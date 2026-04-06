@@ -1,0 +1,31 @@
+# Generated output
+www/
+
+# Source help files (downloaded or user-supplied)
+sources/
+
+# Downloaded archives
+downloads/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Legacy
+converter/hlx2html/generated/

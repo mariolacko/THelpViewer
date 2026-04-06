@@ -1,0 +1,10 @@
+services:
+  viewer:
+    build: .
+    ports:
+      - "5448:5448"
+    volumes:
+      - ./sources:/app/sources:ro
+      - ./docs:/app/docs:ro
+      - ./downloads:/app/downloads
+      - ./www:/app/www
