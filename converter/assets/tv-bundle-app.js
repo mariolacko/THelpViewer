@@ -126,19 +126,20 @@ class TVLoadingDialog {
         this.cancelled = false;
         this.abortController = new AbortController();
 
+
         const cancelButton = new TVBtn({
-            x: 14, y: 4, w: 10,
+            x: 15, y: 5, w: 10,
             className: "is-default",
             attrs: { "data-tv-loading-cancel": true },
             labelMarkup: renderHotkeyMarkup("~C~ancel"),
         });
 
         const bodyGroup = new TVGroup({
-            w: 38, h: 5,
+            w: 38, h: 6,
             children: [
-                new TVStaticText({ x: 0, y: 0, w: 38, className: "tv-loading-filename", text: "" }),
-                new TVStaticText({ x: 0, y: 1, w: 38, className: "tv-loading-bar-line", text: "" }),
-                new TVStaticText({ x: 0, y: 2, w: 38, className: "tv-loading-percent", text: "0%" }),
+                new TVStaticText({ x: 0, y: 1, w: 38, align: "center", className: "tv-loading-filename", text: "" }),
+                new TVStaticText({ x: 0, y: 2, w: 38, align: "center", className: "tv-loading-bar-line", text: "" }),
+                new TVStaticText({ x: 0, y: 3, w: 38, align: "center", className: "tv-loading-percent", text: "0%" }),
                 cancelButton,
             ],
         }).renderMarkup();
@@ -151,7 +152,7 @@ class TVLoadingDialog {
             closeAttrs: { "data-tv-loading-close": true, "aria-label": "Cancel loading" },
             bodyMarkup: bodyGroup,
             footerMarkup: TVDialog.footerMarkup(),
-            width: "42ch",
+            width: "40ch",
             height: "min(9em, calc(100% - 2em))",
             top: "5em",
         });
