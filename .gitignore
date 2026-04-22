@@ -32,3 +32,6 @@ Thumbs.db
 # Local runtime files
 var/uvicorn.pid
 var/uvicorn.log
+
+# Build / output
+out/
