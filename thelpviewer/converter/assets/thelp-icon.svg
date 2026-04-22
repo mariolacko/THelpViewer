@@ -1,0 +1,31 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- pozadie -->
+  <rect width="128" height="128" rx="16" fill="#0000AA"/>
+
+  <!-- vonkajší rám -->
+  <rect x="16" y="24" width="96" height="80"
+        fill="none" stroke="#FFFF00" stroke-width="2"/>
+
+  <!-- vnútorný rám (menšia medzera) -->
+  <rect x="19" y="27" width="90" height="74"
+        fill="none" stroke="#FFFF00" stroke-width="2"/>
+
+  <!-- maska pod title -->
+  <rect x="32" y="18" width="64" height="16" fill="#0000AA"/>
+
+  <!-- title (väčší) -->
+  <text x="64" y="26"
+        font-family="monospace"
+        font-size="16"
+        fill="#FFFF00"
+        text-anchor="middle"
+        dominant-baseline="middle">THelp</text>
+
+  <!-- prompt -->
+  <text x="64" y="72"
+        font-family="monospace"
+        font-size="22"
+        fill="#FFFF00"
+        text-anchor="middle"
+        dominant-baseline="middle">&gt;_</text>
+</svg>

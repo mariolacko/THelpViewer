@@ -1,5 +1,6 @@
 # Generated output
-www/
+helps/
+var/
 
 # Source help files (downloaded or user-supplied)
 sources/
@@ -9,6 +10,7 @@ downloads/
 
 # Python
 __pycache__/
+.venv/
 *.pyc
 *.pyo
 *.egg-info/
@@ -27,5 +29,6 @@ Thumbs.db
 *.swo
 *~
 
-# Legacy
-converter/hlx2html/generated/
+# Local runtime files
+var/uvicorn.pid
+var/uvicorn.log

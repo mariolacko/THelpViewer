@@ -1,123 +1,126 @@
 # Downloader
 
-> Updated: 2026-04-05
+> Updated: 2026-04-09
 
-Automated downloader for Borland/Turbo DOS help files from multiple online sources.
-Fetches original product archives, extracts them, and collects `.HLP`/`.TPH`/`.TCH`
-files into the `sources/` directory organized by product group.
+Automated downloader for DOS help-file sources.
 
-Requires Python 3.10+ and `7z` (p7zip) for archive and disk image extraction.
+The downloader is now split into three layers:
+
+1. `catalog.py` defines **what** logical product groups we want to fetch and
+   how each source should search for them.
+2. `winworld.py`, `archiveorg.py`, `olddos.py`, `github.py`, `davep_ng.py` define **how**
+   each concrete website is scraped and downloaded.
+3. `extractor.py` handles **all unpacking** through `unar`/`lsar`, including
+   nested archives and disk images.
 
 ## Usage
 
 ```bash
-# Download from all sources, all products
-python3 -m downloader
+# Download from all sources, all configured products
+python3 -m thelpviewer.downloader
 
-# Specific sources
-python3 -m downloader --source winworld archiveorg
+# Only specific sites
+python3 -m thelpviewer.downloader --source winworld archiveorg
 
-# Specific products
-python3 -m downloader --products tp tc tasm
+# Positional selectors also work
+python3 -m thelpviewer.downloader tp olddos
 
-# Preview what would be downloaded
-python3 -m downloader --dry-run
+# Only specific logical products
+python3 -m thelpviewer.downloader --products tp tc ng qbx quickc masm
 
-# Custom output directories
-python3 -m downloader --out-dir sources/ --dl-dir downloads/
+# Preview only
+python3 -m thelpviewer.downloader --dry-run
 ```
+
+With no selectors, the downloader runs every configured provider for every
+configured product and skips anything already present in `downloads/` or
+`sources/`.
 
 ## Options
 
 | Option | Description |
 |--------|-------------|
-| `--source` | Sources to use: `winworld`, `archiveorg`, `olddos` (default: all) |
-| `--products` | Products to download: `tp`, `tc`, `tasm`, etc. (default: all for given source) |
-| `--out-dir` | Target directory for extracted help files (default: `sources/`) |
-| `--dl-dir` | Directory for downloaded archives (default: `downloads/`) |
-| `--dry-run` | Only print what would happen, don't download or extract |
+| `--source` | Sources to use: `winworld`, `archiveorg`, `olddos`, `github`, `davep_ng` |
+| `--products` | Logical product groups from `thelpviewer/downloader/catalog.py` |
+| positional selectors | Short form for sources/products, e.g. `python3 -m thelpviewer.downloader tp olddos` |
+| `--out-dir` | Target directory for extracted help files |
+| `--dl-dir` | Directory for downloaded archives/files |
+| `--dry-run` | Print planned actions only |
 
-## Sources
+## Manifest
 
-| Source | URL | Notes |
-|--------|-----|-------|
-| `winworld` | WinWorldPC | 25 downloads/day limit. Downloads disk images (`.img`, `.zip`), extracts with `7z`. |
-| `archiveorg` | Archive.org | No rate limit. Downloads direct file archives (`.zip`, `.7z`). |
-| `olddos` | old-dos.ru | Category 102 programming tools. Downloads `.zip`/`.rar` archives. |
+`thelpviewer/downloader/catalog.py` is the single source of truth for:
 
-Each source has its own set of supported products (not all products are
-available on all sources):
+- logical product keys such as `tp`, `tc`, `bc`, `ng`, `qbx`, `quickc`, `masm`
+- user-facing labels such as `Borland Turbo Pascal`
+- per-site search text
+- per-site machine parameters such as:
+  - WinWorld slug
+  - Archive.org advanced-search query
+  - old-dos category ids + filter keywords
+  - direct base URL for mirrors
+  - direct item/repository URLs when the exact source is known
 
-| Product | `winworld` | `archiveorg` | `olddos` |
-|---------|:----------:|:------------:|:--------:|
-| `tp` — Turbo Pascal | ✓ | ✓ | ✓ |
-| `tc` — Turbo C / C++ | ✓ | ✓ | ✓ |
-| `tasm` — Turbo Assembler | ✓ | ✓ | ✓ |
-| `td` — Turbo Debugger | — | ✓ | ✓ |
-| `tbasic` — Turbo Basic | ✓ | ✓ | ✓ |
-| `tprolog` — Turbo Prolog | ✓ | ✓ | ✓ |
-| `bc` — Borland C++ | ✓ | ✓ | ✓ |
-| `bp` — Borland Pascal | ✓ | ✓ | ✓ |
-| `sk` — Sidekick | ✓ | — | — |
+This keeps “what we want” separate from provider code.
 
-## Extraction Pipeline
+## Providers
 
-1. **Download** — fetch archive from the source into `downloads/`
-2. **Extract** — use `7z` to unpack the archive (handles `.zip`, `.7z`, `.rar`,
-   `.img`, `.ima`, `.dsk` disk images, and nested archives)
-3. **Collect** — scan extracted files for help file extensions
-   (`.HLP`, `.TPH`, `.TCH`) using case-insensitive matching
-4. **Organize** — copy found help files into `sources/<Product Group>/`
-   (e.g. `sources/Borland Turbo Pascal 7/TURBO.TPH`)
+| Module | Site | Responsibility |
+|--------|------|----------------|
+| `winworld.py` | WinWorldPC | Product/version scraping, mirror selection |
+| `archiveorg.py` | Archive.org | Search API, metadata files, candidate file picking |
+| `olddos.py` | old-dos.ru | Category pagination, detail-page download link lookup |
+| `github.py` | GitHub | Public repo directory listing via Contents API or direct repo path |
+| `davep_ng.py` | DaveP NG mirror | Plain `.ng` mirror download |
 
-The extraction automatically handles nested archives (e.g. a `.zip` containing
-a floppy disk image containing another `.zip` with the actual help files).
+Each provider reads only its own source-specific config from `catalog.py`.
 
-## Architecture
+## Extraction
+
+`thelpviewer/downloader/extractor.py` uses:
+
+- `lsar -json` to detect whether a file is an extractable container and what
+  format it is
+- `unar` to unpack it
+
+The extraction is recursive:
+
+```text
+outer.7z
+  -> disk1.img
+    -> install.zip
+      -> TURBO.HLP
+```
+
+The extractor will:
+
+1. unpack the downloaded file
+2. scan the extracted tree for any nested extractable files
+3. unpack those too
+4. repeat up to a safe maximum depth
+5. collect final help files from the fully expanded tree
+
+This replaces the old mix of `7z`, `zipfile`, and special-case RAR handling.
+
+## Shared Helpers
 
 | Module | Purpose |
 |--------|---------|
-| `__main__.py` | Unified CLI entry point, source routing, product filtering |
-| `common.py` | Shared utilities: HTTP download, `7z` detection, archive extraction, help file collection |
-| `winworld.py` | WinWorldPC scraper — version page parsing, download link extraction, disk image handling |
-| `archiveorg.py` | Archive.org downloader — direct file downloads with metadata parsing |
-| `olddos.py` | old-dos.ru downloader — category page parsing, `.rar`/`.zip` extraction |
-
-### `common.py` Utilities
-
-| Function | Description |
-|----------|-------------|
-| `require_7z()` | Find `7z` or `7zz` binary, raise error if not installed |
-| `download_file(url, dest)` | HTTP download with progress tracking and retry |
-| `extract_archive(archive, dest, sevenz)` | Extract using `7z x` with auto-detection |
-| `collect_help_files(source_dir, target_dir)` | Recursively find `.HLP`/`.TPH`/`.TCH` and copy to target |
+| `http.py` | HTTP fetch/download helpers and anchor parsing |
+| `collector.py` | language detection, help-file scanning, final copy to `sources/` |
+| `common.py` | compatibility re-export shim for older entry points |
 
 ## Requirements
 
-- **Python 3.10+** — no external Python packages needed
-- **7z** (p7zip or 7-Zip) — must be on PATH. Install via:
-  - macOS: `brew install p7zip` or `brew install sevenzip`
-  - Linux: `apt install p7zip-full` or `dnf install p7zip-plugins`
-  - Windows: install [7-Zip](https://www.7-zip.org/) and add to PATH
+- Python 3.10+
+- `unar` and `lsar` on PATH
+
+Install:
+
+- macOS: `brew install unar`
+- Linux: `sudo apt install unar`
 
 ## Output
 
-Downloaded help files are organized into `sources/` by product group:
-
-```
-sources/
-├── Borland Turbo Pascal 4/
-│   └── TURBO4.HLP
-├── Borland Turbo Pascal 7/
-│   ├── TURBO.TPH
-│   ├── TVISION.TPH
-│   └── OWL.TPH
-├── Borland Turbo C 2.01/
-│   └── TCHELP.TCH
-├── Software602 M602/
-│   └── M602_200.HLP
-└── ...
-```
-
-These directories map directly to catalog groups when
-the converter builds JSON bundles (`python -m converter sources/ www/ --bundle`).
+Collected help files are copied into `sources/<Product Label ...>/`.
+Those directories are then consumed by `python -m thelpviewer.converter` / `./thelp.sh build`.

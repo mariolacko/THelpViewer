@@ -10,19 +10,19 @@ The converter has no external dependencies beyond Python 3.10+.
 
 ```bash
 # Single file → HTML
-python -m converter TURBO.TPH output/
+python -m thelpviewer.converter TURBO.TPH output/
 
 # Directory tree → HTML (with clean target)
-python -m converter sources/ output/ --clean
+python -m thelpviewer.converter sources/ output/ --clean
 
 # JSON bundle for SPA viewer
-python -m converter sources/ www/ --bundle
+python -m thelpviewer.converter sources/ www/ --bundle
 
 # Specify encoding
-python -m converter TURBO7CZ.TPH output/ --encoding cp852
+python -m thelpviewer.converter TURBO7CZ.TPH output/ --encoding cp852
 
 # Dump normalized HelpDocument as JSON
-python -m converter TURBO.TPH output/ --dump-json
+python -m thelpviewer.converter TURBO.TPH output/ --dump-json
 ```
 
 ## Options
@@ -143,7 +143,7 @@ characters like ☺, ♥, ♦, ♣, ♠, •, ◘, etc.).
 | `exporter.py` | Format detection, reader dispatch, single-file and tree export coordination |
 | `codepages.py` | Character encoding tables (CP437, Kamenický, CP852, Latin-1, Latin-2) and auto-detection |
 
-### Readers (`converter/readers/`)
+### Readers (`thelpviewer/converter/readers/`)
 
 | Reader | Format | Signature | Binary/Text |
 |--------|--------|-----------|-------------|
@@ -155,7 +155,7 @@ characters like ☺, ♥, ♦, ♣, ♠, •, ◘, etc.).
 
 Each reader implements `read_bytes(data: bytes) → HelpDocument`.
 
-### Writers (`converter/writers/`)
+### Writers (`thelpviewer/converter/writers/`)
 
 | Writer | Output | Description |
 |--------|--------|-------------|
@@ -182,6 +182,9 @@ startup.
 See Formats for detailed binary format documentation:
 
 - [Borland THELP](../Formats/Borland%20THELP.md) — TP4–5.5, Turbo C, TASM, Sidekick, Sprint
+- [Microsoft BW03 Help](../Formats/Microsoft%20BW03%20Help.md) — older CodeView DOS / OS2 help
+- [Microsoft QuickHelp](../Formats/Microsoft%20QuickHelp.md) — QuickBASIC, QuickC, MASM 6, PWB, LINK
+- [Norton Guide](../Formats/Norton%20Guide.md) — Norton Guides and Expert Help
 - [TurboVision FBHF](../Formats/TurboVision%20FBHF.md) — TP6, TP7, BP7 THelpFile
 - [Software602 M602](../Formats/Software602%20M602.md) — M602 Manager HelpSystem
 - [Software602 Text602](../Formats/Software602%20Text602.md) — Text602, Calc602

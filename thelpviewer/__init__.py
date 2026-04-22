@@ -1,0 +1,1 @@
+"""THelpViewer Python package."""

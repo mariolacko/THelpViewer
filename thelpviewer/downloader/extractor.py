@@ -1,0 +1,352 @@
+"""Universal recursive extractor built around ``unar`` / ``lsar``."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+from .collector import HELP_EXTENSIONS, collect_help_files, copy_help_files
+
+
+MAX_EXTRACTION_DEPTH = 6
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractorTools:
+    """Resolved external tools used by the downloader extraction pipeline."""
+
+    unar: str | None
+    lsar: str | None
+    sevenzip: str | None
+
+    @property
+    def available(self) -> bool:
+        return bool((self.unar and self.lsar) or self.sevenzip)
+
+
+@dataclass(frozen=True, slots=True)
+class ArchiveProbe:
+    """Basic format information reported by ``lsar``."""
+
+    format_name: str
+    entry_count: int
+
+
+SZDD_SIGNATURE = b"SZDD\x88\xF0\x27\x33"
+QBASIC_SZ_SIGNATURE = b"SZ \x88\xF0\x27\x33\xD1"
+
+
+def find_unar() -> str | None:
+    """Return the ``unar`` binary on PATH when available."""
+    return shutil.which("unar")
+
+
+def find_lsar() -> str | None:
+    """Return the companion ``lsar`` binary on PATH when available."""
+    return shutil.which("lsar")
+
+
+def find_sevenzip() -> str | None:
+    """Return a working 7-Zip compatible binary when available."""
+    return shutil.which("7zz") or shutil.which("7z")
+
+
+def require_extractor_tools(dry_run: bool = False) -> ExtractorTools:
+    """Resolve required extraction tools or exit with a clear install hint."""
+    tools = ExtractorTools(
+        unar=find_unar(),
+        lsar=find_lsar(),
+        sevenzip=find_sevenzip(),
+    )
+    if tools.available:
+        return tools
+
+    msg = (
+        "No archive/image extractor found – downloader needs unar/lsar or 7zz.\n"
+        "  macOS:  brew install unar\n"
+        "  alt:    brew install sevenzip\n"
+        "  Linux:  sudo apt install unar\n"
+    )
+    if dry_run:
+        print(f"WARNING: {msg}")
+        return tools
+    sys.exit(f"ERROR: {msg}")
+
+
+def probe_extractable(path: Path, tools: ExtractorTools) -> ArchiveProbe | None:
+    """Return archive/image format metadata for one file or ``None``."""
+    if not path.is_file():
+        return None
+
+    if tools.lsar:
+        result = subprocess.run(
+            [tools.lsar, "-json", str(path)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            try:
+                payload = json.loads(result.stdout or "{}")
+            except json.JSONDecodeError:
+                payload = {}
+            format_name = str(payload.get("lsarFormatName") or "").strip()
+            contents = payload.get("lsarContents") or []
+            if format_name:
+                return ArchiveProbe(format_name=format_name, entry_count=len(contents))
+
+    if tools.sevenzip:
+        result = subprocess.run(
+            [tools.sevenzip, "l", str(path)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            match = re.search(r"^Type = (.+)$", result.stdout or "", flags=re.MULTILINE)
+            if match:
+                return ArchiveProbe(format_name=match.group(1).strip(), entry_count=0)
+
+    return None
+
+
+def _extract_with_unar(path: Path, dest: Path, tools: ExtractorTools) -> tuple[bool, str | None]:
+    if not tools.unar:
+        return False, None
+    result = subprocess.run(
+        [
+            tools.unar,
+            "-quiet",
+            "-force-overwrite",
+            "-no-directory",
+            "-no-recursion",
+            "-output-directory",
+            str(dest),
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True, None
+    stderr = (result.stderr or result.stdout or "").strip()
+    return False, stderr[:300] or None
+
+
+def _extract_with_7zz(path: Path, dest: Path, tools: ExtractorTools) -> tuple[bool, str | None]:
+    if not tools.sevenzip:
+        return False, None
+    result = subprocess.run(
+        [
+            tools.sevenzip,
+            "x",
+            "-y",
+            f"-o{dest}",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return True, None
+    stderr = (result.stderr or result.stdout or "").strip()
+    return False, stderr[:300] or None
+
+
+def _read_head(path: Path, size: int = 16) -> bytes:
+    with path.open("rb") as handle:
+        return handle.read(size)
+
+
+def extract_file(path: Path, dest: Path, tools: ExtractorTools) -> bool:
+    """Extract one archive/image/container into ``dest`` using ``unar``."""
+    if not tools.available:
+        print(f"    [error] Cannot extract {path.name}: no extractor available")
+        return False
+
+    dest.mkdir(parents=True, exist_ok=True)
+    ok, unar_error = _extract_with_unar(path, dest, tools)
+    if ok:
+        return True
+    ok, sevenzip_error = _extract_with_7zz(path, dest, tools)
+    if ok:
+        return True
+    error = sevenzip_error or unar_error
+    if error:
+        print(f"    [extract error] {path.name}: {error}")
+    return False
+
+
+def _unique_extract_dir(path: Path) -> Path:
+    """Return a stable sibling extraction directory for one file."""
+    stem = path.name.replace(".", "_")
+    candidate = path.parent / f"{stem}__extracted"
+    index = 2
+    while candidate.exists():
+        candidate = path.parent / f"{stem}__extracted_{index}"
+        index += 1
+    return candidate
+
+
+def _should_probe(path: Path) -> bool:
+    """Skip known final artifacts that should not be treated as containers."""
+    if path.suffix.lower() in HELP_EXTENSIONS:
+        return False
+    return True
+
+
+def extract_nested(work_dir: Path, tools: ExtractorTools, depth: int = 0) -> None:
+    """Recursively unpack nested archives and disk images via ``unar``."""
+    if not tools.available or depth >= MAX_EXTRACTION_DEPTH:
+        return
+
+    for path in sorted(work_dir.rglob("*")):
+        if not (path.is_file() and _should_probe(path)):
+            continue
+        probe = probe_extractable(path, tools)
+        if probe is None:
+            continue
+        dest = _unique_extract_dir(path)
+        indent = "  " * depth
+        print(f"    {indent}[extract] {path.name} ({probe.format_name}, {probe.entry_count} entries)")
+        if extract_file(path, dest, tools):
+            extract_nested(dest, tools, depth + 1)
+
+
+def _looks_like_single_file_payload(path: Path, head: bytes) -> bool:
+    """Return True for known single-file compressed payloads."""
+    upper = path.name.upper()
+    return (
+        head.startswith(SZDD_SIGNATURE)
+        or head.startswith(QBASIC_SZ_SIGNATURE)
+        or upper.endswith(".HL$")
+        or upper.endswith(".HL_")
+        or upper.endswith("_")
+        or upper.endswith("$")
+    )
+
+
+def _single_file_output_path(path: Path) -> Path:
+    """Choose a reasonable destination path for one expanded payload."""
+    upper = path.name.upper()
+    if upper.endswith(".HL$") or upper.endswith(".HL_"):
+        return path.with_suffix(".HLP")
+    if path.name.endswith("_") or path.name.endswith("$"):
+        return path.with_name(path.name[:-1])
+    return path.with_name(f"{path.name}.expanded")
+
+
+def _decompress_sz_payload(data: bytes) -> bytes:
+    """Decompress an SZDD-style single-file payload."""
+    if data.startswith(SZDD_SIGNATURE):
+        out_len = int.from_bytes(data[10:14], "little")
+        payload = memoryview(data)[14:]
+        pos = 4096 - 16
+    elif data.startswith(QBASIC_SZ_SIGNATURE):
+        out_len = int.from_bytes(data[8:12], "little")
+        payload = memoryview(data)[12:]
+        pos = 4096 - 18
+    else:
+        raise ValueError("Not an SZDD-style single-file payload")
+
+    window = bytearray(b"\x20" * 4096)
+    output = bytearray()
+    index = 0
+
+    while len(output) < out_len:
+        if index >= len(payload):
+            raise ValueError("Unexpected end of compressed stream")
+        control = payload[index]
+        index += 1
+        bit = 1
+        while bit <= 0x80 and len(output) < out_len:
+            if control & bit:
+                if index >= len(payload):
+                    raise ValueError("Missing literal byte")
+                value = payload[index]
+                index += 1
+                window[pos] = value
+                output.append(value)
+                pos = (pos + 1) & 0x0FFF
+            else:
+                if index + 1 >= len(payload):
+                    raise ValueError("Missing match bytes")
+                match_pos = payload[index]
+                match_len = payload[index + 1]
+                index += 2
+                match_pos |= (match_len & 0xF0) << 4
+                match_len = (match_len & 0x0F) + 3
+                for _ in range(match_len):
+                    value = window[match_pos]
+                    window[pos] = value
+                    output.append(value)
+                    pos = (pos + 1) & 0x0FFF
+                    match_pos = (match_pos + 1) & 0x0FFF
+                    if len(output) >= out_len:
+                        break
+            bit <<= 1
+
+    return bytes(output)
+
+
+def _extract_single_file_payload_with_unar(path: Path, tools: ExtractorTools) -> bytes | None:
+    """Try to expand one single-file payload via ``unar`` first."""
+    if not tools.unar:
+        return None
+    with tempfile.TemporaryDirectory(prefix="dlsingle_") as tmp:
+        out_dir = Path(tmp)
+        ok, _error = _extract_with_unar(path, out_dir, tools)
+        if not ok:
+            return None
+        extracted = [candidate for candidate in out_dir.rglob("*") if candidate.is_file()]
+        if len(extracted) != 1:
+            return None
+        return extracted[0].read_bytes()
+
+
+def expand_single_file_payloads(work_dir: Path, tools: ExtractorTools) -> None:
+    """Expand single-file compressed payloads discovered in one tree."""
+    for path in sorted(work_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        head = _read_head(path)
+        if not _looks_like_single_file_payload(path, head):
+            continue
+        dest = _single_file_output_path(path)
+        if dest.exists():
+            continue
+        try:
+            data = _extract_single_file_payload_with_unar(path, tools)
+            if data is None:
+                data = _decompress_sz_payload(path.read_bytes())
+        except Exception:
+            continue
+        dest.write_bytes(data)
+
+
+def collect_from_archive(
+    archive: Path,
+    label: str,
+    sources_dir: Path,
+    tools: ExtractorTools,
+    *,
+    lang_code: str | None = None,
+) -> list[Path]:
+    """Extract one downloaded container, recurse, collect help files, copy them."""
+    lang_suffix = f" ({lang_code})" if lang_code else ""
+    target_dir = sources_dir / f"{label}{lang_suffix}".strip()
+
+    with tempfile.TemporaryDirectory(prefix="dlhelp_") as tmp:
+        tmp_path = Path(tmp)
+        if not extract_file(archive, tmp_path, tools):
+            return []
+        extract_nested(tmp_path, tools)
+        expand_single_file_payloads(tmp_path, tools)
+        files = collect_help_files(tmp_path)
+        if not files:
+            return []
+        return copy_help_files(files, target_dir, sources_dir)

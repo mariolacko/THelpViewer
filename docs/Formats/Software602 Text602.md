@@ -1,6 +1,6 @@
 # Software602 Text-Family Help Format
 
-> Created: 2026-04-03 · Last updated: 2026-04-03
+> Created: 2026-04-03 · Last updated: 2026-04-18
 
 Used by: Software602 word-processor and spreadsheet products.
 
@@ -11,6 +11,13 @@ Known header variants:
 This document describes the currently reverse-engineered chunk-based format
 shared by both products.  It is structurally different from the classic
 `M602 HelpSystem` format and does not use XOR `$FA` encryption.
+
+Current repository validation samples:
+- `T602_310.HLP`
+- `C602.HLP`
+
+Earlier reverse-engineering notes in this document may still reference older
+but equivalent sample names such as `T602_301.HLP` or `C602_152.HLP`.
 
 ## Current Status
 
@@ -29,10 +36,10 @@ The file starts with a printable ASCII header string terminated by the first
 `0x0E` byte:
 
 ```text
-Text602 - help  v.3.1   (c) Software602\r\n<14 binary bytes>0x0E
+Text602 - help  v.3.1   (c) Software602\r\n<15 binary bytes>0x0E
 ```
 
-The 14-byte binary section at offset 42 (immediately after the `\r\n`)
+The 15-byte binary section immediately after the `\r\n`
 contains:
 
 | Offset | Size | Interpretation |
@@ -48,9 +55,9 @@ The file-level S602SCREENMETA at bytes 11–13 follows the same rule as the
 per-screen variant: byte 2 (flag) = `0x01`, and bytes 0–1 as LE16 equal the
 raw length of the very first chunk minus 2.
 
-Confirmed:
-- T602: bytes `1b 00 01` → LE16=27, first chunk len=29=27+2 ✓
-- C602: bytes `09 00 01` → LE16=9, first chunk len=11=9+2 ✓
+Confirmed on current samples:
+- `T602_310.HLP`: file-level screen meta `1b 00 01` → LE16=27, first chunk len=29=27+2
+- `C602.HLP`: file-level screen meta `09 00 01` → LE16=9, first chunk len=11=9+2
 
 ## Chunk Model
 
@@ -528,8 +535,8 @@ The anchor table is needed only to resolve `dest_id → screen title`.
 
 | File | Entries | dest_id range |
 |------|---------|---------------|
-| T602_301.HLP | 89 entries (0–88) | 0x0168 bytes |
-| C602_152.HLP | 70 entries (0–69) | 0x0118 bytes |
+| T602_310.HLP | 90 entries (0–89) | 0x0168 bytes |
+| C602.HLP | 70 entries (0–69) | 0x0118 bytes |
 
 Dest_ids above the anchor table range (e.g. C602 dest_ids 70–154) are
 **special fixed IDs** that the viewer resolves internally without consulting
@@ -552,13 +559,13 @@ the table. Common ones:
 
 ## Calc602 Help File
 
-`C602_152.HLP` uses the identical chunk format with a different header string:
+`C602.HLP` uses the identical chunk format with a different header string:
 
 ```text
-Calc602 - help  v.1.00  (c) Software602\r\n<14 binary bytes>0x0E
+Calc602 - help  v.1.00  (c) Software602\r\n<15 binary bytes>0x0E
 ```
 
-Binary header section (bytes after `\r\n`, 14 bytes):
+Binary header section (bytes after `\r\n`, 15 bytes):
 `f8 39 03 00 c1 35 03 00 10 27 06 00 09 00 01`
 
 | Offset | Bytes | Value | Meaning |
@@ -569,10 +576,12 @@ Binary header section (bytes after `\r\n`, 14 bytes):
 | 8      | 3     | `06 00 09` | Unknown |
 | 11     | 3     | `00 01` → `09 00 01` | File-level S602SCREENMETA |
 
-- Anchor table at 0x0335c1: magic `11 27`, 70 entries (0x0118 bytes), **mid-chunk** (C602 differs from T602 where the anchor table is standalone)
+- Anchor table at `0x0335c1`: magic `11 27`, 70 entries (`0x0118` bytes), **mid-chunk** (C602 differs from T602 where the anchor table is standalone)
 - File-level S602SCREENMETA: `09 00 01` → LE16=9, first chunk len=11=9+2 ✓
 
-Statistics: 4894 chunks, 147 screens.
+Current observed parser totals on repo sample:
+- `T602_310.HLP`: 194 screens, context flag distribution `0x01 × 180`, `0x00 × 14`
+- `C602.HLP`: 147 screens, context flag distribution `0x01 × 102`, `0x00 × 44`
 
 ### C602 special dest_ids
 
@@ -587,6 +596,28 @@ C602 uses different dest_ids from T602 for its standard footer/navigation:
 
 These IDs are above the 70-entry anchor table range and are resolved by the
 viewer internally.
+
+## What Is Still Unknown
+
+The broad file format is understood well enough to parse both current samples,
+but one important family remains only partially decoded:
+
+- post-footer **late lookup records** stored as raw 5-byte tuples
+- used heavily in `Help | Obsah` / `Help | Rejstřík` style navigation screens
+- especially visible in `C602.HLP`, where not every destination can yet be
+  resolved from the anchor table alone
+
+Current parser strategy:
+- trust the anchor table for `dest_id -> title` where available
+- use text-derived aliases from titles and leading body lines
+- use a minimal fallback map only for fixed viewer ids still not described by
+  the decoded structures
+
+Practical consequence:
+- ordinary topic screens are parsed reliably
+- navigation screens are mostly linked correctly
+- a small subset of `C602` `Obsah/Rejstřík` entries still needs the remaining
+  late-lookup format to be fully decoded
 
 ## HLX Round-Trip Markers
 

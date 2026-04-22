@@ -1,0 +1,489 @@
+"""UHF 2.0 JSON writer for the normalized ``HelpDocument`` model."""
+
+from __future__ import annotations
+
+import gzip
+import json
+import string
+from datetime import datetime, timezone
+from pathlib import Path
+
+from .. import __version__ as GENERATOR_VERSION
+from ..base import HelpDocument, PositionedKeyword, TopicNavItem, TopicRecord, context_nav_action
+from ..uhf_markup import escape_uhf_text, format_uhf_link
+from .html import HelpHtmlRenderer
+
+
+SOURCE_FORMAT_BY_READER: dict[str, str] = {
+    "borland": "thelp",
+    "calc602": "text602",
+    "fbhf": "fbhf",
+    "hlx": "hlx",
+    "m602": "m602",
+    "norton-guide": "norton-guide",
+    "quickhelp": "quickhelp",
+    "scorpion-dat": "scorpion-dat",
+    "software602": "m602",
+    "text602": "text602",
+}
+
+
+class HelpJsonRenderer:
+    """Render one ``HelpDocument`` as a UHF 2.0 JSON structure."""
+
+    def __init__(
+        self,
+        document: HelpDocument,
+        display_encoding: str = "cp437",
+        generator_name: str = "THelpViewer",
+    ):
+        self.document = document
+        self.display_encoding = display_encoding
+        self.generator_name = generator_name
+        self.html_renderer = HelpHtmlRenderer(
+            document,
+            display_encoding=display_encoding,
+            generator_name=generator_name,
+        )
+        self.topic_ids = {topic.context_id for topic in document.topics}
+
+    def render_document(self) -> dict[str, object]:
+        """Return a JSON-serializable UHF 2.0 document."""
+        return {
+            "uhf_version": "2.0",
+            "metadata": self._build_metadata(),
+            "converter": self._build_converter(),
+            "contents": self._build_contents(),
+            "index": self._build_index(),
+            "topics": self._build_topics(),
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        """Serialize the rendered UHF document to formatted JSON."""
+        return json.dumps(
+            self.render_document(),
+            ensure_ascii=False,
+            indent=indent,
+        )
+
+    def write_json(self, path: str | Path, indent: int = 2) -> Path:
+        """Write the rendered UHF document to disk and return the path."""
+        target_path = Path(path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        return target_path
+
+    def write_json_gz(
+        self,
+        path: str | Path,
+        indent: int = 2,
+        compresslevel: int = 9,
+    ) -> Path:
+        """Write the rendered UHF document as gzip-compressed UTF-8 JSON."""
+        target_path = Path(path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = (self.to_json(indent=indent) + "\n").encode("utf-8")
+        target_path.write_bytes(gzip.compress(payload, compresslevel=compresslevel))
+        return target_path
+
+    def _build_metadata(self) -> dict[str, object]:
+        meta = self.document.metadata or {}
+        payload: dict[str, object] = {
+            "name": self._metadata_name(),
+            "encoding": "utf-8",
+            "source": {
+                "filename": Path(self.document.source_name).name,
+                "format": self._source_format(),
+                "encoding": self._source_encoding(),
+            },
+        }
+
+        author = self._metadata_author()
+        if author:
+            payload["author"] = author
+
+        copyright_text = self._metadata_copyright()
+        if copyright_text:
+            payload["copyright"] = copyright_text
+
+        display: dict[str, int] = {}
+        cols = meta.get("width")
+        if not isinstance(cols, int):
+            cols = meta.get("display_width")
+        rows = meta.get("height")
+        if isinstance(cols, int) and cols > 0:
+            display["cols"] = cols
+        if isinstance(rows, int) and rows > 0:
+            display["rows"] = rows
+        if display:
+            payload["display"] = display
+
+        frozen_rows = meta.get("frozen_rows")
+        if isinstance(frozen_rows, int) and frozen_rows > 0:
+            payload["frozen_rows"] = frozen_rows
+
+        return payload
+
+    def _build_converter(self) -> dict[str, str]:
+        return {
+            "name": self.generator_name,
+            "version": GENERATOR_VERSION,
+            "date": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+
+    def _build_contents(self) -> list[dict[str, object]]:
+        """Return the TOC tree prepared by the source reader."""
+        return [node.to_dict() for node in self.document.contents]
+
+    def _build_index(self) -> list[dict[str, object]]:
+        grouped: dict[str, list[dict[str, object]]] = {"#": []}
+
+        # Build helper maps to resolve index entry context ids or alias strings
+        alias_id_map: dict[int, int] = {}
+        alias_string_map: dict[str, int] = {}
+        for topic in self.document.topics:
+            try:
+                topic_id = int(topic.context_id)
+            except Exception:
+                topic_id = topic.context_id
+            for aid in getattr(topic, "alias_contexts", []) or []:
+                if isinstance(aid, int):
+                    alias_id_map[aid] = topic_id
+            for astr in getattr(topic, "alias_strings", []) or []:
+                if isinstance(astr, bytes):
+                    s = self.html_renderer._decode_bytes(astr).strip().lower()
+                else:
+                    s = str(astr).strip().lower()
+                if s:
+                    alias_string_map[s] = topic_id
+
+        for entry in self.document.index_entries:
+            label = self.html_renderer._decode_bytes(entry.label).strip()
+            if not label:
+                continue
+            group = label[0].upper()
+            if group not in string.ascii_uppercase:
+                group = "#"
+
+            # Resolve target context id to one that exists in this document's topics
+            target = entry.context_id
+            if target not in self.topic_ids:
+                # Try alias id mapping
+                mapped = alias_id_map.get(target)
+                if mapped is None:
+                    # Try alias string mapping by label
+                    mapped = alias_string_map.get(label.strip().lower())
+                if mapped is None:
+                    # Try to find a topic whose title or content contains the label
+                    mapped = None
+                    for topic in self.document.topics:
+                        try:
+                            t_title = self.html_renderer._topic_heading(topic) or ""
+                        except Exception:
+                            t_title = ""
+                        if t_title.strip().lower() == label.strip().lower():
+                            mapped = topic.context_id
+                            break
+                        for ln in (getattr(topic, "uhf_content", []) or []):
+                            if isinstance(ln, str) and label.strip().lower() in ln.strip().lower():
+                                mapped = topic.context_id
+                                break
+                        if mapped is not None:
+                            break
+                if mapped is not None:
+                    target = mapped
+
+            grouped.setdefault(group, []).append(
+                {
+                    "label": label,
+                    "topic_id": target,
+                }
+            )
+
+        payload: list[dict[str, object]] = []
+        if grouped["#"]:
+            payload.append({"group": "#", "entries": grouped["#"]})
+
+        for letter in string.ascii_uppercase:
+            entries = grouped.get(letter)
+            if entries:
+                payload.append({"group": letter, "entries": entries})
+
+        return payload
+
+    def _build_topics(self) -> dict[str, dict[str, object]]:
+        payload: dict[str, dict[str, object]] = {}
+        for topic in self.document.topics:
+            content = self._build_topic_content(topic)
+            topic_payload: dict[str, object] = {
+                "id": topic.context_id,
+                "title": self.html_renderer._topic_heading(topic),
+                "content": content,
+            }
+
+            aliases = self._build_topic_aliases(topic)
+            if aliases:
+                topic_payload["aliases"] = aliases
+            if topic.is_main_index:
+                topic_payload["is_main"] = True
+            if topic.frozen_rows > 0:
+                topic_payload["frozen_rows"] = topic.frozen_rows
+
+            nav = self._serialize_nav_items(topic.nav_items)
+            if nav:
+                topic_payload["nav"] = nav
+
+            payload[str(topic.context_id)] = topic_payload
+
+        return payload
+
+    @staticmethod
+    def _build_topic_aliases(topic: TopicRecord) -> dict[str, list[int] | list[str]] | None:
+        aliases: dict[str, list[int] | list[str]] = {}
+        if topic.alias_contexts:
+            aliases["ids"] = list(topic.alias_contexts)
+        if topic.alias_strings:
+            aliases["strings"] = list(topic.alias_strings)
+        return aliases or None
+
+    def _build_topic_content(self, topic: TopicRecord) -> list[str]:
+        if topic.uhf_content:
+            return list(topic.uhf_content)
+
+        content: list[str] = []
+        code_line_indices = set(topic.code_line_indices or set())
+        in_code_block = False
+
+        positional_by_line: dict[int, list[PositionedKeyword]] = {}
+        for keyword in topic.positional_keywords:
+            positional_by_line.setdefault(keyword.line, []).append(keyword)
+        for keywords in positional_by_line.values():
+            keywords.sort(key=lambda keyword: keyword.first_column)
+
+        sequential_index = 0
+        for line_index, raw_line in enumerate(topic.raw_lines):
+            line_is_code = line_index in code_line_indices
+            if line_is_code and not in_code_block:
+                content.append("[code]")
+                in_code_block = True
+            elif not line_is_code and in_code_block:
+                content.append("[/code]")
+                in_code_block = False
+
+            if line_is_code:
+                # For code lines, still render positional/sequential hotspots
+                # as UHF inline tags so the viewer can convert them to anchors.
+                line_number = line_index + 1
+                if line_number in positional_by_line:
+                    content.append(self._render_positioned_line(raw_line, positional_by_line[line_number]))
+                    continue
+                if b"\x02" in raw_line and topic.sequential_keywords:
+                    rendered_line, sequential_index = self._render_sequential_line(
+                        raw_line,
+                        topic.sequential_keywords,
+                        sequential_index,
+                    )
+                    content.append(rendered_line)
+                    continue
+                # Ensure code lines are escaped consistently — do not
+                # emit raw decoded HTML into code blocks. Use
+                # _render_plain_segment which applies the canonical
+                # UHF escaping used elsewhere.
+                content.append(self._render_plain_segment(raw_line))
+                continue
+
+            line_number = line_index + 1
+            if line_number in positional_by_line:
+                content.append(self._render_positioned_line(raw_line, positional_by_line[line_number]))
+                continue
+            if b"\x02" in raw_line and topic.sequential_keywords:
+                rendered_line, sequential_index = self._render_sequential_line(
+                    raw_line,
+                    topic.sequential_keywords,
+                    sequential_index,
+                )
+                content.append(rendered_line)
+                continue
+            content.append(self._escape_plain_text(self.html_renderer._decode_bytes(raw_line)))
+
+        if in_code_block:
+            content.append("[/code]")
+
+        return content
+
+    def _render_positioned_line(self, raw_line: bytes, keywords: list[PositionedKeyword]) -> str:
+        parts: list[str] = []
+        cursor = 0
+
+        for keyword in keywords:
+            start = max(keyword.first_column - 1, 0)
+            end = min(keyword.last_column, len(raw_line))
+            if start > cursor:
+                parts.append(self._render_plain_segment(raw_line[cursor:start]))
+            label = self._escape_plain_text(self.html_renderer._decode_bytes(raw_line[start:end]))
+            parts.append(self._wrap_link_text(keyword.target_context, label))
+            cursor = end
+
+        parts.append(self._render_plain_segment(raw_line[cursor:]))
+        return "".join(parts)
+
+    def _render_sequential_line(
+        self,
+        raw_line: bytes,
+        keywords: list[int],
+        start_index: int,
+    ) -> tuple[str, int]:
+        parts: list[str] = []
+        buffer = bytearray()
+        in_hotspot = False
+        keyword_index = start_index
+
+        for value in raw_line:
+            if value != 0x02:
+                buffer.append(value)
+                continue
+
+            if in_hotspot:
+                label = self._escape_plain_text(self.html_renderer._decode_bytes(bytes(buffer)))
+                if keyword_index < len(keywords):
+                    parts.append(self._wrap_link_text(keywords[keyword_index], label))
+                    keyword_index += 1
+                else:
+                    parts.append(label)
+                buffer.clear()
+                in_hotspot = False
+                continue
+
+            if buffer:
+                parts.append(self._render_plain_segment(bytes(buffer)))
+                buffer.clear()
+            in_hotspot = True
+
+        if buffer:
+            parts.append(self._render_plain_segment(bytes(buffer)))
+
+        return "".join(parts), keyword_index
+
+    def _render_plain_segment(self, raw_segment: bytes) -> str:
+        return self._escape_plain_text(self.html_renderer._decode_bytes(raw_segment))
+
+    @staticmethod
+    def _escape_plain_text(text: str) -> str:
+        # Convert visible glyph-based nav markers (e.g. ◄[b]Contents[/b]►)
+        # into canonical UHF nav tags before escaping ordinary text.
+        if not isinstance(text, str):
+            text = str(text)
+
+        # Fast path: nothing to convert
+        if "◄" not in text and "►" not in text:
+            return escape_uhf_text(text)
+
+        import re
+
+        replacements: list[str] = []
+
+        def _repl(m: re.Match) -> str:
+            label = m.group(1)
+            lowered = label.strip().lower()
+            if lowered.startswith("contents"):
+                act = "contents"
+            elif lowered.startswith("index"):
+                act = "index"
+            elif lowered.startswith("back"):
+                act = "back"
+            else:
+                return m.group(0)
+            # preserve the glyphs and emphasize the label as bold
+            rep = f"[nav:{act}]◄[b]{label}[/b]►[/nav]"
+            idx = len(replacements)
+            replacements.append(rep)
+            return f"\x00UHFPLACE{idx}\x00"
+
+        pattern = re.compile(r"◄\s*(?:\[b\])?\s*(Contents|Index|Back)\s*(?:\[/b\])?\s*►", re.IGNORECASE)
+        intermediate = pattern.sub(_repl, text)
+        escaped = escape_uhf_text(intermediate)
+
+        # Restore inserted UHF tag replacements (they must remain unescaped)
+        for i, rep in enumerate(replacements):
+            escaped = escaped.replace(f"\x00UHFPLACE{i}\x00", rep)
+
+        return escaped
+
+    def _wrap_link_text(self, target_context: int, label: str) -> str:
+        nav_action = context_nav_action(target_context)
+        if nav_action:
+            return f"[nav:{nav_action}]{label}[/nav]"
+        if target_context not in self.topic_ids:
+            return label
+        return format_uhf_link(label, topic_id=target_context)
+
+    def _metadata_name(self) -> str:
+        name = self.document.display_name.strip()
+        if name:
+            return name
+        return self.html_renderer._site_name()
+
+    def _serialize_nav_items(self, nav_items: list[TopicNavItem]) -> dict[str, dict[str, int | str]]:
+        nav: dict[str, dict[str, int | str]] = {}
+        for item in nav_items:
+            label = item.label.strip()
+            if not label:
+                continue
+            payload: dict[str, int | str] = {}
+            if item.action:
+                payload["action"] = item.action
+            if item.source_file:
+                payload["file"] = item.source_file
+            if item.topic_id is not None:
+                payload["topic_id"] = item.topic_id
+            if item.alias:
+                payload["alias"] = item.alias
+            if item.line is not None and item.line > 0:
+                payload["line"] = item.line
+            if payload:
+                nav[label] = payload
+        return nav
+
+    def _metadata_author(self) -> str | None:
+        meta = self.document.metadata or {}
+        credit_lines = meta.get("credit_lines")
+        if isinstance(credit_lines, list):
+            for line in credit_lines:
+                if isinstance(line, str) and line.strip():
+                    return line.strip()
+        return None
+
+    def _metadata_copyright(self) -> str | None:
+        meta = self.document.metadata or {}
+        credit_lines = meta.get("credit_lines")
+        if isinstance(credit_lines, list):
+            for line in credit_lines:
+                if isinstance(line, str) and line.strip():
+                    lowered = line.lower()
+                    if "copyright" in lowered or "(c)" in lowered:
+                        return line.strip()
+        return None
+
+    def _source_format(self) -> str:
+        suffix = Path(self.document.source_name).suffix.lower()
+        if suffix in {".hlx", ".hl6"}:
+            return "hlx"
+        return SOURCE_FORMAT_BY_READER.get(self.document.format_name, self.document.format_name)
+
+    def _source_encoding(self) -> str:
+        meta = self.document.metadata or {}
+        encoding = (meta.get("source_encoding")
+                    or meta.get("text_encoding")
+                    or meta.get("encoding")
+                    or self.display_encoding)
+        return self._normalize_encoding_name(str(encoding))
+
+    @staticmethod
+    def _normalize_encoding_name(encoding: str) -> str:
+        aliases = {
+            "latin1": "latin-1",
+            "latin2": "latin-2",
+            "utf8": "utf-8",
+        }
+        lowered = encoding.strip().lower()
+        return aliases.get(lowered, lowered)

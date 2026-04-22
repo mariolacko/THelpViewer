@@ -2,18 +2,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Copy converter package and build script
-COPY converter/ /app/converter/
-COPY downloader/ /app/downloader/
-COPY thelp.sh /app/thelp.sh
-RUN chmod +x /app/thelp.sh
+COPY requirements.txt .
 
-# Sources are mounted read-only, downloads and www are volumes
-VOLUME ["/app/sources", "/app/downloads", "/app/www"]
+RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 5448
 
-# Default: serve only (no rebuild on restart).
-# To rebuild: docker compose exec viewer ./thelp.sh build
-# To rebuild + serve: docker compose run viewer ./thelp.sh build serve 5448
-CMD ["/app/thelp.sh", "serve", "5448"]
+# Runtime files are bind-mounted by docker-compose. The image only provides Python + deps.
+CMD ["/bin/bash", "-lc", "chmod +x /app/thelp.sh && THELP_SERVER_FOREGROUND=1 exec /app/thelp.sh serve ${THELP_PORT:-5448}"]

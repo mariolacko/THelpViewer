@@ -1,10 +1,19 @@
 services:
   viewer:
     build: .
+    working_dir: /app
+    environment:
+      THELP_PORT: "${THELP_PORT:-5448}"
+      THELP_WEB_DIR: "/app/www"
+      THELP_INDEX_PATH: "/app/www/index.html"
+      THELP_HELPS_DIR: "/app/helps"
+      THELP_DOCS_DIR: "/app/docs"
+      THELP_ASSETS_DIR: "/app/www/assets"
+      THELP_README_PATH: "/app/README.md"
+      THELP_CHANGELOG_PATH: "/app/CHANGELOG.md"
+      THELP_STATE_DIR: "/app/var"
+      THELP_HELP_DATABASE_PATH: "/app/thelpviewer/help-database.json"
     ports:
-      - "5448:5448"
+      - "${THELP_PORT:-5448}:${THELP_PORT:-5448}"
     volumes:
-      - ./sources:/app/sources:ro
-      - ./docs:/app/docs:ro
-      - ./downloads:/app/downloads
-      - ./www:/app/www
+      - ${THELP_APP_HOST_DIR:-.}:/app

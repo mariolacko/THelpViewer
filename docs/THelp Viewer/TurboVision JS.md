@@ -1,6 +1,6 @@
 # TurboVision JS — API Documentation
 
-THelpViewer uses a modular JavaScript framework inspired by Borland's TurboVision TUI toolkit. The code is organized into five files under `converter/assets/`:
+THelpViewer uses a modular JavaScript framework inspired by Borland's TurboVision TUI toolkit. The runtime assets are served from `www/assets/`:
 
 | File | Purpose |
 |------|---------|
