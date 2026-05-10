@@ -120,7 +120,7 @@ class TopicNavItem:
         if self.action:
             payload["action"] = self.action
         if self.source_file:
-            payload["source_file"] = self.source_file
+            payload["file"] = self.source_file
         if self.alias:
             payload["alias"] = self.alias
         if self.line is not None:
@@ -139,7 +139,7 @@ class TopicRecord:
     alias_strings: list[str] = field(default_factory=list)
     sequential_keywords: list[int] = field(default_factory=list)
     positional_keywords: list[PositionedKeyword] = field(default_factory=list)
-    is_main_index: bool = False
+    is_help_contents: bool = False
     up_context: int | None = None
     down_context: int | None = None
     prev_context: int | None = None
@@ -148,11 +148,14 @@ class TopicRecord:
     nav_items: list[TopicNavItem] = field(default_factory=list)
     code_line_indices: set[int] = field(default_factory=set)
     frozen_rows: int = 0
+    quickhelp_category_nav: TopicNavItem | None = None
+    quickhelp_is_list: bool = False
+    quickhelp_is_popup: bool = False
     uhf_content: list[str] = field(default_factory=list)
 
     def to_dict(self, text_encoding: str = "latin1") -> dict[str, object]:
         """Return a JSON-safe view of one normalized help topic."""
-        return {
+        payload = {
             "context_id": self.context_id,
             "names": list(self.names),
             "raw_lines": [_serialize_bytes(line, text_encoding) for line in self.raw_lines],
@@ -161,7 +164,7 @@ class TopicRecord:
             "alias_strings": list(self.alias_strings),
             "sequential_keywords": list(self.sequential_keywords),
             "positional_keywords": [keyword.to_dict() for keyword in self.positional_keywords],
-            "is_main_index": self.is_main_index,
+            "is_help_contents": self.is_help_contents,
             "up_context": self.up_context,
             "down_context": self.down_context,
             "prev_context": self.prev_context,
@@ -171,21 +174,41 @@ class TopicRecord:
             "frozen_rows": self.frozen_rows,
             "uhf_content": list(self.uhf_content),
         }
+        if self.quickhelp_category_nav is not None:
+            payload["quickhelp_category_nav"] = self.quickhelp_category_nav.to_dict()
+        if self.quickhelp_is_list:
+            payload["quickhelp_is_list"] = True
+        if self.quickhelp_is_popup:
+            payload["quickhelp_is_popup"] = True
+        return payload
 
 
 @dataclass(slots=True)
 class IndexEntry:
-    """One index label pointing to a topic context id."""
+    """One index label pointing to a topic or to a generic UHF target."""
 
     label: bytes
     context_id: int
+    topic_id: int | None = None
+    source_file: str | None = None
+    alias: str | None = None
+    line: int | None = None
 
     def to_dict(self, text_encoding: str = "latin1") -> dict[str, object]:
         """Return a JSON-safe view of one visible index entry."""
-        return {
+        payload: dict[str, object] = {
             "label": _serialize_bytes(self.label, text_encoding),
             "context_id": self.context_id,
         }
+        if self.topic_id is not None:
+            payload["topic_id"] = self.topic_id
+        if self.source_file:
+            payload["file"] = self.source_file
+        if self.alias:
+            payload["alias"] = self.alias
+        if self.line is not None:
+            payload["line"] = self.line
+        return payload
 
 
 @dataclass(slots=True)
@@ -211,7 +234,7 @@ class ContentNode:
         if self.topic_id is not None:
             payload["topic_id"] = self.topic_id
         if self.source_file:
-            payload["source_file"] = self.source_file
+            payload["file"] = self.source_file
         if self.alias:
             payload["alias"] = self.alias
         if self.line is not None:
@@ -356,7 +379,7 @@ class HelpReaderBase(ABC):
 _UHF_NAV_ACTION_RE = re.compile(r"\[nav:([^\]]+)\](.*?)\[/nav\]")
 _UHF_NAV_LINK_RE = re.compile(r"\[link:([^\]]+)\](.*?)\[/link\]")
 _UHF_INLINE_STYLE_RE = re.compile(
-    r"\[/?(?:b|i|u|r|fg:\d{1,2}|bg:\d{1,2}|color:\d{1,2}(?::\d{1,2})?)\]"
+    r"\[/?(?:b|i|u|r|style|fg[:=][^\]]+|bg[:=][^\]]+|color[:=][^\]]+)\]"
 )
 
 

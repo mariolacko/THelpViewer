@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+import re
 import struct
 from pathlib import Path
 from ..base import (
@@ -15,6 +16,7 @@ from ..base import (
     HelpReaderBase,
     IndexEntry,
     PositionedKeyword,
+    TopicNavItem,
     TopicRecord,
     context_nav_action,
     ensure_document_index,
@@ -22,6 +24,9 @@ from ..base import (
     nav_action_context,
 )
 from ..uhf_markup import UhfLinkSpan, UhfStyleSpan, format_uhf_link, render_uhf_line
+
+
+_QUICKHELP_GRID_SPLIT_RE = re.compile(r"(\s{2,})")
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +179,16 @@ class _ExternalQuickHelpTarget:
     source_file: str
     topic_id: int | None = None
     context_alias: str | None = None
+
+
+@dataclass(slots=True)
+class _QuickHelpTopicOptions:
+    """Extra QuickHelp topic directives captured during command-line parsing."""
+
+    frozen_rows: int = 0
+    category_param: str | None = None
+    is_list: bool = False
+    is_popup: bool = False
 
 
 @lru_cache(maxsize=256)
@@ -371,18 +386,18 @@ def _decompile_topic(
     context_map: dict[str, int],
     topic_count: int,
     source_path: Path | None,
-) -> tuple[list[bytes], list[PositionedKeyword], list[str], list[str], int]:
+) -> tuple[list[bytes], list[PositionedKeyword], list[str], list[str], _QuickHelpTopicOptions]:
     """Decompile a binary topic into display lines and hyperlink data.
 
     Returns:
-        (raw_lines, positional_keywords, names, uhf_lines, frozen_rows)
+        (raw_lines, positional_keywords, names, uhf_lines, topic_options)
         where names are :n (topic title) values.
     """
     raw_lines: list[bytes] = []
     keywords: list[PositionedKeyword] = []
     names: list[str] = []
     uhf_lines: list[str] = []
-    frozen_rows = 0
+    topic_options = _QuickHelpTopicOptions()
 
     pos = 0
     while pos < len(binary):
@@ -419,9 +434,15 @@ def _decompile_topic(
                     names.append(param)
                 elif cmd_char == b"l":
                     try:
-                        frozen_rows = max(0, int(param.split()[0]))
+                        topic_options.frozen_rows = max(0, int(param.split()[0]))
                     except (IndexError, ValueError):
                         pass
+                elif cmd_char == b"c" and param:
+                    topic_options.category_param = param
+                elif cmd_char == b"i":
+                    topic_options.is_list = True
+                elif cmd_char == b"g":
+                    topic_options.is_popup = True
             # Command lines are not displayed; skip to next
             continue
 
@@ -469,7 +490,7 @@ def _decompile_topic(
         )
         raw_lines.append(stored_text)
 
-    return raw_lines, keywords, names, uhf_lines, frozen_rows
+    return raw_lines, keywords, names, uhf_lines, topic_options
 
 
 def _parse_links(
@@ -510,7 +531,7 @@ def _parse_links(
             if ctx_upper == "!B":
                 topic_idx = nav_action_context("back")
             elif ctx_upper.endswith("!HV") or ctx_upper == "-9996":
-                # Home-view context: Contents / main topic
+                # Home-view context: source Contents topic.
                 topic_idx = nav_action_context("contents")
             elif ctx_upper.endswith("!VX") or ctx_upper == "-9997":
                 # Index-view context
@@ -645,13 +666,14 @@ class QuickHelpReader(HelpReaderBase):
 
         # --- Decode each topic ---
         topics: list[TopicRecord] = []
+        quickhelp_category_params: dict[int, str] = {}
         for i in range(topic_count):
             t_start = topic_offsets[i]
             t_end = topic_offsets[i + 1]
             raw_topic = data[t_start:t_end]
 
             try:
-                raw_lines, pos_keywords, names, uhf_lines, frozen_rows = _decode_topic(
+                raw_lines, pos_keywords, names, uhf_lines, topic_options = _decode_topic(
                     raw_topic, tree, keywords, control_char,
                     context_map, topic_count, self.source_path,
                 )
@@ -660,7 +682,7 @@ class QuickHelpReader(HelpReaderBase):
                 pos_keywords = []
                 names = []
                 uhf_lines = []
-                frozen_rows = 0
+                topic_options = _QuickHelpTopicOptions()
 
             if not names:
                 derived_heading = _quickhelp_topic_heading(
@@ -689,14 +711,22 @@ class QuickHelpReader(HelpReaderBase):
                 positional_keywords=pos_keywords,
                 names=names,
                 alias_strings=alias_strings,
-                frozen_rows=frozen_rows,
+                frozen_rows=topic_options.frozen_rows,
+                quickhelp_is_list=topic_options.is_list,
+                quickhelp_is_popup=topic_options.is_popup,
                 uhf_content=uhf_lines,
             )
             topic.nav_items = extract_nav_items_from_uhf(
                 uhf_lines,
                 valid_topic_ids=set(range(topic_count)),
             )
+            if topic_options.category_param:
+                quickhelp_category_params[i] = topic_options.category_param
             topics.append(topic)
+
+        help_contents_topic_id = _quickhelp_help_contents_topic_id(topics)
+        if help_contents_topic_id is not None:
+            topics[help_contents_topic_id].is_help_contents = True
 
         # --- Build index entries ---
         # Prefer `:n` topic titles as visible labels; fall back to context strings.
@@ -717,6 +747,11 @@ class QuickHelpReader(HelpReaderBase):
                         label = ctx_str.encode("latin-1", errors="replace")
                 index_entries.append(IndexEntry(label=label, context_id=topic_idx))
 
+        _linkify_quickhelp_grid_topics(topics, index_entries)
+        label_lookup = _build_quickhelp_index_lookup(topics, index_entries)
+        _resolve_quickhelp_category_topics(topics, quickhelp_category_params, label_lookup)
+        _linkify_quickhelp_list_topics(topics, label_lookup)
+
         metadata: dict[str, object] = {
             "db_name": db_name,
             "version": version,
@@ -727,6 +762,8 @@ class QuickHelpReader(HelpReaderBase):
         title = _derive_quickhelp_title(topics, source_name=self.source_name, db_name=db_name)
         if title:
             metadata["title"] = title
+        if help_contents_topic_id is not None:
+            metadata["help_contents_topic_id"] = help_contents_topic_id
 
         return ensure_document_index(HelpDocument(
             format_name="quickhelp",
@@ -745,10 +782,10 @@ def _decode_topic(
     context_map: dict[str, int],
     topic_count: int,
     source_path: Path | None,
-) -> tuple[list[bytes], list[PositionedKeyword], list[str], list[str], int]:
+) -> tuple[list[bytes], list[PositionedKeyword], list[str], list[str], _QuickHelpTopicOptions]:
     """Full three-stage decoding pipeline for one topic."""
     if len(raw_topic) < 2:
-        return [], [], [], [], 0
+        return [], [], [], [], _QuickHelpTopicOptions()
 
     # OUTLEN = uncompressed binary size (Step 1 output size)
     outlen = struct.unpack_from("<H", raw_topic, 0)[0]
@@ -828,6 +865,256 @@ def _format_quickhelp_link(link: UhfLinkSpan, label: str, topic_count: int) -> s
             line=link.target_line,
         )
     return label
+
+
+def _quickhelp_help_contents_topic_id(topics: list[TopicRecord]) -> int | None:
+    """Return the QuickHelp contents topic when the database exposes one."""
+    for topic in topics:
+        aliases = {alias.strip().upper() for alias in topic.alias_strings}
+        if "-9996" in aliases or any(alias.endswith("!HV") for alias in aliases):
+            return topic.context_id
+
+    for topic in topics:
+        aliases = {alias.strip().casefold() for alias in topic.alias_strings}
+        if "h.contents" in aliases:
+            return topic.context_id
+
+    for topic in topics:
+        title = " ".join(name.strip() for name in topic.names if name.strip()).casefold()
+        if "contents" not in title:
+            continue
+        if any(alias.strip().casefold().endswith(".contents") for alias in topic.alias_strings):
+            return topic.context_id
+
+    return None
+
+
+def _normalize_quickhelp_index_label(label: str) -> str:
+    return " ".join(label.split()).casefold()
+
+
+def _quickhelp_register_link_label(
+    lookup: dict[str, int],
+    ambiguous: set[str],
+    label: str,
+    topic_id: int,
+) -> None:
+    normalized = _normalize_quickhelp_index_label(label)
+    if not normalized or normalized in ambiguous:
+        return
+    existing = lookup.get(normalized)
+    if existing is None:
+        lookup[normalized] = topic_id
+        return
+    if existing != topic_id:
+        ambiguous.add(normalized)
+        lookup.pop(normalized, None)
+
+
+def _build_quickhelp_index_lookup(topics: list[TopicRecord], index_entries: list[IndexEntry]) -> dict[str, int]:
+    lookup: dict[str, int] = {}
+    ambiguous: set[str] = set()
+    for entry in index_entries:
+        label = entry.label.decode("latin-1", errors="replace").strip()
+        if not label:
+            continue
+        _quickhelp_register_link_label(lookup, ambiguous, label, entry.context_id)
+
+    for topic in topics:
+        for label in topic.names:
+            cleaned = label.strip()
+            if cleaned:
+                _quickhelp_register_link_label(lookup, ambiguous, cleaned, topic.context_id)
+        for alias in topic.alias_strings:
+            cleaned = alias.strip()
+            if cleaned:
+                _quickhelp_register_link_label(lookup, ambiguous, cleaned, topic.context_id)
+    return lookup
+
+
+def _quickhelp_list_candidate_labels(text: str) -> list[str]:
+    stripped = text.strip()
+    if not stripped:
+        return []
+
+    labels: list[str] = []
+    words = stripped.split(None, 1)
+    if words:
+        labels.append(words[0])
+
+    line_label = re.split(r"\s{2,}", stripped, maxsplit=1)[0].strip()
+    if line_label and line_label not in labels:
+        labels.append(line_label)
+    return labels
+
+
+def _resolve_quickhelp_list_target(
+    line_text: str,
+    label_lookup: dict[str, int],
+    *,
+    skip_topic_id: int | None = None,
+) -> tuple[str, int] | None:
+    for label in _quickhelp_list_candidate_labels(line_text):
+        target_topic = label_lookup.get(_normalize_quickhelp_index_label(label))
+        if target_topic is None:
+            continue
+        if skip_topic_id is not None and target_topic == skip_topic_id:
+            continue
+        return label, target_topic
+    return None
+
+
+def _linkify_quickhelp_list_line(
+    line: str,
+    raw_line: bytes,
+    label_lookup: dict[str, int],
+    *,
+    topic_id: int,
+) -> str:
+    if "[" in line:
+        return line
+
+    raw_text = raw_line.decode("cp437", errors="replace")
+    resolved = _resolve_quickhelp_list_target(raw_text, label_lookup, skip_topic_id=topic_id)
+    if resolved is None:
+        return line
+
+    label, target_topic = resolved
+    leading = line[: len(line) - len(line.lstrip())]
+    body = line[len(leading):]
+    if not body.startswith(label):
+        return line
+    return f"{leading}{format_uhf_link(label, topic_id=target_topic)}{body[len(label):]}"
+
+
+def _find_quickhelp_list_line(
+    topic: TopicRecord,
+    label_lookup: dict[str, int],
+    *,
+    wanted_topic_id: int,
+) -> int | None:
+    for line_number, raw_line in enumerate(topic.raw_lines, start=1):
+        raw_text = raw_line.decode("cp437", errors="replace")
+        resolved = _resolve_quickhelp_list_target(raw_text, label_lookup)
+        if resolved is not None and resolved[1] == wanted_topic_id:
+            return line_number
+    return None
+
+
+def _resolve_quickhelp_category_target(
+    category_param: str,
+    topics: list[TopicRecord],
+    label_lookup: dict[str, int],
+    *,
+    current_topic: TopicRecord,
+) -> TopicNavItem | None:
+    cleaned = " ".join(category_param.split())
+    if not cleaned:
+        return None
+
+    alias = cleaned
+    target_topic = label_lookup.get(_normalize_quickhelp_index_label(cleaned))
+    explicit_line: int | None = None
+
+    if target_topic is None:
+        head, sep, tail = cleaned.rpartition(" ")
+        if sep:
+            candidate_alias = head.strip()
+            candidate_line = tail.strip()
+            if candidate_alias and candidate_line.isdigit():
+                resolved_topic = label_lookup.get(_normalize_quickhelp_index_label(candidate_alias))
+                if resolved_topic is not None:
+                    alias = candidate_alias
+                    target_topic = resolved_topic
+                    explicit_line = max(1, int(candidate_line))
+
+    if target_topic is None:
+        return TopicNavItem(label="Category", alias=alias)
+
+    line_number: int | None = None
+    target_record = topics[target_topic] if 0 <= target_topic < len(topics) else None
+    if target_record is not None and target_record.quickhelp_is_list:
+        if explicit_line is not None:
+            line_number = explicit_line
+        else:
+            line_number = _find_quickhelp_list_line(
+                target_record,
+                label_lookup,
+                wanted_topic_id=current_topic.context_id,
+            )
+
+    item = TopicNavItem(label="Category", topic_id=target_topic, alias=alias)
+    if line_number is not None:
+        item.line = line_number
+    return item
+
+
+def _resolve_quickhelp_category_topics(
+    topics: list[TopicRecord],
+    category_params: dict[int, str],
+    label_lookup: dict[str, int],
+) -> None:
+    for topic in topics:
+        category_param = category_params.get(topic.context_id)
+        if not category_param:
+            continue
+        topic.quickhelp_category_nav = _resolve_quickhelp_category_target(
+            category_param,
+            topics,
+            label_lookup,
+            current_topic=topic,
+        )
+
+
+def _linkify_quickhelp_list_topics(topics: list[TopicRecord], label_lookup: dict[str, int]) -> None:
+    if not label_lookup:
+        return
+
+    for topic in topics:
+        if not topic.quickhelp_is_list or not topic.uhf_content or not topic.raw_lines:
+            continue
+        topic.uhf_content = [
+            _linkify_quickhelp_list_line(line, raw_line, label_lookup, topic_id=topic.context_id)
+            for line, raw_line in zip(topic.uhf_content, topic.raw_lines)
+        ]
+
+
+def _linkify_quickhelp_grid_line(line: str, topic_id: int, label_lookup: dict[str, int]) -> str:
+    if "[" in line:
+        return line
+
+    parts = _QUICKHELP_GRID_SPLIT_RE.split(line)
+    if len(parts) < 3:
+        return line
+
+    replacements = 0
+    for index in range(0, len(parts), 2):
+        chunk = parts[index]
+        stripped = chunk.strip()
+        if not stripped:
+            continue
+        target_topic = label_lookup.get(_normalize_quickhelp_index_label(stripped))
+        if target_topic is None or target_topic == topic_id:
+            continue
+        leading = chunk[: len(chunk) - len(chunk.lstrip())]
+        trailing = chunk[len(chunk.rstrip()):]
+        parts[index] = f"{leading}{format_uhf_link(stripped, topic_id=target_topic)}{trailing}"
+        replacements += 1
+
+    return "".join(parts) if replacements >= 2 else line
+
+
+def _linkify_quickhelp_grid_topics(topics: list[TopicRecord], index_entries: list[IndexEntry]) -> None:
+    label_lookup = _build_quickhelp_index_lookup(topics, index_entries)
+    if not label_lookup:
+        return
+    for topic in topics:
+        if not topic.uhf_content:
+            continue
+        topic.uhf_content = [
+            _linkify_quickhelp_grid_line(line, topic.context_id, label_lookup)
+            for line in topic.uhf_content
+        ]
 
 
 def _quickhelp_topic_heading(topic: TopicRecord) -> str:

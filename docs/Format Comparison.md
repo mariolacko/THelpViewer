@@ -171,7 +171,7 @@ class TopicRecord:
     alias_contexts: list[int]                # alternative context ids for the same topic
     sequential_keywords: list[int]           # THELP v5 / FBHF / M602 inline hotspot targets
     positional_keywords: list[PositionedKeyword]  # line+col link ranges (THELP v4, NG, QuickHelp)
-    is_main_index: bool
+    is_help_contents: bool
     up_context: int | None
     down_context: int | None
     names: list[str]                         # explicit titles (QuickHelp :n, FBHF .topic)

@@ -276,7 +276,7 @@ Index respectively.  These are treated the same as `!HV` and `!VX`.
 | Context string pattern | Viewer action |
 |------------------------|---------------|
 | `!B` | Back (history) |
-| `*!HV` | Contents — go to main topic |
+| `*!HV` | Contents — go to help contents topic |
 | `*!VX` | Index — open index page |
 | `-9996` | Contents (numeric predefined context) |
 | `-9997` | Index (numeric predefined context) |

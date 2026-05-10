@@ -224,8 +224,8 @@ class HelpJsonRenderer:
             aliases = self._build_topic_aliases(topic)
             if aliases:
                 topic_payload["aliases"] = aliases
-            if topic.is_main_index:
-                topic_payload["is_main"] = True
+            if topic.is_help_contents:
+                topic_payload["is_help_contents"] = True
             if topic.frozen_rows > 0:
                 topic_payload["frozen_rows"] = topic.frozen_rows
 
