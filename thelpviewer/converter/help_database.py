@@ -22,6 +22,8 @@ class HelpDatabaseEntry:
     title: str
     collection: str
     text_encoding: str = ""
+    language: str = ""
+    help_contents_topic_id: int | None = None
 
 
 def crc32_file(path: str | Path) -> int:
@@ -81,12 +83,21 @@ def _load_entries(database_path: str) -> dict[int, HelpDatabaseEntry]:
         if not collection and isinstance(item.get("project"), str):
             collection = item.get("project")
         text_encoding = item.get("text_encoding") if isinstance(item.get("text_encoding"), str) else ""
+        language = item.get("language") if isinstance(item.get("language"), str) else ""
+        help_contents_topic_id = item.get("help_contents_topic_id")
+        if help_contents_topic_id is not None:
+            try:
+                help_contents_topic_id = int(help_contents_topic_id)
+            except (TypeError, ValueError):
+                help_contents_topic_id = None
         entries[crc_value] = HelpDatabaseEntry(
             crc32=crc_value,
             filenames=tuple(alias_names),
             title=title.strip(),
             collection=collection.strip(),
             text_encoding=text_encoding.strip(),
+            language=language.strip(),
+            help_contents_topic_id=help_contents_topic_id,
         )
     return entries
 

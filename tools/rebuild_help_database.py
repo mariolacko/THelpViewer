@@ -22,6 +22,7 @@ from thelpviewer.converter.exporter import (
     load_document,
 )
 from thelpviewer.converter.help_database import crc32_file
+from thelpviewer.downloader.collector import detect_language
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
@@ -36,20 +37,77 @@ _STOP_TOKENS = {
     "the",
     "and",
 }
-_HELP_FILE_SUFFIXES = {".hlp", ".tph", ".tch", ".ng", ".hlx", ".hl6", ".dat"}
+_HELP_FILE_SUFFIXES = {".hlp", ".tph", ".tch", ".tdh", ".tfh", ".ng", ".hlx", ".hl6", ".dat"}
 _NEW_ENTRIES_SEPARATOR_KIND = "separator"
 _NEW_ENTRIES_NOTE = "New help files discovered during the last rebuild start below."
 
+LANGUAGE_BY_DETECTED_CODE = {
+    "CZ": "cs",
+    "DE": "de",
+    "FR": "fr",
+    "ES": "es",
+    "IT": "it",
+    "NL": "nl",
+    "PT": "pt",
+    "PL": "pl",
+    "RU": "ru",
+    "SE": "sv",
+    "HU": "hu",
+}
 
-def _inspect_supported_file(path: Path) -> tuple[str, str]:
+
+def _inspect_supported_file(path: Path) -> tuple[str, str, int | None]:
     handler = detect_format_handler(path)
     if handler is None:
-        return path.stem, ""
+        if path.name.upper() == "TDHELP.TDH":
+            return "Turbo Debugger Help", "", None
+        if path.name.upper() == "TFHELP.TFH":
+            return "Turbo Profiler Help", "", None
+        return path.stem, "", None
     document = load_document(path)
     encoding = autodetect_display_encoding(document, source_hint=str(path))
     fix_metadata_encoding(document, encoding)
     title = document.display_name.strip()
-    return title or path.stem, encoding
+    topic_ids = {topic.context_id for topic in document.topics}
+    help_contents_topic_id = document.metadata.get("help_contents_topic_id")
+    if not isinstance(help_contents_topic_id, int) or help_contents_topic_id not in topic_ids:
+        help_contents_topic_id = next(
+            (topic.context_id for topic in document.topics if topic.is_help_contents),
+            None,
+        )
+    return title or path.stem, encoding, help_contents_topic_id
+
+
+def _infer_language(path: Path, title: str, collection: str, text_encoding: str) -> str:
+    """Infer a BCP 47 language tag from canonical metadata and source names."""
+    haystack = " ".join((str(path), title, collection))
+    detected = detect_language(f" {haystack} ")
+    if detected:
+        mapped = LANGUAGE_BY_DETECTED_CODE.get(detected.upper())
+        if mapped:
+            return mapped
+
+    lowered = haystack.casefold()
+    if any(token in lowered for token in ("(cz)", " czech", " česk", " cesk", " nápověd", "napoved")):
+        return "cs"
+    if any(token in lowered for token in ("(de)", " german", " deutsch", " hilfe")):
+        return "de"
+    if any(token in lowered for token in ("software 602", "text602", "calc602", "m602", "scorpion")):
+        return "cs"
+    if text_encoding in {"cp852", "kamenicky"}:
+        return "cs"
+    if any(token in lowered for token in ("microsoft", "borland", "norton", "quick", "turbo", "objectwindows")):
+        return "en"
+    return ""
+
+
+def _is_help_file_path(path: Path) -> bool:
+    suffix = path.suffix.lower()
+    return suffix in _HELP_FILE_SUFFIXES or (
+        len(suffix) == 4
+        and suffix.startswith(".t")
+        and suffix.endswith("h")
+    )
 
 
 def _tokens(value: str) -> set[str]:
@@ -135,14 +193,26 @@ def _normalize_entry(item: object) -> dict[str, object] | None:
     if not collection and isinstance(item.get("project"), str):
         collection = item.get("project")
     text_encoding = item.get("text_encoding") if isinstance(item.get("text_encoding"), str) else ""
+    language = item.get("language") if isinstance(item.get("language"), str) else ""
+    help_contents_topic_id = item.get("help_contents_topic_id")
+    if help_contents_topic_id is not None:
+        try:
+            help_contents_topic_id = int(help_contents_topic_id)
+        except (TypeError, ValueError):
+            help_contents_topic_id = None
 
-    return {
+    normalized = {
         "crc32": crc32.upper(),
         "filenames": filenames,
         "title": title,
         "collection": collection,
         "text_encoding": text_encoding,
     }
+    if language.strip():
+        normalized["language"] = language.strip()
+    if help_contents_topic_id is not None:
+        normalized["help_contents_topic_id"] = help_contents_topic_id
+    return normalized
 
 
 def _merge_filenames(existing: list[str], discovered: list[str]) -> list[str]:
@@ -164,8 +234,12 @@ def _merge_existing_entry(existing: dict[str, object], discovered: dict[str, obj
         list(existing.get("filenames", [])) if isinstance(existing.get("filenames"), list) else [],
         list(discovered.get("filenames", [])) if isinstance(discovered.get("filenames"), list) else [],
     )
-    for key in ("title", "collection", "text_encoding"):
+    for key in ("title", "collection", "text_encoding", "language", "help_contents_topic_id"):
         current = merged.get(key)
+        if key == "help_contents_topic_id":
+            if current is None and discovered.get(key) is not None:
+                merged[key] = discovered[key]
+            continue
         if not isinstance(current, str) or not current.strip():
             merged[key] = discovered.get(key, "")
     return merged
@@ -194,7 +268,7 @@ def _discover_entries(sources_dir: Path) -> dict[str, dict[str, object]]:
     all_paths = sorted(
         path
         for path in sources_dir.rglob("*")
-        if path.is_file() and path.suffix.lower() in _HELP_FILE_SUFFIXES
+        if path.is_file() and _is_help_file_path(path)
     )
     for path in all_paths:
         grouped_paths[crc32_file(path)].append(path)
@@ -208,7 +282,7 @@ def _discover_entries(sources_dir: Path) -> dict[str, dict[str, object]]:
         ordered_filenames = [canonical_filename] + [
             name for name in filenames if name.casefold() != canonical_filename.casefold()
         ]
-        title, text_encoding = _inspect_supported_file(representative)
+        title, text_encoding, help_contents_topic_id = _inspect_supported_file(representative)
         collections = sorted(
             {
                 str(path.parent.relative_to(sources_dir)).replace("\\", "/")
@@ -217,13 +291,19 @@ def _discover_entries(sources_dir: Path) -> dict[str, dict[str, object]]:
             key=str.casefold,
         )
         collection = _canonical_collection(collections, title)
-        discovered_entries[f"{crc32:08X}"] = {
+        language = _infer_language(representative, title, collection, text_encoding)
+        entry: dict[str, object] = {
             "filenames": ordered_filenames,
             "crc32": f"{crc32:08X}",
             "title": title,
             "collection": collection,
             "text_encoding": text_encoding,
         }
+        if language:
+            entry["language"] = language
+        if help_contents_topic_id is not None:
+            entry["help_contents_topic_id"] = help_contents_topic_id
+        discovered_entries[f"{crc32:08X}"] = entry
     return discovered_entries
 
 

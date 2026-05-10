@@ -1,15 +1,17 @@
 {
   "version": 1,
-  "generated_at": "2026-04-12T16:46:02+00:00",
+  "generated_at": "2026-05-05T04:52:05+00:00",
   "entries": [
     {
       "crc32": "03F6A215",
       "filenames": [
         "TCHELP.TCH"
       ],
-      "title": "Turbo C Help",
+      "title": "Turbo C++ 3.0 Help",
       "collection": "Borland Turbo C 3.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 399,
+      "language": "en"
     },
     {
       "crc32": "05B5AFB6",
@@ -18,7 +20,9 @@
       ],
       "title": "Turbo Pascal Version 4.00",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "0C943B3E",
@@ -27,7 +31,9 @@
       ],
       "title": "Turbo Vision",
       "collection": "Borland Turbo Pascal 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 1226,
+      "language": "en"
     },
     {
       "crc32": "0F706BA4",
@@ -36,7 +42,8 @@
       ],
       "title": "Microsoft Utilities Errors Help",
       "collection": "Microsoft QuickC, C, and C++ 6.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "13413B92",
@@ -45,7 +52,8 @@
       ],
       "title": "Error Message",
       "collection": "Microsoft QuickC, C, and C++ 2.50",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "140DCBDE",
@@ -54,7 +62,9 @@
       ],
       "title": "Turbo Vision Help",
       "collection": "Borland Turbo Pascal 7 (CZ)",
-      "text_encoding": "kamenicky"
+      "text_encoding": "kamenicky",
+      "help_contents_topic_id": 2,
+      "language": "cs"
     },
     {
       "crc32": "17ADD07D",
@@ -63,7 +73,8 @@
       ],
       "title": "Kartotéka 602",
       "collection": "Software 602",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "cs"
     },
     {
       "crc32": "19E56BD2",
@@ -72,7 +83,9 @@
       ],
       "title": "LINK Help",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 1,
+      "language": "en"
     },
     {
       "crc32": "2624FAB7",
@@ -81,7 +94,8 @@
       ],
       "title": "DIFF",
       "collection": "Borland Turbo Prolog 1.x current",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "2B446AAB",
@@ -90,7 +104,8 @@
       ],
       "title": "GEOBASE",
       "collection": "Borland Turbo Prolog 1.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "2E10B9E2",
@@ -99,7 +114,9 @@
       ],
       "title": "Browse Menu",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 445,
+      "language": "en"
     },
     {
       "crc32": "2E2F6324",
@@ -108,7 +125,9 @@
       ],
       "title": "QEdit",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "30CA411F",
@@ -117,7 +136,9 @@
       ],
       "title": "MS-DOS Line",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "39309330",
@@ -126,7 +147,8 @@
       ],
       "title": "Turbo C Help",
       "collection": "Borland Turbo C 2.01",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "3EB5A592",
@@ -135,7 +157,9 @@
       ],
       "title": "Errors Help",
       "collection": "Microsoft QuickC, C, and C++ 6.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 3,
+      "language": "en"
     },
     {
       "crc32": "49BAFD20",
@@ -144,7 +168,9 @@
       ],
       "title": "LINK Help",
       "collection": "Microsoft QuickC, C, and C++ 6.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 1,
+      "language": "en"
     },
     {
       "crc32": "49FD3396",
@@ -153,7 +179,9 @@
       ],
       "title": "Frontdoor 2.02",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "4A123CB9",
@@ -162,7 +190,8 @@
       ],
       "title": "Turbo C Help",
       "collection": "Borland Turbo C 2.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "4EA322BD",
@@ -171,7 +200,9 @@
       ],
       "title": "Turbo C",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "55335E67",
@@ -180,7 +211,8 @@
       ],
       "title": "GENI",
       "collection": "Borland Turbo Prolog 1.x current",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "559E061B",
@@ -189,7 +221,8 @@
       ],
       "title": "MC",
       "collection": "Borland Turbo Basic 1.x current",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "58AB33C3",
@@ -198,7 +231,8 @@
       ],
       "title": "Turbo Pascal 4",
       "collection": "Borland Turbo Pascal 4.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "58D27871",
@@ -207,7 +241,8 @@
       ],
       "title": "Sidekick 2",
       "collection": "Borland Sidekick 2",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "59DAE54E",
@@ -216,7 +251,9 @@
       ],
       "title": "Borland Pascal 7",
       "collection": "Borland Turbo Pascal 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 3,
+      "language": "en"
     },
     {
       "crc32": "5A907417",
@@ -225,7 +262,9 @@
       ],
       "title": "Microsoft C",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "5C5EE722",
@@ -234,16 +273,19 @@
       ],
       "title": "PROLOG",
       "collection": "Borland Turbo Prolog 1.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "6450667D",
       "filenames": [
         "WINHELP.TCH"
       ],
-      "title": "winhelp",
+      "title": "Borland C++ 3.1 Windows Help",
       "collection": "Borland C++ 3.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 399,
+      "language": "en"
     },
     {
       "crc32": "662E3D85",
@@ -252,7 +294,9 @@
       ],
       "title": "Mouse Services",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "667F1E22",
@@ -261,7 +305,8 @@
       ],
       "title": "c602",
       "collection": "Software 602",
-      "text_encoding": "utf-8"
+      "text_encoding": "utf-8",
+      "language": "cs"
     },
     {
       "crc32": "6956410B",
@@ -270,7 +315,9 @@
       ],
       "title": "Resource Compiler",
       "collection": "Microsoft QuickC, C, and C++ 6.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 0,
+      "language": "en"
     },
     {
       "crc32": "6DFD935B",
@@ -279,16 +326,20 @@
       ],
       "title": "Turbo Pascal 5",
       "collection": "Borland Turbo Pascal 5.0 (DE)",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 100,
+      "language": "de"
     },
     {
       "crc32": "6E12E51C",
       "filenames": [
         "TCHELP.TCH"
       ],
-      "title": "Turbo C Help",
+      "title": "Borland C++ 3.1 Help",
       "collection": "Borland C++ 3.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 399,
+      "language": "en"
     },
     {
       "crc32": "716B739B",
@@ -297,7 +348,9 @@
       ],
       "title": "Nápověda k MS Windows",
       "collection": "Borland Turbo Pascal 7 (CZ)",
-      "text_encoding": "kamenicky"
+      "text_encoding": "kamenicky",
+      "help_contents_topic_id": 2,
+      "language": "cs"
     },
     {
       "crc32": "72FAFC7B",
@@ -306,7 +359,8 @@
       ],
       "title": "taw080554",
       "collection": "Microsoft QuickC, C, and C++ 2.50",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "79C180A5",
@@ -315,7 +369,9 @@
       ],
       "title": "PKZIP 2.0 Reference Guide",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "7D278C3C",
@@ -324,7 +380,8 @@
       ],
       "title": "Microsoft BASIC Programming Examples Help",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "81180535",
@@ -333,7 +390,8 @@
       ],
       "title": "BASIC Expressions",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "820B43DC",
@@ -343,7 +401,8 @@
       ],
       "title": "CODEVIEW (R) HELP SYSTEM",
       "collection": "Microsoft MASM and CodeView 5.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "86285238",
@@ -352,7 +411,9 @@
       ],
       "title": "Drive Configuration Notes",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "8BB44D4B",
@@ -361,7 +422,9 @@
       ],
       "title": "Turbo Pascal 5",
       "collection": "Borland Turbo Pascal 5.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 100,
+      "language": "en"
     },
     {
       "crc32": "8EA2FCF8",
@@ -370,7 +433,8 @@
       ],
       "title": "Text 602 3.10",
       "collection": "Software 602",
-      "text_encoding": "utf-8"
+      "text_encoding": "utf-8",
+      "language": "cs"
     },
     {
       "crc32": "919D8109",
@@ -379,7 +443,8 @@
       ],
       "title": "Microsoft BASIC Details Help",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "94FC8B4B",
@@ -388,7 +453,9 @@
       ],
       "title": "CodeView Contents",
       "collection": "Microsoft QuickC, C, and C++ 6.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 0,
+      "language": "en"
     },
     {
       "crc32": "9AC4FE21",
@@ -397,7 +464,9 @@
       ],
       "title": "Assembly Language",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "9BDE1E30",
@@ -406,7 +475,9 @@
       ],
       "title": "CL Command-Line Help",
       "collection": "Microsoft QuickC, C, and C++ 6.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 2,
+      "language": "en"
     },
     {
       "crc32": "AB5645A7",
@@ -415,7 +486,9 @@
       ],
       "title": "NC 3.0 Hilfe",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "de"
     },
     {
       "crc32": "AE2B580A",
@@ -424,7 +497,9 @@
       ],
       "title": "GoldED ver. 2.40 Norton Guide ver. 1.00",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "B6BBDC5B",
@@ -433,7 +508,8 @@
       ],
       "title": "Microsoft BASIC Environment Help",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "B8229670",
@@ -442,7 +518,9 @@
       ],
       "title": "Nápověda k ObjectWindows",
       "collection": "Borland Turbo Pascal 7 (CZ)",
-      "text_encoding": "kamenicky"
+      "text_encoding": "kamenicky",
+      "help_contents_topic_id": 14,
+      "language": "cs"
     },
     {
       "crc32": "BE9A1165",
@@ -451,7 +529,8 @@
       ],
       "title": "PWB Extensions Help",
       "collection": "Microsoft QuickC, C, and C++ 6.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "C08D93CB",
@@ -460,7 +539,8 @@
       ],
       "title": "_arc Functions",
       "collection": "Microsoft QuickC, C, and C++ 2.50",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "C0BFC15D",
@@ -469,7 +549,9 @@
       ],
       "title": "Microsoft BASIC Help",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 1,
+      "language": "en"
     },
     {
       "crc32": "C0E87F7E",
@@ -478,7 +560,9 @@
       ],
       "title": "Fossil Driver Functions",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "C3600BA2",
@@ -487,7 +571,8 @@
       ],
       "title": "PROLOG",
       "collection": "Borland Turbo Prolog 2.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "C6397E50",
@@ -496,7 +581,9 @@
       ],
       "title": "Turbo Pascal 6",
       "collection": "Borland Turbo Pascal 6.x",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 3,
+      "language": "en"
     },
     {
       "crc32": "CB153985",
@@ -505,7 +592,9 @@
       ],
       "title": "Nápověda k Turbo Pascalu",
       "collection": "Borland Turbo Pascal 7 (CZ)",
-      "text_encoding": "cp852"
+      "text_encoding": "cp852",
+      "help_contents_topic_id": 3,
+      "language": "cs"
     },
     {
       "crc32": "CBB75BF0",
@@ -514,7 +603,9 @@
       ],
       "title": "Turbo Vision Help",
       "collection": "Borland Turbo Pascal 7",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 1254,
+      "language": "en"
     },
     {
       "crc32": "CBC21976",
@@ -523,7 +614,9 @@
       ],
       "title": "Turbo Pascal Help",
       "collection": "Borland Turbo Pascal 7",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 3,
+      "language": "en"
     },
     {
       "crc32": "CD6CFBA7",
@@ -532,7 +625,9 @@
       ],
       "title": "CXL Window-Library Version 5.0",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "CE5FED62",
@@ -541,7 +636,8 @@
       ],
       "title": "SANAL",
       "collection": "Borland Turbo Prolog 1.x current",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "CE9A78DB",
@@ -550,7 +646,8 @@
       ],
       "title": "Microsoft Utilities Errors Help",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "CEA5FAE6",
@@ -559,7 +656,8 @@
       ],
       "title": "MC",
       "collection": "Borland Turbo Basic 1.0 (DE)",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "de"
     },
     {
       "crc32": "D1DD925B",
@@ -568,7 +666,9 @@
       ],
       "title": "LIB Help",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 1,
+      "language": "en"
     },
     {
       "crc32": "D3B2F075",
@@ -577,7 +677,9 @@
       ],
       "title": "CodeView Debugger Help",
       "collection": "Microsoft QuickBASIC Extended 7.1",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 90,
+      "language": "en"
     },
     {
       "crc32": "D7539FAD",
@@ -586,7 +688,8 @@
       ],
       "title": "CODEVIEW (R) HELP SYSTEM",
       "collection": "Microsoft MASM and CodeView 5.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "D9A76BA0",
@@ -595,7 +698,9 @@
       ],
       "title": "ObjectWindows Help",
       "collection": "Borland Turbo Pascal 7",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 2,
+      "language": "en"
     },
     {
       "crc32": "DB2836B5",
@@ -604,7 +709,8 @@
       ],
       "title": "SCRDEF",
       "collection": "Borland Turbo Prolog 1.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "DD1EC5D6",
@@ -613,7 +719,9 @@
       ],
       "title": "Packer, Zipper und Co.",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "E4871126",
@@ -622,7 +730,9 @@
       ],
       "title": "Interrupts & Ports",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "E60ECEAB",
@@ -631,7 +741,9 @@
       ],
       "title": "4DOS 3.03",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "E71708C8",
@@ -640,7 +752,8 @@
       ],
       "title": "GEOBASE",
       "collection": "Borland Turbo Prolog 1.x current",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "E851C195",
@@ -649,7 +762,8 @@
       ],
       "title": "Manažér 602 2.00",
       "collection": "Software 602",
-      "text_encoding": "kamenicky"
+      "text_encoding": "kamenicky",
+      "language": "cs"
     },
     {
       "crc32": "F002C405",
@@ -658,7 +772,8 @@
       ],
       "title": "Microsoft QuickHelp",
       "collection": "Microsoft QuickC, C, and C++ 6.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "F0D012D9",
@@ -667,7 +782,8 @@
       ],
       "title": "Using Help",
       "collection": "Microsoft QuickC, C, and C++ 2.50",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
       "crc32": "F361F5DA",
@@ -676,7 +792,8 @@
       ],
       "title": "XHELP",
       "collection": "Borland Turbo Prolog 1.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "FB92DEEC",
@@ -685,7 +802,8 @@
       ],
       "title": "PROLOG",
       "collection": "Borland Turbo Prolog 1.x current",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
       "crc32": "FCD4088E",
@@ -694,7 +812,9 @@
       ],
       "title": "The Guide To Clipper 5.0",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
       "crc32": "FDD9038D",
@@ -703,795 +823,956 @@
       ],
       "title": "abort",
       "collection": "Microsoft QuickC, C, and C++ 6.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 1060,
+      "language": "en"
     },
     {
-      "kind": "separator",
-      "note": "New help files discovered during the last rebuild start below.",
-      "generated_at": "2026-04-12T16:46:02+00:00"
-    },
-    {
-      "filenames": [
-        "TCHELP.TCH"
-      ],
-      "crc32": "03A248A8",
-      "title": "Turbo C Help",
-      "collection": "Borland Turbo C 3.x DOS",
-      "text_encoding": "cp437"
-    },
-    {
+      "crc32": "07FF1872",
       "filenames": [
         "VGAREGS.NG"
       ],
-      "crc32": "07FF1872",
       "title": "VGA registers",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "0803C74D",
       "filenames": [
         "PIE.HLP"
       ],
-      "crc32": "0803C74D",
       "title": "PIE",
       "collection": "Borland Turbo Prolog 2.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
+      "crc32": "0D64AA0C",
       "filenames": [
         "WIN32.HLX"
       ],
-      "crc32": "0D64AA0C",
-      "title": "WIN32",
+      "title": "Win32 API Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "1058F6E8",
       "filenames": [
         "PBMAKE.NG"
       ],
-      "crc32": "1058F6E8",
       "title": "PBMake 2.15 for Clipper, Xbase++, C and",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "1146049B",
       "filenames": [
         "SBGUIDE.NG"
       ],
-      "crc32": "1146049B",
       "title": "AdLib and Sound Blaster reference guide.",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "1387BD2A",
       "filenames": [
         "TVCHELP.TCH"
       ],
-      "crc32": "1387BD2A",
-      "title": "tvchelp",
+      "title": "Turbo Vision C++ Help",
       "collection": "Borland C++ 3.x",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 399,
+      "language": "en"
     },
     {
+      "crc32": "1B162453",
       "filenames": [
         "NANFOR1.NG"
       ],
-      "crc32": "1B162453",
       "title": "Nanforum Toolkit v2.1 Reference Guide",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "1D81B775",
       "filenames": [
         "CL52AN00.NG"
       ],
-      "crc32": "1D81B775",
-      "title": "Clipper 5.2c ╗ Anomalies & IE's v0.99",
+      "title": "Clipper 5.2c » Anomalies & IE's v0.99",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "1E512384",
       "filenames": [
         "FGL_V15.NG"
       ],
-      "crc32": "1E512384",
       "title": "Ferns' Graphics Library V 1.5",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "2B71174C",
       "filenames": [
         "TURBO.TPH"
       ],
-      "crc32": "2B71174C",
       "title": "Borland Pascal Help",
       "collection": "Borland Pascal 7.x current",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 3,
+      "language": "en"
     },
     {
+      "crc32": "2CDBD1AD",
       "filenames": [
         "XMS30.NG"
       ],
-      "crc32": "2CDBD1AD",
       "title": "XMS Specification  (version 3.0)",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "2D7BA644",
       "filenames": [
         "OCF.HLX"
       ],
-      "crc32": "2D7BA644",
-      "title": "OCF",
+      "title": "ObjectComponents Framework",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "2F039386",
       "filenames": [
         "TASM4.NG"
       ],
-      "crc32": "2F039386",
       "title": "TASM v4.0",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "33AF2993",
       "filenames": [
         "GEOBASE.HLP"
       ],
-      "crc32": "33AF2993",
       "title": "GEOBASE",
       "collection": "Borland Turbo Prolog 2.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
+      "crc32": "34B40DD7",
       "filenames": [
         "CLIPUG.NG"
       ],
-      "crc32": "34B40DD7",
       "title": "CA-Clipper User Group Directory",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "36EA4ED6",
       "filenames": [
         "WORKHELP.HLX"
       ],
-      "crc32": "36EA4ED6",
-      "title": "WORKHELP",
+      "title": "Borland Resource Workshop Help",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "392086F1",
       "filenames": [
         "DOS-DK.NG"
       ],
-      "crc32": "392086F1",
       "title": "DOS kommando database.",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "3B33FE33",
       "filenames": [
         "DEBUG.NG"
       ],
-      "crc32": "3B33FE33",
       "title": "DEBUG",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "3D7B34F7",
       "filenames": [
         "GENI.HLP"
       ],
-      "crc32": "3D7B34F7",
       "title": "GENI",
       "collection": "Borland Turbo Prolog 2.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
+      "crc32": "3F3404F2",
       "filenames": [
         "OSLIB.NG"
       ],
-      "crc32": "3F3404F2",
       "title": "OSLIB v1.06",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "4074AF0C",
       "filenames": [
         "PERL.NG"
       ],
-      "crc32": "4074AF0C",
       "title": "PERL 4.0 Reference Guide",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "418860F6",
       "filenames": [
         "SKPLUS.HLP"
       ],
-      "crc32": "418860F6",
       "title": "SKPLUS",
       "collection": "Borland Sidekick Plus",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
+      "crc32": "B2E9DC4F",
       "filenames": [
         "TCHELP.TCH"
       ],
-      "crc32": "433C6EAC",
-      "title": "Turbo C Help",
+      "title": "Borland C++ 2.0 Help",
       "collection": "Borland C++ 2.0 DOS current",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 2,
+      "language": "en"
     },
     {
+      "crc32": "46D23978",
       "filenames": [
         "TURBO.HLP"
       ],
-      "crc32": "46D23978",
       "title": "Turbo Pascal 6",
       "collection": "Borland Turbo Pascal 6.0 (DE)",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 3,
+      "language": "de"
     },
     {
+      "crc32": "53912AEA",
       "filenames": [
         "AREACODE.NG"
       ],
-      "crc32": "53912AEA",
       "title": "Area Codes",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "53F7D2B9",
       "filenames": [
         "RPC.HLX"
       ],
-      "crc32": "53F7D2B9",
-      "title": "RPC",
+      "title": "Microsoft RPC Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "54CF860C",
       "filenames": [
         "SOC.HLX"
       ],
-      "crc32": "54CF860C",
-      "title": "SOC",
+      "title": "Windows Sockets Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "BD0C1891",
       "filenames": [
         "WINDOWS.TPH"
       ],
-      "crc32": "58D89629",
-      "title": "Windows Help File",
-      "collection": "Borland Turbo Pascal 7",
-      "text_encoding": "cp437"
+      "title": "Borland Pascal 7 Windows Help",
+      "collection": "Borland Pascal 7.x current",
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 2,
+      "language": "en"
     },
     {
+      "crc32": "590A3739",
       "filenames": [
         "HELPREF.HLX"
       ],
-      "crc32": "590A3739",
-      "title": "HELPREF",
+      "title": "WinHelp Project Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "593D981C",
       "filenames": [
         "REGISTER.HLP"
       ],
-      "crc32": "593D981C",
       "title": "REGISTER",
       "collection": "Borland Turbo Prolog 2.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
+      "crc32": "59A67BAA",
       "filenames": [
         "MODFORM.NG"
       ],
-      "crc32": "59A67BAA",
       "title": "MOD File Format",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "5E84450B",
       "filenames": [
         "VISTA.NG"
       ],
-      "crc32": "5E84450B",
       "title": "db_VISTA III",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "6079D2E6",
       "filenames": [
         "BIOS.NG"
       ],
-      "crc32": "6079D2E6",
       "title": "BIOS ref.",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "632AA9E6",
       "filenames": [
         "DPMI.NG"
       ],
-      "crc32": "632AA9E6",
       "title": "Dos Protected Mode Interface",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
-      "filenames": [
-        "TVISION.TPH"
-      ],
-      "crc32": "64AADA2B",
-      "title": "Turbo Vision",
-      "collection": "Borland Turbo Pascal 7.0 (DE)",
-      "text_encoding": "cp437"
-    },
-    {
+      "crc32": "67369D90",
       "filenames": [
         "OWL.HLX"
       ],
-      "crc32": "67369D90",
-      "title": "OWL",
+      "title": "ObjectWindows Library",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "6AE04030",
       "filenames": [
         "SK.HLP"
       ],
-      "crc32": "6AE04030",
       "title": "SK",
       "collection": "Borland Sidekick 1.x current",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
+      "crc32": "73C8209A",
       "filenames": [
         "OPENHELP.HLX"
       ],
-      "crc32": "73C8209A",
-      "title": "OPENHELP",
+      "title": "Borland OpenHelp",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "74FF0E95",
       "filenames": [
         "GT_LIBNG.NG"
       ],
-      "crc32": "74FF0E95",
       "title": "GT_LIB v1.0 Reference Guide Release 2.0",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "76AED3CF",
       "filenames": [
         "CLICK.NG"
       ],
-      "crc32": "76AED3CF",
       "title": "Click! 2.00 Source Code Reformatter",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "787F19FB",
       "filenames": [
         "X86.NG"
       ],
-      "crc32": "787F19FB",
       "title": "iAPx86",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "CFF91CBC",
       "filenames": [
         "WINDOWS.TPH"
       ],
-      "crc32": "7A7316B9",
-      "title": "Windows Help File",
+      "title": "Borland Pascal 7 Windows Help (DE)",
       "collection": "Borland Pascal 7.x current (DE)",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 2,
+      "language": "de"
     },
     {
+      "crc32": "80132F51",
       "filenames": [
         "CL5IE4.NG"
       ],
-      "crc32": "80132F51",
-      "title": "Clipper 5.00a ╗ Internal Errors  V1.04",
+      "title": "Clipper 5.00a » Internal Errors  V1.04",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "837F903D",
       "filenames": [
         "OPENGL.HLX"
       ],
-      "crc32": "837F903D",
-      "title": "OPENGL",
+      "title": "OpenGL Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "845BADAB",
       "filenames": [
         "DOS5.NG"
       ],
-      "crc32": "845BADAB",
       "title": "DOS 5.0 Ref.",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "89290A26",
       "filenames": [
         "BEATLES.NG"
       ],
-      "crc32": "89290A26",
       "title": "The Beatles",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "8FDD97B1",
       "filenames": [
         "MASTCON.NG"
       ],
-      "crc32": "8FDD97B1",
       "title": "Master Conversions Version 1.0",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "93A4C615",
       "filenames": [
         "RBINT.NG"
       ],
-      "crc32": "93A4C615",
       "title": "Ralf Brown",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "945522AF",
       "filenames": [
         "POSTSCRI.NG"
       ],
-      "crc32": "945522AF",
       "title": "Syntaxes PostScript",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "96497CD0",
       "filenames": [
         "MRDEBUG.NG"
       ],
-      "crc32": "96497CD0",
-      "title": "MrDebug for CA-Clipper Ver 1.20.147▀",
+      "title": "MrDebug for CA-Clipper Ver 1.20.147ß",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "C691B7B0",
       "filenames": [
         "TCHELPW.TCH"
       ],
-      "crc32": "9CD86A8A",
-      "title": "tchelpw",
+      "title": "Borland C++ 2.0 Windows API Help",
       "collection": "Borland C++ 2.0 DOS current",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 2,
+      "language": "en"
     },
     {
+      "crc32": "A1967945",
       "filenames": [
         "WINSIGHT.HLX"
       ],
-      "crc32": "A1967945",
-      "title": "WINSIGHT",
+      "title": "WinSight",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "A617EC41",
       "filenames": [
         "CLIPNCPP.NG"
       ],
-      "crc32": "A617EC41",
       "title": "More Clipper Part One",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "A8199212",
       "filenames": [
         "BCDOS.HLX"
       ],
-      "crc32": "A8199212",
-      "title": "BCDOS",
+      "title": "Borland C++ DOS Runtime Library",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "ABF314D3",
       "filenames": [
         "PROGREF.NG"
       ],
-      "crc32": "ABF314D3",
       "title": "Programmers Reference 0.02b",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "B60941F0",
       "filenames": [
         "VFW.HLX"
       ],
-      "crc32": "B60941F0",
-      "title": "VFW",
+      "title": "Video for Windows Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "B81D70FB",
       "filenames": [
         "DIFF.HLP"
       ],
-      "crc32": "B81D70FB",
       "title": "DIFF",
       "collection": "Borland Turbo Prolog 2.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
+      "crc32": "B83AB615",
       "filenames": [
         "BCW.HLX"
       ],
-      "crc32": "B83AB615",
-      "title": "BCW",
+      "title": "Borland C++ Windows Runtime Library",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "202BC542",
       "filenames": [
         "TCHELP.TCH"
       ],
-      "crc32": "B859969C",
-      "title": "Turbo C Help",
+      "title": "Turbo C++ 1.01 Help",
       "collection": "Borland Turbo C 1.x current",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 2,
+      "language": "en"
     },
     {
+      "crc32": "DBBB570E",
       "filenames": [
         "TCHELP.TCH"
       ],
-      "crc32": "B8D35355",
-      "title": "Turbo C Help",
-      "collection": "Borland Turbo C 1.0",
-      "text_encoding": "cp437"
+      "title": "Turbo C++ 1.00 Help",
+      "collection": "Borland Turbo C++ 1.00",
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 2,
+      "language": "en"
     },
     {
+      "crc32": "EC08E0E9",
       "filenames": [
         "TCHELP.TCH"
       ],
-      "crc32": "B9B00000",
-      "title": "Turbo C Help",
+      "title": "Borland C++ 3.0 Help",
       "collection": "Borland C++ 3.0",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 399,
+      "language": "en"
     },
     {
+      "crc32": "BA517178",
       "filenames": [
         "WIN31WH.HLX"
       ],
-      "crc32": "BA517178",
-      "title": "WIN31WH",
+      "title": "Windows 3.1 API Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "C1A53A35",
       "filenames": [
         "TURBO.TPH"
       ],
-      "crc32": "C1A53A35",
       "title": "Borland Pascal Hilfe",
       "collection": "Borland Pascal 7.x current (DE)",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 3,
+      "language": "de"
     },
     {
+      "crc32": "C2D16062",
       "filenames": [
         "EDLIN.NG"
       ],
-      "crc32": "C2D16062",
       "title": "EDLIN",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "C356C7B8",
       "filenames": [
         "CL5IE101.NG"
       ],
-      "crc32": "C356C7B8",
-      "title": "Clipper 5.00a ╗ Internal Errors  V1.01",
+      "title": "Clipper 5.00a » Internal Errors  V1.01",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "C3B95D0B",
       "filenames": [
         "TR.NG"
       ],
-      "crc32": "C3B95D0B",
       "title": "Tom Rettigs Library",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "C6882199",
       "filenames": [
         "WINSPCTR.HLX"
       ],
-      "crc32": "C6882199",
-      "title": "WINSPCTR",
+      "title": "WinSpector",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "C729A167",
       "filenames": [
         "TURBO.HLP"
       ],
-      "crc32": "C729A167",
       "title": "Turbo Pascal 5",
       "collection": "Borland Turbo Pascal 5.5",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 100,
+      "language": "en"
     },
     {
+      "crc32": "C8EB3173",
       "filenames": [
         "OWL.TPH"
       ],
-      "crc32": "C8EB3173",
       "title": "ObjectWindows Hilfe",
       "collection": "Borland Pascal 7.x current (DE)",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 2,
+      "language": "de"
     },
     {
+      "crc32": "CD9E958C",
       "filenames": [
         "DPMIV1.NG"
       ],
-      "crc32": "CD9E958C",
       "title": "DPMI v1 Norton Guide",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "D56923A1",
       "filenames": [
         "BULBS.NG"
       ],
-      "crc32": "D56923A1",
       "title": "The Light Bulb Norton Guide",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "D5BCD9A0",
       "filenames": [
         "NANFOR.NG"
       ],
-      "crc32": "D5BCD9A0",
       "title": "Nanforum Toolkit v3.05 Reference Guide",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "D81038EE",
       "filenames": [
         "CLASSLIB.HLX"
       ],
-      "crc32": "D81038EE",
-      "title": "CLASSLIB",
+      "title": "Borland C++ Class Library",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "D83076A6",
       "filenames": [
         "SEN_AN.HLP"
       ],
-      "crc32": "D83076A6",
       "title": "SEN_AN",
       "collection": "Borland Turbo Prolog 2.0",
-      "text_encoding": ""
+      "text_encoding": "",
+      "language": "en"
     },
     {
+      "crc32": "D94BC466",
       "filenames": [
         "OWLHELP.TCH"
       ],
-      "crc32": "D94BC466",
-      "title": "owlhelp",
+      "title": "ObjectWindows Library Help",
       "collection": "Borland C++ 3.x",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 399,
+      "language": "en"
     },
     {
+      "crc32": "DE4704E8",
       "filenames": [
         "CL5104.NG"
       ],
-      "crc32": "DE4704E8",
       "title": "Clipper 5.01 vs 1.29 Anomalies (#04)",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "DE54EE80",
       "filenames": [
         "H_LIBNG.NG"
       ],
-      "crc32": "DE54EE80",
       "title": "H_LIB52 v1.0 Reference Guide Release 1.0",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "E0E078A0",
       "filenames": [
         "BWCC.HLX"
       ],
-      "crc32": "E0E078A0",
-      "title": "BWCC",
+      "title": "Borland Windows Custom Controls",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "E47077FD",
       "filenames": [
         "EG.NG"
       ],
-      "crc32": "E47077FD",
       "title": "Expert Guide",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "E5D9E877",
       "filenames": [
         "RR-TIPS.NG"
       ],
-      "crc32": "E5D9E877",
       "title": "R&R Tips & Techniques",
       "collection": "Norton Guides",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 378,
+      "language": "en"
     },
     {
+      "crc32": "EDF6B1BA",
       "filenames": [
         "TURBO.HLP"
       ],
-      "crc32": "EDF6B1BA",
       "title": "Turbo Pascal 6",
       "collection": "Borland Turbo Pascal 6.01 (DE)",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 3,
+      "language": "de"
     },
     {
+      "crc32": "EEA6C9C8",
       "filenames": [
         "TURBO.TPH"
       ],
-      "crc32": "EEA6C9C8",
       "title": "Turbo Pascal Hilfe",
       "collection": "Borland Turbo Pascal 7.0 (DE)",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 3,
+      "language": "de"
     },
     {
+      "crc32": "F0264CD4",
       "filenames": [
         "RSL.HLX"
       ],
-      "crc32": "F0264CD4",
-      "title": "RSL",
+      "title": "Resource Script Language Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "F15731FE",
       "filenames": [
         "OLE.HLX"
       ],
-      "crc32": "F15731FE",
-      "title": "OLE",
+      "title": "OLE 2 Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
     },
     {
+      "crc32": "FA7FDAD1",
       "filenames": [
         "TVISION.TPH"
       ],
-      "crc32": "FA7FDAD1",
       "title": "Turbo Vision",
       "collection": "Borland Pascal 7.x current (DE)",
-      "text_encoding": "cp437"
+      "text_encoding": "cp437",
+      "help_contents_topic_id": 1242,
+      "language": "de"
     },
     {
+      "crc32": "FBB5F677",
       "filenames": [
         "CWH.HLX"
       ],
-      "crc32": "FBB5F677",
-      "title": "CWH",
+      "title": "Creating Windows Help",
       "collection": "Borland C++ 4.x",
-      "text_encoding": ""
+      "text_encoding": "cp437",
+      "language": "en"
+    },
+    {
+      "crc32": "A9C668A7",
+      "filenames": [
+        "TDHELP.TDH"
+      ],
+      "title": "Turbo Debugger Help",
+      "collection": "Borland Turbo Debugger 1.0",
+      "text_encoding": "",
+      "language": "en"
+    },
+    {
+      "crc32": "07E89446",
+      "filenames": [
+        "TASM.TAH"
+      ],
+      "title": "Turbo Assembler Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler 2.x",
+      "text_encoding": "cp437",
+      "language": "en"
+    },
+    {
+      "crc32": "A6E139F2",
+      "filenames": [
+        "TDHELP.TDH"
+      ],
+      "title": "Turbo Debugger Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler 2.x",
+      "text_encoding": "",
+      "language": "en"
+    },
+    {
+      "crc32": "EDCB6DAB",
+      "filenames": [
+        "TFHELP.TFH"
+      ],
+      "title": "Turbo Profiler Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler 2.x",
+      "text_encoding": "",
+      "language": "en"
     }
   ]
 }

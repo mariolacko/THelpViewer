@@ -134,7 +134,7 @@ class NGReader(HelpReaderBase):
     def read(self) -> HelpDocument:
         d = self.data
         root_offset = self._detect_root_offset(d)
-        topics, index_entries, main_index = self._traverse(d, root_offset)
+        topics, index_entries, help_contents_topic_id = self._traverse(d, root_offset)
 
         return ensure_document_index(HelpDocument(
             format_name="norton-guide",
@@ -144,9 +144,10 @@ class NGReader(HelpReaderBase):
             metadata={
                 "encoding": self.encoding,
                 "text_encoding": self.encoding,
+                "metadata_already_decoded": True,
                 "title": self.title,
                 "credit_lines": self.credit_lines,
-                "main_index": main_index,
+                "help_contents_topic_id": help_contents_topic_id,
             },
             binary_data=self.data,
         ))
@@ -200,7 +201,7 @@ class NGReader(HelpReaderBase):
                 topic, child_offsets, title, prompt_labels = self._build_menu_topic(
                     entry,
                     offset,
-                    is_main=(offset == root_offset),
+                    is_help_contents=(offset == root_offset),
                 )
                 if topic is not None:
                     topics_by_offset[offset] = topic
@@ -220,7 +221,7 @@ class NGReader(HelpReaderBase):
                 topic, child_offsets, child_labels, parent_line = self._build_short_topic(
                     entry,
                     offset,
-                    is_main=(offset == root_offset),
+                    is_help_contents=(offset == root_offset),
                 )
                 if topic is not None:
                     topics_by_offset[offset] = topic
@@ -261,8 +262,8 @@ class NGReader(HelpReaderBase):
 
         topics = [topics_by_offset[offset] for offset in topic_order]
         index_entries = self._build_index_entries(topics)
-        main_index = root_offset if root_offset in topics_by_offset else (topic_order[0] if topic_order else None)
-        return topics, index_entries, main_index
+        help_contents_topic_id = root_offset if root_offset in topics_by_offset else (topic_order[0] if topic_order else None)
+        return topics, index_entries, help_contents_topic_id
 
     # ------------------------------------------------------------------
     # Block processors
@@ -272,7 +273,7 @@ class NGReader(HelpReaderBase):
         self,
         entry: bytes,
         self_offset: int,
-        is_main: bool,
+        is_help_contents: bool,
     ) -> tuple[TopicRecord | None, list[int], str, list[str]]:
         """Parse a MENU entry into a TopicRecord."""
         prompt_count = int.from_bytes(entry[4:6], "little")
@@ -288,7 +289,7 @@ class NGReader(HelpReaderBase):
             context_id=self_offset,
             raw_lines=[],
             positional_keywords=[],
-            is_main_index=is_main,
+            is_help_contents=is_help_contents,
             names=[title] if title else [],
             uhf_content=[],
         )
@@ -298,7 +299,7 @@ class NGReader(HelpReaderBase):
         self,
         entry: bytes,
         self_offset: int,
-        is_main: bool,
+        is_help_contents: bool,
     ) -> tuple[TopicRecord | None, list[int], list[tuple[int, str]], int]:
         """Parse a SHORT entry into a TopicRecord (menu/index page)."""
         line_count = int.from_bytes(entry[4:6], "little")
@@ -375,7 +376,7 @@ class NGReader(HelpReaderBase):
             context_id=self_offset,
             raw_lines=raw_lines,
             positional_keywords=pos_kws,
-            is_main_index=is_main,
+            is_help_contents=is_help_contents,
             up_context=up,
             names=[first_text] if first_text else [],
             uhf_content=uhf_lines,
@@ -479,7 +480,7 @@ class NGReader(HelpReaderBase):
             context_id=self_offset,
             raw_lines=raw_lines,
             positional_keywords=pos_kws,
-            is_main_index=False,
+            is_help_contents=False,
             up_context=up,
             prev_context=prev_context,
             next_context=next_context,
