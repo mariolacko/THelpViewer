@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .catalog import products_for_source
-from .collector import HELP_EXTENSIONS
+from .collector import is_help_file_path
 from .extractor import ExtractorTools, collect_from_archive
 from .http import download_file, fetch_json
 
@@ -77,13 +77,12 @@ def run(
         for entry in files:
             name = entry["name"]
             url = entry["download_url"]
-            ext = Path(name).suffix.lower()
             print(f"  File: {name}")
             if dry_run:
                 print(f"    [dry-run] {url}")
                 continue
 
-            if ext in HELP_EXTENSIONS:
+            if is_help_file_path(Path(name)):
                 final_dest = target_dir / name.upper()
                 temp_dest = dl_dir / name
                 if final_dest.exists():

@@ -13,6 +13,7 @@
 #   ./thelp.sh docker start         Start Docker container
 #   ./thelp.sh docker stop          Stop Docker container
 #   ./thelp.sh docker restart       Restart Docker container
+#   ./thelp.sh docker build         Build Docker images
 #   ./thelp.sh all                  Full pipeline: download, build, Docker start
 #
 # Commands can be combined:
@@ -36,6 +37,13 @@ HOST="${THELP_HOST:-0.0.0.0}"
 PID_FILE="${THELP_PID_FILE:-${STATE_DIR}/uvicorn.pid}"
 LOG_FILE="${THELP_LOG_FILE:-${STATE_DIR}/uvicorn.log}"
 SERVER_FOREGROUND="${THELP_SERVER_FOREGROUND:-0}"
+if [ -n "${THELP_PYTHON:-}" ]; then
+    PYTHON_BIN="${THELP_PYTHON}"
+elif [ -x "${SCRIPT_DIR}/.venv/bin/python3" ]; then
+    PYTHON_BIN="${SCRIPT_DIR}/.venv/bin/python3"
+else
+    PYTHON_BIN="$(command -v python3)"
+fi
 
 do_download=false
 do_build=false
@@ -48,6 +56,7 @@ do_update=false
 do_start=false
 do_stop=false
 do_restart=false
+do_docker_build=false
 do_all=false
 PORT="${THELP_PORT:-5448}"
 download_args=()
@@ -61,7 +70,7 @@ has_help_bundles() {
 }
 
 have_uvicorn() {
-    python3 -c 'import uvicorn' >/dev/null 2>&1
+    "${PYTHON_BIN}" -c 'import uvicorn' >/dev/null 2>&1
 }
 
 have_docker() {
@@ -92,7 +101,7 @@ server_running() {
 start_server_background() {
     mkdir -p "${HELPS_DIR}" "${STATE_DIR}"
     if ! have_uvicorn; then
-        echo "[thelp] missing dependency: uvicorn is not installed for $(command -v python3)."
+        echo "[thelp] missing dependency: uvicorn is not installed for ${PYTHON_BIN}."
         echo "[thelp] install requirements first: pip install -r requirements.txt"
         return 1
     fi
@@ -112,7 +121,7 @@ start_server_background() {
     export THELP_README_PATH="${README_PATH}"
     export THELP_CHANGELOG_PATH="${CHANGELOG_PATH}"
     export THELP_STATE_DIR="${STATE_DIR}"
-    nohup python3 -m uvicorn thelpviewer.server.app:app --host "${HOST}" --port "${PORT}" > "${LOG_FILE}" 2>&1 &
+    nohup "${PYTHON_BIN}" -m uvicorn thelpviewer.server.app:app --host "${HOST}" --port "${PORT}" > "${LOG_FILE}" 2>&1 &
     echo $! > "${PID_FILE}"
     sleep 1
     if server_running; then
@@ -129,7 +138,7 @@ start_server_background() {
 start_server_foreground() {
     mkdir -p "${HELPS_DIR}" "${STATE_DIR}"
     if ! have_uvicorn; then
-        echo "[thelp] missing dependency: uvicorn is not installed for $(command -v python3)."
+        echo "[thelp] missing dependency: uvicorn is not installed for ${PYTHON_BIN}."
         echo "[thelp] install requirements first: pip install -r requirements.txt"
         return 1
     fi
@@ -144,7 +153,7 @@ start_server_foreground() {
     export THELP_CHANGELOG_PATH="${CHANGELOG_PATH}"
     export THELP_STATE_DIR="${STATE_DIR}"
     echo "[thelp] serving in foreground on http://localhost:${PORT}/"
-    exec python3 -m uvicorn thelpviewer.server.app:app --host "${HOST}" --port "${PORT}"
+    exec "${PYTHON_BIN}" -m uvicorn thelpviewer.server.app:app --host "${HOST}" --port "${PORT}"
 }
 
 stop_server() {
@@ -173,16 +182,17 @@ while [ $i -lt $# ]; do
         docker)
             i=$((i + 1))
             if [ $i -ge $# ]; then
-                echo "[thelp] missing action after 'docker'. Expected: start|stop|restart"
+                echo "[thelp] missing action after 'docker'. Expected: start|stop|restart|build"
                 exit 1
             fi
             case "${args[$i]}" in
                 start) do_start=true ;;
                 stop) do_stop=true ;;
                 restart) do_restart=true ;;
+                build) do_docker_build=true ;;
                 *)
                     echo "[thelp] unknown docker action: ${args[$i]}"
-                    echo "[thelp] expected one of: start, stop, restart"
+                    echo "[thelp] expected one of: start, stop, restart, build"
                     exit 1
                     ;;
             esac
@@ -268,6 +278,7 @@ if ! $do_download && ! $do_build && ! $do_catalog && ! $do_serve && ! $do_serve_
     echo "  docker start    Start Docker container"
     echo "  docker stop     Stop Docker container"
     echo "  docker restart  Restart Docker container (down + build + up)"
+    echo "  docker build    Build Docker images (docker compose build)"
     echo "  all             Full pipeline: download + build + docker start"
     echo ""
     echo "Examples:"
@@ -308,7 +319,7 @@ fi
 if $do_download; then
     echo "=== Download ==="
     cd "${SCRIPT_DIR}"
-    python3 -m thelpviewer.downloader "${download_args[@]}"
+    "${PYTHON_BIN}" -m thelpviewer.downloader "${download_args[@]}"
     echo "Download complete."
     echo ""
 fi
@@ -319,8 +330,34 @@ if $do_build; then
     echo "Bundles: ${HELPS_DIR}"
     echo ""
     cd "${SCRIPT_DIR}"
-    mkdir -p "${HELPS_DIR}"
-    python3 -m thelpviewer.converter --bundle --bundle-layout helps --clean "${SOURCES_DIR}" "${HELPS_DIR}"
+    mkdir -p "${STATE_DIR}" "$(dirname "${HELPS_DIR}")"
+    build_tmp_dir="$(mktemp -d "${STATE_DIR}/helps-build.XXXXXX")"
+    build_backup_dir="${HELPS_DIR}.prev.$$"
+    rm -rf "${build_backup_dir}"
+
+    if ! "${PYTHON_BIN}" -m thelpviewer.converter --bundle --bundle-layout helps --clean "${SOURCES_DIR}" "${build_tmp_dir}"; then
+        rm -rf "${build_tmp_dir}"
+        echo "[thelp] build failed."
+        exit 1
+    fi
+
+    if [ ! -f "${build_tmp_dir}/catalog.json" ]; then
+        echo "[thelp] staged bundle build is missing catalog.json, rebuilding catalog."
+        "${PYTHON_BIN}" tools/rebuild_catalog.py "${build_tmp_dir}" --output "${build_tmp_dir}/catalog.json"
+    fi
+
+    if [ -e "${HELPS_DIR}" ]; then
+        mv "${HELPS_DIR}" "${build_backup_dir}"
+    fi
+    if ! mv "${build_tmp_dir}" "${HELPS_DIR}"; then
+        echo "[thelp] failed to activate new help bundles."
+        if [ -e "${build_backup_dir}" ]; then
+            mv "${build_backup_dir}" "${HELPS_DIR}" || true
+        fi
+        rm -rf "${build_tmp_dir}"
+        exit 1
+    fi
+    rm -rf "${build_backup_dir}"
     echo "Build complete."
     echo ""
 fi
@@ -328,7 +365,7 @@ fi
 if $do_catalog; then
     echo "=== Rebuild catalog ==="
     cd "${SCRIPT_DIR}"
-    python3 tools/rebuild_catalog.py "${HELPS_DIR}" --output "${HELPS_DIR}/catalog.json"
+    "${PYTHON_BIN}" tools/rebuild_catalog.py "${HELPS_DIR}" --output "${HELPS_DIR}/catalog.json"
     echo "Catalog rebuilt."
     echo ""
 fi
@@ -386,6 +423,17 @@ if $do_restart; then
     docker compose up -d
     echo ""
     echo "Ready: http://localhost:${PORT}/"
+    echo ""
+fi
+
+if $do_docker_build; then
+    echo "=== Docker build ==="
+    cd "${SCRIPT_DIR}"
+    docker_preflight || exit 1
+    export THELP_PORT="${PORT}"
+    docker compose build
+    echo ""
+    echo "Docker images built."
     echo ""
 fi
 

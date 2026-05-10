@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 
-HELP_EXTENSIONS = {".hlp", ".tph", ".tch", ".hlx", ".hl6", ".ng"}
+HELP_EXTENSIONS = {".hlp", ".tph", ".tch", ".tdh", ".hlx", ".hl6", ".ng"}
 WINHELP_MAGIC = b"\x3f\x5f\x03\x00"
 
 SKIP_HELP_NAMES = {
@@ -61,11 +61,21 @@ def is_winhelp(path: Path) -> bool:
         return False
 
 
+def is_help_file_path(path: Path) -> bool:
+    """Return True for file names that can contain supported help payloads."""
+    suffix = path.suffix.lower()
+    return suffix in HELP_EXTENSIONS or (
+        len(suffix) == 4
+        and suffix.startswith(".t")
+        and suffix.endswith("h")
+    )
+
+
 def collect_help_files(work_dir: Path) -> list[Path]:
     """Find all supported help files under one extracted work tree."""
     found: list[Path] = []
     for path in sorted(work_dir.rglob("*")):
-        if not (path.is_file() and path.suffix.lower() in HELP_EXTENSIONS):
+        if not (path.is_file() and is_help_file_path(path)):
             continue
         if path.name.upper() in SKIP_HELP_NAMES:
             print(f"    [skipped] {path.name} (accessory)")

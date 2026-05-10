@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 
-from .collector import HELP_EXTENSIONS, collect_help_files, copy_help_files
+from .collector import collect_help_files, copy_help_files, is_help_file_path
 
 
 MAX_EXTRACTION_DEPTH = 6
@@ -40,6 +40,8 @@ class ArchiveProbe:
 
 SZDD_SIGNATURE = b"SZDD\x88\xF0\x27\x33"
 QBASIC_SZ_SIGNATURE = b"SZ \x88\xF0\x27\x33\xD1"
+ZIP_LOCAL_FILE_HEADER = b"PK\x03\x04"
+BORLAND_SPLIT_PART_RE = re.compile(r"^(?P<stem>.+)\.C(?P<series>[A-Z])(?P<part>\d+)$", re.I)
 
 
 def find_unar() -> str | None:
@@ -192,9 +194,114 @@ def _unique_extract_dir(path: Path) -> Path:
     return candidate
 
 
+def _borland_split_part(path: Path) -> tuple[str, str, int] | None:
+    """Return Borland installer split-archive identity for ``*.CA1``-style parts."""
+    match = BORLAND_SPLIT_PART_RE.match(path.name)
+    if not match:
+        return None
+    return (
+        match.group("stem"),
+        match.group("series").upper(),
+        int(match.group("part")),
+    )
+
+
+def _is_borland_split_part(path: Path) -> bool:
+    return _borland_split_part(path) is not None
+
+
+def _zip_has_end_record(data: bytes) -> bool:
+    """Return True when a ZIP stream has its end-of-central-directory record."""
+    return data.rfind(b"PK\x05\x06", max(0, len(data) - 65557)) >= 0
+
+
+def _assembled_split_archive_path(work_dir: Path, first_part: Path, payload_head: bytes) -> Path:
+    """Choose the generated path for a combined split archive."""
+    part_info = _borland_split_part(first_part)
+    if part_info is None:
+        return work_dir / "__assembled_split_archives" / f"{first_part.name}.assembled"
+
+    stem, _series, _part = part_info
+    suffix = ".ZIP" if payload_head.startswith(ZIP_LOCAL_FILE_HEADER) else ".assembled"
+    return work_dir / "__assembled_split_archives" / f"{stem}{suffix}"
+
+
+def assemble_borland_split_archives(work_dir: Path) -> list[Path]:
+    """Combine Borland installer split archives like ``HELP.CA1`` + ``HELP.CA2``.
+
+    The floppy installer stores split ZIP streams as ``*.CA1``, ``*.CA2`` ...
+    and prefixes every part with a four-byte part header.  Extracting ``*.CA1``
+    alone can produce a truncated payload, so generate a synthetic archive first
+    and let the normal recursive extractor process that archive instead.
+    """
+    groups: dict[tuple[str, str], dict[int, list[Path]]] = {}
+    for path in sorted(work_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        part_info = _borland_split_part(path)
+        if part_info is None:
+            continue
+        stem, series, part = part_info
+        groups.setdefault((stem, series), {}).setdefault(part, []).append(path)
+
+    assembled: list[Path] = []
+    for (_stem, _series), parts in sorted(groups.items(), key=lambda item: str(item[0])):
+        if 1 not in parts or len(parts) < 2:
+            continue
+
+        ordered: list[Path] = []
+        part_num = 1
+        while part_num in parts:
+            candidates = parts[part_num]
+            if len(candidates) != 1:
+                ordered = []
+                break
+            ordered.append(candidates[0])
+            part_num += 1
+        if len(ordered) != len(parts):
+            continue
+
+        try:
+            first_data = ordered[0].read_bytes()
+        except OSError:
+            continue
+        if len(first_data) <= 4:
+            continue
+
+        first_payload = first_data[4:]
+        if not first_payload.startswith(ZIP_LOCAL_FILE_HEADER):
+            continue
+
+        out_path = _assembled_split_archive_path(work_dir, ordered[0], first_payload)
+        if out_path.exists():
+            continue
+
+        combined = bytearray(first_payload)
+        try:
+            for path in ordered[1:]:
+                data = path.read_bytes()
+                if len(data) <= 4:
+                    raise ValueError("split part is too short")
+                combined.extend(data[4:])
+        except (OSError, ValueError):
+            continue
+
+        if first_payload.startswith(ZIP_LOCAL_FILE_HEADER) and not _zip_has_end_record(combined):
+            continue
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(bytes(combined))
+        print(f"    [assemble] {' + '.join(path.name for path in ordered)} -> {out_path.name}")
+        assembled.append(out_path)
+
+    return assembled
+
+
 def _should_probe(path: Path) -> bool:
     """Skip known final artifacts that should not be treated as containers."""
-    if path.suffix.lower() in HELP_EXTENSIONS:
+    if is_help_file_path(path):
+        return False
+    if _is_borland_split_part(path):
         return False
     return True
 
@@ -204,9 +311,21 @@ def extract_nested(work_dir: Path, tools: ExtractorTools, depth: int = 0) -> Non
     if not tools.available or depth >= MAX_EXTRACTION_DEPTH:
         return
 
+    assemble_borland_split_archives(work_dir)
+
     for path in sorted(work_dir.rglob("*")):
         if not (path.is_file() and _should_probe(path)):
             continue
+        probe = probe_extractable(path, tools)
+        if probe is None:
+            continue
+        dest = _unique_extract_dir(path)
+        indent = "  " * depth
+        print(f"    {indent}[extract] {path.name} ({probe.format_name}, {probe.entry_count} entries)")
+        if extract_file(path, dest, tools):
+            extract_nested(dest, tools, depth + 1)
+
+    for path in assemble_borland_split_archives(work_dir):
         probe = probe_extractable(path, tools)
         if probe is None:
             continue

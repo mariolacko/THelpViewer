@@ -9,6 +9,7 @@ from .collector import (
     collect_help_files,
     copy_help_files,
     detect_language,
+    is_help_file_path,
     is_winhelp,
 )
 from .extractor import (
@@ -52,6 +53,7 @@ __all__ = [
     "find_lsar",
     "find_unar",
     "get_opener",
+    "is_help_file_path",
     "is_winhelp",
     "parse_anchors",
     "probe_extractable",
