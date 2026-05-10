@@ -65,6 +65,10 @@ def export_bundle(
             document.metadata["collection"] = collection_name.strip()
         if isinstance(title_override, str) and title_override.strip():
             document.metadata["title"] = title_override.strip()
+        if database_entry is not None and getattr(database_entry, "help_contents_topic_id", None) is not None:
+            document.metadata.setdefault("help_contents_topic_id", database_entry.help_contents_topic_id)
+        if database_entry is not None and getattr(database_entry, "language", ""):
+            document.metadata.setdefault("language", database_entry.language)
         renderer = HelpJsonRenderer(document, display_encoding=chosen_encoding)
 
         target_dir = Path(output_dir)

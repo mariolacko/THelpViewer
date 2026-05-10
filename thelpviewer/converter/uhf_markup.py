@@ -66,7 +66,7 @@ def format_uhf_link_target(
             parts.append(f"line={normalized_line}")
 
     if not parts:
-        raise ValueError("UHF link target requires at least one of topic_id/alias/source_file/line")
+        raise ValueError("UHF link target requires at least one of topic_id/alias/file/line")
 
     return ",".join(parts)
 
@@ -105,10 +105,10 @@ def parse_uhf_link_target(raw_target: str) -> dict[str, int | str] | None:
         value = value.strip()
         if not value:
             continue
-        if key in {"file", "source"}:
+        if key == "file":
             result["source_file"] = value
             continue
-        if key in {"topic", "topic_id", "id"}:
+        if key == "topic":
             try:
                 result["topic_id"] = int(value, 10)
             except ValueError:
@@ -117,7 +117,7 @@ def parse_uhf_link_target(raw_target: str) -> dict[str, int | str] | None:
         if key == "alias":
             result["alias"] = value
             continue
-        if key in {"line", "row"}:
+        if key == "line":
             try:
                 line_number = int(value, 10)
             except ValueError:

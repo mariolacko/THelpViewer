@@ -24,9 +24,32 @@ SOURCE_FORMAT_BY_READER: dict[str, str] = {
     "quickhelp": "quickhelp",
     "scorpion-dat": "scorpion-dat",
     "software602": "m602",
+    "tdh": "tdh",
+    "tfh": "tfh",
     "text602": "text602",
 }
 
+TRANSPORT_METADATA_KEYS: tuple[str, ...] = (
+    "hlx_kind",
+    "hlx_family",
+    "index_navigation_order",
+    "control_byte_dominant",
+    "pointer_count",
+    "topic_count",
+    "index_record_count",
+    "index_topic_count",
+    "rtf_ref_count",
+    "overview_rtf_count",
+    "lkeyword_rtf_count",
+    "hex_prefix_count",
+    "long_string_count",
+    "avg_lines_per_topic",
+    "single_line_ratio",
+)
+
+TRANSPORT_METADATA_LIST_KEYS: tuple[str, ...] = (
+    "control_byte_dominant",
+)
 
 class HelpJsonRenderer:
     """Render one ``HelpDocument`` as a UHF 2.0 JSON structure."""
@@ -49,7 +72,7 @@ class HelpJsonRenderer:
 
     def render_document(self) -> dict[str, object]:
         """Return a JSON-serializable UHF 2.0 document."""
-        return {
+        payload: dict[str, object] = {
             "uhf_version": "2.0",
             "metadata": self._build_metadata(),
             "converter": self._build_converter(),
@@ -57,6 +80,13 @@ class HelpJsonRenderer:
             "index": self._build_index(),
             "topics": self._build_topics(),
         }
+        default_palette = self._default_palette()
+        if default_palette:
+            payload["default_palette"] = default_palette
+        palettes = self._build_palettes()
+        if palettes:
+            payload["palettes"] = palettes
+        return payload
 
     def to_json(self, indent: int = 2) -> str:
         """Serialize the rendered UHF document to formatted JSON."""
@@ -118,11 +148,97 @@ class HelpJsonRenderer:
         if display:
             payload["display"] = display
 
+        help_contents_topic_id = self._help_contents_topic_id()
+        if help_contents_topic_id is not None:
+            payload["help_contents_topic_id"] = help_contents_topic_id
+
+        language = self._metadata_language()
+        if language:
+            payload["language"] = language
+
+        ui = self._metadata_ui()
+        if ui:
+            payload["ui"] = ui
+
         frozen_rows = meta.get("frozen_rows")
         if isinstance(frozen_rows, int) and frozen_rows > 0:
             payload["frozen_rows"] = frozen_rows
 
+        for key in TRANSPORT_METADATA_KEYS:
+            value = meta.get(key)
+            if isinstance(value, (str, int, float, bool)):
+                payload[key] = value
+            elif key in TRANSPORT_METADATA_LIST_KEYS and isinstance(value, list):
+                payload[key] = list(value)
+
         return payload
+
+    def _default_palette(self) -> str:
+        """Return an explicitly configured default inline color palette name."""
+        meta = self.document.metadata or {}
+        value = meta.get("default_palette")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        value = meta.get("palette")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return ""
+
+    def _build_palettes(self) -> dict[str, object]:
+        """Return only palettes explicitly supplied by source metadata."""
+        palettes: dict[str, object] = {}
+        meta_palettes = (self.document.metadata or {}).get("palettes")
+        if not isinstance(meta_palettes, dict):
+            return palettes
+
+        for raw_name, raw_palette in meta_palettes.items():
+            if not isinstance(raw_name, str) or not raw_name.strip() or not isinstance(raw_palette, dict):
+                continue
+            name = raw_name.strip()
+            merged: dict[str, object] = {}
+            if isinstance(raw_palette.get("type"), str) and raw_palette["type"].strip():
+                merged["type"] = raw_palette["type"].strip()
+
+            raw_colors = raw_palette.get("colors")
+            colors: dict[str, str] = {}
+            if isinstance(raw_colors, dict):
+                for key, value in raw_colors.items():
+                    if isinstance(value, str) and value.strip():
+                        colors[str(key)] = value.strip()
+            elif isinstance(raw_colors, list):
+                for index, value in enumerate(raw_colors):
+                    if isinstance(value, str) and value.strip():
+                        colors[str(index)] = value.strip()
+            if colors:
+                merged["colors"] = colors
+
+            raw_aliases = raw_palette.get("aliases")
+            aliases: dict[str, int | str] = {}
+            if isinstance(raw_aliases, dict):
+                for key, value in raw_aliases.items():
+                    if isinstance(key, str) and key.strip() and isinstance(value, (int, str)):
+                        aliases[key.strip()] = value.strip() if isinstance(value, str) else value
+            if aliases:
+                merged["aliases"] = aliases
+
+            if merged:
+                palettes[name] = merged
+        return palettes
+
+    def _help_contents_topic_id(self) -> int | None:
+        """Return the source help contents topic id when known."""
+        meta = self.document.metadata or {}
+        value = meta.get("help_contents_topic_id")
+        if isinstance(value, int) and value in self.topic_ids:
+            return value
+        if isinstance(value, str) and value.strip().isdigit():
+            parsed = int(value.strip())
+            if parsed in self.topic_ids:
+                return parsed
+        for topic in self.document.topics:
+            if topic.is_help_contents and topic.context_id in self.topic_ids:
+                return topic.context_id
+        return None
 
     def _build_converter(self) -> dict[str, str]:
         return {
@@ -165,40 +281,29 @@ class HelpJsonRenderer:
             if group not in string.ascii_uppercase:
                 group = "#"
 
-            # Resolve target context id to one that exists in this document's topics
+            # Resolve target context id to one that exists in this document's topics.
+            # UHF2 does not emit unresolved/debug-only index targets.
             target = entry.context_id
-            if target not in self.topic_ids:
-                # Try alias id mapping
+            if entry.topic_id is None and target not in self.topic_ids:
                 mapped = alias_id_map.get(target)
                 if mapped is None:
-                    # Try alias string mapping by label
                     mapped = alias_string_map.get(label.strip().lower())
-                if mapped is None:
-                    # Try to find a topic whose title or content contains the label
-                    mapped = None
-                    for topic in self.document.topics:
-                        try:
-                            t_title = self.html_renderer._topic_heading(topic) or ""
-                        except Exception:
-                            t_title = ""
-                        if t_title.strip().lower() == label.strip().lower():
-                            mapped = topic.context_id
-                            break
-                        for ln in (getattr(topic, "uhf_content", []) or []):
-                            if isinstance(ln, str) and label.strip().lower() in ln.strip().lower():
-                                mapped = topic.context_id
-                                break
-                        if mapped is not None:
-                            break
                 if mapped is not None:
                     target = mapped
-
-            grouped.setdefault(group, []).append(
-                {
-                    "label": label,
-                    "topic_id": target,
-                }
-            )
+            payload: dict[str, object] = {"label": label}
+            if entry.topic_id is not None:
+                payload["topic_id"] = entry.topic_id
+                if entry.source_file:
+                    payload["file"] = entry.source_file
+                if entry.alias:
+                    payload["alias"] = entry.alias
+                if entry.line is not None:
+                    payload["line"] = entry.line
+            elif target in self.topic_ids:
+                payload["topic_id"] = target
+            else:
+                continue
+            grouped.setdefault(group, []).append(payload)
 
         payload: list[dict[str, object]] = []
         if grouped["#"]:
@@ -463,6 +568,24 @@ class HelpJsonRenderer:
                     if "copyright" in lowered or "(c)" in lowered:
                         return line.strip()
         return None
+
+    def _metadata_language(self) -> str | None:
+        meta = self.document.metadata or {}
+        language = meta.get("language")
+        if not isinstance(language, str):
+            return None
+        normalized = language.strip().replace("_", "-").lower()
+        return normalized or None
+
+    def _metadata_ui(self) -> dict[str, str] | None:
+        meta = self.document.metadata or {}
+        theme: dict[str, str] = {}
+        raw_theme = meta.get("ui")
+        if isinstance(raw_theme, dict):
+            for key, value in raw_theme.items():
+                if isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip():
+                    theme[key.strip()] = value.strip()
+        return theme or None
 
     def _source_format(self) -> str:
         suffix = Path(self.document.source_name).suffix.lower()
