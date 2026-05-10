@@ -1068,10 +1068,10 @@ def _build_external_scorpion_section(base_dir: Path, filename: str, label: str) 
     except Exception:
         return None
 
-    main_topic = next((topic for topic in document.topics if topic.is_main_index), None)
+    help_contents_topic = next((topic for topic in document.topics if topic.is_help_contents), None)
     children: list[ContentNode] = []
     for topic in document.topics:
-        if topic.is_main_index and len(document.topics) > 1:
+        if topic.is_help_contents and len(document.topics) > 1:
             continue
         title = next((name.strip() for name in topic.names if name.strip()), f"Topic {topic.context_id}")
         alias = _preferred_topic_alias(topic)
@@ -1088,12 +1088,12 @@ def _build_external_scorpion_section(base_dir: Path, filename: str, label: str) 
         return None
 
     section = ContentNode(label=label, children=children)
-    if main_topic is not None:
-        alias = _preferred_topic_alias(main_topic)
+    if help_contents_topic is not None:
+        alias = _preferred_topic_alias(help_contents_topic)
         section.source_file = source_path.name
         section.alias = alias
         if alias is None:
-            section.topic_id = main_topic.context_id
+            section.topic_id = help_contents_topic.context_id
     return section
 
 
@@ -1229,7 +1229,7 @@ class ScorpionDatReader(HelpReaderBase):
             contents = _build_program_library_contents(alias_lookup, source_path, program_menu_entries)
             for topic in topics:
                 if "seznam" in {alias.lower() for alias in topic.alias_strings}:
-                    topic.is_main_index = True
+                    topic.is_help_contents = True
                     topic.names = ["Seznam položek"]
                     topic.index_terms = [b"Seznam polozek"]
                     topic.uhf_content = _build_program_menu_lines(alias_lookup, program_menu_entries)
@@ -1238,7 +1238,7 @@ class ScorpionDatReader(HelpReaderBase):
         else:
             for topic in topics:
                 if any(alias.lower().startswith("seznam") for alias in topic.alias_strings):
-                    topic.is_main_index = True
+                    topic.is_help_contents = True
                     break
 
         metadata: dict[str, object] = {
