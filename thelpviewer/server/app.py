@@ -6,8 +6,7 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse, Response
-import aiofiles
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .config import AppConfig, load_config
@@ -69,9 +68,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     async def index() -> Response:
         if not config.index_path.is_file():
             raise HTTPException(status_code=404)
-        async with aiofiles.open(config.index_path, mode="rb") as f:
-            content = await f.read()
-        return Response(content, media_type="text/html")
+        return Response(config.index_path.read_bytes(), media_type="text/html")
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -96,10 +93,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             if not resolved.is_file():
                 raise HTTPException(status_code=404)
             path = resolved
-        async with aiofiles.open(path, mode="rb") as f:
-            content = await f.read()
         # Volitelně: určete media_type podle přípony
-        return Response(content, media_type="text/markdown")
+        return Response(path.read_bytes(), media_type="text/markdown")
 
     @app.get("/config.json")
     def runtime_config() -> JSONResponse:
