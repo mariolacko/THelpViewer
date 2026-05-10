@@ -7,6 +7,7 @@ const SCROLL_REPEAT_MS = 75;
 const TRACK_CHAR = "\u2592";
 const DISABLED_TRACK_CHAR = "\u2593";
 const THUMB_CHAR = "\u25A0";
+const CLOSE_PRESSED_CHAR = "\u2217";
 const CP437_TABLE = ["\u0000", "\u263a", "\u263b", "\u2665", "\u2666", "\u2663", "\u2660", "\u2022", "\u25d8", "\t", "\n", "\u2642", "\u2640", "\r", "\u266b", "\u263c", "\u25ba", "\u25c4", "\u2195", "\u203c", "\u00b6", "\u00a7", "\u25ac", "\u21a8", "\u2191", "\u2193", "\u2192", "\u2190", "\u221f", "\u2194", "\u25b2", "\u25bc", " ", "!", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ":", ";", "<", "=", ">", "?", "@", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "[", "\\", "]", "^", "_", "`", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "{", "|", "}", "~", "\u007f", "\u00c7", "\u00fc", "\u00e9", "\u00e2", "\u00e4", "\u00e0", "\u00e5", "\u00e7", "\u00ea", "\u00eb", "\u00e8", "\u00ef", "\u00ee", "\u00ec", "\u00c4", "\u00c5", "\u00c9", "\u00e6", "\u00c6", "\u00f4", "\u00f6", "\u00f2", "\u00fb", "\u00f9", "\u00ff", "\u00d6", "\u00dc", "\u00a2", "\u00a3", "\u00a5", "\u20a7", "\u0192", "\u00e1", "\u00ed", "\u00f3", "\u00fa", "\u00f1", "\u00d1", "\u00aa", "\u00ba", "\u00bf", "\u2310", "\u00ac", "\u00bd", "\u00bc", "\u00a1", "\u00ab", "\u00bb", "\u2591", "\u2592", "\u2593", "\u2502", "\u2524", "\u2561", "\u2562", "\u2556", "\u2555", "\u2563", "\u2551", "\u2557", "\u255d", "\u255c", "\u255b", "\u2510", "\u2514", "\u2534", "\u252c", "\u251c", "\u2500", "\u253c", "\u255e", "\u255f", "\u255a", "\u2554", "\u2569", "\u2566", "\u2560", "\u2550", "\u256c", "\u2567", "\u2568", "\u2564", "\u2565", "\u2559", "\u2558", "\u2552", "\u2553", "\u256b", "\u256a", "\u2518", "\u250c", "\u2588", "\u2584", "\u258c", "\u2590", "\u2580", "\u03b1", "\u00df", "\u0393", "\u03c0", "\u03a3", "\u03c3", "\u00b5", "\u03c4", "\u03a6", "\u0398", "\u03a9", "\u03b4", "\u221e", "\u03c6", "\u03b5", "\u2229", "\u2261", "\u00b1", "\u2265", "\u2264", "\u2320", "\u2321", "\u00f7", "\u2248", "\u00b0", "\u2219", "\u00b7", "\u221a", "\u207f", "\u00b2", "\u25a0", "\u00a0"];
 const MONTH_NAMES = [
     "",
@@ -688,6 +689,7 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
     if (!windowElement) {
         return;
     }
+    const singleFrame = !dialog && windowElement.classList.contains("is-resizing");
     const topBar = dialog
         ? windowElement.querySelector(".tv-dialog-titlebar")
         : windowElement.querySelector(".tv-border-top");
@@ -701,15 +703,16 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
     const sides = dialog
         ? Array.from(windowElement.querySelectorAll("[data-tv-border-side]"))
         : Array.from(windowElement.querySelectorAll(".tv-border-side-left"));
+    const closeButton = windowElement.querySelector("[data-tv-close-button]");
     const closeGlyph = windowElement.querySelector("[data-tv-close-glyph]");
     const resizeHandle = !dialog ? windowElement.querySelector("[data-tv-resize-handle]") : null;
 
-    const horiz = active ? "═" : "─";
-    const vert = active ? "║" : "│";
-    const tl = active ? "╔" : "┌";
-    const tr = active ? "╗" : "┐";
-    const bl = active ? "╚" : "└";
-    const br = active ? "╝" : "┘";
+    const horiz = singleFrame ? "─" : (active ? "═" : "─");
+    const vert = singleFrame ? "│" : (active ? "║" : "│");
+    const tl = singleFrame ? "┌" : (active ? "╔" : "┌");
+    const tr = singleFrame ? "┐" : (active ? "╗" : "┐");
+    const bl = singleFrame ? "└" : (active ? "╚" : "└");
+    const br = singleFrame ? "┘" : (active ? "╝" : "┘");
 
     if (topCorners[0]) {
         topCorners[0].textContent = tl;
@@ -730,7 +733,7 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
         bottomFills.forEach((element) => setBorderFill(element, horiz));
 
         // Update internal separator T-connectors (e.g. ASCII table ╟/╢)
-        const tMap = active
+        const tMap = active && !singleFrame
             ? { "├": "╟", "┤": "╢", "┬": "╤", "┴": "╧" }
             : { "╟": "├", "╢": "┤", "╤": "┬", "╧": "┴" };
         const bodyCorners = Array.from(windowElement.querySelectorAll(".tv-border-corner"))
@@ -744,13 +747,14 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
         if (leftCorner) {
             leftCorner.textContent = bl;
         }
+        bottomFills.forEach((element) => setBorderFill(element, horiz));
         if (resizeHandle) {
             resizeHandle.textContent = active ? "─┘" : "─┘";
         }
     }
 
     if (closeGlyph) {
-        closeGlyph.textContent = "■";
+        applyCloseGlyphState(closeButton, closeButton && closeButton.dataset.tvClosePressed === "1");
     }
 
     fillBorders();
@@ -838,7 +842,7 @@ function applyCloseGlyphState(button, active) {
     if (!glyph) {
         return;
     }
-    glyph.textContent = active ? "\u263C" : "\u25A0";
+    glyph.textContent = active ? CLOSE_PRESSED_CHAR : "\u25A0";
 }
 
 function bindCloseButtons(scope = document) {
@@ -847,10 +851,18 @@ function bindCloseButtons(scope = document) {
             return;
         }
         button.dataset.tvCloseBound = "1";
-        button.addEventListener("mousedown", () => applyCloseGlyphState(button, true));
-        button.addEventListener("mouseup", () => applyCloseGlyphState(button, false));
-        button.addEventListener("mouseleave", () => applyCloseGlyphState(button, false));
-        button.addEventListener("blur", () => applyCloseGlyphState(button, false));
+        const setPressed = (pressed) => {
+            if (pressed) {
+                button.dataset.tvClosePressed = "1";
+            } else {
+                delete button.dataset.tvClosePressed;
+            }
+            applyCloseGlyphState(button, pressed);
+        };
+        button.addEventListener("mousedown", () => setPressed(true));
+        button.addEventListener("mouseup", () => setPressed(false));
+        button.addEventListener("mouseleave", () => setPressed(false));
+        button.addEventListener("blur", () => setPressed(false));
     });
 }
 
@@ -1921,6 +1933,14 @@ class TVMenuBox extends TVWidget {
         const popupAttrs = attrsToString(this.attrs);
         const attrs = popupAttrs ? ` ${popupAttrs}` : "";
         const borderFill = '<span class="tv-border-fill" data-tv-border-fill="\u2500" aria-hidden="true"></span>';
+        const scrollbarMarkup = '<div class="tv-scrollbar tv-scrollbar-y tv-menu-popup-scrollbar" data-tv-menu-scrollbar hidden aria-hidden="true">'
+            + `<button type="button" class="tv-scroll-arrow" data-tv-menu-scroll-backward tabindex="-1">${escapeHtml(displayCp437Char(30))}</button>`
+            + '<div class="tv-scroll-track" data-tv-menu-scroll-track>'
+            + '<div class="tv-scroll-cells" data-tv-menu-scroll-cells></div>'
+            + '<div class="tv-scroll-thumb" data-tv-menu-scroll-thumb></div>'
+            + '</div>'
+            + `<button type="button" class="tv-scroll-arrow" data-tv-menu-scroll-forward tabindex="-1">${escapeHtml(displayCp437Char(31))}</button>`
+            + '</div>';
         // Split items into segments at separator strings to render them as body-level rows.
         const segments = [[]];
         for (const item of this.items) {
@@ -1944,9 +1964,9 @@ class TVMenuBox extends TVWidget {
                 );
             } else if (seg.length > 0) {
                 bodyRows.push(
-                    '<span class="tv-border-side" data-tv-border-side="\u2502" aria-hidden="true"></span>'
+                    '<span class="tv-border-side tv-menu-popup-side tv-menu-popup-side-left" data-tv-border-side="\u2502" aria-hidden="true"></span>'
                     + '<div class="tv-menu-popup-items">' + seg.join("") + '</div>'
-                    + '<span class="tv-border-side" data-tv-border-side="\u2502" aria-hidden="true"></span>'
+                    + '<span class="tv-border-side tv-menu-popup-side tv-menu-popup-side-right" data-tv-border-side="\u2502" aria-hidden="true"></span>'
                 );
             }
         }
@@ -1956,8 +1976,12 @@ class TVMenuBox extends TVWidget {
             + borderFill
             + '<span class="tv-border-corner" aria-hidden="true">\u2510</span>'
             + '</div>'
+            + '<div class="tv-menu-popup-main">'
             + '<div class="tv-menu-popup-body">'
             + bodyRows.join("")
+            + '</div>'
+            + scrollbarMarkup
+            + '<span class="tv-border-side tv-menu-popup-frame-side" data-tv-border-side="\u2502" aria-hidden="true"></span>'
             + '</div>'
             + '<div class="tv-menu-popup-row">'
             + '<span class="tv-border-corner" aria-hidden="true">\u2514</span>'
@@ -1966,6 +1990,269 @@ class TVMenuBox extends TVWidget {
             + '</div>'
             + '</div>';
     }
+}
+
+function getMenuPopupScrollbarParts(popup) {
+    if (!popup) {
+        return null;
+    }
+    const body = popup.querySelector(".tv-menu-popup-body");
+    const scrollbar = popup.querySelector("[data-tv-menu-scrollbar]");
+    const track = popup.querySelector("[data-tv-menu-scroll-track]");
+    const cells = popup.querySelector("[data-tv-menu-scroll-cells]");
+    const thumb = popup.querySelector("[data-tv-menu-scroll-thumb]");
+    const backward = popup.querySelector("[data-tv-menu-scroll-backward]");
+    const forward = popup.querySelector("[data-tv-menu-scroll-forward]");
+    return body && scrollbar && track && cells && thumb && backward && forward
+        ? { body, scrollbar, track, cells, thumb, backward, forward }
+        : null;
+}
+
+function stopMenuPopupScrollRepeat(popup) {
+    const state = popup && popup._tvMenuPopupScrollbarState;
+    if (!state || state.repeatTimer === null) {
+        return;
+    }
+    window.clearInterval(state.repeatTimer);
+    state.repeatTimer = null;
+}
+
+function setMenuPopupScrollTop(popup, scrollTop) {
+    const parts = getMenuPopupScrollbarParts(popup);
+    if (!parts) {
+        return;
+    }
+    const maxScroll = Math.max(parts.body.scrollHeight - parts.body.clientHeight, 0);
+    parts.body.scrollTop = Math.min(Math.max(scrollTop, 0), maxScroll);
+    syncMenuPopupScrollbar(popup);
+}
+
+function scrollMenuPopupByRows(popup, deltaRows) {
+    const parts = getMenuPopupScrollbarParts(popup);
+    if (!parts) {
+        return;
+    }
+    const cellHeight = measureCells().height || 16;
+    setMenuPopupScrollTop(popup, parts.body.scrollTop + (deltaRows * cellHeight));
+}
+
+function getMenuPopupScrollbarMetrics(parts, cellHeight) {
+    const scrollbarRows = Math.max(1, Math.floor(parts.scrollbar.clientHeight / cellHeight));
+    const trackRows = Math.max(1, scrollbarRows - 2);
+    return { scrollbarRows, trackRows };
+}
+
+function syncMenuPopupScrollbar(popup) {
+    const parts = getMenuPopupScrollbarParts(popup);
+    if (!parts) {
+        return;
+    }
+    const { body, scrollbar, track, cells, thumb } = parts;
+    const cellHeight = measureCells().height || 16;
+    const needsScrollbar = body.scrollHeight > body.clientHeight + 1;
+    popup.classList.toggle("is-scrollable", needsScrollbar);
+    body.classList.toggle("is-scrollable", needsScrollbar);
+    scrollbar.hidden = !needsScrollbar;
+    cells.innerHTML = "";
+    thumb.innerHTML = "";
+
+    if (!needsScrollbar) {
+        track.style.height = "";
+        thumb.style.display = "none";
+        return;
+    }
+
+    const { trackRows } = getMenuPopupScrollbarMetrics(parts, cellHeight);
+    const maxScroll = Math.max(body.scrollHeight - body.clientHeight, 0);
+    const thumbRows = maxScroll > 0 ? 1 : 0;
+    const freeRows = Math.max(trackRows - thumbRows, 0);
+    const thumbStart = maxScroll > 0 ? Math.round((body.scrollTop / maxScroll) * freeRows) : 0;
+    const trackChar = maxScroll > 0 ? TRACK_CHAR : DISABLED_TRACK_CHAR;
+
+    track.style.height = `${trackRows * cellHeight}px`;
+    cells.style.gridTemplateRows = `repeat(${trackRows}, 1em)`;
+    thumb.style.gridTemplateRows = `repeat(${thumbRows}, 1em)`;
+    thumb.style.transform = `translateY(${thumbStart * cellHeight}px)`;
+
+    for (let index = 0; index < trackRows; index += 1) {
+        const cell = document.createElement("span");
+        cell.className = "tv-scroll-cell";
+        cell.textContent = trackChar;
+        cells.appendChild(cell);
+    }
+
+    for (let index = 0; index < thumbRows; index += 1) {
+        const cell = document.createElement("span");
+        cell.className = "tv-scroll-thumb-cell";
+        cell.textContent = THUMB_CHAR;
+        thumb.appendChild(cell);
+    }
+
+    thumb.style.display = thumbRows > 0 ? "grid" : "none";
+}
+
+function bindMenuPopupScrollbar(popup) {
+    if (!popup || popup.dataset.tvMenuScrollbarBound === "1") {
+        return;
+    }
+    const parts = getMenuPopupScrollbarParts(popup);
+    if (!parts) {
+        return;
+    }
+    const state = {
+        repeatTimer: null,
+        dragState: null,
+    };
+    popup.dataset.tvMenuScrollbarBound = "1";
+    popup._tvMenuPopupScrollbarState = state;
+
+    const startRepeat = (event, direction) => {
+        event.preventDefault();
+        stopMenuPopupScrollRepeat(popup);
+        scrollMenuPopupByRows(popup, direction);
+        state.repeatTimer = window.setInterval(() => scrollMenuPopupByRows(popup, direction), SCROLL_REPEAT_MS);
+    };
+
+    const onTrackMouseDown = (event) => {
+        if (event.target.closest("[data-tv-menu-scroll-thumb]")) {
+            return;
+        }
+        event.preventDefault();
+        const cellHeight = measureCells().height || 16;
+        const { trackRows } = getMenuPopupScrollbarMetrics(parts, cellHeight);
+        const maxScroll = Math.max(parts.body.scrollHeight - parts.body.clientHeight, 0);
+        if (maxScroll <= 0) {
+            return;
+        }
+        const rect = parts.track.getBoundingClientRect();
+        const clickRow = Math.max(0, Math.floor((event.clientY - rect.top) / cellHeight));
+        const thumbRows = 1;
+        const freeRows = Math.max(trackRows - thumbRows, 0);
+        const targetRow = freeRows > 0 ? Math.round((clickRow / freeRows) * maxScroll / cellHeight) : 0;
+        setMenuPopupScrollTop(popup, targetRow * cellHeight);
+    };
+
+    const onDragMove = (event) => {
+        if (!state.dragState) {
+            return;
+        }
+        const delta = event.clientY - state.dragState.startClientY;
+        const scrollDelta = state.dragState.freeTrackPx > 0
+            ? (delta / state.dragState.freeTrackPx) * state.dragState.maxScroll
+            : 0;
+        setMenuPopupScrollTop(popup, state.dragState.startScrollTop + scrollDelta);
+    };
+
+    const onDragEnd = () => {
+        state.dragState = null;
+        document.removeEventListener("mousemove", onDragMove);
+        document.removeEventListener("mouseup", onDragEnd);
+    };
+
+    const onThumbMouseDown = (event) => {
+        event.preventDefault();
+        const thumbRect = parts.thumb.getBoundingClientRect();
+        const maxScroll = Math.max(parts.body.scrollHeight - parts.body.clientHeight, 0);
+        state.dragState = {
+            startClientY: event.clientY,
+            startScrollTop: parts.body.scrollTop,
+            maxScroll,
+            freeTrackPx: Math.max(parts.track.clientHeight - thumbRect.height, 0),
+        };
+        document.addEventListener("mousemove", onDragMove);
+        document.addEventListener("mouseup", onDragEnd);
+    };
+
+    parts.body.addEventListener("scroll", () => syncMenuPopupScrollbar(popup), { passive: true });
+    parts.backward.addEventListener("mousedown", (event) => startRepeat(event, -1));
+    parts.forward.addEventListener("mousedown", (event) => startRepeat(event, 1));
+    parts.track.addEventListener("mousedown", onTrackMouseDown);
+    parts.thumb.addEventListener("mousedown", onThumbMouseDown);
+    document.addEventListener("mouseup", () => stopMenuPopupScrollRepeat(popup), { passive: true });
+    window.addEventListener("resize", () => syncMenuPopupScrollbar(popup), { passive: true });
+}
+
+function resetMenuPopupLayout(popup) {
+    if (!popup) {
+        return;
+    }
+    bindMenuPopupScrollbar(popup);
+    popup.classList.remove("is-scrollable");
+    popup.style.top = "";
+    popup.style.maxHeight = "";
+    const body = popup.querySelector(".tv-menu-popup-body");
+    if (body) {
+        body.scrollTop = 0;
+        body.style.maxHeight = "";
+        body.style.overflowY = "";
+        body.classList.remove("is-scrollable");
+    }
+    const parts = getMenuPopupScrollbarParts(popup);
+    if (parts) {
+        parts.scrollbar.hidden = true;
+        syncMenuPopupScrollbar(popup);
+    }
+}
+
+function fitMenuPopupToViewport(root, popup) {
+    if (!root || !popup) {
+        return;
+    }
+    bindMenuPopupScrollbar(popup);
+    const cellHeight = measureCells().height || 16;
+    const rootRect = root.getBoundingClientRect();
+    const parentPopupRect = root.matches("[data-tv-submenu-root]")
+        ? root.closest(".tv-menu-popup")?.getBoundingClientRect() || null
+        : null;
+    const defaultTop = root.matches("[data-tv-submenu-root]") ? -cellHeight : rootRect.height;
+    const body = popup.querySelector(".tv-menu-popup-body");
+
+    popup.classList.remove("is-scrollable");
+    popup.style.top = `${defaultTop}px`;
+    popup.style.maxHeight = "";
+    if (body) {
+        body.scrollTop = 0;
+        body.style.maxHeight = "";
+        body.style.overflowY = "";
+        body.classList.remove("is-scrollable");
+    }
+
+    let popupRect = popup.getBoundingClientRect();
+    const reservedBottomRows = 2;
+    const minGlobalTop = parentPopupRect ? parentPopupRect.top : rootRect.top + defaultTop;
+    const availablePopupHeight = Math.max(
+        cellHeight * 4,
+        window.innerHeight - (cellHeight * reservedBottomRows) - minGlobalTop,
+    );
+    const maxPopupRows = Math.max(4, Math.floor(availablePopupHeight / cellHeight));
+    const maxPopupHeight = maxPopupRows * cellHeight;
+    if (popupRect.height > maxPopupHeight && body) {
+        const maxBodyHeight = Math.max(cellHeight, maxPopupHeight - (cellHeight * 2));
+        popup.classList.add("is-scrollable");
+        popup.style.maxHeight = `${Math.round(maxPopupHeight)}px`;
+        body.style.maxHeight = `${Math.round(maxBodyHeight)}px`;
+        body.style.overflowY = "auto";
+        body.classList.add("is-scrollable");
+        popupRect = popup.getBoundingClientRect();
+    }
+
+    let nextTop = defaultTop;
+    const minTop = minGlobalTop - rootRect.top;
+    const maxTop = minGlobalTop + maxPopupHeight - rootRect.top - popupRect.height;
+    if (nextTop > maxTop) {
+        nextTop = maxTop;
+    }
+    if (nextTop < minTop) {
+        nextTop = minTop;
+    }
+
+    popup.style.top = `${Math.round(nextTop)}px`;
+    syncMenuPopupScrollbar(popup);
+    window.requestAnimationFrame(() => {
+        if (!popup.hidden) {
+            syncMenuPopupScrollbar(popup);
+        }
+    });
 }
 
 class TVButtonStrip extends TVWidget {
@@ -2156,6 +2443,7 @@ class TVFrame extends TVWidget {
                 <div class="${windowClasses}" role="dialog" aria-modal="true" aria-label="${escapeHtml(ariaLabel)}">
                     <div class="${titlebarClasses}">
                         <span class="tv-border-corner" aria-hidden="true">╔</span>
+                        <span class="tv-border-fill tv-dialog-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>
                         ${TVFrame.closeMarkup(closeClasses, closeAttrs)}
                         <span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>
                         <div class="${titleClasses}">${escapeHtml(title)}</div>
@@ -2988,6 +3276,8 @@ Object.assign(TV, {
     bindCloseButtons,
     normalizeSearchText,
     updateWindowFrameState,
+    resetMenuPopupLayout,
+    fitMenuPopupToViewport,
     TVAppContext,
     TVWidget,
     TVStaticText,

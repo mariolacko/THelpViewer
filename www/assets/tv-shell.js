@@ -31,6 +31,8 @@ const {
     TVScreenSaver,
     TurboVisionScrollbar,
     measureCells,
+    resetMenuPopupLayout,
+    fitMenuPopupToViewport,
     SCROLL_REPEAT_MS,
     TRACK_CHAR,
     DISABLED_TRACK_CHAR,
@@ -168,10 +170,14 @@ class TVStatusLine extends TVWidget {
     }
 
     render() {
-        this.root.innerHTML = this.context.uiConfig.status
+        const items = this.context.uiConfig.status
             .map((entry) => this.renderItem(entry))
-            .filter(Boolean)
-            .join("");
+            .filter(Boolean);
+        const hintIndex = items.findIndex((item) => item.indexOf("tv-status-hint") !== -1);
+        if (hintIndex > 0) {
+            items.splice(hintIndex, 0, '<span class="tv-status-separator" aria-hidden="true">│</span>');
+        }
+        this.root.innerHTML = items.join("");
     }
 }
 
@@ -255,6 +261,7 @@ class TurboVisionWindowResizer {
             return;
         }
         event.preventDefault();
+        this.setResizeFrame(true);
         const cell = measureCells();
         const style = getComputedStyle(this.windowElement);
         const left = this.numericVar(style, "--tv-window-left", this.windowElement.offsetLeft);
@@ -297,8 +304,40 @@ class TurboVisionWindowResizer {
             startLeft: this.numericVar(style, "--tv-window-left", this.windowElement.offsetLeft),
             startTop: this.numericVar(style, "--tv-window-top", this.windowElement.offsetTop),
         };
+        this.setMoveFrame(true);
         document.addEventListener("mousemove", this.onMoveDrag);
         document.addEventListener("mouseup", this.onMoveEnd);
+    }
+
+    setResizeFrame(active) {
+        this.windowElement.classList.toggle("is-resizing", active);
+        this.setWindowFrame(active);
+    }
+
+    setMoveFrame(active) {
+        if (this.windowElement.classList.contains("is-resizing")) {
+            return;
+        }
+        this.setWindowFrame(active);
+    }
+
+    setWindowFrame(singleFrame) {
+        const chars = singleFrame
+            ? { tl: "┌", tr: "┐", bl: "└", top: "─", side: "│" }
+            : { tl: "╔", tr: "╗", bl: "╚", top: "═", side: "║" };
+        this.windowElement.querySelectorAll("[data-tv-frame-corner]").forEach((element) => {
+            const corner = element.getAttribute("data-tv-frame-corner");
+            if (corner && chars[corner]) {
+                element.textContent = chars[corner];
+            }
+        });
+        this.windowElement.querySelectorAll(".tv-border-top [data-tv-border-fill]").forEach((element) => {
+            element.setAttribute("data-tv-border-fill", chars.top);
+        });
+        this.windowElement.querySelectorAll("[data-tv-border-side]").forEach((element) => {
+            element.setAttribute("data-tv-border-side", chars.side);
+        });
+        fillBorders(this.windowElement);
     }
 
     numericVar(style, name, fallback) {
@@ -473,6 +512,7 @@ class TurboVisionWindowResizer {
 
     onResizeEnd = () => {
         this.dragState = null;
+        this.setResizeFrame(false);
         document.removeEventListener("mousemove", this.onResizeMove);
         document.removeEventListener("mouseup", this.onResizeEnd);
         this.restoreSnapshot = this.captureGeometry();
@@ -497,6 +537,7 @@ class TurboVisionWindowResizer {
 
     onMoveEnd = () => {
         this.moveState = null;
+        this.setMoveFrame(false);
         document.removeEventListener("mousemove", this.onMoveDrag);
         document.removeEventListener("mouseup", this.onMoveEnd);
         this.restoreSnapshot = this.captureGeometry();
@@ -607,8 +648,10 @@ class TurboVisionMenus {
         toggle.setAttribute("aria-expanded", "true");
         toggle.classList.add("is-current");
         this.activeRoot = root;
-        fillBorders(popup);
-        requestAnimationFrame(() => fillBorders(popup));
+        requestAnimationFrame(() => {
+            fitMenuPopupToViewport(root, popup);
+            fillBorders(popup);
+        });
     }
 
     closeMenus() {
@@ -618,6 +661,7 @@ class TurboVisionMenus {
             const toggle = root.querySelector("[data-tv-menu-toggle]");
             if (popup) {
                 popup.hidden = true;
+                resetMenuPopupLayout(popup);
             }
             if (toggle) {
                 toggle.setAttribute("aria-expanded", "false");
@@ -630,10 +674,15 @@ class TurboVisionMenus {
     closeSubmenus() {
         document.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
             popup.hidden = true;
+            resetMenuPopupLayout(popup);
         });
         document.querySelectorAll("[data-tv-submenu-toggle]").forEach((el) => {
             el.classList.remove("is-submenu-open");
         });
+    }
+
+    positionSubmenu(root, popup) {
+        fitMenuPopupToViewport(root, popup);
     }
 
     bindSubmenus() {
@@ -651,7 +700,10 @@ class TurboVisionMenus {
                 if (!isOpen) {
                     popup.hidden = false;
                     toggle.classList.add("is-submenu-open");
-                    requestAnimationFrame(() => fillBorders(popup));
+                    requestAnimationFrame(() => {
+                        this.positionSubmenu(root, popup);
+                        fillBorders(popup);
+                    });
                 }
             });
 
@@ -659,7 +711,10 @@ class TurboVisionMenus {
                 this.closeSubmenus();
                 popup.hidden = false;
                 toggle.classList.add("is-submenu-open");
-                requestAnimationFrame(() => fillBorders(popup));
+                requestAnimationFrame(() => {
+                    this.positionSubmenu(root, popup);
+                    fillBorders(popup);
+                });
             });
 
             root.addEventListener("mouseleave", (event) => {
@@ -780,6 +835,7 @@ class TVApplication {
     }
 
     initLayout() {
+        highlightCodeExamples(document);
         fillBorders();
         fillDesktopPatterns();
         updateClocks();
@@ -789,7 +845,6 @@ class TVApplication {
         window.addEventListener("load", fillBorders, { passive: true });
         window.addEventListener("load", fillDesktopPatterns, { passive: true });
         window.addEventListener("load", updateClocks, { passive: true });
-        highlightCodeExamples(document);
     }
 
     start() {

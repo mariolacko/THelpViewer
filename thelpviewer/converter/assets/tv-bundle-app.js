@@ -38,6 +38,8 @@ const {
     TurboVisionWindowResizer,
     bindCloseButtons,
     updateWindowFrameState,
+    resetMenuPopupLayout,
+    fitMenuPopupToViewport,
     SCROLL_REPEAT_MS,
     TRACK_CHAR,
     DISABLED_TRACK_CHAR,
@@ -61,7 +63,7 @@ function loadBundle(filename, { onProgress, signal } = {}) {
         return Promise.resolve(bundleCache.get(filename));
     }
     const fetchUrl = HELPS_DIR + filename;
-    return fetch(fetchUrl, { signal }).then(async (response) => {
+    return fetch(fetchUrl, { signal, cache: "no-store" }).then(async (response) => {
         if (!response.ok) {
             throw new Error(`HTTP ${response.status} loading ${filename}`);
         }
@@ -118,13 +120,6 @@ function loadBundle(filename, { onProgress, signal } = {}) {
     });
 }
 
-const UHF_BOX_TRIM_CHARS = " \t\u2500\u2502\u250c\u2510\u2514\u2518\u251c\u2524\u252c\u2534\u253c\u2550\u2551\u2554\u2557\u255a\u255d\u2560\u2563\u2566\u2569\u256c\u2580\u2584\u2588\u258c\u2590\u2591\u2592\u2593\u25a0\u2261";
-const UHF_BOX_ONLY_CHARS = new Set(UHF_BOX_TRIM_CHARS.replace(/[ \t]/g, "") + "-_=|");
-
-function bundleFormatName(bundle) {
-    return (((bundle.metadata || {}).source || {}).format) || "help";
-}
-
 function bundleSourceFilename(bundle) {
     return (((bundle.metadata || {}).source || {}).filename) || "help";
 }
@@ -176,8 +171,10 @@ function findCatalogEntryBySourceFile(sourceFile) {
     const wantedStem = normalizeSourceFileStem(sourceFile);
     if (!wantedStem) { return null; }
 
-    // Stem fallback for source_files or bundle file
-    found = catalogData.find((entry) => sourceFiles(entry).some((value) => normalizeSourceFileStem(value) === wantedStem) || normalizeSourceFileStem(entry.file || "") === wantedStem) || null;
+    found = catalogData.find((entry) =>
+        sourceFiles(entry).some((value) => normalizeSourceFileStem(value) === wantedStem)
+        || normalizeSourceFileStem(entry.file || "") === wantedStem
+    ) || null;
     return found;
 }
 
@@ -209,36 +206,75 @@ function bundleHeaderLabel(bundle) {
     return sourceName ? `${title} (${sourceName})` : title;
 }
 
-function bundleIndexLabel(bundle) {
-    const formatName = bundleFormatName(bundle);
-    if (formatName === "thelp") { return "Turbo Help Index"; }
-    if (formatName === "m602") { return "Software602 Help Index"; }
-    return "Help Index";
+function formatHlxControlBytes(values) {
+    if (!Array.isArray(values)) {
+        return "";
+    }
+    return values
+        .map((value) => Number.parseInt(value, 10))
+        .filter((value) => Number.isInteger(value) && value >= 0)
+        .slice(0, 3)
+        .map((value) => `0x${value.toString(16).toUpperCase()}`)
+        .join(" ");
+}
+
+function bundleDiagnosticItems(bundle) {
+    if (bundleSourceFormat(bundle) !== "hlx") {
+        return [];
+    }
+
+    const metadata = bundle && typeof bundle === "object" ? (bundle.metadata || {}) : {};
+    const items = [];
+
+    if (typeof metadata.hlx_kind === "string" && metadata.hlx_kind.trim()) {
+        items.push({ label: "Kind", value: metadata.hlx_kind.trim() });
+    }
+    if (typeof metadata.hlx_family === "string" && metadata.hlx_family.trim()) {
+        items.push({ label: "Family", value: metadata.hlx_family.trim() });
+    }
+    if (Number.isInteger(metadata.pointer_count)) {
+        items.push({ label: "Ptrs", value: String(metadata.pointer_count) });
+    }
+    const controlBytes = formatHlxControlBytes(metadata.control_byte_dominant);
+    if (controlBytes) {
+        items.push({ label: "Ctrl", value: controlBytes });
+    }
+    return items;
+}
+
+function renderBundleDiagnostics(bundle) {
+    void bundle;
+    return "";
+}
+
+function wrapBundleContent(bundle, contentHTML) {
+    void bundle;
+    return contentHTML;
 }
 
 function bundleWindowSpec(bundle) {
     const display = ((bundle.metadata || {}).display) || {};
-    const formatName = bundleFormatName(bundle);
     let cols = 82;
     let rows = 24;
+    const hasExplicitCols = Number.isInteger(display.cols) && display.cols > 0;
+    const hasExplicitRows = Number.isInteger(display.rows) && display.rows > 0;
     if (Number.isInteger(display.cols) && display.cols > 0) {
-        cols = display.cols + 3;
-    } else if (formatName === "fbhf") {
-        cols = 50;
+        cols = display.cols + 4;
     }
     if (Number.isInteger(display.rows) && display.rows > 0) {
-        rows = display.rows + 3;
-    } else if (formatName === "fbhf") {
-        rows = 18;
+        rows = display.rows + 4;
     }
-    const hasExplicitDisplay = Number.isInteger(display.cols) && display.cols > 0
-        && Number.isInteger(display.rows) && display.rows > 0;
     return {
         cols,
         rows,
-        min_cols: hasExplicitDisplay ? cols : Math.min(cols, 80),
-        min_rows: hasExplicitDisplay ? rows : Math.min(rows, 25),
+        min_cols: hasExplicitCols ? cols : Math.min(cols, 80),
+        min_rows: hasExplicitRows ? rows : Math.min(rows, 25),
     };
+}
+
+function bundleUsesFixedTopicLayout(bundle) {
+    const display = ((bundle.metadata || {}).display) || {};
+    return Number.isInteger(display.cols) && display.cols > 0;
 }
 
 function bundleWindowKey(bundle) {
@@ -253,11 +289,23 @@ function bundleTopicList(bundle) {
     return topics;
 }
 
-function bundleHelpTopicRef(bundle) {
+function bundleHelpContentsTopicRef(bundle) {
+    const metadata = bundle && typeof bundle === "object" ? (bundle.metadata || {}) : {};
+    const direct = normalizeDirectTopicRef(bundle, metadata.help_contents_topic_id);
+    if (direct) { return direct; }
     const topics = bundleTopicList(bundle);
-    const main = topics.find((topic) => topic && topic.is_main);
-    if (main) { return String(main.id); }
+    const helpContents = topics.find((topic) => topic && topic.is_help_contents);
+    if (helpContents) { return String(helpContents.id); }
+    return null;
+}
+
+function bundleFirstTopicRef(bundle) {
+    const topics = bundleTopicList(bundle);
     return topics.length ? String(topics[0].id) : null;
+}
+
+function bundleTopicFallbackRef(bundle) {
+    return bundleHelpContentsTopicRef(bundle) || bundleFirstTopicRef(bundle);
 }
 
 function normalizeDirectTopicRef(bundle, ref) {
@@ -272,15 +320,6 @@ function normalizeDirectTopicRef(bundle, ref) {
         const normalized = String(parseInt(raw, 10));
         if (Object.prototype.hasOwnProperty.call(topics, normalized)) {
             return normalized;
-        }
-    }
-    if (/^[0-9A-Fa-f]+$/.test(raw)) {
-        const parsed = parseInt(raw, 16);
-        if (!Number.isNaN(parsed)) {
-            const normalized = String(parsed);
-            if (Object.prototype.hasOwnProperty.call(topics, normalized)) {
-                return normalized;
-            }
         }
     }
     return null;
@@ -310,10 +349,6 @@ function bundleAliasMap(bundle) {
             aliasMap.set(normalized, resolvedTopic);
         };
 
-        if (Array.isArray(aliases)) {
-            aliases.forEach((value) => addAlias(value));
-            continue;
-        }
         if (aliases && typeof aliases === "object") {
             const ids = Array.isArray(aliases.ids) ? aliases.ids : [];
             const strings = Array.isArray(aliases.strings) ? aliases.strings : [];
@@ -346,11 +381,22 @@ function flattenUhfIndexEntries(bundle) {
     bundle.index.forEach((group) => {
         const groupEntries = Array.isArray(group && group.entries) ? group.entries : [];
         groupEntries.forEach((entry) => {
-            entries.push({
+            if (entry == null) {
+                return;
+            }
+            if (entry.topic_id == null) { return; }
+            const payload = {
                 label: entry.label || "",
                 context_id: entry.topic_id,
                 context_hex: String(entry.topic_id),
-            });
+            };
+            if (entry.line != null) {
+                payload.line = entry.line;
+            }
+        if (entry.file) {
+            payload.file = entry.file;
+        }
+            entries.push(payload);
         });
     });
     return entries;
@@ -378,14 +424,15 @@ function bundleHasNavAction(bundle, action) {
 }
 
 function bundleCanShowIndex(bundle) {
-    return bundleHasIndexEntries(bundle) || bundleHasNavAction(bundle, "index");
+    return bundleHasIndexEntries(bundle);
 }
 
 function bundleCanShowContents(bundle) {
-    return (
-        (Array.isArray(bundle.contents) && bundle.contents.length > 0)
-        || bundleHasNavAction(bundle, "contents")
-    );
+    return Array.isArray(bundle.contents) && bundle.contents.length > 0;
+}
+
+function bundleCanShowHelpContentsTopic(bundle) {
+    return !!bundleHelpContentsTopicRef(bundle);
 }
 
 function isUhfCodeStart(line) {
@@ -417,59 +464,402 @@ function stripUhfMarkup(text) {
     return result;
 }
 
-function compactVisibleText(text) {
-    let cleaned = text;
-    for (const ch of UHF_BOX_TRIM_CHARS) {
-        if (ch === " " || ch === "\t") { continue; }
-        cleaned = cleaned.split(ch).join(" ");
-    }
-    return cleaned.replace(/\s+/g, " ").trim();
+function normalizeSearchText(text) {
+    return stripUhfMarkup(String(text || "")).replace(/\s+/g, " ").trim();
 }
 
-function isUnderlineText(text) {
-    const stripped = text.trim();
-    if (!stripped) { return true; }
-    for (const ch of stripped) {
-        if (!UHF_BOX_ONLY_CHARS.has(ch)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-function deriveUhfTopicTitle(topic) {
+function bundleTopicTitle(bundle, topic) {
     if (topic && typeof topic.title === "string" && topic.title.trim()) {
         return topic.title.trim();
-    }
-    const content = Array.isArray(topic && topic.content) ? topic.content : [];
-    let inCodeBlock = false;
-    for (const line of content) {
-        if (isUhfCodeStart(line)) {
-            inCodeBlock = true;
-            continue;
-        }
-        if (line === "[/code]") {
-            inCodeBlock = false;
-            continue;
-        }
-        if (inCodeBlock || line === "[rule]") {
-            continue;
-        }
-        const compact = compactVisibleText(stripUhfMarkup(String(line || "")));
-        if (compact && !isUnderlineText(compact)) {
-            return compact;
-        }
     }
     return topic && topic.id != null ? `Topic ${topic.id}` : "Topic";
 }
 
-function bundleTopicTitle(bundle, topic) {
-    return deriveUhfTopicTitle(topic);
+function renderUhfRule(bundle) {
+    void bundle;
+    return escapeHtml("─".repeat(512));
 }
 
-function renderUhfRule(bundle) {
-    const width = Math.max((bundleWindowSpec(bundle).cols || 82) - 6, 1);
-    return escapeHtml("─".repeat(width));
+const STANDARD_UHF_PALETTES = {
+    cga: {
+        type: "indexed",
+        colors: DOS_COLORS.reduce((acc, color, index) => {
+            acc[String(index)] = color;
+            return acc;
+        }, {}),
+        aliases: {
+            black: 0,
+            blue: 1,
+            green: 2,
+            cyan: 3,
+            red: 4,
+            magenta: 5,
+            brown: 6,
+            lightgray: 7,
+            light_gray: 7,
+            darkgray: 8,
+            dark_gray: 8,
+            lightblue: 9,
+            light_blue: 9,
+            lightgreen: 10,
+            light_green: 10,
+            lightcyan: 11,
+            light_cyan: 11,
+            lightred: 12,
+            light_red: 12,
+            lightmagenta: 13,
+            light_magenta: 13,
+            yellow: 14,
+            white: 15,
+        },
+    },
+};
+
+function normalizedUhfPalettes(bundle) {
+    if (bundle && bundle._normalizedPalettes) {
+        return bundle._normalizedPalettes;
+    }
+    const palettes = {};
+    Object.entries(STANDARD_UHF_PALETTES).forEach(([name, palette]) => {
+        palettes[name] = {
+            type: palette.type || "indexed",
+            colors: { ...(palette.colors || {}) },
+            aliases: { ...(palette.aliases || {}) },
+        };
+    });
+
+    const source = bundle && bundle.palettes && typeof bundle.palettes === "object" ? bundle.palettes : {};
+    Object.entries(source).forEach(([name, palette]) => {
+        if (!name || !palette || typeof palette !== "object") {
+            return;
+        }
+        const target = palettes[name] || { type: "indexed", colors: {}, aliases: {} };
+        if (typeof palette.type === "string" && palette.type.trim()) {
+            target.type = palette.type.trim();
+        }
+        if (Array.isArray(palette.colors)) {
+            palette.colors.forEach((color, index) => {
+                if (typeof color === "string" && color.trim()) {
+                    target.colors[String(index)] = color.trim();
+                }
+            });
+        } else if (palette.colors && typeof palette.colors === "object") {
+            Object.entries(palette.colors).forEach(([key, color]) => {
+                if (typeof color === "string" && color.trim()) {
+                    target.colors[String(key)] = color.trim();
+                }
+            });
+        }
+        if (palette.aliases && typeof palette.aliases === "object") {
+            Object.entries(palette.aliases).forEach(([key, value]) => {
+                if (key && (typeof value === "string" || Number.isInteger(value))) {
+                    target.aliases[key] = value;
+                }
+            });
+        }
+        palettes[name] = target;
+    });
+
+    if (bundle) {
+        bundle._normalizedPalettes = palettes;
+    }
+    return palettes;
+}
+
+function defaultUhfPaletteName(bundle) {
+    const value = bundle && typeof bundle.default_palette === "string" ? bundle.default_palette.trim() : "";
+    return value || "cga";
+}
+
+function normalizeUhfCssColor(value) {
+    const color = String(value || "").trim();
+    if (color.toLowerCase() === "transparent") {
+        return "transparent";
+    }
+    let match = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (match) {
+        return `#${match[1].toLowerCase()}`;
+    }
+    match = color.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i);
+    if (match) {
+        const parts = match.slice(1).map((part) => parseInt(part, 10));
+        if (parts.every((part) => part >= 0 && part <= 255)) {
+            return `rgb(${parts[0]},${parts[1]},${parts[2]})`;
+        }
+    }
+    return null;
+}
+
+function resolveUhfPaletteValue(bundle, paletteName, value, seen) {
+    const raw = String(value || "").trim();
+    if (!raw) {
+        return null;
+    }
+    const direct = normalizeUhfCssColor(raw);
+    if (direct) {
+        return direct;
+    }
+    const paletteMatch = raw.match(/^([A-Za-z][A-Za-z0-9_-]*):(.+)$/);
+    if (paletteMatch && !/^rgb\s*\(/i.test(raw)) {
+        return resolveUhfPaletteColor(bundle, paletteMatch[1], paletteMatch[2], seen);
+    }
+    return resolveUhfPaletteColor(bundle, paletteName, raw, seen);
+}
+
+function resolveUhfPaletteColor(bundle, paletteName, key, seen = new Set()) {
+    const palettes = normalizedUhfPalettes(bundle);
+    const palette = palettes[paletteName];
+    if (!palette) {
+        return null;
+    }
+    const rawKey = String(key || "").trim();
+    if (!rawKey) {
+        return null;
+    }
+    const seenKey = `${paletteName}:${rawKey.toLowerCase()}`;
+    if (seen.has(seenKey)) {
+        return null;
+    }
+    seen.add(seenKey);
+
+    if (/^\d+$/.test(rawKey) && Object.prototype.hasOwnProperty.call(palette.colors || {}, rawKey)) {
+        return resolveUhfPaletteValue(bundle, paletteName, palette.colors[rawKey], seen);
+    }
+
+    const aliasKey = rawKey.toLowerCase();
+    if (palette.aliases && Object.prototype.hasOwnProperty.call(palette.aliases, aliasKey)) {
+        return resolveUhfPaletteValue(bundle, paletteName, palette.aliases[aliasKey], seen);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(palette.colors || {}, rawKey)) {
+        return resolveUhfPaletteValue(bundle, paletteName, palette.colors[rawKey], seen);
+    }
+
+    return null;
+}
+
+function resolveUhfColor(bundle, rawValue, seen = new Set()) {
+    const value = String(rawValue || "").trim();
+    if (!value) {
+        return null;
+    }
+
+    const direct = normalizeUhfCssColor(value);
+    if (direct) {
+        return direct;
+    }
+
+    const paletteMatch = value.match(/^([A-Za-z][A-Za-z0-9_-]*):(.+)$/);
+    if (paletteMatch && !/^rgb\s*\(/i.test(value)) {
+        return resolveUhfPaletteColor(bundle, paletteMatch[1], paletteMatch[2], seen);
+    }
+
+    return resolveUhfPaletteColor(bundle, defaultUhfPaletteName(bundle), value, seen);
+}
+
+const UHF_UI_THEME_VARS = {
+    window: "--tv-window",
+    text: "--tv-text",
+    link: "--tv-link",
+    title: "--tv-title",
+    title_passive: "--tv-title-passive",
+    title_text: "--tv-title-text",
+    title_text_passive: "--tv-title-text-passive",
+    frame: "--tv-frame-line",
+    frame_passive: "--tv-frame-passive",
+    icon: "--tv-icon",
+    icon_passive: "--tv-icon-passive",
+    page_area: "--tv-page-area",
+    hover_bg: "--tv-hover-bg",
+    hover_fg: "--tv-hover-fg",
+    arrow_bg: "--tv-arrow-bg",
+    arrow_fg: "--tv-arrow-fg",
+    scroll_glyph: "--tv-scroll-glyph",
+    thumb_bg: "--tv-thumb-bg",
+    thumb_fg: "--tv-thumb-fg",
+    code_bg: "--tv-code-bg",
+    code_text: "--tv-code-text",
+};
+
+const DEFAULT_UHF_UI_BY_SOURCE_FORMAT = {
+    thelp: {
+        window: "cga:3",
+        text: "cga:0",
+        link: "cga:14",
+        title: "cga:3",
+        title_text: "cga:15",
+        frame: "cga:15",
+        icon: "cga:10",
+        page_area: "cga:1",
+        hover_bg: "cga:1",
+        hover_fg: "cga:14",
+        code_bg: "cga:1",
+        code_text: "cga:14",
+    },
+    quickhelp: {
+        window: "cga:0",
+        text: "cga:7",
+        link: "cga:14",
+        title: "cga:0",
+        title_passive: "cga:0",
+        title_text: "cga:15",
+        frame: "cga:7",
+        icon: "cga:14",
+        page_area: "cga:0",
+        hover_bg: "cga:1",
+        hover_fg: "cga:14",
+        arrow_bg: "cga:0",
+        arrow_fg: "cga:7",
+        scroll_glyph: "cga:7",
+        thumb_bg: "transparent",
+        thumb_fg: "cga:14",
+        code_bg: "cga:0",
+        code_text: "cga:7",
+    },
+    bw03: {
+        window: "cga:1",
+        text: "cga:7",
+        link: "cga:14",
+        title: "cga:1",
+        title_text: "cga:15",
+        frame: "cga:7",
+        icon: "cga:14",
+        page_area: "cga:0",
+        hover_bg: "cga:7",
+        hover_fg: "cga:1",
+        code_bg: "cga:0",
+        code_text: "cga:7",
+    },
+    "norton-guide": {
+        window: "cga:1",
+        text: "cga:7",
+        link: "cga:14",
+        title: "cga:1",
+        title_passive: "cga:1",
+        title_text: "cga:15",
+        frame: "cga:7",
+        icon: "cga:14",
+        page_area: "cga:1",
+        hover_bg: "cga:7",
+        hover_fg: "cga:1",
+        arrow_bg: "cga:1",
+        arrow_fg: "cga:11",
+        scroll_glyph: "cga:11",
+        thumb_bg: "transparent",
+        thumb_fg: "cga:15",
+        code_bg: "cga:1",
+        code_text: "cga:7",
+    },
+    m602: {
+        window: "cga:0",
+        text: "cga:7",
+        link: "cga:11",
+        title: "cga:0",
+        title_text: "cga:15",
+        frame: "cga:7",
+        icon: "cga:12",
+        page_area: "cga:0",
+        hover_bg: "cga:1",
+        hover_fg: "cga:14",
+        code_bg: "cga:0",
+        code_text: "cga:7",
+    },
+    text602: {
+        window: "cga:0",
+        text: "cga:7",
+        link: "cga:11",
+        title: "cga:0",
+        title_text: "cga:15",
+        frame: "cga:7",
+        icon: "cga:12",
+        page_area: "cga:0",
+        hover_bg: "cga:1",
+        hover_fg: "cga:14",
+        code_bg: "cga:0",
+        code_text: "cga:7",
+    },
+    hlx: {
+        window: "cga:3",
+        text: "cga:0",
+        link: "cga:14",
+        title: "cga:3",
+        title_text: "cga:15",
+        frame: "cga:15",
+        icon: "cga:10",
+        page_area: "cga:1",
+        hover_bg: "cga:1",
+        hover_fg: "cga:14",
+        code_bg: "cga:1",
+        code_text: "cga:14",
+    },
+    tdh: {
+        window: "cga:1",
+        text: "cga:7",
+        link: "cga:14",
+        title: "cga:1",
+        title_text: "cga:15",
+        frame: "cga:7",
+        icon: "cga:14",
+        page_area: "cga:0",
+        hover_bg: "cga:7",
+        hover_fg: "cga:1",
+        code_bg: "cga:0",
+        code_text: "cga:7",
+    },
+    tfh: {
+        window: "cga:1",
+        text: "cga:7",
+        link: "cga:14",
+        title: "cga:1",
+        title_text: "cga:15",
+        frame: "cga:7",
+        icon: "cga:14",
+        page_area: "cga:0",
+        hover_bg: "cga:7",
+        hover_fg: "cga:1",
+        code_bg: "cga:0",
+        code_text: "cga:7",
+    },
+};
+
+function bundleSourceFormat(bundle) {
+    const metadata = bundle && typeof bundle === "object" ? (bundle.metadata || {}) : {};
+    const source = metadata.source && typeof metadata.source === "object" ? metadata.source : {};
+    const format = source.format || metadata.format;
+    return typeof format === "string" ? format.trim().toLowerCase() : "";
+}
+
+function bundleUiThemeStyle(bundle) {
+    const metadata = bundle && typeof bundle === "object" ? (bundle.metadata || {}) : {};
+    const defaultTheme = DEFAULT_UHF_UI_BY_SOURCE_FORMAT[bundleSourceFormat(bundle)] || {};
+    const explicitTheme = metadata.ui && typeof metadata.ui === "object" ? metadata.ui : {};
+    const theme = { ...defaultTheme, ...explicitTheme };
+    const declarations = [];
+    Object.entries(UHF_UI_THEME_VARS).forEach(([key, cssVar]) => {
+        const raw = theme[key];
+        if (typeof raw !== "string" || !raw.trim()) {
+            return;
+        }
+        const color = resolveUhfColor(bundle, raw);
+        if (color) {
+            declarations.push(`${cssVar}:${color}`);
+        }
+    });
+    return declarations.join("; ");
+}
+
+function parseUhfStyleArgs(text) {
+    const args = {};
+    const pattern = /([A-Za-z][A-Za-z0-9_-]*)\s*=\s*("(?:[^"]*)"|'(?:[^']*)'|[^\s]+)/g;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+        let value = match[2].trim();
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.slice(1, -1);
+        }
+        args[match[1].toLowerCase()] = value;
+    }
+    return args;
 }
 
 function parseUhfLinkTargetSpec(rawTarget) {
@@ -491,12 +881,12 @@ function parseUhfLinkTargetSpec(rawTarget) {
         if (!value) {
             continue;
         }
-        if (key === "file" || key === "source") {
+        if (key === "file") {
             target.file = value;
             recognized = true;
             continue;
         }
-        if (key === "topic" || key === "topic_id" || key === "id") {
+        if (key === "topic") {
             if (!/^-?\d+$/.test(value)) {
                 return null;
             }
@@ -509,7 +899,7 @@ function parseUhfLinkTargetSpec(rawTarget) {
             recognized = true;
             continue;
         }
-        if (key === "line" || key === "row") {
+        if (key === "line") {
             if (!/^\d+$/.test(value) || parseInt(value, 10) <= 0) {
                 return null;
             }
@@ -521,7 +911,7 @@ function parseUhfLinkTargetSpec(rawTarget) {
     return recognized ? target : null;
 }
 
-function parseUhfTag(tagBody) {
+function parseUhfTag(tagBody, bundle) {
     const lowered = tagBody.toLowerCase();
     if (lowered === "b") { return { name: "b", open: "<b>", close: "</b>", raw: tagBody }; }
     if (lowered === "i") { return { name: "i", open: "<i>", close: "</i>", raw: tagBody }; }
@@ -565,40 +955,40 @@ function parseUhfTag(tagBody) {
         };
     }
 
-    match = tagBody.match(/^fg:(\d{1,2})$/i);
+    match = tagBody.match(/^fg[:=](.+)$/i);
     if (match) {
-        const colorIndex = parseInt(match[1], 10);
-        if (colorIndex >= 0 && colorIndex < DOS_COLORS.length) {
+        const color = resolveUhfColor(bundle, match[1]);
+        if (color) {
             return {
                 name: "fg",
-                open: `<span style="color:${DOS_COLORS[colorIndex]}">`,
+                open: `<span style="color:${color}">`,
                 close: "</span>",
                 raw: tagBody,
             };
         }
     }
 
-    match = tagBody.match(/^bg:(\d{1,2})$/i);
+    match = tagBody.match(/^bg[:=](.+)$/i);
     if (match) {
-        const colorIndex = parseInt(match[1], 10);
-        if (colorIndex >= 0 && colorIndex < DOS_COLORS.length) {
+        const color = resolveUhfColor(bundle, match[1]);
+        if (color) {
             return {
                 name: "bg",
-                open: `<span style="background:${DOS_COLORS[colorIndex]}">`,
+                open: `<span style="background:${color}">`,
                 close: "</span>",
                 raw: tagBody,
             };
         }
     }
 
-    match = tagBody.match(/^color:(\d{1,2})(?::(\d{1,2}))?$/i);
+    match = tagBody.match(/^color:(.+?)(?::(.+))?$/i);
     if (match) {
-        const fg = parseInt(match[1], 10);
-        const bg = match[2] != null ? parseInt(match[2], 10) : null;
-        if (fg >= 0 && fg < DOS_COLORS.length && (bg == null || (bg >= 0 && bg < DOS_COLORS.length))) {
-            const styles = [`color:${DOS_COLORS[fg]}`];
-            if (bg != null) {
-                styles.push(`background:${DOS_COLORS[bg]}`);
+        const fg = resolveUhfColor(bundle, match[1]);
+        const bg = match[2] != null ? resolveUhfColor(bundle, match[2]) : null;
+        if (fg && (match[2] == null || bg)) {
+            const styles = [`color:${fg}`];
+            if (bg) {
+                styles.push(`background:${bg}`);
             }
             return {
                 name: "color",
@@ -609,10 +999,52 @@ function parseUhfTag(tagBody) {
         }
     }
 
+    match = tagBody.match(/^color=(.+)$/i);
+    if (match) {
+        const fg = resolveUhfColor(bundle, match[1]);
+        if (fg) {
+            return {
+                name: "color",
+                open: `<span style="color:${fg}">`,
+                close: "</span>",
+                raw: tagBody,
+            };
+        }
+    }
+
+    match = tagBody.match(/^style\s+(.+)$/i);
+    if (match) {
+        const args = parseUhfStyleArgs(match[1]);
+        const styles = [];
+        if (args.fg != null) {
+            const fg = resolveUhfColor(bundle, args.fg);
+            if (!fg) {
+                return null;
+            }
+            styles.push(`color:${fg}`);
+        }
+        if (args.bg != null) {
+            const bg = resolveUhfColor(bundle, args.bg);
+            if (!bg) {
+                return null;
+            }
+            styles.push(`background:${bg}`);
+        }
+        if (!styles.length) {
+            return null;
+        }
+        return {
+            name: "style",
+            open: `<span style="${styles.join(";")}">`,
+            close: "</span>",
+            raw: tagBody,
+        };
+    }
+
     return null;
 }
 
-function renderUhfInline(text) {
+function renderUhfInline(text, bundle) {
     const root = { name: null, open: "", close: "", raw: "", children: [] };
     const stack = [root];
 
@@ -652,7 +1084,7 @@ function renderUhfInline(text) {
             index = close + 1;
             continue;
         }
-        const descriptor = parseUhfTag(tagBody);
+        const descriptor = parseUhfTag(tagBody, bundle);
         if (!descriptor) {
             append(escapeHtml(text.slice(open, close + 1)));
             index = close + 1;
@@ -679,8 +1111,9 @@ function bundleFrozenRows(bundle, topic) {
     return Math.max(0, Number((bundle.metadata || {}).frozen_rows) || 0);
 }
 
-function wrapTopicLineMarkup(lineNumber, html) {
-    return `<span class="tv-topic-line" data-tv-line="${lineNumber}">${html}</span>`;
+function wrapTopicLineMarkup(lineNumber, html, extraClass = "") {
+    const classSuffix = extraClass ? ` ${extraClass}` : "";
+    return `<span class="tv-topic-line${classSuffix}" data-tv-line="${lineNumber}">${html}</span>`;
 }
 
 function renderUhfTopicLines(topic, bundle) {
@@ -690,6 +1123,7 @@ function renderUhfTopicLines(topic, bundle) {
     let lineNumber = 0;
 
     content.forEach((line) => {
+        const raw = String(line || "");
         if (isUhfCodeStart(line)) {
             inCodeBlock = true;
             return;
@@ -700,98 +1134,61 @@ function renderUhfTopicLines(topic, bundle) {
         }
         if (line === "[rule]") {
             lineNumber += 1;
-            lines.push(wrapTopicLineMarkup(lineNumber, renderUhfRule(bundle)));
+            lines.push(wrapTopicLineMarkup(lineNumber, renderUhfRule(bundle), "tv-topic-line-rule"));
             return;
         }
         if (inCodeBlock) {
             lineNumber += 1;
-            if (!line) {
+            if (!raw) {
                 lines.push(
                     wrapTopicLineMarkup(
                         lineNumber,
-                        '<span class="code-example code-example-empty">&nbsp;</span>',
+                        '<span class="code-example code-example-empty">&nbsp;</span>'
                     )
                 );
-                            content.forEach((line) => {
-                                const raw = String(line || "");
-                                const leftTrim = raw.replace(/^[ \t]+/, "");
-                                // THELP in-band markers (CP437 0x05 etc.) sometimes appear as
-                                // visible glyphs such as '♣' or '►♣' at the start of a line. Treat
-                                // a leading marker as a code-block toggle and, if the marker is
-                                // followed by text, render the remainder as the first/last code line.
-                                const THELP_MARKER_RE = /^[\u2663\u25BA\u25C4]+/;
-                                if (leftTrim && THELP_MARKER_RE.test(leftTrim)) {
-                                    const after = leftTrim.replace(THELP_MARKER_RE, "");
-                                    inCodeBlock = !inCodeBlock;
-                                    if (!after) {
-                                        // Marker-only line — toggled mode, skip visible output
-                                        return;
-                                    }
-                                    lineNumber += 1;
-                                    if (inCodeBlock) {
-                                        if (!after) {
-                                            lines.push(
-                                                wrapTopicLineMarkup(
-                                                    lineNumber,
-                                                    '<span class="code-example code-example-empty">&nbsp;</span>',
-                                                ),
-                                            );
-                                        } else {
-                                            lines.push(
-                                                wrapTopicLineMarkup(
-                                                    lineNumber,
-                                                    `<span class="code-example">${renderUhfInline(after)}</span>`,
-                                                ),
-                                            );
-                                        }
-                                    } else {
-                                        // closing marker with trailing text — treat as normal text
-                                        lines.push(wrapTopicLineMarkup(lineNumber, renderUhfInline(after)));
-                                    }
-                                    return;
-                                }
+            } else {
+                lines.push(
+                    wrapTopicLineMarkup(
+                        lineNumber,
+                        `<span class="code-example">${renderUhfInline(raw, bundle)}</span>`
+                    )
+                );
+            }
+            return;
+        }
+        lineNumber += 1;
+        lines.push(wrapTopicLineMarkup(lineNumber, renderUhfInline(raw, bundle)));
+    });
 
-                                if (isUhfCodeStart(line)) {
-                                    inCodeBlock = true;
-                                    return;
-                                }
-                                if (line === "[/code]") {
-                                    inCodeBlock = false;
-                                    return;
-                                }
-                                if (line === "[rule]") {
-                                    lineNumber += 1;
-                                    lines.push(wrapTopicLineMarkup(lineNumber, renderUhfRule(bundle)));
-                                    return;
-                                }
-                                if (inCodeBlock) {
-                                    lineNumber += 1;
-                                    if (!line) {
-                                        lines.push(
-                                            wrapTopicLineMarkup(
-                                                lineNumber,
-                                                '<span class="code-example code-example-empty">&nbsp;</span>',
-                                            )
-                                        );
-                                    } else {
-                                        lines.push(
-                                            wrapTopicLineMarkup(
-                                                lineNumber,
-                                                `<span class="code-example">${renderUhfInline(String(line))}</span>`,
-                                            )
-                                        );
-                                    }
-                                    return;
-                                }
-                                lineNumber += 1;
-                                lines.push(wrapTopicLineMarkup(lineNumber, renderUhfInline(String(line || ""))));
-                            });
+    return lines;
+}
+
+function renderUhfTopic(topic, bundle) {
+    const lines = renderUhfTopicLines(topic, bundle);
+    const frozenRows = Math.min(bundleFrozenRows(bundle, topic), lines.length);
+    const fixedLayoutClass = bundleUsesFixedTopicLayout(bundle) ? " tv-topic-pre-fixed" : "";
+    if (frozenRows > 0) {
+        const frozenLines = lines.slice(0, frozenRows);
+        const bodyLines = lines.slice(frozenRows);
+        const html = [
+            '<div class="tv-topic-shell">',
+            `<pre class="tv-pre tv-topic-pre${fixedLayoutClass} tv-topic-pre-frozen">`,
+            ...frozenLines,
+            "</pre>",
+        ];
+        if (bodyLines.length) {
+            html.push(
+                `<pre class="tv-pre tv-topic-pre${fixedLayoutClass} tv-topic-pre-body">`,
+                ...bodyLines,
+                "</pre>",
+            );
+        }
         html.push("</div>");
         return html.join("\n");
     }
 
     return [
-        '<pre class="tv-pre tv-topic-pre">',
+        `<pre class="tv-pre tv-topic-pre${fixedLayoutClass}">`,
         "",
         ...lines,
         "</pre>",
@@ -830,8 +1227,8 @@ function buildUhfSearchIndex(bundle) {
             if (inCodeBlock || line === "[rule]") {
                 return;
             }
-            const compact = compactVisibleText(stripUhfMarkup(String(line || "")));
-            if (compact && !isUnderlineText(compact)) {
+            const compact = normalizeSearchText(line);
+            if (compact) {
                 bodyLines.push(compact);
             }
         });
@@ -860,6 +1257,8 @@ function buildUhfSearchIndex(bundle) {
 // ── Loading progress dialog (DOS Navigator Copy style) ──────────────
 
 const PROGRESS_BAR_WIDTH = 32;
+const PROGRESS_BAR_ANIMATION_MS = 90;
+const PROGRESS_BAR_MIN_VISIBLE_MS = 180;
 
 class TVLoadingDialog {
     constructor(desktop) {
@@ -873,6 +1272,12 @@ class TVLoadingDialog {
         this.desktop = desktop;
         this.cancelled = false;
         this.abortController = new AbortController();
+        this.openedAt = 0;
+        this.progressUpdates = 0;
+        this.animationTimer = null;
+        this.animationFrame = 0;
+        this.destroyTimer = null;
+        this.destroyed = false;
 
 
         const cancelButton = new TVBtn({
@@ -925,11 +1330,22 @@ class TVLoadingDialog {
 
     show(filename) {
         if (this.filenameEl) { this.filenameEl.textContent = filename; }
-        this.update(0, 1);
+        this.openedAt = performance.now();
+        this.progressUpdates = 0;
+        this._renderRatio(0, 1);
+        this._startIndeterminate();
         this.dialog.open();
     }
 
     update(received, total) {
+        if (received > 0) {
+            this.progressUpdates += 1;
+        }
+        this._stopIndeterminate();
+        this._renderRatio(received, total);
+    }
+
+    _renderRatio(received, total) {
         const ratio = total > 0 ? Math.min(received / total, 1) : 0;
         const filled = Math.round(ratio * PROGRESS_BAR_WIDTH);
         const empty = PROGRESS_BAR_WIDTH - filled;
@@ -941,19 +1357,69 @@ class TVLoadingDialog {
         }
     }
 
+    _startIndeterminate() {
+        this._stopIndeterminate();
+        this.animationFrame = 0;
+        this.animationTimer = window.setInterval(() => {
+            const lead = this.animationFrame % PROGRESS_BAR_WIDTH;
+            const cells = new Array(PROGRESS_BAR_WIDTH).fill("░");
+            for (let index = 0; index < 6; index += 1) {
+                cells[(lead + index) % PROGRESS_BAR_WIDTH] = "█";
+            }
+            this.animationFrame += 1;
+            if (this.barEl) {
+                this.barEl.textContent = cells.join("");
+            }
+        }, PROGRESS_BAR_ANIMATION_MS);
+    }
+
+    _stopIndeterminate() {
+        if (this.animationTimer !== null) {
+            window.clearInterval(this.animationTimer);
+            this.animationTimer = null;
+        }
+    }
+
+    _finalizeDestroy() {
+        if (this.destroyed) {
+            return;
+        }
+        this.destroyed = true;
+        this._stopIndeterminate();
+        if (this.destroyTimer !== null) {
+            window.clearTimeout(this.destroyTimer);
+            this.destroyTimer = null;
+        }
+        this.dialog.close();
+        this.dialog.overlay.remove();
+    }
+
     cancel() {
         this.cancelled = true;
         this.abortController.abort();
-        this.destroy();
+        this.destroy(true);
     }
 
     close() {
         this.dialog.close();
     }
 
-    destroy() {
-        this.dialog.close();
-        this.dialog.overlay.remove();
+    destroy(immediate = false) {
+        if (this.destroyed) {
+            return;
+        }
+        this._stopIndeterminate();
+        const elapsed = performance.now() - this.openedAt;
+        const shouldDelay = !immediate && !this.cancelled && this.progressUpdates <= 1;
+        const delay = shouldDelay ? Math.max(0, PROGRESS_BAR_MIN_VISIBLE_MS - elapsed) : 0;
+        if (delay > 0) {
+            if (this.destroyTimer !== null) {
+                window.clearTimeout(this.destroyTimer);
+            }
+            this.destroyTimer = window.setTimeout(() => this._finalizeDestroy(), delay);
+            return;
+        }
+        this._finalizeDestroy();
     }
 }
 
@@ -972,18 +1438,21 @@ function renderScrollbar(axis) {
 
 function buildWindowHTML(bundle, contentHTML, caption) {
     const w = bundleWindowSpec(bundle);
-    const style = `--tv-window-cols:${w.cols}; --tv-window-rows:${w.rows}; --tv-window-min-cols:${w.min_cols}; --tv-window-min-rows:${w.min_rows};`;
+    const themeStyle = bundleUiThemeStyle(bundle);
+    const style = `--tv-window-cols:${w.cols}; --tv-window-rows:${w.rows}; --tv-window-min-cols:${w.min_cols}; --tv-window-min-rows:${w.min_rows};${themeStyle ? ` ${themeStyle};` : ""}`;
     return [
         `<main class="tv-window" data-tv-window data-tv-bundle-window="${escapeHtml(bundleWindowKey(bundle))}" style="${style}">`,
         `<div class="tv-shell">`,
         `<div class="tv-border-row tv-border-top" data-tv-move-handle>`,
-        `<span class="tv-border-corner" aria-hidden="true">╔</span>`,
+        `<span class="tv-border-corner tv-border-corner-tl" data-tv-frame-corner="tl" aria-hidden="true">╔</span>`,
+        `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
         `<a class="tv-close-control" data-tv-close-button data-tv-bundle-close href="#" aria-label="Close window">[<span class="tv-close-glyph" data-tv-close-glyph>■</span>]</a>`,
         `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
         `<div class="tv-window-caption">${escapeHtml(caption)}</div>`,
         `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
         `<a class="tv-zoom-control" data-tv-bundle-zoom href="#" aria-label="Zoom window">[<span class="tv-zoom-glyph" data-tv-zoom-glyph>↑</span>]</a>`,
-        `<span class="tv-border-corner" aria-hidden="true">╗</span>`,
+        `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
+        `<span class="tv-border-corner tv-border-corner-tr" data-tv-frame-corner="tr" aria-hidden="true">╗</span>`,
         `</div>`,
         `<div class="tv-client-row">`,
         `<span class="tv-border-side tv-border-side-left" data-tv-border-side="║" aria-hidden="true"></span>`,
@@ -996,7 +1465,8 @@ function buildWindowHTML(bundle, contentHTML, caption) {
         `</div>`,
         renderScrollbar("y"),
         `<div class="tv-bottom-bar">`,
-        `<span class="tv-scroll-corner tv-scroll-corner-left" aria-hidden="true">╚</span>`,
+        `<span class="tv-scroll-corner tv-scroll-corner-left" data-tv-frame-corner="bl" aria-hidden="true">╚</span>`,
+        `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
         renderScrollbar("x"),
         `<button type="button" class="tv-grow-handle" data-tv-resize-handle aria-label="Resize window">─┘</button>`,
         `</div>`,
@@ -1028,7 +1498,7 @@ function renderBundleIndex(bundle) {
 
     return [
         `<div class="tv-document tv-index-document">`,
-        `<div class="tv-index-heading">${escapeHtml(bundleIndexLabel(bundle))}</div>`,
+        `<div class="tv-index-heading">Index</div>`,
         `<nav class="tv-index-nav">${navItems.join("")}</nav>`,
         ...sections,
         `</div>`,
@@ -1037,17 +1507,20 @@ function renderBundleIndex(bundle) {
 
 function renderIndexSection(anchor, label, entries) {
     const items = entries.map((entry) => {
-        const topicRef = String(entry.topic_id);
-        const attrs = [
-            'href="#"',
-            `data-tv-bundle-topic="${escapeHtml(topicRef)}"`,
-        ];
-        if (entry.source_file) {
-            attrs.push(`data-tv-source-file="${escapeHtml(entry.source_file)}"`);
-        } else if (entry.file) {
-            attrs.push(`data-tv-source-file="${escapeHtml(entry.file)}"`);
+        if (entry == null || entry.topic_id == null) {
+            const targetAttrs = buildBundleTargetDataset(entry || {});
+            if (!Object.keys(targetAttrs).length) {
+                return `<div class="tv-index-entry"><span>${escapeHtml(entry && entry.label ? entry.label : "")}</span></div>`;
+            }
+            return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...targetAttrs })}>${escapeHtml(entry.label || "")}</a></div>`;
         }
-        return `<div class="tv-index-entry"><a ${attrs.join(" ")}>${escapeHtml(entry.label)}</a></div>`;
+        const targetAttrs = buildBundleTargetDataset({
+            topic_id: entry.topic_id,
+            file: entry.file,
+            alias: entry.alias,
+            line: entry.line,
+        });
+        return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...targetAttrs })}>${escapeHtml(entry.label)}</a></div>`;
     });
     return [
         `<section class="tv-index-section" id="idx-${escapeHtml(anchor)}">`,
@@ -1078,8 +1551,8 @@ function buildBundleTargetDataset(target) {
     if (target && target.topic_id != null) {
         attrs["data-tv-bundle-topic"] = String(target.topic_id);
     }
-    if (target && target.source_file) {
-        attrs["data-tv-source-file"] = String(target.source_file);
+    if (target && target.file) {
+        attrs["data-tv-source-file"] = String(target.file);
     }
     if (target && target.alias) {
         attrs["data-tv-topic-alias"] = String(target.alias);
@@ -1144,10 +1617,10 @@ class BundleWindowManager {
     }
 
     showIndex(bundle) {
-        // If the bundle has no index entries, show the main/fallback topic
+        // If the UHF2 bundle has no index entries, show the first available topic
         // instead of an empty index page.
         if (!bundleHasIndexEntries(bundle)) {
-            const fallback = bundleHelpTopicRef(bundle);
+            const fallback = bundleFirstTopicRef(bundle);
             if (fallback) {
                 this.showTopic(bundle, fallback);
                 return;
@@ -1157,7 +1630,7 @@ class BundleWindowManager {
         this.currentBundle = bundle;
         this.currentContextHex = null;
         this.currentLineNumber = null;
-        const contentHTML = renderBundleIndex(bundle);
+        const contentHTML = wrapBundleContent(bundle, renderBundleIndex(bundle));
         this._openWindow(bundle, contentHTML, bundleHeaderLabel(bundle));
         if (this.onNavigate) { this.onNavigate("Index"); }
         this._updateUrl();
@@ -1170,11 +1643,27 @@ class BundleWindowManager {
         this.currentBundle = bundle;
         this.currentContextHex = normalizeTopicRef(bundle, contextHex);
         this.currentLineNumber = this._normalizeLineNumber(lineNumber);
-        const contentHTML = renderTopicContent(bundle, topic);
+        const contentHTML = wrapBundleContent(bundle, renderTopicContent(bundle, topic));
         const windowEl = this._openWindow(bundle, contentHTML, bundleHeaderLabel(bundle));
         this._focusTopicLine(windowEl, this.currentLineNumber);
         if (this.onNavigate) { this.onNavigate(bundleTopicTitle(bundle, topic)); }
         this._updateUrl();
+    }
+
+    showHelpContentsTopic(bundle) {
+        const helpContentsTopic = bundleHelpContentsTopicRef(bundle);
+        if (helpContentsTopic) {
+            this.showTopic(bundle, helpContentsTopic);
+        }
+    }
+
+    showDefault(bundle, lineNumber = null) {
+        const helpContentsTopic = bundleHelpContentsTopicRef(bundle);
+        if (helpContentsTopic) {
+            this.showTopic(bundle, helpContentsTopic, lineNumber);
+            return;
+        }
+        this.showIndex(bundle);
     }
 
     showContents(bundle) {
@@ -1183,12 +1672,12 @@ class BundleWindowManager {
             this.currentBundle = bundle;
             this.currentContextHex = null;
             this.currentLineNumber = null;
-            this._openWindow(bundle, renderBundleContents(bundle), bundleHeaderLabel(bundle));
+            this._openWindow(bundle, wrapBundleContent(bundle, renderBundleContents(bundle)), bundleHeaderLabel(bundle));
             if (this.onNavigate) { this.onNavigate("Contents"); }
             this._updateUrl();
             return;
         }
-        const fallback = bundleHelpTopicRef(bundle);
+        const fallback = bundleTopicFallbackRef(bundle);
         if (fallback) {
             this.showTopic(bundle, fallback);
             return;
@@ -1208,7 +1697,7 @@ class BundleWindowManager {
             this.showTopic(bundle, normalizedTopic, lineNumber);
             return;
         }
-        const fallback = bundleHelpTopicRef(bundle);
+        const fallback = bundleTopicFallbackRef(bundle);
         if (fallback) {
             this.showTopic(bundle, fallback, lineNumber);
             return;
@@ -1278,14 +1767,14 @@ class BundleWindowManager {
         if (prev.contextHex) {
             const topic = findTopicByHex(prev.bundle, prev.contextHex);
             if (topic) {
-                const contentHTML = renderTopicContent(prev.bundle, topic);
+                const contentHTML = wrapBundleContent(prev.bundle, renderTopicContent(prev.bundle, topic));
                 const windowEl = this._openWindow(prev.bundle, contentHTML, bundleHeaderLabel(prev.bundle));
                 this._focusTopicLine(windowEl, this.currentLineNumber);
                 if (this.onNavigate) { this.onNavigate(bundleTopicTitle(prev.bundle, topic)); }
             }
         } else {
             this.currentLineNumber = null;
-            const contentHTML = renderBundleIndex(prev.bundle);
+            const contentHTML = wrapBundleContent(prev.bundle, renderBundleIndex(prev.bundle));
             this._openWindow(prev.bundle, contentHTML, bundleHeaderLabel(prev.bundle));
             if (this.onNavigate) { this.onNavigate("Index"); }
         }
@@ -1307,8 +1796,8 @@ class BundleWindowManager {
             if (captionEl) {
                 captionEl.textContent = caption;
             }
-            this._bindTopicLinks(existing, bundle);
             highlightCodeExamples(existing);
+            this._bindTopicLinks(existing, bundle);
             fillBorders();
             return existing;
         }
@@ -1325,13 +1814,14 @@ class BundleWindowManager {
         template.innerHTML = windowHTML.trim();
         const windowEl = template.content.firstElementChild;
         this.desktop.appendChild(windowEl);
+        bindCloseButtons(windowEl);
         this.openWindows.set(key, windowEl);
         this._initWindowWidgets(windowEl);
+        highlightCodeExamples(windowEl);
         this._bindTopicLinks(windowEl, bundle);
         this._bindCloseButton(windowEl, key);
         this._bindZoomButton(windowEl);
         if (this.dialogManager) { this.dialogManager.registerWindow("help:" + key, windowEl); }
-        highlightCodeExamples(windowEl);
         fillBorders();
         fillDesktopPatterns();
         return windowEl;
@@ -2162,6 +2652,14 @@ class TVBundleApp {
                     labelMarkup: renderHotkeyMarkup("~I~ndex"),
                 }).renderMarkup());
             }
+            if (currentBundle && bundleCanShowHelpContentsTopic(currentBundle)) {
+                items.push(new TVButton({
+                    dialog: false,
+                    className: "tv-status-item",
+                    attrs: { type: "button", "data-tv-bundle-help-contents": true },
+                    labelMarkup: renderHotkeyMarkup("~H~elp Contents"),
+                }).renderMarkup());
+            }
             if (currentBundle && bundleCanShowContents(currentBundle)) {
                 items.push(new TVButton({
                     dialog: false,
@@ -2189,6 +2687,7 @@ class TVBundleApp {
             attrs: { type: "button", "data-tv-dialog-open": "about" },
             labelMarkup: renderHotkeyMarkup("~F1~ About"),
         }).renderMarkup());
+        items.push(`<span class="tv-status-separator" aria-hidden="true">│</span>`);
         items.push(`<span class="tv-status-hint" data-tv-status-hint>${escapeHtml(hint || "THelpViewer")}</span>`);
         items.push(`<a class="tv-status-link" href="https://github.com/mariolacko/THelpViewer" target="_blank" rel="noopener">GitHub</a>`);
         statusLine.innerHTML = items.join("");
@@ -2220,6 +2719,15 @@ class TVBundleApp {
                 event.preventDefault();
                 if (this.windowManager && this.windowManager.currentBundle) {
                     this.windowManager.showIndex(this.windowManager.currentBundle);
+                }
+            });
+        }
+        const helpContentsBtn = statusLine.querySelector("[data-tv-bundle-help-contents]");
+        if (helpContentsBtn) {
+            helpContentsBtn.addEventListener("click", (event) => {
+                event.preventDefault();
+                if (this.windowManager && this.windowManager.currentBundle) {
+                    this.windowManager.showHelpContentsTopic(this.windowManager.currentBundle);
                 }
             });
         }
@@ -2409,8 +2917,8 @@ class TVBundleApp {
     async _loadCatalog() {
         // Load both help and docs catalogs in parallel.
         const [helpResp, docsResp] = await Promise.allSettled([
-            fetch(CATALOG_FILE),
-            fetch(DOCS_CATALOG_FILE),
+            fetch(CATALOG_FILE, { cache: "no-store" }),
+            fetch(DOCS_CATALOG_FILE, { cache: "no-store" }),
         ]);
 
         if (helpResp.status === "fulfilled" && helpResp.value.ok) {
@@ -2500,14 +3008,9 @@ class TVBundleApp {
             if (topicParam) {
                 this.windowManager.showTopic(bundle, topicParam, lineParam);
             } else if (lineParam) {
-                const fallbackTopic = bundleHelpTopicRef(bundle);
-                if (fallbackTopic) {
-                    this.windowManager.showTopic(bundle, fallbackTopic, lineParam);
-                } else {
-                    this.windowManager.showIndex(bundle);
-                }
+                this.windowManager.showDefault(bundle, lineParam);
             } else {
-                this.windowManager.showIndex(bundle);
+                this.windowManager.showDefault(bundle);
             }
 
             if (searchParam && this.searchDialog) {
@@ -2537,13 +3040,15 @@ class TVBundleApp {
             `<main class="tv-window tv-doc-window" data-tv-window style="${style}">`,
             `<div class="tv-shell">`,
             `<div class="tv-border-row tv-border-top" data-tv-move-handle>`,
-            `<span class="tv-border-corner" aria-hidden="true">╔</span>`,
+            `<span class="tv-border-corner tv-border-corner-tl" data-tv-frame-corner="tl" aria-hidden="true">╔</span>`,
+            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
             `<a class="tv-close-control" data-tv-close-button href="#" aria-label="Close window">[<span class="tv-close-glyph" data-tv-close-glyph>■</span>]</a>`,
             `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
             `<div class="tv-window-caption">${escapeHtml(title)}</div>`,
             `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
             `<a class="tv-zoom-control" href="#" aria-label="Zoom window">[<span class="tv-zoom-glyph" data-tv-zoom-glyph>↑</span>]</a>`,
-            `<span class="tv-border-corner" aria-hidden="true">╗</span>`,
+            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
+            `<span class="tv-border-corner tv-border-corner-tr" data-tv-frame-corner="tr" aria-hidden="true">╗</span>`,
             `</div>`,
             `<div class="tv-client-row">`,
             `<span class="tv-border-side tv-border-side-left" data-tv-border-side="║" aria-hidden="true"></span>`,
@@ -2556,7 +3061,8 @@ class TVBundleApp {
             `</div>`,
             renderScrollbar("y"),
             `<div class="tv-bottom-bar">`,
-            `<span class="tv-scroll-corner tv-scroll-corner-left" aria-hidden="true">╚</span>`,
+            `<span class="tv-scroll-corner tv-scroll-corner-left" data-tv-frame-corner="bl" aria-hidden="true">╚</span>`,
+            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
             renderScrollbar("x"),
             `<button type="button" class="tv-grow-handle" data-tv-resize-handle aria-label="Resize window">─┘</button>`,
             `</div>`,
@@ -2575,6 +3081,7 @@ class TVBundleApp {
         template.innerHTML = windowHTML.trim();
         const windowEl = template.content.firstElementChild;
         this.desktop.appendChild(windowEl);
+        bindCloseButtons(windowEl);
 
         // Register with window manager for focus/z-index management
         if (this.dialogManager) {
@@ -2720,7 +3227,10 @@ class TVBundleApp {
                         toggle.setAttribute("aria-expanded", "true");
                         toggle.classList.add("is-current");
                         activeRoot = root;
-                        requestAnimationFrame(fillBorders);
+                        requestAnimationFrame(() => {
+                            fitMenuPopupToViewport(root, popup);
+                            fillBorders(popup);
+                        });
                     }
                 }
             });
@@ -2771,7 +3281,7 @@ class TVBundleApp {
                     });
                     if (loadingDialog) { loadingDialog.destroy(); }
                     this._updateSearchData(bundle);
-                    this.windowManager.showIndex(bundle);
+                    this.windowManager.showDefault(bundle);
                 } catch (error) {
                     if (loadingDialog) { loadingDialog.destroy(); }
                     if (error.name === "AbortError") { return; }
@@ -2925,7 +3435,10 @@ class TVBundleApp {
             menuRoots.forEach((root) => {
                 const popup = root.querySelector("[data-tv-menu-popup]");
                 const toggle = root.querySelector("[data-tv-menu-toggle]");
-                if (popup) { popup.hidden = true; }
+                if (popup) {
+                    popup.hidden = true;
+                    resetMenuPopupLayout(popup);
+                }
                 if (toggle) {
                     toggle.setAttribute("aria-expanded", "false");
                     toggle.classList.remove("is-current");
@@ -2938,6 +3451,7 @@ class TVBundleApp {
         function closeSubmenus() {
             document.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
                 popup.hidden = true;
+                resetMenuPopupLayout(popup);
             });
             document.querySelectorAll("[data-tv-submenu-toggle]").forEach((el) => {
                 el.classList.remove("is-submenu-open");
@@ -2961,7 +3475,10 @@ class TVBundleApp {
                 if (!isOpen) {
                     popup.hidden = false;
                     toggle.classList.add("is-submenu-open");
-                    requestAnimationFrame(() => fillBorders(popup));
+                    requestAnimationFrame(() => {
+                        fitMenuPopupToViewport(root, popup);
+                        fillBorders(popup);
+                    });
                 }
             });
 
@@ -2969,7 +3486,10 @@ class TVBundleApp {
                 closeSubmenus();
                 popup.hidden = false;
                 toggle.classList.add("is-submenu-open");
-                requestAnimationFrame(() => fillBorders(popup));
+                requestAnimationFrame(() => {
+                    fitMenuPopupToViewport(root, popup);
+                    fillBorders(popup);
+                });
             });
 
             root.addEventListener("mouseleave", (event) => {

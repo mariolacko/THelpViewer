@@ -6,7 +6,6 @@ Presentation assets for the generated TurboVision-style HTML viewer:
 - `tv-core.js` — theme engine, utility functions and base TV widgets
 - `tv-dialogs.js` — standalone dialog windows (About, ASCII, Calculator, Calendar, Colors, Search)
 - `tv-games.js` — built-in games (Tetris, Minesweeper, Puzzle)
-- `tv-highlight.js` — client-side Pascal/C/ASM syntax highlighting
 - `tv-screensaver.js` — idle screensaver
 - `tv-shell.js` — menu bar, status line, scrollbars and application shell
 - `tv-bundle-app.js` — SPA bundle loader, window manager and docs viewer

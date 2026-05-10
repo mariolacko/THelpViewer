@@ -1,294 +1,385 @@
-/**
- * tv-highlight.js — Borland-style syntax highlighting for Pascal, C and ASM.
- *
- * Operates on .code-example spans produced by the converter.  Detects the
- * primary language automatically and handles inline `asm … end` blocks in
- * Pascal code.
- *
- * Colour classes used: code-keyword, code-string, code-comment, code-number,
- * code-preproc, code-asm (CSS variables --tv-code-*).
- */
-
-/* global TV */
+// tv-highlight.js — lightweight syntax highlighting for code examples.
 (function (TV) {
 "use strict";
 
-// ── keyword sets ────────────────────────────────────────────────────
-
 const PASCAL_KW = new Set([
-    "and","array","asm","begin","case","const","constructor","destructor",
-    "div","do","downto","else","end","file","for","function","goto","if",
-    "implementation","in","inherited","inline","interface","label","mod",
-    "nil","not","object","of","or","packed","procedure","program","record",
-    "repeat","set","shl","shr","string","then","to","type","unit","until",
-    "uses","var","while","with","xor",
+    "and", "array", "asm", "begin", "case", "const", "constructor", "destructor",
+    "div", "do", "downto", "else", "end", "file", "for", "function", "goto", "if",
+    "implementation", "in", "inherited", "inline", "interface", "label", "mod",
+    "nil", "not", "object", "of", "or", "packed", "procedure", "program", "record",
+    "repeat", "set", "shl", "shr", "string", "then", "to", "type", "unit", "until",
+    "uses", "var", "while", "with", "xor",
 ]);
 
 const C_KW = new Set([
-    "auto","break","case","char","const","continue","default","do","double",
-    "else","enum","extern","float","for","goto","if","int","long","register",
-    "return","short","signed","sizeof","static","struct","switch","typedef",
-    "union","unsigned","void","volatile","while",
-    // common C++ / Borland extensions seen in help examples
-    "asm","bool","catch","cdecl","class","delete","far","friend","huge",
-    "inline","interrupt","mutable","namespace","near","new","operator",
-    "pascal","private","protected","public","template","this","throw",
-    "true","false","try","using","virtual",
-    // Win16/Win32 common typedefs seen in Borland help files
-    "BOOL","BYTE","DWORD","FAR","HANDLE","HINSTANCE","HWND","LONG","LPARAM",
-    "LPCSTR","LPSTR","LPVOID","NEAR","NULL","PASCAL","TRUE","FALSE","UINT",
-    "VOID","WINAPI","WORD","WPARAM","CALLBACK","LRESULT","HDC","HBRUSH",
-    "HCURSOR","HICON","HMENU","HMODULE","MSG","WNDCLASS","RECT","POINT",
-].map((word) => word.toLowerCase()));
+    "auto", "break", "case", "char", "const", "continue", "default", "do", "double",
+    "else", "enum", "extern", "float", "for", "goto", "if", "int", "long", "register",
+    "return", "short", "signed", "sizeof", "static", "struct", "switch", "typedef",
+    "union", "unsigned", "void", "volatile", "while", "asm", "bool", "catch", "cdecl",
+    "class", "delete", "far", "friend", "huge", "inline", "interrupt", "mutable",
+    "namespace", "near", "new", "operator", "pascal", "private", "protected", "public",
+    "template", "this", "throw", "true", "false", "try", "using", "virtual", "bool",
+    "byte", "word", "dword", "handle", "hwnd", "hinstance", "uint", "lparam", "wparam",
+    "lresult", "callback", "winapi", "null",
+]);
 
 const ASM_KW = new Set([
-    // x86 registers
-    "ah","al","ax","bh","bl","bp","bx","ch","cl","cs","cx","dh","di",
-    "dl","ds","dx","eax","ebp","ebx","ecx","edi","edx","es","esi","esp",
-    if (lang === "c") {
-        // C mode — use DOM-based highlighting to avoid fragile HTML
-        // string serialization that previously produced malformed tags.
-        els.forEach((el) => {
-            el.classList.remove("code-lang-c", "code-lang-pascal", "code-lang-asm");
-            el.classList.add("code-lang-c");
-            const raw = el.textContent || "";
-            if (!raw.trim()) return;
+    "aaa", "aad", "aam", "aas", "adc", "add", "and", "call", "cbw", "clc", "cld",
+    "cli", "cmc", "cmp", "cmps", "cwd", "daa", "das", "dec", "div", "hlt", "idiv",
+    "imul", "in", "inc", "int", "into", "iret", "ja", "jae", "jb", "jbe", "jc",
+    "jcxz", "je", "jg", "jge", "jl", "jle", "jmp", "jna", "jnae", "jnb", "jnbe",
+    "jnc", "jne", "jng", "jnge", "jnl", "jnle", "jno", "jnp", "jns", "jnz", "jo",
+    "jp", "jpe", "jpo", "js", "jz", "lahf", "lds", "lea", "les", "lock", "lods",
+    "loop", "mov", "movs", "mul", "neg", "nop", "not", "or", "out", "pop", "push",
+    "rcl", "rcr", "rep", "repe", "repne", "ret", "rol", "ror", "sahf", "sal", "sar",
+    "sbb", "scas", "shl", "shr", "stc", "std", "sti", "stos", "sub", "test", "wait",
+    "xchg", "xlat", "xor", "db", "dd", "dw", "dq", "dt", "dup", "offset", "ptr",
+    "seg", "byte", "word", "dword", "fword", "qword", "tbyte", "near", "far", "short",
+    "ax", "bx", "cx", "dx", "si", "di", "bp", "sp", "cs", "ds", "es", "ss", "al",
+    "ah", "bl", "bh", "cl", "ch", "dl", "dh", "eax", "ebx", "ecx", "edx", "esi",
+    "edi", "ebp", "esp",
+]);
 
-            // Entire preprocessor directive — wrap whole line while
-            // preserving existing inline elements.
-            if (C_PREPROC_RE.test(raw)) {
-                if (!el.children.length) {
-                    const w = document.createElement("span");
-                    w.className = "code-preproc";
-                    w.textContent = raw;
-                    el.innerHTML = "";
-                    el.appendChild(w);
-                } else {
-                    const wrapper = document.createElement("span");
-                    wrapper.className = "code-preproc";
-                    Array.from(el.childNodes).forEach((n) => wrapper.appendChild(n.cloneNode(true)));
-                    el.innerHTML = "";
-                    el.appendChild(wrapper);
-                }
-                return;
-            }
-
-            // Tokenize text nodes into spans/nodes safely using the DOM.
-            function createFragmentForC(text) {
-                const frag = document.createDocumentFragment();
-                const tokenRE = /(\$[0-9A-Fa-f]+|0x[0-9A-Fa-f]+|[0-9][0-9A-Fa-f]*[hH]|\d+(?:\.\d+)?|\b\w+\b|[{};*+\-\/%=|^&()\[\]<>])/g;
-                let last = 0;
-                tokenRE.lastIndex = 0;
-                let m;
-                while ((m = tokenRE.exec(text)) !== null) {
-                    if (m.index > last) {
-                        frag.appendChild(document.createTextNode(text.slice(last, m.index)));
-                    }
-                    const tok = m[0];
-                    let node;
-                    NUMBER_RE.lastIndex = 0;
-                    if (NUMBER_RE.test(tok)) {
-                        node = document.createElement("span");
-                        node.className = "code-number";
-                        node.textContent = tok;
-                    } else if (/^\w+$/.test(tok) && C_KW.has(tok.toLowerCase())) {
-                        node = document.createElement("span");
-                        node.className = "code-keyword";
-                        node.textContent = tok;
-                    } else if (/^[{};*+\-\/%=|^&()\[\]<>]$/.test(tok) || tok === "<" || tok === ">" || tok === "&") {
-                        node = document.createElement("span");
-                        node.className = "code-keyword";
-                        node.textContent = tok;
-                    } else {
-                        node = document.createTextNode(tok);
-                    }
-                    frag.appendChild(node);
-                    last = tokenRE.lastIndex;
-                }
-                if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
-                return frag;
-            }
-
-            function processChildNode(node) {
-                const frag = document.createDocumentFragment();
-                if (node.nodeType === Node.TEXT_NODE) {
-                    frag.appendChild(createFragmentForC(node.nodeValue || ""));
-                    return frag;
-                }
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                    const el2 = document.createElement(node.tagName.toLowerCase());
-                    Array.from(node.attributes).forEach((a) => el2.setAttribute(a.name, a.value));
-                    Array.from(node.childNodes).forEach((ch) => el2.appendChild(processChildNode(ch)));
-                    frag.appendChild(el2);
-                    return frag;
-                }
-                return frag;
-            }
-
-            if (!el.children.length) {
-                el.innerHTML = "";
-                el.appendChild(createFragmentForC(raw));
-                return;
-            }
-
-            const fragment = document.createDocumentFragment();
-            Array.from(el.childNodes).forEach((node) => fragment.appendChild(processChildNode(node)));
-            el.innerHTML = "";
-            el.appendChild(fragment);
-        });
-        return;
-    }
-// Numbers: $FF, 0xFF, 0FFh, 123, 12.34
+const C_PREPROC_RE = /^\s*#\s*(include|define|ifdef|ifndef|endif|else|elif|pragma|if|undef|error|warning|line)\b/;
+const PASCAL_TOKEN_RE = /(\{[^}]*\}|\(\*[\s\S]*?\*\)|\/\/.*$|'(?:''|[^'])*')/gm;
+const C_TOKEN_RE = /(\/\*[\s\S]*?\*\/|\/\/.*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/gm;
+const ASM_COMMENT_RE = /(;.*$)/gm;
 const NUMBER_RE = /(?<![&\w])(\$[0-9A-Fa-f]+|0x[0-9A-Fa-f]+|[0-9][0-9A-Fa-f]*[hH]|\d+(?:\.\d+)?)(?!\w)/g;
 
-// ── plain fragment highlighting (keywords + numbers) ────────────────
+function esc(text) {
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function spanWrap(cls, inner) {
+    return `<span class="${cls}">${inner}</span>`;
+}
+
+function detectCodeLang(text) {
+    const probe = String(text || "");
+    let cScore = 0;
+    let pascalScore = 0;
+    let asmScore = 0;
+
+    if (/#include|#define|#pragma|->|::|\b(?:printf|scanf|malloc|free|sizeof|class|template|namespace|virtual)\b/i.test(probe)) { cScore += 5; }
+    if (/\b(?:void|int|char|short|long|float|double|unsigned|signed|struct|typedef)\b/.test(probe)) { cScore += 3; }
+    if (/\{[^}]*\}|\/\*|\*\//.test(probe)) { cScore += 2; }
+
+    if (/\b(?:begin|end|procedure|function|program|unit|uses|implementation|interface|record|object)\b/i.test(probe)) { pascalScore += 5; }
+    if (/\b(?:var|const|type|string|nil|array|set|downto|inherited)\b/i.test(probe)) { pascalScore += 3; }
+    if (/\(\*|\*\)|:=|\bdiv\b|\bmod\b/i.test(probe)) { pascalScore += 2; }
+
+    if (/\b(?:mov|push|pop|jmp|call|cmp|lea|xor|or|and|int|ret)\b/i.test(probe)) { asmScore += 5; }
+    if (/\b(?:ax|bx|cx|dx|si|di|bp|sp|cs|ds|es|ss|eax|ebx|ecx|edx)\b/i.test(probe)) { asmScore += 4; }
+    if (/^\s*;.*$/m.test(probe)) { asmScore += 2; }
+
+    if (asmScore > cScore && asmScore > pascalScore) {
+        return "asm";
+    }
+    return cScore > pascalScore ? "c" : "pascal";
+}
 
 function hlPlainPascal(text) {
-    let r = text.replace(/\b(\w+)\b/g, (w) =>
-        PASCAL_KW.has(w.toLowerCase()) ? spanWrap("code-keyword", w) : w
-    );
-    r = r.replace(NUMBER_RE, (_, n) => spanWrap("code-number", n));
-    return r;
+    let result = text.replace(/\b(\w+)\b/g, (word) => (
+        PASCAL_KW.has(word.toLowerCase()) ? spanWrap("code-keyword", word) : word
+    ));
+    result = result.replace(NUMBER_RE, (_m, number) => spanWrap("code-number", number));
+    return result;
 }
 
 function hlPlainC(text) {
-    if (C_PREPROC_RE.test(text)) return spanWrap("code-preproc", text);
-    let r = text.replace(/\b(\w+)\b/g, (w) =>
-        C_KW.has(w.toLowerCase()) ? spanWrap("code-keyword", w) : w
-    );
-    r = r.replace(NUMBER_RE, (_, n) => spanWrap("code-number", n));
-    return r;
+    if (C_PREPROC_RE.test(text)) {
+        return spanWrap("code-preproc", text);
+    }
+    let result = text.replace(/\b(\w+)\b/g, (word) => (
+        C_KW.has(word.toLowerCase()) ? spanWrap("code-keyword", word) : word
+    ));
+    result = result.replace(NUMBER_RE, (_m, number) => spanWrap("code-number", number));
+    return result;
 }
 
 function hlPlainAsm(text) {
-    let r = text.replace(/\b(\w+)\b/g, (w) =>
-        ASM_KW.has(w.toLowerCase()) ? spanWrap("code-keyword", w) : w
-    );
-    r = r.replace(NUMBER_RE, (_, n) => spanWrap("code-number", n));
-    return r;
+    let result = text.replace(/\b(\w+)\b/g, (word) => (
+        ASM_KW.has(word.toLowerCase()) ? spanWrap("code-keyword", word) : word
+    ));
+    result = result.replace(NUMBER_RE, (_m, number) => spanWrap("code-number", number));
+    return result;
 }
-
-// ── line-level highlighting ─────────────────────────────────────────
 
 function hlTokenize(escaped, tokenRe, plainFn) {
     const parts = [];
-    let cur = 0, m;
+    let cursor = 0;
     tokenRe.lastIndex = 0;
-    while ((m = tokenRe.exec(escaped)) !== null) {
-        if (m.index > cur) parts.push(plainFn(escaped.slice(cur, m.index)));
-        const tok = m[0];
-        if (tok.startsWith("'") || tok.startsWith('"')) {
-            parts.push(spanWrap("code-string", tok));
-        } else {
-            parts.push(spanWrap("code-comment", tok));
+    let match;
+    while ((match = tokenRe.exec(escaped)) !== null) {
+        if (match.index > cursor) {
+            parts.push(plainFn(escaped.slice(cursor, match.index)));
         }
-        cur = tokenRe.lastIndex;
+        const token = match[0];
+        if (token.startsWith("'") || token.startsWith('"')) {
+            parts.push(spanWrap("code-string", token));
+        } else {
+            parts.push(spanWrap("code-comment", token));
+        }
+        cursor = tokenRe.lastIndex;
     }
-    if (cur < escaped.length) parts.push(plainFn(escaped.slice(cur)));
+    if (cursor < escaped.length) {
+        parts.push(plainFn(escaped.slice(cursor)));
+    }
     return parts.join("");
 }
 
-function hlLinePascal(escaped) {
-    return hlTokenize(escaped, PASCAL_TOKEN_RE, hlPlainPascal);
+function hlLinePascal(raw, inBlockComment) {
+    const parts = [];
+    let cursor = 0;
+    let index = 0;
+    let blockComment = inBlockComment;
+
+    function flushCode(until) {
+        if (until <= cursor) {
+            return;
+        }
+        parts.push(hlPlainPascal(esc(raw.slice(cursor, until))));
+    }
+
+    while (index < raw.length) {
+        if (blockComment === "paren") {
+            const end = raw.indexOf("*)", index);
+            if (end < 0) {
+                parts.push(spanWrap("code-comment", esc(raw.slice(index))));
+                return { html: parts.join(""), inBlockComment: "paren" };
+            }
+            parts.push(spanWrap("code-comment", esc(raw.slice(index, end + 2))));
+            index = end + 2;
+            cursor = index;
+            blockComment = false;
+            continue;
+        }
+
+        if (blockComment === "brace") {
+            const end = raw.indexOf("}", index);
+            if (end < 0) {
+                parts.push(spanWrap("code-comment", esc(raw.slice(index))));
+                return { html: parts.join(""), inBlockComment: "brace" };
+            }
+            parts.push(spanWrap("code-comment", esc(raw.slice(index, end + 1))));
+            index = end + 1;
+            cursor = index;
+            blockComment = false;
+            continue;
+        }
+
+        if (raw.startsWith("//", index)) {
+            flushCode(index);
+            parts.push(spanWrap("code-comment", esc(raw.slice(index))));
+            return { html: parts.join(""), inBlockComment: false };
+        }
+
+        if (raw.startsWith("(*", index)) {
+            flushCode(index);
+            const end = raw.indexOf("*)", index + 2);
+            if (end < 0) {
+                parts.push(spanWrap("code-comment", esc(raw.slice(index))));
+                return { html: parts.join(""), inBlockComment: "paren" };
+            }
+            parts.push(spanWrap("code-comment", esc(raw.slice(index, end + 2))));
+            index = end + 2;
+            cursor = index;
+            continue;
+        }
+
+        if (raw[index] === "{") {
+            flushCode(index);
+            const end = raw.indexOf("}", index + 1);
+            if (end < 0) {
+                parts.push(spanWrap("code-comment", esc(raw.slice(index))));
+                return { html: parts.join(""), inBlockComment: "brace" };
+            }
+            parts.push(spanWrap("code-comment", esc(raw.slice(index, end + 1))));
+            index = end + 1;
+            cursor = index;
+            continue;
+        }
+
+        if (raw[index] === "'") {
+            let end = index + 1;
+            while (end < raw.length) {
+                if (raw[end] === "'") {
+                    if (raw[end + 1] === "'") {
+                        end += 2;
+                        continue;
+                    }
+                    end += 1;
+                    break;
+                }
+                end += 1;
+            }
+            flushCode(index);
+            parts.push(spanWrap("code-string", esc(raw.slice(index, Math.min(end, raw.length)))));
+            index = Math.min(end, raw.length);
+            cursor = index;
+            continue;
+        }
+
+        index += 1;
+    }
+
+    flushCode(raw.length);
+    return { html: parts.join(""), inBlockComment: false };
 }
 
-function hlLineC(escaped) {
-    return hlTokenize(escaped, C_TOKEN_RE, hlPlainC);
+function hlLineC(raw, inBlockComment) {
+    const parts = [];
+    let cursor = 0;
+    let index = 0;
+    let blockComment = inBlockComment;
+
+    if (!blockComment && C_PREPROC_RE.test(raw)) {
+        return { html: spanWrap("code-preproc", esc(raw)), inBlockComment: false };
+    }
+
+    function flushCode(until) {
+        if (until <= cursor) {
+            return;
+        }
+        parts.push(hlPlainC(esc(raw.slice(cursor, until))));
+    }
+
+    while (index < raw.length) {
+        if (blockComment) {
+            const end = raw.indexOf("*/", index);
+            if (end < 0) {
+                parts.push(spanWrap("code-comment", esc(raw.slice(index))));
+                return { html: parts.join(""), inBlockComment: true };
+            }
+            parts.push(spanWrap("code-comment", esc(raw.slice(index, end + 2))));
+            index = end + 2;
+            cursor = index;
+            blockComment = false;
+            continue;
+        }
+
+        if (raw.startsWith("//", index)) {
+            flushCode(index);
+            parts.push(spanWrap("code-comment", esc(raw.slice(index))));
+            return { html: parts.join(""), inBlockComment: false };
+        }
+
+        if (raw.startsWith("/*", index)) {
+            flushCode(index);
+            const end = raw.indexOf("*/", index + 2);
+            if (end < 0) {
+                parts.push(spanWrap("code-comment", esc(raw.slice(index))));
+                return { html: parts.join(""), inBlockComment: true };
+            }
+            parts.push(spanWrap("code-comment", esc(raw.slice(index, end + 2))));
+            index = end + 2;
+            cursor = index;
+            continue;
+        }
+
+        if (raw[index] === '"' || raw[index] === "'") {
+            const quote = raw[index];
+            let end = index + 1;
+            while (end < raw.length) {
+                if (raw[end] === "\\") {
+                    end += 2;
+                    continue;
+                }
+                if (raw[end] === quote) {
+                    end += 1;
+                    break;
+                }
+                end += 1;
+            }
+            flushCode(index);
+            parts.push(spanWrap("code-string", esc(raw.slice(index, Math.min(end, raw.length)))));
+            index = Math.min(end, raw.length);
+            cursor = index;
+            continue;
+        }
+
+        index += 1;
+    }
+
+    flushCode(raw.length);
+    return { html: parts.join(""), inBlockComment: false };
 }
 
 function hlLineAsm(escaped) {
-    // ASM comments use ; to end-of-line
     const parts = [];
-    let cur = 0, m;
+    let cursor = 0;
     ASM_COMMENT_RE.lastIndex = 0;
-    while ((m = ASM_COMMENT_RE.exec(escaped)) !== null) {
-        if (m.index > cur) parts.push(hlPlainAsm(escaped.slice(cur, m.index)));
-        parts.push(spanWrap("code-comment", m[0]));
-        cur = ASM_COMMENT_RE.lastIndex;
+    let match;
+    while ((match = ASM_COMMENT_RE.exec(escaped)) !== null) {
+        if (match.index > cursor) {
+            parts.push(hlPlainAsm(escaped.slice(cursor, match.index)));
+        }
+        parts.push(spanWrap("code-comment", match[0]));
+        cursor = ASM_COMMENT_RE.lastIndex;
     }
-    if (cur < escaped.length) parts.push(hlPlainAsm(escaped.slice(cur)));
+    if (cursor < escaped.length) {
+        parts.push(hlPlainAsm(escaped.slice(cursor)));
+    }
     return parts.join("");
 }
 
-// ── inline asm detection in Pascal ──────────────────────────────────
-//
-// Pascal `asm … end` blocks: each line inside gets ASM highlighting.
-// We track state across lines.
-
-const ASM_OPEN_RE = /\basm\b/i;
-const ASM_CLOSE_RE = /\bend\b/i;
-
-/**
- * Highlight all .code-example elements inside *container*.
- *
- * For Pascal code, tracks inline `asm … end` blocks across lines so
- * that assembler instructions get the asm colour class.
- */
 function highlightCodeExamples(container) {
-    const els = container.querySelectorAll(".code-example");
-    if (!els.length) return;
-
-    // Detect primary language from the combined text
-    const lang = detectCodeLang(Array.from(els, (el) => el.textContent || "").join("\n"));
-    const baseClass = lang === "c" ? "code-lang-c" : "code-lang-pascal";
-
-    if (lang === "c") {
-        // C mode — straightforward, no inline asm tracking needed for
-        // the help files (inline asm in BC++ uses asm { } which is rare
-        // in help examples).
-        els.forEach((el) => {
-            el.classList.remove("code-lang-c", "code-lang-pascal", "code-lang-asm");
-            el.classList.add(baseClass);
-            const raw = el.textContent;
-            if (raw.trim()) el.innerHTML = hlLineC(esc(raw));
-        });
+    const scope = container && container.querySelectorAll ? container : document;
+    const examples = Array.from(scope.querySelectorAll(".code-example"));
+    if (!examples.length) {
         return;
     }
 
-    // Pascal mode — track inline asm blocks
-    let inAsm = false;
-    els.forEach((el) => {
+    const lang = detectCodeLang(examples.map((el) => el.textContent || "").join("\n"));
+    let inPascalAsm = false;
+    let inCBlockComment = false;
+    let inPascalBlockComment = false;
+
+    examples.forEach((el) => {
+        const raw = el.textContent || "";
         el.classList.remove("code-lang-c", "code-lang-pascal", "code-lang-asm");
-        el.classList.add(baseClass);
-        const raw = el.textContent;
-        if (!raw.trim()) return;
-        const escaped = esc(raw);
 
-        if (inAsm) {
-            // Inside an asm block — check if this line ends it
-            if (ASM_CLOSE_RE.test(raw)) {
-                // The `end` keyword itself still gets Pascal highlighting
-                inAsm = false;
-                el.innerHTML = hlLinePascal(escaped);
-            } else {
-                el.classList.remove(baseClass);
-                el.classList.add("code-lang-asm");
-                el.innerHTML = spanWrap("code-asm", hlLineAsm(escaped));
-            }
+        if (!raw.trim()) {
             return;
         }
 
-        // Not in asm — check if this line opens an asm block
-        if (ASM_OPEN_RE.test(raw)) {
-            // If the line is just `asm` (with possible keyword decoration),
-            // highlight as Pascal keyword and enter asm mode.
-            // If asm and end are on the same line, just highlight as Pascal.
-            if (ASM_CLOSE_RE.test(raw)) {
-                // Single-line asm…end — highlight as mixed
-                el.innerHTML = hlLinePascal(escaped);
-            } else {
-                el.innerHTML = hlLinePascal(escaped);
-                inAsm = true;
-            }
+        if (lang === "c") {
+            el.classList.add("code-lang-c");
+            const result = hlLineC(raw, inCBlockComment);
+            el.innerHTML = result.html;
+            inCBlockComment = result.inBlockComment;
             return;
         }
 
-        el.innerHTML = hlLinePascal(escaped);
+        if (lang === "asm") {
+            el.classList.add("code-lang-asm");
+            el.innerHTML = spanWrap("code-asm", hlLineAsm(esc(raw)));
+            return;
+        }
+
+        if (inPascalAsm && !/\bend\b/i.test(raw)) {
+            el.classList.add("code-lang-asm");
+            el.innerHTML = spanWrap("code-asm", hlLineAsm(esc(raw)));
+            return;
+        }
+
+        el.classList.add("code-lang-pascal");
+        const result = hlLinePascal(raw, inPascalBlockComment);
+        el.innerHTML = result.html;
+        inPascalBlockComment = result.inBlockComment;
+
+        if (/\basm\b/i.test(raw) && !/\bend\b/i.test(raw)) {
+            inPascalAsm = true;
+            return;
+        }
+        if (inPascalAsm && /\bend\b/i.test(raw)) {
+            inPascalAsm = false;
+        }
     });
 }
 
-// ── export ──────────────────────────────────────────────────────────
-
 TV.highlightCodeExamples = highlightCodeExamples;
-
 })(window.THelpViewerTV || (window.THelpViewerTV = {}));

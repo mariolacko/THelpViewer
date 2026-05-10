@@ -258,27 +258,27 @@ def _render_bundle_index_html() -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>THelpViewer — TurboVision-style Help File Viewer</title>
-<meta name="description" content="TurboVision-style web viewer for Borland and Software602 help files. Browse Turbo Pascal, Borland C++ and Text602/M602 help in a retro DOS-like interface.">
-<meta name="keywords" content="THelp, TurboVision, Borland, Software602, help file viewer, Turbo Pascal, retro DOS">
+<meta name="description" content="TurboVision-style web viewer for UHF2 help bundles. Browse converted help files in a retro DOS-like interface.">
+<meta name="keywords" content="THelp, TurboVision, UHF2, help file viewer, retro DOS">
 <meta name="author" content="THelpViewer">
 <meta property="og:title" content="THelpViewer — TurboVision-style Help File Viewer">
-<meta property="og:description" content="TurboVision-style web viewer for Borland and Software602 help files. Browse Turbo Pascal, Borland C++ and Text602/M602 help in a retro DOS-like interface.">
+<meta property="og:description" content="TurboVision-style web viewer for UHF2 help bundles. Browse converted help files in a retro DOS-like interface.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="{SITE_ASSET_DIR_NAME}/Thelp.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="THelpViewer — TurboVision-style Help File Viewer">
-<meta name="twitter:description" content="TurboVision-style web viewer for Borland and Software602 help files.">
+<meta name="twitter:description" content="TurboVision-style web viewer for UHF2 help bundles.">
 <meta name="twitter:image" content="{SITE_ASSET_DIR_NAME}/Thelp.png">
 <meta name="theme-color" content="#000080">
 <meta name="GENERATOR" content="THelp Viewer Converter {GENERATOR_VERSION}">
-<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css">
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js"></script>
+<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260508b">
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20260510b"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js?v=20260506a"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20260506a"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20260506a"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20260506a"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20260507b"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260507b"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"

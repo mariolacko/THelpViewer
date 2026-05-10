@@ -211,6 +211,7 @@ button:focus-visible {
 .tv-status-item,
 .tv-menu-clock,
 .tv-menu-separator,
+.tv-status-separator,
 .tv-status-hint {
     display: inline-flex;
     align-items: center;
@@ -227,6 +228,12 @@ button:focus-visible {
 
 .tv-menu-separator {
     padding: 0;
+    color: var(--tv-appbar-text);
+    background: var(--tv-appbar-bg);
+}
+
+.tv-status-separator {
+    padding: 0 1ch 0 0;
     color: var(--tv-appbar-text);
     background: var(--tv-appbar-bg);
 }
@@ -277,7 +284,7 @@ button.tv-status-item {
 .tv-menu-popup-row {
     position: relative;
     background: var(--tv-dialog-bg);
-    color: var(--tv-dialog-frame);
+    color: #000000;
 }
 .tv-menu-popup-row .tv-border-corner:last-child {
     position: absolute;
@@ -285,15 +292,102 @@ button.tv-status-item {
     top: 0;
 }
 
-.tv-menu-popup-body {
+.tv-menu-popup-main {
     display: grid;
-    grid-template-columns: 1ch minmax(0, 1fr) 1ch;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
     background: var(--tv-dialog-bg);
 }
 
+.tv-menu-popup.is-scrollable .tv-menu-popup-main {
+    grid-template-columns: minmax(0, 1fr) 1ch 1ch;
+}
+
+.tv-menu-popup-scrollbar.tv-scrollbar-y {
+    grid-column: 2;
+}
+
+.tv-menu-popup-body {
+    display: grid;
+    grid-template-columns: 1ch minmax(0, 1fr) 1ch;
+    min-height: 0;
+    background: var(--tv-dialog-bg);
+}
+
+.tv-menu-popup.is-scrollable .tv-menu-popup-side-right {
+    display: none;
+}
+
+.tv-menu-popup-body.is-scrollable {
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.tv-js .tv-menu-popup-body.is-scrollable::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+.tv-menu-popup-scrollbar,
+.tv-menu-popup-frame-side {
+    display: none;
+}
+
+.tv-menu-popup-scrollbar[hidden] {
+    display: none !important;
+}
+
+.tv-menu-popup.is-scrollable .tv-menu-popup-scrollbar {
+    display: flex;
+}
+
+.tv-menu-popup.is-scrollable .tv-menu-popup-frame-side {
+    display: grid !important;
+}
+
+.tv-menu-popup-scrollbar {
+    min-width: 1ch;
+    width: 1ch;
+    --tv-scrollbar-bg: #000000;
+    --tv-scrollbar-glyph: #555555;
+    --tv-scrollbar-arrow-bg: #000000;
+    --tv-scrollbar-arrow-fg: #aaaaaa;
+    --tv-scrollbar-thumb-fg: #aaaaaa;
+}
+
+.tv-menu-popup-scrollbar .tv-scroll-arrow {
+    width: 1ch;
+    min-width: 1ch;
+}
+
+.tv-menu-popup-scrollbar .tv-scroll-cell {
+    width: 1ch;
+    place-items: center;
+    background: transparent;
+}
+
+.tv-menu-popup-scrollbar .tv-scroll-thumb {
+    background: transparent;
+}
+
+.tv-menu-popup-scrollbar .tv-scroll-thumb-cell {
+    width: 1ch;
+    place-items: center;
+    background: transparent;
+}
+
+.tv-menu-popup-frame-side {
+    grid-column: 3;
+    background: var(--tv-dialog-bg);
+    display: none !important;
+}
+
 .tv-menu-popup-row .tv-border-corner,
+.tv-menu-popup-main > .tv-border-side,
 .tv-menu-popup-body .tv-border-side {
-    color: var(--tv-dialog-frame);
+    color: #000000;
 }
 
 .tv-menu-popup-row .tv-border-fill {
@@ -302,7 +396,7 @@ button.tv-status-item {
     right: 1ch;
     top: 0;
     overflow: hidden;
-    color: var(--tv-dialog-frame);
+    color: #000000;
 }
 
 .tv-menu-popup-items {
@@ -310,11 +404,15 @@ button.tv-status-item {
     background: var(--tv-dialog-bg);
 }
 
+.tv-menu-popup.is-scrollable .tv-menu-popup-items {
+    grid-column: 2;
+}
+
 .tv-menu-popup-separator {
     position: relative;
     grid-column: 1 / -1;
     background: var(--tv-dialog-bg);
-    color: var(--tv-dialog-frame);
+    color: #000000;
 }
 .tv-menu-popup-separator .tv-border-corner:last-child {
     position: absolute;
@@ -425,8 +523,7 @@ button.tv-status-item {
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--tv-appbar-text);
-    border-left: 1px solid var(--tv-appbar-text);
-    padding-left: 1ch;
+    padding-left: 0;
 }
 
 .tv-status-link {
@@ -512,7 +609,7 @@ button.tv-status-item {
 }
 
 .tv-border-top {
-    grid-template-columns: 1ch auto minmax(1ch, 1fr) auto minmax(1ch, 1fr) auto 1ch;
+    grid-template-columns: 1ch 1ch auto minmax(1ch, 1fr) auto minmax(1ch, 1fr) auto 1ch 1ch;
     cursor: move;
     user-select: none;
 }
@@ -539,12 +636,20 @@ button.tv-status-item {
     min-width: 0;
 }
 
+.tv-control-gap {
+    width: 1ch;
+    min-width: 1ch;
+    max-width: 1ch;
+}
+
 .tv-close-control,
 .tv-zoom-control,
 .tv-window-caption {
     display: inline-flex;
     align-items: center;
+    line-height: 1;
     min-height: 1em;
+    height: 1em;
     background: var(--tv-current-title-bg, var(--tv-title));
     min-width: 0;
     overflow: hidden;
@@ -579,6 +684,9 @@ button.tv-status-item {
 
 .tv-close-glyph,
 .tv-zoom-glyph {
+    display: inline-block;
+    line-height: 1;
+    height: 1em;
     color: var(--tv-current-icon, var(--tv-icon));
 }
 
@@ -610,6 +718,7 @@ button.tv-status-item {
 .tv-window > .tv-shell > .tv-border-top .tv-border-corner,
 .tv-window > .tv-shell > .tv-border-top .tv-border-fill,
 .tv-window > .tv-shell > .tv-client-row > .tv-border-side-left,
+.tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-border-fill,
 .tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-scroll-corner-left,
 .tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-grow-handle {
     color: var(--tv-current-frame);
@@ -660,8 +769,8 @@ button.tv-status-item {
 }
 
 .tv-scrollbar {
-    background: var(--tv-page-area);
-    color: var(--tv-scroll-glyph);
+    background: var(--tv-scrollbar-bg, var(--tv-page-area));
+    color: var(--tv-scrollbar-glyph, var(--tv-scroll-glyph));
     user-select: none;
 }
 
@@ -672,8 +781,8 @@ button.tv-status-item {
     min-height: 1em;
     padding: 0;
     border: 0;
-    background: var(--tv-arrow-bg);
-    color: var(--tv-arrow-fg);
+    background: var(--tv-scrollbar-arrow-bg, var(--tv-arrow-bg));
+    color: var(--tv-scrollbar-arrow-fg, var(--tv-arrow-fg));
     font: inherit;
     cursor: pointer;
     display: grid;
@@ -683,7 +792,7 @@ button.tv-status-item {
 .tv-scroll-track {
     position: relative;
     flex: 1;
-    background: var(--tv-page-area);
+    background: var(--tv-scrollbar-bg, var(--tv-page-area));
     overflow: hidden;
 }
 
@@ -720,7 +829,7 @@ button.tv-status-item {
 .tv-scrollbar-y .tv-scroll-cells {
     grid-auto-rows: 1em;
     grid-template-columns: var(--tv-cell-width);
-    background: var(--tv-page-area);
+    background: var(--tv-scrollbar-bg, var(--tv-page-area));
 }
 
 .tv-scrollbar-y .tv-scroll-thumb {
@@ -732,7 +841,7 @@ button.tv-status-item {
     grid-auto-columns: var(--tv-cell-width);
     grid-template-rows: 1em;
     grid-auto-flow: column;
-    background: var(--tv-page-area);
+    background: var(--tv-scrollbar-bg, var(--tv-page-area));
 }
 
 .tv-scrollbar-x .tv-scroll-thumb {
@@ -751,12 +860,12 @@ button.tv-status-item {
 
 .tv-scroll-cell {
     background: transparent;
-    color: var(--tv-scroll-glyph);
+    color: var(--tv-scrollbar-glyph, var(--tv-scroll-glyph));
 }
 
 .tv-thumb-cell {
     background: var(--tv-thumb-bg);
-    color: var(--tv-thumb-fg);
+    color: var(--tv-scrollbar-thumb-fg, var(--tv-thumb-fg));
     pointer-events: auto;
 }
 
@@ -780,6 +889,10 @@ button.tv-status-item {
     white-space: pre;
 }
 
+.tv-bottom-bar > .tv-scrollbar-x {
+    position: relative;
+}
+
 .tv-grow-handle {
     width: 2ch;
     min-width: 2ch;
@@ -787,7 +900,7 @@ button.tv-status-item {
     padding: 0;
     border: 0;
     background: var(--tv-window);
-    color: var(--tv-frame-line);
+    color: #55ff55;
     font: inherit;
     white-space: pre;
     display: grid;
@@ -798,7 +911,27 @@ button.tv-status-item {
 .tv-grow-handle:hover,
 .tv-grow-handle:focus-visible {
     background: var(--tv-window);
-    color: var(--tv-frame-line);
+    color: #55ff55;
+}
+
+.tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-grow-handle {
+    color: #55ff55;
+}
+
+.tv-window.is-resizing {
+    --tv-current-frame: #55ff55;
+    --tv-current-title-bg: var(--tv-window);
+    --tv-current-title-fg: #55ff55;
+    --tv-current-icon: #55ff55;
+}
+
+.tv-window.is-resizing .tv-border-top,
+.tv-window.is-resizing .tv-border-corner,
+.tv-window.is-resizing .tv-border-fill,
+.tv-window.is-resizing .tv-border-side,
+.tv-window.is-resizing .tv-scroll-corner-left,
+.tv-window.is-resizing .tv-grow-handle {
+    color: #55ff55;
 }
 
 .tv-document,
@@ -807,6 +940,33 @@ button.tv-status-item {
     padding: 1ch;
     min-width: max-content;
     box-sizing: border-box;
+}
+
+.tv-bundle-view {
+    min-width: max-content;
+}
+
+.tv-bundle-diagnostics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1ch;
+    padding: 1ch 1ch 0;
+    color: var(--tv-muted);
+    white-space: normal;
+}
+
+.tv-bundle-diagnostic {
+    display: inline-flex;
+    align-items: center;
+    gap: 1ch;
+    padding: 0 1ch;
+    color: var(--tv-frame-line);
+    border: 1px solid currentColor;
+}
+
+.tv-bundle-diagnostic-label {
+    color: var(--tv-icon);
+    text-transform: uppercase;
 }
 
 /* Documentation window — blue info theme, uses central button styling via custom properties */
@@ -843,6 +1003,9 @@ button.tv-status-item {
     --tv-current-title-bg: var(--tv-window-bg);
     --tv-current-title-fg: var(--tv-title-text-passive);
     --tv-current-icon: var(--tv-icon-passive);
+}
+.tv-doc-window .tv-grow-handle {
+    color: #55ff55;
 }
 .tv-doc-document {
     font-family: inherit;
@@ -931,6 +1094,15 @@ button.tv-status-item {
     word-break: break-word;
 }
 
+.tv-topic-pre-fixed {
+    width: max-content;
+    max-width: none;
+    min-width: 100%;
+    white-space: pre;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
 .tv-topic-shell {
     min-width: max-content;
 }
@@ -945,6 +1117,18 @@ button.tv-status-item {
 
 .tv-topic-pre-body {
     padding-top: 0;
+}
+
+.tv-topic-line-rule {
+    display: inline-block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    vertical-align: top;
 }
 
 .tv-topic-line.is-target {
@@ -1218,7 +1402,7 @@ button.tv-status-item {
 }
 
 .tv-dialog-titlebar {
-    grid-template-columns: 1ch auto minmax(1ch, 1fr) auto minmax(1ch, 1fr) 1ch;
+    grid-template-columns: 1ch 1ch auto minmax(1ch, 1fr) auto minmax(1ch, 1fr) 1ch;
     cursor: move;
 }
 
@@ -1245,7 +1429,9 @@ button.tv-status-item {
 .tv-dialog-close-control {
     display: inline-flex;
     align-items: center;
+    line-height: 1;
     min-height: 1em;
+    height: 1em;
     background: var(--tv-current-dialog-title-bg);
     color: var(--tv-current-dialog-title-fg);
     white-space: pre;
@@ -1253,6 +1439,12 @@ button.tv-status-item {
 
 .tv-dialog-title-text {
     padding: 0 1ch;
+}
+
+.tv-dialog-control-gap {
+    width: 1ch;
+    min-width: 1ch;
+    max-width: 1ch;
 }
 
 .tv-dialog-close-control {
