@@ -148,6 +148,8 @@ def decode_bytes_box_aware(data: bytes, encoding: str) -> str:
     if encoding != "cp852":
         return decode_bytes(data, encoding)
     table = build_decode_table(encoding, "unicode")
+    has_left_block = 0xDD in data
+    has_right_block = 0xDE in data
     out: list[str] = []
     length = len(data)
     for i, value in enumerate(data):
@@ -156,7 +158,16 @@ def decode_bytes_box_aware(data: bytes, encoding: str) -> str:
         if value in CP852_BOX_CONFLICTS:
             prev = data[i - 1] if i > 0 else 0
             nxt = data[i + 1] if i + 1 < length else 0
-            if prev in _BOX_CONTEXT_BYTES or nxt in _BOX_CONTEXT_BYTES:
+            # Czech CP852 help files often use CP437 block glyphs as
+            # title decorations. 0xDD is Romanian in CP852, not Czech,
+            # and 0xDE is the matching right block when the line also
+            # contains 0xDD.
+            if (
+                value == 0xDD
+                or (value == 0xDE and has_left_block and has_right_block)
+                or prev in _BOX_CONTEXT_BYTES
+                or nxt in _BOX_CONTEXT_BYTES
+            ):
                 out.append(CP852_BOX_CONFLICTS[value])
                 continue
         out.append(table[value])
