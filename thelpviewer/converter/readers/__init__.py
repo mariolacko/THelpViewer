@@ -20,6 +20,7 @@ from .bw03 import BW03HelpReader, is_bw03_binary
 from .quickhelp import QuickHelpReader, is_quickhelp_binary
 from .scorpion_dat import ScorpionDatReader, is_scorpion_dat_binary
 from .software602 import Text602Reader, is_text602_binary
+from .tdh import TdhHelpReader, is_tdh_binary, is_tfh_binary, probe_tdh_binary, probe_tfh_binary
 
 __all__ = [
     "ThelpHelpReader",
@@ -51,4 +52,9 @@ __all__ = [
     "is_scorpion_dat_binary",
     "Text602Reader",
     "is_text602_binary",
+    "TdhHelpReader",
+    "is_tdh_binary",
+    "is_tfh_binary",
+    "probe_tdh_binary",
+    "probe_tfh_binary",
 ]

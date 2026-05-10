@@ -7,6 +7,7 @@ Index of supported help file binary and source formats.
 ## Binary Format Specifications
 
 - Borland THELP: [Formats/Borland THELP.md](Formats/Borland%20THELP.md) — TP4–7, Turbo C, TASM, Sidekick, Sprint
+- Borland Turbo Debugger/Profiler runtime help: [Formats/Borland TDH.md](Formats/Borland%20TDH.md) — detected external `TDHELP.TDH` / `TFHELP.TFH`, payload not decoded yet
 - TurboVision FBHF: [Formats/TurboVision FBHF.md](Formats/TurboVision%20FBHF.md) — TP6, BP7 THelpFile (TVHC)
 - Software602 family index: [Formats/Software602.md](Formats/Software602.md) — M602, Text602, Calc602
 - Software602 M602 HelpSystem: [Formats/Software602 M602.md](Formats/Software602%20M602.md) — XOR $FA encrypted

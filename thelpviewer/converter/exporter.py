@@ -17,6 +17,7 @@ from .readers.ng import NGReader, is_ng_binary
 from .readers.quickhelp import QuickHelpReader, is_quickhelp_binary
 from .readers.scorpion_dat import ScorpionDatReader, is_scorpion_dat_binary
 from .readers.software602 import Text602Reader, is_text602_binary
+from .readers.tdh import TdhHelpReader, is_tdh_binary, is_tfh_binary
 from .codepages import decode_bytes, guess_display_encoding, is_czech_encoding_hint
 from .help_database import lookup_help_database_entry
 from .readers.fbhf import FBHFHelpReader, FBHFSourceReader, is_fbhf_binary, is_fbhf_source
@@ -87,6 +88,10 @@ def _load_thelp(path: Path, data: bytes) -> HelpDocument:
     return _build_reader_document(ThelpHelpReader, path, data)
 
 
+def _load_tdh(path: Path, data: bytes) -> HelpDocument:
+    return _build_reader_document(TdhHelpReader, path, data)
+
+
 def _load_scorpion_dat(path: Path, data: bytes) -> HelpDocument:
     return _build_reader_document(ScorpionDatReader, path, data)
 
@@ -151,6 +156,18 @@ FORMAT_HANDLERS: tuple[FormatHandler, ...] = (
         source_kind="compiled",
         matches=lambda path, data: path.suffix.lower() == ".dat" and is_scorpion_dat_binary(data),
         load=_load_scorpion_dat,
+    ),
+    FormatHandler(
+        name="tdh",
+        source_kind="compiled",
+        matches=lambda _path, data: is_tdh_binary(data),
+        load=_load_tdh,
+    ),
+    FormatHandler(
+        name="tfh",
+        source_kind="compiled",
+        matches=lambda path, data: path.suffix.lower() == ".tfh" and is_tfh_binary(data),
+        load=_load_tdh,
     ),
     FormatHandler(
         name="thelp",
