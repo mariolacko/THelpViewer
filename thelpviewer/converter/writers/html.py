@@ -670,15 +670,13 @@ class HelpHtmlRenderer:
 
     def _help_topic(self) -> TopicRecord | None:
         """Return the best landing topic for the Help menu item."""
-        # Use main_index from metadata if available
-        main_idx = self.document.metadata.get("main_index")
-        if main_idx is not None and isinstance(main_idx, int):
-            topic = self._topic_by_context(main_idx)
+        help_contents_topic_id = self.document.metadata.get("help_contents_topic_id")
+        if help_contents_topic_id is not None and isinstance(help_contents_topic_id, int):
+            topic = self._topic_by_context(help_contents_topic_id)
             if topic is not None:
                 return topic
-        # Fall back to topic marked as main index
         for topic in self.document.topics:
-            if topic.is_main_index:
+            if topic.is_help_contents:
                 return topic
         return self.document.topics[0] if self.document.topics else None
 
@@ -739,7 +737,7 @@ class HelpHtmlRenderer:
                     "context_hex": f"{topic.context_id:04X}",
                     "title": self._topic_heading(topic),
                     "html": topic_html,
-                    "is_main_index": topic.is_main_index,
+                    "is_help_contents": topic.is_help_contents,
                 }
             )
 

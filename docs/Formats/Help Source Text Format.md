@@ -72,7 +72,7 @@ Ignored by compilers. Used to store metadata about the decompilation.
 | `;DESCRIPTION`   | `;DESCRIPTION Help text`         | Help file description / `RT_IndexTags[$FFFF]`|
 | `;FORMAT`        | `;FORMAT Software602 (...)`      | Format identifier (Python)                   |
 | `;CONTEXTCOUNT`  | `;CONTEXTCOUNT 1334`             | Exact THELP context table size               |
-| `;UNUSEDCTX`     | `;UNUSEDCTX 42 FFFFFE`           | Exact unused-context sentinel                |
+| `;UNUSEDCTX`     | `;UNUSEDCTX 42 FFFFFE`           | Exact special context-table sentinel         |
 | `;INDEXORDER`    | `;INDEXORDER 424 Runtime errors` | Preserve raw THELP index entry order         |
 | `;TAGORDER`      | `;TAGORDER 17 Errors`            | Preserve raw THELP tag record order          |
 | `;COMMENT`       | `;COMMENT FormatVersion 52`      | Informational comment                        |
@@ -121,7 +121,7 @@ FBHF topics use `.topic` instead of `;SCREEN`/`;ENDSCREEN`.
 ;PAGE 471
 ;INDEX Runtime errors
 ;SCREENTAG Errors
-;MAININDEX
+;HELP_CONTENTS
 ;LINK UP 12 DOWN 13
 ;COMMENT ALIASCTX 658
 ;TEXTCOMPLETE
@@ -134,7 +134,7 @@ Meaning:
 | `;PAGE N`               | THELP continuation page within a multi-page topic |
 | `;INDEX text`           | Index entry attached to current screen |
 | `;SCREENTAG tag`        | Tag emitted before the following `;INDEX` |
-| `;MAININDEX`            | Marks `MainIndexScreen` in THELP file header |
+| `;HELP_CONTENTS`        | Marks the source Help Contents / table-of-contents topic |
 | `;LINK UP a DOWN b`     | Explicit old-format page links (format < 5) |
 | `;COMMENT ALIASCTX n`   | Additional context number pointing to the same text record |
 | `;TEXTCOMPLETE`         | Exact THELP v5+ text-record ending hint for byte-identical rebuild |

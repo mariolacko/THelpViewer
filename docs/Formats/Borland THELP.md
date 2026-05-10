@@ -1,14 +1,61 @@
 # Borland THELP Format
 
-> Created: 2026-03-29 · Last updated: 2026-04-03
+> Created: 2026-03-29 · Last updated: 2026-05-05
 
 Used by: Turbo Pascal 4–5.5, Turbo C, Turbo Assembler, Borland Sprint,
-Sidekick, Eureka. File extensions: `.HLP`, `.TPH`, `.TCH`.
+Sidekick, Eureka. File extensions: `.HLP`, `.TPH`, `.TCH`, and other
+Borland `*.T?H` variants when the THELP signature matches.
 
 Original implementation: THELP unit in Turbo Pascal runtime.  
-Reference decompiler: HLDC 1.03 by Volker Pohlers (1994/2010).
+Reference decompiler: HLDC 1.03 by Volker Pohlers (1994/2010).  
+Borland references:
+- Open Architecture Handbook 4.0, chapter `Borland Help System` (`BOA.TXT`)
+- `DEHELP.C` / `DEHELP.DOC` from `BOA.BC3/DECOMP.ZIP`
+
+`DEHELP` explicitly states support for BC++ 3.0 and Turbo Pascal help
+systems only; Borland's Windows and some product-specific variants are
+outside its supported set.
+
+Turbo Debugger 1.0 `TDHELP.TDH` is a product-specific exception, not a
+THELP record stream. It has no `$*$* &&&&$*$` signature, starts with
+`02 06 00 01 ...`, and appears compressed/encoded from offset 0. The downloader
+collects it and the help database records its CRC32, but it must be decoded by
+a separate TDH reader rather than by the THELP parser.
 
 All multi-byte integers are little-endian.
+
+BOA documents the core Borland Help binary model with record types `0..5`
+and `formatVersion = 52` as the current baseline. Real files seen in the
+wild extend this baseline, most notably with `RT_IndexTags = 6` in newer
+`TPH/TCH` variants.
+
+Observed divergence from the BOA baseline:
+- some `formatVersion = 51` TCH files end with large trailing `0x20` padding
+  after the last valid BOA-style record
+- these tails are not a continuation of the normal record stream and should
+  not be interpreted as additional records
+- some `formatVersion = 51` TCH files also use context ids that have no
+  standalone `RT_Text` record; in practice these behave like hidden anchors
+  into existing topics and can often be resolved from inline keyword usage
+
+Observed BC++ 2.x hidden-anchor behavior:
+- `RT_Index.ContextNumber` is still the authoritative raw target. In some
+  BC++ 2.x `formatVersion = 51` files that target's context-table offset
+  points into trailing space padding instead of an `RT_Text` record.
+- BOA 4.0 and `DEHELP.C` do not document an additional record that resolves
+  these targets. They only read the context table, the index table and the
+  keyword target list.
+- A hidden context can be reconstructed exactly only when the same context id
+  is referenced by `RT_Keyword` from visible text. If that context id appears
+  at one unique `(topic, line)` location, the parser treats that location as
+  the hidden anchor.
+- If the same hidden context is referenced from multiple different locations,
+  or is never referenced by `RT_Keyword`, the parser must leave the index item
+  unresolved instead of guessing from visible text.
+- Known generated index-table contexts such as `HC_INDEXTABLE = 401` may also
+  point to padding. `DEHELP.C` uses the hard-coded `401` only to skip the
+  generated index screen and let `HL.EXE` recreate it; it does not provide
+  per-entry targets for missing contexts.
 
 ### 1.1 File Layout
 
@@ -73,6 +120,10 @@ Every record begins with:
 | 5     | Compression   | Nibble compression character table    |
 | 6     | IndexTags     | Named tags for index entries (≥v5)    |
 
+BOA 4.0 explicitly lists only record types `0..5`. `RT_IndexTags = 6` is an
+observed extension present in newer Borland help files and supported by the
+current parser.
+
 Record order is format-dependent:
 
 - Format 2/3: `FileHeader(with embedded compression) → Context → Index → [Text → Keyword]*`
@@ -81,6 +132,11 @@ Record order is format-dependent:
 
 For exact rebuild, preserve the original order of index entries and tag
 entries as they appear in `RT_Index` and `RT_IndexTags`.
+
+Parser note:
+- stop record parsing at the first invalid record header or record extending
+  past EOF; any remaining bytes should be treated as opaque trailing data or
+  padding, not as more help records
 
 ### 1.4 FileHeader Record (RecType=0)
 
@@ -109,7 +165,7 @@ entries as they appear in `RT_Index` and `RT_IndexTags`.
 | Offset | Size | Field           | Description                   |
 |--------|------|-----------------|-------------------------------|
 | +0     | 2    | Options         | Flags                         |
-| +2     | 2    | MainIndexScreen | Context number of main index  |
+| +2     | 2    | HelpContentsScreen | Context number of the source Help Contents screen |
 | +4     | 2    | MaxScreenSize   | Maximum compressed `RT_Text` payload size |
 | +6     | 1    | Height          | Screen height                 |
 | +7     | 1    | Width           | Screen width                  |
@@ -128,11 +184,16 @@ Each 3-byte entry encodes a 24-bit file offset:
 The array index = screen/context number. The file offset points to
 the Text record for that screen.
 
-Special values seen in the wild:
+Special values seen in BOA and in real files:
 
-- `0xFFFFFE` encoded as `FE FF FF` = unused context slot
+- `0xFFFFFF` encoded as `FF FF FF` = use the source Help Contents screen text
+- `0xFFFFFE` encoded as `FE FF FF` = no help available for this context
 - Multiple context entries may point to the same text offset; these are
   alias contexts and must be preserved for byte-identical rebuilds
+
+The current parser treats `0xFFFFFF` entries as aliases to the header's
+Help Contents context when the file header defines one. In the original
+viewers this is the help contents screen, not the alphabetical index.
 
 ### 1.6 Compression Record (RecType=5)
 
@@ -234,8 +295,12 @@ alone and must be preserved if exact rebuild is required.
 | +2     | 2    | DownContext | Word | Next screen link       |
 | +4     | 2    | KeyWordCnt  | Word | Number of keywords     |
 
-Followed by `KeyWordCnt` × Word values (context IDs referencing the
-Index record).
+Followed by `KeyWordCnt` × Word values (target context IDs).
+
+In page-oriented files, the word values are best treated as target context
+ids. They often equal index-context values, but the binary does not store a
+separate text label here; the visible label comes from the matching inline
+`0x02...0x02` hotspot in the `RT_Text` stream.
 
 For decompilation, a practical textual source format is:
 
@@ -261,6 +326,16 @@ Each entry:
 
 The entry number in this record is important because `RT_IndexTags`
 references index entries by ordinal, not by string value.
+
+For exact link reconstruction:
+- if `ContextNumber` exists as an `RT_Text` topic, link directly to that topic
+- if it is a hidden context with one unique `RT_Keyword` occurrence, link to
+  that `(topic, line)` anchor
+- if it has several possible keyword occurrences, keep it unresolved and
+  expose the alternatives in parser metadata
+- if it has no keyword occurrence and its context-table offset points into
+  padding, there is not enough information in the known BOA/DEHELP structures
+  to reconstruct the destination
 
 ### 1.10 IndexTags Record (RecType=6, Format ≥ 5)
 
@@ -296,7 +371,7 @@ use the following directives:
 Recommended meanings:
 
 - `;CONTEXTCOUNT`: exact context table size
-- `;UNUSEDCTX`: exact non-default unused entry value
+- `;UNUSEDCTX`: exact special context-table sentinel as emitted in source form
 - `;COMMENT ALIASCTX`: additional context numbers sharing the same text offset
 - `;INDEXORDER`: raw `RT_Index` order
 - `;TAGORDER`: raw `RT_IndexTags` order

@@ -271,6 +271,13 @@ def fix_metadata_encoding(document: HelpDocument, encoding: str) -> None:
     raw high-byte chars (U+0080..U+00FF).  This function converts them
     to proper Unicode using the detected *encoding*.
     """
+    document.metadata["text_encoding"] = encoding
+    if document.format_name == "borland":
+        from .readers.thelp import ThelpHelpReader
+
+        ThelpHelpReader.refresh_rendered_uhf_content(document, encoding=encoding)
+    if document.metadata.get("metadata_already_decoded"):
+        return
     if encoding in ("utf-8", "latin-1", "latin1"):
         return
     for key in ("title", "display_name", "description"):
