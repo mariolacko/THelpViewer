@@ -17,7 +17,7 @@ look and feel.
 
 | Format | Products | Extension |
 |--------|----------|-----------|
-| **Borland THELP** | Turbo Pascal 4–7, Turbo C, TASM, Sidekick, Sprint | `.HLP`, `.TPH`, `.TCH` |
+| **Borland THELP** | Turbo Pascal 4–7, Turbo C, TASM, Sidekick, Sprint | `.HLP`, `.TPH`, `.TCH`, `*.T?H` with THELP signature |
 | **Microsoft BW03** | Older CodeView DOS / OS2 help (`CV.HLP`, `CVP.HLP`) | `.HLP` |
 | **Microsoft QuickHelp (LN)** | QuickBASIC, QuickC, MASM 6, PWB, LINK | `.HLP` |
 | **Norton Guide** | Norton Guides and Expert Help databases | `.NG` |
@@ -159,12 +159,12 @@ THelpViewer/
 
 Measured on the current generated UHF 2.0 payloads:
 
-| Source | Raw UHF JSON | Compressed `.json.gz` | Reduction |
-|--------|--------------:|----------------------:|----------:|
-| `Borland Pascal 4.0/TURBO.HLP` | 326,369 B | 47,130 B | 85.6% |
-| `Microsoft QuickBASIC Extended 7.1/BAS7QCK.HLP` | 858,630 B | 115,323 B | 86.6% |
-| `Norton Guides/DOS.NG` | 125,313 B | 22,072 B | 82.4% |
-| `Borland C++ 3.1/TCHELP.TCH` | 4,513,532 B | 626,963 B | 86.1% |
+| Source | Original help | Raw UHF JSON | Compressed `.json.gz` | Reduction (orig→gz) | Reduction (UHF→gz) |
+|--------|---------------:|--------------:|----------------------:|-------------------:|-------------------:|
+| `Borland Pascal 4.0/TURBO.HLP` | 85,344 B | 326,369 B | 47,130 B | 44.7% | 85.6% |
+| `Microsoft QuickBASIC Extended 7.1/BAS7QCK.HLP` | 230,419 B | 858,630 B | 115,323 B | 50.0% | 86.6% |
+| `Norton Guides/DOS.NG` | 58,664 B | 125,313 B | 22,072 B | 62.4% | 82.4% |
+| `Borland C++ 3.1/TCHELP.TCH` | 1,544,843 B | 4,513,532 B | 626,963 B | 59.4% | 86.1% |
 
 ## How It Works
 

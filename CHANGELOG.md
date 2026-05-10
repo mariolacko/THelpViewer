@@ -10,6 +10,8 @@
   LINK and related toolchain help files
 - Added **Microsoft BW03** reader support for older CodeView DOS / OS/2 help
   files (`CV.HLP`, `CVP.HLP`)
+- Added separate **Borland Turbo Debugger TDH** detection and diagnostic reader
+  for `TDHELP.TDH`; its encoded payload is documented but not decoded yet
 - Added **Norton Guide / Expert Help** reader support with parent-derived topic
   titles, real MENU traversal, see-also links, and generated contents/index data
 - Added standalone **UHF JSON writer** and made the web bundle transport
@@ -60,6 +62,9 @@
 - Added recursive extraction through `lsar` / `unar`, including nested archives,
   disk images, and fallback handling for Microsoft compressed help payloads such
   as `HL$` / `SZDD`
+- Added Borland installer split-archive assembly for `*.CA1`, `*.CA2`, ...
+  files so WinWorld floppy images yield complete `TCHELP.TCH` / `TCHELPW.TCH`
+  help files instead of truncated first-part payloads
 - Expanded downloadable Microsoft source sets for QuickBASIC, QuickC, MASM,
   CodeView, and related tools
 
