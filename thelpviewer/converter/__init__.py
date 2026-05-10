@@ -11,6 +11,7 @@ from .readers.bw03 import BW03HelpReader, is_bw03_binary
 from .readers.hlx import HlxHelpReader, HlxSourceParser, detect_hlx_source_format, is_hlx_source
 from .readers.m602 import M602HelpReader, is_m602_binary
 from .readers.thelp import ThelpHelpReader, is_thelp_binary
+from .readers.tdh import TdhHelpReader, is_tdh_binary, is_tfh_binary
 from .readers.scorpion_dat import ScorpionDatReader, is_scorpion_dat_binary
 from .codepages import guess_display_encoding
 from .exporter import (
@@ -45,6 +46,7 @@ __all__ = [
     "IndexEntry",
     "M602HelpReader",
     "ScorpionDatReader",
+    "TdhHelpReader",
     "ThelpHelpReader",
     "TopicRecord",
     "detect_hlx_source_format",
@@ -60,6 +62,8 @@ __all__ = [
     "is_m602_binary",
     "is_scorpion_dat_binary",
     "is_thelp_binary",
+    "is_tdh_binary",
+    "is_tfh_binary",
     "load_binary_document",
     "load_document",
 ]

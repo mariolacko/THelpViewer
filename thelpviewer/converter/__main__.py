@@ -15,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m thelpviewer.converter",
         description="Read Borland THELP, TurboVision FBHF, Software602 M602, HLX/HL6 or TVHC source files and export HTML.",
     )
-    parser.add_argument("input", help="Input .hlp/.tph/.hlx/.hl6/.txt file or a directory tree with help files.")
+    parser.add_argument("input", help="Input .hlp/.tph/.tch/*.t?h/.hlx/.hl6/.txt file or directory tree with help files.")
     parser.add_argument("output_dir", help="Directory where HTML files will be written.")
     parser.add_argument(
         "--encoding",

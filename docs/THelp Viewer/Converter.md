@@ -29,7 +29,7 @@ python -m thelpviewer.converter TURBO.TPH output/ --dump-json
 
 | Option | Description |
 |--------|-------------|
-| `input` | Input `.hlp`/`.tph`/`.tch`/`.hlx`/`.hl6`/`.txt` file or directory tree |
+| `input` | Input `.hlp`/`.tph`/`.tch`/`*.t?h`/`.hlx`/`.hl6`/`.txt` file or directory tree |
 | `output_dir` | Target directory for exported files |
 | `--encoding` | Display encoding: `auto`, `cp437`, `cp852`, `latin1`, `latin2`, `kamenicky` (default: `auto`) |
 | `--clean` | Delete target directory before exporting a directory tree |
@@ -58,7 +58,7 @@ file extension and magic-byte detection:
 | 5 | First bytes = `$*$* &&&&$*$` (in first 200 bytes) | Borland THELP binary |
 | 6 | First 4 bytes = `FBHF` | TurboVision FBHF binary |
 | 7 | First bytes = `\x1a(c) Software602 HelpSystem` | M602 binary |
-| 8 | Extension `.hlp`/`.tph`/`.tch` → falls through to THELP | Borland THELP binary |
+| 8 | THELP signature in `.hlp`/`.tph`/`.tch`/`*.t?h` files | Borland THELP binary |
 
 Detection is deterministic — each file triggers exactly one reader.
 Unknown formats raise `ValueError`.
@@ -79,7 +79,7 @@ HelpDocument
 │   ├── sequential_keywords: list[int]     (THELP format ≥5)
 │   ├── positional_keywords: list[PositionedKeyword]  (THELP format <5)
 │   ├── names: list[str]                   (FBHF topic names)
-│   ├── is_main_index: bool
+│   ├── is_help_contents: bool
 │   ├── up_context / down_context: int     (page navigation)
 │   └── ...
 ├── index_entries: list[IndexEntry]
