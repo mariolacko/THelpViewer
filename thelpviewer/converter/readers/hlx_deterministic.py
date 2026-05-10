@@ -10,8 +10,53 @@ from __future__ import annotations
 
 from typing import Optional, List, Tuple
 import bisect
+import re
 
 from ..base import TopicRecord, IndexEntry
+
+
+_HLX_HEX_PREFIX_RE = re.compile(r"^[0-9A-F]{8}\s+")
+_HLX_DRIVE_PATH_RE = re.compile(r"\s+[A-Za-z]:\\")
+
+
+def _clean_hlx_label_bytes(raw: bytes) -> tuple[bytes | None, bool]:
+    try:
+        text = raw.decode("cp437", errors="ignore")
+    except Exception:
+        text = raw.decode("latin-1", errors="ignore")
+
+    compact = " ".join(text.replace("\x02", " ").split()).strip()
+    if not compact:
+        return None, False
+
+    looks_like_raw_record = bool(
+        _HLX_HEX_PREFIX_RE.match(compact)
+        or _HLX_DRIVE_PATH_RE.search(compact)
+        or ".rtf" in compact.lower()
+    )
+    if not looks_like_raw_record:
+        return compact.encode("cp437", errors="replace"), False
+
+    compact = _HLX_HEX_PREFIX_RE.sub("", compact)
+    path_match = _HLX_DRIVE_PATH_RE.search(compact)
+    if path_match:
+        compact = compact[: path_match.start()].strip()
+
+    compact = re.sub(r"\b\d+\b", " ", compact)
+    compact = " ".join(compact.split()).strip()
+    if not compact:
+        return None, True
+
+    words = compact.split()
+    if len(words) % 2 == 0:
+        half = len(words) // 2
+        if words[:half] == words[half:]:
+            compact = " ".join(words[:half])
+
+    compact = compact.strip()
+    if not compact:
+        return None, True
+    return compact.encode("cp437", errors="replace"), True
 
 
 def _extract_strings(data: bytes) -> List[Tuple[int, bytes, str]]:
@@ -216,10 +261,25 @@ def parse_hlx_deterministic(data: bytes, min_topics: int = 20) -> Optional[Tuple
     topic_objs: List[TopicRecord] = []
     index_entries: List[IndexEntry] = []
     for idx, raw_lines in enumerate(result_topics, start=1):
-        tr = TopicRecord(context_id=idx, raw_lines=raw_lines.copy())
+        normalized_lines = raw_lines.copy()
+        cleaned_label: bytes | None = None
+        if normalized_lines:
+            cleaned_label, should_replace = _clean_hlx_label_bytes(normalized_lines[0])
+            if cleaned_label and should_replace:
+                normalized_lines[0] = cleaned_label
+
+        tr = TopicRecord(context_id=idx, raw_lines=normalized_lines)
+        if cleaned_label:
+            tr.index_terms.append(cleaned_label)
+            try:
+                tr.names.append(cleaned_label.decode("cp437", errors="replace"))
+            except Exception:
+                tr.names.append(cleaned_label.decode("latin-1", errors="replace"))
         topic_objs.append(tr)
-        if raw_lines:
-            index_entries.append(IndexEntry(label=raw_lines[0], context_id=idx))
+        if cleaned_label:
+            index_entries.append(IndexEntry(label=cleaned_label, context_id=idx))
+        elif normalized_lines:
+            index_entries.append(IndexEntry(label=normalized_lines[0], context_id=idx))
 
     # Always return the parsed topic list and index entries derived from
     # the file contents. Do not use external heuristics or require a

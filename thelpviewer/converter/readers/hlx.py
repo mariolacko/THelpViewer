@@ -81,7 +81,7 @@ class HlxSourceParser:
             "width": None,
             "left_margin": 0,
             "description": None,
-            "main_index": None,
+            "help_contents_topic_id": None,
             "casesense": False,
             "context_count": None,
             "text_encoding": None,
@@ -240,9 +240,9 @@ class HlxSourceParser:
             self.current_topic.alias_contexts.append(int(line_str[10:].strip()))
             return
 
-        if line_str.startswith(";MAININDEX") and self.current_topic is not None:
-            self.current_topic.is_main_index = True
-            self.metadata["main_index"] = self.current_topic.context_id
+        if line_str.startswith(";HELP_CONTENTS") and self.current_topic is not None:
+            self.current_topic.is_help_contents = True
+            self.metadata["help_contents_topic_id"] = self.current_topic.context_id
             return
 
         match = LINK_RE.match(line_str)

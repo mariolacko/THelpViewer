@@ -1,0 +1,43 @@
+[
+  {
+    "name": "bcw",
+    "group": "Borland C++ 4.x",
+    "file": "BCW.HLX",
+    "hlx_kind": "compiled-topics",
+    "hlx_family": "rtf-keyword-map",
+    "min_topics": 300,
+    "min_pointer_count": 3,
+    "min_hotspots": 100,
+    "control_byte_prefix": [0, 1, 2]
+  },
+  {
+    "name": "bcdos",
+    "group": "Borland C++ 4.x",
+    "file": "BCDOS.HLX",
+    "hlx_kind": "compiled-topics",
+    "hlx_family": "topic-clusters",
+    "min_topics": 80,
+    "max_pointer_count": 0,
+    "min_hotspots": 50,
+    "control_byte_prefix": [0, 1, 2]
+  },
+  {
+    "name": "ole",
+    "group": "Borland C++ 4.x",
+    "file": "OLE.HLX",
+    "hlx_kind": "compiled-index",
+    "hlx_family": "heading-catalog",
+    "min_topics": 1000,
+    "control_byte_prefix": [0, 1, 2]
+  },
+  {
+    "name": "openhelp",
+    "group": "Borland C++ 4.x",
+    "file": "OPENHELP.HLX",
+    "hlx_kind": "compiled-index",
+    "hlx_family": "compact-index",
+    "min_topics": 30,
+    "max_pointer_count": 0,
+    "control_byte_prefix": [0, 1, 4]
+  }
+]
