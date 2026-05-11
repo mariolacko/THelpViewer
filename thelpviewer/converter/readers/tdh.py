@@ -39,6 +39,9 @@ class TdhProbe:
     separator_word: int
     encoded_payload_offset: int
     encoded_payload_size: int
+    payload_lead_byte: int
+    payload_lead_cc_run: int
+    payload_prefix_hex: str
     crc32: int
 
     def to_metadata(self) -> dict[str, object]:
@@ -54,8 +57,21 @@ class TdhProbe:
             "separator_word": f"0x{self.separator_word:04X}",
             "encoded_payload_offset": self.encoded_payload_offset,
             "encoded_payload_size": self.encoded_payload_size,
+            "payload_lead_byte": f"0x{self.payload_lead_byte:02X}",
+            "payload_lead_cc_run": self.payload_lead_cc_run,
+            "payload_prefix_hex": self.payload_prefix_hex,
             "crc32": f"{self.crc32:08X}",
         }
+
+
+def _payload_lead_cc_run(data: bytes, encoded_payload_offset: int) -> int:
+    """Return the count of consecutive 0xCC bytes after the lead payload byte."""
+    cc_run = 0
+    for value in data[encoded_payload_offset + 1 :]:
+        if value != 0xCC:
+            break
+        cc_run += 1
+    return cc_run
 
 
 def _probe_runtime_help_binary(
@@ -98,6 +114,9 @@ def _probe_runtime_help_binary(
         return None
     if data[encoded_payload_offset + 1:encoded_payload_offset + 5] != b"\xcc\xcc\xcc\xcc":
         return None
+    payload_lead_byte = data[encoded_payload_offset]
+    payload_lead_cc_run = _payload_lead_cc_run(data, encoded_payload_offset)
+    payload_prefix_hex = data[encoded_payload_offset : encoded_payload_offset + 16].hex(" ").upper()
 
     return TdhProbe(
         format_name=format_name,
@@ -112,6 +131,9 @@ def _probe_runtime_help_binary(
         separator_word=separator_word,
         encoded_payload_offset=encoded_payload_offset,
         encoded_payload_size=len(data) - encoded_payload_offset,
+        payload_lead_byte=payload_lead_byte,
+        payload_lead_cc_run=payload_lead_cc_run,
+        payload_prefix_hex=payload_prefix_hex,
         crc32=zlib.crc32(data) & 0xFFFFFFFF,
     )
 
@@ -185,6 +207,8 @@ class TdhHelpReader(HelpReaderBase):
             f"CRC32: {probe.crc32:08X}".encode("ascii"),
             f"Encoded payload offset: 0x{probe.encoded_payload_offset:04X}".encode("ascii"),
             f"Encoded payload size: {probe.encoded_payload_size}".encode("ascii"),
+            f"Payload lead byte: 0x{probe.payload_lead_byte:02X}".encode("ascii"),
+            f"Payload lead 0xCC run: {probe.payload_lead_cc_run}".encode("ascii"),
         ]
         topic = TopicRecord(
             context_id=1,

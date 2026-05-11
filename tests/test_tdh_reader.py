@@ -12,6 +12,7 @@ from thelpviewer.converter.readers.thelp import is_thelp_binary
 
 
 TDH_SAMPLE = Path("sources/Borland Turbo Debugger 1.0/TDHELP.TDH")
+TFH_SAMPLE = Path("sources/Borland Turbo Profiler/TFHELP.TFH")
 
 
 def test_tdh_sample_is_detected_separately_from_thelp():
@@ -37,24 +38,20 @@ def test_tdh_reader_preserves_probe_metadata():
     assert probe.separator_offset == 0x040E
     assert probe.separator_word == 1
     assert probe.encoded_payload_offset == 0x410
+    assert probe.payload_lead_byte == 0xA0
+    assert probe.payload_lead_cc_run == 9
+    assert probe.payload_prefix_hex.startswith("A0 CC CC CC CC CC CC CC CC CC")
     assert probe.crc32 == 0xA9C668A7
 
     document = TdhHelpReader(source_name=TDH_SAMPLE.name, source_path=TDH_SAMPLE).read_bytes(data)
     assert document.format_name == "tdh"
     assert document.metadata["format_status"] == "undecoded"
+    assert document.metadata["tdh_probe"]["payload_lead_byte"] == "0xA0"
     assert document.topics
 
 
 def test_tfh_shape_is_detected_as_profiler_help():
-    table_byte_size = 0x016B
-    data = (
-        table_byte_size.to_bytes(2, "big")
-        + bytes(table_byte_size)
-        + bytes(table_byte_size)
-        + b"\x00\x00"
-        + b"\x96\xcc\xcc\xcc\xcc"
-        + bytes(64)
-    )
+    data = TFH_SAMPLE.read_bytes()
 
     assert is_tfh_binary(data)
     assert not is_tdh_binary(data)
@@ -62,10 +59,16 @@ def test_tfh_shape_is_detected_as_profiler_help():
     probe = probe_tfh_binary(data)
     assert probe is not None
     assert probe.format_name == "tfh"
-    assert probe.table_byte_size == table_byte_size
+    assert probe.table_byte_size == 0x016B
     assert probe.separator_word == 0
     assert probe.encoded_payload_offset == 0x02DA
+    assert probe.payload_lead_byte == 0x96
+    assert probe.payload_lead_cc_run == 9
+    assert probe.payload_prefix_hex.startswith("96 CC CC CC CC CC CC CC CC CC")
+    assert probe.crc32 == 0xEDCB6DAB
 
-    document = TdhHelpReader(source_name="TFHELP.TFH", source_path=Path("TFHELP.TFH")).read_bytes(data)
+    document = TdhHelpReader(source_name=TFH_SAMPLE.name, source_path=TFH_SAMPLE).read_bytes(data)
     assert document.format_name == "tfh"
     assert document.metadata["format"] == "tfh"
+    assert document.metadata["format_status"] == "undecoded"
+    assert document.metadata["tdh_probe"]["payload_lead_byte"] == "0x96"

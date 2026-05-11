@@ -22,6 +22,7 @@ The same file appears in:
 |------------|------|
 | Borland Turbo Debugger 1.0 | `sources/Borland Turbo Debugger 1.0/TDHELP.TDH` |
 | Borland Turbo Assembler 1.0 with Turbo Debugger | `sources/Borland Turbo Assembler 1.0 with Turbo Debugger/TDHELP.TDH` |
+| Borland Turbo Profiler | `sources/Borland Turbo Profiler/TFHELP.TFH` |
 | Borland Turbo Debugger/Profiler/Assembler 2.x | `downloads/.../TDUTIL.ZIP/TDHELP.TDH` |
 | Borland Turbo Debugger/Profiler/Assembler 2.x | `downloads/.../TFHELP.ZIP/TFHELP.TFH` |
 
@@ -48,6 +49,11 @@ The two 259-entry tables look like a compact decoder table pair, but the exact
 meaning of entries and root/index handling is not confirmed yet. Treating them
 as a simple left/right Huffman tree does not produce readable text.
 
+The payload lead also has a stable short preamble in the current real samples:
+the first payload byte is followed by 9 consecutive `0xCC` bytes, and both TDH
+and TFH then continue with the same visible prefix bytes starting at
+`FC 48 5F F4 4C 0F ...`.
+
 The later 125,805-byte sample has the same structure but starts with `0x0254`,
 which gives two 596-byte tables with 298 big-endian words each. Its payload
 starts at `0x04AC` with `AE CC CC ...`. This confirms that the first word is a
@@ -68,7 +74,12 @@ odd first table byte size:
 positive caused by the first big-endian word `0x0206`. The system magic rule for
 ALAN only checks this word and does not validate a Borland TDH structure.
 
-## Relation To Turbo Debugger
+Brute-force checks against nearby decoder families have not matched yet. The
+currently tested simple left/right prefix-tree variants and small standard LZW
+bitstream variants both produce only repetitive synthetic output, not readable
+help text.
+
+## Relation To Turbo Debugger / Profiler
 
 `TD.EXE` contains:
 
@@ -84,6 +95,20 @@ First page
 This confirms that TDH is the external runtime help payload used by Turbo
 Debugger. The decompressor and context resolver are likely in `TD.EXE` and/or
 `TD.OVL`.
+
+`TPROF.EXE` contains the same UI strings plus:
+
+```text
+tfhelp.tfh
+No help for this context
+Help file %s not found
+Index
+Previous page
+First page
+```
+
+This confirms that TFH is the matching external runtime help payload used by
+Turbo Profiler and strongly suggests a shared or closely related help decoder.
 
 `DEHELP.DOC` from the BOA/DEHELP tools explicitly lists Turbo Debugger,
 Turbo Debugger for Windows, Turbo C++ for Windows, and Resource Workshop as
@@ -106,7 +131,9 @@ The reader metadata contains:
     "header_word": "0x0206",
     "table_byte_size": 518,
     "table_word_count": 259,
-    "encoded_payload_offset": 1040
+    "encoded_payload_offset": 1040,
+    "payload_lead_byte": "0xA0",
+    "payload_lead_cc_run": 9
   }
 }
 ```
