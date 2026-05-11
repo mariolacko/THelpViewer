@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 
-HELP_EXTENSIONS = {".hlp", ".tph", ".tch", ".tdh", ".hlx", ".hl6", ".ng"}
+HELP_EXTENSIONS = {".hlp", ".tph", ".tch", ".tah", ".tdh", ".tfh", ".hlx", ".hl6", ".ng"}
 WINHELP_MAGIC = b"\x3f\x5f\x03\x00"
 
 SKIP_HELP_NAMES = {

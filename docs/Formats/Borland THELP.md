@@ -1,10 +1,15 @@
 # Borland THELP Format
 
-> Created: 2026-03-29 · Last updated: 2026-05-05
+> Created: 2026-03-29 · Last updated: 2026-05-11
 
 Used by: Turbo Pascal 4–5.5, Turbo C, Turbo Assembler, Borland Sprint,
-Sidekick, Eureka. File extensions: `.HLP`, `.TPH`, `.TCH`, and other
+Sidekick, Eureka. File extensions: `.HLP`, `.TPH`, `.TCH`, `.TAH`, and other
 Borland `*.T?H` variants when the THELP signature matches.
+
+Confirmed Turbo Assembler sample: `sources/Borland Turbo Assembler/TASM.TAH`
+is a normal THELP-family file. The current loader detects it via the standard
+THELP signature and reads it with `format_version = 52` / `text_version = 1`;
+no separate `TAH` decoder is needed.
 
 Original implementation: THELP unit in Turbo Pascal runtime.  
 Reference decompiler: HLDC 1.03 by Volker Pohlers (1994/2010).  

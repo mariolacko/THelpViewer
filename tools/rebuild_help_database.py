@@ -37,7 +37,7 @@ _STOP_TOKENS = {
     "the",
     "and",
 }
-_HELP_FILE_SUFFIXES = {".hlp", ".tph", ".tch", ".tdh", ".tfh", ".ng", ".hlx", ".hl6", ".dat"}
+_HELP_FILE_SUFFIXES = {".hlp", ".tph", ".tch", ".tah", ".tdh", ".tfh", ".ng", ".hlx", ".hl6", ".dat"}
 _NEW_ENTRIES_SEPARATOR_KIND = "separator"
 _NEW_ENTRIES_NOTE = "New help files discovered during the last rebuild start below."
 
@@ -59,6 +59,8 @@ LANGUAGE_BY_DETECTED_CODE = {
 def _inspect_supported_file(path: Path) -> tuple[str, str, int | None]:
     handler = detect_format_handler(path)
     if handler is None:
+        if path.name.upper() == "TASM.TAH":
+            return "Turbo Assembler Help", "cp437", None
         if path.name.upper() == "TDHELP.TDH":
             return "Turbo Debugger Help", "", None
         if path.name.upper() == "TFHELP.TFH":
@@ -75,6 +77,8 @@ def _inspect_supported_file(path: Path) -> tuple[str, str, int | None]:
             (topic.context_id for topic in document.topics if topic.is_help_contents),
             None,
         )
+    if path.name.upper() == "TASM.TAH" and title.casefold() == "tasm":
+        title = "Turbo Assembler Help"
     return title or path.stem, encoding, help_contents_topic_id
 
 
