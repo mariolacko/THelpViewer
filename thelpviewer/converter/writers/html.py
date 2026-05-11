@@ -318,15 +318,17 @@ class HelpHtmlRenderer:
         return cols, rows
 
     def _window_min_geometry(self, cols: int, rows: int) -> tuple[int, int]:
-        """Choose resize minima from help metadata or from a generic 80x25 default."""
+        """Choose resize minima from help metadata or from a generic help-window default."""
         width = self.document.metadata.get("width")
         height = self.document.metadata.get("height")
 
         if isinstance(width, int) and width > 0 and isinstance(height, int) and height > 0:
             return cols, rows
-        # Never let the resize minimum exceed the initial geometry, otherwise
-        # smaller help windows jump to a larger size on the first resize drag.
-        return min(cols, 80), min(rows, 25)
+        # The generic help window opens at 82 columns wide, which already
+        # includes the left frame column and the right scrollbar/grow column.
+        # Keep the fallback resize minimum at that full outer width so 80-column
+        # help content cannot be shrunk two columns past its intended size.
+        return min(cols, 82), min(rows, 25)
 
     def _asset_version(self) -> int:
         """Return a stable cache-busting version for bundled assets."""

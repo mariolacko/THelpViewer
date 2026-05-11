@@ -16,13 +16,21 @@ from ..base import (
     build_directional_nav_items,
     ensure_document_index,
 )
+from ..uhf_markup import UhfStyleSpan, render_uhf_line
 
 
 BW03_SIGNATURE = b"BW03"
 MENU_ENTRY_SIZE = 22
 SCREEN_DESCRIPTOR_SIZE = 12
+STYLE_TABLE_SIZE = 48
 STYLE_CONTROL_BYTES = frozenset(range(0xE1, 0xF1))
-SCREEN_FOOTER_RE = re.compile(r"^SCREEN\s+(\d+)\s+OF\s+(\d+)\s+\((.+)\)$", re.IGNORECASE)
+SCREEN_FOOTER_RE = re.compile(r"SCREEN\s+(\d+)\s+OF\s+(\d+)\s+\((.+)\)\s*$", re.IGNORECASE)
+BW03_MONO_COLORS = {
+    "0": "#000000",
+    "7": "#aaaaaa",
+    "8": "#555555",
+    "15": "#ffffff",
+}
 
 
 def is_bw03_binary(data: bytes) -> bool:
@@ -43,6 +51,16 @@ class _ScreenDescriptor:
     prev_index: int
     offset: int
     length: int
+
+
+@dataclass(frozen=True, slots=True)
+class _StyleEntry:
+    color_attr: int
+    mono_attr: int
+    color_fg: int
+    color_bg: int
+    mono_fg: int
+    mono_bg: int
 
 
 def _decode_menu_title(raw: bytes) -> str:
@@ -96,9 +114,8 @@ def _descriptor_table_offset(data: bytes, menu_count: int, screen_count: int) ->
     raise ValueError("Unable to locate BW03 screen descriptor table")
 
 
-def _parse_screen_descriptors(data: bytes, screen_count: int, menu_count: int) -> list[_ScreenDescriptor]:
+def _parse_screen_descriptors_at_offset(data: bytes, screen_count: int, offset: int) -> list[_ScreenDescriptor]:
     entries: list[_ScreenDescriptor] = []
-    offset = _descriptor_table_offset(data, menu_count, screen_count)
     for index in range(screen_count):
         chunk = data[offset + (index * SCREEN_DESCRIPTOR_SIZE): offset + ((index + 1) * SCREEN_DESCRIPTOR_SIZE)]
         if len(chunk) < SCREEN_DESCRIPTOR_SIZE:
@@ -115,6 +132,146 @@ def _parse_screen_descriptors(data: bytes, screen_count: int, menu_count: int) -
             )
         )
     return entries
+
+
+def _parse_screen_descriptors(data: bytes, screen_count: int, menu_count: int) -> list[_ScreenDescriptor]:
+    offset = _descriptor_table_offset(data, menu_count, screen_count)
+    return _parse_screen_descriptors_at_offset(data, screen_count, offset)
+
+
+def _attr_colors(attr: int) -> tuple[int, int]:
+    return attr & 0x0F, (attr >> 4) & 0x0F
+
+
+def _parse_style_table(data: bytes, menu_count: int, descriptor_offset: int) -> dict[int, _StyleEntry]:
+    table_offset = 8 + (menu_count * MENU_ENTRY_SIZE)
+    chunk = data[table_offset:descriptor_offset]
+    if len(chunk) != STYLE_TABLE_SIZE or len(chunk) % 3 != 0:
+        return {}
+
+    entries: dict[int, _StyleEntry] = {}
+    for pos in range(0, len(chunk), 3):
+        color_attr, mono_attr, style_code = chunk[pos:pos + 3]
+        if style_code not in STYLE_CONTROL_BYTES:
+            continue
+        color_fg, color_bg = _attr_colors(color_attr)
+        mono_fg, mono_bg = _attr_colors(mono_attr)
+        entries[style_code] = _StyleEntry(
+            color_attr=color_attr,
+            mono_attr=mono_attr,
+            color_fg=color_fg,
+            color_bg=color_bg,
+            mono_fg=mono_fg,
+            mono_bg=mono_bg,
+        )
+    return entries
+
+
+def _build_style_spans(styles: list[tuple[int, int] | None]) -> list[UhfStyleSpan]:
+    spans: list[UhfStyleSpan] = []
+    start = 0
+    while start < len(styles):
+        style = styles[start]
+        end = start + 1
+        while end < len(styles) and styles[end] == style:
+            end += 1
+        if style is not None:
+            fg, bg = style
+            spans.append(UhfStyleSpan(start=start, end=end, fg=fg, bg=bg))
+        start = end
+    return spans
+
+
+def _decode_screen_payload(
+    payload: bytes,
+    style_table: dict[int, _StyleEntry],
+) -> tuple[list[bytes], list[str]]:
+    raw_lines: list[bytes] = []
+    uhf_lines: list[str] = []
+    visible_bytes = bytearray()
+    visible_styles: list[tuple[int, int] | None] = []
+    current_style = style_table.get(0xE1)
+
+    def flush_line() -> None:
+        raw_line = bytes(visible_bytes)
+        text = raw_line.decode("cp437", errors="replace")
+        raw_lines.append(raw_line)
+        uhf_lines.append(render_uhf_line(text, style_spans=_build_style_spans(visible_styles)))
+        visible_bytes.clear()
+        visible_styles.clear()
+
+    def append_value(value: int) -> None:
+        nonlocal current_style
+        if value in STYLE_CONTROL_BYTES:
+            current_style = style_table.get(value)
+            return
+        if value == 0x00 or value == 0x0A:
+            flush_line()
+            return
+        if value == 0x0D:
+            return
+        visible_bytes.append(value)
+        if current_style is None:
+            visible_styles.append(None)
+            return
+        visible_styles.append((current_style.color_fg, current_style.color_bg))
+
+    pos = 0
+    while pos < len(payload):
+        value = payload[pos]
+        if value == 0xFF and pos + 2 < len(payload):
+            count = payload[pos + 1]
+            repeated = payload[pos + 2]
+            for _ in range(count):
+                append_value(repeated)
+            pos += 3
+            continue
+        append_value(value)
+        pos += 1
+
+    if visible_bytes or not raw_lines:
+        flush_line()
+
+    while raw_lines and raw_lines[-1] == b"":
+        raw_lines.pop()
+        uhf_lines.pop()
+    if not raw_lines:
+        return [b""], [""]
+    return raw_lines, uhf_lines
+
+
+def _build_bw03_palettes(style_table: dict[int, _StyleEntry]) -> dict[str, object]:
+    if not style_table:
+        return {}
+
+    color_aliases: dict[str, int] = {}
+    mono_aliases: dict[str, int] = {}
+    mono_indices: set[int] = set()
+    for style_code, entry in sorted(style_table.items()):
+        alias_prefix = f"bw03_{style_code:02x}"
+        color_aliases[f"{alias_prefix}_fg"] = entry.color_fg
+        color_aliases[f"{alias_prefix}_bg"] = entry.color_bg
+        mono_aliases[f"{alias_prefix}_fg"] = entry.mono_fg
+        mono_aliases[f"{alias_prefix}_bg"] = entry.mono_bg
+        mono_indices.add(entry.mono_fg)
+        mono_indices.add(entry.mono_bg)
+
+    palettes: dict[str, object] = {
+        "cga": {
+            "type": "indexed",
+            "aliases": color_aliases,
+        },
+        "bw03-mono": {
+            "type": "indexed",
+            "colors": {
+                str(index): BW03_MONO_COLORS[str(index)]
+                for index in sorted(mono_indices)
+                if str(index) in BW03_MONO_COLORS
+            },
+            "aliases": mono_aliases,
+        },
+    }
+    return palettes
 
 
 def _expand_screen_payload(payload: bytes) -> bytes:
@@ -154,7 +311,7 @@ def _visible_lines(raw_lines: list[bytes]) -> list[str]:
 
 def _find_screen_footer(lines: list[str]) -> tuple[int, int, str] | None:
     for line in reversed(lines):
-        match = SCREEN_FOOTER_RE.match(line.strip())
+        match = SCREEN_FOOTER_RE.search(line)
         if match:
             page = int(match.group(1))
             total = int(match.group(2))
@@ -226,10 +383,21 @@ def _build_contents_tree(menu_entries: list[_MenuEntry], topics: list[TopicRecor
                 topic_id=topic_nodes[0].topic_id,
             ))
             continue
+
+        child_nodes = topic_nodes
+        first_topic_id = topic_nodes[0].topic_id
+        if (
+            len(topic_nodes) > 1
+            and topic_nodes[0].topic_id is not None
+            and topic_nodes[0].label == menu_entry.title
+        ):
+            child_nodes = topic_nodes[1:]
+
         nodes.append(ContentNode(
             label=menu_entry.title,
             hotkey=menu_entry.hotkey,
-            children=topic_nodes,
+            topic_id=first_topic_id,
+            children=child_nodes,
         ))
     return nodes
 
@@ -246,15 +414,16 @@ class BW03HelpReader(HelpReaderBase):
         screen_count = struct.unpack_from("<H", data, 4)[0]
         menu_count = struct.unpack_from("<H", data, 6)[0]
         menu_entries = _parse_menu_entries(data, menu_count)
-        descriptors = _parse_screen_descriptors(data, screen_count, menu_count)
+        descriptor_offset = _descriptor_table_offset(data, menu_count, screen_count)
+        style_table = _parse_style_table(data, menu_count, descriptor_offset)
+        descriptors = _parse_screen_descriptors_at_offset(data, screen_count, descriptor_offset)
 
         topics: list[TopicRecord] = []
         for index, descriptor in enumerate(descriptors):
             end = descriptor.offset + descriptor.length
             if end > len(data):
                 raise ValueError("BW03 screen payload points outside the file.")
-            expanded = _expand_screen_payload(data[descriptor.offset:end])
-            raw_lines = _split_raw_lines(expanded)
+            raw_lines, uhf_lines = _decode_screen_payload(data[descriptor.offset:end], style_table)
             visible = _visible_lines(raw_lines)
             footer = _find_screen_footer(visible)
 
@@ -269,6 +438,7 @@ class BW03HelpReader(HelpReaderBase):
                 TopicRecord(
                     context_id=index,
                     raw_lines=raw_lines,
+                    uhf_content=uhf_lines,
                     index_terms=index_terms,
                     prev_context=descriptor.prev_index if 0 <= descriptor.prev_index < screen_count else None,
                     next_context=(index + 1) % screen_count if screen_count else None,
@@ -310,6 +480,10 @@ class BW03HelpReader(HelpReaderBase):
             "text_encoding": "cp437",
             "source_family": "microsoft-bw03",
         }
+        palettes = _build_bw03_palettes(style_table)
+        if palettes:
+            metadata["default_palette"] = "cga"
+            metadata["palettes"] = palettes
         title = _document_title(topics)
         if title:
             metadata["title"] = title

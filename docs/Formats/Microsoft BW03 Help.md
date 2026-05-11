@@ -13,9 +13,12 @@ extension must therefore be detected by signature, not by suffix.
 
 Status of this document:
 
-- header, menu table, screen table and text stream layout are confirmed from
-  local sample files
-- some attribute bytes are still only partially reverse-engineered
+- header, menu table, style table, descriptor table and text stream layout are
+  confirmed from local sample files
+- the second attribute byte in each style triplet is strongly supported as a
+  monochrome DOS attribute by external Microsoft documentation, although no
+  external source has yet been found that states the BW03 triplet semantics at
+  byte-level explicitly
 
 Sample files used:
 
@@ -47,12 +50,12 @@ Offset `0x00`:
 Immediately after the 8-byte header:
 
 1. menu table, `MenuCount * 22` bytes
-2. small control / style table, observed as `46-48` bytes in local samples
-3. 24 fixed screen descriptors, `24 * 12` bytes
-4. zero padding until the first screen payload
+2. control / style dictionary, always `48` bytes in the sampled files
+3. 40 fixed screen descriptors, `40 * 12` bytes
+4. first screen payload begins immediately after the 40-slot descriptor array
 
-The sample files always reserve space for **24 screen descriptors**, even when
-the actual `ScreenCount` is smaller.
+The sampled files reserve space for **40 screen descriptors**, even when the
+actual `ScreenCount` is smaller.
 
 ---
 
@@ -93,18 +96,53 @@ The first-screen index is enough to reconstruct category ranges:
 
 ## Control / Style Table
 
-After the menu table there is a small control table.  In the sampled files it
-contains non-zero bytes and is stable in shape, but not perfectly constant in
-length across all variants, so the reader locates the descriptor table by
-validating the first screen records instead of relying on one hard-coded offset.
+After the menu table there is a `48`-byte control table. In all sampled files it
+is byte-for-byte identical and consists of `16` consecutive 3-byte entries:
 
-The reader currently treats it as an opaque formatting dictionary.
+| Bytes | Meaning |
+|-------|---------|
+| `attr_lo attr_hi style_id` | one formatting dictionary entry |
+
+The `style_id` bytes run in order from `0xE1` to `0xF0`. Example from all three
+sampled files:
+
+| Entry bytes |
+|-------------|
+| `17 07 E1` |
+| `12 07 E2` |
+| `13 70 E3` |
+| `1F 0F E4` |
+| `...` |
+| `74 70 EF` |
+| `0F 0F F0` |
+
+This is a palette / attribute dictionary for the inline style markers used in
+the payload stream. The current working meaning of the two attribute bytes is:
+
+- first byte = color-display DOS text attribute
+- second byte = monochrome-display attribute / fallback variant
+
+The converter exports inline BW03 styles to UHF using the first attribute byte,
+split into DOS `fg/bg` nibbles and resolved through the standard UHF `cga`
+palette. The second byte is preserved as additional palette metadata under a
+`bw03-mono` palette.
+
+External support for the second byte interpretation:
+
+- Microsoft CodeView documentation states that black-and-white mode uses
+  `normal text`, `high-intensity text`, and `reverse-video text`.
+- Microsoft KB Q44412 documents standard monochrome adapter attributes:
+  `07 = normal`, `0F = high intensity`, `70 = reverse video`, `87 = blinking`.
+
+These external descriptions match the second-byte values seen in BW03 triplets
+exactly, but they still stop short of an explicit byte-level statement about the
+BW03 file format itself.
 
 ---
 
 ## Screen Descriptor Table
 
-After the control table comes a fixed array of **24 descriptors**.
+After the control table comes a fixed array of **40 descriptors**.
 
 Descriptor layout:
 
@@ -144,8 +182,36 @@ Observed byte classes:
   yields readable output
 - `0xFF <count> <byte>`: simple run-length encoding, expand `<byte>` repeated
   `<count>` times
-- `0xE1` .. `0xF0`: inline style / emphasis control bytes
+- `0xE1` .. `0xF0`: inline style / emphasis control bytes whose attribute pairs
+  are defined in the 48-byte dictionary described above
 - CP437 printable text and box-drawing characters
+
+Important distinction from the raw byte stream:
+
+- low bytes such as `0x04`, `0x08`, `0x1B` visible in the compressed payload are
+  only the `<count>` part of `0xFF <count> <byte>` sequences in the sampled
+  files; they do **not** survive RLE expansion as standalone inline controls
+
+In the currently sampled screen payloads, the actual inline style markers that
+appear are limited to `0xE1`, `0xE2`, `0xE3`, `0xE4`, and `0xEF`.
+
+Working semantic interpretation from visible screens:
+
+- `0xE1`: default body text
+- `0xE2`: headings / command labels
+- `0xE3`: placeholders and user-supplied metavariables
+- `0xE4`: literal keys, commands, punctuation, and bracket markers
+- `0xEF`: reset / structural text used around screen markers and footers
+
+Example attribute decoding from the shared 48-byte dictionary:
+
+| Style | Color attr | Mono attr | Working meaning |
+|-------|------------|-----------|-----------------|
+| `E1` | `0x17` | `0x07` | body text |
+| `E2` | `0x12` | `0x07` | headings / command names |
+| `E3` | `0x13` | `0x70` | placeholders |
+| `E4` | `0x1F` | `0x0F` | literals / hotkeys |
+| `EF` | `0x74` | `0x70` | screen markers / footer band |
 
 For readable plain-text extraction the following is sufficient:
 
@@ -155,6 +221,10 @@ For readable plain-text extraction the following is sufficient:
 4. decode the result as `CP437`
 
 That produces legible screens with their line-drawing layout preserved.
+
+For richer UHF export the converter may instead keep the inline style runs and
+emit them as UHF `[color:fg:bg]...[/color]` spans using the decoded DOS
+attributes.
 
 ---
 

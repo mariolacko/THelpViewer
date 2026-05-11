@@ -1957,9 +1957,11 @@ class TVMenuBox extends TVWidget {
             if (seg === "separator") {
                 bodyRows.push(
                     '<div class="tv-menu-popup-separator" aria-hidden="true">'
-                    + '<span class="tv-border-corner">\u251C</span>'
-                    + borderFill
-                    + '<span class="tv-border-corner">\u2524</span>'
+                    + '<span class="tv-border-corner tv-menu-popup-separator-left">\u251C</span>'
+                    + '<span class="tv-border-fill tv-menu-popup-separator-fill" data-tv-border-fill="\u2500"></span>'
+                    + '<span class="tv-border-corner tv-menu-popup-separator-right">\u2524</span>'
+                    + '<span class="tv-border-fill tv-menu-popup-separator-scroll-fill" data-tv-border-fill="\u2500"></span>'
+                    + '<span class="tv-border-corner tv-menu-popup-separator-frame-right">\u2524</span>'
                     + '</div>'
                 );
             } else if (seg.length > 0) {

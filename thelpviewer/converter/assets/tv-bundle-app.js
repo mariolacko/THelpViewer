@@ -267,7 +267,7 @@ function bundleWindowSpec(bundle) {
     return {
         cols,
         rows,
-        min_cols: hasExplicitCols ? cols : Math.min(cols, 80),
+        min_cols: hasExplicitCols ? cols : Math.min(cols, 82),
         min_rows: hasExplicitRows ? rows : Math.min(rows, 25),
     };
 }
@@ -2233,7 +2233,11 @@ function renderBundleMenuLabel(label, hotkey = "") {
 }
 
 function buildBundleContentsMenuRoot(bundle) {
-    const nodes = Array.isArray(bundle && bundle.contents) ? bundle.contents : [];
+    const sourceFormat = bundleSourceFormat(bundle);
+    const rawNodes = Array.isArray(bundle && bundle.contents) ? bundle.contents : [];
+    const nodes = sourceFormat === "bw03"
+        ? rawNodes.map((node) => ({ ...(node || {}), children: [] }))
+        : rawNodes;
     if (!nodes.length) {
         return "";
     }
@@ -2557,7 +2561,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         winToggle,
         winPopupHTML,
         `</div>`,
-        bundleContentsRootHTML ? `<div class="tv-menu-separator" aria-hidden="true">|</div>` : ``,
+        bundleContentsRootHTML ? `<div class="tv-menu-separator" aria-hidden="true">│</div>` : ``,
         bundleContentsRootHTML,
         `</nav>`,
         `<div class="tv-menu-clock" data-tv-clock>00:00:00</div>`,
