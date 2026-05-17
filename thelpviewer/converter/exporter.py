@@ -166,7 +166,7 @@ FORMAT_HANDLERS: tuple[FormatHandler, ...] = (
     FormatHandler(
         name="tfh",
         source_kind="compiled",
-        matches=lambda path, data: path.suffix.lower() == ".tfh" and is_tfh_binary(data),
+        matches=lambda _path, data: is_tfh_binary(data),
         load=_load_tdh,
     ),
     FormatHandler(

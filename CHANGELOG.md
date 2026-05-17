@@ -1,5 +1,41 @@
 # Changelog
 
+## [Unreleased]
+
+### Formats
+- Promoted **Borland Turbo Debugger TDH / Turbo Profiler TFH** from a
+  diagnostic-only path to a decoded reader path for the known sample families,
+  including runtime-aligned topics, hotspots, contents/index export, and UHF
+  bundle output
+- Added end-to-end bundle export regression coverage for the current TDH/TFH
+  sample families, so legacy TDH, later 2.x TDH, and TFH are now checked
+  through actual UHF bundle output instead of reader-local decode assertions
+  only
+- Hardened the TDH runtime decoder to rely on in-stream topic termination plus
+  the confirmed 15-line page limit instead of a synthetic next-page upper bound
+- Narrowed TDH alias fallback so text matching now runs only for unresolved
+  out-of-range alias contexts after structural embedded-start detection
+- Extended TDH decode metadata so alias-heavy high contexts now expose exact
+  out-of-range, embedded, text-fallback, remaining-unresolved, and empty-
+  placeholder context-id lists instead of counts only
+- Hardened the TDH reader failure path so structurally matched but truncated
+  payloads now raise a clean unsupported/truncated error instead of failing in
+  intermediate decode bookkeeping
+- Switched TFH format-handler detection to content-based probing in the shared
+  exporter registry, so renamed TFH inputs no longer depend on a `.tfh`
+  suffix to route into the TFH reader
+- Recovered a direct resident TD 2.0 loader/seek anchor: `TD.EXE` opens
+  `tdhelp.tdh`, reads the header into `0xA248`, buffers `0x258` words at
+  `0x9D94`, and computes topic starts as `2 * header + 2 + sum(sign16(deltas))`
+  instead of relying only on file-side inference
+
+### Tooling
+- Added built-in ZIP member listing support to `tools/zip_implode.py`, so old
+  PKZIP method-6 archives can be inspected with a repo-local tool instead of
+  depending on external `unzip` / `7z` output
+- Verified repo-local extraction of bundled TD/TPROF method-6 DOC members via
+  `tools/zip_implode.py`
+
 ## [1.1.0] — 2026-04-09
 
 ### Features
@@ -10,8 +46,9 @@
   LINK and related toolchain help files
 - Added **Microsoft BW03** reader support for older CodeView DOS / OS/2 help
   files (`CV.HLP`, `CVP.HLP`)
-- Added separate **Borland Turbo Debugger TDH** detection and diagnostic reader
-  for `TDHELP.TDH`; its encoded payload is documented but not decoded yet
+- Added separate **Borland Turbo Debugger TDH / TFH** reader support with
+  decoded text/topic-addressing for the current real TDH 1.0, later TDH 2.x,
+  and TFH sample families
 - Added **Norton Guide / Expert Help** reader support with parent-derived topic
   titles, real MENU traversal, see-also links, and generated contents/index data
 - Added standalone **UHF JSON writer** and made the web bundle transport
