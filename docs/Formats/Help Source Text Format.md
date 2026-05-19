@@ -323,4 +323,4 @@ project.
 
 ---
 
-*Part of the THelp Viewer project. See FORMATS.md for binary format documentation.*
+*Part of the THelp Viewer project. See [Formats.md](../Formats.md) for binary format documentation.*

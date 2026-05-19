@@ -158,4 +158,4 @@ Two practical notes from the sample corpus in this repository:
 - Archiveteam / Just Solve: [Norton Guides help file](https://fileformats.archiveteam.org/wiki/Norton_Guides_help_file)
 
 _This documentation is part of the THelpViewer project. For the full index of
-format notes, see [FORMATS.md](FORMATS.md)._
+format notes, see [Formats.md](../Formats.md)._

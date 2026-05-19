@@ -1,154 +1,260 @@
 # Borland Turbo Debugger/Profiler Runtime Help
 
-Status: detected, not decoded.
+> Created: 2026-05-14 · Last updated: 2026-05-17
 
-`TDHELP.TDH` from Turbo Debugger and `TFHELP.TFH` from Turbo Profiler are not
-Borland THELP/TPH/TCH files. They do not contain the THELP signature
-`$*$* &&&&$*$`, and the existing THELP record parser must not handle them.
+Used by: Borland Turbo Debugger 1.0/2.x and Borland Turbo Profiler.
+File extensions: `.TDH`, `.TFH`.
 
-## Confirmed Sample
+These files are not Borland THELP/TPH/TCH streams. They do not contain the
+THELP signature `$*$* &&&&$*$` and must be detected and parsed separately.
 
-Current samples:
+Detailed reverse-engineering history, runtime traces, and unresolved questions
+live in [Borland TDH RE Notes.md](Borland%20TDH%20RE%20Notes.md).
 
-| File | Size | CRC32 | SHA256 |
-|------|------|-------|--------|
-| `TDHELP.TDH` | 112,669 | `A9C668A7` | `0c23e564e60f3ec97b98eb71adab052eae2f8b19d5202faa7c43d93271da5f07` |
-| `TDHELP.TDH` | 125,805 | `A6E139F2` | `fabad0cc8f53cc5ad3134c3c41baf384f12fa72581b00a1012bf6553fc25f04d` |
-| `TFHELP.TFH` | 67,415 | `EDCB6DAB` | `a00fcaee3c1ee94a8801cdbae9dd75d602ed91d9df4063fd1bc27676dc075630` |
+All visible multi-byte integers in the on-disk outer structures are
+big-endian unless stated otherwise. In the TDH runtime map, each word is later
+interpreted as a signed 16-bit delta.
 
-The same file appears in:
+For the known TDH/TFH sample families, the runtime text layer and topic
+addressing are now decoded rather than merely sketched. The formerly suspicious
+later-2.x context `537` is now confirmed as a literal three-byte empty
+placeholder block (`00 00 0D`), not as hidden undecoded text. The old
+loader/service blocker has also narrowed sharply: the widened 2.x path is now
+anchored directly in resident `TD.EXE`, while `TDH386.SYS` turns out to be a
+separate `TDHDEBUG` DOS device driver rather than the TDH text loader itself.
+That status is now also covered by end-to-end bundle export regression checks
+for the current legacy TDH, later 2.x TDH, and TFH samples rather than only by
+reader-local decode assertions.
+The exact proof addresses, helper entrypoints, and byte-level runtime traces
+stay in [Borland TDH RE Notes.md](Borland%20TDH%20RE%20Notes.md); this document
+only keeps the stable format-level conclusions.
 
-| Collection | Path |
-|------------|------|
-| Borland Turbo Debugger 1.0 | `sources/Borland Turbo Debugger 1.0/TDHELP.TDH` |
-| Borland Turbo Assembler 1.0 with Turbo Debugger | `sources/Borland Turbo Assembler 1.0 with Turbo Debugger/TDHELP.TDH` |
-| Borland Turbo Profiler | `sources/Borland Turbo Profiler/TFHELP.TFH` |
-| Borland Turbo Debugger/Profiler/Assembler 2.x | `downloads/.../TDUTIL.ZIP/TDHELP.TDH` |
-| Borland Turbo Debugger/Profiler/Assembler 2.x | `downloads/.../TFHELP.ZIP/TFHELP.TFH` |
+## 1. Family Overview
 
-## Observed Header
+The TDH/TFH family shares one higher text layer:
 
-The file starts with big-endian words:
+- nibble-packed text, read low nibble first then high nibble
+- `^` hotspot markers with a big-endian target word
+- fixed-width runtime line layout (`49` columns)
 
-```text
-0206 0001 0124 01B7 0072 0096 008B 00AF
-006C 00A7 0086 00C3 00BB 00B4 00BE 0060
-```
+The outer container differs by product family:
 
-Confirmed structural observations in the Turbo Debugger 1.0 sample:
+| Variant | Used by | Word 0 | Outer layout |
+|---------|---------|--------|--------------|
+| TDH | Turbo Debugger | byte size of each visible pre-separator half | `header -> half A -> half B -> separator -> payload` |
+| TFH | Turbo Profiler | context count | `count -> size table -> separator -> cumulative blocks` |
 
-| Offset | Value | Meaning |
-|--------|-------|---------|
-| `0x0000` | `0x0206` | Header word; in this sample it is also the byte size of each decode table. |
-| `0x0002` | 259 big-endian words | First decode table, 518 bytes. |
-| `0x0208` | 259 big-endian words | Second decode table, 518 bytes. |
-| `0x040E` | `00 01` | Separator word before payload. |
-| `0x0410` | starts `A0 CC CC ...` | Encoded payload. |
+## 2. Detection
 
-The two 259-entry tables look like a compact decoder table pair, but the exact
-meaning of entries and root/index handling is not confirmed yet. Treating them
-as a simple left/right Huffman tree does not produce readable text.
+There is no fixed ASCII magic string. Detection is structural.
 
-The payload lead also has a stable short preamble in the current real samples:
-the first payload byte is followed by 9 consecutive `0xCC` bytes, and both TDH
-and TFH then continue with the same visible prefix bytes starting at
-`FC 48 5F F4 4C 0F ...`.
+### 2.1 TDH Detection
 
-The later 125,805-byte sample has the same structure but starts with `0x0254`,
-which gives two 596-byte tables with 298 big-endian words each. Its payload
-starts at `0x04AC` with `AE CC CC ...`. This confirms that the first word is a
-table byte size, not a fixed TDH version signature.
+Known TDH samples satisfy all of the following:
 
-`TFHELP.TFH` follows the same broad runtime-help structure but with a smaller,
-odd first table byte size:
+- word `0x0000` is an even byte count in the observed range `0x0200..0x0800`
+- two visible halves of that byte size follow immediately after the header word
+- the separator word at `2 + header_word + header_word` is `0x0001`
+- the first payload byte after the separator is in the observed range `0x80..0xBF`
+- the payload begins with a short run of `0xCC` bytes after that lead byte
 
-| Offset | Value | Meaning |
-|--------|-------|---------|
-| `0x0000` | `0x016B` | Header word; byte size of each decode table. |
-| `0x0002` | 363 bytes | First decode table. |
-| `0x016D` | 363 bytes | Second decode table. |
-| `0x02D8` | `00 00` | Separator word before payload. |
-| `0x02DA` | starts `96 CC CC ...` | Encoded payload. |
+### 2.2 TFH Detection
 
-`file(1)` reports this as `ALAN game data version 2.60`, but that is a false
-positive caused by the first big-endian word `0x0206`. The system magic rule for
-ALAN only checks this word and does not validate a Borland TDH structure.
+Known TFH samples satisfy all of the following:
 
-Brute-force checks against nearby decoder families have not matched yet. The
-currently tested simple left/right prefix-tree variants and small standard LZW
-bitstream variants both produce only repetitive synthetic output, not readable
-help text.
+- word `0x0000` is the big-endian context count
+- `context_count` big-endian words follow as a size table
+- the separator word at `2 + context_count * 2` is `0x0000`
+- the first byte after the separator follows the same observed payload lead pattern
 
-## Relation To Turbo Debugger / Profiler
-
-`TD.EXE` contains:
+## 3. TDH Outer Layout
 
 ```text
-tdhelp.tdh
-No help for this context
-Help file %s not found
-Index
-Previous page
-First page
+┌──────────────────────────────────────────┐  +0x0000
+│ HeaderWord (WORD)                        │  byte size of each visible half
+├──────────────────────────────────────────┤  +0x0002
+│ VisibleHalfA (HeaderWord bytes)          │
+├──────────────────────────────────────────┤
+│ VisibleHalfB (HeaderWord bytes)          │
+├──────────────────────────────────────────┤  +SeparatorOffset
+│ SeparatorWord = 0x0001                   │
+├──────────────────────────────────────────┤  +EncodedPayloadOffset
+│ Encoded payload                          │
+└──────────────────────────────────────────┘
 ```
 
-This confirms that TDH is the external runtime help payload used by Turbo
-Debugger. The decompressor and context resolver are likely in `TD.EXE` and/or
-`TD.OVL`.
+Known header values:
 
-`TPROF.EXE` contains the same UI strings plus:
+- TD 1.0 sample: `0x0206` (`518` bytes per half)
+- later TD 2.x sample: `0x0254` (`596` bytes per half)
+
+The first word is a byte-size field, not a fixed TDH version signature.
+
+Current sample-specific probe offsets, payload-prefix comparisons, and other
+byte-level evidence stay in [Borland TDH RE Notes.md](Borland%20TDH%20RE%20Notes.md).
+
+### 3.1 Runtime Context Map
+
+The runtime uses the separator offset as the context-map base.
+
+Known sample families currently use these active map widths:
+
+- TD 1.0: fixed legacy width `0x212` (`530`) words
+- later TD 2.x sample: full pre-separator prefix width (`596`) words
+
+That split is also visible directly in the file layout. In TD 1.0, the visible
+pre-separator area contains only `259 + 259 = 518` words, so the live legacy
+`530`-word runtime load necessarily overruns by `12` words into the separator
+and payload prefix. In the later 2.x sample, the widened `298 + 298 = 596`
+visible words already fill the whole active runtime map, so the `596`-word
+model stops cleanly before the separator instead of spilling into the payload.
+
+On the later TD 2.x sample, decoding that full `596`-word runtime map exposes a
+coherent late-topic region through contexts `530..595`. So the `596`-word
+model is an observed property of the known 2.x sample family, not just a
+reader-side overrun heuristic.
+
+For the known TDH sample families, that is now enough for practical end-to-end
+support rather than only partial reverse-engineering:
+
+- the legacy TDH 1.0 sample decodes through the full user-visible namespace,
+  with the old high-tail `519..529` now resolving as alias continuations rather
+  than as unnamed hidden pages
+- the later TDH 2.x sample decodes through the full real `596`-context map,
+  including the confirmed late tail `530..595`
+- the resident TD 2.x runtime agrees with the same cumulative signed-delta
+  addressing model used by the file-side reader
+- context `537` is a genuine empty placeholder block, so any future collapse to
+  nearby context `539` would be viewer/export policy rather than missing format
+  decode
+
+That does not erase every historical caution. The end of the legacy TDH 1.0
+high-context range is alias-heavy rather than a clean run of standalone pages:
+current tooling reconstructs redirects such as `520 -> 425`, `521 -> 380`,
+`522 -> 314`, `527 -> 393`, and `528 -> 328`, so the overlap window near
+`530..543` cannot be resolved by naive title-for-title comparison alone. But
+that is now a namespace-reconstruction nuance, not a missing decoder.
+
+In other words, for the known TDH sample families the current reader status is
+already `decoded` at the text/topic-addressing layer. The remaining uncertainty
+is limited to exact 1.0-to-2.x namespace reconstruction near the front edge of
+the late 2.x tail plus a few runtime implementation details already tracked in
+[Borland TDH RE Notes.md](Borland%20TDH%20RE%20Notes.md). Exact `TD.EXE`
+helper addresses, runtime buffers, the `600` vs. `596` preload nuance, and the
+detailed anchor list for the observed high-context drift stay there.
+
+Each map entry is interpreted as `sign16(word)`, not as an unsigned block size.
+
+Context starts are computed cumulatively:
 
 ```text
-tfhelp.tfh
-No help for this context
-Help file %s not found
-Index
-Previous page
-First page
+start(0) = separator_offset
+start(n) = separator_offset + sum(sign16(map[i]) for i = 0 .. n-1)
 ```
 
-This confirms that TFH is the matching external runtime help payload used by
-Turbo Profiler and strongly suggests a shared or closely related help decoder.
+Runtime slot `0` is effectively a separator-aligned artifact rather than a
+user-visible help topic. Real help content starts at context `1`.
 
-`DEHELP.DOC` from the BOA/DEHELP tools explicitly lists Turbo Debugger,
-Turbo Debugger for Windows, Turbo C++ for Windows, and Resource Workshop as
-unsupported formats. That matches the observed separate TDH/TFH container
-instead of the standard THELP layout.
+### 3.2 TDH Topic Block
 
-## Current Reader Behavior
+At each computed TDH topic start:
 
-`thelpviewer/converter/readers/tdh.py` contains strict TDH and TFH detectors and
-a diagnostic reader. It intentionally emits a single status topic instead of
-inventing topics from unknown data.
+- the first big-endian word is a per-page control / next-context field
+- visible text begins immediately after that word
+- topic termination is found in the text stream itself; TDH does not rely on a
+  stored explicit block length for each topic
+- the runtime page parser renders at most `15` visible lines per TDH page
 
-The reader metadata contains:
+When the leading control word is a valid in-range context id, it behaves as the
+runtime next-page target.
 
-```json
-{
-  "format": "tdh",
-  "format_status": "undecoded",
-  "tdh_probe": {
-    "header_word": "0x0206",
-    "table_byte_size": 518,
-    "table_word_count": 259,
-    "encoded_payload_offset": 1040,
-    "payload_lead_byte": "0xA0",
-    "payload_lead_cc_run": 9
-  }
-}
+## 4. TFH Outer Layout
+
+```text
+┌──────────────────────────────────────────┐  +0x0000
+│ ContextCount (WORD)                      │
+├──────────────────────────────────────────┤  +0x0002
+│ SizeTable[ContextCount] (WORD each)      │  big-endian block sizes
+├──────────────────────────────────────────┤  +SeparatorOffset
+│ SeparatorWord = 0x0000                   │
+├──────────────────────────────────────────┤
+│ Runtime blocks                           │  cumulative variable-size blocks
+└──────────────────────────────────────────┘
 ```
 
-## Work Needed For Full Reader Support
+For the known TFH sample, `ContextCount = 0x016B` (`363`).
 
-To produce normal UHF2 topics, we still need to reverse:
+### 4.1 TFH Block Addressing
 
-| Area | Needed result |
-|------|---------------|
-| Encoded table | Exact role of the two 259-word big-endian tables. |
-| Payload codec | Bit/byte-level decompression algorithm. |
-| Topic boundaries | Mapping from TD help contexts to decoded text blocks. |
-| Index/menu data | Runtime help index labels and navigation actions. |
-| Text attributes | Link, color, and selection markers if stored in TDH. |
+The runtime block base is the separator offset itself:
 
-Until these are known, TDH/TFH support must remain separate from THELP and
-marked as undecoded.
+```text
+block_start(0) = separator_offset
+block_start(n) = separator_offset + sum(size[i] for i = 0 .. n-1)
+```
+
+Known sample detail:
+
+- context `0` is a one-byte sentinel block
+- context `1` therefore starts one byte after the separator word
+
+### 4.2 TFH Topic Block
+
+Each TFH block consists of:
+
+1. one leading big-endian control word
+2. visible text stream starting at block byte `+2`
+
+When that control word is a valid in-range context id, it behaves as the
+runtime next-page target.
+
+## 5. Shared Text And Hotspot Layer
+
+### 5.1 Nibble Packing
+
+Text is decoded low nibble first, then high nibble.
+
+Known nibble values:
+
+| Nibble | Meaning |
+|--------|---------|
+| `0x0` | skip / no output |
+| `0x1` | `e` |
+| `0x2` | `t` |
+| `0x3` | `r` |
+| `0x4` | `o` |
+| `0x5` | `i` |
+| `0x6` | `n` |
+| `0x7` | `a` |
+| `0x8` | `s` |
+| `0x9` | `l` |
+| `0xA` | `c` |
+| `0xB` | `h` |
+| `0xC` | space |
+| `0xD` | `^` hotspot/control marker |
+| `0xE` | special marker class (`<E>` in the current reader) |
+| `0xF` | literal byte from the next two raw nibbles as `low + high * 16` |
+
+### 5.2 Hotspots
+
+In the decoded stream, `^` starts a hotspot block:
+
+1. align to the next byte boundary
+2. read one big-endian target context word
+3. decode visible hotspot label text until the next `^`
+
+### 5.3 Line Layout
+
+The runtime renders one screen line at a time with a width of `0x31` (`49`)
+columns.
+
+- CR/LF sequences terminate the current line
+- ordinary text wraps at spaces before column `49`
+- hotspot labels are kept intact; if a label does not fit near the right edge,
+  it moves to the next line instead of being split
+
+## 6. Relationship To THELP
+
+TDH and TFH are separate Borland runtime-help containers, not THELP variants.
+They should not be decoded by the THELP record parser even though they are used
+by Borland DOS tools and also carry topic text, links, and next-page behavior.

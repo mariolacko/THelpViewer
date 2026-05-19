@@ -3,21 +3,22 @@
 ![THelpViewer](Thelp.png)
 
 
-A web-based viewer for Borland/Turbo Pascal and Software602 help files,
-rendered as a TurboVision-style single-page application.
+A web-based viewer for legacy DOS help files, rendered as a TurboVision-style
+single-page application.
 
 Homepage: [https://thelp.zdrojak.dev](https://thelp.zdrojak.dev)
 
 Reads multiple legacy DOS help formats including Borland THELP, Microsoft
-QuickHelp / BW03, Norton Guide, FBHF, Software602, and text `.hlx` / `.hl6`
-sources, then serves them as an interactive web application with authentic DOS
-look and feel.
+QuickHelp / BW03, Borland TDH/TFH runtime help, Norton Guide, FBHF,
+Software602, and text `.hlx` / `.hl6` sources, then serves them as an
+interactive web application with authentic DOS look and feel.
 
 ## Supported Formats
 
 | Format | Products | Extension |
 |--------|----------|-----------|
 | **Borland THELP** | Turbo Pascal 4–7, Turbo C, TASM, Sidekick, Sprint | `.HLP`, `.TPH`, `.TCH`, `*.T?H` with THELP signature |
+| **Borland TDH/TFH runtime help** | Turbo Debugger 1.0/2.x, Turbo Profiler | `.TDH`, `.TFH` |
 | **Microsoft BW03** | Older CodeView DOS / OS2 help (`CV.HLP`, `CVP.HLP`) | `.HLP` |
 | **Microsoft QuickHelp (LN)** | QuickBASIC, QuickC, MASM 6, PWB, LINK | `.HLP` |
 | **Norton Guide** | Norton Guides and Expert Help databases | `.NG` |
@@ -26,6 +27,9 @@ look and feel.
 | **Software602 Text602** | Text602, Calc602 word processors | `.HLP` |
 | **HLX/HL6 text** | Decompiled text format (round-trip capable) | `.hlx`, `.hl6` |
 | **Scorpion DAT (experimental)** | Scorpion's Cheater 23.0 content databases | `.dat` |
+
+Borland TDH/TFH runtime help is decoded for the current known TDH 1.0, later
+TDH 2.x, and TFH sample families.
 
 ## Quick Start
 
@@ -97,7 +101,7 @@ THelpViewer/
 │   └── assets/             ←   JS, CSS, fonts, images
 ├── thelpviewer/            ← Unified Python package root
 │   ├── converter/          ←   help converter package
-│   │   ├── readers/        ←     format readers (thelp, bw03, quickhelp, ng, fbhf, hlx, m602, scorpion_dat)
+│   │   ├── readers/        ←     format readers (thelp, tdh, bw03, quickhelp, ng, fbhf, hlx, m602, scorpion_dat)
 │   │   ├── writers/        ←     output writers (html, uhf json, bundle, md)
 │   │   ├── base.py         ←     shared data model (HelpDocument, TopicRecord, …)
 │   │   ├── codepages.py    ←     encoding tables (CP437, CP852, Kamenický)
@@ -120,9 +124,10 @@ THelpViewer/
 ├── helps/                  ← Generated UHF 2.0 `.json.gz` bundles + catalog.json
 ├── var/                    ← Future mutable server-side state
 ├── docs/                   ← Documentation
-│   ├── FORMATS.md          ←   binary format index
+│   ├── Formats.md          ←   binary format index
 │   ├── Formats/            ←   detailed format specifications
 │   │   ├── Borland THELP.md
+│   │   ├── Borland TDH.md
 │   │   ├── TurboVision FBHF.md
 │   │   ├── Software602.md
 │   │   ├── Software602 M602.md
@@ -209,8 +214,9 @@ After regeneration, restart the local server or Docker and hard-refresh the brow
 
 ### Format Specifications
 
-- [Format index](docs/FORMATS.md) — overview and comparison of all binary formats
+- [Format index](docs/Formats.md) — overview and comparison of all binary formats
 - [Borland THELP](docs/Formats/Borland%20THELP.md) — TP4–7, Turbo C, TASM, Sidekick, Sprint
+- [Borland TDH/TFH runtime help](docs/Formats/Borland%20TDH.md) — Turbo Debugger 1.0/2.x, Turbo Profiler
 - [TurboVision FBHF](docs/Formats/TurboVision%20FBHF.md) — TP6, BP7 THelpFile (TVHC compiler)
 - [Software602](docs/Formats/Software602.md) — M602, Text602, Calc602 help families
 - [Help source text format](docs/Formats/Help%20Source%20Text%20Format.md) — HLX/TXT decompiled-source specification
