@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .. import __version__ as GENERATOR_VERSION
-from ..base import HelpDocument, PositionedKeyword, TopicNavItem, TopicRecord, context_nav_action
+from ..base import HelpDocument, PositionedKeyword, TopicNavItem, TopicRecord, context_nav_action, render_topic_uhf_content
 from ..uhf_markup import escape_uhf_text, format_uhf_link
 from .html import HelpHtmlRenderer
 
@@ -68,7 +68,16 @@ class HelpJsonRenderer:
             display_encoding=display_encoding,
             generator_name=generator_name,
         )
-        self.topic_ids = {topic.context_id for topic in document.topics}
+        self.suppressed_topic_ids = {
+            topic.context_id
+            for topic in document.topics
+            if topic.redirect_context is not None and topic.redirect_context != topic.context_id
+        }
+        self.topic_ids = {
+            topic.context_id
+            for topic in document.topics
+            if topic.context_id not in self.suppressed_topic_ids
+        }
 
     def render_document(self) -> dict[str, object]:
         """Return a JSON-serializable UHF 2.0 document."""
@@ -283,26 +292,27 @@ class HelpJsonRenderer:
 
             # Resolve target context id to one that exists in this document's topics.
             # UHF2 does not emit unresolved/debug-only index targets.
-            target = entry.context_id
-            if entry.topic_id is None and target not in self.topic_ids:
+            target = entry.topic_id if entry.topic_id is not None else entry.context_id
+            if target not in self.topic_ids:
                 mapped = alias_id_map.get(target)
                 if mapped is None:
                     mapped = alias_string_map.get(label.strip().lower())
                 if mapped is not None:
                     target = mapped
             payload: dict[str, object] = {"label": label}
+            if target in self.topic_ids:
+                payload["topic_id"] = target
+            elif entry.topic_id is not None:
+                continue
+            else:
+                continue
             if entry.topic_id is not None:
-                payload["topic_id"] = entry.topic_id
                 if entry.source_file:
                     payload["file"] = entry.source_file
                 if entry.alias:
                     payload["alias"] = entry.alias
                 if entry.line is not None:
                     payload["line"] = entry.line
-            elif target in self.topic_ids:
-                payload["topic_id"] = target
-            else:
-                continue
             grouped.setdefault(group, []).append(payload)
 
         payload: list[dict[str, object]] = []
@@ -319,6 +329,8 @@ class HelpJsonRenderer:
     def _build_topics(self) -> dict[str, dict[str, object]]:
         payload: dict[str, dict[str, object]] = {}
         for topic in self.document.topics:
+            if topic.context_id in self.suppressed_topic_ids:
+                continue
             content = self._build_topic_content(topic)
             topic_payload: dict[str, object] = {
                 "id": topic.context_id,
@@ -354,6 +366,12 @@ class HelpJsonRenderer:
     def _build_topic_content(self, topic: TopicRecord) -> list[str]:
         if topic.uhf_content:
             return list(topic.uhf_content)
+        if topic.sequential_keywords:
+            return render_topic_uhf_content(
+                topic,
+                decode_bytes=self.html_renderer._decode_bytes,
+                topic_ids=self.topic_ids,
+            )
 
         content: list[str] = []
         code_line_indices = set(topic.code_line_indices or set())
@@ -365,7 +383,6 @@ class HelpJsonRenderer:
         for keywords in positional_by_line.values():
             keywords.sort(key=lambda keyword: keyword.first_column)
 
-        sequential_index = 0
         for line_index, raw_line in enumerate(topic.raw_lines):
             line_is_code = line_index in code_line_indices
             if line_is_code and not in_code_block:
@@ -382,14 +399,6 @@ class HelpJsonRenderer:
                 if line_number in positional_by_line:
                     content.append(self._render_positioned_line(raw_line, positional_by_line[line_number]))
                     continue
-                if b"\x02" in raw_line and topic.sequential_keywords:
-                    rendered_line, sequential_index = self._render_sequential_line(
-                        raw_line,
-                        topic.sequential_keywords,
-                        sequential_index,
-                    )
-                    content.append(rendered_line)
-                    continue
                 # Ensure code lines are escaped consistently — do not
                 # emit raw decoded HTML into code blocks. Use
                 # _render_plain_segment which applies the canonical
@@ -400,14 +409,6 @@ class HelpJsonRenderer:
             line_number = line_index + 1
             if line_number in positional_by_line:
                 content.append(self._render_positioned_line(raw_line, positional_by_line[line_number]))
-                continue
-            if b"\x02" in raw_line and topic.sequential_keywords:
-                rendered_line, sequential_index = self._render_sequential_line(
-                    raw_line,
-                    topic.sequential_keywords,
-                    sequential_index,
-                )
-                content.append(rendered_line)
                 continue
             content.append(self._escape_plain_text(self.html_renderer._decode_bytes(raw_line)))
 
@@ -432,87 +433,14 @@ class HelpJsonRenderer:
         parts.append(self._render_plain_segment(raw_line[cursor:]))
         return "".join(parts)
 
-    def _render_sequential_line(
-        self,
-        raw_line: bytes,
-        keywords: list[int],
-        start_index: int,
-    ) -> tuple[str, int]:
-        parts: list[str] = []
-        buffer = bytearray()
-        in_hotspot = False
-        keyword_index = start_index
-
-        for value in raw_line:
-            if value != 0x02:
-                buffer.append(value)
-                continue
-
-            if in_hotspot:
-                label = self._escape_plain_text(self.html_renderer._decode_bytes(bytes(buffer)))
-                if keyword_index < len(keywords):
-                    parts.append(self._wrap_link_text(keywords[keyword_index], label))
-                    keyword_index += 1
-                else:
-                    parts.append(label)
-                buffer.clear()
-                in_hotspot = False
-                continue
-
-            if buffer:
-                parts.append(self._render_plain_segment(bytes(buffer)))
-                buffer.clear()
-            in_hotspot = True
-
-        if buffer:
-            parts.append(self._render_plain_segment(bytes(buffer)))
-
-        return "".join(parts), keyword_index
-
     def _render_plain_segment(self, raw_segment: bytes) -> str:
         return self._escape_plain_text(self.html_renderer._decode_bytes(raw_segment))
 
     @staticmethod
     def _escape_plain_text(text: str) -> str:
-        # Convert visible glyph-based nav markers (e.g. ◄[b]Contents[/b]►)
-        # into canonical UHF nav tags before escaping ordinary text.
         if not isinstance(text, str):
             text = str(text)
-
-        # Fast path: nothing to convert
-        if "◄" not in text and "►" not in text:
-            return escape_uhf_text(text)
-
-        import re
-
-        replacements: list[str] = []
-
-        def _repl(m: re.Match) -> str:
-            label = m.group(1)
-            lowered = label.strip().lower()
-            if lowered.startswith("contents"):
-                act = "contents"
-            elif lowered.startswith("index"):
-                act = "index"
-            elif lowered.startswith("back"):
-                act = "back"
-            else:
-                return m.group(0)
-            # preserve the glyphs and emphasize the label as bold
-            rep = f"[nav:{act}]◄[b]{label}[/b]►[/nav]"
-            idx = len(replacements)
-            replacements.append(rep)
-            return f"\x00UHFPLACE{idx}\x00"
-
-        pattern = re.compile(r"◄\s*(?:\[b\])?\s*(Contents|Index|Back)\s*(?:\[/b\])?\s*►", re.IGNORECASE)
-        intermediate = pattern.sub(_repl, text)
-        escaped = escape_uhf_text(intermediate)
-
-        # Restore inserted UHF tag replacements (they must remain unescaped)
-        for i, rep in enumerate(replacements):
-            escaped = escaped.replace(f"\x00UHFPLACE{i}\x00", rep)
-
-        return escaped
+        return escape_uhf_text(text)
 
     def _wrap_link_text(self, target_context: int, label: str) -> str:
         nav_action = context_nav_action(target_context)

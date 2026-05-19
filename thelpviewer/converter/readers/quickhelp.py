@@ -376,6 +376,56 @@ def _quickhelp_marker_style_spans(
     return spans
 
 
+def _quickhelp_marker_nav_links(
+    text_data: bytes,
+    line_keywords: list[UhfLinkSpan],
+) -> list[UhfLinkSpan]:
+    """Return built-in nav links encoded only by QuickHelp marker bytes."""
+    nav_links: list[UhfLinkSpan] = []
+    start_marker: int | None = None
+    for index, value in enumerate(text_data):
+        if value == 0x11:
+            start_marker = index
+            continue
+        if value != 0x10 or start_marker is None or index <= start_marker + 1:
+            continue
+
+        label_start = start_marker + 1
+        label_end = index
+        linked = any(
+            keyword.start < label_end and keyword.end > label_start
+            for keyword in line_keywords
+        )
+        if linked:
+            start_marker = None
+            continue
+
+        label = text_data[label_start:label_end].decode("cp437", errors="replace")
+        normalized = " ".join(label.split()).casefold()
+        action: str | None = None
+        if normalized == "contents":
+            action = "contents"
+        elif normalized == "index":
+            action = "index"
+        elif normalized == "back":
+            action = "back"
+
+        if action is not None:
+            target_context = nav_action_context(action)
+            if target_context is not None:
+                nav_links.append(
+                    UhfLinkSpan(
+                        start=label_start,
+                        end=label_end,
+                        target_context=target_context,
+                    )
+                )
+
+        start_marker = None
+
+    return nav_links
+
+
 # ---------------------------------------------------------------------------
 # Binary topic decompilation (Step 1 reversal)
 # ---------------------------------------------------------------------------
@@ -467,6 +517,10 @@ def _decompile_topic(
                 line_keywords,
                 source_path=source_path,
             )
+
+        marker_nav_links = _quickhelp_marker_nav_links(text_data, line_keywords)
+        if marker_nav_links:
+            line_keywords.extend(marker_nav_links)
 
         has_markers = any(value in (0x10, 0x11) for value in text_data)
         stored_text = _strip_quickhelp_markers(text_data)

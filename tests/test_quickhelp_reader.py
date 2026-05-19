@@ -42,3 +42,18 @@ def test_quickhelp_popup_topics_export_as_standard_topics(tmp_path):
     assert topic.get("title") == "Print  Use this command to copy all or part of a topic to LPT1. When you"
     assert "quickhelp_is_popup" not in topic
     assert "quickhelp_category_nav" not in topic
+
+
+def test_quickbasic_marker_only_contents_nav_is_reader_rendered():
+    path = Path("sources") / "Microsoft QuickBASIC Extended 7.1" / "BAS7QCK.HLP"
+    doc = load_document(path)
+
+    nav_line = next(
+        line
+        for topic in doc.topics
+        for line in topic.uhf_content
+        if "Contents" in line and "Back" in line
+    )
+    assert "[nav:contents]Contents[/nav]" in nav_line
+    assert "[nav:back]Back[/nav]" in nav_line
+    assert "◄[b]Contents[/b]►" not in nav_line

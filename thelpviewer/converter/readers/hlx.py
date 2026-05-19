@@ -15,6 +15,7 @@ from ..base import (
     TopicRecord,
     build_directional_nav_items,
     ensure_document_index,
+    render_topic_uhf_content,
 )
 
 
@@ -111,7 +112,13 @@ class HlxSourceParser:
         self._resolve_pending_inline_links()
         self._synthesize_missing_index_entries()
         self._dedupe_index_entries()
+        topic_ids = {topic.context_id for topic in self.topics}
         for topic in self.topics:
+            topic.uhf_content = render_topic_uhf_content(
+                topic,
+                decode_bytes=self._decode_source_text,
+                topic_ids=topic_ids,
+            )
             topic.nav_items = build_directional_nav_items(topic)
         return ensure_document_index(HelpDocument(
             format_name=self.format_name,
@@ -718,7 +725,7 @@ class HlxSourceParser:
         if encoding == "utf-8":
             return data.decode("utf-8", errors="replace")
         if isinstance(encoding, str) and encoding:
-            from .codepages import decode_bytes
+            from ..codepages import decode_bytes
 
             return decode_bytes(data, encoding)
         return data.decode("latin-1", errors="ignore")

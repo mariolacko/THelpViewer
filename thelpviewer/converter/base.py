@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
 import re
 
-from .uhf_markup import parse_uhf_link_target
+from .uhf_markup import escape_uhf_text, format_uhf_link, parse_uhf_link_target
 
 _BOX_LINE_BYTES = frozenset(
     {
@@ -140,6 +141,7 @@ class TopicRecord:
     sequential_keywords: list[int] = field(default_factory=list)
     positional_keywords: list[PositionedKeyword] = field(default_factory=list)
     is_help_contents: bool = False
+    redirect_context: int | None = None
     up_context: int | None = None
     down_context: int | None = None
     prev_context: int | None = None
@@ -165,6 +167,7 @@ class TopicRecord:
             "sequential_keywords": list(self.sequential_keywords),
             "positional_keywords": [keyword.to_dict() for keyword in self.positional_keywords],
             "is_help_contents": self.is_help_contents,
+            "redirect_context": self.redirect_context,
             "up_context": self.up_context,
             "down_context": self.down_context,
             "prev_context": self.prev_context,
@@ -379,7 +382,7 @@ class HelpReaderBase(ABC):
 _UHF_NAV_ACTION_RE = re.compile(r"\[nav:([^\]]+)\](.*?)\[/nav\]")
 _UHF_NAV_LINK_RE = re.compile(r"\[link:([^\]]+)\](.*?)\[/link\]")
 _UHF_INLINE_STYLE_RE = re.compile(
-    r"\[/?(?:b|i|u|r|style|fg[:=][^\]]+|bg[:=][^\]]+|color[:=][^\]]+)\]"
+    r"\[/?(?:b|i|u|r|fg[:=][^\]]+|bg[:=][^\]]+|color[:=][^\]]+)\]"
 )
 
 
@@ -432,6 +435,211 @@ def build_directional_nav_items(topic: TopicRecord) -> list[TopicNavItem]:
             continue
         items.append(TopicNavItem(label=label, topic_id=target_context))
     return items
+
+
+def render_topic_uhf_content(
+    topic: TopicRecord,
+    *,
+    decode_bytes: Callable[[bytes], str],
+    topic_ids: set[int],
+    fallback_map: dict[int, dict[str, int | str]] | None = None,
+) -> list[str]:
+    """Render one normalized topic body as UHF content lines.
+
+    Readers use this when they preserve raw lines plus hotspot metadata in the
+    shared model but still want export-ready UHF without duplicating renderer
+    logic in individual writers.
+    """
+    resolved_fallbacks = fallback_map or {}
+    content: list[str] = []
+    code_line_indices = set(topic.code_line_indices or set())
+    in_code_block = False
+
+    positional_by_line: dict[int, list[PositionedKeyword]] = {}
+    for keyword in topic.positional_keywords:
+        positional_by_line.setdefault(keyword.line, []).append(keyword)
+    for keywords in positional_by_line.values():
+        keywords.sort(key=lambda keyword: keyword.first_column)
+
+    sequential_index = 0
+    for line_index, raw_line in enumerate(topic.raw_lines):
+        line_is_code = line_index in code_line_indices
+        if line_is_code and not in_code_block:
+            content.append("[code]")
+            in_code_block = True
+        elif not line_is_code and in_code_block:
+            content.append("[/code]")
+            in_code_block = False
+
+        line_number = line_index + 1
+        if line_number in positional_by_line:
+            content.append(
+                _render_positioned_uhf_line(
+                    raw_line,
+                    positional_by_line[line_number],
+                    decode_bytes=decode_bytes,
+                    topic_ids=topic_ids,
+                    fallback_map=resolved_fallbacks,
+                )
+            )
+            continue
+
+        if topic.sequential_keywords:
+            rendered_line, next_index = _render_sequential_uhf_line(
+                raw_line,
+                topic.sequential_keywords,
+                sequential_index,
+                decode_bytes=decode_bytes,
+                topic_ids=topic_ids,
+                fallback_map=resolved_fallbacks,
+            )
+            if next_index != sequential_index:
+                content.append(rendered_line)
+                sequential_index = next_index
+                continue
+
+        content.append(_escape_uhf_segment(raw_line, decode_bytes))
+
+    if in_code_block:
+        content.append("[/code]")
+
+    return content
+
+
+def _render_positioned_uhf_line(
+    raw_line: bytes,
+    keywords: list[PositionedKeyword],
+    *,
+    decode_bytes: Callable[[bytes], str],
+    topic_ids: set[int],
+    fallback_map: dict[int, dict[str, int | str]],
+) -> str:
+    """Render one line with positioned hotspot ranges."""
+    parts: list[str] = []
+    cursor = 0
+
+    for keyword in keywords:
+        start = max(keyword.first_column - 1, 0)
+        end = min(keyword.last_column, len(raw_line))
+        if start > cursor:
+            parts.append(_escape_uhf_segment(raw_line[cursor:start], decode_bytes))
+        label = _escape_uhf_segment(raw_line[start:end], decode_bytes)
+        parts.append(
+            _wrap_uhf_link_target(
+                keyword.target_context,
+                label,
+                topic_ids=topic_ids,
+                fallback_map=fallback_map,
+            )
+        )
+        cursor = end
+
+    parts.append(_escape_uhf_segment(raw_line[cursor:], decode_bytes))
+    return "".join(parts)
+
+
+def _render_sequential_uhf_line(
+    raw_line: bytes,
+    keywords: list[int],
+    start_index: int,
+    *,
+    decode_bytes: Callable[[bytes], str],
+    topic_ids: set[int],
+    fallback_map: dict[int, dict[str, int | str]],
+) -> tuple[str, int]:
+    """Render one line with the shared in-band sequential hotspot delimiter."""
+    if b"\x02" not in raw_line:
+        return _escape_uhf_segment(raw_line, decode_bytes), start_index
+
+    parts: list[str] = []
+    buffer = bytearray()
+    in_hotspot = False
+    keyword_index = start_index
+
+    for value in raw_line:
+        if value != 0x02:
+            buffer.append(value)
+            continue
+
+        if in_hotspot:
+            label = _escape_uhf_segment(bytes(buffer), decode_bytes)
+            if keyword_index < len(keywords):
+                parts.append(
+                    _wrap_uhf_link_target(
+                        keywords[keyword_index],
+                        label,
+                        topic_ids=topic_ids,
+                        fallback_map=fallback_map,
+                    )
+                )
+                keyword_index += 1
+            else:
+                parts.append(label)
+            buffer.clear()
+            in_hotspot = False
+            continue
+
+        if buffer:
+            parts.append(_escape_uhf_segment(bytes(buffer), decode_bytes))
+            buffer.clear()
+        in_hotspot = True
+
+    if buffer:
+        parts.append(_escape_uhf_segment(bytes(buffer), decode_bytes))
+
+    return "".join(parts), keyword_index
+
+
+def _wrap_uhf_link_target(
+    target_context: int,
+    label: str,
+    *,
+    topic_ids: set[int],
+    fallback_map: dict[int, dict[str, int | str]],
+) -> str:
+    """Format one visible label as a UHF link or nav action when resolvable."""
+    nav_action = context_nav_action(target_context)
+    if nav_action:
+        return f"[nav:{nav_action}]{label}[/nav]"
+
+    if target_context in topic_ids:
+        return format_uhf_link(label, topic_id=target_context)
+
+    fallback = fallback_map.get(target_context)
+    if fallback is None:
+        return label
+
+    topic_id = fallback.get("topic_id")
+    if topic_id is not None and not isinstance(topic_id, int):
+        topic_id = None
+
+    source_file = fallback.get("source_file")
+    if not isinstance(source_file, str) or not source_file.strip():
+        source_file = None
+
+    alias = fallback.get("alias")
+    if not isinstance(alias, str) or not alias.strip():
+        alias = None
+
+    line = fallback.get("line")
+    if not isinstance(line, int) or line <= 0:
+        line = None
+
+    if topic_id is None and source_file is None and alias is None and line is None:
+        return label
+
+    return format_uhf_link(
+        label,
+        topic_id=topic_id,
+        source_file=source_file,
+        alias=alias,
+        line=line,
+    )
+
+
+def _escape_uhf_segment(raw: bytes, decode_bytes: Callable[[bytes], str]) -> str:
+    """Decode and escape one literal text segment for UHF output."""
+    return escape_uhf_text(decode_bytes(raw))
 
 
 def extract_nav_items_from_uhf(

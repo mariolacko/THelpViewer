@@ -16,6 +16,7 @@ from ..base import (
     TopicRecord,
     build_directional_nav_items,
     ensure_document_index,
+    render_topic_uhf_content,
 )
 from ..codepages import decode_bytes, decode_bytes_box_aware
 from ..uhf_markup import escape_uhf_text, format_uhf_link
@@ -626,6 +627,8 @@ class ThelpHelpReader(HelpReaderBase):
         self._apply_context_fallbacks(document)
         self._apply_keyword_index_targets(document)
         self._annotate_unresolved_contexts(document, parser.context_array, data)
+        encoding = str((document.metadata or {}).get("text_encoding") or "cp437")
+        self.refresh_rendered_uhf_content(document, encoding=encoding)
         return document
 
     def _build_document(
@@ -801,21 +804,12 @@ class ThelpHelpReader(HelpReaderBase):
             if str(context_id).isdigit() and isinstance(target, dict)
         }
         for topic in document.topics:
-            topic.uhf_content = []
-            needs_fallback_render = any(
-                target in fallback_map
-                for target in topic.sequential_keywords
-            ) or any(
-                keyword.target_context in fallback_map
-                for keyword in topic.positional_keywords
+            topic.uhf_content = render_topic_uhf_content(
+                topic,
+                decode_bytes=lambda raw: cls._decode_context_text(raw, encoding),
+                topic_ids=topic_ids,
+                fallback_map=fallback_map,
             )
-            if needs_fallback_render:
-                topic.uhf_content = cls._render_topic_uhf_content(
-                    topic,
-                    topic_ids=topic_ids,
-                    fallback_map=fallback_map,
-                    encoding=encoding,
-                )
 
     @classmethod
     def _apply_keyword_index_targets(cls, document: HelpDocument) -> None:

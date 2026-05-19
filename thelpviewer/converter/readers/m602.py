@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 import re
 
-from ..base import HelpDocument, HelpReaderBase, IndexEntry, TopicRecord, ensure_document_index
+from ..base import HelpDocument, HelpReaderBase, IndexEntry, TopicRecord, ensure_document_index, render_topic_uhf_content
 from ..codepages import decode_bytes, guess_display_encoding
 
 
@@ -457,6 +457,13 @@ class M602Reader:
             text_encoding=self.text_encoding,
             exact_targets=exact_target_map,
         )
+        topic_ids = {topic.context_id for topic in topics}
+        for topic in topics:
+            topic.uhf_content = render_topic_uhf_content(
+                topic,
+                decode_bytes=lambda raw: decode_m602_bytes(raw, self.text_encoding),
+                topic_ids=topic_ids,
+            )
         index_entries = [
             IndexEntry(label=topic["title"], context_id=topic["context_id"])
             for topic in parsed_topics
