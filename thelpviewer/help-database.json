@@ -1740,7 +1740,8 @@
         "TDHELP.TDH"
       ],
       "title": "Turbo Debugger Help",
-      "collection": "Borland Turbo Debugger 1.0",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "bundle_stem": "tdhelp-1.0",
       "text_encoding": "cp437",
       "language": "en",
       "help_contents_topic_id": 1
@@ -1751,7 +1752,7 @@
         "TASM.TAH"
       ],
       "title": "Turbo Assembler Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler 2.x",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
       "text_encoding": "cp437",
       "language": "en"
     },
@@ -1761,7 +1762,8 @@
         "TDHELP.TDH"
       ],
       "title": "Turbo Debugger Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler 2.x",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "bundle_stem": "tdhelp-2.x",
       "text_encoding": "",
       "language": "en"
     },
@@ -1771,9 +1773,10 @@
         "TFHELP.TFH"
       ],
       "title": "Turbo Profiler Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler 2.x",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
       "text_encoding": "",
-      "language": "en"
+      "language": "en",
+      "help_contents_topic_id": 1
     },
     {
       "kind": "separator",
@@ -1786,7 +1789,7 @@
       ],
       "crc32": "9AC3E64A",
       "title": "Turbo Assembler Help",
-      "collection": "Borland Turbo Assembler",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
       "text_encoding": "cp437",
       "language": "en",
       "help_contents_topic_id": 3

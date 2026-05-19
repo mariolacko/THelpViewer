@@ -793,32 +793,32 @@ const DEFAULT_UHF_UI_BY_SOURCE_FORMAT = {
         code_text: "cga:14",
     },
     tdh: {
-        window: "cga:1",
-        text: "cga:7",
+        window: "cga:3",
+        text: "cga:0",
         link: "cga:14",
-        title: "cga:1",
+        title: "cga:3",
         title_text: "cga:15",
-        frame: "cga:7",
-        icon: "cga:14",
-        page_area: "cga:0",
-        hover_bg: "cga:7",
-        hover_fg: "cga:1",
-        code_bg: "cga:0",
-        code_text: "cga:7",
+        frame: "cga:15",
+        icon: "cga:10",
+        page_area: "cga:1",
+        hover_bg: "cga:1",
+        hover_fg: "cga:14",
+        code_bg: "cga:1",
+        code_text: "cga:14",
     },
     tfh: {
-        window: "cga:1",
-        text: "cga:7",
+        window: "cga:3",
+        text: "cga:0",
         link: "cga:14",
-        title: "cga:1",
+        title: "cga:3",
         title_text: "cga:15",
-        frame: "cga:7",
-        icon: "cga:14",
-        page_area: "cga:0",
-        hover_bg: "cga:7",
-        hover_fg: "cga:1",
-        code_bg: "cga:0",
-        code_text: "cga:7",
+        frame: "cga:15",
+        icon: "cga:10",
+        page_area: "cga:1",
+        hover_bg: "cga:1",
+        hover_fg: "cga:14",
+        code_bg: "cga:1",
+        code_text: "cga:14",
     },
 };
 
@@ -846,20 +846,6 @@ function bundleUiThemeStyle(bundle) {
         }
     });
     return declarations.join("; ");
-}
-
-function parseUhfStyleArgs(text) {
-    const args = {};
-    const pattern = /([A-Za-z][A-Za-z0-9_-]*)\s*=\s*("(?:[^"]*)"|'(?:[^']*)'|[^\s]+)/g;
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-        let value = match[2].trim();
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.slice(1, -1);
-        }
-        args[match[1].toLowerCase()] = value;
-    }
-    return args;
 }
 
 function parseUhfLinkTargetSpec(rawTarget) {
@@ -1010,35 +996,6 @@ function parseUhfTag(tagBody, bundle) {
                 raw: tagBody,
             };
         }
-    }
-
-    match = tagBody.match(/^style\s+(.+)$/i);
-    if (match) {
-        const args = parseUhfStyleArgs(match[1]);
-        const styles = [];
-        if (args.fg != null) {
-            const fg = resolveUhfColor(bundle, args.fg);
-            if (!fg) {
-                return null;
-            }
-            styles.push(`color:${fg}`);
-        }
-        if (args.bg != null) {
-            const bg = resolveUhfColor(bundle, args.bg);
-            if (!bg) {
-                return null;
-            }
-            styles.push(`background:${bg}`);
-        }
-        if (!styles.length) {
-            return null;
-        }
-        return {
-            name: "style",
-            open: `<span style="${styles.join(";")}">`,
-            close: "</span>",
-            raw: tagBody,
-        };
     }
 
     return null;

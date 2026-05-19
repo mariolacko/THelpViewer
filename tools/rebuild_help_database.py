@@ -61,10 +61,6 @@ def _inspect_supported_file(path: Path) -> tuple[str, str, int | None]:
     if handler is None:
         if path.name.upper() == "TASM.TAH":
             return "Turbo Assembler Help", "cp437", None
-        if path.name.upper() == "TDHELP.TDH":
-            return "Turbo Debugger Help", "", None
-        if path.name.upper() == "TFHELP.TFH":
-            return "Turbo Profiler Help", "", None
         return path.stem, "", None
     document = load_document(path)
     encoding = autodetect_display_encoding(document, source_hint=str(path))
@@ -198,6 +194,7 @@ def _normalize_entry(item: object) -> dict[str, object] | None:
         collection = item.get("project")
     text_encoding = item.get("text_encoding") if isinstance(item.get("text_encoding"), str) else ""
     language = item.get("language") if isinstance(item.get("language"), str) else ""
+    bundle_stem = item.get("bundle_stem") if isinstance(item.get("bundle_stem"), str) else ""
     help_contents_topic_id = item.get("help_contents_topic_id")
     if help_contents_topic_id is not None:
         try:
@@ -212,6 +209,8 @@ def _normalize_entry(item: object) -> dict[str, object] | None:
         "collection": collection,
         "text_encoding": text_encoding,
     }
+    if bundle_stem.strip():
+        normalized["bundle_stem"] = bundle_stem.strip()
     if language.strip():
         normalized["language"] = language.strip()
     if help_contents_topic_id is not None:
@@ -238,7 +237,7 @@ def _merge_existing_entry(existing: dict[str, object], discovered: dict[str, obj
         list(existing.get("filenames", [])) if isinstance(existing.get("filenames"), list) else [],
         list(discovered.get("filenames", [])) if isinstance(discovered.get("filenames"), list) else [],
     )
-    for key in ("title", "collection", "text_encoding", "language", "help_contents_topic_id"):
+    for key in ("title", "collection", "bundle_stem", "text_encoding", "language", "help_contents_topic_id"):
         current = merged.get(key)
         if key == "help_contents_topic_id":
             if current is None and discovered.get(key) is not None:

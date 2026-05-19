@@ -441,7 +441,6 @@ or direct RGB values (see §3). Numeric values and aliases resolve through
 | `[color:FG]...[/color]` | Foreground color, background unchanged. |
 | `[color:FG:BG]...[/color]` | Legacy shorthand: foreground and background. Intended for simple values such as `14:1`. |
 | `[color=FG]...[/color]` | Foreground color, including palette-qualified values such as `cga:red`. |
-| `[style fg=FG bg=BG]...[/style]` | Foreground and/or background via named attributes. |
 
 Examples:
 ```
@@ -449,13 +448,13 @@ Examples:
 [color:14:1]yellow on blue[/color]
 [color=#ff5555]RGB red text[/color]
 [fg=cga:12]light red from CGA[/fg]
-[style fg=yellow bg=blue]yellow on blue[/style]
-[style fg=ng:link]Norton Guides link color[/style]
+[fg=yellow][bg=blue]yellow on blue[/bg][/fg]
+[fg=ng:link]Norton Guides link color[/fg]
 ```
 
 `[color:FG:BG]` is kept for compact DOS attribute output. Prefer
-`[style fg=... bg=...]` when either color value contains `:`, for example
-`[style fg=cga:yellow bg=cga:blue]`.
+nesting `[fg]` and `[bg]` when either color value contains `:`, for example
+`[fg=cga:yellow][bg=cga:blue]...[/bg][/fg]`.
 
 ### 10.3 Link tags
 
@@ -621,7 +620,7 @@ How each source format maps onto UHF fields:
         "Up": { "topic_id": 0 }
       },
       "content": [
-        "[style fg=heading][b]CHDRIVE Statement Details[/b][/style]",
+        "[fg:heading][b]CHDRIVE Statement Details[/b][/fg]",
         "",
         "Syntax",
         "[code:basic]",
@@ -644,7 +643,7 @@ How each source format maps onto UHF fields:
 
 - Each string in `content` is exactly one display line.
 - `""` is a blank line — same as pressing Enter in the original viewer.
-- `"[style fg=heading][b]CHDRIVE Statement Details[/b][/style]"` — the title rendered bold and colored through the document palette.
+- `"[fg:heading][b]CHDRIVE Statement Details[/b][/fg]"` — the title rendered bold and colored through the document palette.
 - `"[code:basic]"` and `"[/code]"` are sentinel lines that toggle code mode — they are not displayed themselves.
 - Lines inside the code block (`"  ChDrive drive$"`) are plain text; inline tags would not be parsed there.
 - `"See also: [link:topic=2]ChDir[/link]  [link:topic=3]CurDir$[/link]"` — `ChDir` and `CurDir$` are clickable links to topics `2` and `3`.

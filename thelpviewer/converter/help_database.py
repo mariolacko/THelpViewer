@@ -21,6 +21,7 @@ class HelpDatabaseEntry:
     filenames: tuple[str, ...]
     title: str
     collection: str
+    bundle_stem: str = ""
     text_encoding: str = ""
     language: str = ""
     help_contents_topic_id: int | None = None
@@ -82,6 +83,7 @@ def _load_entries(database_path: str) -> dict[int, HelpDatabaseEntry]:
         collection = item.get("collection") if isinstance(item.get("collection"), str) else ""
         if not collection and isinstance(item.get("project"), str):
             collection = item.get("project")
+        bundle_stem = item.get("bundle_stem") if isinstance(item.get("bundle_stem"), str) else ""
         text_encoding = item.get("text_encoding") if isinstance(item.get("text_encoding"), str) else ""
         language = item.get("language") if isinstance(item.get("language"), str) else ""
         help_contents_topic_id = item.get("help_contents_topic_id")
@@ -95,6 +97,7 @@ def _load_entries(database_path: str) -> dict[int, HelpDatabaseEntry]:
             filenames=tuple(alias_names),
             title=title.strip(),
             collection=collection.strip(),
+            bundle_stem=bundle_stem.strip(),
             text_encoding=text_encoding.strip(),
             language=language.strip(),
             help_contents_topic_id=help_contents_topic_id,

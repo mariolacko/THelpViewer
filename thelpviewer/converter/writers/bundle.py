@@ -35,6 +35,26 @@ class BundleResult:
     source_files: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class _PendingBundleExport:
+    source_path: Path
+    bundle_dir: Path
+    bundle_path: Path
+    bundle_stem: str
+    database_entry: object | None = None
+
+
+def _bundle_stem_for_entry(source_path: Path, database_entry: object | None) -> str:
+    if database_entry is not None:
+        bundle_stem = getattr(database_entry, "bundle_stem", "")
+        if isinstance(bundle_stem, str) and bundle_stem.strip():
+            return bundle_stem.strip().lower()
+        filenames = getattr(database_entry, "filenames", ())
+        if filenames:
+            return Path(filenames[0]).stem.lower()
+    return source_path.stem.lower()
+
+
 def export_bundle(
     source_path: str | Path,
     output_dir: str | Path,
@@ -74,8 +94,7 @@ def export_bundle(
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
         display_name = document.display_name
-        canonical_name = database_entry.filenames[0] if database_entry and database_entry.filenames else source_path.name
-        file_stem = Path(canonical_name).stem.lower() if bundle_name is None else bundle_name
+        file_stem = _bundle_stem_for_entry(source_path, database_entry) if bundle_name is None else bundle_name
         json_path = renderer.write_json_gz(target_dir / (file_stem + ".json.gz"))
         print(f"[bundle] OK: {source_path.name} → {json_path.name} ({getattr(document, 'format_name', '?')})")
         return BundleResult(
@@ -103,6 +122,60 @@ def export_bundle(
         )
 
 
+def _build_pending_bundle_export(
+    path: Path,
+    *,
+    source_root: Path,
+    helps_dir: Path,
+    database_entry: object | None,
+) -> _PendingBundleExport:
+    relative = path.relative_to(source_root)
+    group_name = (
+        database_entry.collection
+        if database_entry is not None and getattr(database_entry, "collection", "")
+        else str(relative.parent).replace("\\", "/")
+    )
+    group_parts = tuple(part for part in Path(group_name).parts if part not in {"", "."})
+    bundle_dir = helps_dir.joinpath(*group_parts) if group_parts else helps_dir
+    bundle_stem = _bundle_stem_for_entry(path, database_entry)
+    return _PendingBundleExport(
+        source_path=path,
+        bundle_dir=bundle_dir,
+        bundle_path=bundle_dir / f"{bundle_stem}.json.gz",
+        bundle_stem=bundle_stem,
+        database_entry=database_entry,
+    )
+
+
+def _pending_bundle_topic_count(
+    candidate: _PendingBundleExport,
+    *,
+    cache: dict[Path, int],
+) -> int:
+    cached = cache.get(candidate.source_path)
+    if cached is not None:
+        return cached
+    try:
+        cached = len(load_document(candidate.source_path).topics)
+    except Exception:
+        cached = -1
+    cache[candidate.source_path] = cached
+    return cached
+
+
+def _prefer_pending_bundle_export(
+    current: _PendingBundleExport,
+    candidate: _PendingBundleExport,
+    *,
+    topic_count_cache: dict[Path, int],
+) -> bool:
+    current_count = _pending_bundle_topic_count(current, cache=topic_count_cache)
+    candidate_count = _pending_bundle_topic_count(candidate, cache=topic_count_cache)
+    if candidate_count != current_count:
+        return candidate_count > current_count
+    return str(candidate.source_path).casefold() < str(current.source_path).casefold()
+
+
 def export_bundle_tree(
     input_root: str | Path,
     output_dir: str | Path,
@@ -126,32 +199,40 @@ def export_bundle_tree(
     help_database = load_help_database()
     results: list[BundleResult] = []
     seen_crc32: set[int] = set()
-    seen_outputs: set[Path] = set()
+    topic_count_cache: dict[Path, int] = {}
+    pending_exports: dict[Path, _PendingBundleExport] = {}
     for path in iter_help_files(source_root):
-        relative = path.relative_to(source_root)
         db_entry = lookup_help_database_entry(path, help_database)
-        group_name = db_entry.collection if db_entry and db_entry.collection else str(relative.parent).replace("\\", "/")
-        group_parts = tuple(part for part in Path(group_name).parts if part not in {"", "."})
-        bundle_dir = helps_dir.joinpath(*group_parts) if group_parts else helps_dir
-        bundle_stem = Path(db_entry.filenames[0]).stem.lower() if db_entry and db_entry.filenames else path.stem.lower()
-        bundle_path = bundle_dir / f"{bundle_stem}.json.gz"
+        pending = _build_pending_bundle_export(
+            path,
+            source_root=source_root,
+            helps_dir=helps_dir,
+            database_entry=db_entry,
+        )
         if db_entry is not None:
             if db_entry.crc32 in seen_crc32:
-                rel_bundle = bundle_path.relative_to(helps_dir)
+                rel_bundle = pending.bundle_path.relative_to(helps_dir)
                 print(f"[bundle] SKIP DUPLIKÁT CRC32: {path.name} → {rel_bundle}")
                 continue
             seen_crc32.add(db_entry.crc32)
-        elif bundle_path in seen_outputs:
-            rel_bundle = bundle_path.relative_to(helps_dir)
-            print(f"[bundle] SKIP DUPLIKÁT: {path.name} → {rel_bundle}")
+        existing = pending_exports.get(pending.bundle_path)
+        if existing is not None and not _prefer_pending_bundle_export(
+            existing,
+            pending,
+            topic_count_cache=topic_count_cache,
+        ):
+            rel_bundle = pending.bundle_path.relative_to(helps_dir)
+            print(f"[bundle] SKIP KOLÍZIU: {path.name} → {rel_bundle}")
             continue
-        else:
-            seen_outputs.add(bundle_path)
+        pending_exports[pending.bundle_path] = pending
+
+    for pending in pending_exports.values():
+        db_entry = pending.database_entry
         result = export_bundle(
-            path,
-            bundle_dir,
+            pending.source_path,
+            pending.bundle_dir,
             encoding=encoding,
-            bundle_name=bundle_stem,
+            bundle_name=pending.bundle_stem,
             collection_name=db_entry.collection if db_entry else None,
             title_override=db_entry.title if db_entry else None,
             database_entry=db_entry,

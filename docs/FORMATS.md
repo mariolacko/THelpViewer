@@ -1,13 +1,13 @@
 # Help File Format Documentation
 
-> Created: 2026-03-29 · Last updated: 2026-04-05
+> Created: 2026-03-29 · Last updated: 2026-05-17
 
 Index of supported help file binary and source formats.
 
 ## Binary Format Specifications
 
 - Borland THELP: [Formats/Borland THELP.md](Formats/Borland%20THELP.md) — TP4–7, Turbo C, TASM, Sidekick, Sprint
-- Borland Turbo Debugger/Profiler runtime help: [Formats/Borland TDH.md](Formats/Borland%20TDH.md) — detected external `TDHELP.TDH` / `TFHELP.TFH`, payload not decoded yet
+- Borland Turbo Debugger/Profiler runtime help: [Formats/Borland TDH.md](Formats/Borland%20TDH.md) — separate TDH/TFH runtime-help family, decoded for the known sample families
 - TurboVision FBHF: [Formats/TurboVision FBHF.md](Formats/TurboVision%20FBHF.md) — TP6, BP7 THelpFile (TVHC)
 - Software602 family index: [Formats/Software602.md](Formats/Software602.md) — M602, Text602, Calc602
 - Software602 M602 HelpSystem: [Formats/Software602 M602.md](Formats/Software602%20M602.md) — XOR $FA encrypted
@@ -44,7 +44,7 @@ Index of supported help file binary and source formats.
 
 | Tool | Language | Purpose |
 |------|----------|---------|
-| `python -m thelpviewer.converter` | Python | Universal reader (all 4 formats) → HTML / JSON bundle / Markdown |
+| `python -m thelpviewer.converter` | Python | Universal reader (all supported formats) → HTML / JSON bundle / Markdown |
 | `python -m thelpviewer.converter --bundle` | Python | Gzip-compressed JSON bundles for the SPA viewer |
 | `python -m downloader` | Python | Automated help file downloader (WinWorldPC, archive.org, old-dos.ru, GitHub, DaveP NG mirror) |
 
