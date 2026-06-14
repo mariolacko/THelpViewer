@@ -1,6 +1,650 @@
 {
-  "version": 1,
-  "generated_at": "2026-05-11T18:06:00+00:00",
+  "version": 2,
+  "generated_at": "2026-06-14T00:00:00+00:00",
+  "sources": [
+    {
+      "key": "winworld",
+      "description": "WinWorldPC (product/version pages)",
+      "runner": "thelpviewer.downloader.winworld"
+    },
+    {
+      "key": "archiveorg",
+      "description": "Archive.org (search query + metadata files)",
+      "runner": "thelpviewer.downloader.archiveorg"
+    },
+    {
+      "key": "olddos",
+      "description": "old-dos.ru (category listing + detail page)",
+      "runner": "thelpviewer.downloader.olddos"
+    },
+    {
+      "key": "github",
+      "description": "GitHub (repo tree / contents API)",
+      "runner": "thelpviewer.downloader.github"
+    },
+    {
+      "key": "davep_ng",
+      "description": "Dave Pearson Norton Guides mirror",
+      "runner": "thelpviewer.downloader.davep_ng"
+    },
+    {
+      "key": "cheater_cz",
+      "description": "Cheater.cz (Scorpions Cheater DOS archives)",
+      "runner": "thelpviewer.downloader.cheater_cz"
+    },
+    {
+      "key": "slunecnice",
+      "description": "Slunečnice.cz (Game-Cheater 9.02 archive)",
+      "runner": "thelpviewer.downloader.slunecnice"
+    }
+  ],
+  "products": [
+    {
+      "key": "tp",
+      "label": "Borland Turbo Pascal",
+      "build_group": "borland",
+      "collection_prefixes": [
+        "Borland Turbo Pascal"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "winworld": {
+          "search_text": "Turbo Pascal",
+          "slug": "turbo-pascal"
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Pascal",
+          "query": "creator:Borland AND (title:\"Turbo Pascal\" OR subject:\"Turbo Pascal\") AND mediatype:software",
+          "keywords": [
+            "borland",
+            "turbo pascal"
+          ]
+        },
+        "olddos": {
+          "search_text": "Turbo Pascal",
+          "keywords": [
+            "turbo pascal"
+          ],
+          "category_ids": [
+            51
+          ]
+        }
+      }
+    },
+    {
+      "key": "tc",
+      "label": "Borland Turbo C",
+      "build_group": "borland",
+      "collection_prefixes": [
+        "Borland Turbo C++",
+        "Borland Turbo C"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "winworld": {
+          "search_text": "Turbo C / Turbo C++",
+          "slug": "turbo-c"
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo C / Turbo C++",
+          "query": "creator:Borland AND (title:\"Turbo C\" OR title:\"Turbo C++\") AND mediatype:software",
+          "keywords": [
+            "borland",
+            "turbo c",
+            "turbo c++"
+          ]
+        },
+        "olddos": {
+          "search_text": "Turbo C / Turbo C++",
+          "keywords": [
+            "turbo c",
+            "turbo c++",
+            "turbo cpp"
+          ],
+          "category_ids": [
+            52
+          ]
+        }
+      }
+    },
+    {
+      "key": "tasm",
+      "label": "Borland Turbo Assembler",
+      "build_group": "borland",
+      "sources": {
+        "winworld": {
+          "search_text": "Turbo Assembler",
+          "slug": "turbo-assembler"
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Assembler",
+          "query": "creator:Borland AND (title:\"Turbo Assembler\" OR title:\"TASM\") AND mediatype:software",
+          "keywords": [
+            "borland",
+            "turbo assembler",
+            "tasm"
+          ]
+        },
+        "olddos": {
+          "search_text": "Turbo Assembler",
+          "keywords": [
+            "turbo assembler",
+            "tasm"
+          ],
+          "category_ids": [
+            50
+          ]
+        }
+      }
+    },
+    {
+      "key": "td",
+      "label": "Borland Turbo Debugger",
+      "build_group": "borland",
+      "collection_prefixes": [
+        "Borland Turbo Debugger/Profiler/Assembler"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Debugger",
+          "query": "creator:Borland AND title:\"Turbo Debugger\" AND mediatype:software",
+          "keywords": [
+            "borland",
+            "turbo debugger"
+          ]
+        },
+        "olddos": {
+          "search_text": "Turbo Debugger",
+          "keywords": [
+            "turbo debugger"
+          ],
+          "category_ids": [
+            229
+          ]
+        }
+      }
+    },
+    {
+      "key": "tbasic",
+      "label": "Borland Turbo Basic",
+      "build_group": "borland",
+      "collection_prefixes": [
+        "Borland Turbo Basic"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "winworld": {
+          "search_text": "Turbo Basic",
+          "slug": "turbo-basic"
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Basic / PowerBASIC",
+          "query": "(creator:Borland OR creator:\"Power Basic\") AND (title:\"Turbo Basic\" OR title:\"PowerBASIC\") AND mediatype:software",
+          "keywords": [
+            "borland",
+            "turbo basic",
+            "powerbasic"
+          ]
+        },
+        "olddos": {
+          "search_text": "Turbo Basic",
+          "keywords": [
+            "turbo basic"
+          ],
+          "category_ids": [
+            58
+          ]
+        }
+      }
+    },
+    {
+      "key": "tprolog",
+      "label": "Borland Turbo Prolog",
+      "build_group": "borland",
+      "collection_prefixes": [
+        "Borland Turbo Prolog"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "winworld": {
+          "search_text": "Turbo Prolog",
+          "slug": "turbo-prolog"
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Prolog",
+          "query": "creator:Borland AND title:\"Turbo Prolog\" AND mediatype:software",
+          "keywords": [
+            "borland",
+            "turbo prolog"
+          ]
+        },
+        "olddos": {
+          "search_text": "Turbo Prolog",
+          "keywords": [
+            "turbo prolog"
+          ],
+          "category_ids": [
+            126
+          ]
+        }
+      }
+    },
+    {
+      "key": "bc",
+      "label": "Borland C++",
+      "build_group": "borland",
+      "collection_prefixes": [
+        "Borland C++"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++",
+          "slug": "borland-c"
+        },
+        "archiveorg": {
+          "search_text": "Borland C++",
+          "query": "creator:Borland AND title:\"Borland C++\" AND mediatype:software NOT title:\"Builder\"",
+          "keywords": [
+            "borland",
+            "borland c++",
+            "borland c"
+          ]
+        },
+        "olddos": {
+          "search_text": "Borland C++",
+          "keywords": [
+            "borland c++",
+            "borland c"
+          ],
+          "category_ids": [
+            52
+          ]
+        }
+      }
+    },
+    {
+      "key": "bp",
+      "label": "Borland Pascal",
+      "build_group": "borland",
+      "collection_prefixes": [
+        "Borland Pascal"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Pascal",
+          "slug": "borland-pascal"
+        },
+        "archiveorg": {
+          "search_text": "Borland Pascal",
+          "query": "creator:Borland AND title:\"Borland Pascal\" AND mediatype:software",
+          "keywords": [
+            "borland",
+            "borland pascal"
+          ]
+        },
+        "olddos": {
+          "search_text": "Borland Pascal",
+          "keywords": [
+            "borland pascal"
+          ],
+          "category_ids": [
+            51
+          ]
+        }
+      }
+    },
+    {
+      "key": "sk",
+      "label": "Borland Sidekick",
+      "build_group": "borland",
+      "collection_prefixes": [
+        "Borland Sidekick"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "winworld": {
+          "search_text": "Sidekick",
+          "slug": "sidekick"
+        }
+      }
+    },
+    {
+      "key": "ng",
+      "label": "Norton Guides",
+      "build_group": "norton-guides",
+      "collection_prefixes": [
+        "Norton Guides"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "archiveorg": {
+          "search_text": "Peter Norton Computing Norton Guides",
+          "query": "creator:\"Peter Norton Computing\" AND subject:\"Norton Guides\"",
+          "keywords": [
+            "norton guides",
+            "peter norton",
+            "ng"
+          ]
+        },
+        "github": {
+          "search_text": "Norton Guides on GitHub",
+          "base_url": "https://github.com/davep/norton-guides/tree/main/guides",
+          "api_url": "https://api.github.com/repos/davep/norton-guides/contents/guides",
+          "raw_base_url": "https://raw.githubusercontent.com/davep/norton-guides/main/guides/",
+          "direct_urls": [
+            "https://github.com/davep/norton-guides/tree/main/guides"
+          ]
+        },
+        "davep_ng": {
+          "search_text": "Norton Guides mirror",
+          "base_url": "https://norton-guides.davep.dev/"
+        }
+      }
+    },
+    {
+      "key": "qbx",
+      "label": "Microsoft QuickBASIC Extended 7.1",
+      "build_group": "microsoft",
+      "collection_prefixes": [
+        "Microsoft QuickBASIC Extended"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "archiveorg": {
+          "search_text": "Microsoft QuickBASIC Extended 7.1 / BASIC PDS 7.1",
+          "query": "(identifier:qb71zip OR title:\"Quickbasic Extended 7.1\" OR title:\"BASIC Professional Development System 7.1\") AND mediatype:software",
+          "keywords": [
+            "quickbasic extended",
+            "basic professional development system",
+            "qbx",
+            "quickbasic"
+          ],
+          "direct_urls": [
+            "https://archive.org/details/qb71zip",
+            "https://archive.org/details/microsoft-basic-professional-development-system-7.1-5.25"
+          ]
+        }
+      }
+    },
+    {
+      "key": "quickc",
+      "label": "Microsoft QuickC, C, and C++",
+      "build_group": "microsoft",
+      "collection_prefixes": [
+        "Microsoft QuickC, C, and C++"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "archiveorg": {
+          "search_text": "Microsoft QuickC / Microsoft C / PDS",
+          "query": "(identifier:microsoft-quick-c-2.50 OR identifier:ms_c_pro_dev_sys_ver6.0 OR identifier:\"microsoft-c-cpp-7.0-3-20-1992-3.5-1.44mb.-7z\") AND mediatype:software",
+          "keywords": [
+            "quickc",
+            "microsoft c",
+            "microsoft c/c++",
+            "professional development system"
+          ],
+          "direct_urls": [
+            "https://archive.org/details/microsoft-quick-c-2.50",
+            "https://archive.org/details/ms_c_pro_dev_sys_ver6.0",
+            "https://archive.org/details/microsoft-c-cpp-7.0-3-20-1992-3.5-1.44mb.-7z"
+          ]
+        }
+      }
+    },
+    {
+      "key": "masm",
+      "label": "Microsoft MASM and CodeView",
+      "build_group": "microsoft",
+      "collection_prefixes": [
+        "Microsoft MASM and CodeView"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {
+        "archiveorg": {
+          "search_text": "Microsoft MASM / Macro Assembler / CodeView",
+          "query": "(identifier:en-masm-611 OR identifier:microsoftmacroassembler_v51 OR identifier:\"microsoft-macro-assembler-v5.0\") AND mediatype:software",
+          "keywords": [
+            "masm",
+            "microsoft macro assembler",
+            "macro assembler",
+            "codeview"
+          ],
+          "direct_urls": [
+            "https://archive.org/details/en-masm-611",
+            "https://archive.org/details/microsoftmacroassembler_v51",
+            "https://archive.org/details/microsoft-macro-assembler-v5.0"
+          ]
+        }
+      }
+    },
+    {
+      "key": "software602",
+      "label": "Software 602",
+      "build_group": "software602",
+      "collection_prefixes": [
+        "Software 602"
+      ],
+      "conversion": {
+        "use_database_entries": true
+      },
+      "sources": {}
+    },
+    {
+      "key": "scorpion",
+      "label": "Scorpions Cheater DOS",
+      "build_group": "scorpion",
+      "conversion": {
+        "use_database_entries": false,
+        "files": [
+          {
+            "pattern": "*.DAT"
+          },
+          {
+            "pattern": "*.SCO"
+          },
+          {
+            "pattern": "*.SCX"
+          },
+          {
+            "pattern": "*.SCD"
+          }
+        ],
+        "fallback_files": [
+          {
+            "pattern": "*.EXE"
+          }
+        ]
+      },
+      "sources": {
+        "cheater_cz": {
+          "search_text": "Scorpions Cheater DOS versions",
+          "base_url": "https://www.cheater.cz/wincheater2/historie-cheater-pro-dos/",
+          "direct_urls": [
+            "https://www.cheater.cz/wincheater2/historie-cheater-pro-dos/"
+          ]
+        }
+      }
+    },
+    {
+      "key": "game-cheater",
+      "label": "Game-Cheater 9.02",
+      "build_group": "game-cheater",
+      "conversion": {
+        "use_database_entries": false,
+        "bundles": [
+          {
+            "label": "Cheaty",
+            "bundle_stem": "cheaty",
+            "filenames": [
+              "CHEATDBS.000",
+              "CHEATDBS.T00"
+            ]
+          },
+          {
+            "label": "Firmy",
+            "bundle_stem": "firmy",
+            "filenames": [
+              "FIRMY.000",
+              "FIRMY.T00"
+            ]
+          },
+          {
+            "label": "Internetové adresy",
+            "bundle_stem": "internetove-adresy",
+            "filenames": [
+              "GCNETADR.000",
+              "GCNETADR.T00"
+            ]
+          },
+          {
+            "label": "Nápověda",
+            "bundle_stem": "napoveda",
+            "filenames": [
+              "GCHLP.000",
+              "GCHLP.T00"
+            ],
+            "show_topic_titles": false
+          },
+          {
+            "label": "Informace",
+            "bundle_stem": "informace",
+            "filenames": [
+              "DBSNFO.000",
+              "DBSNFO.T00",
+              "GCPRM.000"
+            ]
+          }
+        ]
+      },
+      "sources": {
+        "slunecnice": {
+          "search_text": "Game-Cheater 9.02",
+          "base_url": "https://www.slunecnice.cz/sw/game-cheater/",
+          "direct_urls": [
+            "https://www.slunecnice.cz/sw/game-cheater/"
+          ]
+        }
+      }
+    }
+  ],
+  "build_groups": [
+    {
+      "key": "borland",
+      "label": "Borland",
+      "source_root_prefixes": [
+        "Borland "
+      ],
+      "help_dir_prefixes": [
+        "Borland "
+      ],
+      "aliases": [
+        "borland"
+      ]
+    },
+    {
+      "key": "microsoft",
+      "label": "Microsoft",
+      "source_root_prefixes": [
+        "Microsoft "
+      ],
+      "help_dir_prefixes": [
+        "Microsoft "
+      ],
+      "aliases": [
+        "microsoft",
+        "ms"
+      ]
+    },
+    {
+      "key": "norton-guides",
+      "label": "Norton Guides",
+      "source_root_prefixes": [
+        "Norton Guides"
+      ],
+      "help_dir_prefixes": [
+        "Norton Guides"
+      ],
+      "aliases": [
+        "norton_guides",
+        "norton-guides.",
+        "norton",
+        "ng"
+      ]
+    },
+    {
+      "key": "software602",
+      "label": "Software 602",
+      "source_root_prefixes": [
+        "Software 602"
+      ],
+      "help_dir_prefixes": [
+        "Software 602"
+      ],
+      "aliases": [
+        "software-602",
+        "602",
+        "software"
+      ]
+    },
+    {
+      "key": "scorpion",
+      "label": "Scorpions Cheater DOS",
+      "source_root_prefixes": [
+        "Scorpions Cheater DOS"
+      ],
+      "help_dir_prefixes": [
+        "Scorpions Cheater"
+      ],
+      "include_by_default": false,
+      "aliases": [
+        "scorpions",
+        "cheater",
+        "scorpions-cheater"
+      ]
+    },
+    {
+      "key": "game-cheater",
+      "label": "Game-Cheater 9.02",
+      "source_root_prefixes": [
+        "Game-Cheater"
+      ],
+      "help_dir_prefixes": [
+        "Game-Cheater 9.02"
+      ],
+      "aliases": [
+        "gamecheater",
+        "gc"
+      ]
+    }
+  ],
   "entries": [
     {
       "crc32": "03F6A215",

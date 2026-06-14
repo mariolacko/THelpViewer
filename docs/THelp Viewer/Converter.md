@@ -45,6 +45,13 @@ The converter uses a pipeline architecture with automatic format detection:
 Binary/Source Files → Format Detection → Reader → HelpDocument → Writer → Output
 ```
 
+Before format detection, `thelpviewer/help-database.json` supplies shared
+product and source metadata. Its product families group releases, define build
+roots and conversion inputs, and map known CRC32 files to canonical collection,
+title, encoding, and bundle metadata. `thelpviewer/help_database.py` validates
+and exposes the schema; `converter/help_database.py` remains a compatibility
+import for existing converter callers.
+
 ### 1. Format Detection
 
 When the converter loads a file, `exporter.py` determines the format using
@@ -143,6 +150,7 @@ characters like ☺, ♥, ♦, ♣, ♠, •, ◘, etc.).
 | `base.py` | Shared in-memory model (`HelpDocument`, `TopicRecord`, `IndexEntry`, `HelpReaderBase`) |
 | `exporter.py` | Format detection, reader dispatch, single-file and tree export coordination |
 | `codepages.py` | Character encoding tables (CP437, Kamenický, CP852, Latin-1, Latin-2) and auto-detection |
+| `../help_database.py` | Shared JSON manifest loader, product grouping, CRC lookup, and validation |
 
 ### Readers (`thelpviewer/converter/readers/`)
 
@@ -180,6 +188,12 @@ Each reader implements `read_bytes(data: bytes) → HelpDocument`.
 Tree exports preserve subdirectory structure from `sources/`. Bundle tree
 exports also generate a `helps/catalog.json` that the SPA viewer loads at
 startup.
+
+Known files are deduplicated by CRC32. Product-level conversion rules cover
+corpora where a release consists of several related files without stable CRCs.
+For example, Game-Cheater's manifest bundles pair `.000` indexes with `.T00`
+texts, while Scorpion's manifest selects its version-dependent data files and
+lets the version readers assemble related sections.
 
 ## Supported Formats
 

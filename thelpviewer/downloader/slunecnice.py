@@ -8,7 +8,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-from .catalog import products_for_source
+from .catalog import product_spec, products_for_source
 from .collector import copy_help_files
 from .extractor import ExtractorTools, extract_file
 from .http import DOWNLOAD_DELAY, USER_AGENT, fetch_html, get_opener, parse_anchors
@@ -17,17 +17,8 @@ from .http import DOWNLOAD_DELAY, USER_AGENT, fetch_html, get_opener, parse_anch
 SOURCE_NAME = "slunecnice"
 DOWNLOAD_PAGE_SUFFIX = "stahnout/"
 DATABASE_FILENAMES = {
-    "CHEATDBS.000",
-    "CHEATDBS.T00",
-    "FIRMY.000",
-    "FIRMY.T00",
-    "GCNETADR.000",
-    "GCNETADR.T00",
-    "GCHLP.000",
-    "GCHLP.T00",
-    "DBSNFO.000",
-    "DBSNFO.T00",
-    "GCPRM.000",
+    name.upper()
+    for name in product_spec("game-cheater").conversion.required_filenames
 }
 
 
@@ -66,11 +57,15 @@ def _download_archive(url: str, dest: Path, *, referer: str) -> Path:
     return dest
 
 
-def _collect_database_files(work_dir: Path) -> list[Path]:
+def _collect_database_files(
+    work_dir: Path,
+    filenames: set[str] | None = None,
+) -> list[Path]:
+    selected_names = DATABASE_FILENAMES if filenames is None else filenames
     by_name: dict[str, Path] = {}
     for path in sorted(work_dir.rglob("*")):
         name = path.name.upper()
-        if path.is_file() and name in DATABASE_FILENAMES:
+        if path.is_file() and name in selected_names:
             current = by_name.get(name)
             if current is None or "GCDATA" in {part.upper() for part in path.parts}:
                 by_name[name] = path
@@ -92,7 +87,12 @@ def run(
     collected: list[Path] = []
     for product in selected:
         query = product.sources[SOURCE_NAME]
-        catalog_url = query.base_url or "https://www.slunecnice.cz/sw/game-cheater/"
+        database_filenames = {name.upper() for name in product.conversion.required_filenames}
+        if not database_filenames:
+            raise RuntimeError(f"No required conversion files configured for {product.key}")
+        catalog_url = query.base_url
+        if not catalog_url:
+            raise RuntimeError(f"No base_url configured for {product.key}/{SOURCE_NAME}")
         download_page = urljoin(catalog_url.rstrip("/") + "/", DOWNLOAD_PAGE_SUFFIX)
         print(f"\n{'=' * 60}")
         print(f"[slunecnice.cz] {product.label}")
@@ -125,8 +125,8 @@ def run(
                 if not extract_file(installers[0], installer_dir, extractor):
                     print("    [error] Could not extract INSTGC.EXE")
                     continue
-                files = _collect_database_files(installer_dir)
-                missing = sorted(DATABASE_FILENAMES - {path.name.upper() for path in files})
+                files = _collect_database_files(installer_dir, database_filenames)
+                missing = sorted(database_filenames - {path.name.upper() for path in files})
                 if missing:
                     print(f"    [error] Missing database files: {', '.join(missing)}")
                     continue

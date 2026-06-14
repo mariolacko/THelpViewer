@@ -108,15 +108,16 @@ THelpViewer/
 │   │   ├── codepages.py    ←     encoding tables (CP437, CP852, Kamenický)
 │   │   └── exporter.py     ←     high-level export orchestration
 │   ├── downloader/         ←   help file downloader
-│   │   ├── catalog.py      ←     logical product/source manifest
+│   │   ├── catalog.py      ←     typed facade over help-database.json
 │   │   ├── http.py         ←     shared HTTP + HTML helpers
 │   │   ├── extractor.py    ←     recursive unar/lsar extraction
 │   │   └── *.py            ←     one provider per website
+│   ├── help_database.py    ←   shared manifest loader and validation
 │   ├── server/             ←   FastAPI app
 │       ├── app.py          ←     routes and static mounts
 │       ├── config.py       ←     env-based runtime configuration
 │       └── __init__.py
-│   └── help-database.json  ←   canonical help-file metadata
+│   └── help-database.json  ←   products, download sources, build groups, conversion files, CRC metadata
 ├── downloads/              ← Cached downloaded archives and disk images
 ├── sources/                ← Source help files organized by product group
 │   ├── Borland Turbo Pascal 7/   ← e.g. TURBO.TPH, TVISION.TPH, OWL.TPH
@@ -185,7 +186,7 @@ Those releases are stored under `sources/Scorpions Cheater DOS/` in per-version
 subdirectories so DAT-era and pre-DAT-era builds can coexist without overwriting
 each other.
 2. `thelp.sh build` runs the converter over manifest-backed build groups resolved
-   from `thelpviewer/downloader/catalog.py`. The default build still covers
+   from `thelpviewer/help-database.json`. The default build still covers
    `borland`, `microsoft`, `norton-guides`, and `software602`, while the
    Scorpions Cheater group remains opt-in and can be generated later with
    `./thelp.sh build group=scorpion`. The same grouped build path also works for
@@ -198,13 +199,18 @@ each other.
 6. FastAPI serves `www/`, `helps/`, and `docs/` directly
 7. The browser fetches `.json.gz` bundles on demand, decompresses them, and renders them in a TurboVision window
 
-The canonical [help-database.json](thelpviewer/help-database.json) stores source-level
-metadata keyed by `crc32`, including the canonical `filenames` list, the target
-`collection` name, the help-file title, and the preferred
-`text_encoding`. Encoding resolution now uses this precedence: explicit
-parameter, database entry, then payload autodetection. Bundle export also uses
-the database for CRC-based deduplication and falls back to the current
-directory-based grouping when no match exists.
+The canonical [help-database.json](thelpviewer/help-database.json) is shared by
+the downloader and converter. Schema version 2 contains downloader providers,
+product families, build groups, conversion file rules, output bundle groups,
+and the existing source metadata keyed by `crc32`. Product families group
+multiple releases without duplicating provider configuration. CRC entries are
+assigned to a family through `collection_prefixes` and expose the remaining
+collection suffix as the release version.
+
+Encoding resolution uses this precedence: explicit parameter, CRC database
+entry, then payload autodetection. Bundle export also uses the database for
+CRC-based deduplication and falls back to directory-based grouping when no
+match exists.
 
 See [Bundle format](docs/THelp%20Viewer/Bundle.md) for the JSON bundle specification.
 

@@ -98,32 +98,15 @@ mapfile -t DEFAULT_BUILD_GROUPS < <(catalog_build_group_values default)
 mapfile -t ALL_BUILD_GROUPS < <(catalog_build_group_values all)
 
 normalize_build_group() {
-    case "${1,,}" in
-        all)
-            echo "all"
-            ;;
-        borland)
-            echo "borland"
-            ;;
-        microsoft|ms)
-            echo "microsoft"
-            ;;
-        norton-guides|norton_guides|norton-guides.|norton|ng)
-            echo "norton-guides"
-            ;;
-        software602|software-602|602|software)
-            echo "software602"
-            ;;
-        scorpion|scorpions|cheater|scorpions-cheater)
-            echo "scorpion"
-            ;;
-        game-cheater|gamecheater|gc)
-            echo "game-cheater"
-            ;;
-        *)
-            return 1
-            ;;
-    esac
+    "${PYTHON_BIN}" - "$1" <<'PY'
+from thelpviewer.downloader.catalog import normalize_build_group
+import sys
+
+resolved = normalize_build_group(sys.argv[1])
+if resolved is None:
+    raise SystemExit(1)
+print(resolved)
+PY
 }
 
 build_group_list_text() {

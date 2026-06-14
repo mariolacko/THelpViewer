@@ -7,19 +7,15 @@ import importlib
 import sys
 from pathlib import Path
 
-from .catalog import PRODUCTS, SOURCE_DESCRIPTIONS, all_products, all_sources, products_for_source
+from .catalog import (
+    PRODUCTS,
+    SOURCE_DESCRIPTIONS,
+    SOURCE_RUNNERS,
+    all_products,
+    all_sources,
+    products_for_source,
+)
 from .extractor import require_extractor_tools
-
-
-RUNNER_MODULES = {
-    "winworld": "thelpviewer.downloader.winworld",
-    "archiveorg": "thelpviewer.downloader.archiveorg",
-    "olddos": "thelpviewer.downloader.olddos",
-    "github": "thelpviewer.downloader.github",
-    "davep_ng": "thelpviewer.downloader.davep_ng",
-    "cheater_cz": "thelpviewer.downloader.cheater_cz",
-    "slunecnice": "thelpviewer.downloader.slunecnice",
-}
 
 
 def _build_parser(project_root: Path) -> argparse.ArgumentParser:
@@ -123,7 +119,7 @@ def main() -> None:
             print(f"\n[{source}] No matching products selected, skipping.")
             continue
 
-        module = importlib.import_module(RUNNER_MODULES[source])
+        module = importlib.import_module(SOURCE_RUNNERS[source])
         collected = module.run(
             product_keys=selected,
             sources_dir=sources_dir,

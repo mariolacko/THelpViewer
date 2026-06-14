@@ -9,22 +9,19 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import quote_plus, urljoin
 
-from .catalog import products_for_source
+from .catalog import ProductSpec, products_for_source
 from .collector import copy_help_files
 from .extractor import ExtractorTools, expand_single_file_payloads, extract_file, extract_nested
 from .http import DOWNLOAD_DELAY, REQUEST_DELAY, USER_AGENT, fetch_html, get_opener
 
 
 SOURCE_NAME = "cheater_cz"
-DEFAULT_HISTORY_URL = "https://www.cheater.cz/wincheater2/historie-cheater-pro-dos/"
 VERSION_ROW_RE = re.compile(
     r"<tr>\s*<td>\s*(Scorpions\s+Cheater[^<]+?)\s*</td>\s*<td[^>]*>.*?</td>\s*<td[^>]*>.*?</td>\s*<td>\s*"
     r"<a[^>]*downloadx\('([^']+)'\)",
     re.IGNORECASE | re.DOTALL,
 )
 DOWNLOAD_HREF_RE = re.compile(r'href="([^"]*download-file\.php\?[^"]+)"', re.IGNORECASE)
-SCORPION_SOURCE_SUFFIXES = {".dat", ".sco", ".scx", ".scd"}
-SCORPION_EMBEDDED_FALLBACK_SUFFIXES = {".exe"}
 
 
 def _normalize_spaces(text: str) -> str:
@@ -120,12 +117,12 @@ def _download_with_referer(url: str, dest: Path, *, referer: str) -> Path:
     return dest
 
 
-def _collect_scorpion_source_files(work_dir: Path) -> list[Path]:
+def _collect_scorpion_source_files(work_dir: Path, product: ProductSpec) -> list[Path]:
     files: list[Path] = []
     for path in sorted(work_dir.rglob("*")):
         if not path.is_file():
             continue
-        if path.suffix.lower() in SCORPION_SOURCE_SUFFIXES:
+        if product.conversion.matches(path):
             files.append(path)
     if files:
         return files
@@ -133,7 +130,7 @@ def _collect_scorpion_source_files(work_dir: Path) -> list[Path]:
     for path in sorted(work_dir.rglob("*")):
         if not path.is_file():
             continue
-        if path.suffix.lower() in SCORPION_EMBEDDED_FALLBACK_SUFFIXES:
+        if product.conversion.matches(path, fallback=True):
             files.append(path)
     return files
 
@@ -145,6 +142,7 @@ def _collect_from_archive(
     version_label: str,
     sources_dir: Path,
     extractor: ExtractorTools,
+    product: ProductSpec,
 ) -> list[Path]:
     target_dir = sources_dir / product_label / _safe_segment(version_label)
     with tempfile.TemporaryDirectory(prefix="dlscorpion_") as tmp:
@@ -153,7 +151,7 @@ def _collect_from_archive(
             return []
         extract_nested(tmp_path, extractor)
         expand_single_file_payloads(tmp_path, extractor)
-        files = _collect_scorpion_source_files(tmp_path)
+        files = _collect_scorpion_source_files(tmp_path, product)
         if not files:
             return []
         return copy_help_files(files, target_dir, sources_dir)
@@ -173,7 +171,9 @@ def run(
 
     product = selected[0]
     source_query = product.sources[SOURCE_NAME]
-    history_url = source_query.base_url or DEFAULT_HISTORY_URL
+    history_url = source_query.base_url
+    if not history_url:
+        raise RuntimeError(f"No base_url configured for {product.key}/{SOURCE_NAME}")
 
     print(f"\n{'=' * 60}")
     print("[cheater.cz] Scorpions Cheater DOS")
@@ -214,6 +214,7 @@ def run(
                 version_label=version_label,
                 sources_dir=sources_dir,
                 extractor=extractor,
+                product=product,
             )
             if not files:
                 print("    No Scorpion source files found.")

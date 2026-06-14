@@ -4,13 +4,15 @@
 
 Automated downloader for DOS help-file sources.
 
-The downloader is now split into three layers:
+The downloader is split into three layers:
 
-1. `catalog.py` defines **what** logical product groups we want to fetch and
-   how each source should search for them.
+1. `thelpviewer/help-database.json` defines **what** logical product families
+   we want, how each provider should find them, and which files are conversion
+   inputs.
 2. `winworld.py`, `archiveorg.py`, `olddos.py`, `github.py`, `davep_ng.py`, `cheater_cz.py`, `slunecnice.py` define **how**
    each concrete website is scraped and downloaded.
-3. `extractor.py` handles **all unpacking** through `unar`/`lsar`, including
+3. `catalog.py` exposes typed manifest objects and `extractor.py` handles
+   unpacking through `unar`/`lsar`, including
    nested archives and disk images.
 
 ## Usage
@@ -44,7 +46,7 @@ configured product and skips anything already present in `downloads/` or
 | Option | Description |
 |--------|-------------|
 | `--source` | Sources to use: `winworld`, `archiveorg`, `olddos`, `github`, `davep_ng`, `cheater_cz`, `slunecnice` |
-| `--products` | Logical product groups from `thelpviewer/downloader/catalog.py` |
+| `--products` | Logical product families from `thelpviewer/help-database.json` |
 | positional selectors | Short form for sources/products, e.g. `python3 -m thelpviewer.downloader tp olddos` |
 | `--out-dir` | Target directory for extracted help files |
 | `--dl-dir` | Directory for downloaded archives/files |
@@ -52,17 +54,26 @@ configured product and skips anything already present in `downloads/` or
 
 ## Manifest
 
-`thelpviewer/downloader/catalog.py` is the single source of truth for:
+`thelpviewer/help-database.json` is the single source of truth for:
 
-- logical product keys such as `tp`, `tc`, `bc`, `ng`, `qbx`, `quickc`, `masm`, `scorpion`, `game-cheater`
-- user-facing labels such as `Borland Turbo Pascal`
-- per-site search text
-- per-site machine parameters such as:
-  - WinWorld slug
-  - Archive.org advanced-search query
-  - old-dos category ids + filter keywords
-  - direct base URL for mirrors
-  - direct item/repository URLs when the exact source is known
+- `sources`: provider key, description, and Python runner module
+- `products`: stable family key, display label, build group, collection
+  prefixes, provider queries, and conversion rules
+- `build_groups`: source/output prefixes, default inclusion, and CLI aliases
+- `entries`: known individual files with filenames, optional bundle name,
+  encoding, language, and CRC32
+
+A product source may use a direct URL, provider-specific search query, slug,
+keywords, category ids, API URL, or any combination required by that provider.
+Products with many releases keep these values once at family level. Known files
+remain independent `entries`; their family and release are derived from the
+configured `collection_prefixes`, or can be stated explicitly with `product`
+and `release`.
+
+Conversion rules support exact `filename` values, glob `pattern` values,
+optional `crc32`, required inputs, fallback inputs, and named output `bundles`.
+Game-Cheater uses bundle rules for its five sections. Scorpion uses `*.DAT`,
+`*.SCO`, `*.SCX`, and `*.SCD`, with `*.EXE` only as an embedded-data fallback.
 
 For Scorpions Cheater this now also includes the stable public DOS history page
 in `direct_urls`, while the provider still resolves each per-version gated file
@@ -82,16 +93,17 @@ This keeps “what we want” separate from provider code.
 | `cheater_cz.py` | Cheater.cz | DOS Scorpions Cheater version discovery, gated download resolution, versioned corpus collection |
 | `slunecnice.py` | Slunečnice.cz | Signed Game-Cheater URL discovery and extraction of `instgc.zip` plus embedded `INSTGC.EXE` |
 
-Each provider reads only its own source-specific config from `catalog.py`.
+Each provider reads only its own source-specific config from the parsed JSON
+manifest. `catalog.py` contains no concrete product list.
 
 `cheater_cz.py` is intentionally provider-specific: it keeps every DOS release in a
 separate version folder under `sources/Scorpions Cheater DOS/` and copies the raw
-Scorpion corpus artifacts (`.dat`, `.sco`, `.scx`, `.scd`). For the earliest
+Scorpion corpus artifacts selected by the manifest. For the earliest
 releases where the corpus is embedded directly in executables, it falls back to
 preserving the `.exe` files so no DOS version is silently dropped.
 
-The same manifest also drives build-group selection in `thelp.sh`, so Scorpion's
-opt-in build behavior is no longer hardcoded only in the shell wrapper.
+The same manifest also drives build-group selection and aliases in `thelp.sh`,
+so adding a group does not require another shell `case` branch.
 
 `slunecnice.py` copies the eleven Game-Cheater database files into
 `sources/Game-Cheater/Game-Cheater 9.02/`. Build them with
