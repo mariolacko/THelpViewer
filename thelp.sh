@@ -60,9 +60,155 @@ do_docker_build=false
 do_all=false
 PORT="${THELP_PORT:-5448}"
 download_args=()
+build_groups=()
+
+catalog_build_group_values() {
+    local mode="${1:-all}"
+    "${PYTHON_BIN}" - "$mode" <<'PY'
+from thelpviewer.downloader.catalog import all_build_groups
+import sys
+
+default_only = len(sys.argv) > 1 and sys.argv[1] == "default"
+for key in all_build_groups(default_only=default_only):
+    print(key)
+PY
+}
+
+catalog_group_source_prefixes() {
+    "${PYTHON_BIN}" - "$@" <<'PY'
+from thelpviewer.downloader.catalog import build_source_root_prefixes_for_groups
+import sys
+
+for root in build_source_root_prefixes_for_groups(list(sys.argv[1:]) or None):
+    print(root)
+PY
+}
+
+catalog_group_help_prefixes() {
+    "${PYTHON_BIN}" - "$@" <<'PY'
+from thelpviewer.downloader.catalog import build_help_prefixes_for_groups
+import sys
+
+for prefix in build_help_prefixes_for_groups(list(sys.argv[1:]) or None):
+    print(prefix)
+PY
+}
+
+mapfile -t DEFAULT_BUILD_GROUPS < <(catalog_build_group_values default)
+mapfile -t ALL_BUILD_GROUPS < <(catalog_build_group_values all)
+
+normalize_build_group() {
+    case "${1,,}" in
+        all)
+            echo "all"
+            ;;
+        borland)
+            echo "borland"
+            ;;
+        microsoft|ms)
+            echo "microsoft"
+            ;;
+        norton-guides|norton_guides|norton-guides.|norton|ng)
+            echo "norton-guides"
+            ;;
+        software602|software-602|602|software)
+            echo "software602"
+            ;;
+        scorpion|scorpions|cheater|scorpions-cheater)
+            echo "scorpion"
+            ;;
+        game-cheater|gamecheater|gc)
+            echo "game-cheater"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+build_group_list_text() {
+    printf '%s' "${ALL_BUILD_GROUPS[*]}" | tr ' ' ','
+}
+
+selected_build_groups() {
+    local requested=()
+    local expanded=()
+    local seen=" "
+    local group
+
+    if [ ${#build_groups[@]} -eq 0 ]; then
+        requested=("${DEFAULT_BUILD_GROUPS[@]}")
+    else
+        requested=("${build_groups[@]}")
+    fi
+
+    for group in "${requested[@]}"; do
+        if [ "${group}" = "all" ]; then
+            expanded+=("${ALL_BUILD_GROUPS[@]}")
+        else
+            expanded+=("${group}")
+        fi
+    done
+
+    for group in "${expanded[@]}"; do
+        case "${seen}" in
+            *" ${group} "*)
+                ;;
+            *)
+                printf '%s\n' "${group}"
+                seen+="${group} "
+                ;;
+        esac
+    done
+}
+
+selected_build_source_roots() {
+    local -a prefixes=()
+    local root
+    local dir_name
+    local prefix
+
+    mapfile -t prefixes < <(catalog_group_source_prefixes "$@")
+    while IFS= read -r -d '' root; do
+        dir_name="$(basename "$root")"
+        for prefix in "${prefixes[@]}"; do
+            if [[ "$dir_name" == "$prefix"* ]]; then
+                printf '%s\n' "$root"
+                break
+            fi
+        done
+    done < <(find "${SOURCES_DIR}" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+}
+
+remove_group_outputs() {
+    local target_dir="$1"
+    shift
+    [ -d "$target_dir" ] || return 0
+
+    local -a help_prefixes=()
+    local prefix
+    mapfile -t help_prefixes < <(catalog_group_help_prefixes "$@")
+    [ ${#help_prefixes[@]} -gt 0 ] || return 0
+
+    local path
+    while IFS= read -r -d '' path; do
+        local dir_name
+        dir_name="$(basename "$path")"
+        for prefix in "${help_prefixes[@]}"; do
+            if [[ "$dir_name" == "$prefix"* ]]; then
+                rm -rf "$path"
+                break
+            fi
+        done
+    done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -type d -print0)
+}
 
 has_download_data() {
     [ -d "${DOWNLOADS_DIR}" ] && find "${DOWNLOADS_DIR}" -type f -print -quit | grep -q .
+}
+
+has_source_data() {
+    [ -d "${SOURCES_DIR}" ] && find "${SOURCES_DIR}" -type f -print -quit | grep -q .
 }
 
 has_help_bundles() {
@@ -228,6 +374,38 @@ while [ $i -lt $# ]; do
             ;;
         serve-stop|server-stop) do_serve_stop=true ;;
         serve-status|server-status) do_serve_status=true ;;
+        --group)
+            i=$((i + 1))
+            if [ $i -ge $# ]; then
+                echo "[thelp] missing value after --group. Available groups: $(build_group_list_text)"
+                exit 1
+            fi
+            group_value="${args[$i]}"
+            group_value="${group_value//,/ }"
+            for group_token in ${group_value}; do
+                if ! normalized_group="$(normalize_build_group "${group_token}")"; then
+                    echo "[thelp] unknown build group: ${group_token}"
+                    echo "[thelp] available groups: $(build_group_list_text)"
+                    exit 1
+                fi
+                build_groups+=("${normalized_group}")
+            done
+            ;;
+        --group=*|group=*|groups=*|build-group=*)
+            group_value="${arg#--group=}"
+            group_value="${group_value#group=}"
+            group_value="${group_value#groups=}"
+            group_value="${group_value#build-group=}"
+            group_value="${group_value//,/ }"
+            for group_token in ${group_value}; do
+                if ! normalized_group="$(normalize_build_group "${group_token}")"; then
+                    echo "[thelp] unknown build group: ${group_token}"
+                    echo "[thelp] available groups: $(build_group_list_text)"
+                    exit 1
+                fi
+                build_groups+=("${normalized_group}")
+            done
+            ;;
         start)    do_start=true ;;
         stop)     do_stop=true ;;
         restart)  do_restart=true ;;
@@ -254,8 +432,8 @@ if $do_build || $do_serve || $do_serve_restart || $do_start || $do_restart; then
     needs_input_data=true
 fi
 
-if $needs_input_data && ! $do_download && ! has_download_data; then
-    echo "[thelp] downloads/ je prázdny, zapínam download."
+if $needs_input_data && ! $do_download && ! has_source_data; then
+    echo "[thelp] sources/ je prázdny, zapínam download."
     do_download=true
 fi
 
@@ -281,9 +459,16 @@ if ! $do_download && ! $do_build && ! $do_catalog && ! $do_serve && ! $do_serve_
     echo "  docker build    Build Docker images (docker compose build)"
     echo "  all             Full pipeline: download + build + docker start"
     echo ""
+    echo "Build groups (use with build): $(build_group_list_text)"
+    echo "Default build groups: $(printf '%s' "${DEFAULT_BUILD_GROUPS[*]}" | tr ' ' ',')"
+    echo ""
     echo "Examples:"
     echo "  ./thelp.sh all                     # Everything from scratch"
     echo "  ./thelp.sh build serve start       # Build and start local server"
+    echo "  ./thelp.sh build --group borland   # Generate only Borland bundles"
+    echo "  ./thelp.sh build --group scorpion  # Add Scorpions bundles on demand"
+    echo "  ./thelp.sh build --group borland,microsoft  # Generate selected groups"
+    echo "  ./thelp.sh build --group all       # Build all groups including Scorpions"
     echo "  ./thelp.sh serve start 5450        # Start local server on port 5450"
     echo "  ./thelp.sh serve status            # Show local server status"
     echo "  ./thelp.sh serve restart           # Restart local server"
@@ -328,6 +513,8 @@ if $do_build; then
     echo "=== Build ==="
     echo "Sources: ${SOURCES_DIR}"
     echo "Bundles: ${HELPS_DIR}"
+    mapfile -t active_build_groups < <(selected_build_groups)
+    echo "Groups: ${active_build_groups[*]}"
     echo ""
     cd "${SCRIPT_DIR}"
     mkdir -p "${STATE_DIR}" "$(dirname "${HELPS_DIR}")"
@@ -335,29 +522,51 @@ if $do_build; then
     build_backup_dir="${HELPS_DIR}.prev.$$"
     rm -rf "${build_backup_dir}"
 
-    if ! "${PYTHON_BIN}" -m thelpviewer.converter --bundle --bundle-layout helps --clean "${SOURCES_DIR}" "${build_tmp_dir}"; then
+    mapfile -t build_roots < <(selected_build_source_roots "${active_build_groups[@]}")
+    if [ ${#build_roots[@]} -eq 0 ]; then
         rm -rf "${build_tmp_dir}"
-        echo "[thelp] build failed."
+        echo "[thelp] no matching source groups found under ${SOURCES_DIR}."
         exit 1
     fi
 
-    if [ ! -f "${build_tmp_dir}/catalog.json" ]; then
-        echo "[thelp] staged bundle build is missing catalog.json, rebuilding catalog."
-        "${PYTHON_BIN}" tools/rebuild_catalog.py "${build_tmp_dir}" --output "${build_tmp_dir}/catalog.json"
-    fi
-
-    if [ -e "${HELPS_DIR}" ]; then
-        mv "${HELPS_DIR}" "${build_backup_dir}"
-    fi
-    if ! mv "${build_tmp_dir}" "${HELPS_DIR}"; then
-        echo "[thelp] failed to activate new help bundles."
-        if [ -e "${build_backup_dir}" ]; then
-            mv "${build_backup_dir}" "${HELPS_DIR}" || true
+    for build_root in "${build_roots[@]}"; do
+        echo "[thelp] build root: ${build_root#${SOURCES_DIR}/}"
+        if ! "${PYTHON_BIN}" -m thelpviewer.converter --bundle --bundle-layout helps "${build_root}" "${build_tmp_dir}"; then
+            rm -rf "${build_tmp_dir}"
+            echo "[thelp] build failed."
+            exit 1
         fi
+    done
+
+    echo "[thelp] rebuilding staged catalog."
+    "${PYTHON_BIN}" tools/rebuild_catalog.py "${build_tmp_dir}" --output "${build_tmp_dir}/catalog.json"
+
+    if [ ${#build_groups[@]} -eq 0 ]; then
+        if [ -e "${HELPS_DIR}" ]; then
+            mv "${HELPS_DIR}" "${build_backup_dir}"
+        fi
+        if ! mv "${build_tmp_dir}" "${HELPS_DIR}"; then
+            echo "[thelp] failed to activate new help bundles."
+            if [ -e "${build_backup_dir}" ]; then
+                mv "${build_backup_dir}" "${HELPS_DIR}" || true
+            fi
+            rm -rf "${build_tmp_dir}"
+            exit 1
+        fi
+        rm -rf "${build_backup_dir}"
+    else
+        mkdir -p "${HELPS_DIR}"
+        remove_group_outputs "${HELPS_DIR}" "${active_build_groups[@]}"
+        while IFS= read -r -d '' staged_path; do
+            staged_name="$(basename "$staged_path")"
+            if [ "$staged_name" = "catalog.json" ]; then
+                continue
+            fi
+            mv "$staged_path" "${HELPS_DIR}/$staged_name"
+        done < <(find "${build_tmp_dir}" -mindepth 1 -maxdepth 1 -print0)
         rm -rf "${build_tmp_dir}"
-        exit 1
+        "${PYTHON_BIN}" tools/rebuild_catalog.py "${HELPS_DIR}" --output "${HELPS_DIR}/catalog.json"
     fi
-    rm -rf "${build_backup_dir}"
     echo "Build complete."
     echo ""
 fi

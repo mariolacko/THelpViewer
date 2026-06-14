@@ -17,6 +17,8 @@ RUNNER_MODULES = {
     "olddos": "thelpviewer.downloader.olddos",
     "github": "thelpviewer.downloader.github",
     "davep_ng": "thelpviewer.downloader.davep_ng",
+    "cheater_cz": "thelpviewer.downloader.cheater_cz",
+    "slunecnice": "thelpviewer.downloader.slunecnice",
 }
 
 

@@ -1,6 +1,6 @@
 # Downloader
 
-> Updated: 2026-04-09
+> Updated: 2026-06-14
 
 Automated downloader for DOS help-file sources.
 
@@ -8,7 +8,7 @@ The downloader is now split into three layers:
 
 1. `catalog.py` defines **what** logical product groups we want to fetch and
    how each source should search for them.
-2. `winworld.py`, `archiveorg.py`, `olddos.py`, `github.py`, `davep_ng.py` define **how**
+2. `winworld.py`, `archiveorg.py`, `olddos.py`, `github.py`, `davep_ng.py`, `cheater_cz.py`, `slunecnice.py` define **how**
    each concrete website is scraped and downloaded.
 3. `extractor.py` handles **all unpacking** through `unar`/`lsar`, including
    nested archives and disk images.
@@ -20,13 +20,16 @@ The downloader is now split into three layers:
 python3 -m thelpviewer.downloader
 
 # Only specific sites
-python3 -m thelpviewer.downloader --source winworld archiveorg
+python3 -m thelpviewer.downloader --source winworld archiveorg cheater_cz slunecnice
 
 # Positional selectors also work
 python3 -m thelpviewer.downloader tp olddos
 
 # Only specific logical products
-python3 -m thelpviewer.downloader --products tp tc ng qbx quickc masm
+python3 -m thelpviewer.downloader --products tp tc ng qbx quickc masm scorpion game-cheater
+
+# Game-Cheater 9.02 only
+./thelp.sh download game-cheater slunecnice
 
 # Preview only
 python3 -m thelpviewer.downloader --dry-run
@@ -40,7 +43,7 @@ configured product and skips anything already present in `downloads/` or
 
 | Option | Description |
 |--------|-------------|
-| `--source` | Sources to use: `winworld`, `archiveorg`, `olddos`, `github`, `davep_ng` |
+| `--source` | Sources to use: `winworld`, `archiveorg`, `olddos`, `github`, `davep_ng`, `cheater_cz`, `slunecnice` |
 | `--products` | Logical product groups from `thelpviewer/downloader/catalog.py` |
 | positional selectors | Short form for sources/products, e.g. `python3 -m thelpviewer.downloader tp olddos` |
 | `--out-dir` | Target directory for extracted help files |
@@ -51,7 +54,7 @@ configured product and skips anything already present in `downloads/` or
 
 `thelpviewer/downloader/catalog.py` is the single source of truth for:
 
-- logical product keys such as `tp`, `tc`, `bc`, `ng`, `qbx`, `quickc`, `masm`
+- logical product keys such as `tp`, `tc`, `bc`, `ng`, `qbx`, `quickc`, `masm`, `scorpion`, `game-cheater`
 - user-facing labels such as `Borland Turbo Pascal`
 - per-site search text
 - per-site machine parameters such as:
@@ -60,6 +63,10 @@ configured product and skips anything already present in `downloads/` or
   - old-dos category ids + filter keywords
   - direct base URL for mirrors
   - direct item/repository URLs when the exact source is known
+
+For Scorpions Cheater this now also includes the stable public DOS history page
+in `direct_urls`, while the provider still resolves each per-version gated file
+URL dynamically through `get-name.php` / `get-link.php`.
 
 This keeps “what we want” separate from provider code.
 
@@ -72,8 +79,23 @@ This keeps “what we want” separate from provider code.
 | `olddos.py` | old-dos.ru | Category pagination, detail-page download link lookup |
 | `github.py` | GitHub | Public repo directory listing via Contents API or direct repo path |
 | `davep_ng.py` | DaveP NG mirror | Plain `.ng` mirror download |
+| `cheater_cz.py` | Cheater.cz | DOS Scorpions Cheater version discovery, gated download resolution, versioned corpus collection |
+| `slunecnice.py` | Slunečnice.cz | Signed Game-Cheater URL discovery and extraction of `instgc.zip` plus embedded `INSTGC.EXE` |
 
 Each provider reads only its own source-specific config from `catalog.py`.
+
+`cheater_cz.py` is intentionally provider-specific: it keeps every DOS release in a
+separate version folder under `sources/Scorpions Cheater DOS/` and copies the raw
+Scorpion corpus artifacts (`.dat`, `.sco`, `.scx`, `.scd`). For the earliest
+releases where the corpus is embedded directly in executables, it falls back to
+preserving the `.exe` files so no DOS version is silently dropped.
+
+The same manifest also drives build-group selection in `thelp.sh`, so Scorpion's
+opt-in build behavior is no longer hardcoded only in the shell wrapper.
+
+`slunecnice.py` copies the eleven Game-Cheater database files into
+`sources/Game-Cheater/Game-Cheater 9.02/`. Build them with
+`./thelp.sh build --group=game-cheater`.
 
 ## Extraction
 

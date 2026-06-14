@@ -18,7 +18,9 @@ from .hlx_binary import HlxBinaryReader, is_hlx_binary
 from .ng import NGReader, is_ng_binary
 from .bw03 import BW03HelpReader, is_bw03_binary
 from .quickhelp import QuickHelpReader, is_quickhelp_binary
-from .scorpion_dat import ScorpionDatReader, is_scorpion_dat_binary
+from .game_cheater import GameCheaterReader, is_game_cheater_database
+from .scorpion_dat_reader import ScorpionDatReader, is_scorpion_dat_binary
+from .scorpion_reader import ScorpionReader, scorpion_version_hint_from_path
 from .software602 import Text602Reader, is_text602_binary
 from .tdh import TdhHelpReader, is_tdh_binary, is_tfh_binary, probe_tdh_binary, probe_tfh_binary
 
@@ -48,8 +50,12 @@ __all__ = [
     "is_bw03_binary",
     "QuickHelpReader",
     "is_quickhelp_binary",
+    "GameCheaterReader",
+    "is_game_cheater_database",
+    "ScorpionReader",
     "ScorpionDatReader",
     "is_scorpion_dat_binary",
+    "scorpion_version_hint_from_path",
     "Text602Reader",
     "is_text602_binary",
     "TdhHelpReader",

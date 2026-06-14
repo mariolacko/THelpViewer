@@ -52,6 +52,7 @@ described here is still plain JSON.
   "copyright":     "Copyright © 1990 Microsoft",
   "display":       { "cols": 76, "rows": 24 },
   "help_contents_topic_id": 3,
+  "show_topic_titles": true,
   "frozen_rows":   0,
   "language":      "en",
   "ui": {
@@ -78,6 +79,7 @@ described here is still plain JSON.
 | `display.cols` | integer | ❌ | Default display width in character columns. |
 | `display.rows` | integer | ❌ | Default display height in character rows. |
 | `help_contents_topic_id` | integer | ❌ | Source Help Contents / table-of-contents topic for the whole help file. This is distinct from the alphabetical help index. A viewer may expose this as a Help Contents button. |
+| `show_topic_titles` | boolean | ❌ | Whether the viewer should add `topic.title` above topic content. Default `true`; use `false` when source topic bodies already contain their own headings. |
 | `frozen_rows` | integer | ❌ | Number of lines from the top of each topic that stay fixed during scrolling (file-level default). Default `0`. |
 | `language` | string | ❌ | BCP 47 language tag for the help content, e.g. `"en"`, `"cs"`, `"de"`. Omit if unknown. |
 | `ui` | object | ❌ | Semantic viewer colors for this help file. Values are UHF2 color references resolved through `default_palette` / `palettes`. |
@@ -321,6 +323,9 @@ integer topic id `0`, but the canonical numeric value is always `topic.id`.
   "id":          42,
   "title":       "CHDRIVE Statement Details",
   "aliases":     { "ids": [10, 11], "strings": ["chdrive", "chdrive.details"] },
+  "tags": [
+    { "key": "source", "label": "Zdroj", "value": "Cheat-Pack" }
+  ],
   "is_help_contents": false,
   "nav": {
     "Obsah": { "action": "contents" },
@@ -340,6 +345,7 @@ integer topic id `0`, but the canonical numeric value is always `topic.id`.
 | `aliases` | object | ❌ | Optional alternative identifiers that also resolve to this topic. |
 | `aliases.ids` | array\<integer\> | ❌ | Alternative numeric topic ids. |
 | `aliases.strings` | array\<string\> | ❌ | Alternative symbolic aliases such as QuickHelp context strings. |
+| `tags` | array\<Tag Object\> | ❌ | Searchable topic attributes. A viewer may render them as links to all topics with the same exact `key` and `value`. |
 | `is_help_contents` | boolean | ❌ | `true` for the source Help Contents / table-of-contents topic. This is distinct from the alphabetical help index. Default `false`. |
 | `nav` | object | ❌ | Map of display label → Nav Item. Keys are source-provided labels to show in the viewer menu. Labels such as `Up`, `Next`, or `Back` are not reserved; use them only when the source help file uses them. |
 | `nav.<label>.file` | string | ❌ | Original source filename of another bundle to open first (for example `BAS7EX.HLP`). |
@@ -354,6 +360,23 @@ Each nav item should contain either `action` or a link target composed from any
 combination of `file`, `topic_id`, `alias`, and `line`.
 The viewer must not synthesize localized labels from `action`; the object key is
 the visible label.
+
+### 8.1 Tag Object
+
+```json
+{ "key": "publisher", "label": "Vydavatel", "value": "Apogee Software" }
+```
+
+| Field | Type | Required | Description |
+|---|---|:---:|---|
+| `key` | string | ✅ | Stable machine-readable category, for example `source` or `publisher`. |
+| `value` | string | ✅ | Exact facet value used for matching topics. |
+| `label` | string | ❌ | Human-readable category label. The viewer falls back to `key`. |
+
+Tags are structured metadata, not inline markup. Writers should normalize
+insignificant surrounding whitespace before emitting a value. Viewers should
+match both `key` and `value`; values from different categories must not be
+merged into one result list.
 
 ---
 

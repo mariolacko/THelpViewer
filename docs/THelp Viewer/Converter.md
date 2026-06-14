@@ -1,6 +1,6 @@
 # Converter
 
-> Updated: 2026-04-05
+> Updated: 2026-06-14
 
 Help file converter — reads binary and source help formats, exports to HTML, JSON bundles or Markdown.
 
@@ -35,6 +35,7 @@ python -m thelpviewer.converter TURBO.TPH output/ --dump-json
 | `--clean` | Delete target directory before exporting a directory tree |
 | `--dump-json` | Write `document.json` with the normalized HelpDocument model next to the exported files |
 | `--bundle` | Export as gzip-compressed `.json.gz` bundles for the SPA viewer instead of individual HTML files |
+| `--bundle-layout` | Bundle layout: `site` writes SPA assets + catalog, `helps` writes only bundle data |
 
 ## Architecture
 
@@ -69,7 +70,7 @@ All readers produce a single shared **HelpDocument** object:
 
 ```
 HelpDocument
-├── format_name: str         ("borland", "fbhf", "m602", "software602")
+├── format_name: str         ("borland", "fbhf", "m602", "software602", "scorpion-dat", "scorpion-legacy", "game-cheater")
 ├── source_name: str         ("TURBO.TPH")
 ├── topics: list[TopicRecord]
 │   ├── context_id: int
@@ -152,6 +153,9 @@ characters like ☺, ♥, ♦, ♣, ♠, •, ◘, etc.).
 | `m602.py` | Software602 M602 HelpSystem | `\x1a(c) Software602 HelpSystem` | Binary (XOR $FA encrypted) |
 | `hlx.py` | HLX/HL6 decompiled source text | `;SCREEN`/`;PAGE` directives | Text |
 | `fbhf.py` | TVHC-compatible `.txt` source | `.topic` directives | Text |
+| `game_cheater.py` + `game_cheater_bundle.py` | Game-Cheater 9.02 Pc-Fand database, split into cheats, companies, internet addresses, help and information bundles | `CHEATDBS.000`, 111-byte records | Binary |
+| `scorpion_dat_reader.py` | Scorpion's Cheater DAT 15-23 | Allegro DAT signature | Binary |
+| `scorpion_legacy_reader.py` + `_v1x/_v3x/_v4x` | Scorpion's Cheater legacy families 1-14 | version-aware path + extension hints | Binary |
 
 Each reader implements `read_bytes(data: bytes) → HelpDocument`.
 
@@ -188,5 +192,7 @@ See Formats for detailed binary format documentation:
 - [TurboVision FBHF](../Formats/TurboVision%20FBHF.md) — TP6, TP7, BP7 THelpFile
 - [Software602 M602](../Formats/Software602%20M602.md) — M602 Manager HelpSystem
 - [Software602 Text602](../Formats/Software602%20Text602.md) — Text602, Calc602
+- [Scorpion's Cheater DAT](../Formats/Scorpion%20Cheater%20DAT.md) — modern DAT 15-23 plus notes about legacy branches
+- [Game-Cheater Pc-Fand](../Formats/Game%20Cheater%20PC-Fand%20Format.md) — paired `.000`/`.T00` tables used by Game-Cheater 9.02
 - [Help Source Text Format](../Formats/Help%20Source%20Text%20Format.md) — HLX/TXT decompiled source format
 - [JSON Bundle](Bundle.md) — Transport format for SPA viewer

@@ -9,6 +9,9 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..base import HelpDocument
+from ..bundle_extensions import discover_bundle_source_groups, document_bundle_variants
+from ..bundle_types import BundleDocumentVariant, BundleSourceGroup
 from ..help_database import load_help_database, lookup_help_database_entry
 from ..exporter import iter_help_files, load_document, select_display_encoding, fix_metadata_encoding, _clean_dir
 from .json import HelpJsonRenderer
@@ -89,13 +92,11 @@ def export_bundle(
             document.metadata.setdefault("help_contents_topic_id", database_entry.help_contents_topic_id)
         if database_entry is not None and getattr(database_entry, "language", ""):
             document.metadata.setdefault("language", database_entry.language)
-        renderer = HelpJsonRenderer(document, display_encoding=chosen_encoding)
-
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
         display_name = document.display_name
         file_stem = _bundle_stem_for_entry(source_path, database_entry) if bundle_name is None else bundle_name
-        json_path = renderer.write_json_gz(target_dir / (file_stem + ".json.gz"))
+        json_path = _write_document_bundle(document, target_dir / (file_stem + ".json.gz"), chosen_encoding)
         print(f"[bundle] OK: {source_path.name} → {json_path.name} ({getattr(document, 'format_name', '?')})")
         return BundleResult(
             input_path=source_path,
@@ -120,6 +121,130 @@ def export_bundle(
             display_name=source_path.stem,
             source_files=(source_path.name,),
         )
+
+
+def _write_document_bundle(document: HelpDocument, json_path: Path, display_encoding: str) -> Path:
+    renderer = HelpJsonRenderer(document, display_encoding=display_encoding)
+    return renderer.write_json_gz(json_path)
+
+
+def _export_bundle_source_group(
+    group: BundleSourceGroup,
+    *,
+    bundle_dir: Path,
+    encoding: str,
+) -> BundleResult:
+    source_names = ", ".join(path.name for path in group.source_paths)
+    print(f"[bundle] Spracovávam: {source_names}")
+    documents = tuple(load_document(path) for path in group.source_paths)
+    chosen_encoding = select_display_encoding(
+        documents[0],
+        encoding=encoding,
+        source_hint=str(group.source_paths[0]),
+        source_path=group.source_paths[0],
+        help_database=load_help_database(),
+        database_entry=None,
+    )
+    for document in documents:
+        fix_metadata_encoding(document, chosen_encoding)
+
+    document = group.build_document(group.source_paths, documents)
+    json_path = _write_document_bundle(document, bundle_dir / f"{group.bundle_stem}.json.gz", chosen_encoding)
+    print(f"[bundle] OK: {source_names} → {json_path.name} ({getattr(document, 'format_name', '?')})")
+    return BundleResult(
+        input_path=group.source_paths[0],
+        json_path=json_path,
+        format_name=document.format_name,
+        topic_count=len(document.topics),
+        display_name=document.display_name,
+        source_files=tuple(path.name for path in group.source_paths),
+    )
+
+
+def _apply_bundle_metadata(
+    document: HelpDocument,
+    *,
+    collection_name: str | None,
+    title_override: str | None,
+    database_entry,
+) -> None:
+    if isinstance(collection_name, str) and collection_name.strip():
+        document.metadata["collection"] = collection_name.strip()
+    if isinstance(title_override, str) and title_override.strip():
+        document.metadata["title"] = title_override.strip()
+    if database_entry is not None and getattr(database_entry, "help_contents_topic_id", None) is not None:
+        document.metadata.setdefault("help_contents_topic_id", database_entry.help_contents_topic_id)
+    if database_entry is not None and getattr(database_entry, "language", ""):
+        document.metadata.setdefault("language", database_entry.language)
+
+
+def _export_pending_bundle_variants(
+    pending: _PendingBundleExport,
+    *,
+    encoding: str,
+) -> list[BundleResult]:
+    source_path = pending.source_path
+    print(f"[bundle] Spracovávam: {source_path.name}")
+    try:
+        document = load_document(source_path)
+        chosen_encoding = select_display_encoding(
+            document,
+            encoding=encoding,
+            source_hint=str(source_path),
+            source_path=source_path,
+            help_database=load_help_database(),
+            database_entry=pending.database_entry,
+        )
+        fix_metadata_encoding(document, chosen_encoding)
+        db_entry = pending.database_entry
+        _apply_bundle_metadata(
+            document,
+            collection_name=db_entry.collection if db_entry else None,
+            title_override=db_entry.title if db_entry else None,
+            database_entry=db_entry,
+        )
+
+        variants = document_bundle_variants(document) or [
+            BundleDocumentVariant(bundle_stem=pending.bundle_stem, document=document)
+        ]
+        results: list[BundleResult] = []
+        for variant in variants:
+            variant_document = variant.document
+            json_path = _write_document_bundle(
+                variant_document,
+                pending.bundle_dir / f"{variant.bundle_stem}.json.gz",
+                chosen_encoding,
+            )
+            print(
+                f"[bundle] OK: {source_path.name} → {json_path.name} "
+                f"({getattr(variant_document, 'format_name', '?')})"
+            )
+            results.append(
+                BundleResult(
+                    input_path=source_path,
+                    json_path=json_path,
+                    format_name=variant_document.format_name,
+                    topic_count=len(variant_document.topics),
+                    display_name=variant_document.display_name,
+                    source_files=variant.source_files
+                    or tuple(getattr(db_entry, "filenames", ()) or (source_path.name,)),
+                )
+            )
+        return results
+    except Exception as e:
+        import traceback
+        print(f"[bundle] CHYBA: {source_path.name} — {e}")
+        traceback.print_exc()
+        return [
+            BundleResult(
+                input_path=source_path,
+                json_path=pending.bundle_path,
+                format_name="ERROR",
+                topic_count=0,
+                display_name=source_path.stem,
+                source_files=(source_path.name,),
+            )
+        ]
 
 
 def _build_pending_bundle_export(
@@ -201,7 +326,17 @@ def export_bundle_tree(
     seen_crc32: set[int] = set()
     topic_count_cache: dict[Path, int] = {}
     pending_exports: dict[Path, _PendingBundleExport] = {}
-    for path in iter_help_files(source_root):
+    help_paths = iter_help_files(source_root)
+    source_groups = discover_bundle_source_groups(help_paths)
+    grouped_source_members = {
+        path
+        for group in source_groups
+        for path in group.source_paths
+    }
+
+    for path in help_paths:
+        if path in grouped_source_members:
+            continue
         db_entry = lookup_help_database_entry(path, help_database)
         pending = _build_pending_bundle_export(
             path,
@@ -227,17 +362,39 @@ def export_bundle_tree(
         pending_exports[pending.bundle_path] = pending
 
     for pending in pending_exports.values():
-        db_entry = pending.database_entry
-        result = export_bundle(
-            pending.source_path,
-            pending.bundle_dir,
-            encoding=encoding,
-            bundle_name=pending.bundle_stem,
-            collection_name=db_entry.collection if db_entry else None,
-            title_override=db_entry.title if db_entry else None,
-            database_entry=db_entry,
-        )
-        results.append(result)
+        results.extend(_export_pending_bundle_variants(pending, encoding=encoding))
+    for group in source_groups:
+        try:
+            first_pending = _build_pending_bundle_export(
+                group.source_paths[0],
+                source_root=source_root,
+                helps_dir=helps_dir,
+                database_entry=None,
+            )
+            results.append(
+                _export_bundle_source_group(
+                    group,
+                    bundle_dir=first_pending.bundle_dir,
+                    encoding=encoding,
+                )
+            )
+        except Exception as e:
+            import traceback
+            description = group.description or group.bundle_stem
+            print(f"[bundle] CHYBA: {description} — {e}")
+            traceback.print_exc()
+            results.append(
+                BundleResult(
+                    input_path=group.source_paths[0],
+                    json_path=helps_dir
+                    / group.source_paths[0].parent.relative_to(source_root)
+                    / f"{group.bundle_stem}.json.gz",
+                    format_name="ERROR",
+                    topic_count=0,
+                    display_name=description,
+                    source_files=tuple(path.name for path in group.source_paths),
+                )
+            )
 
     # Build catalog.json in the helps/ directory.
     catalog = []
@@ -352,14 +509,14 @@ def _render_bundle_index_html() -> str:
 <meta name="twitter:image" content="{SITE_ASSET_DIR_NAME}/Thelp.png">
 <meta name="theme-color" content="#000080">
 <meta name="GENERATOR" content="THelp Viewer Converter {GENERATOR_VERSION}">
-<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260511b">
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20260511d"></script>
+<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260602d">
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20260602b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js?v=20260506a"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20260506a"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20260612a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20260506a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20260506a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20260507b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260511c"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260612b"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"

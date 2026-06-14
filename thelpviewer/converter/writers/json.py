@@ -18,11 +18,11 @@ SOURCE_FORMAT_BY_READER: dict[str, str] = {
     "borland": "thelp",
     "calc602": "text602",
     "fbhf": "fbhf",
+    "game-cheater": "pc-fand",
     "hlx": "hlx",
     "m602": "m602",
     "norton-guide": "norton-guide",
     "quickhelp": "quickhelp",
-    "scorpion-dat": "scorpion-dat",
     "software602": "m602",
     "tdh": "tdh",
     "tfh": "tfh",
@@ -34,6 +34,7 @@ TRANSPORT_METADATA_KEYS: tuple[str, ...] = (
     "hlx_family",
     "index_navigation_order",
     "control_byte_dominant",
+    "record_count",
     "pointer_count",
     "topic_count",
     "index_record_count",
@@ -50,6 +51,24 @@ TRANSPORT_METADATA_KEYS: tuple[str, ...] = (
 TRANSPORT_METADATA_LIST_KEYS: tuple[str, ...] = (
     "control_byte_dominant",
 )
+
+TRANSPORT_METADATA_STRUCT_KEYS: tuple[str, ...] = ()
+TRANSPORT_METADATA_KEY_LIST = "transport_metadata_keys"
+
+
+def _extra_transport_metadata_keys(meta: dict[str, object]) -> list[str]:
+    value = meta.get(TRANSPORT_METADATA_KEY_LIST)
+    if not isinstance(value, (list, tuple)):
+        return []
+    keys: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        key = item.strip()
+        if not key or key == TRANSPORT_METADATA_KEY_LIST or key in keys:
+            continue
+        keys.append(key)
+    return keys
 
 class HelpJsonRenderer:
     """Render one ``HelpDocument`` as a UHF 2.0 JSON structure."""
@@ -127,15 +146,22 @@ class HelpJsonRenderer:
 
     def _build_metadata(self) -> dict[str, object]:
         meta = self.document.metadata or {}
+        source_metadata: dict[str, object] = {
+            "filename": Path(self.document.source_name).name,
+            "format": self._source_format(),
+            "encoding": self._source_encoding(),
+        }
         payload: dict[str, object] = {
             "name": self._metadata_name(),
             "encoding": "utf-8",
-            "source": {
-                "filename": Path(self.document.source_name).name,
-                "format": self._source_format(),
-                "encoding": self._source_encoding(),
-            },
+            "source": source_metadata,
         }
+
+        source_date = meta.get("source_date")
+        if isinstance(source_date, str):
+            cleaned_source_date = source_date.strip()
+            if cleaned_source_date:
+                source_metadata["date"] = cleaned_source_date
 
         author = self._metadata_author()
         if author:
@@ -150,6 +176,8 @@ class HelpJsonRenderer:
         if not isinstance(cols, int):
             cols = meta.get("display_width")
         rows = meta.get("height")
+        if self._source_format() == "quickhelp" and isinstance(cols, int) and cols > 100:
+            cols = None
         if isinstance(cols, int) and cols > 0:
             display["cols"] = cols
         if isinstance(rows, int) and rows > 0:
@@ -173,12 +201,39 @@ class HelpJsonRenderer:
         if isinstance(frozen_rows, int) and frozen_rows > 0:
             payload["frozen_rows"] = frozen_rows
 
+        emitted_metadata_keys: set[str] = set()
+
         for key in TRANSPORT_METADATA_KEYS:
             value = meta.get(key)
             if isinstance(value, (str, int, float, bool)):
                 payload[key] = value
-            elif key in TRANSPORT_METADATA_LIST_KEYS and isinstance(value, list):
+                emitted_metadata_keys.add(key)
+
+        for key in TRANSPORT_METADATA_LIST_KEYS:
+            value = meta.get(key)
+            if isinstance(value, list):
                 payload[key] = list(value)
+                emitted_metadata_keys.add(key)
+
+        for key in TRANSPORT_METADATA_STRUCT_KEYS:
+            value = meta.get(key)
+            if isinstance(value, list):
+                payload[key] = [dict(item) if isinstance(item, dict) else item for item in value]
+                emitted_metadata_keys.add(key)
+            elif isinstance(value, dict):
+                payload[key] = dict(value)
+                emitted_metadata_keys.add(key)
+
+        for key in _extra_transport_metadata_keys(meta):
+            if key in emitted_metadata_keys:
+                continue
+            value = meta.get(key)
+            if isinstance(value, (str, int, float, bool)):
+                payload[key] = value
+            elif isinstance(value, list):
+                payload[key] = [dict(item) if isinstance(item, dict) else item for item in value]
+            elif isinstance(value, dict):
+                payload[key] = dict(value)
 
         return payload
 
@@ -341,6 +396,8 @@ class HelpJsonRenderer:
             aliases = self._build_topic_aliases(topic)
             if aliases:
                 topic_payload["aliases"] = aliases
+            if topic.tags:
+                topic_payload["tags"] = [tag.to_dict() for tag in topic.tags]
             if topic.is_help_contents:
                 topic_payload["is_help_contents"] = True
             if topic.frozen_rows > 0:

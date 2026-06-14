@@ -15,7 +15,8 @@ from .readers.m602 import M602HelpReader, is_m602_binary
 from .readers.thelp import ThelpHelpReader, is_thelp_binary
 from .readers.ng import NGReader, is_ng_binary
 from .readers.quickhelp import QuickHelpReader, is_quickhelp_binary
-from .readers.scorpion_dat import ScorpionDatReader, is_scorpion_dat_binary
+from .readers.game_cheater import GameCheaterReader, is_game_cheater_database
+from .readers.scorpion_reader import ScorpionReader, detect_scorpion_reader_family
 from .readers.software602 import Text602Reader, is_text602_binary
 from .readers.tdh import TdhHelpReader, is_tdh_binary, is_tfh_binary
 from .codepages import decode_bytes, guess_display_encoding, is_czech_encoding_hint
@@ -84,6 +85,10 @@ def _load_quickhelp(path: Path, data: bytes) -> HelpDocument:
     return _build_reader_document(QuickHelpReader, path, data)
 
 
+def _load_game_cheater(path: Path, data: bytes) -> HelpDocument:
+    return _build_reader_document(GameCheaterReader, path, data)
+
+
 def _load_thelp(path: Path, data: bytes) -> HelpDocument:
     return _build_reader_document(ThelpHelpReader, path, data)
 
@@ -92,8 +97,8 @@ def _load_tdh(path: Path, data: bytes) -> HelpDocument:
     return _build_reader_document(TdhHelpReader, path, data)
 
 
-def _load_scorpion_dat(path: Path, data: bytes) -> HelpDocument:
-    return _build_reader_document(ScorpionDatReader, path, data)
+def _load_scorpion(path: Path, data: bytes) -> HelpDocument:
+    return _build_reader_document(ScorpionReader, path, data)
 
 
 def _load_fbhf_binary(path: Path, data: bytes) -> HelpDocument:
@@ -152,10 +157,22 @@ FORMAT_HANDLERS: tuple[FormatHandler, ...] = (
         load=_load_quickhelp,
     ),
     FormatHandler(
+        name="game-cheater",
+        source_kind="compiled",
+        matches=is_game_cheater_database,
+        load=_load_game_cheater,
+    ),
+    FormatHandler(
+        name="scorpion-legacy",
+        source_kind="compiled",
+        matches=lambda path, data: detect_scorpion_reader_family(path, data) == "legacy",
+        load=_load_scorpion,
+    ),
+    FormatHandler(
         name="scorpion-dat",
         source_kind="compiled",
-        matches=lambda path, data: path.suffix.lower() == ".dat" and is_scorpion_dat_binary(data),
-        load=_load_scorpion_dat,
+        matches=lambda path, data: detect_scorpion_reader_family(path, data) == "dat",
+        load=_load_scorpion,
     ),
     FormatHandler(
         name="tdh",

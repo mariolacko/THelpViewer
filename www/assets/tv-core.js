@@ -1998,13 +1998,28 @@ function getMenuPopupScrollbarParts(popup) {
     if (!popup) {
         return null;
     }
-    const body = popup.querySelector(".tv-menu-popup-body");
-    const scrollbar = popup.querySelector("[data-tv-menu-scrollbar]");
-    const track = popup.querySelector("[data-tv-menu-scroll-track]");
-    const cells = popup.querySelector("[data-tv-menu-scroll-cells]");
-    const thumb = popup.querySelector("[data-tv-menu-scroll-thumb]");
-    const backward = popup.querySelector("[data-tv-menu-scroll-backward]");
-    const forward = popup.querySelector("[data-tv-menu-scroll-forward]");
+    const main = Array.from(popup.children).find((node) => node.classList?.contains("tv-menu-popup-main")) || null;
+    const body = main
+        ? Array.from(main.children).find((node) => node.classList?.contains("tv-menu-popup-body")) || null
+        : null;
+    const scrollbar = main
+        ? Array.from(main.children).find((node) => node.hasAttribute?.("data-tv-menu-scrollbar")) || null
+        : null;
+    const track = scrollbar
+        ? Array.from(scrollbar.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-track")) || null
+        : null;
+    const cells = track
+        ? Array.from(track.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-cells")) || null
+        : null;
+    const thumb = track
+        ? Array.from(track.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-thumb")) || null
+        : null;
+    const backward = scrollbar
+        ? Array.from(scrollbar.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-backward")) || null
+        : null;
+    const forward = scrollbar
+        ? Array.from(scrollbar.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-forward")) || null
+        : null;
     return body && scrollbar && track && cells && thumb && backward && forward
         ? { body, scrollbar, track, cells, thumb, backward, forward }
         : null;
@@ -2180,6 +2195,8 @@ function resetMenuPopupLayout(popup) {
     }
     bindMenuPopupScrollbar(popup);
     popup.classList.remove("is-scrollable");
+    popup.style.position = "";
+    popup.style.left = "";
     popup.style.top = "";
     popup.style.maxHeight = "";
     const body = popup.querySelector(".tv-menu-popup-body");
@@ -2201,15 +2218,21 @@ function fitMenuPopupToViewport(root, popup) {
         return;
     }
     bindMenuPopupScrollbar(popup);
-    const cellHeight = measureCells().height || 16;
+    const cell = measureCells();
+    const cellHeight = cell.height || 16;
+    const cellWidth = cell.width || 8;
     const rootRect = root.getBoundingClientRect();
-    const parentPopupRect = root.matches("[data-tv-submenu-root]")
+    const isSubmenu = root.matches("[data-tv-submenu-root]");
+    const parentPopupRect = isSubmenu
         ? root.closest(".tv-menu-popup")?.getBoundingClientRect() || null
         : null;
-    const defaultTop = root.matches("[data-tv-submenu-root]") ? -cellHeight : rootRect.height;
+    const defaultTop = isSubmenu ? rootRect.top - cellHeight : rootRect.height;
+    const defaultLeft = isSubmenu ? rootRect.right - cellWidth : 0;
     const body = popup.querySelector(".tv-menu-popup-body");
 
     popup.classList.remove("is-scrollable");
+    popup.style.position = isSubmenu ? "fixed" : "";
+    popup.style.left = isSubmenu ? `${Math.round(defaultLeft)}px` : "";
     popup.style.top = `${defaultTop}px`;
     popup.style.maxHeight = "";
     if (body) {
@@ -2238,17 +2261,44 @@ function fitMenuPopupToViewport(root, popup) {
         popupRect = popup.getBoundingClientRect();
     }
 
-    let nextTop = defaultTop;
-    const minTop = minGlobalTop - rootRect.top;
-    const maxTop = minGlobalTop + maxPopupHeight - rootRect.top - popupRect.height;
-    if (nextTop > maxTop) {
-        nextTop = maxTop;
-    }
-    if (nextTop < minTop) {
-        nextTop = minTop;
-    }
+    if (isSubmenu) {
+        let nextTop = defaultTop;
+        const minTop = minGlobalTop;
+        const maxTop = minGlobalTop + maxPopupHeight - popupRect.height;
+        if (nextTop > maxTop) {
+            nextTop = maxTop;
+        }
+        if (nextTop < minTop) {
+            nextTop = minTop;
+        }
 
-    popup.style.top = `${Math.round(nextTop)}px`;
+        let nextLeft = defaultLeft;
+        if (nextLeft + popupRect.width > window.innerWidth) {
+            nextLeft = rootRect.left + cellWidth - popupRect.width;
+        }
+        const minLeft = 0;
+        const maxLeft = Math.max(0, window.innerWidth - popupRect.width);
+        if (nextLeft < minLeft) {
+            nextLeft = minLeft;
+        }
+        if (nextLeft > maxLeft) {
+            nextLeft = maxLeft;
+        }
+
+        popup.style.left = `${Math.round(nextLeft)}px`;
+        popup.style.top = `${Math.round(nextTop)}px`;
+    } else {
+        let nextTop = defaultTop;
+        const minTop = minGlobalTop - rootRect.top;
+        const maxTop = minGlobalTop + maxPopupHeight - rootRect.top - popupRect.height;
+        if (nextTop > maxTop) {
+            nextTop = maxTop;
+        }
+        if (nextTop < minTop) {
+            nextTop = minTop;
+        }
+        popup.style.top = `${Math.round(nextTop)}px`;
+    }
     syncMenuPopupScrollbar(popup);
     window.requestAnimationFrame(() => {
         if (!popup.hidden) {

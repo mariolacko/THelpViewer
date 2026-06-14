@@ -6,13 +6,21 @@ __version__ = "1.0.0"
 
 from pathlib import Path
 
-from .base import CommentRecord, HelpDocument, HelpReaderBase, IndexEntry, TopicRecord
+from .base import (
+    CommentRecord,
+    HelpDocument,
+    HelpReaderBase,
+    IndexEntry,
+    TopicRecord,
+    TopicTag,
+)
 from .readers.bw03 import BW03HelpReader, is_bw03_binary
 from .readers.hlx import HlxHelpReader, HlxSourceParser, detect_hlx_source_format, is_hlx_source
 from .readers.m602 import M602HelpReader, is_m602_binary
 from .readers.thelp import ThelpHelpReader, is_thelp_binary
 from .readers.tdh import TdhHelpReader, is_tdh_binary, is_tfh_binary
-from .readers.scorpion_dat import ScorpionDatReader, is_scorpion_dat_binary
+from .readers.scorpion_dat_reader import ScorpionDatReader, is_scorpion_dat_binary
+from .readers.scorpion_reader import ScorpionReader, scorpion_version_hint_from_path
 from .codepages import guess_display_encoding
 from .exporter import (
     ExportResult,
@@ -45,10 +53,12 @@ __all__ = [
     "HlxSourceParser",
     "IndexEntry",
     "M602HelpReader",
+    "ScorpionReader",
     "ScorpionDatReader",
     "TdhHelpReader",
     "ThelpHelpReader",
     "TopicRecord",
+    "TopicTag",
     "detect_hlx_source_format",
     "export_bundle",
     "export_bundle_tree",
@@ -61,6 +71,7 @@ __all__ = [
     "is_hlx_source",
     "is_m602_binary",
     "is_scorpion_dat_binary",
+    "scorpion_version_hint_from_path",
     "is_thelp_binary",
     "is_tdh_binary",
     "is_tfh_binary",

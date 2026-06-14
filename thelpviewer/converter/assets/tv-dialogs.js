@@ -1034,7 +1034,10 @@ class TVSearchDialog extends TVDialog {
 
         this.input.addEventListener("input", () => this.renderResults(this.input.value));
         this.resultsBox.bind({
-            onSelect: (_entry, index) => this.selectIndex(index),
+            onSelect: (_entry, index) => {
+                this.selectIndex(index);
+                this.openSelected();
+            },
             onActivate: (_entry, index) => {
                 this.selectIndex(index);
                 this.openSelected();

@@ -26,7 +26,8 @@ interactive web application with authentic DOS look and feel.
 | **Software602 M602** | M602 Manager (XOR $FA encrypted) | `.HLP` |
 | **Software602 Text602** | Text602, Calc602 word processors | `.HLP` |
 | **HLX/HL6 text** | Decompiled text format (round-trip capable) | `.hlx`, `.hl6` |
-| **Scorpion DAT (experimental)** | Scorpion's Cheater 23.0 content databases | `.dat` |
+| **Scorpion's Cheater legacy / DAT (experimental)** | Scorpion's Cheater 1-23 (`legacy` 1-14, modern DAT 15-23) | `.exe`, `.dat`, `.sco`, `.scd`, `.scx` |
+| **Game-Cheater Pc-Fand** | Game-Cheater 9.02 cheat, company, URL, help and database tables | paired `.000`, `.T00` files |
 
 Borland TDH/TFH runtime help is decoded for the current known TDH 1.0, later
 TDH 2.x, and TFH sample families.
@@ -101,7 +102,7 @@ THelpViewer/
 │   └── assets/             ←   JS, CSS, fonts, images
 ├── thelpviewer/            ← Unified Python package root
 │   ├── converter/          ←   help converter package
-│   │   ├── readers/        ←     format readers (thelp, tdh, bw03, quickhelp, ng, fbhf, hlx, m602, scorpion_dat)
+│   │   ├── readers/        ←     format readers (thelp, tdh, bw03, quickhelp, ng, fbhf, hlx, m602, scorpion)
 │   │   ├── writers/        ←     output writers (html, uhf json, bundle, md)
 │   │   ├── base.py         ←     shared data model (HelpDocument, TopicRecord, …)
 │   │   ├── codepages.py    ←     encoding tables (CP437, CP852, Kamenický)
@@ -175,10 +176,21 @@ Measured on the current generated UHF 2.0 payloads:
 
 1. The **downloader** (`python3 -m thelpviewer.downloader`) reads one shared manifest of
    logical products and fetches them via provider-specific downloaders
-   (WinWorldPC, archive.org, old-dos.ru, GitHub, DaveP NG mirror) into `sources/`
+   (WinWorldPC, archive.org, old-dos.ru, GitHub, DaveP NG mirror, Cheater.cz) into `sources/`
    When called without selectors it downloads everything it knows about and skips
    files already present in `downloads/` or `sources/`
-2. `thelp.sh build` runs the converter over all files in `sources/`
+
+The downloader now also manages the full published DOS Scorpions Cheater corpus.
+Those releases are stored under `sources/Scorpions Cheater DOS/` in per-version
+subdirectories so DAT-era and pre-DAT-era builds can coexist without overwriting
+each other.
+2. `thelp.sh build` runs the converter over manifest-backed build groups resolved
+   from `thelpviewer/downloader/catalog.py`. The default build still covers
+   `borland`, `microsoft`, `norton-guides`, and `software602`, while the
+   Scorpions Cheater group remains opt-in and can be generated later with
+   `./thelp.sh build group=scorpion`. The same grouped build path also works for
+   other families such as `group=borland`, `group=microsoft`,
+   `group=norton-guides`, or `group=all`.
 3. Each help file is parsed and rendered into a UHF 2.0 JSON payload containing
    structured topics, index entries, and metadata
 4. The JSON payload is gzip-compressed into a `.json.gz` bundle for web transport

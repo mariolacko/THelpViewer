@@ -130,6 +130,22 @@ class TopicNavItem:
 
 
 @dataclass(slots=True)
+class TopicTag:
+    """One searchable topic attribute shown as a clickable tag."""
+
+    key: str
+    value: str
+    label: str = ""
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a JSON-safe view of one topic tag."""
+        payload = {"key": self.key, "value": self.value}
+        if self.label:
+            payload["label"] = self.label
+        return payload
+
+
+@dataclass(slots=True)
 class TopicRecord:
     """One logical help topic with raw text and hyperlink metadata."""
 
@@ -154,6 +170,7 @@ class TopicRecord:
     quickhelp_is_list: bool = False
     quickhelp_is_popup: bool = False
     uhf_content: list[str] = field(default_factory=list)
+    tags: list[TopicTag] = field(default_factory=list)
 
     def to_dict(self, text_encoding: str = "latin1") -> dict[str, object]:
         """Return a JSON-safe view of one normalized help topic."""
@@ -176,6 +193,7 @@ class TopicRecord:
             "code_line_indices": sorted(self.code_line_indices),
             "frozen_rows": self.frozen_rows,
             "uhf_content": list(self.uhf_content),
+            "tags": [tag.to_dict() for tag in self.tags],
         }
         if self.quickhelp_category_nav is not None:
             payload["quickhelp_category_nav"] = self.quickhelp_category_nav.to_dict()

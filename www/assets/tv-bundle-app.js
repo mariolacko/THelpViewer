@@ -196,6 +196,20 @@ function bundleLoadingLabel(value, fallback = "") {
     return text.split("/").pop() || text;
 }
 
+function bundleDisplayLayout(bundle) {
+    const display = ((bundle.metadata || {}).display) || {};
+    let cols = Number.isInteger(display.cols) && display.cols > 0 ? display.cols : null;
+    const rows = Number.isInteger(display.rows) && display.rows > 0 ? display.rows : null;
+
+    // QuickHelp 2.50 stores a 160-column screen hint that is not the intended
+    // outer help-window width. Treat it as source metadata, not fixed layout.
+    if (bundleSourceFormat(bundle) === "quickhelp" && Number.isInteger(cols) && cols > 100) {
+        cols = null;
+    }
+
+    return { cols, rows };
+}
+
 function bundleTitle(bundle) {
     return ((bundle.metadata || {}).name) || "Help";
 }
@@ -253,7 +267,7 @@ function wrapBundleContent(bundle, contentHTML) {
 }
 
 function bundleWindowSpec(bundle) {
-    const display = ((bundle.metadata || {}).display) || {};
+    const display = bundleDisplayLayout(bundle);
     let cols = 82;
     let rows = 24;
     const hasExplicitCols = Number.isInteger(display.cols) && display.cols > 0;
@@ -273,7 +287,7 @@ function bundleWindowSpec(bundle) {
 }
 
 function bundleUsesFixedTopicLayout(bundle) {
-    const display = ((bundle.metadata || {}).display) || {};
+    const display = bundleDisplayLayout(bundle);
     return Number.isInteger(display.cols) && display.cols > 0;
 }
 
@@ -433,6 +447,33 @@ function bundleCanShowContents(bundle) {
 
 function bundleCanShowHelpContentsTopic(bundle) {
     return !!bundleHelpContentsTopicRef(bundle);
+}
+
+function resolveMissingSourceTopicFallback(bundle, sourceFile, topicRef) {
+    const localRef = bundle ? normalizeTopicRef(bundle, topicRef) : null;
+    if (localRef) {
+        return { type: "topic", ref: localRef };
+    }
+
+    if (!bundle || bundleSourceFormat(bundle) !== "quickhelp") {
+        return null;
+    }
+
+    const normalizedSource = normalizeSourceFileName(sourceFile);
+    const normalizedTopic = normalizeTopicAlias(topicRef);
+    if (!normalizedTopic) {
+        return null;
+    }
+    if (/(^|[!:])(?:[a-z0-9_.-]+\.)?contents$/.test(normalizedTopic)) {
+        return { type: "contents" };
+    }
+    if (/(^|[!:])(?:[a-z0-9_.-]+\.)?index$/.test(normalizedTopic)) {
+        return { type: "index" };
+    }
+    if ((normalizedSource === "qc.hlp" || normalizedSource === "qc") && /\.lst(?:v\d+)?(?:$|[!:])/.test(normalizedTopic)) {
+        return { type: "contents" };
+    }
+    return null;
 }
 
 function isUhfCodeStart(line) {
@@ -1120,14 +1161,54 @@ function renderUhfTopicLines(topic, bundle) {
     return lines;
 }
 
+function normalizedTopicTags(topic) {
+    const tags = Array.isArray(topic && topic.tags) ? topic.tags : [];
+    return tags.flatMap((tag) => {
+        if (!tag || typeof tag !== "object") { return []; }
+        const key = String(tag.key || "").trim();
+        const value = String(tag.value || "").trim();
+        if (!key || !value) { return []; }
+        const label = String(tag.label || key).trim() || key;
+        return [{ key, value, label }];
+    });
+}
+
+function renderTopicTags(topic) {
+    const tags = normalizedTopicTags(topic);
+    if (!tags.length) { return ""; }
+    const links = tags.map((tag) => {
+        const attrs = renderHtmlAttributes({
+            href: "#",
+            "data-tv-topic-tag-key": tag.key,
+            "data-tv-topic-tag-value": tag.value,
+            "data-tv-topic-tag-label": tag.label,
+        });
+        return [
+            '<span class="tv-topic-tag">',
+            `<span class="tv-topic-tag-label">${escapeHtml(tag.label)}:</span> `,
+            `<a ${attrs}>${escapeHtml(tag.value)}</a>`,
+            "</span>",
+        ].join("");
+    });
+    return `<div class="tv-topic-tags">${links.join("\n")}</div>`;
+}
+
 function renderUhfTopic(topic, bundle) {
     const lines = renderUhfTopicLines(topic, bundle);
+    const title = bundleTopicTitle(bundle, topic);
+    const metadata = bundle && typeof bundle === "object" ? (bundle.metadata || {}) : {};
+    const titleHTML = title && metadata.show_topic_titles !== false
+        ? `<div class="tv-topic-heading">${escapeHtml(title)}</div>`
+        : "";
+    const tagHTML = renderTopicTags(topic);
     const frozenRows = Math.min(bundleFrozenRows(bundle, topic), lines.length);
     const fixedLayoutClass = bundleUsesFixedTopicLayout(bundle) ? " tv-topic-pre-fixed" : "";
     if (frozenRows > 0) {
         const frozenLines = lines.slice(0, frozenRows);
         const bodyLines = lines.slice(frozenRows);
         const html = [
+            titleHTML,
+            tagHTML,
             '<div class="tv-topic-shell">',
             `<pre class="tv-pre tv-topic-pre${fixedLayoutClass} tv-topic-pre-frozen">`,
             ...frozenLines,
@@ -1145,6 +1226,8 @@ function renderUhfTopic(topic, bundle) {
     }
 
     return [
+        titleHTML,
+        tagHTML,
         `<pre class="tv-pre tv-topic-pre${fixedLayoutClass}">`,
         "",
         ...lines,
@@ -1188,6 +1271,9 @@ function buildUhfSearchIndex(bundle) {
             if (compact) {
                 bodyLines.push(compact);
             }
+        });
+        normalizedTopicTags(topic).forEach((tag) => {
+            bodyLines.push(normalizeSearchText(`${tag.label}: ${tag.value}`));
         });
 
         let preview = bodyLines.slice(0, 3).join(" ").trim();
@@ -1290,7 +1376,6 @@ class TVLoadingDialog {
         this.openedAt = performance.now();
         this.progressUpdates = 0;
         this._renderRatio(0, 1);
-        this._startIndeterminate();
         this.dialog.open();
     }
 
@@ -1298,7 +1383,6 @@ class TVLoadingDialog {
         if (received > 0) {
             this.progressUpdates += 1;
         }
-        this._stopIndeterminate();
         this._renderRatio(received, total);
     }
 
@@ -1455,8 +1539,10 @@ function renderBundleIndex(bundle) {
 
     return [
         `<div class="tv-document tv-index-document">`,
+        `<div class="tv-index-frozen">`,
         `<div class="tv-index-heading">Index</div>`,
         `<nav class="tv-index-nav">${navItems.join("")}</nav>`,
+        `</div>`,
         ...sections,
         `</div>`,
     ].join("\n");
@@ -1500,6 +1586,28 @@ function renderBundleContents(bundle) {
         renderContentsNodes(nodes),
         `</div>`,
         `</div>`,
+    ].join("\n");
+}
+
+function renderBundleTagTopics(bundle, key, value, label) {
+    const topics = bundleTopicList(bundle).filter((topic) => (
+        normalizedTopicTags(topic).some((tag) => tag.key === key && tag.value === value)
+    ));
+    const entries = topics.map((topic) => {
+        const attrs = renderHtmlAttributes({
+            href: "#",
+            "data-tv-bundle-topic": topic.id,
+        });
+        return `<div class="tv-index-entry"><a ${attrs}>${escapeHtml(bundleTopicTitle(bundle, topic))}</a></div>`;
+    });
+    if (!entries.length) {
+        entries.push('<div class="tv-index-empty">No matching topics.</div>');
+    }
+    return [
+        '<div class="tv-document tv-index-document tv-tag-document">',
+        `<div class="tv-index-heading">${escapeHtml(label || key)}: ${escapeHtml(value)}</div>`,
+        ...entries,
+        "</div>",
     ].join("\n");
 }
 
@@ -1571,6 +1679,8 @@ class BundleWindowManager {
         this.currentBundle = null;
         this.currentContextHex = null;
         this.currentLineNumber = null;
+        this.currentView = "index";
+        this.currentTag = null;
     }
 
     showIndex(bundle) {
@@ -1587,6 +1697,8 @@ class BundleWindowManager {
         this.currentBundle = bundle;
         this.currentContextHex = null;
         this.currentLineNumber = null;
+        this.currentView = "index";
+        this.currentTag = null;
         const contentHTML = wrapBundleContent(bundle, renderBundleIndex(bundle));
         this._openWindow(bundle, contentHTML, bundleHeaderLabel(bundle));
         if (this.onNavigate) { this.onNavigate("Index"); }
@@ -1594,17 +1706,24 @@ class BundleWindowManager {
     }
 
     showTopic(bundle, contextHex, lineNumber = null) {
-        const topic = findTopicByHex(bundle, contextHex);
-        if (!topic) { return; }
+        const normalized = normalizeTopicRef(bundle, contextHex);
+        const topic = normalized ? ((bundle.topics && bundle.topics[normalized]) || null) : null;
+        if (!topic) {
+            console.warn(`Topic not found: ${contextHex}`);
+            return false;
+        }
         this._pushHistory();
         this.currentBundle = bundle;
-        this.currentContextHex = normalizeTopicRef(bundle, contextHex);
+        this.currentContextHex = normalized;
         this.currentLineNumber = this._normalizeLineNumber(lineNumber);
+        this.currentView = "topic";
+        this.currentTag = null;
         const contentHTML = wrapBundleContent(bundle, renderTopicContent(bundle, topic));
         const windowEl = this._openWindow(bundle, contentHTML, bundleHeaderLabel(bundle));
         this._focusTopicLine(windowEl, this.currentLineNumber);
         if (this.onNavigate) { this.onNavigate(bundleTopicTitle(bundle, topic)); }
         this._updateUrl();
+        return true;
     }
 
     showHelpContentsTopic(bundle) {
@@ -1629,6 +1748,8 @@ class BundleWindowManager {
             this.currentBundle = bundle;
             this.currentContextHex = null;
             this.currentLineNumber = null;
+            this.currentView = "contents";
+            this.currentTag = null;
             this._openWindow(bundle, wrapBundleContent(bundle, renderBundleContents(bundle)), bundleHeaderLabel(bundle));
             if (this.onNavigate) { this.onNavigate("Contents"); }
             this._updateUrl();
@@ -1642,16 +1763,63 @@ class BundleWindowManager {
         this._updateUrl();
     }
 
-    async openSourceTopic(sourceFile, topicRef, lineNumber = null) {
+    showTag(bundle, key, value, label = "") {
+        const normalizedKey = String(key || "").trim();
+        const normalizedValue = String(value || "").trim();
+        if (!normalizedKey || !normalizedValue) { return false; }
+        const normalizedLabel = String(label || normalizedKey).trim() || normalizedKey;
+        this._pushHistory();
+        this.currentBundle = bundle;
+        this.currentContextHex = null;
+        this.currentLineNumber = null;
+        this.currentView = "tag";
+        this.currentTag = { key: normalizedKey, value: normalizedValue, label: normalizedLabel };
+        const contentHTML = wrapBundleContent(
+            bundle,
+            renderBundleTagTopics(bundle, normalizedKey, normalizedValue, normalizedLabel),
+        );
+        this._openWindow(bundle, contentHTML, bundleHeaderLabel(bundle));
+        if (this.onNavigate) { this.onNavigate(`${normalizedLabel}: ${normalizedValue}`); }
+        this._updateUrl();
+        return true;
+    }
+
+    async openSourceTopic(sourceFile, topicRef, lineNumber = null, fallbackBundle = null) {
+        const showFallback = (bundle, fallback) => {
+            if (!bundle || !fallback) {
+                return false;
+            }
+            if (fallback.type === "topic" && fallback.ref) {
+                this.showTopic(bundle, fallback.ref, lineNumber);
+                return true;
+            }
+            if (fallback.type === "index") {
+                this.showIndex(bundle);
+                return true;
+            }
+            if (fallback.type === "contents") {
+                this.showContents(bundle);
+                return true;
+            }
+            return false;
+        };
+
         const entry = findCatalogEntryBySourceFile(sourceFile);
         if (!entry) {
+            if (showFallback(fallbackBundle, resolveMissingSourceTopicFallback(fallbackBundle, sourceFile, topicRef))) {
+                return;
+            }
             console.warn(`Bundle not found for source file: ${sourceFile}`);
             return;
         }
         const bundle = await loadBundle(entry.file);
         const normalizedTopic = topicRef != null ? String(topicRef).trim() : "";
-        if (normalizedTopic) {
-            this.showTopic(bundle, normalizedTopic, lineNumber);
+        const resolvedTopic = normalizedTopic ? normalizeTopicRef(bundle, normalizedTopic) : null;
+        if (resolvedTopic) {
+            this.showTopic(bundle, resolvedTopic, lineNumber);
+            return;
+        }
+        if (showFallback(bundle, resolveMissingSourceTopicFallback(bundle, sourceFile, normalizedTopic))) {
             return;
         }
         const fallback = bundleTopicFallbackRef(bundle);
@@ -1710,6 +1878,8 @@ class BundleWindowManager {
                 bundle: this.currentBundle,
                 contextHex: this.currentContextHex,
                 lineNumber: this.currentLineNumber,
+                view: this.currentView,
+                tag: this.currentTag ? { ...this.currentTag } : null,
             });
         }
     }
@@ -1721,6 +1891,8 @@ class BundleWindowManager {
         this.currentBundle = prev.bundle;
         this.currentContextHex = prev.contextHex;
         this.currentLineNumber = this._normalizeLineNumber(prev.lineNumber);
+        this.currentView = prev.view || (prev.contextHex ? "topic" : "index");
+        this.currentTag = prev.tag || null;
         if (prev.contextHex) {
             const topic = findTopicByHex(prev.bundle, prev.contextHex);
             if (topic) {
@@ -1729,6 +1901,17 @@ class BundleWindowManager {
                 this._focusTopicLine(windowEl, this.currentLineNumber);
                 if (this.onNavigate) { this.onNavigate(bundleTopicTitle(prev.bundle, topic)); }
             }
+        } else if (this.currentView === "contents") {
+            this.currentLineNumber = null;
+            const contentHTML = wrapBundleContent(prev.bundle, renderBundleContents(prev.bundle));
+            this._openWindow(prev.bundle, contentHTML, bundleHeaderLabel(prev.bundle));
+            if (this.onNavigate) { this.onNavigate("Contents"); }
+        } else if (this.currentView === "tag" && this.currentTag) {
+            this.currentLineNumber = null;
+            const { key, value, label } = this.currentTag;
+            const contentHTML = wrapBundleContent(prev.bundle, renderBundleTagTopics(prev.bundle, key, value, label));
+            this._openWindow(prev.bundle, contentHTML, bundleHeaderLabel(prev.bundle));
+            if (this.onNavigate) { this.onNavigate(`${label}: ${value}`); }
         } else {
             this.currentLineNumber = null;
             const contentHTML = wrapBundleContent(prev.bundle, renderBundleIndex(prev.bundle));
@@ -1793,38 +1976,13 @@ class BundleWindowManager {
     }
 
     _bindTopicLinks(windowEl, bundle) {
-        windowEl.querySelectorAll("[data-tv-uhf-link], [data-tv-bundle-topic]").forEach((link) => {
-            if (link.dataset.tvBundleBound === "1") { return; }
-            link.dataset.tvBundleBound = "1";
-            link.addEventListener("click", async (event) => {
+        if (windowEl.dataset.tvBundleLinksBound === "1") { return; }
+        windowEl.dataset.tvBundleLinksBound = "1";
+        windowEl.addEventListener("click", async (event) => {
+            const navLink = event.target.closest("[data-tv-nav]");
+            if (navLink && windowEl.contains(navLink)) {
                 event.preventDefault();
-                const sourceFile = link.dataset.tvSourceFile || "";
-                const lineNumber = this._normalizeLineNumber(link.dataset.tvTopicLine);
-                const topicRef = (link.dataset.tvBundleTopic || link.dataset.tvTopicAlias || "").trim();
-                try {
-                    if (sourceFile) {
-                        await this.openSourceTopic(sourceFile, topicRef, lineNumber);
-                    } else if (topicRef) {
-                        this.showTopic(bundle, topicRef, lineNumber);
-                    } else if (lineNumber) {
-                        this._pushHistory();
-                        this._focusTopicLine(windowEl, lineNumber);
-                        this.currentLineNumber = lineNumber;
-                        this._updateUrl();
-                    } else {
-                        this.showTopic(bundle, link.dataset.tvBundleTopic);
-                    }
-                } catch (error) {
-                    console.error("Failed to open linked topic", error);
-                }
-            });
-        });
-        windowEl.querySelectorAll("[data-tv-nav]").forEach((link) => {
-            if (link.dataset.tvBundleBound === "1") { return; }
-            link.dataset.tvBundleBound = "1";
-            link.addEventListener("click", (event) => {
-                event.preventDefault();
-                const action = (link.getAttribute("data-tv-nav") || "").toLowerCase();
+                const action = (navLink.getAttribute("data-tv-nav") || "").toLowerCase();
                 if (action === "back") {
                     this.goBack();
                 } else if (action === "index") {
@@ -1832,20 +1990,55 @@ class BundleWindowManager {
                 } else if (action === "contents") {
                     this.showContents(bundle);
                 }
-            });
-        });
-        // Bind letter navigation links in index
-        windowEl.querySelectorAll("a[data-letter]").forEach((link) => {
-            if (link.dataset.tvBundleBound === "1") { return; }
-            link.dataset.tvBundleBound = "1";
-            link.addEventListener("click", (event) => {
+                return;
+            }
+
+            const letterLink = event.target.closest("a[data-letter]");
+            if (letterLink && windowEl.contains(letterLink)) {
                 event.preventDefault();
-                const letter = link.getAttribute("data-letter");
-                const section = windowEl.querySelector(`#idx-${letter}`);
+                const letter = letterLink.getAttribute("data-letter");
+                const section = document.getElementById(`idx-${letter}`);
                 if (section) {
                     section.scrollIntoView({ behavior: "smooth", block: "start" });
                 }
-            });
+                return;
+            }
+
+            const tagLink = event.target.closest("[data-tv-topic-tag-key]");
+            if (tagLink && windowEl.contains(tagLink)) {
+                event.preventDefault();
+                this.showTag(
+                    bundle,
+                    tagLink.dataset.tvTopicTagKey,
+                    tagLink.dataset.tvTopicTagValue,
+                    tagLink.dataset.tvTopicTagLabel,
+                );
+                return;
+            }
+
+            const link = event.target.closest(
+                "[data-tv-uhf-link], [data-tv-bundle-topic], [data-tv-topic-alias], [data-tv-source-file]"
+            );
+            if (!link || !windowEl.contains(link)) { return; }
+
+            event.preventDefault();
+            const sourceFile = link.dataset.tvSourceFile || "";
+            const lineNumber = this._normalizeLineNumber(link.dataset.tvTopicLine);
+            const topicRef = (link.dataset.tvBundleTopic || link.dataset.tvTopicAlias || "").trim();
+            try {
+                if (sourceFile) {
+                    await this.openSourceTopic(sourceFile, topicRef, lineNumber, bundle);
+                } else if (topicRef) {
+                    this.showTopic(bundle, topicRef, lineNumber);
+                } else if (lineNumber) {
+                    this._pushHistory();
+                    this._focusTopicLine(windowEl, lineNumber);
+                    this.currentLineNumber = lineNumber;
+                    this._updateUrl();
+                }
+            } catch (error) {
+                console.error("Failed to open linked topic", error);
+            }
         });
     }
 
@@ -1859,6 +2052,8 @@ class BundleWindowManager {
             if (this.dialogManager) { this.dialogManager.unregisterWindow("help:" + key); }
             this.currentBundle = null;
             this.currentContextHex = null;
+            this.currentView = "index";
+            this.currentTag = null;
             this._clearUrl();
             fillBorders();
             fillDesktopPatterns();
@@ -1909,6 +2104,8 @@ class BundleWindowManager {
         this.history = [];
         this.currentBundle = null;
         this.currentContextHex = null;
+        this.currentView = "index";
+        this.currentTag = null;
         this._clearUrl();
         if (this.onNavigate) { this.onNavigate(""); }
     }
@@ -1981,135 +2178,114 @@ class BundleWindowManager {
 
 // ── Catalog menu items ──────────────────────────────────────────────
 
-function buildCatalogMenuItems(catalog) {
-    if (!catalog.length) { return []; }
+function renderMenuPopupSeparator() {
+    return '<div class="tv-menu-popup-separator" aria-hidden="true">'
+        + '<span class="tv-border-corner">├</span>'
+        + '<span class="tv-border-fill" data-tv-border-fill="─"></span>'
+        + '<span class="tv-border-corner">┤</span>'
+        + '</div>';
+}
 
-    // Group entries by their group name; preserve insertion order.
-    const groups = new Map();   // group → [entry, …]
+function renderMenuPopup(items, attrs = {}, className = "tv-menu-popup") {
+    return new TVMenuBox({ className, attrs, items }).renderMarkup();
+}
+
+function renderMenuSubmenu(labelMarkup, items) {
+    return [
+        `<div class="tv-submenu-root" data-tv-submenu-root="true">`,
+        `<button type="button" class="tv-menu-popup-item tv-submenu-toggle" data-tv-submenu-toggle="true">`,
+        `${labelMarkup}<span class="tv-submenu-arrow">►</span>`,
+        `</button>`,
+        renderMenuPopup(items, { "data-tv-submenu-popup": true, hidden: true }, "tv-menu-popup tv-submenu-popup"),
+        `</div>`,
+    ].join("");
+}
+
+function renderMenuRoot(labelMarkup, items, rootAttrs = {}) {
+    const rootMarkup = renderHtmlAttributes({
+        class: "tv-menu-root",
+        "data-tv-menu-root": "true",
+        ...rootAttrs,
+    });
+    const toggle = new TVButton({
+        dialog: false,
+        className: "tv-menu-item tv-menu-button",
+        attrs: { type: "button", "data-tv-menu-toggle": true, "aria-haspopup": "true", "aria-expanded": "false" },
+        labelMarkup,
+    }).renderMarkup();
+    return [
+        `<div ${rootMarkup}>`,
+        toggle,
+        renderMenuPopup(items, { "data-tv-menu-popup": true, hidden: true }),
+        `</div>`,
+    ].join("");
+}
+
+function splitGroupedMenuEntries(entries) {
+    const groups = new Map();
     const ungrouped = [];
-    for (const entry of catalog) {
+    entries.forEach((entry) => {
         const group = entry.group || "";
         if (!group) {
             ungrouped.push(entry);
-        } else {
-            if (!groups.has(group)) { groups.set(group, []); }
-            groups.get(group).push(entry);
+            return;
         }
+        if (!groups.has(group)) {
+            groups.set(group, []);
+        }
+        groups.get(group).push(entry);
+    });
+    return { groups, ungrouped };
+}
+
+function buildGroupedMenuItems(entries, renderItem) {
+    if (!entries.length) {
+        return [];
     }
 
+    const { groups, ungrouped } = splitGroupedMenuEntries(entries);
     const items = [];
     let needSep = false;
 
-    // Ungrouped entries go directly into the top-level menu.
-    for (const entry of ungrouped) {
-        items.push(new TVButton({
-            dialog: false,
-            className: "tv-menu-popup-item",
-            attrs: { type: "button", "data-tv-bundle-open": entry.file, "data-tv-bundle-label": bundleLoadingLabel(entry) },
-            labelMarkup: escapeHtml(entry.name),
-        }));
+    ungrouped.forEach((entry) => {
+        items.push(renderItem(entry));
         needSep = true;
-    }
+    });
 
-    // Each group becomes a submenu.
-    for (const [group, entries] of groups) {
+    groups.forEach((groupEntries, group) => {
         if (needSep) {
-            items.push('<div class="tv-menu-popup-separator" aria-hidden="true">'
-                + '<span class="tv-border-corner">├</span>'
-                + '<span class="tv-border-fill" data-tv-border-fill="─"></span>'
-                + '<span class="tv-border-corner">┤</span>'
-                + '</div>');
+            items.push(renderMenuPopupSeparator());
         }
-        const subItems = entries.map((entry) =>
-            new TVButton({
-                dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-bundle-open": entry.file, "data-tv-bundle-label": bundleLoadingLabel(entry) },
-                labelMarkup: escapeHtml(entry.name),
-            })
-        );
-        const subPopup = new TVMenuBox({
-            className: "tv-menu-popup tv-submenu-popup",
-            attrs: { "data-tv-submenu-popup": true, hidden: true },
-            items: subItems,
-        }).renderMarkup();
-
-        items.push(
-            `<div class="tv-submenu-root" data-tv-submenu-root>`
-            + `<button type="button" class="tv-menu-popup-item tv-submenu-toggle" data-tv-submenu-toggle>`
-            + `${escapeHtml(group)}<span class="tv-submenu-arrow">►</span>`
-            + `</button>`
-            + subPopup
-            + `</div>`
-        );
+        items.push(renderMenuSubmenu(
+            escapeHtml(group),
+            groupEntries.map((entry) => renderItem(entry)),
+        ));
         needSep = false;
-    }
+    });
 
     return items;
 }
 
+function buildCatalogMenuItems(catalog) {
+    return buildGroupedMenuItems(catalog, (entry) =>
+        new TVButton({
+            dialog: false,
+            className: "tv-menu-popup-item",
+            attrs: { type: "button", "data-tv-bundle-open": entry.file, "data-tv-bundle-label": bundleLoadingLabel(entry) },
+            labelMarkup: escapeHtml(entry.name),
+        })
+    );
+}
+
 function buildDocsMenuItems(docs) {
-    if (!docs.length) { return []; }
-
-    const groups = new Map();
-    const ungrouped = [];
-    for (const entry of docs) {
-        const group = entry.group || "";
-        if (!group) {
-            ungrouped.push(entry);
-        } else {
-            if (!groups.has(group)) { groups.set(group, []); }
-            groups.get(group).push(entry);
-        }
-    }
-
-    const items = [];
-    let needSep = false;
-
-    for (const entry of ungrouped) {
-        items.push(new TVButton({
+    return buildGroupedMenuItems(docs, (entry) =>
+        new TVButton({
             dialog: false,
             className: "tv-menu-popup-item",
             attrs: { type: "button", "data-tv-doc-open": entry.file },
             labelMarkup: escapeHtml(entry.name),
-        }));
-        needSep = true;
-    }
-
-    for (const [group, entries] of groups) {
-        if (needSep) {
-            items.push('<div class="tv-menu-popup-separator" aria-hidden="true">'
-                + '<span class="tv-border-corner">├</span>'
-                + '<span class="tv-border-fill" data-tv-border-fill="─"></span>'
-                + '<span class="tv-border-corner">┤</span>'
-                + '</div>');
-        }
-        const subItems = entries.map((entry) =>
-            new TVButton({
-                dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-doc-open": entry.file },
-                labelMarkup: escapeHtml(entry.name),
-            })
-        );
-        const subPopup = new TVMenuBox({
-            className: "tv-menu-popup tv-submenu-popup",
-            attrs: { "data-tv-submenu-popup": true, hidden: true },
-            items: subItems,
-        }).renderMarkup();
-
-        items.push(
-            `<div class="tv-submenu-root" data-tv-submenu-root>`
-            + `<button type="button" class="tv-menu-popup-item tv-submenu-toggle" data-tv-submenu-toggle>`
-            + `${escapeHtml(group)}<span class="tv-submenu-arrow">►</span>`
-            + `</button>`
-            + subPopup
-            + `</div>`
-        );
-        needSep = false;
-    }
-
-    return items;
+        })
+    );
 }
 
 function buildBundleContentsMenuItems(nodes) {
@@ -2134,26 +2310,10 @@ function buildBundleContentsMenuItems(nodes) {
                     attrs: { type: "button", "data-tv-menu-link": "1", ...targetAttrs },
                     labelMarkup,
                 }));
-                subItems.push('<div class="tv-menu-popup-separator" aria-hidden="true">'
-                    + '<span class="tv-border-corner">├</span>'
-                    + '<span class="tv-border-fill" data-tv-border-fill="─"></span>'
-                    + '<span class="tv-border-corner">┤</span>'
-                    + '</div>');
+                subItems.push(renderMenuPopupSeparator());
             }
             subItems.push(...childItems);
-            const subPopup = new TVMenuBox({
-                className: "tv-menu-popup tv-submenu-popup",
-                attrs: { "data-tv-submenu-popup": true, hidden: true },
-                items: subItems,
-            }).renderMarkup();
-            items.push(
-                `<div class="tv-submenu-root" data-tv-submenu-root>`
-                + `<button type="button" class="tv-menu-popup-item tv-submenu-toggle" data-tv-submenu-toggle>`
-                + `${labelMarkup}<span class="tv-submenu-arrow">►</span>`
-                + `</button>`
-                + subPopup
-                + `</div>`
-            );
+            items.push(renderMenuSubmenu(labelMarkup, subItems));
             return;
         }
 
@@ -2204,23 +2364,11 @@ function buildBundleContentsMenuRoot(bundle) {
         return "";
     }
 
-    const popupHTML = new TVMenuBox({
-        attrs: { "data-tv-menu-popup": true, hidden: true },
+    return renderMenuRoot(
+        renderHotkeyMarkup(nodes.some((node) => node && node.hotkey) ? "~M~enu" : "~C~ontents"),
         items,
-    }).renderMarkup();
-    const toggle = new TVButton({
-        dialog: false,
-        className: "tv-menu-item tv-menu-button",
-        attrs: { type: "button", "data-tv-menu-toggle": true, "aria-haspopup": "true", "aria-expanded": "false" },
-        labelMarkup: renderHotkeyMarkup(nodes.some((node) => node && node.hotkey) ? "~M~enu" : "~C~ontents"),
-    }).renderMarkup();
-
-    return [
-        `<div class="tv-menu-root" data-tv-menu-root data-tv-bundle-menu-root>`,
-        toggle,
-        popupHTML,
-        `</div>`,
-    ].join("");
+        { "data-tv-bundle-menu-root": "true" },
+    );
 }
 
 // ── Minimal Markdown → HTML renderer ────────────────────────────────
@@ -2365,14 +2513,9 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { type: "theme", theme: "auto", label: "A~u~to Theme" },
     ];
     const sysPopupHTML = new TVMenuBox({
-        attrs: { "data-tv-menu-popup": true, hidden: true },
         items: sysPopupItems.map((entry) => {
             if (entry.type === "separator") {
-                return '<div class="tv-menu-popup-separator" aria-hidden="true">'
-                    + '<span class="tv-border-corner">├</span>'
-                    + '<span class="tv-border-fill" data-tv-border-fill="─"></span>'
-                    + '<span class="tv-border-corner">┤</span>'
-                    + '</div>';
+                return renderMenuPopupSeparator();
             }
             if (entry.type === "submenu") {
                 const subItems = entry.items.map((sub) => new TVButton({
@@ -2381,17 +2524,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                     attrs: { type: "button", "data-tv-saver-start": sub.mode },
                     labelMarkup: renderHotkeyMarkup(sub.label),
                 }));
-                const subPopup = new TVMenuBox({
-                    className: "tv-menu-popup tv-submenu-popup",
-                    attrs: { "data-tv-submenu-popup": true, hidden: true },
-                    items: subItems,
-                }).renderMarkup();
-                return `<div class="tv-submenu-root" data-tv-submenu-root>`
-                    + `<button type="button" class="tv-menu-popup-item tv-submenu-toggle" data-tv-submenu-toggle>`
-                    + `${renderHotkeyMarkup(entry.label)}<span class="tv-submenu-arrow">►</span>`
-                    + `</button>`
-                    + subPopup
-                    + `</div>`;
+                return renderMenuSubmenu(renderHotkeyMarkup(entry.label), subItems);
             }
             const attrs = entry.type === "theme"
                 ? { type: "button", "data-tv-theme-set": entry.theme }
@@ -2405,38 +2538,15 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                 labelMarkup: renderHotkeyMarkup(entry.label),
             });
         }),
-    }).renderMarkup();
-    const sysToggle = new TVButton({
-        dialog: false,
-        className: "tv-menu-item tv-menu-button",
-        attrs: { type: "button", "data-tv-menu-toggle": true, "aria-haspopup": "true", "aria-expanded": "false" },
-        labelMarkup: renderHotkeyMarkup("~≡~"),
-    }).renderMarkup();
+    });
+    const sysRootHTML = renderMenuRoot(renderHotkeyMarkup("~≡~"), sysPopupHTML.items);
 
     // File menu with catalog entries
-    const filePopupHTML = new TVMenuBox({
-        attrs: { "data-tv-menu-popup": true, hidden: true },
-        items: buildCatalogMenuItems(catalog),
-    }).renderMarkup();
-    const fileToggle = new TVButton({
-        dialog: false,
-        className: "tv-menu-item tv-menu-button",
-        attrs: { type: "button", "data-tv-menu-toggle": true, "aria-haspopup": "true", "aria-expanded": "false" },
-        labelMarkup: renderHotkeyMarkup("~H~elp Files"),
-    }).renderMarkup();
+    const fileRootHTML = renderMenuRoot(renderHotkeyMarkup("~H~elp Files"), buildCatalogMenuItems(catalog));
 
     // Docs menu with documentation markdown files
     const docsItems = buildDocsMenuItems(docsCatalogData || []);
-    const docsPopupHTML = new TVMenuBox({
-        attrs: { "data-tv-menu-popup": true, hidden: true },
-        items: docsItems,
-    }).renderMarkup();
-    const docsToggle = new TVButton({
-        dialog: false,
-        className: "tv-menu-item tv-menu-button",
-        attrs: { type: "button", "data-tv-menu-toggle": true, "aria-haspopup": "true", "aria-expanded": "false" },
-        labelMarkup: renderHotkeyMarkup("~D~ocs"),
-    }).renderMarkup();
+    const docsRootHTML = renderMenuRoot(renderHotkeyMarkup("~D~ocs"), docsItems);
 
     // Windows menu (TV standard)
     const winPopupItems = [
@@ -2446,9 +2556,9 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { cmd: "zoom", label: "~Z~oom", hotkey: "F5" },
         { cmd: "close", label: "~C~lose", hotkey: "Alt-F3" },
     ];
-    const winPopupHTML = new TVMenuBox({
-        attrs: { "data-tv-menu-popup": true, hidden: true },
-        items: winPopupItems.map((entry) =>
+    const winRootHTML = renderMenuRoot(
+        renderHotkeyMarkup("~W~indows"),
+        winPopupItems.map((entry) =>
             new TVButton({
                 dialog: false,
                 className: "tv-menu-popup-item",
@@ -2457,13 +2567,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                     `<span class="tv-menu-hotkey">${escapeHtml(entry.hotkey)}</span>`,
             })
         ),
-    }).renderMarkup();
-    const winToggle = new TVButton({
-        dialog: false,
-        className: "tv-menu-item tv-menu-button",
-        attrs: { type: "button", "data-tv-menu-toggle": true, "aria-haspopup": "true", "aria-expanded": "false" },
-        labelMarkup: renderHotkeyMarkup("~W~indows"),
-    }).renderMarkup();
+    );
 
     // Games menu
     const gamesPopupItems = [
@@ -2476,9 +2580,9 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { type: "dialog", dialog: "sokoban", label: "~S~okoban" },
         { type: "dialog", dialog: "tetris", label: "~T~etris" },
     ];
-    const gamesPopupHTML = new TVMenuBox({
-        attrs: { "data-tv-menu-popup": true, hidden: true },
-        items: gamesPopupItems.map((entry) =>
+    const gamesRootHTML = renderMenuRoot(
+        renderHotkeyMarkup("~G~ames"),
+        gamesPopupItems.map((entry) =>
             new TVButton({
                 dialog: false,
                 className: "tv-menu-popup-item",
@@ -2486,38 +2590,17 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                 labelMarkup: renderHotkeyMarkup(entry.label),
             })
         ),
-    }).renderMarkup();
-    const gamesToggle = new TVButton({
-        dialog: false,
-        className: "tv-menu-item tv-menu-button",
-        attrs: { type: "button", "data-tv-menu-toggle": true, "aria-haspopup": "true", "aria-expanded": "false" },
-        labelMarkup: renderHotkeyMarkup("~G~ames"),
-    }).renderMarkup();
+    );
 
     const bundleContentsRootHTML = buildBundleContentsMenuRoot(activeBundle);
 
     menuBar.innerHTML = [
         `<nav class="tv-menu-items">`,
-        `<div class="tv-menu-root" data-tv-menu-root>`,
-        sysToggle,
-        sysPopupHTML,
-        `</div>`,
-        `<div class="tv-menu-root" data-tv-menu-root>`,
-        fileToggle,
-        filePopupHTML,
-        `</div>`,
-        `<div class="tv-menu-root" data-tv-menu-root>`,
-        docsToggle,
-        docsPopupHTML,
-        `</div>`,
-        `<div class="tv-menu-root" data-tv-menu-root>`,
-        gamesToggle,
-        gamesPopupHTML,
-        `</div>`,
-        `<div class="tv-menu-root" data-tv-menu-root>`,
-        winToggle,
-        winPopupHTML,
-        `</div>`,
+        sysRootHTML,
+        fileRootHTML,
+        docsRootHTML,
+        gamesRootHTML,
+        winRootHTML,
         bundleContentsRootHTML ? `<div class="tv-menu-separator" aria-hidden="true">│</div>` : ``,
         bundleContentsRootHTML,
         `</nav>`,
@@ -3269,7 +3352,7 @@ class TVBundleApp {
                     || ""
                 ).trim();
                 if (sourceFile) {
-                    await this.windowManager.openSourceTopic(sourceFile, topicRef, lineNumber);
+                    await this.windowManager.openSourceTopic(sourceFile, topicRef, lineNumber, this.windowManager.currentBundle);
                     return;
                 }
                 if (!topicRef) {

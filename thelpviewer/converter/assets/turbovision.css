@@ -1119,6 +1119,30 @@ button.tv-status-item {
     word-break: break-word;
 }
 
+.tv-topic-heading {
+    padding: 1ch 1ch 0;
+    color: var(--tv-muted);
+    font-weight: bold;
+    white-space: normal;
+}
+
+.tv-topic-tags {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    padding: 1ch 1ch 0;
+    white-space: normal;
+}
+
+.tv-topic-tag {
+    color: var(--tv-text);
+}
+
+.tv-topic-tag-label {
+    color: var(--tv-text);
+}
+
 .tv-topic-pre-fixed {
     width: max-content;
     max-width: none;
@@ -1180,6 +1204,19 @@ button.tv-status-item {
     flex-wrap: wrap;
     gap: 0;
     margin-bottom: 1ch;
+}
+
+.tv-index-frozen {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding-bottom: 0;
+    background: var(--tv-window);
+}
+
+.tv-index-frozen .tv-index-heading,
+.tv-index-frozen .tv-index-nav {
+    margin-bottom: 0;
 }
 
 .tv-index-jump {

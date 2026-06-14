@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-SOURCE_ORDER = ("winworld", "archiveorg", "olddos", "github", "davep_ng")
+SOURCE_ORDER = ("winworld", "archiveorg", "olddos", "github", "davep_ng", "cheater_cz", "slunecnice")
 
 SOURCE_DESCRIPTIONS: dict[str, str] = {
     "winworld": "WinWorldPC (product/version pages)",
@@ -13,6 +13,8 @@ SOURCE_DESCRIPTIONS: dict[str, str] = {
     "olddos": "old-dos.ru (category listing + detail page)",
     "github": "GitHub (repo tree / contents API)",
     "davep_ng": "Dave Pearson Norton Guides mirror",
+    "cheater_cz": "Cheater.cz (Scorpions Cheater DOS archives)",
+    "slunecnice": "Slunečnice.cz (Game-Cheater 9.02 archive)",
 }
 
 
@@ -38,6 +40,17 @@ class ProductSpec:
     key: str
     label: str
     sources: dict[str, SourceQuery]
+
+
+@dataclass(frozen=True, slots=True)
+class BuildGroupSpec:
+    """One logical build group consumed by the build shell wrapper."""
+
+    key: str
+    label: str
+    source_root_prefixes: tuple[str, ...]
+    help_dir_prefixes: tuple[str, ...]
+    include_by_default: bool = True
 
 
 PRODUCTS: dict[str, ProductSpec] = {
@@ -286,9 +299,73 @@ PRODUCTS: dict[str, ProductSpec] = {
             ),
         },
     ),
+    "scorpion": ProductSpec(
+        key="scorpion",
+        label="Scorpions Cheater DOS",
+        sources={
+            "cheater_cz": SourceQuery(
+                search_text="Scorpions Cheater DOS versions",
+                base_url="https://www.cheater.cz/wincheater2/historie-cheater-pro-dos/",
+                direct_urls=("https://www.cheater.cz/wincheater2/historie-cheater-pro-dos/",),
+            ),
+        },
+    ),
+    "game-cheater": ProductSpec(
+        key="game-cheater",
+        label="Game-Cheater 9.02",
+        sources={
+            "slunecnice": SourceQuery(
+                search_text="Game-Cheater 9.02",
+                base_url="https://www.slunecnice.cz/sw/game-cheater/",
+                direct_urls=("https://www.slunecnice.cz/sw/game-cheater/",),
+            ),
+        },
+    ),
 }
 
 PRODUCT_ORDER = tuple(PRODUCTS.keys())
+
+BUILD_GROUPS: dict[str, BuildGroupSpec] = {
+    "borland": BuildGroupSpec(
+        key="borland",
+        label="Borland",
+        source_root_prefixes=("Borland ",),
+        help_dir_prefixes=("Borland ",),
+    ),
+    "microsoft": BuildGroupSpec(
+        key="microsoft",
+        label="Microsoft",
+        source_root_prefixes=("Microsoft ",),
+        help_dir_prefixes=("Microsoft ",),
+    ),
+    "norton-guides": BuildGroupSpec(
+        key="norton-guides",
+        label="Norton Guides",
+        source_root_prefixes=(PRODUCTS["ng"].label,),
+        help_dir_prefixes=(PRODUCTS["ng"].label,),
+    ),
+    "software602": BuildGroupSpec(
+        key="software602",
+        label="Software 602",
+        source_root_prefixes=("Software 602",),
+        help_dir_prefixes=("Software 602",),
+    ),
+    "scorpion": BuildGroupSpec(
+        key="scorpion",
+        label="Scorpions Cheater DOS",
+        source_root_prefixes=(PRODUCTS["scorpion"].label,),
+        help_dir_prefixes=("Scorpions Cheater",),
+        include_by_default=False,
+    ),
+    "game-cheater": BuildGroupSpec(
+        key="game-cheater",
+        label="Game-Cheater 9.02",
+        source_root_prefixes=("Game-Cheater",),
+        help_dir_prefixes=(PRODUCTS["game-cheater"].label,),
+    ),
+}
+
+BUILD_GROUP_ORDER = tuple(BUILD_GROUPS.keys())
 
 
 def all_sources() -> list[str]:
@@ -299,6 +376,50 @@ def all_sources() -> list[str]:
 def all_products() -> list[str]:
     """Return supported logical product keys in stable CLI order."""
     return list(PRODUCT_ORDER)
+
+
+def all_build_groups(*, default_only: bool = False) -> list[str]:
+    """Return stable build group keys used by the shell wrapper."""
+    if not default_only:
+        return list(BUILD_GROUP_ORDER)
+    return [key for key in BUILD_GROUP_ORDER if BUILD_GROUPS[key].include_by_default]
+
+
+def build_group_spec(key: str) -> BuildGroupSpec:
+    """Return one build-group spec or raise ``KeyError``."""
+    return BUILD_GROUPS[key]
+
+
+def build_source_root_prefixes_for_groups(selected_keys: list[str] | None = None) -> list[str]:
+    """Return source-root prefixes for the selected build groups."""
+    wanted = set(selected_keys or all_build_groups(default_only=True))
+    roots: list[str] = []
+    seen: set[str] = set()
+    for key in BUILD_GROUP_ORDER:
+        if key not in wanted:
+            continue
+        for root in BUILD_GROUPS[key].source_root_prefixes:
+            if root in seen:
+                continue
+            seen.add(root)
+            roots.append(root)
+    return roots
+
+
+def build_help_prefixes_for_groups(selected_keys: list[str] | None = None) -> list[str]:
+    """Return top-level help-dir prefixes for the selected build groups."""
+    wanted = set(selected_keys or all_build_groups(default_only=True))
+    prefixes: list[str] = []
+    seen: set[str] = set()
+    for key in BUILD_GROUP_ORDER:
+        if key not in wanted:
+            continue
+        for prefix in BUILD_GROUPS[key].help_dir_prefixes:
+            if prefix in seen:
+                continue
+            seen.add(prefix)
+            prefixes.append(prefix)
+    return prefixes
 
 
 def product_spec(key: str) -> ProductSpec:
