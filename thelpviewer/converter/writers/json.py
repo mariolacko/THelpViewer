@@ -20,6 +20,7 @@ SOURCE_FORMAT_BY_READER: dict[str, str] = {
     "fbhf": "fbhf",
     "game-cheater": "pc-fand",
     "hlx": "hlx",
+    "k602": "k602",
     "m602": "m602",
     "norton-guide": "norton-guide",
     "quickhelp": "quickhelp",

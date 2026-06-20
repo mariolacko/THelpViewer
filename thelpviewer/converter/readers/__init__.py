@@ -15,6 +15,7 @@ from .m602 import M602Reader, M602BinaryParser, is_m602_binary, decode_m602_byte
 
 from .hlx import HlxHelpReader, HlxSourceParser, detect_hlx_source_format, is_hlx_source
 from .hlx_binary import HlxBinaryReader, is_hlx_binary
+from .k602 import K602Reader, is_k602_binary
 from .ng import NGReader, is_ng_binary
 from .bw03 import BW03HelpReader, is_bw03_binary
 from .quickhelp import QuickHelpReader, is_quickhelp_binary
@@ -44,6 +45,8 @@ __all__ = [
     "is_hlx_source",
     "HlxBinaryReader",
     "is_hlx_binary",
+    "K602Reader",
+    "is_k602_binary",
     "NGReader",
     "is_ng_binary",
     "BW03HelpReader",

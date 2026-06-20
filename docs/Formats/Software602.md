@@ -20,6 +20,5 @@ not be treated as one binary format.
   [Software602 M602.md](Software602%20M602.md)
 - Text602 help:
   [Software602 Text602.md](Software602%20Text602.md)
-
-`K6HLP` is currently only detected by the tools in this repository. No parser
-or dedicated format document exists yet.
+- Kartoteka 602 help:
+  [Software602 K602.md](Software602%20K602.md)

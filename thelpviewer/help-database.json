@@ -158,6 +158,13 @@
       "reader": "thelpviewer.converter.readers.fbhf:FBHFHelpReader"
     },
     {
+      "name": "k602",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.k602:is_k602_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.k602:K602HelpReader"
+    },
+    {
       "name": "m602",
       "source_kind": "compiled",
       "matcher": "thelpviewer.converter.readers.m602:is_m602_binary",
