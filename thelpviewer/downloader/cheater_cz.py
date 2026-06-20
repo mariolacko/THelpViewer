@@ -130,7 +130,7 @@ def _collect_scorpion_source_files(work_dir: Path, product: ProductSpec) -> list
     for path in sorted(work_dir.rglob("*")):
         if not path.is_file():
             continue
-        if product.conversion.matches(path, fallback=True):
+        if product.conversion.matches(path, secondary=True):
             files.append(path)
     return files
 

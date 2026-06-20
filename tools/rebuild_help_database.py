@@ -21,8 +21,8 @@ from thelpviewer.converter.exporter import (
     fix_metadata_encoding,
     load_document,
 )
-from thelpviewer.converter.help_database import crc32_file
 from thelpviewer.downloader.collector import detect_language
+from thelpviewer.help_database import crc32_file
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+")

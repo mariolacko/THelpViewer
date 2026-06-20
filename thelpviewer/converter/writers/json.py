@@ -203,6 +203,11 @@ class HelpJsonRenderer:
 
         emitted_metadata_keys: set[str] = set()
 
+        show_topic_titles = meta.get("show_topic_titles")
+        if isinstance(show_topic_titles, bool):
+            payload["show_topic_titles"] = show_topic_titles
+            emitted_metadata_keys.add("show_topic_titles")
+
         for key in TRANSPORT_METADATA_KEYS:
             value = meta.get(key)
             if isinstance(value, (str, int, float, bool)):

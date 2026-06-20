@@ -38,6 +38,140 @@
       "runner": "thelpviewer.downloader.slunecnice"
     }
   ],
+  "converters": [
+    {
+      "name": "fbhf-source",
+      "source_kind": "source",
+      "extensions": [
+        ".txt",
+        ".hlx"
+      ],
+      "matcher": "thelpviewer.converter.readers.fbhf:is_fbhf_source",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.fbhf:FBHFSourceReader"
+    },
+    {
+      "name": "hlx",
+      "source_kind": "source",
+      "extensions": [
+        ".hl6"
+      ],
+      "reader": "thelpviewer.converter.readers.hlx:HlxHelpReader"
+    },
+    {
+      "name": "hlx",
+      "source_kind": "compiled",
+      "extensions": [
+        ".hlx"
+      ],
+      "matcher": "thelpviewer.converter.readers.hlx_binary:is_hlx_binary",
+      "matcher_args": "data",
+      "reject_matcher": "thelpviewer.converter.readers.hlx:is_hlx_source",
+      "reject_matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.hlx_binary:HlxBinaryReader"
+    },
+    {
+      "name": "hlx",
+      "source_kind": "source",
+      "extensions": [
+        ".hlx"
+      ],
+      "matcher": "thelpviewer.converter.readers.hlx:is_hlx_source",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.hlx:HlxHelpReader"
+    },
+    {
+      "name": "norton-guide",
+      "source_kind": "compiled",
+      "extensions": [
+        ".ng"
+      ],
+      "match_mode": "any",
+      "matcher": "thelpviewer.converter.readers.ng:is_ng_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.ng:NGReader",
+      "reader_init": "path"
+    },
+    {
+      "name": "bw03",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.bw03:is_bw03_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.bw03:BW03HelpReader"
+    },
+    {
+      "name": "quickhelp",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.quickhelp:is_quickhelp_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.quickhelp:QuickHelpReader"
+    },
+    {
+      "name": "game-cheater",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.game_cheater:is_game_cheater_database",
+      "matcher_args": "path_data",
+      "reader": "thelpviewer.converter.readers.game_cheater:GameCheaterReader"
+    },
+    {
+      "name": "scorpion-legacy",
+      "source_kind": "compiled",
+      "detector": "thelpviewer.converter.readers.scorpion_reader:detect_scorpion_reader_family",
+      "detector_args": "path_data",
+      "detector_equals": "legacy",
+      "reader": "thelpviewer.converter.readers.scorpion_reader:ScorpionReader"
+    },
+    {
+      "name": "scorpion-dat",
+      "source_kind": "compiled",
+      "detector": "thelpviewer.converter.readers.scorpion_reader:detect_scorpion_reader_family",
+      "detector_args": "path_data",
+      "detector_equals": "dat",
+      "reader": "thelpviewer.converter.readers.scorpion_reader:ScorpionReader"
+    },
+    {
+      "name": "tdh",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.tdh:is_tdh_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.tdh:TdhHelpReader"
+    },
+    {
+      "name": "tfh",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.tdh:is_tfh_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.tdh:TdhHelpReader"
+    },
+    {
+      "name": "thelp",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.thelp:is_thelp_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.thelp:ThelpHelpReader"
+    },
+    {
+      "name": "fbhf",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.fbhf:is_fbhf_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.fbhf:FBHFHelpReader"
+    },
+    {
+      "name": "m602",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.m602:is_m602_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.m602:M602HelpReader"
+    },
+    {
+      "name": "text602",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.software602:is_text602_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.software602:Text602Reader"
+    }
+  ],
   "products": [
     {
       "key": "tp",
@@ -460,6 +594,7 @@
     {
       "key": "scorpion",
       "label": "Scorpions Cheater DOS",
+      "menu_label": "Scorpions Cheater",
       "build_group": "scorpion",
       "conversion": {
         "use_database_entries": false,
@@ -477,7 +612,7 @@
             "pattern": "*.SCD"
           }
         ],
-        "fallback_files": [
+        "secondary_files": [
           {
             "pattern": "*.EXE"
           }
@@ -496,6 +631,8 @@
     {
       "key": "game-cheater",
       "label": "Game-Cheater 9.02",
+      "menu_label": "Game-Cheater",
+      "default_version": "9.02",
       "build_group": "game-cheater",
       "conversion": {
         "use_database_entries": false,

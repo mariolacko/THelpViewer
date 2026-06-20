@@ -44,6 +44,14 @@ def test_manifest_drives_sources_products_and_conversion_files():
     manifest = load_help_manifest()
 
     assert manifest.version == 2
+    assert [converter.name for converter in manifest.converters[:5]] == [
+        "fbhf-source",
+        "hlx",
+        "hlx",
+        "hlx",
+        "norton-guide",
+    ]
+    assert manifest.converters[0].reader == "thelpviewer.converter.readers.fbhf:FBHFSourceReader"
     assert SOURCE_RUNNERS["cheater_cz"] == "thelpviewer.downloader.cheater_cz"
     assert "software602" in all_products()
     assert normalize_build_group("ms") == "microsoft"
@@ -51,6 +59,8 @@ def test_manifest_drives_sources_products_and_conversion_files():
     assert normalize_build_group("missing") is None
 
     game_cheater = product_spec("game-cheater")
+    assert game_cheater.menu_label == "Game-Cheater"
+    assert game_cheater.default_version == "9.02"
     assert game_cheater.conversion.required_filenames == (
         "CHEATDBS.000",
         "CHEATDBS.T00",
@@ -72,7 +82,7 @@ def test_manifest_drives_sources_products_and_conversion_files():
         "informace",
     ]
     assert product_spec("scorpion").conversion.matches("DATA1.SCO")
-    assert product_spec("scorpion").conversion.matches("CHEATER.EXE", fallback=True)
+    assert product_spec("scorpion").conversion.matches("CHEATER.EXE", secondary=True)
 
     turbo_pascal_entries = product_entries("tp")
     assert turbo_pascal_entries

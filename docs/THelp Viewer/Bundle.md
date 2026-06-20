@@ -25,10 +25,18 @@ Example catalog entry:
   "group": "Microsoft QuickBASIC Extended 7.1",
   "file": "Microsoft QuickBASIC Extended 7.1/bas7qck.json.gz",
   "name": "Microsoft BASIC Help",
+  "product": "qbx",
+  "product_name": "Microsoft QuickBASIC Extended",
+  "version": "7.1",
+  "menu_name": "Microsoft BASIC Help",
   "format": "quickhelp",
   "topics": 428
 }
 ```
+
+`product`, `product_name`, `version`, and `menu_name` are emitted by the bundle
+writer and used by the TurboVision menu. Help Files is rendered as product →
+version → bundle file from these explicit catalog fields.
 
 ## 2. Loading Flow
 

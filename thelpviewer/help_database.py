@@ -24,6 +24,26 @@ class DownloadSourceSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class ConverterSpec:
+    """One format detector and reader registered in the manifest."""
+
+    name: str
+    source_kind: str
+    reader: str
+    reader_init: str = "source"
+    loader: str = ""
+    matcher: str = ""
+    matcher_args: str = "data"
+    reject_matcher: str = ""
+    reject_matcher_args: str = "data"
+    detector: str = ""
+    detector_args: str = "path_data"
+    detector_equals: str = ""
+    extensions: tuple[str, ...] = ()
+    match_mode: str = "all"
+
+
+@dataclass(frozen=True, slots=True)
 class SourceQuery:
     """How one logical product is discovered on one provider."""
 
@@ -71,7 +91,7 @@ class ConversionSpec:
 
     use_database_entries: bool = True
     files: tuple[ConversionFileSpec, ...] = ()
-    fallback_files: tuple[ConversionFileSpec, ...] = ()
+    secondary_files: tuple[ConversionFileSpec, ...] = ()
     bundles: tuple[ConversionBundleSpec, ...] = ()
 
     @property
@@ -82,8 +102,8 @@ class ConversionSpec:
     def required_filenames(self) -> tuple[str, ...]:
         return tuple(item.filename for item in self.files if item.filename and item.required)
 
-    def matches(self, path: str | Path, *, fallback: bool = False) -> bool:
-        candidates = self.fallback_files if fallback else self.files
+    def matches(self, path: str | Path, *, secondary: bool = False) -> bool:
+        candidates = self.secondary_files if secondary else self.files
         return any(item.matches(path) for item in candidates)
 
 
@@ -94,6 +114,8 @@ class ProductSpec:
     key: str
     label: str
     sources: dict[str, SourceQuery]
+    menu_label: str = ""
+    default_version: str = ""
     build_group: str = ""
     collection_prefixes: tuple[str, ...] = ()
     conversion: ConversionSpec = field(default_factory=ConversionSpec)
@@ -133,6 +155,7 @@ class HelpManifest:
 
     version: int
     sources: tuple[DownloadSourceSpec, ...]
+    converters: tuple[ConverterSpec, ...]
     products: tuple[ProductSpec, ...]
     build_groups: tuple[BuildGroupSpec, ...]
     entries: tuple[HelpDatabaseEntry, ...]
@@ -140,6 +163,10 @@ class HelpManifest:
     @property
     def source_map(self) -> dict[str, DownloadSourceSpec]:
         return {item.key: item for item in self.sources}
+
+    @property
+    def converter_map(self) -> dict[str, ConverterSpec]:
+        return {item.name: item for item in self.converters}
 
     @property
     def product_map(self) -> dict[str, ProductSpec]:
@@ -212,6 +239,40 @@ def _parse_source_query(value: object) -> SourceQuery:
     )
 
 
+def _parse_converter(value: object) -> ConverterSpec | None:
+    if not isinstance(value, dict):
+        return None
+    name = value.get("name") if isinstance(value.get("name"), str) else ""
+    source_kind = value.get("source_kind") if isinstance(value.get("source_kind"), str) else ""
+    reader = value.get("reader") if isinstance(value.get("reader"), str) else ""
+    loader = value.get("loader") if isinstance(value.get("loader"), str) else ""
+    if not name.strip() or source_kind.strip() not in {"compiled", "source"}:
+        return None
+    if not reader.strip() and not loader.strip():
+        return None
+    reader_init = value.get("reader_init") if isinstance(value.get("reader_init"), str) else "source"
+    match_mode = value.get("match_mode") if isinstance(value.get("match_mode"), str) else "all"
+    matcher_args = value.get("matcher_args") if isinstance(value.get("matcher_args"), str) else "data"
+    reject_args = value.get("reject_matcher_args") if isinstance(value.get("reject_matcher_args"), str) else "data"
+    detector_args = value.get("detector_args") if isinstance(value.get("detector_args"), str) else "path_data"
+    return ConverterSpec(
+        name=name.strip(),
+        source_kind=source_kind.strip(),
+        reader=reader.strip(),
+        reader_init=reader_init.strip() or "source",
+        loader=loader.strip(),
+        matcher=str(value.get("matcher") or "").strip(),
+        matcher_args=matcher_args.strip() or "data",
+        reject_matcher=str(value.get("reject_matcher") or "").strip(),
+        reject_matcher_args=reject_args.strip() or "data",
+        detector=str(value.get("detector") or "").strip(),
+        detector_args=detector_args.strip() or "path_data",
+        detector_equals=str(value.get("detector_equals") or "").strip(),
+        extensions=tuple(item.lower() for item in _string_tuple(value.get("extensions"))),
+        match_mode=match_mode.strip() or "all",
+    )
+
+
 def _parse_conversion_file(value: object) -> ConversionFileSpec | None:
     if isinstance(value, str) and value.strip():
         return ConversionFileSpec(filename=value.strip())
@@ -277,7 +338,7 @@ def _parse_conversion(value: object) -> ConversionSpec:
     return ConversionSpec(
         use_database_entries=bool(item.get("use_database_entries", True)),
         files=files,
-        fallback_files=parse_files("fallback_files"),
+        secondary_files=parse_files("secondary_files"),
         bundles=tuple(bundles),
     )
 
@@ -321,6 +382,14 @@ def _parse_manifest(payload: object) -> HelpManifest:
             description = item.get("description") if isinstance(item.get("description"), str) else key
             sources.append(DownloadSourceSpec(key.strip(), description.strip(), runner.strip()))
 
+    raw_converters = payload.get("converters", [])
+    converters: list[ConverterSpec] = []
+    if isinstance(raw_converters, list):
+        for item in raw_converters:
+            converter = _parse_converter(item)
+            if converter is not None:
+                converters.append(converter)
+
     raw_products = payload.get("products", [])
     products: list[ProductSpec] = []
     if isinstance(raw_products, list):
@@ -343,6 +412,8 @@ def _parse_manifest(payload: object) -> HelpManifest:
                     key=key.strip(),
                     label=label.strip(),
                     sources=queries,
+                    menu_label=str(item.get("menu_label") or "").strip(),
+                    default_version=str(item.get("default_version") or "").strip(),
                     build_group=build_group.strip(),
                     collection_prefixes=_string_tuple(item.get("collection_prefixes")),
                     conversion=_parse_conversion(item.get("conversion")),
@@ -432,6 +503,14 @@ def _parse_manifest(payload: object) -> HelpManifest:
             raise ValueError(
                 f"entry {entry.crc32:08X} uses unknown product: {entry.product_key}"
             )
+    for converter in converters:
+        if converter.match_mode not in {"all", "any"}:
+            raise ValueError(f"converter {converter.name} has invalid match_mode: {converter.match_mode}")
+        if converter.reader_init not in {"source", "path", "none"}:
+            raise ValueError(f"converter {converter.name} has invalid reader_init: {converter.reader_init}")
+        has_matcher = bool(converter.matcher or converter.detector or converter.extensions)
+        if not has_matcher:
+            raise ValueError(f"converter {converter.name} has no matcher, detector, or extension rule")
 
     try:
         version = int(payload.get("version", 1))
@@ -440,6 +519,7 @@ def _parse_manifest(payload: object) -> HelpManifest:
     return HelpManifest(
         version=version,
         sources=tuple(sources),
+        converters=tuple(converters),
         products=product_tuple,
         build_groups=tuple(build_groups),
         entries=tuple(entries),
@@ -450,7 +530,7 @@ def _parse_manifest(payload: object) -> HelpManifest:
 def _load_manifest(database_path: str) -> HelpManifest:
     path = Path(database_path)
     if not path.is_file():
-        return HelpManifest(version=1, sources=(), products=(), build_groups=(), entries=())
+        return HelpManifest(version=1, sources=(), converters=(), products=(), build_groups=(), entries=())
     return _parse_manifest(json.loads(path.read_text(encoding="utf-8")))
 
 
@@ -480,6 +560,7 @@ def product_entries(product_key: str, path: str | Path | None = None) -> tuple[H
 
 __all__ = [
     "BuildGroupSpec",
+    "ConverterSpec",
     "ConversionBundleSpec",
     "ConversionFileSpec",
     "ConversionSpec",

@@ -6,14 +6,19 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import os
 from pathlib import Path
+import sys
 
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 # ``metadata.source.format`` in the bundle records the source format id
-# ("thelp", "quickhelp", ...).  ``helps/catalog.json`` historically exposes the
-# reader family used by the bundle exporter ("borland", "bw03", ...), so we
-# normalize here to keep rebuilt catalogs byte-for-byte compatible with the
-# normal bundle build.
+# ("thelp", "quickhelp", ...).  ``helps/catalog.json`` exposes the reader
+# family used by the bundle exporter ("borland", "bw03", ...), so rebuilt
+# catalogs normalize the same public value.
 FORMAT_ALIASES = {
     "thelp": "borland",
     "ng": "norton-guide",
@@ -38,8 +43,35 @@ def _topic_count(payload: dict[str, object]) -> int:
     return 0
 
 
+def _read_file_bytes(path: Path) -> bytes:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                return b"".join(chunks)
+            chunks.append(chunk)
+    finally:
+        os.close(fd)
+
+
+def _metadata_string(metadata: dict[str, object], key: str) -> str:
+    value = metadata.get(key)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _catalog_source_files(metadata: dict[str, object], source_file: str) -> list[str]:
+    raw_files = metadata.get("catalog_source_files")
+    if isinstance(raw_files, list):
+        files = [item.strip() for item in raw_files if isinstance(item, str) and item.strip()]
+        if files:
+            return files
+    return [source_file] if source_file else []
+
+
 def _catalog_entry(path: Path, helps_dir: Path) -> dict[str, object]:
-    payload = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
+    payload = json.loads(gzip.decompress(_read_file_bytes(path)).decode("utf-8"))
     metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
         metadata = {}
@@ -53,15 +85,30 @@ def _catalog_entry(path: Path, helps_dir: Path) -> dict[str, object]:
     name = metadata.get("name") if isinstance(metadata.get("name"), str) else ""
     if not name:
         name = path.stem
+    source_files = _catalog_source_files(metadata, source_file or path.name)
 
-    return {
+    product_key = _metadata_string(metadata, "product")
+    product_name = _metadata_string(metadata, "product_name")
+    version = _metadata_string(metadata, "version")
+    menu_name = _metadata_string(metadata, "menu_name")
+    entry = {
         "group": "" if group == "." else group,
         "file": str(rel_path).replace("\\", "/"),
-        "source_file": source_file or path.name,
+        "source_file": source_files[0],
+        "source_files": source_files,
         "name": name,
         "format": _normalize_format(source.get("format")),
         "topics": _topic_count(payload),
     }
+    if product_key:
+        entry["product"] = product_key
+    if product_name:
+        entry["product_name"] = product_name
+    if version:
+        entry["version"] = version
+    if menu_name and menu_name != name:
+        entry["menu_name"] = menu_name
+    return entry
 
 
 def rebuild_catalog(helps_dir: Path, output_path: Path) -> int:
@@ -88,8 +135,7 @@ def rebuild_catalog(helps_dir: Path, output_path: Path) -> int:
 
 
 def main() -> int:
-    repo_root = Path(__file__).resolve().parents[1]
-    default_helps_dir = repo_root / "helps"
+    default_helps_dir = REPO_ROOT / "helps"
     parser = argparse.ArgumentParser(
         description="Rebuild helps/catalog.json from existing .json.gz bundles.",
     )

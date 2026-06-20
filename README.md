@@ -201,16 +201,16 @@ each other.
 
 The canonical [help-database.json](thelpviewer/help-database.json) is shared by
 the downloader and converter. Schema version 2 contains downloader providers,
-product families, build groups, conversion file rules, output bundle groups,
-and the existing source metadata keyed by `crc32`. Product families group
+converter handlers, product families, build groups, conversion file rules,
+output bundle groups, and the existing source metadata keyed by `crc32`. Product families group
 multiple releases without duplicating provider configuration. CRC entries are
 assigned to a family through `collection_prefixes` and expose the remaining
 collection suffix as the release version.
 
 Encoding resolution uses this precedence: explicit parameter, CRC database
 entry, then payload autodetection. Bundle export also uses the database for
-CRC-based deduplication and falls back to directory-based grouping when no
-match exists.
+CRC-based deduplication; files without CRC metadata keep their directory-based
+grouping.
 
 See [Bundle format](docs/THelp%20Viewer/Bundle.md) for the JSON bundle specification.
 

@@ -185,11 +185,6 @@ class FBHFSourceParser:
         )
 
 
-def parse_source_data(data: bytes):
-    """Compatibility wrapper around ``FBHFSourceParser``."""
-    return FBHFSourceParser(data).parse()
-
-
 class FBHFBinaryParser:
     """Parse FBHF binary structures directly into the shared intermediate model."""
 

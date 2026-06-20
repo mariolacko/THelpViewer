@@ -48,14 +48,15 @@ Binary/Source Files → Format Detection → Reader → HelpDocument → Writer 
 Before format detection, `thelpviewer/help-database.json` supplies shared
 product and source metadata. Its product families group releases, define build
 roots and conversion inputs, and map known CRC32 files to canonical collection,
-title, encoding, and bundle metadata. `thelpviewer/help_database.py` validates
-and exposes the schema; `converter/help_database.py` remains a compatibility
-import for existing converter callers.
+title, encoding, and bundle metadata. It also defines converter handlers in
+deterministic order, including the matcher/detector function and reader class.
+`thelpviewer/help_database.py` validates and exposes the schema.
 
 ### 1. Format Detection
 
-When the converter loads a file, `exporter.py` determines the format using
-file extension and magic-byte detection:
+When the converter loads a file, `exporter.py` builds its format registry from
+the manifest and then determines the format using file extension and
+magic-byte detection:
 
 | Priority | Check | Format |
 |----------|-------|--------|

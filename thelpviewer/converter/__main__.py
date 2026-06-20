@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from thelpviewer.help_database import load_help_database, lookup_help_database_entry
+
 from .exporter import export_file, export_tree
 from .writers.bundle import export_bundle, export_bundle_tree
 
@@ -64,7 +66,13 @@ def main() -> None:
                 print(f"{result.format_name}\t{result.input_path.name}\t{result.json_path.name}")
             print(f"TOTAL\t{len(results)}")
         else:
-            result = export_bundle(input_path, args.output_dir, encoding=args.encoding)
+            help_database = load_help_database()
+            result = export_bundle(
+                input_path,
+                args.output_dir,
+                encoding=args.encoding,
+                database_entry=lookup_help_database_entry(input_path, help_database),
+            )
             print(f"{result.format_name}\t{result.input_path.name}\t{result.json_path.name}")
         return
 

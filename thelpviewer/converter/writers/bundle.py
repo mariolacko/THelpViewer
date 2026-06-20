@@ -12,9 +12,15 @@ from pathlib import Path
 from ..base import HelpDocument
 from ..bundle_extensions import discover_bundle_source_groups, document_bundle_variants
 from ..bundle_types import BundleDocumentVariant, BundleSourceGroup
-from ..help_database import load_help_database, lookup_help_database_entry
 from ..exporter import iter_help_files, load_document, select_display_encoding, fix_metadata_encoding, _clean_dir
-from .json import HelpJsonRenderer
+from .json import HelpJsonRenderer, TRANSPORT_METADATA_KEY_LIST
+from thelpviewer.help_database import (
+    HelpDatabaseEntry,
+    ProductSpec,
+    load_help_database,
+    load_help_manifest,
+    lookup_help_database_entry,
+)
 from .html import (
     GENERATOR_VERSION,
     PACKAGE_ASSET_DIR,
@@ -36,6 +42,9 @@ class BundleResult:
     topic_count: int
     display_name: str
     source_files: tuple[str, ...] = ()
+    product: str = ""
+    product_name: str = ""
+    version: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +53,8 @@ class _PendingBundleExport:
     bundle_dir: Path
     bundle_path: Path
     bundle_stem: str
-    database_entry: object | None = None
+    group_name: str = ""
+    database_entry: HelpDatabaseEntry | None = None
 
 
 def _bundle_stem_for_entry(source_path: Path, database_entry: object | None) -> str:
@@ -56,6 +66,103 @@ def _bundle_stem_for_entry(source_path: Path, database_entry: object | None) -> 
         if filenames:
             return Path(filenames[0]).stem.lower()
     return source_path.stem.lower()
+
+
+def _product_menu_label(product: ProductSpec | None) -> str:
+    if product is None:
+        return ""
+    return product.menu_label or product.label
+
+
+def _product_metadata_for_database_entry(
+    database_entry: HelpDatabaseEntry | None,
+) -> tuple[str, str, str]:
+    if database_entry is None or not database_entry.product_key:
+        return "", "", ""
+    product = load_help_manifest().product_map.get(database_entry.product_key)
+    version = database_entry.version or (product.default_version if product else "")
+    return database_entry.product_key, _product_menu_label(product), version
+
+
+def _product_metadata_for_group(group_name: str) -> tuple[str, str, str]:
+    normalized = group_name.replace("\\", "/").strip("/")
+    if not normalized:
+        return "", "", ""
+    manifest = load_help_manifest()
+    for product in manifest.products:
+        prefixes = (
+            (product.menu_label,) if product.menu_label else ()
+        ) + product.collection_prefixes + (product.label,)
+        for prefix in prefixes:
+            clean_prefix = prefix.strip()
+            if not clean_prefix:
+                continue
+            if normalized.casefold().startswith(clean_prefix.casefold()):
+                version = normalized[len(clean_prefix) :].strip(" -/")
+                return product.key, _product_menu_label(product), version or product.default_version
+    return "", "", ""
+
+
+def _catalog_menu_name(
+    display_name: str,
+    *,
+    group_name: str,
+    product_name: str,
+    version: str,
+) -> str:
+    label = display_name.strip()
+    prefixes = [
+        f"{group_name} - ",
+        f"{product_name} {version} - " if product_name and version else "",
+        f"{product_name} - " if product_name else "",
+    ]
+    for prefix in prefixes:
+        if prefix and label.casefold().startswith(prefix.casefold()):
+            return label[len(prefix) :].strip() or label
+    return label
+
+
+def _add_transport_metadata_keys(document: HelpDocument, keys: tuple[str, ...]) -> None:
+    raw_keys = document.metadata.get(TRANSPORT_METADATA_KEY_LIST)
+    transport_keys = (
+        [item for item in raw_keys if isinstance(item, str)]
+        if isinstance(raw_keys, (list, tuple))
+        else []
+    )
+    for key in keys:
+        if key not in transport_keys:
+            transport_keys.append(key)
+    document.metadata[TRANSPORT_METADATA_KEY_LIST] = transport_keys
+
+
+def _apply_catalog_metadata(
+    document: HelpDocument,
+    *,
+    product: str,
+    product_name: str,
+    version: str,
+    menu_name: str,
+    source_files: tuple[str, ...],
+) -> None:
+    transported: list[str] = []
+    for key, value in (
+        ("product", product),
+        ("product_name", product_name),
+        ("version", version),
+        ("menu_name", menu_name),
+    ):
+        cleaned = value.strip()
+        if cleaned:
+            document.metadata[key] = cleaned
+            transported.append(key)
+
+    files = [item for item in source_files if isinstance(item, str) and item.strip()]
+    if files:
+        document.metadata["catalog_source_files"] = files
+        transported.append("catalog_source_files")
+
+    if transported:
+        _add_transport_metadata_keys(document, tuple(transported))
 
 
 def export_bundle(
@@ -96,6 +203,24 @@ def export_bundle(
         target_dir.mkdir(parents=True, exist_ok=True)
         display_name = document.display_name
         file_stem = _bundle_stem_for_entry(source_path, database_entry) if bundle_name is None else bundle_name
+        source_files = tuple(
+            getattr(database_entry, "filenames", ()) or (source_path.name,)
+        )
+        product_key, product_name, version = _product_metadata_for_database_entry(database_entry)
+        menu_name = _catalog_menu_name(
+            display_name,
+            group_name=getattr(database_entry, "collection", "") if database_entry is not None else "",
+            product_name=product_name,
+            version=version,
+        )
+        _apply_catalog_metadata(
+            document,
+            product=product_key,
+            product_name=product_name,
+            version=version,
+            menu_name=menu_name if menu_name != display_name else "",
+            source_files=source_files,
+        )
         json_path = _write_document_bundle(document, target_dir / (file_stem + ".json.gz"), chosen_encoding)
         print(f"[bundle] OK: {source_path.name} → {json_path.name} ({getattr(document, 'format_name', '?')})")
         return BundleResult(
@@ -104,9 +229,10 @@ def export_bundle(
             format_name=document.format_name,
             topic_count=len(document.topics),
             display_name=display_name,
-            source_files=tuple(
-                getattr(database_entry, "filenames", ()) or (source_path.name,)
-            ),
+            source_files=source_files,
+            product=product_key,
+            product_name=product_name,
+            version=version,
         )
     except Exception as e:
         import traceback
@@ -132,6 +258,7 @@ def _export_bundle_source_group(
     group: BundleSourceGroup,
     *,
     bundle_dir: Path,
+    group_name: str,
     encoding: str,
 ) -> BundleResult:
     source_names = ", ".join(path.name for path in group.source_paths)
@@ -149,6 +276,22 @@ def _export_bundle_source_group(
         fix_metadata_encoding(document, chosen_encoding)
 
     document = group.build_document(group.source_paths, documents)
+    product_key, product_name, version = _product_metadata_for_group(group_name)
+    source_files = tuple(path.name for path in group.source_paths)
+    menu_name = _catalog_menu_name(
+        document.display_name,
+        group_name=group_name,
+        product_name=product_name,
+        version=version,
+    )
+    _apply_catalog_metadata(
+        document,
+        product=product_key,
+        product_name=product_name,
+        version=version,
+        menu_name=menu_name if menu_name != document.display_name else "",
+        source_files=source_files,
+    )
     json_path = _write_document_bundle(document, bundle_dir / f"{group.bundle_stem}.json.gz", chosen_encoding)
     print(f"[bundle] OK: {source_names} → {json_path.name} ({getattr(document, 'format_name', '?')})")
     return BundleResult(
@@ -157,7 +300,10 @@ def _export_bundle_source_group(
         format_name=document.format_name,
         topic_count=len(document.topics),
         display_name=document.display_name,
-        source_files=tuple(path.name for path in group.source_paths),
+        source_files=source_files,
+        product=product_key,
+        product_name=product_name,
+        version=version,
     )
 
 
@@ -208,8 +354,28 @@ def _export_pending_bundle_variants(
             BundleDocumentVariant(bundle_stem=pending.bundle_stem, document=document)
         ]
         results: list[BundleResult] = []
+        product_key, product_name, version = (
+            _product_metadata_for_database_entry(db_entry)
+            if db_entry is not None
+            else _product_metadata_for_group(pending.group_name)
+        )
         for variant in variants:
             variant_document = variant.document
+            source_files = variant.source_files or tuple(getattr(db_entry, "filenames", ()) or (source_path.name,))
+            menu_name = _catalog_menu_name(
+                variant_document.display_name,
+                group_name=pending.group_name,
+                product_name=product_name,
+                version=version,
+            )
+            _apply_catalog_metadata(
+                variant_document,
+                product=product_key,
+                product_name=product_name,
+                version=version,
+                menu_name=menu_name if menu_name != variant_document.display_name else "",
+                source_files=source_files,
+            )
             json_path = _write_document_bundle(
                 variant_document,
                 pending.bundle_dir / f"{variant.bundle_stem}.json.gz",
@@ -226,8 +392,10 @@ def _export_pending_bundle_variants(
                     format_name=variant_document.format_name,
                     topic_count=len(variant_document.topics),
                     display_name=variant_document.display_name,
-                    source_files=variant.source_files
-                    or tuple(getattr(db_entry, "filenames", ()) or (source_path.name,)),
+                    source_files=source_files,
+                    product=product_key,
+                    product_name=product_name,
+                    version=version,
                 )
             )
         return results
@@ -243,6 +411,9 @@ def _export_pending_bundle_variants(
                 topic_count=0,
                 display_name=source_path.stem,
                 source_files=(source_path.name,),
+                product=_product_metadata_for_group(pending.group_name)[0],
+                product_name=_product_metadata_for_group(pending.group_name)[1],
+                version=_product_metadata_for_group(pending.group_name)[2],
             )
         ]
 
@@ -252,7 +423,7 @@ def _build_pending_bundle_export(
     *,
     source_root: Path,
     helps_dir: Path,
-    database_entry: object | None,
+    database_entry: HelpDatabaseEntry | None,
 ) -> _PendingBundleExport:
     relative = path.relative_to(source_root)
     group_name = (
@@ -268,6 +439,7 @@ def _build_pending_bundle_export(
         bundle_dir=bundle_dir,
         bundle_path=bundle_dir / f"{bundle_stem}.json.gz",
         bundle_stem=bundle_stem,
+        group_name=group_name,
         database_entry=database_entry,
     )
 
@@ -375,6 +547,7 @@ def export_bundle_tree(
                 _export_bundle_source_group(
                     group,
                     bundle_dir=first_pending.bundle_dir,
+                    group_name=first_pending.group_name,
                     encoding=encoding,
                 )
             )
@@ -393,6 +566,9 @@ def export_bundle_tree(
                     topic_count=0,
                     display_name=description,
                     source_files=tuple(path.name for path in group.source_paths),
+                    product=_product_metadata_for_group(str(group.source_paths[0].parent.relative_to(source_root)))[0],
+                    product_name=_product_metadata_for_group(str(group.source_paths[0].parent.relative_to(source_root)))[1],
+                    version=_product_metadata_for_group(str(group.source_paths[0].parent.relative_to(source_root)))[2],
                 )
             )
 
@@ -402,17 +578,30 @@ def export_bundle_tree(
         rel_path = result.json_path.relative_to(helps_dir)
         group = str(rel_path.parent) if rel_path.parent != Path(".") else ""
         source_files = list(result.source_files) if result.source_files else [result.input_path.name]
-        catalog.append(
-            {
-                "group": group,
-                "file": str(rel_path).replace("\\", "/"),
-                "source_file": source_files[0],
-                "source_files": source_files,
-                "name": result.display_name,
-                "format": result.format_name,
-                "topics": result.topic_count,
-            }
+        menu_name = _catalog_menu_name(
+            result.display_name,
+            group_name=group,
+            product_name=result.product_name,
+            version=result.version,
         )
+        entry = {
+            "group": group,
+            "file": str(rel_path).replace("\\", "/"),
+            "source_file": source_files[0],
+            "source_files": source_files,
+            "name": result.display_name,
+            "format": result.format_name,
+            "topics": result.topic_count,
+        }
+        if result.product:
+            entry["product"] = result.product
+        if result.product_name:
+            entry["product_name"] = result.product_name
+        if result.version:
+            entry["version"] = result.version
+        if menu_name and menu_name != result.display_name:
+            entry["menu_name"] = menu_name
+        catalog.append(entry)
 
     catalog_path = helps_dir / CATALOG_FILENAME
     catalog_path.write_text(
@@ -516,7 +705,7 @@ def _render_bundle_index_html() -> str:
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20260506a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20260506a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20260507b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260612b"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260618a"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"

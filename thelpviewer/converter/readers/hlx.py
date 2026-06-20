@@ -730,21 +730,6 @@ class HlxSourceParser:
             return decode_bytes(data, encoding)
         return data.decode("latin-1", errors="ignore")
 
-def parse_hlx_data(
-    data: bytes,
-    source_name: str = "input.hlx",
-    source_path: str | Path | None = None,
-    from_cp: str | None = None,
-) -> HelpDocument:
-    """Compatibility wrapper around ``HlxSourceParser``."""
-    return HlxSourceParser(
-        data,
-        source_name=source_name,
-        source_path=source_path,
-        from_cp=from_cp,
-    ).parse()
-
-
 class HlxHelpReader(HelpReaderBase):
     """Read textual HLX source and normalize it into the shared document model."""
 

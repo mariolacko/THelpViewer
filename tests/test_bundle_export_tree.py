@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 
 from thelpviewer.converter.base import ContentNode, HelpDocument, IndexEntry, TopicRecord
-from thelpviewer.converter.help_database import HelpDatabaseEntry, crc32_file
 from thelpviewer.converter.writers import bundle as bundle_writer
+from thelpviewer.help_database import HelpDatabaseEntry, crc32_file
 
 
 def test_export_bundle_tree_prefers_tdh_candidate_with_more_topics(tmp_path, monkeypatch):
@@ -69,6 +69,8 @@ def test_export_bundle_tree_prefers_tdh_candidate_with_more_topics(tmp_path, mon
             "name": "Turbo Debugger Help",
             "format": "borland",
             "topics": 596,
+            "product": "td",
+            "product_name": "Borland Turbo Debugger",
         }
     ]
 
@@ -207,6 +209,10 @@ def test_export_bundle_tree_splits_scorpion_v3_sections(tmp_path, monkeypatch):
     assert catalog_by_file["Scorpions Cheater 3/navody.json.gz"]["topics"] == 1
     assert catalog_by_file["Scorpions Cheater 3/cheaty.json.gz"]["topics"] == 1
     assert catalog_by_file["Scorpions Cheater 3/vtipy.json.gz"]["topics"] == 1
+    assert catalog_by_file["Scorpions Cheater 3/navody.json.gz"]["product"] == "scorpion"
+    assert catalog_by_file["Scorpions Cheater 3/navody.json.gz"]["product_name"] == "Scorpions Cheater"
+    assert catalog_by_file["Scorpions Cheater 3/navody.json.gz"]["version"] == "3"
+    assert catalog_by_file["Scorpions Cheater 3/navody.json.gz"]["menu_name"] == "Návody"
     assert catalog_by_file["Scorpions Cheater 3/navody.json.gz"]["name"] == "Scorpions Cheater 3 - Návody"
     assert catalog_by_file["Scorpions Cheater 3/cheaty.json.gz"]["name"] == "Scorpions Cheater 3 - Cheaty"
     assert catalog_by_file["Scorpions Cheater 3/vtipy.json.gz"]["name"] == "Scorpions Cheater 3 - Vtipy"

@@ -27,7 +27,6 @@ from .exporter import (
     export_file,
     export_tree,
     load_document,
-    load_binary_document,
 )
 from .readers.fbhf import FBHFHelpReader, FBHFSourceParser, FBHFSourceReader, is_fbhf_binary, is_fbhf_source
 from .writers.html import HelpHtmlRenderer
@@ -75,6 +74,5 @@ __all__ = [
     "is_thelp_binary",
     "is_tdh_binary",
     "is_tfh_binary",
-    "load_binary_document",
     "load_document",
 ]

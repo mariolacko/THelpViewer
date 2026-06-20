@@ -57,6 +57,8 @@ configured product and skips anything already present in `downloads/` or
 `thelpviewer/help-database.json` is the single source of truth for:
 
 - `sources`: provider key, description, and Python runner module
+- `converters`: format handler order, matcher/detector function, reader class,
+  and reader construction mode
 - `products`: stable family key, display label, build group, collection
   prefixes, provider queries, and conversion rules
 - `build_groups`: source/output prefixes, default inclusion, and CLI aliases
@@ -71,15 +73,21 @@ configured `collection_prefixes`, or can be stated explicitly with `product`
 and `release`.
 
 Conversion rules support exact `filename` values, glob `pattern` values,
-optional `crc32`, required inputs, fallback inputs, and named output `bundles`.
+optional `crc32`, required inputs, secondary inputs, and named output `bundles`.
 Game-Cheater uses bundle rules for its five sections. Scorpion uses `*.DAT`,
-`*.SCO`, `*.SCX`, and `*.SCD`, with `*.EXE` only as an embedded-data fallback.
+`*.SCO`, `*.SCX`, and `*.SCD`, with `*.EXE` only as a secondary embedded-data
+input when a release has no standalone data files.
 
 For Scorpions Cheater this now also includes the stable public DOS history page
 in `direct_urls`, while the provider still resolves each per-version gated file
 URL dynamically through `get-name.php` / `get-link.php`.
 
 This keeps “what we want” separate from provider code.
+
+Adding a downloader does not require changing the central CLI: create a provider
+module with `run(...)`, add it to `sources`, and reference that source from one
+or more products. Adding a converter follows the same pattern: create a reader
+module with a matcher/detector and reader class, then add a `converters` entry.
 
 ## Providers
 
@@ -142,7 +150,7 @@ This replaces the old mix of `7z`, `zipfile`, and special-case RAR handling.
 |--------|---------|
 | `http.py` | HTTP fetch/download helpers and anchor parsing |
 | `collector.py` | language detection, help-file scanning, final copy to `sources/` |
-| `common.py` | compatibility re-export shim for older entry points |
+| `extractor.py` | archive probing and extraction through `unar` / `lsar` |
 
 ## Requirements
 
