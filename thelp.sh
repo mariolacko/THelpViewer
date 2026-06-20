@@ -37,12 +37,45 @@ HOST="${THELP_HOST:-0.0.0.0}"
 PID_FILE="${THELP_PID_FILE:-${STATE_DIR}/uvicorn.pid}"
 LOG_FILE="${THELP_LOG_FILE:-${STATE_DIR}/uvicorn.log}"
 SERVER_FOREGROUND="${THELP_SERVER_FOREGROUND:-0}"
+
+resolve_python_candidate() {
+    if [ -x "$1" ]; then
+        printf '%s\n' "$1"
+        return 0
+    fi
+    command -v "$1" 2>/dev/null
+}
+
+python_auto_supported() {
+    "$1" - <<'PY' >/dev/null 2>&1
+import sys
+
+version = sys.version_info[:2]
+raise SystemExit(not ((3, 10) <= version < (3, 14)))
+PY
+}
+
+PYTHON_BIN=""
 if [ -n "${THELP_PYTHON:-}" ]; then
     PYTHON_BIN="${THELP_PYTHON}"
-elif [ -x "${SCRIPT_DIR}/.venv/bin/python3" ]; then
-    PYTHON_BIN="${SCRIPT_DIR}/.venv/bin/python3"
 else
-    PYTHON_BIN="$(command -v python3)"
+    for candidate in \
+        "${SCRIPT_DIR}/.venv/bin/python3" \
+        "${SCRIPT_DIR}/.venv/bin/python" \
+        python3.13 \
+        python3.12 \
+        python3.11 \
+        python3.10 \
+        python3
+    do
+        if candidate_path="$(resolve_python_candidate "$candidate")" && python_auto_supported "$candidate_path"; then
+            PYTHON_BIN="$candidate_path"
+            break
+        fi
+    done
+    if [ -z "${PYTHON_BIN}" ]; then
+        PYTHON_BIN="$(command -v python3)"
+    fi
 fi
 
 do_download=false
