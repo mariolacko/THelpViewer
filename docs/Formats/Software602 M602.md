@@ -77,6 +77,12 @@ Record types are determined by content pattern, not by a dedicated type field.
 | `$01` + bytes containing `$DF`            | Separator |
 | Anything else                             | Body text |
 
+Body records may also start with `$01`. In observed `M602_200.HLP` this is an
+internal line prefix, not a visible CP437 smiley. Strip one leading `$01` from
+body records before parsing visible text and links. A body record containing
+only `$01` is a blank line. Do not treat `$01` bytes inside the two raw target
+bytes after a link as text or markup.
+
 ## 3.5 Title Records
 
 Mark the beginning of a new help topic.
@@ -326,6 +332,10 @@ Selected mappings:
 | $87  | č    | $8F  | Ć    | $9F  | ť    | $A0  | á    |
 | $A1  | í    | $A2  | ó    | $A3  | ú    | $A4  | ň    |
 | $A5  | Ň    | $A8  | š    | $A9  | ř    | $B5  | Á    |
+
+Low CP437 graphic bytes can appear as visible text after record/link parsing.
+Observed examples in body text are `$12` = `↕`, `$1E` = `▲`, and `$1F` = `▼`.
+They are display glyphs, not additional formatting controls.
 
 ## 3.9 Topic Structure
 

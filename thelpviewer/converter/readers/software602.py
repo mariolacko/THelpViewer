@@ -6,6 +6,8 @@ Visible bytes are stored with a +1 offset; body is 0x0E-delimited chunks.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from functools import lru_cache
 import re
 import struct
 from difflib import SequenceMatcher
@@ -19,6 +21,30 @@ from ..uhf_markup import escape_uhf_text, format_uhf_link
 _TEXT602_HDR = b'Text602 - help'
 _CALC602_HDR = b'Calc602 - help'
 
+_TEXT602_UI_THEME: dict[str, str] = {
+    "window": "#005454",
+    "text": "#a8fcfc",
+    "link": "#a8a800",
+    "title": "#a8a800",
+    "title_passive": "#005454",
+    "title_text": "#005454",
+    "title_text_passive": "#a8a800",
+    "frame": "#a8a800",
+    "frame_passive": "#a8a800",
+    "icon": "#005454",
+    "icon_passive": "#a8a800",
+    "page_area": "#005454",
+    "hover_bg": "#a8a800",
+    "hover_fg": "#005454",
+    "arrow_bg": "#a8a800",
+    "arrow_fg": "#005454",
+    "scroll_glyph": "#a8a800",
+    "thumb_bg": "#a8a800",
+    "thumb_fg": "#005454",
+    "code_bg": "#005454",
+    "code_text": "#a8fcfc",
+}
+
 
 def is_text602_binary(data: bytes) -> bool:
     """Return True when *data* looks like a Text602 or Calc602 help file."""
@@ -30,11 +56,16 @@ def is_text602_binary(data: bytes) -> bool:
 
 _T602_TEXT: dict[int, str] = {
     0x98: '\u25A0',  # ■
+    0xC4: '\u010F',  # ď
     0xCE: '\u0148',  # ň
+    0xD4: '\u0165',  # ť
     0xD5: '\u00FA',  # ú
+    0xE1: '\u00C1',  # Á
     0xE7: '|',
     0xF2: '\u0158',  # Ř
     0xF3: '\u0160',  # Š
+    0xF5: '\u00DA',  # Ú
+    0xF7: '\u00C9',  # É
     0xC1: '\u00E1',  # á
     0xC3: '\u010D',  # č
     0xC5: '\u011B',  # ě
@@ -68,6 +99,27 @@ _T602_BOX: dict[int, str] = {
 # Internal link markup produced by the parser: {label:target_title} or {label:target_title:dest_id}
 _LINK_RE = re.compile(r'\{([^{}:]+):([^{}]*?)(?::(\d+))?\}')
 _UNRESOLVED_LINK_RE = re.compile(r'\{([^{}:]+)::(\d+)\}')
+_NAV_TITLE_ALIAS_BY_TITLE = {
+    'Graf | Nadpis': ('Nadpis grafu',),
+}
+_NAV_GRAPH_TITLE_RE = re.compile(r'([23]D)\s+(?:rovinný|prostorový)\s+graf', re.IGNORECASE)
+
+
+@dataclass(frozen=True, slots=True)
+class _NavCandidate:
+    ctx_id: int
+    title: str
+    text: str
+    score: int
+    key: str
+    tokens: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _NavigationIndex:
+    by_key: dict[str, list[_NavCandidate]]
+    by_token: dict[str, tuple[_NavCandidate, ...]]
+    candidates: tuple[_NavCandidate, ...]
 
 
 # ─── Core parser ─────────────────────────────────────────────────────────────
@@ -92,7 +144,6 @@ class _T602Parser:
         self._title_aliases: dict[str, set[str]] = {}
         self._dest_targets: dict[int, str] = {}
         self._dest_hints: dict[int, tuple[str, ...]] = {}
-        self._screen_num = 0
 
     # ── public ──
 
@@ -301,12 +352,6 @@ class _T602Parser:
                 scoped = sorted(t for t in targets if t.startswith(f'{section} | '))
                 if len(scoped) == 1:
                     return scoped[0]
-        return None
-
-    def _resolve_scoped_link_target(self, text: str, prefix: str) -> str | None:
-        targets = sorted(t for t in self._candidate_targets(text) if t.startswith(prefix))
-        if len(targets) == 1:
-            return targets[0]
         return None
 
     def _resolve_hint_target(self, dest_id: int, hints: tuple[str, ...]) -> str | None:
@@ -717,7 +762,6 @@ class _T602Parser:
         return idx
 
     def _process_screen(self, parts: list[bytes], start_idx: int) -> tuple[dict | None, int | None]:
-        self._screen_num += 1
         items: list[dict] = []
         link_chunks: list[list] = []
         idx = self._emit_title_block(items, parts, start_idx)
@@ -823,21 +867,23 @@ def _make_screen(title: str, flag: int | None, items: list[dict]) -> dict:
 _NAV_SCREEN_TITLES = {'Help | Obsah', 'Help | Rejstřík'}
 
 
+@lru_cache(maxsize=8192)
 def _plain_internal_text(text: str) -> str:
     return re.sub(r'\{([^{}:]+):[^{}]*?(?::\d+)?\}', r'\1', text)
 
 
+@lru_cache(maxsize=8192)
 def _normalize_lookup_text(text: str) -> str:
     text = _plain_internal_text(text)
     text = text.strip()
     if text.startswith('\u25a0'):
         text = text[1:].strip()
-    text = text.replace('⌡', 'Ú')
     text = re.sub(r'\s+', ' ', text)
     text = re.sub(r'[^0-9A-Za-zÁČĎÉĚÍĹĽŇÓŘŠŤÚŮÝŽáčďéěíĺľňóřšťúůýž]+$', '', text)
     return text.rstrip('.').strip().casefold()
 
 
+@lru_cache(maxsize=8192)
 def _lookup_tokens(text: str) -> tuple[str, ...]:
     normalized = _normalize_lookup_text(text)
     if not normalized:
@@ -883,6 +929,18 @@ def _navigation_lookup_aliases(text: str) -> tuple[str, ...]:
     return tuple(aliases)
 
 
+def _title_navigation_aliases(title: str) -> tuple[str, ...]:
+    configured = _NAV_TITLE_ALIAS_BY_TITLE.get(title)
+    if configured:
+        return configured
+
+    match = _NAV_GRAPH_TITLE_RE.fullmatch(_T602Parser._title_last_segment(title))
+    if not match:
+        return ()
+    dimension = match.group(1).upper()
+    return (f'{dimension} graf', f'Výběr {dimension} grafu')
+
+
 def _is_candidate_text_line(text: str) -> bool:
     plain = _plain_internal_text(text).strip()
     if not plain:
@@ -894,17 +952,38 @@ def _is_candidate_text_line(text: str) -> bool:
     return sum(char.isalnum() for char in plain) >= 4
 
 
-def _build_navigation_target_index(screens: list[dict]) -> dict[str, list[tuple[int, str, str, int]]]:
-    index: dict[str, list[tuple[int, str, str, int]]] = {}
+def _build_navigation_target_index(screens: list[dict]) -> _NavigationIndex:
+    by_key: dict[str, list[_NavCandidate]] = {}
+    token_buckets: dict[str, set[_NavCandidate]] = {}
+    candidates: list[_NavCandidate] = []
+
+    def add_candidate(ctx_id: int, title: str, text: str, score: int) -> None:
+        key = _normalize_lookup_text(text)
+        if not key:
+            return
+        candidate = _NavCandidate(
+            ctx_id=ctx_id,
+            title=title,
+            text=text,
+            score=score,
+            key=key,
+            tokens=_lookup_tokens(text),
+        )
+        candidates.append(candidate)
+        by_key.setdefault(key, []).append(candidate)
+        for token in candidate.tokens:
+            token_buckets.setdefault(token, set()).add(candidate)
+
     for ctx_id, screen in enumerate(screens, 1):
         title = screen['title']
         if title in _NAV_SCREEN_TITLES:
             continue
 
         for title_alias in {title, _T602Parser._title_last_segment(title)}:
-            title_key = _normalize_lookup_text(title_alias)
-            if title_key:
-                index.setdefault(title_key, []).append((ctx_id, title, title_alias, 120))
+            add_candidate(ctx_id, title, title_alias, 120)
+
+        for title_alias in _title_navigation_aliases(title):
+            add_candidate(ctx_id, title, title_alias, 118)
 
         plain_seen = 0
         for item in screen['items']:
@@ -924,16 +1003,18 @@ def _build_navigation_target_index(screens: list[dict]) -> dict[str, list[tuple[
             if plain.startswith('\u25a0'):
                 score -= 15
             for alias in _navigation_lookup_aliases(item_text):
-                alias_key = _normalize_lookup_text(alias)
-                if alias_key:
-                    index.setdefault(alias_key, []).append((ctx_id, title, alias, score))
-    return index
+                add_candidate(ctx_id, title, alias, score)
+
+    by_token = {token: tuple(values) for token, values in token_buckets.items()}
+    return _NavigationIndex(by_key=by_key, by_token=by_token, candidates=tuple(candidates))
 
 
 def _resolve_navigation_target(
     label: str,
     current_title: str,
-    target_index: dict[str, list[tuple[int, str, str, int]]],
+    target_index: _NavigationIndex,
+    *,
+    allow_fuzzy: bool = True,
 ) -> str | None:
     key = _normalize_lookup_text(label)
     if not key:
@@ -941,97 +1022,93 @@ def _resolve_navigation_target(
 
     candidates = [
         candidate
-        for candidate in target_index.get(key, [])
-        if candidate[1] != current_title
+        for candidate in target_index.by_key.get(key, [])
+        if candidate.title != current_title
     ]
     if len(candidates) == 1:
-        return candidates[0][1]
+        return candidates[0].title
     if candidates:
-        ranked = sorted(candidates, key=lambda item: (-item[3], item[0], item[1], item[2]))
-        top_score = ranked[0][3]
-        top = [candidate for candidate in ranked if candidate[3] == top_score]
+        ranked = sorted(candidates, key=lambda item: (-item.score, item.ctx_id, item.title, item.text))
+        top_score = ranked[0].score
+        top = [candidate for candidate in ranked if candidate.score == top_score]
         if len(top) == 1:
-            return top[0][1]
+            return top[0].title
         filtered = [
             candidate
             for candidate in top
-            if not candidate[1].startswith(('Help | ', 'Menu '))
-            and candidate[1] != 'Makrofunkce odpovídající příkazům na menu'
+            if not candidate.title.startswith(('Help | ', 'Menu '))
+            and candidate.title != 'Makrofunkce odpovídající příkazům na menu'
         ]
         if filtered:
             top = filtered
-        titles = {candidate[1] for candidate in top}
+        titles = {candidate.title for candidate in top}
         if titles:
-            return sorted(top, key=lambda item: (item[0], item[1], item[2]))[0][1]
+            return sorted(top, key=lambda item: (item.ctx_id, item.title, item.text))[0].title
 
-    fuzzy_candidates: list[tuple[int, str, str, int]] = []
-    for values in target_index.values():
-        for candidate in values:
-            if candidate[1] == current_title:
-                continue
-            candidate_key = _normalize_lookup_text(candidate[2])
-            if not candidate_key or (key not in candidate_key and candidate_key not in key):
-                continue
-            score = candidate[3] - abs(len(candidate_key) - len(key))
-            if candidate[1].startswith('Menu '):
-                score -= 35
-            if candidate[1] == 'Makrofunkce odpovídající příkazům na menu':
-                score -= 25
-            if candidate[1].startswith('Help | '):
-                score -= 60
-            fuzzy_candidates.append((candidate[0], candidate[1], candidate[2], score))
+    if not allow_fuzzy:
+        return None
+
+    fuzzy_candidates: list[tuple[_NavCandidate, int]] = []
+    for candidate in target_index.candidates:
+        if candidate.title == current_title:
+            continue
+        if key not in candidate.key and candidate.key not in key:
+            continue
+        score = candidate.score - abs(len(candidate.key) - len(key))
+        if candidate.title.startswith('Menu '):
+            score -= 35
+        if candidate.title == 'Makrofunkce odpovídající příkazům na menu':
+            score -= 25
+        if candidate.title.startswith('Help | '):
+            score -= 60
+        fuzzy_candidates.append((candidate, score))
 
     if fuzzy_candidates:
-        ranked = sorted(fuzzy_candidates, key=lambda item: (-item[3], item[0], item[1], item[2]))
-        top_score = ranked[0][3]
-        top = [candidate for candidate in ranked if candidate[3] == top_score]
+        ranked = sorted(fuzzy_candidates, key=lambda item: (-item[1], item[0].ctx_id, item[0].title, item[0].text))
+        top_score = ranked[0][1]
+        top = [candidate for candidate in ranked if candidate[1] == top_score]
         if len(top) == 1 and top_score >= 55:
-            return top[0][1]
+            return top[0][0].title
         filtered = [
             candidate
             for candidate in top
-            if not candidate[1].startswith(('Help | ', 'Menu '))
-            and candidate[1] != 'Makrofunkce odpovídající příkazům na menu'
+            if not candidate[0].title.startswith(('Help | ', 'Menu '))
+            and candidate[0].title != 'Makrofunkce odpovídající příkazům na menu'
         ]
         if len(filtered) == 1 and top_score >= 55:
-            return filtered[0][1]
+            return filtered[0][0].title
 
     query_tokens = set(_lookup_tokens(label))
     if len(query_tokens) <= 1:
         return None
     ranked_by_title: dict[str, tuple[float, int]] = {}
-    for values in target_index.values():
-        for ctx_id, title, candidate_text, base_score in values:
-            if title == current_title:
-                continue
-            candidate_key = _normalize_lookup_text(candidate_text)
-            if not candidate_key:
-                continue
-            candidate_tokens = set(_lookup_tokens(candidate_text))
-            overlap = (
-                len(query_tokens & candidate_tokens) / max(len(query_tokens), len(candidate_tokens))
-                if query_tokens and candidate_tokens
-                else 0.0
-            )
-            ratio = SequenceMatcher(None, key, candidate_key).ratio()
-            prefix_bonus = 0.0
-            if candidate_tokens and query_tokens:
-                ordered_query = list(_lookup_tokens(label))
-                ordered_candidate = list(_lookup_tokens(candidate_text))
-                common_prefix = 0
-                for left, right in zip(ordered_query, ordered_candidate):
-                    if left != right:
-                        break
-                    common_prefix += 1
-                prefix_bonus = common_prefix * 18
-            score = ratio * 100 + overlap * 60 + base_score * 0.2 + prefix_bonus
-            if title.startswith('Help | '):
-                score -= 30
-            if title.startswith('Menu '):
-                score -= 20
-            previous = ranked_by_title.get(title)
-            if previous is None or score > previous[0] or (score == previous[0] and ctx_id < previous[1]):
-                ranked_by_title[title] = (score, ctx_id)
+    candidate_pool: set[_NavCandidate] = set()
+    for token in query_tokens:
+        candidate_pool.update(target_index.by_token.get(token, ()))
+    ordered_query = _lookup_tokens(label)
+    for candidate in candidate_pool:
+        if candidate.title == current_title or not candidate.key:
+            continue
+        candidate_tokens = set(candidate.tokens)
+        overlap = (
+            len(query_tokens & candidate_tokens) / max(len(query_tokens), len(candidate_tokens))
+            if query_tokens and candidate_tokens
+            else 0.0
+        )
+        ratio = SequenceMatcher(None, key, candidate.key).ratio()
+        common_prefix = 0
+        for left, right in zip(ordered_query, candidate.tokens):
+            if left != right:
+                break
+            common_prefix += 1
+        score = ratio * 100 + overlap * 60 + candidate.score * 0.2 + common_prefix * 18
+        if candidate.title.startswith('Help | '):
+            score -= 30
+        if candidate.title.startswith('Menu '):
+            score -= 20
+        previous = ranked_by_title.get(candidate.title)
+        if previous is None or score > previous[0] or (score == previous[0] and candidate.ctx_id < previous[1]):
+            ranked_by_title[candidate.title] = (score, candidate.ctx_id)
 
     if not ranked_by_title:
         return None
@@ -1057,8 +1134,89 @@ def _resolve_navigation_target(
     return None
 
 
-def _linkify_navigation_screens(screens: list[dict]) -> None:
-    target_index = _build_navigation_target_index(screens)
+def _navigation_line_span(text: str) -> tuple[int, int, str] | None:
+    stripped_start = len(text) - len(text.lstrip(' '))
+    stripped = text[stripped_start:]
+    if stripped.startswith('\u25a0'):
+        label_start = stripped_start + 1
+        while label_start < len(text) and text[label_start] == ' ':
+            label_start += 1
+    elif stripped_start >= 2:
+        label_start = stripped_start
+    else:
+        return None
+
+    label_end = len(text.rstrip())
+    label = text[label_start:label_end]
+    if not label:
+        return None
+    if len(label) > 50 or label[-1] in '.:,;':
+        return None
+    if sum(char.isalnum() for char in label) < 4:
+        return None
+    return label_start, label_end, label
+
+
+def _is_footer_navigation_line(text: str) -> bool:
+    plain = _plain_internal_text(text).strip()
+    return plain == '\u25a0 Rejstřík  Obsah'
+
+
+def _contextual_navigation_indexes(items: list[dict]) -> list[int]:
+    footer_idx = next(
+        (
+            idx
+            for idx, item in enumerate(items)
+            if item['kind'] == 'visible' and _is_footer_navigation_line(item['text'])
+        ),
+        None,
+    )
+    if footer_idx is None:
+        return []
+
+    idx = footer_idx - 1
+    while idx >= 0 and items[idx]['kind'] == 'visible' and not items[idx]['text'].strip():
+        idx -= 1
+
+    indexes: list[int] = []
+    while idx >= 0:
+        item = items[idx]
+        if item['kind'] != 'visible':
+            break
+        if _navigation_line_span(item['text']) is None:
+            break
+        indexes.append(idx)
+        idx -= 1
+    return list(reversed(indexes))
+
+
+def _linkify_contextual_navigation_lines(screens: list[dict], target_index: _NavigationIndex) -> None:
+    for screen in screens:
+        if screen['title'] in _NAV_SCREEN_TITLES:
+            continue
+        for item_idx in _contextual_navigation_indexes(screen['items']):
+            item = screen['items'][item_idx]
+            if item['kind'] != 'visible' or '{' in item['text'] or '}' in item['text']:
+                continue
+            span = _navigation_line_span(item['text'])
+            if span is None:
+                continue
+            label_start, label_end, label = span
+            target = _resolve_navigation_target(label, screen['title'], target_index)
+            if not target:
+                continue
+            item['text'] = (
+                item['text'][:label_start]
+                + '{'
+                + label
+                + ':'
+                + target
+                + '}'
+                + item['text'][label_end:]
+            )
+
+
+def _linkify_navigation_screens(screens: list[dict], target_index: _NavigationIndex) -> None:
     for screen in screens:
         if screen['title'] not in _NAV_SCREEN_TITLES:
             continue
@@ -1109,8 +1267,7 @@ def _learn_dest_targets_from_screens(screens: list[dict]) -> dict[int, str]:
     }
 
 
-def _resolve_inline_placeholders(screens: list[dict]) -> None:
-    target_index = _build_navigation_target_index(screens)
+def _resolve_inline_placeholders(screens: list[dict], target_index: _NavigationIndex) -> None:
     learned_targets = _learn_dest_targets_from_screens(screens)
 
     for screen in screens:
@@ -1147,6 +1304,8 @@ def _items_to_uhf(items: list[dict], title_to_ctx: dict[str, int]) -> list[str]:
             content.append('')
             continue
         content.append(_convert_links(text, title_to_ctx))
+    while content and content[-1] == '[rule]':
+        content.pop()
     return content
 
 
@@ -1193,8 +1352,10 @@ class Text602Reader:
 
         parser = _T602Parser(data)
         screens = parser.parse()
-        _resolve_inline_placeholders(screens)
-        _linkify_navigation_screens(screens)
+        navigation_index = _build_navigation_target_index(screens)
+        _resolve_inline_placeholders(screens, navigation_index)
+        _linkify_contextual_navigation_lines(screens, navigation_index)
+        _linkify_navigation_screens(screens, navigation_index)
 
         # Assign sequential context IDs (1-based); map title → context_id
         title_to_ctx: dict[str, int] = {}
@@ -1230,5 +1391,6 @@ class Text602Reader:
                 'text_encoding': 'utf-8',      # labels stored as utf-8 (already decoded)
                 'source_encoding': 'kamenicky', # original file encoding
                 'stamp': header_str.strip(),
+                'ui': dict(_TEXT602_UI_THEME),
             },
         )

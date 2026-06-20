@@ -583,6 +583,21 @@ Current observed parser totals on repo sample:
 - `T602_310.HLP`: 194 screens, context flag distribution `0x01 × 180`, `0x00 × 14`
 - `C602.HLP`: 147 screens, context flag distribution `0x01 × 102`, `0x00 × 44`
 
+## Viewer UI Theme
+
+Text602/Calc602 bundles carry a Software602-specific `metadata.ui` theme based
+on the T602 3.00 screenshot colors:
+
+| UI role | Color |
+|---------|-------|
+| Window/page background | `#005454` |
+| Main text | `#a8fcfc` |
+| Links | `#a8a800` |
+| Frame, caption bar, scrollbar | `#a8a800` |
+| Active title/close/zoom glyphs | `#005454` |
+
+These values are stored as direct RGB colors, not CGA palette indices.
+
 ### C602 special dest_ids
 
 C602 uses different dest_ids from T602 for its standard footer/navigation:
@@ -721,11 +736,24 @@ adds it as `kind='separator'` (excluded from position accounting).
 
 ### 12. C602 character encoding overrides missing
 
-Two characters were wrong in C602 output:
+Several characters were wrong in C602 output. The stored byte is still decoded
+by subtracting `1` first; the values below are the post-subtraction byte values.
+
+Confirmed Software602-specific remaps:
 - `Ž` (e.g. `Ženatý`, `ŽENA`, `Životnost`): KEYBCS2 maps byte `0xFB` to `·`. Fixed by overriding `0xFA → Ž` (`\u017D`) in `TEXT602_TEXT_CHARS`.
 - `Í` (e.g. `POUŽÍVAT`): KEYBCS2 maps byte `0xEA` to `Θ`. Fixed by overriding `0xE9 → Í` (`\u00CD`).
+- `ď` in `buď`: `0xC4 → ď`.
+- `ť` in `zvlášť`, `paměť`: `0xD4 → ť`.
+- `Á` in `ZÁPORNÉ`, `TERMINÁL`: `0xE1 → Á`.
+- `Ú` in `Úvod`, `Úrok`: `0xF5 → Ú`.
+- `É` in `KLADNÉ`, `ZÁPORNÉ`: `0xF7 → É`.
 
 These are Software602-specific remappings that differ from standard KEYBCS2.
+
+Two symbols are intentionally left as decoded glyphs until the original
+Software602 font/screen rendering is verified:
+- `0xE0 → α` in a chart axis drawing.
+- `0xF4 → ⌠` in a `Postup:` step line.
 
 ### 13. Box drawing detection failed for short chunks
 
