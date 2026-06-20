@@ -282,7 +282,7 @@ function bundleWindowSpec(bundle) {
         cols,
         rows,
         min_cols: hasExplicitCols ? cols : Math.min(cols, 82),
-        min_rows: hasExplicitRows ? rows : Math.min(rows, 25),
+        min_rows: Math.min(rows, 25),
     };
 }
 
@@ -792,18 +792,18 @@ const DEFAULT_UHF_UI_BY_SOURCE_FORMAT = {
         code_text: "cga:7",
     },
     m602: {
-        window: "cga:0",
-        text: "cga:7",
-        link: "cga:11",
-        title: "cga:0",
+        window: "cga:3",
+        text: "cga:0",
+        link: "cga:14",
+        title: "cga:3",
         title_text: "cga:15",
-        frame: "cga:7",
-        icon: "cga:12",
-        page_area: "cga:0",
+        frame: "cga:15",
+        icon: "cga:10",
+        page_area: "cga:1",
         hover_bg: "cga:1",
         hover_fg: "cga:14",
-        code_bg: "cga:0",
-        code_text: "cga:7",
+        code_bg: "cga:1",
+        code_text: "cga:14",
     },
     text602: {
         window: "cga:0",
@@ -1197,7 +1197,7 @@ function renderUhfTopic(topic, bundle) {
     const lines = renderUhfTopicLines(topic, bundle);
     const title = bundleTopicTitle(bundle, topic);
     const metadata = bundle && typeof bundle === "object" ? (bundle.metadata || {}) : {};
-    const titleHTML = title && metadata.show_topic_titles !== false
+    const titleHTML = title && metadata.show_topic_titles === true
         ? `<div class="tv-topic-heading">${escapeHtml(title)}</div>`
         : "";
     const tagHTML = renderTopicTags(topic);
@@ -2266,15 +2266,72 @@ function buildGroupedMenuItems(entries, renderItem) {
     return items;
 }
 
+function catalogMenuEntryButton(entry) {
+    return new TVButton({
+        dialog: false,
+        className: "tv-menu-popup-item",
+        attrs: { type: "button", "data-tv-bundle-open": entry.file, "data-tv-bundle-label": bundleLoadingLabel(entry) },
+        labelMarkup: escapeHtml(entry.menu_name || entry.name),
+    });
+}
+
+function catalogProductLabel(entry) {
+    return String(entry.product_name || "").trim();
+}
+
+function catalogVersionLabel(entry) {
+    return String(entry.version || "").trim();
+}
+
+function catalogTreeNode(map, ordered, key) {
+    if (!map.has(key)) {
+        const node = { key, direct: [], versionMap: new Map(), versions: [] };
+        map.set(key, node);
+        ordered.push(node);
+    }
+    return map.get(key);
+}
+
 function buildCatalogMenuItems(catalog) {
-    return buildGroupedMenuItems(catalog, (entry) =>
-        new TVButton({
-            dialog: false,
-            className: "tv-menu-popup-item",
-            attrs: { type: "button", "data-tv-bundle-open": entry.file, "data-tv-bundle-label": bundleLoadingLabel(entry) },
-            labelMarkup: escapeHtml(entry.name),
-        })
-    );
+    if (!catalog.length) { return []; }
+
+    const directItems = [];
+    const productMap = new Map();
+    const products = [];
+
+    catalog.forEach((entry) => {
+        const product = catalogProductLabel(entry);
+        if (!product) {
+            directItems.push(catalogMenuEntryButton(entry));
+            return;
+        }
+
+        const productNode = catalogTreeNode(productMap, products, product);
+        const version = catalogVersionLabel(entry);
+        if (!version) {
+            productNode.direct.push(catalogMenuEntryButton(entry));
+            return;
+        }
+
+        const versionNode = catalogTreeNode(productNode.versionMap, productNode.versions, version);
+        versionNode.direct.push(catalogMenuEntryButton(entry));
+    });
+
+    const items = [...directItems];
+    if (items.length && products.length) {
+        items.push(renderMenuPopupSeparator());
+    }
+    products.forEach((productNode) => {
+        const productItems = [...productNode.direct];
+        if (productItems.length && productNode.versions.length) {
+            productItems.push(renderMenuPopupSeparator());
+        }
+        productNode.versions.forEach((versionNode) => {
+            productItems.push(renderMenuSubmenu(escapeHtml(versionNode.key), versionNode.direct));
+        });
+        items.push(renderMenuSubmenu(escapeHtml(productNode.key), productItems));
+    });
+    return items;
 }
 
 function buildDocsMenuItems(docs) {
@@ -3494,11 +3551,30 @@ class TVBundleApp {
 
         function closeSubmenus() {
             document.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
-                popup.hidden = true;
-                resetMenuPopupLayout(popup);
+                closeSubmenuPopup(popup);
             });
-            document.querySelectorAll("[data-tv-submenu-toggle]").forEach((el) => {
-                el.classList.remove("is-submenu-open");
+        }
+
+        function directSubmenuChild(root, selector) {
+            return Array.from(root.children).find((child) => child.matches?.(selector)) || null;
+        }
+
+        function closeSubmenuPopup(popup) {
+            popup.hidden = true;
+            resetMenuPopupLayout(popup);
+            const popupRoot = popup.closest("[data-tv-submenu-root]");
+            const toggle = popupRoot ? directSubmenuChild(popupRoot, "[data-tv-submenu-toggle]") : null;
+            if (toggle) {
+                toggle.classList.remove("is-submenu-open");
+            }
+        }
+
+        function closeSubmenusOutsidePath(root, activePopup) {
+            document.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
+                if (popup === activePopup || popup.contains(root)) {
+                    return;
+                }
+                closeSubmenuPopup(popup);
             });
         }
 
@@ -3508,26 +3584,28 @@ class TVBundleApp {
             toggle.dataset.tvMenuBound = "1";
             const root = toggle.closest("[data-tv-submenu-root]");
             if (!root) { return; }
-            const popup = root.querySelector("[data-tv-submenu-popup]");
+            const popup = directSubmenuChild(root, "[data-tv-submenu-popup]");
             if (!popup) { return; }
 
             toggle.addEventListener("click", (event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 const isOpen = !popup.hidden;
-                closeSubmenus();
                 if (!isOpen) {
+                    closeSubmenusOutsidePath(root, popup);
                     popup.hidden = false;
                     toggle.classList.add("is-submenu-open");
                     requestAnimationFrame(() => {
                         fitMenuPopupToViewport(root, popup);
                         fillBorders(popup);
                     });
+                } else {
+                    closeSubmenuPopup(popup);
                 }
             });
 
             root.addEventListener("mouseenter", () => {
-                closeSubmenus();
+                closeSubmenusOutsidePath(root, popup);
                 popup.hidden = false;
                 toggle.classList.add("is-submenu-open");
                 requestAnimationFrame(() => {

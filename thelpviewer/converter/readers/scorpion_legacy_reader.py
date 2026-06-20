@@ -1242,6 +1242,8 @@ class ScorpionVersionReaderBase:
     def _finalize_document(self, document: HelpDocument) -> HelpDocument:
         document.metadata["scorpion_reader_class"] = type(self).__name__
         document.metadata["ui"] = dict(SCORPION_UI_THEME)
+        if self.profile.family in {"v1-dat-exe", "v1.5-embedded-exe"}:
+            document.metadata["show_topic_titles"] = True
         raw_keys = document.metadata.get("transport_metadata_keys")
         transport_keys = [key for key in raw_keys if isinstance(key, str)] if isinstance(raw_keys, list) else []
         for key in SCORPION_LEGACY_TRANSPORT_METADATA_KEYS:

@@ -226,6 +226,10 @@ Single-page application for browsing help file bundles.
 - `_registerDialog(name, factory)` — Creates and registers a dialog with the dialog manager
 - Registered dialogs: about, puzzle, calendar, ascii, calc, colors, tetris, mines, breakout, sokoban, lines, reversi, search
 
+The Help Files menu uses `product_name`, `version`, and `menu_name` from
+`helps/catalog.json` to render product → version → file. Entries without
+`product_name` are shown as direct Help Files items.
+
 ### BundleWindowManager
 
 - `showIndex()` — Display bundle index (topic list)

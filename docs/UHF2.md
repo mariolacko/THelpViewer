@@ -79,7 +79,7 @@ described here is still plain JSON.
 | `display.cols` | integer | ❌ | Default display width in character columns. |
 | `display.rows` | integer | ❌ | Default display height in character rows. |
 | `help_contents_topic_id` | integer | ❌ | Source Help Contents / table-of-contents topic for the whole help file. This is distinct from the alphabetical help index. A viewer may expose this as a Help Contents button. |
-| `show_topic_titles` | boolean | ❌ | Whether the viewer should add `topic.title` above topic content. Default `true`; use `false` when source topic bodies already contain their own headings. |
+| `show_topic_titles` | boolean | ❌ | Whether the viewer should add `topic.title` above topic content. Default `false`; use `true` only when source topic bodies do not already contain their own headings. |
 | `frozen_rows` | integer | ❌ | Number of lines from the top of each topic that stay fixed during scrolling (file-level default). Default `0`. |
 | `language` | string | ❌ | BCP 47 language tag for the help content, e.g. `"en"`, `"cs"`, `"de"`. Omit if unknown. |
 | `ui` | object | ❌ | Semantic viewer colors for this help file. Values are UHF2 color references resolved through `default_palette` / `palettes`. |

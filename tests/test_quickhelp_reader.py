@@ -57,3 +57,14 @@ def test_quickbasic_marker_only_contents_nav_is_reader_rendered():
     assert "[nav:contents]Contents[/nav]" in nav_line
     assert "[nav:back]Back[/nav]" in nav_line
     assert "◄[b]Contents[/b]►" not in nav_line
+
+
+def test_quickc_250_marker_nav_buttons_are_reader_rendered():
+    path = Path("sources") / "Microsoft QuickC, C, and C++ 2.50" / "ERRORS.HLP"
+    doc = load_document(path)
+
+    nav_line = doc.topics[8].uhf_content[0]
+    assert "[nav:contents]Contents[/nav]" in nav_line
+    assert "[nav:index]Index[/nav]" in nav_line
+    assert "[nav:back]Back[/nav]" in nav_line
+    assert "◄[b]Contents[/b]►" not in nav_line
