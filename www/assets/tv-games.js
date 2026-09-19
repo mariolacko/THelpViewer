@@ -629,6 +629,8 @@ class TVPuzzleDialog extends TVDialog {
 
 const TETRIS_COLS = 12;  // DN: Shi = 12
 const TETRIS_ROWS = 18;
+const TETRIS_PREVIEW_COLS = 7;
+const TETRIS_PREVIEW_ROWS = 7;
 const TETRIS_FIGURES = [
     [[0,2],[1,2],[2,2],[2,1]],
     [[0,1],[1,1],[2,1],[2,2]],
@@ -686,18 +688,18 @@ class TVTetrisDialog extends TVDialog {
                 new TVStaticText({ tag: "span", name: "lines", attrs: { "data-tv-info-row": true } }),
                 new TVStaticText({ tag: "span", name: "level", attrs: { "data-tv-info-row": true } }),
                 new TVStaticText({ tag: "span", text: TVInfoBox.separator(INFO_W - 2, "Next"), attrs: { "data-tv-info-frame": true } }),
-                new TVStaticText({ tag: "div", h: 5, attrs: { "data-tv-tetris-preview": true } }),
+                new TVStaticText({ tag: "div", h: TETRIS_PREVIEW_ROWS, attrs: { "data-tv-tetris-preview": true } }),
             ],
         });
         const bestBox = new TVInfoBox({
-            x: INFO_X, y: 11, w: INFO_W, name: "best", title: "Best", borderClass: "tv-game-border",
+            x: INFO_X, y: 13, w: INFO_W, name: "best", title: "Best", borderClass: "tv-game-border",
             children: [
                 new TVStaticText({ tag: "span", name: "best", attrs: { "data-tv-info-row": true } }),
             ],
         });
 
         const tetrisMain = new TVGroup({
-            w: INFO_X + INFO_W, h: 18,
+            w: INFO_X + INFO_W, h: 20,
             children: [
                 // Grid (left side)
                 new TVStaticText({
@@ -708,9 +710,9 @@ class TVTetrisDialog extends TVDialog {
                 infoBox,
                 bestBox,
                 // Buttons
-                new TVButton({ x: INFO_X, y: 15, w: 10, attrs: { type: "button", "data-tv-tetris-new": true }, label: '~N~ew' }),
-                new TVButton({ x: INFO_X + 11, y: 15, w: 10, attrs: { type: "button", "data-tv-tetris-pause": true }, label: '~P~ause' }),
-                new TVButton({ x: INFO_X, y: 17, w: INFO_W, attrs: { type: "button", "data-tv-tetris-pentix": true }, label: 'Penti~x~' }),
+                new TVButton({ x: INFO_X, y: 17, w: 10, attrs: { type: "button", "data-tv-tetris-new": true }, label: '~N~ew' }),
+                new TVButton({ x: INFO_X + 11, y: 17, w: 10, attrs: { type: "button", "data-tv-tetris-pause": true }, label: '~P~ause' }),
+                new TVButton({ x: INFO_X, y: 19, w: INFO_W, attrs: { type: "button", "data-tv-tetris-pentix": true }, label: 'Penti~x~' }),
             ],
         }).renderMarkup();
 
@@ -718,11 +720,12 @@ class TVTetrisDialog extends TVDialog {
             desktop,
             ariaLabel: "Tetris",
             title: "Tetris",
+            windowClass: "tv-tetris-window",
             closeAttrs: { "data-tv-tetris-close": true, "aria-label": "Close tetris" },
             bodyMarkup: tetrisMain,
             footerMarkup: TVDialog.footerMarkup(),
             width: "50ch",
-            height: "min(22em, calc(100% - 2em))",
+            height: "min(24em, calc(100% - 2em))",
             left: "4ch",
             top: "2em",
         });
@@ -1068,8 +1071,8 @@ class TVTetrisDialog extends TVDialog {
 
     renderPreview() {
         if (!this.previewEl) { return; }
-        const PCOLS = 5;
-        const PROWS = 5;
+        const PCOLS = TETRIS_PREVIEW_COLS;
+        const PROWS = TETRIS_PREVIEW_ROWS;
         const PAD = 20 - PCOLS * 2;
         const emptyCell = '<span class="tv-tetris-cell">  </span>';
         const border = '<span class="tv-tetris-preview-border tv-game-border">\u2502</span>';

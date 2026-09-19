@@ -151,7 +151,7 @@ Game dialog implementations. All extend `TVDialog`.
 | Class | Game | Grid | Key Controls |
 |-------|------|------|-------------|
 | `TVPuzzleDialog` | 15-puzzle | 4×4 | Click tiles |
-| `TVTetrisDialog` | Tetris / Pentix | 12×20 | ←→ move, ↑ rotate, ↓/Space drop, P pause, X pentix |
+| `TVTetrisDialog` | Tetris / Pentix | 12×18 | ←→ move, ↑ rotate, ↓/Space drop, P pause, X pentix |
 | `TVMinesDialog` | Minesweeper | 9×9 (10 mines) | Click reveal, Right-click flag |
 | `TVBreakOutDialog` | BreakOut | 14×20 | ←→ paddle, Space launch |
 | `TVSokobanDialog` | Sokoban | Variable (5 levels) | ←→↑↓ move, R restart, U undo |
@@ -167,6 +167,8 @@ Game dialog implementations. All extend `TVDialog`.
 - `TETRIS_CROT` — Rotation center per figure
 - `TETRIS_COLORS` — 7 colors
 - `TETRIS_DELAYS` — Level-based drop speeds (1600ms → 80ms)
+- The `Next` preview uses a 7×7 grid, keeping at least one empty cell
+  between every Tetris/Pentix figure and its frame.
 - Ghost piece rendering (transparent preview where piece will land)
 
 ---
