@@ -221,6 +221,7 @@ const DEFAULT_UI_CONFIG = Object.freeze({
             { type: "dialog", dialog: "calendar", label: "Ca~l~endar" },
             { type: "dialog", dialog: "ascii", label: "Ascii ~T~able" },
             { type: "dialog", dialog: "calc", label: "~C~alculator" },
+            { type: "dialog", dialog: "midi", label: "~M~IDI Player" },
             { type: "dialog", dialog: "colors", label: "C~o~lors" },
             { type: "separator" },
             { type: "submenu", label: "~S~creen saver", items: [
@@ -1960,8 +1961,6 @@ class TVMenuBox extends TVWidget {
                     + '<span class="tv-border-corner tv-menu-popup-separator-left">\u251C</span>'
                     + '<span class="tv-border-fill tv-menu-popup-separator-fill" data-tv-border-fill="\u2500"></span>'
                     + '<span class="tv-border-corner tv-menu-popup-separator-right">\u2524</span>'
-                    + '<span class="tv-border-fill tv-menu-popup-separator-scroll-fill" data-tv-border-fill="\u2500"></span>'
-                    + '<span class="tv-border-corner tv-menu-popup-separator-frame-right">\u2524</span>'
                     + '</div>'
                 );
             } else if (seg.length > 0) {
@@ -2686,6 +2685,9 @@ class TVDialog extends TVWidget {
         this.dragState = null;
         document.removeEventListener("mousemove", this.onDragMove);
         document.removeEventListener("mouseup", this.onDragEnd);
+        if (this.manager && this.manager.onChange) {
+            this.manager.onChange();
+        }
     };
 }
 
@@ -2710,6 +2712,7 @@ class TVDialogManager {
         this.activeTarget = HOST_WINDOW_TOKEN;
         this.applyAllZIndices();
         this.applyActiveStates();
+        if (this.onChange) { this.onChange(); }
     }
 
     registerWindow(name, element) {
@@ -2733,6 +2736,7 @@ class TVDialogManager {
         }
         this.applyAllZIndices();
         this.applyActiveStates();
+        if (this.onChange) { this.onChange(); }
     }
 
     activateWindow(name) {
@@ -2741,6 +2745,7 @@ class TVDialogManager {
         this.activeTarget = name;
         this.applyAllZIndices();
         this.applyActiveStates();
+        if (this.onChange) { this.onChange(); }
     }
 
     register(name, dialog) {
@@ -2837,6 +2842,7 @@ class TVDialogManager {
         this.activeTarget = name;
         this.applyAllZIndices();
         this.applyActiveStates();
+        if (this.onChange) { this.onChange(); }
         try {
             dialog.dialog.focus({ preventScroll: true });
         } catch {

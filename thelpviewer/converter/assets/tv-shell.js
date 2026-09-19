@@ -27,6 +27,7 @@ const {
     TVAsciiTableDialog,
     TVCalculatorDialog,
     TVColorsDialog,
+    TVMidiPlayerDialog,
     TVSearchDialog,
     TVScreenSaver,
     TurboVisionScrollbar,
@@ -465,6 +466,7 @@ class TurboVisionWindowResizer {
         if (persist) {
             this.persistState();
         }
+        window.dispatchEvent(new CustomEvent("tv-window-state-change"));
     }
 
     restore(persist = true) {
@@ -478,6 +480,7 @@ class TurboVisionWindowResizer {
         if (persist) {
             this.persistState();
         }
+        window.dispatchEvent(new CustomEvent("tv-window-state-change"));
     }
 
     toggleMaximize(event) {
@@ -517,6 +520,7 @@ class TurboVisionWindowResizer {
         document.removeEventListener("mouseup", this.onResizeEnd);
         this.restoreSnapshot = this.captureGeometry();
         this.persistState();
+        window.dispatchEvent(new CustomEvent("tv-window-state-change"));
     };
 
     onMoveDrag = (event) => {
@@ -542,6 +546,7 @@ class TurboVisionWindowResizer {
         document.removeEventListener("mouseup", this.onMoveEnd);
         this.restoreSnapshot = this.captureGeometry();
         this.persistState();
+        window.dispatchEvent(new CustomEvent("tv-window-state-change"));
     };
 }
 
@@ -620,7 +625,7 @@ class TurboVisionMenus {
             return;
         }
         if (event.key === "Escape") {
-            for (const name of ["about", "puzzle", "calendar", "ascii", "colors"]) {
+            for (const name of ["about", "puzzle", "calendar", "ascii", "midi", "colors"]) {
                 if (this.dialogManager.isOpen(name)) {
                     event.preventDefault();
                     this.dialogManager.close(name);
@@ -793,6 +798,7 @@ class TVApplication {
         this.registerDialog("calendar", () => new TVCalendarDialog(desktop));
         this.registerDialog("ascii", () => new TVAsciiTableDialog(desktop));
         this.registerDialog("calc", () => new TVCalculatorDialog(desktop));
+        this.registerDialog("midi", () => new TVMidiPlayerDialog(desktop));
         this.registerDialog("colors", () => new TVColorsDialog(desktop));
         this.searchDialog = this.registerDialog("search", () => new TVSearchDialog(desktop));
         if (this.searchDialog) {

@@ -1,7 +1,349 @@
 // Turbo Vision games for THelp Viewer.
-(function () {
+(function (root) {
 "use strict";
-const TV = window.THelpViewerTV = window.THelpViewerTV || {};
+const TV = root.THelpViewerTV = root.THelpViewerTV || {};
+
+const LUDO_PLAYER_NAMES = ["Red", "Green", "Yellow", "Blue"];
+const LUDO_PLAYER_COLORS = ["red", "green", "yellow", "blue"];
+const LUDO_START_OFFSETS = [0, 10, 20, 30];
+const LUDO_DEFAULT_MODES = ["human", "cpu", "cpu", "cpu"];
+const LUDO_TRACK_LENGTH = 40;
+const LUDO_HOME_START = 40;
+const LUDO_FINISH = 43;
+const LUDO_MOVE_STEP_MS = 55;
+const LUDO_CAPTURE_FLASH_MS = 320;
+
+const LUDO_COMMON_PATH = [
+    [4, 0], [4, 1], [4, 2], [4, 3], [4, 4],
+    [3, 4], [2, 4], [1, 4], [0, 4], [0, 5],
+    [0, 6], [1, 6], [2, 6], [3, 6], [4, 6],
+    [4, 7], [4, 8], [4, 9], [4, 10], [5, 10],
+    [6, 10], [6, 9], [6, 8], [6, 7], [6, 6],
+    [7, 6], [8, 6], [9, 6], [10, 6], [10, 5],
+    [10, 4], [9, 4], [8, 4], [7, 4], [6, 4],
+    [6, 3], [6, 2], [6, 1], [6, 0], [5, 0],
+];
+
+const LUDO_HOME_PATHS = [
+    [[5, 1], [5, 2], [5, 3], [5, 4]],
+    [[1, 5], [2, 5], [3, 5], [4, 5]],
+    [[5, 9], [5, 8], [5, 7], [5, 6]],
+    [[9, 5], [8, 5], [7, 5], [6, 5]],
+];
+
+const LUDO_BASE_POSITIONS = [
+    [[1, 1], [1, 2], [2, 1], [2, 2]],
+    [[1, 8], [1, 9], [2, 8], [2, 9]],
+    [[8, 8], [8, 9], [9, 8], [9, 9]],
+    [[8, 1], [8, 2], [9, 1], [9, 2]],
+];
+
+function ludoCoordinateForProgress(player, piece, progress) {
+    if (progress < 0) {
+        return LUDO_BASE_POSITIONS[player][piece].slice();
+    }
+    if (progress < LUDO_TRACK_LENGTH) {
+        return LUDO_COMMON_PATH[(LUDO_START_OFFSETS[player] + progress) % LUDO_TRACK_LENGTH].slice();
+    }
+    return LUDO_HOME_PATHS[player][progress - LUDO_HOME_START].slice();
+}
+
+function ludoMoveProgressPath(from, target) {
+    if (from < 0) {
+        return [target];
+    }
+    const path = [];
+    for (let progress = from + 1; progress <= target; progress++) {
+        path.push(progress);
+    }
+    return path;
+}
+
+function validLudoModes(modes) {
+    return Array.isArray(modes) && modes.length === 4 &&
+        modes.every((mode) => mode === "human" || mode === "cpu" || mode === "off") &&
+        modes.filter((mode) => mode !== "off").length >= 2 &&
+        modes.includes("human");
+}
+
+class LudoGame {
+    constructor(random = Math.random) {
+        this.random = typeof random === "function" ? random : Math.random;
+        this.reset();
+    }
+
+    reset(modes = this.modes || LUDO_DEFAULT_MODES) {
+        this.modes = validLudoModes(modes) ? modes.slice() : LUDO_DEFAULT_MODES.slice();
+        this.pieces = Array.from({ length: 4 }, () => [-1, -1, -1, -1]);
+        this.currentPlayer = this._nextActive(-1);
+        this.phase = "roll";
+        this.die = 0;
+        this.rollsLeft = 3;
+        this.winner = null;
+        this.lastCapture = null;
+    }
+
+    playerMode(player = this.currentPlayer) {
+        return this.modes[player] || "off";
+    }
+
+    pieceCoordinate(player, piece) {
+        return ludoCoordinateForProgress(player, piece, this.pieces[player][piece]);
+    }
+
+    legalPieces(player = this.currentPlayer, die = this.die) {
+        if (this.winner !== null || player < 0 || player > 3 || die < 1 || die > 6) {
+            return [];
+        }
+        const legal = [];
+        for (let piece = 0; piece < 4; piece++) {
+            if (this._targetProgress(player, piece, die) !== null) {
+                legal.push(piece);
+            }
+        }
+        return legal;
+    }
+
+    roll() {
+        if (this.phase !== "roll" || this.winner !== null) {
+            return null;
+        }
+        this.die = Math.floor(this.random() * 6) + 1;
+        const legal = this.legalPieces();
+        if (legal.length) {
+            this.phase = "move";
+            return { die: this.die, legal };
+        }
+
+        this.rollsLeft -= 1;
+        if (this.rollsLeft > 0 && this._allPiecesInBase(this.currentPlayer)) {
+            return { die: this.die, legal: [] };
+        }
+        const rolled = this.die;
+        this._advanceTurn();
+        return { die: rolled, legal: [] };
+    }
+
+    move(piece) {
+        if (this.phase !== "move" || !this.legalPieces().includes(piece)) {
+            return null;
+        }
+        const player = this.currentPlayer;
+        const die = this.die;
+        const from = this.pieces[player][piece];
+        const target = this._targetProgress(player, piece, die);
+        this.pieces[player][piece] = target;
+        const captured = target < LUDO_TRACK_LENGTH
+            ? this._captureAt(player, target)
+            : [];
+        this.lastCapture = captured.length ? captured : null;
+
+        if (this.pieces[player].every((progress) => progress >= LUDO_HOME_START)) {
+            this.winner = player;
+            this.phase = "done";
+            this.die = 0;
+        } else if (die === 6) {
+            this.phase = "roll";
+            this.die = 0;
+            this.rollsLeft = 1;
+        } else {
+            this._advanceTurn();
+        }
+        return { player, piece, from, target, captured, winner: this.winner };
+    }
+
+    chooseCpuPiece() {
+        const legal = this.legalPieces();
+        let bestPiece = null;
+        let bestScore = -Infinity;
+        for (const piece of legal) {
+            const from = this.pieces[this.currentPlayer][piece];
+            const target = this._targetProgress(this.currentPlayer, piece, this.die);
+            const captures = target < LUDO_TRACK_LENGTH
+                ? this._piecesAtCommonPosition(this.currentPlayer, target).length
+                : 0;
+            let score = target;
+            if (from < 0) { score += 35; }
+            if (target >= LUDO_HOME_START) { score += 70; }
+            if (captures) { score += 100 + captures * 10; }
+            if (target === LUDO_FINISH) { score += 20; }
+            if (score > bestScore) {
+                bestScore = score;
+                bestPiece = piece;
+            }
+        }
+        return bestPiece;
+    }
+
+    exportState() {
+        return {
+            v: 2,
+            m: this.modes.map((mode) => mode[0]),
+            p: this.pieces.flat(),
+            c: this.currentPlayer,
+            ph: this.phase,
+            d: this.die,
+            r: this.rollsLeft,
+            w: this.winner,
+        };
+    }
+
+    importState(state) {
+        if (!state || state.v !== 2 || !Array.isArray(state.m) || !Array.isArray(state.p)) {
+            return false;
+        }
+        const modeNames = { h: "human", c: "cpu", o: "off" };
+        const modes = state.m.map((mode) => modeNames[mode]);
+        if (!validLudoModes(modes) || state.p.length !== 16) {
+            return false;
+        }
+        const progress = state.p.map(Number);
+        if (progress.some((value) => !Number.isInteger(value) || value < -1 || value > LUDO_FINISH)) {
+            return false;
+        }
+        const current = Number(state.c);
+        const die = Number(state.d);
+        const rolls = Number(state.r);
+        const winner = state.w === null ? null : Number(state.w);
+        if (!Number.isInteger(current) || modes[current] === "off" ||
+                !["roll", "move", "done"].includes(state.ph) ||
+                !Number.isInteger(die) || die < 0 || die > 6 ||
+                !Number.isInteger(rolls) || rolls < 0 || rolls > 3 ||
+                (winner !== null && (!Number.isInteger(winner) || winner < 0 || winner > 3))) {
+            return false;
+        }
+
+        const pieces = Array.from({ length: 4 }, (_, player) => progress.slice(player * 4, player * 4 + 4));
+        for (let player = 0; player < 4; player++) {
+            const occupied = pieces[player].filter((value) => value >= 0);
+            if (new Set(occupied).size !== occupied.length) {
+                return false;
+            }
+        }
+        if (state.ph === "move" && (die === 0 || !this._stateHasLegalMove(pieces, current, die))) {
+            return false;
+        }
+        if (state.ph === "done" && (winner === null ||
+                !pieces[winner].every((value) => value >= LUDO_HOME_START))) {
+            return false;
+        }
+
+        this.modes = modes;
+        this.pieces = pieces;
+        this.currentPlayer = current;
+        this.phase = state.ph;
+        this.die = die;
+        this.rollsLeft = rolls;
+        this.winner = winner;
+        this.lastCapture = null;
+        return true;
+    }
+
+    _stateHasLegalMove(pieces, player, die) {
+        const previousPieces = this.pieces;
+        const previousModes = this.modes;
+        const previousWinner = this.winner;
+        this.pieces = pieces;
+        this.modes = this.modes || LUDO_DEFAULT_MODES;
+        this.winner = null;
+        const hasMove = this.legalPieces(player, die).length > 0;
+        this.pieces = previousPieces;
+        this.modes = previousModes;
+        this.winner = previousWinner;
+        return hasMove;
+    }
+
+    _targetProgress(player, piece, die) {
+        const progress = this.pieces[player][piece];
+        if (progress < 0) {
+            if (die !== 6 || this.pieces[player].includes(0)) {
+                return null;
+            }
+            return 0;
+        }
+        const target = progress + die;
+        if (target > LUDO_FINISH || this.pieces[player].includes(target)) {
+            return null;
+        }
+        if (target >= LUDO_HOME_START) {
+            const first = Math.max(LUDO_HOME_START, progress + 1);
+            for (let position = first; position <= target; position++) {
+                if (this.pieces[player].includes(position)) {
+                    return null;
+                }
+            }
+        }
+        return target;
+    }
+
+    _piecesAtCommonPosition(player, progress) {
+        const absolute = (LUDO_START_OFFSETS[player] + progress) % LUDO_TRACK_LENGTH;
+        const found = [];
+        for (let opponent = 0; opponent < 4; opponent++) {
+            if (opponent === player || this.modes[opponent] === "off") { continue; }
+            for (let piece = 0; piece < 4; piece++) {
+                const otherProgress = this.pieces[opponent][piece];
+                if (otherProgress >= 0 && otherProgress < LUDO_TRACK_LENGTH &&
+                        (LUDO_START_OFFSETS[opponent] + otherProgress) % LUDO_TRACK_LENGTH === absolute) {
+                    found.push([opponent, piece]);
+                }
+            }
+        }
+        return found;
+    }
+
+    _captureAt(player, progress) {
+        const captured = this._piecesAtCommonPosition(player, progress);
+        for (const [opponent, piece] of captured) {
+            this.pieces[opponent][piece] = -1;
+        }
+        return captured;
+    }
+
+    _allPiecesInBase(player) {
+        return this.pieces[player].every((progress) => progress < 0);
+    }
+
+    _nextActive(player) {
+        for (let offset = 1; offset <= 4; offset++) {
+            const candidate = (player + offset + 4) % 4;
+            if (this.modes[candidate] !== "off") {
+                return candidate;
+            }
+        }
+        return 0;
+    }
+
+    _advanceTurn() {
+        this.currentPlayer = this._nextActive(this.currentPlayer);
+        this.phase = "roll";
+        this.die = 0;
+        this.rollsLeft = this._allPiecesInBase(this.currentPlayer) ? 3 : 1;
+        this.lastCapture = null;
+    }
+}
+
+const LUDO_RULES_EXPORTS = {
+    LudoGame,
+    LUDO_BASE_POSITIONS,
+    LUDO_COMMON_PATH,
+    LUDO_DEFAULT_MODES,
+    LUDO_FINISH,
+    LUDO_HOME_PATHS,
+    LUDO_HOME_START,
+    LUDO_PLAYER_COLORS,
+    LUDO_PLAYER_NAMES,
+    LUDO_START_OFFSETS,
+    LUDO_TRACK_LENGTH,
+};
+
+Object.assign(TV, LUDO_RULES_EXPORTS);
+
+if (typeof module === "object" && module.exports && !(root && root.document)) {
+    module.exports = LUDO_RULES_EXPORTS;
+    return;
+}
+
 const {
     escapeHtml,
     renderHotkeyMarkup,
@@ -344,7 +686,7 @@ class TVTetrisDialog extends TVDialog {
                 new TVStaticText({ tag: "span", name: "lines", attrs: { "data-tv-info-row": true } }),
                 new TVStaticText({ tag: "span", name: "level", attrs: { "data-tv-info-row": true } }),
                 new TVStaticText({ tag: "span", text: TVInfoBox.separator(INFO_W - 2, "Next"), attrs: { "data-tv-info-frame": true } }),
-                new TVStaticText({ tag: "span", h: 5, attrs: { "data-tv-tetris-preview": true } }),
+                new TVStaticText({ tag: "div", h: 5, attrs: { "data-tv-tetris-preview": true } }),
             ],
         });
         const bestBox = new TVInfoBox({
@@ -728,13 +1070,27 @@ class TVTetrisDialog extends TVDialog {
         if (!this.previewEl) { return; }
         const PCOLS = 5;
         const PROWS = 5;
-        const PAD = 20 - PCOLS * 2; // innerW(22-2) minus cells width
-        const B = '<span class="tv-game-border">\u2502</span>';
+        const PAD = 20 - PCOLS * 2;
+        const emptyCell = '<span class="tv-tetris-cell">  </span>';
+        const border = '<span class="tv-tetris-preview-border tv-game-border">\u2502</span>';
+        const renderRows = (grid, color = "") => {
+            const rows = [];
+            for (let row = 0; row < PROWS; row++) {
+                rows.push(border);
+                rows.push(`<span class="tv-tetris-preview-pad">${" ".repeat(Math.floor(PAD / 2))}</span>`);
+                for (let col = 0; col < PCOLS; col++) {
+                    rows.push(grid[row][col]
+                        ? `<span class="tv-tetris-cell tv-tetris-filled" style="color:${color}">██</span>`
+                        : emptyCell);
+                }
+                rows.push(`<span class="tv-tetris-preview-pad">${" ".repeat(Math.ceil(PAD / 2))}</span>`);
+                rows.push(border);
+            }
+            return rows.join("");
+        };
         if (!this.preview || this.gameOver) {
-            const emptyRow = B + ' '.repeat(Math.floor(PAD / 2)) + '<span class="tv-tetris-cell">  </span>'.repeat(PCOLS) + ' '.repeat(Math.ceil(PAD / 2)) + B;
-            const lines = [];
-            for (let r = 0; r < PROWS; r++) { lines.push(emptyRow); }
-            this.previewEl.innerHTML = lines.join("\n");
+            const emptyGrid = Array.from({ length: PROWS }, () => new Array(PCOLS).fill(false));
+            this.previewEl.innerHTML = renderRows(emptyGrid);
             return;
         }
         const fig = TETRIS_FIGURES[this.nextFig];
@@ -757,21 +1113,7 @@ class TVTetrisDialog extends TVDialog {
             const nc = c + offC;
             if (nr >= 0 && nr < PROWS && nc >= 0 && nc < PCOLS) { grid[nr][nc] = true; }
         }
-        const lines = [];
-        for (let r = 0; r < PROWS; r++) {
-            const cells = [];
-            for (let c = 0; c < PCOLS; c++) {
-                if (grid[r][c]) {
-                    cells.push(`<span class="tv-tetris-cell tv-tetris-filled" style="color:${color}">██</span>`);
-                } else {
-                    cells.push(`<span class="tv-tetris-cell">  </span>`);
-                }
-            }
-            const lpad = ' '.repeat(Math.floor(PAD / 2));
-            const rpad = ' '.repeat(Math.ceil(PAD / 2));
-            lines.push(B + lpad + cells.join("") + rpad + B);
-        }
-        this.previewEl.innerHTML = lines.join("\n");
+        this.previewEl.innerHTML = renderRows(grid, color);
     }
 }
 
@@ -2164,6 +2506,560 @@ class TVReversiDialog extends TVDialog {
     }
 }
 
+// ── Ludo / Clovece, nezlob se ─────────────────────────────────────
+
+const LUDO_BOARD_SIZE = 11;
+const LUDO_MODE_LABELS = { human: "You", cpu: "CPU", off: "Off" };
+const LUDO_CELL_KEY = (row, col) => `${row},${col}`;
+const LUDO_COMMON_CELLS = new Set(LUDO_COMMON_PATH.map(([row, col]) => LUDO_CELL_KEY(row, col)));
+const LUDO_HOME_CELLS = new Map();
+const LUDO_BASE_CELLS = new Map();
+const LUDO_START_CELLS = new Map();
+const LUDO_ROUTE_EDGES = new Set();
+
+const addLudoEdge = (from, to) => {
+    const fromKey = LUDO_CELL_KEY(...from);
+    const toKey = LUDO_CELL_KEY(...to);
+    LUDO_ROUTE_EDGES.add(`${fromKey}>${toKey}`);
+    LUDO_ROUTE_EDGES.add(`${toKey}>${fromKey}`);
+};
+
+LUDO_COMMON_PATH.forEach((cell, index) => {
+    addLudoEdge(cell, LUDO_COMMON_PATH[(index + 1) % LUDO_COMMON_PATH.length]);
+});
+
+LUDO_HOME_PATHS.forEach((path, player) => {
+    path.forEach(([row, col]) => LUDO_HOME_CELLS.set(LUDO_CELL_KEY(row, col), player));
+});
+LUDO_BASE_POSITIONS.forEach((positions, player) => {
+    positions.forEach(([row, col], piece) => LUDO_BASE_CELLS.set(LUDO_CELL_KEY(row, col), [player, piece]));
+});
+LUDO_START_OFFSETS.forEach((offset, player) => {
+    const [row, col] = LUDO_COMMON_PATH[offset];
+    LUDO_START_CELLS.set(LUDO_CELL_KEY(row, col), player);
+});
+
+class TVLudoDialog extends TVDialog {
+    constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const infoBox = new TVInfoBox({
+            w: 22,
+            name: "info",
+            title: "Game",
+            borderClass: "tv-game-border",
+            children: [
+                new TVStaticText({ tag: "span", name: "turn", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ tag: "span", name: "dice", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ tag: "span", name: "status", attrs: { "data-tv-info-row": true } }),
+            ],
+        });
+        const playerButtons = LUDO_PLAYER_NAMES.map((name, player) => new TVButton({
+            dialog: false,
+            className: `tv-ludo-player-toggle tv-ludo-${LUDO_PLAYER_COLORS[player]}`,
+            attrs: { "data-tv-ludo-player-mode": player, "aria-label": `${name} player mode` },
+            label: name,
+        }));
+        const playersBox = new TVInfoBox({
+            w: 22,
+            title: "Players",
+            borderClass: "tv-game-border",
+            className: "tv-ludo-players",
+            children: playerButtons,
+        });
+        const controls = new TVButtonStrip({
+            className: "tv-ludo-controls",
+            buttons: [
+                new TVButton({ attrs: { "data-tv-ludo-roll": true }, label: "~R~oll" }),
+                new TVButton({ attrs: { "data-tv-ludo-new": true }, label: "~N~ew" }),
+            ],
+        });
+        const side = new TVGroup({
+            className: "tv-ludo-side",
+            children: [infoBox, playersBox, controls],
+        });
+        const main = new TVGroup({
+            className: "tv-ludo-main",
+            children: [
+                new TVStaticText({
+                    className: "tv-ludo-board",
+                    attrs: { "data-tv-ludo-board": true, role: "grid", "aria-label": "Ludo board" },
+                }),
+                side,
+            ],
+        }).renderMarkup();
+
+        super({
+            desktop,
+            windowClass: "tv-ludo-window",
+            ariaLabel: "Ludo",
+            title: "Ludo",
+            closeAttrs: { "data-tv-ludo-close": true, "aria-label": "Close Ludo" },
+            bodyMarkup: main,
+            footerMarkup: TVDialog.footerMarkup(),
+            width: "71ch",
+            height: "min(26em, calc(100% - 2em))",
+            left: "3ch",
+            top: "2em",
+        });
+
+        this.game = new LudoGame();
+        this.infoBox = infoBox.resolve(this.root);
+        this.boardEl = this.query("[data-tv-ludo-board]");
+        this.rollButton = this.query("[data-tv-ludo-roll]");
+        this.playerButtons = this.queryAll("[data-tv-ludo-player-mode]");
+        this.cpuTimer = null;
+        this.moveTimer = null;
+        this.captureFlashTimer = null;
+        this.selectedPiece = null;
+        this.notice = "";
+        this.started = false;
+        this.animating = false;
+        this.animation = null;
+        this.captureFlash = null;
+
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+        this.bind();
+    }
+
+    bind() {
+        if (this.boardEl) {
+            this.boardEl.addEventListener("click", (event) => {
+                const piece = event.target.closest("[data-tv-ludo-piece]");
+                if (!piece) { return; }
+                this.moveHumanPiece(Number(piece.getAttribute("data-tv-ludo-piece")));
+            });
+        }
+        if (this.rollButton) {
+            this.rollButton.addEventListener("click", () => this.rollHuman());
+        }
+        const newButton = this.query("[data-tv-ludo-new]");
+        if (newButton) {
+            newButton.addEventListener("click", () => this.newGame());
+        }
+        this.playerButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                this.cyclePlayerMode(Number(button.getAttribute("data-tv-ludo-player-mode")));
+            });
+        });
+        this._onKeyDown = (event) => this.onKeyDown(event);
+        document.addEventListener("keydown", this._onKeyDown);
+    }
+
+    open() {
+        super.open();
+        if (!this.started) {
+            this.newGame();
+        } else {
+            this.render();
+            this.scheduleCpu();
+        }
+        fillBorders(this.dialog);
+    }
+
+    close() {
+        window.clearTimeout(this.cpuTimer);
+        this.cpuTimer = null;
+        this.clearAnimation();
+        super.close();
+    }
+
+    newGame(modes = this.game.modes) {
+        window.clearTimeout(this.cpuTimer);
+        this.clearAnimation();
+        this.game.reset(modes);
+        this.started = true;
+        this.selectedPiece = null;
+        this.notice = "";
+        this.render();
+        this.notifyStateChange();
+        this.scheduleCpu();
+    }
+
+    cyclePlayerMode(player) {
+        if (this.animating) { return; }
+        const modes = this.game.modes.slice();
+        const active = modes.filter((mode) => mode !== "off").length;
+        const humans = modes.filter((mode) => mode === "human").length;
+        if (modes[player] === "human") {
+            if (humans === 1) {
+                this.notice = "Keep one human";
+                this.renderInfo();
+                return;
+            }
+            modes[player] = "cpu";
+        } else if (modes[player] === "cpu") {
+            if (active === 2) {
+                modes[player] = "human";
+            } else {
+                modes[player] = "off";
+            }
+        } else {
+            modes[player] = "human";
+        }
+        this.newGame(modes);
+    }
+
+    rollHuman() {
+        if (this.animating) { return; }
+        if (this.game.playerMode() !== "human" || this.game.phase !== "roll") { return; }
+        const previousPlayer = this.game.currentPlayer;
+        const result = this.game.roll();
+        if (!result) { return; }
+        this.selectedPiece = result.legal.length ? result.legal[0] : null;
+        this.notice = !result.legal.length && this.game.currentPlayer === previousPlayer
+            ? "Try again"
+            : "";
+        this.render();
+        this.notifyStateChange();
+        this.scheduleCpu();
+    }
+
+    moveHumanPiece(piece) {
+        if (this.animating) { return; }
+        if (this.game.playerMode() !== "human" || this.game.phase !== "move") { return; }
+        this.performMove(piece);
+    }
+
+    onKeyDown(event) {
+        if (!this.isActive()) { return; }
+        if (event.key === "Escape") {
+            event.preventDefault();
+            this.close();
+            return;
+        }
+        if (event.key === "n" || event.key === "N") {
+            event.preventDefault();
+            this.newGame();
+            return;
+        }
+        if ((event.key === "r" || event.key === "R" || event.key === " ") && this.game.phase === "roll") {
+            event.preventDefault();
+            this.rollHuman();
+            return;
+        }
+        if (this.animating || this.game.phase !== "move" || this.game.playerMode() !== "human") { return; }
+        const legal = this.game.legalPieces();
+        if (!legal.length) { return; }
+        if (/^[1-4]$/.test(event.key)) {
+            const piece = Number(event.key) - 1;
+            if (legal.includes(piece)) {
+                event.preventDefault();
+                this.moveHumanPiece(piece);
+            }
+            return;
+        }
+        if (["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key)) {
+            event.preventDefault();
+            const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+            const current = Math.max(0, legal.indexOf(this.selectedPiece));
+            this.selectedPiece = legal[(current + direction + legal.length) % legal.length];
+            this.renderBoard();
+            const selected = this.query(`[data-tv-ludo-piece="${this.selectedPiece}"]`);
+            if (selected) { selected.focus(); }
+            return;
+        }
+        if (event.key === "Enter" && legal.includes(this.selectedPiece)) {
+            event.preventDefault();
+            this.moveHumanPiece(this.selectedPiece);
+        }
+    }
+
+    scheduleCpu() {
+        window.clearTimeout(this.cpuTimer);
+        this.cpuTimer = null;
+        if (this.animating || !this.isOpen() || this.game.winner !== null || this.game.playerMode() !== "cpu") { return; }
+        this.cpuTimer = window.setTimeout(() => {
+            if (this.animating || !this.isOpen() || this.game.playerMode() !== "cpu") { return; }
+            if (this.game.phase === "roll") {
+                this.game.roll();
+                this.selectedPiece = null;
+                this.notice = "";
+                this.render();
+                this.notifyStateChange();
+                this.scheduleCpu();
+            } else if (this.game.phase === "move") {
+                this.performMove(this.game.chooseCpuPiece());
+            }
+        }, 450);
+    }
+
+    performMove(piece) {
+        const beforePieces = this.game.pieces.map((pieces) => pieces.slice());
+        const result = this.game.move(piece);
+        if (!result) { return null; }
+        this.selectedPiece = null;
+        this.notice = result.captured.length ? "Piece captured" : "";
+        this.animateMove(result, beforePieces);
+        return result;
+    }
+
+    clearAnimation() {
+        window.clearTimeout(this.moveTimer);
+        window.clearTimeout(this.captureFlashTimer);
+        this.moveTimer = null;
+        this.captureFlashTimer = null;
+        this.animating = false;
+        this.animation = null;
+        this.captureFlash = null;
+        if (this.dialog) {
+            this.dialog.classList.remove("is-ludo-capture-flash");
+        }
+    }
+
+    animateMove(result, beforePieces) {
+        const path = ludoMoveProgressPath(result.from, result.target);
+        if (!path.length) {
+            this.finishMoveAnimation(result);
+            return;
+        }
+        window.clearTimeout(this.cpuTimer);
+        window.clearTimeout(this.moveTimer);
+        this.cpuTimer = null;
+        this.animating = true;
+        this.animation = {
+            pieces: beforePieces,
+            player: result.player,
+            piece: result.piece,
+            progress: result.from,
+            captured: result.captured,
+        };
+        this.renderInfo();
+        this.renderPlayers();
+
+        let index = 0;
+        const step = () => {
+            if (!this.isOpen()) {
+                this.clearAnimation();
+                return;
+            }
+            this.animation.progress = path[index];
+            this.renderBoard();
+            index += 1;
+            if (index < path.length) {
+                this.moveTimer = window.setTimeout(step, LUDO_MOVE_STEP_MS);
+            } else {
+                this.moveTimer = window.setTimeout(() => this.finishMoveAnimation(result), LUDO_MOVE_STEP_MS);
+            }
+        };
+        step();
+    }
+
+    finishMoveAnimation(result) {
+        window.clearTimeout(this.moveTimer);
+        this.moveTimer = null;
+        this.animating = false;
+        this.animation = null;
+        if (result.captured.length) {
+            this.flashCapture(result.captured);
+            return;
+        }
+        this.finishMove();
+    }
+
+    flashCapture(captured) {
+        this.captureFlash = new Set(captured.map(([player, piece]) => `${player}:${piece}`));
+        if (this.dialog) {
+            this.dialog.classList.add("is-ludo-capture-flash");
+        }
+        this.render();
+        this.captureFlashTimer = window.setTimeout(() => {
+            this.captureFlash = null;
+            if (this.dialog) {
+                this.dialog.classList.remove("is-ludo-capture-flash");
+            }
+            this.finishMove();
+        }, LUDO_CAPTURE_FLASH_MS);
+    }
+
+    finishMove() {
+        window.clearTimeout(this.captureFlashTimer);
+        this.captureFlashTimer = null;
+        this.captureFlash = null;
+        this.render();
+        this.notifyStateChange();
+        this.scheduleCpu();
+    }
+
+    captureUrlState() {
+        return this.game.exportState();
+    }
+
+    restoreUrlState(state) {
+        window.clearTimeout(this.cpuTimer);
+        this.clearAnimation();
+        if (!this.game.importState(state)) { return false; }
+        this.started = true;
+        this.selectedPiece = null;
+        this.notice = "";
+        this.render();
+        this.scheduleCpu();
+        return true;
+    }
+
+    notifyStateChange() {
+        if (this.manager && this.manager.onChange) {
+            this.manager.onChange();
+        }
+    }
+
+    render() {
+        this.renderBoard();
+        this.renderInfo();
+        this.renderPlayers();
+    }
+
+    renderInfo() {
+        const player = this.game.winner === null ? this.game.currentPlayer : this.game.winner;
+        const name = LUDO_PLAYER_NAMES[player];
+        this.infoBox.updateRow("turn", `Turn: ${name}`);
+        this.infoBox.updateRow("dice", `Dice: ${this.game.die || "-"}`);
+        let status = this.notice;
+        if (this.game.winner !== null) {
+            status = `${name} wins!`;
+        } else if (this.animating) {
+            status = this.notice || "Moving";
+        } else if (this.game.playerMode() === "cpu") {
+            status = "CPU thinking";
+        } else if (this.game.phase === "move") {
+            status = "Choose a piece";
+        } else if (!status) {
+            status = this.game.rollsLeft > 1 ? `Roll (${this.game.rollsLeft})` : "Roll the dice";
+        }
+        this.infoBox.updateRow("status", status);
+        if (this.rollButton) {
+            this.rollButton.disabled = this.animating || this.game.winner !== null ||
+                this.game.playerMode() !== "human" || this.game.phase !== "roll";
+        }
+    }
+
+    renderPlayers() {
+        this.playerButtons.forEach((button, player) => {
+            const mode = this.game.modes[player];
+            const home = this.game.pieces[player].filter((progress) => progress >= LUDO_HOME_START).length;
+            const current = this.game.currentPlayer === player && this.game.winner === null;
+            const name = LUDO_PLAYER_NAMES[player].padEnd(6);
+            const label = `${current ? ">" : " "} ${LUDO_PLAYER_NAMES[player][0]} ${name} ${LUDO_MODE_LABELS[mode]} ${home}/4`;
+            button.innerHTML = TVInfoBox.rowHtml(20, label, "tv-game-border");
+            button.classList.toggle("is-current", this.game.currentPlayer === player && this.game.winner === null);
+            button.classList.toggle("is-off", mode === "off");
+        });
+    }
+
+    renderBoard() {
+        if (!this.boardEl) { return; }
+        const animation = this.animation;
+        const pieces = animation ? animation.pieces : this.game.pieces;
+        const activeCells = new Set([
+            ...LUDO_COMMON_CELLS,
+            ...LUDO_HOME_CELLS.keys(),
+            ...LUDO_BASE_CELLS.keys(),
+        ]);
+        const occupied = new Map();
+        let animatedMover = null;
+        for (let player = 0; player < 4; player++) {
+            if (this.game.modes[player] === "off") { continue; }
+            for (let piece = 0; piece < 4; piece++) {
+                if (animation && player === animation.player && piece === animation.piece) {
+                    animatedMover = [player, piece];
+                    continue;
+                }
+                const [row, col] = ludoCoordinateForProgress(player, piece, pieces[player][piece]);
+                occupied.set(LUDO_CELL_KEY(row, col), [player, piece]);
+            }
+        }
+        if (animation && animatedMover) {
+            const [row, col] = ludoCoordinateForProgress(animation.player, animation.piece, animation.progress);
+            occupied.set(LUDO_CELL_KEY(row, col), animatedMover);
+        }
+        const legal = !this.animating && this.game.playerMode() === "human" && this.game.phase === "move"
+            ? new Set(this.game.legalPieces())
+            : new Set();
+        const connected = (fromRow, fromCol, toRow, toCol) => LUDO_ROUTE_EDGES.has(
+            `${LUDO_CELL_KEY(fromRow, fromCol)}>${LUDO_CELL_KEY(toRow, toCol)}`
+        );
+        const line = (html, className = "") => new TVStaticText({
+            className: `tv-ludo-ascii-line ${className}`.trim(),
+            html,
+        }).renderMarkup();
+        const textCell = (text, classes = []) => new TVStaticText({
+            tag: "span",
+            className: ["tv-ludo-ascii-cell", ...classes].join(" "),
+            text,
+        }).renderMarkup();
+        const pathSegment = (text) => new TVStaticText({
+            tag: "span",
+            className: "tv-ludo-ascii-path",
+            text,
+        }).renderMarkup();
+        const cellContent = (row, col) => {
+            const key = LUDO_CELL_KEY(row, col);
+            if (!activeCells.has(key)) { return textCell(" "); }
+            const startPlayer = LUDO_START_CELLS.get(key);
+            const homePlayer = LUDO_HOME_CELLS.get(key);
+            const base = LUDO_BASE_CELLS.get(key);
+            const occupant = occupied.get(key);
+            const cellClasses = [];
+            if (startPlayer !== undefined) {
+                cellClasses.push("tv-ludo-start", `tv-ludo-${LUDO_PLAYER_COLORS[startPlayer]}`);
+            } else if (homePlayer !== undefined) {
+                cellClasses.push("tv-ludo-home", `tv-ludo-${LUDO_PLAYER_COLORS[homePlayer]}`);
+            } else if (base) {
+                cellClasses.push("tv-ludo-base", `tv-ludo-${LUDO_PLAYER_COLORS[base[0]]}`);
+            }
+            if (!occupant) {
+                return textCell(cellClasses.length ? "●" : "○", cellClasses);
+            }
+
+            const [player, piece] = occupant;
+            const isLegal = player === this.game.currentPlayer && legal.has(piece);
+            const isCapturedFlash = this.captureFlash && this.captureFlash.has(`${player}:${piece}`);
+            const pieceClasses = [
+                "tv-ludo-ascii-piece",
+                `tv-ludo-${LUDO_PLAYER_COLORS[player]}`,
+                ...cellClasses,
+                isLegal ? "is-legal" : "",
+                isLegal && piece === this.selectedPiece ? "is-selected" : "",
+                animation && player === animation.player && piece === animation.piece ? "is-moving" : "",
+                isCapturedFlash ? "is-captured" : "",
+            ].filter(Boolean).join(" ");
+            return new TVButton({
+                dialog: false,
+                className: pieceClasses,
+                attrs: {
+                    "data-tv-ludo-piece": piece,
+                    "aria-label": `${LUDO_PLAYER_NAMES[player]} piece ${piece + 1}`,
+                    disabled: !isLegal,
+                },
+                labelMarkup: '<span class="tv-ludo-piece-glyph">♟</span>',
+            }).renderMarkup();
+        };
+
+        const lines = [line(" ".repeat(45))];
+        for (let row = 0; row < LUDO_BOARD_SIZE; row++) {
+            const nodeParts = ["  "];
+            for (let col = 0; col < LUDO_BOARD_SIZE; col++) {
+                nodeParts.push(cellContent(row, col));
+                if (col < LUDO_BOARD_SIZE - 1) {
+                    nodeParts.push(pathSegment(connected(row, col, row, col + 1) ? "───" : "   "));
+                }
+            }
+            nodeParts.push("  ");
+            lines.push(line(nodeParts.join("")));
+            if (row === LUDO_BOARD_SIZE - 1) { break; }
+
+            const pathParts = ["  "];
+            for (let col = 0; col < LUDO_BOARD_SIZE; col++) {
+                pathParts.push(pathSegment(connected(row, col, row + 1, col) ? "│" : " "));
+                if (col < LUDO_BOARD_SIZE - 1) { pathParts.push("   "); }
+            }
+            pathParts.push("  ");
+            lines.push(line(pathParts.join("")));
+        }
+        lines.push(line(" ".repeat(45)));
+        this.boardEl.innerHTML = lines.join("");
+    }
+}
+
 // ── Snake ────────────────────────────────────────────────────────────
 
 const SNAKE_COLS = 20;
@@ -2445,6 +3341,7 @@ Object.assign(TV, {
     TVSokobanDialog,
     TVLinesDialog,
     TVReversiDialog,
+    TVLudoDialog,
     TVSnakeDialog,
 });
-})();
+})(typeof window !== "undefined" ? window : globalThis);

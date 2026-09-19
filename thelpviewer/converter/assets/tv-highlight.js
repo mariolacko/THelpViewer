@@ -57,6 +57,10 @@ function spanWrap(cls, inner) {
     return `<span class="${cls}">${inner}</span>`;
 }
 
+function continuesWithBackslash(raw) {
+    return /\\\s*$/.test(raw);
+}
+
 function detectCodeLang(text) {
     const probe = String(text || "");
     let cScore = 0;
@@ -230,14 +234,19 @@ function hlLinePascal(raw, inBlockComment) {
     return { html: parts.join(""), inBlockComment: false };
 }
 
-function hlLineC(raw, inBlockComment) {
+function hlLineC(raw, inBlockComment, inPreprocContinuation) {
     const parts = [];
     let cursor = 0;
     let index = 0;
     let blockComment = inBlockComment;
+    const continuesPreproc = continuesWithBackslash(raw);
 
-    if (!blockComment && C_PREPROC_RE.test(raw)) {
-        return { html: spanWrap("code-preproc", esc(raw)), inBlockComment: false };
+    if (!blockComment && (inPreprocContinuation || C_PREPROC_RE.test(raw))) {
+        return {
+            html: spanWrap("code-preproc", esc(raw)),
+            inBlockComment: false,
+            inPreprocContinuation: continuesPreproc,
+        };
     }
 
     function flushCode(until) {
@@ -252,7 +261,7 @@ function hlLineC(raw, inBlockComment) {
             const end = raw.indexOf("*/", index);
             if (end < 0) {
                 parts.push(spanWrap("code-comment", esc(raw.slice(index))));
-                return { html: parts.join(""), inBlockComment: true };
+                return { html: parts.join(""), inBlockComment: true, inPreprocContinuation: false };
             }
             parts.push(spanWrap("code-comment", esc(raw.slice(index, end + 2))));
             index = end + 2;
@@ -264,7 +273,7 @@ function hlLineC(raw, inBlockComment) {
         if (raw.startsWith("//", index)) {
             flushCode(index);
             parts.push(spanWrap("code-comment", esc(raw.slice(index))));
-            return { html: parts.join(""), inBlockComment: false };
+            return { html: parts.join(""), inBlockComment: false, inPreprocContinuation: false };
         }
 
         if (raw.startsWith("/*", index)) {
@@ -272,7 +281,7 @@ function hlLineC(raw, inBlockComment) {
             const end = raw.indexOf("*/", index + 2);
             if (end < 0) {
                 parts.push(spanWrap("code-comment", esc(raw.slice(index))));
-                return { html: parts.join(""), inBlockComment: true };
+                return { html: parts.join(""), inBlockComment: true, inPreprocContinuation: false };
             }
             parts.push(spanWrap("code-comment", esc(raw.slice(index, end + 2))));
             index = end + 2;
@@ -305,7 +314,7 @@ function hlLineC(raw, inBlockComment) {
     }
 
     flushCode(raw.length);
-    return { html: parts.join(""), inBlockComment: false };
+    return { html: parts.join(""), inBlockComment: false, inPreprocContinuation: false };
 }
 
 function hlLineAsm(escaped) {
@@ -336,6 +345,7 @@ function highlightCodeExamples(container) {
     const lang = detectCodeLang(examples.map((el) => el.textContent || "").join("\n"));
     let inPascalAsm = false;
     let inCBlockComment = false;
+    let inCPreprocContinuation = false;
     let inPascalBlockComment = false;
 
     examples.forEach((el) => {
@@ -348,9 +358,10 @@ function highlightCodeExamples(container) {
 
         if (lang === "c") {
             el.classList.add("code-lang-c");
-            const result = hlLineC(raw, inCBlockComment);
+            const result = hlLineC(raw, inCBlockComment, inCPreprocContinuation);
             el.innerHTML = result.html;
             inCBlockComment = result.inBlockComment;
+            inCPreprocContinuation = result.inPreprocContinuation;
             return;
         }
 

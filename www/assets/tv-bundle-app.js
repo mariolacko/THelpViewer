@@ -21,6 +21,7 @@ const {
     TVAsciiTableDialog,
     TVCalculatorDialog,
     TVColorsDialog,
+    TVMidiPlayerDialog,
     TVSearchDialog,
     TVTetrisDialog,
     TVMinesDialog,
@@ -28,6 +29,7 @@ const {
     TVSokobanDialog,
     TVLinesDialog,
     TVReversiDialog,
+    TVLudoDialog,
     TVSnakeDialog,
     TVScreenSaver,
     TVWidget,
@@ -57,6 +59,169 @@ const DOCS_CATALOG_FILE = DOCS_DIR + "catalog.json";
 const bundleCache = new Map();
 let catalogData = null;
 let docsCatalogData = null;
+const URL_STATE_PREFIX = "tv=1.";
+
+function encodeUrlState(state) {
+    const json = JSON.stringify(state);
+    const bytes = new TextEncoder().encode(json);
+    let binary = "";
+    for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+    }
+    return URL_STATE_PREFIX + btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function decodeUrlState(hash) {
+    const raw = String(hash || "").replace(/^#/, "");
+    if (!raw.startsWith(URL_STATE_PREFIX)) { return null; }
+    try {
+        const base64 = raw.slice(URL_STATE_PREFIX.length).replace(/-/g, "+").replace(/_/g, "/");
+        const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+        const binary = atob(padded);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+            bytes[index] = binary.charCodeAt(index);
+        }
+        const state = JSON.parse(new TextDecoder().decode(bytes));
+        return state && state.v === 1 && Array.isArray(state.w) ? state : null;
+    } catch {
+        return null;
+    }
+}
+
+function numericCssVar(style, name, fallback) {
+    const value = Number.parseFloat(style.getPropertyValue(name));
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function captureWindowGeometry(element, dialog = false) {
+    if (!element) { return null; }
+    const style = getComputedStyle(element);
+    const cell = measureCells ? measureCells() : { width: 9, height: 16 };
+    const leftName = dialog ? "--tv-dialog-left" : "--tv-window-left";
+    const topName = dialog ? "--tv-dialog-top" : "--tv-window-top";
+    const colsName = dialog ? "" : "--tv-window-cols";
+    const rowsName = dialog ? "" : "--tv-window-rows";
+    const left = numericCssVar(style, leftName, element.offsetLeft);
+    const top = numericCssVar(style, topName, element.offsetTop);
+    const cols = colsName
+        ? numericCssVar(style, colsName, Math.round(element.offsetWidth / cell.width))
+        : Math.round(element.offsetWidth / cell.width);
+    const rows = rowsName
+        ? numericCssVar(style, rowsName, Math.round(element.offsetHeight / cell.height))
+        : Math.round(element.offsetHeight / cell.height);
+    return [
+        Math.max(0, Math.round(left)),
+        Math.max(0, Math.round(top)),
+        Math.max(1, Math.round(cols)),
+        Math.max(1, Math.round(rows)),
+        element.classList.contains("is-maximized") ? 1 : 0,
+    ];
+}
+
+function applyWindowGeometry(element, geometry, dialog = false) {
+    if (!element || !Array.isArray(geometry) || geometry.length < 2) { return; }
+    const left = Math.max(0, Number(geometry[0]) || 0);
+    const top = Math.max(0, Number(geometry[1]) || 0);
+    const cols = Math.max(1, Number(geometry[2]) || 1);
+    const rows = Math.max(1, Number(geometry[3]) || 1);
+    const maximized = Boolean(Number(geometry[4]));
+    if (dialog) {
+        element.style.setProperty("--tv-dialog-left", `${left}px`);
+        element.style.setProperty("--tv-dialog-top", `${top}px`);
+        element.style.setProperty("--tv-dialog-width", `${cols}ch`);
+        element.style.setProperty("--tv-dialog-height", `${rows}em`);
+    } else {
+        element.style.setProperty("--tv-window-left", `${left}px`);
+        element.style.setProperty("--tv-window-top", `${top}px`);
+        element.style.setProperty("--tv-window-cols", String(cols));
+        element.style.setProperty("--tv-window-rows", String(rows));
+        element.classList.toggle("is-maximized", maximized);
+        const glyph = element.querySelector("[data-tv-zoom-glyph]");
+        if (glyph) { glyph.textContent = maximized ? "↓" : "↑"; }
+    }
+}
+
+function textLineCol(text, offset) {
+    const safeOffset = Math.max(0, Math.min(Number(offset) || 0, text.length));
+    const before = text.slice(0, safeOffset);
+    const parts = before.split("\n");
+    return [parts.length, parts[parts.length - 1].length];
+}
+
+function textOffsetFromLineCol(text, line, col) {
+    const targetLine = Math.max(1, Number(line) || 1);
+    const targetCol = Math.max(0, Number(col) || 0);
+    let offset = 0;
+    let currentLine = 1;
+    while (currentLine < targetLine && offset < text.length) {
+        const next = text.indexOf("\n", offset);
+        if (next < 0) { return text.length; }
+        offset = next + 1;
+        currentLine += 1;
+    }
+    const lineEnd = text.indexOf("\n", offset);
+    const maxOffset = lineEnd < 0 ? text.length : lineEnd;
+    return Math.min(offset + targetCol, maxOffset);
+}
+
+function textOffsetForNode(root, node, offset) {
+    try {
+        const range = document.createRange();
+        range.selectNodeContents(root);
+        range.setEnd(node, offset);
+        const value = range.toString().length;
+        if (typeof range.detach === "function") { range.detach(); }
+        return value;
+    } catch {
+        return -1;
+    }
+}
+
+function textNodeAtOffset(root, offset) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let total = 0;
+    let last = null;
+    let current = walker.nextNode();
+    while (current) {
+        last = current;
+        const length = current.nodeValue.length;
+        if (total + length >= offset) {
+            return { node: current, offset: Math.max(0, Math.min(length, offset - total)) };
+        }
+        total += length;
+        current = walker.nextNode();
+    }
+    return last ? { node: last, offset: last.nodeValue.length } : null;
+}
+
+function captureTextSelection(root) {
+    const selection = window.getSelection ? window.getSelection() : null;
+    if (!root || !selection || selection.rangeCount === 0 || selection.isCollapsed) { return null; }
+    const range = selection.getRangeAt(0);
+    if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) { return null; }
+    const text = root.textContent || "";
+    const start = textOffsetForNode(root, range.startContainer, range.startOffset);
+    const end = textOffsetForNode(root, range.endContainer, range.endOffset);
+    if (start < 0 || end < 0 || start === end) { return null; }
+    return [...textLineCol(text, start), ...textLineCol(text, end)];
+}
+
+function restoreTextSelection(root, selectionState) {
+    if (!root || !Array.isArray(selectionState) || selectionState.length < 4) { return; }
+    const text = root.textContent || "";
+    const start = textNodeAtOffset(root, textOffsetFromLineCol(text, selectionState[0], selectionState[1]));
+    const end = textNodeAtOffset(root, textOffsetFromLineCol(text, selectionState[2], selectionState[3]));
+    if (!start || !end) { return; }
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+    const selection = window.getSelection ? window.getSelection() : null;
+    if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+}
 
 function loadBundle(filename, { onProgress, signal } = {}) {
     if (bundleCache.has(filename)) {
@@ -1702,7 +1867,6 @@ class BundleWindowManager {
         const contentHTML = wrapBundleContent(bundle, renderBundleIndex(bundle));
         this._openWindow(bundle, contentHTML, bundleHeaderLabel(bundle));
         if (this.onNavigate) { this.onNavigate("Index"); }
-        this._updateUrl();
     }
 
     showTopic(bundle, contextHex, lineNumber = null) {
@@ -1722,7 +1886,6 @@ class BundleWindowManager {
         const windowEl = this._openWindow(bundle, contentHTML, bundleHeaderLabel(bundle));
         this._focusTopicLine(windowEl, this.currentLineNumber);
         if (this.onNavigate) { this.onNavigate(bundleTopicTitle(bundle, topic)); }
-        this._updateUrl();
         return true;
     }
 
@@ -1752,7 +1915,6 @@ class BundleWindowManager {
             this.currentTag = null;
             this._openWindow(bundle, wrapBundleContent(bundle, renderBundleContents(bundle)), bundleHeaderLabel(bundle));
             if (this.onNavigate) { this.onNavigate("Contents"); }
-            this._updateUrl();
             return;
         }
         const fallback = bundleTopicFallbackRef(bundle);
@@ -1760,7 +1922,6 @@ class BundleWindowManager {
             this.showTopic(bundle, fallback);
             return;
         }
-        this._updateUrl();
     }
 
     showTag(bundle, key, value, label = "") {
@@ -1780,7 +1941,6 @@ class BundleWindowManager {
         );
         this._openWindow(bundle, contentHTML, bundleHeaderLabel(bundle));
         if (this.onNavigate) { this.onNavigate(`${normalizedLabel}: ${normalizedValue}`); }
-        this._updateUrl();
         return true;
     }
 
@@ -1857,21 +2017,6 @@ class BundleWindowManager {
         viewport.scrollTop = Math.max(0, targetTop - padding);
     }
 
-    _updateUrl() {
-        if (!this.currentBundle) { return; }
-        const catalogFile = this.currentBundle._catalogFile;
-        const entry = catalogFile
-            ? catalogData.find((e) => e.file === catalogFile)
-            : catalogData.find((e) => e.name === bundleHeaderLabel(this.currentBundle));
-        const params = new URLSearchParams();
-        if (entry) { params.set("file", entry.file); }
-        if (this.currentContextHex) { params.set("topic", this.currentContextHex); }
-        if (this.currentLineNumber) { params.set("line", String(this.currentLineNumber)); }
-        const qs = params.toString();
-        const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
-        window.history.replaceState(null, "", url);
-    }
-
     _pushHistory() {
         if (this.currentBundle) {
             this.history.push({
@@ -1918,11 +2063,26 @@ class BundleWindowManager {
             this._openWindow(prev.bundle, contentHTML, bundleHeaderLabel(prev.bundle));
             if (this.onNavigate) { this.onNavigate("Index"); }
         }
-        this._updateUrl();
     }
 
     _openWindow(bundle, contentHTML, caption) {
         const key = bundleWindowKey(bundle);
+        const applyStateData = (windowEl) => {
+            windowEl.dataset.tvStateType = "h";
+            windowEl.dataset.tvStateFile = bundle._catalogFile || "";
+            windowEl.dataset.tvStateView = this.currentView || "index";
+            windowEl.dataset.tvStateTopic = this.currentContextHex || "";
+            windowEl.dataset.tvStateLine = this.currentLineNumber ? String(this.currentLineNumber) : "";
+            if (this.currentTag) {
+                windowEl.dataset.tvStateTagKey = this.currentTag.key || "";
+                windowEl.dataset.tvStateTagValue = this.currentTag.value || "";
+                windowEl.dataset.tvStateTagLabel = this.currentTag.label || "";
+            } else {
+                delete windowEl.dataset.tvStateTagKey;
+                delete windowEl.dataset.tvStateTagValue;
+                delete windowEl.dataset.tvStateTagLabel;
+            }
+        };
         const existing = this.openWindows.get(key);
         if (existing) {
             // Update content in existing window
@@ -1938,6 +2098,7 @@ class BundleWindowManager {
             }
             highlightCodeExamples(existing);
             this._bindTopicLinks(existing, bundle);
+            applyStateData(existing);
             fillBorders();
             return existing;
         }
@@ -1956,6 +2117,7 @@ class BundleWindowManager {
         this.desktop.appendChild(windowEl);
         bindCloseButtons(windowEl);
         this.openWindows.set(key, windowEl);
+        applyStateData(windowEl);
         this._initWindowWidgets(windowEl);
         highlightCodeExamples(windowEl);
         this._bindTopicLinks(windowEl, bundle);
@@ -2034,7 +2196,7 @@ class BundleWindowManager {
                     this._pushHistory();
                     this._focusTopicLine(windowEl, lineNumber);
                     this.currentLineNumber = lineNumber;
-                    this._updateUrl();
+                    if (this.onNavigate) { this.onNavigate(""); }
                 }
             } catch (error) {
                 console.error("Failed to open linked topic", error);
@@ -2054,7 +2216,6 @@ class BundleWindowManager {
             this.currentContextHex = null;
             this.currentView = "index";
             this.currentTag = null;
-            this._clearUrl();
             fillBorders();
             fillDesktopPatterns();
             if (this.onNavigate) { this.onNavigate(""); }
@@ -2106,7 +2267,6 @@ class BundleWindowManager {
         this.currentContextHex = null;
         this.currentView = "index";
         this.currentTag = null;
-        this._clearUrl();
         if (this.onNavigate) { this.onNavigate(""); }
     }
 
@@ -2171,9 +2331,6 @@ class BundleWindowManager {
         return dialogs;
     }
 
-    _clearUrl() {
-        window.history.replaceState(null, "", window.location.pathname);
-    }
 }
 
 // ── Catalog menu items ──────────────────────────────────────────────
@@ -2439,6 +2596,13 @@ function renderMarkdown(md) {
     let listTag = "";
     let inTable = false;
 
+    function isSafeMarkdownHref(href) {
+        const value = String(href || "").trim();
+        if (!value || /[\u0000-\u001f\u007f]/.test(value)) { return false; }
+        const scheme = value.match(/^([a-z][a-z0-9+.-]*):/i);
+        return !scheme || ["http", "https", "mailto"].includes(scheme[1].toLowerCase());
+    }
+
     function inlineMarkup(text) {
         return text
             .replace(/&/g, "&amp;")
@@ -2447,7 +2611,11 @@ function renderMarkdown(md) {
             .replace(/`([^`]+)`/g, '<code>$1</code>')
             .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
             .replace(/\*([^*]+)\*/g, '<i>$1</i>')
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => {
+                if (!isSafeMarkdownHref(href)) { return label; }
+                const safeHref = href.trim().replace(/"/g, "&quot;");
+                return `<a href="${safeHref}" target="_blank" rel="noopener">${label}</a>`;
+            });
     }
 
     function closeList() {
@@ -2556,6 +2724,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { type: "dialog", dialog: "calendar", label: "Ca~l~endar" },
         { type: "dialog", dialog: "ascii", label: "Ascii ~T~able" },
         { type: "dialog", dialog: "calc", label: "~C~alculator" },
+        { type: "dialog", dialog: "midi", label: "~M~IDI Player" },
         { type: "dialog", dialog: "colors", label: "C~o~lors" },
         { type: "separator" },
         { type: "submenu", label: "~S~creen saver", items: [
@@ -2630,6 +2799,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
     const gamesPopupItems = [
         { type: "dialog", dialog: "breakout", label: "~B~reakOut" },
         { type: "dialog", dialog: "lines", label: "~L~ines" },
+        { type: "dialog", dialog: "ludo", label: "L~u~do" },
         { type: "dialog", dialog: "mines", label: "~M~ines" },
         { type: "dialog", dialog: "puzzle", label: "~P~uzzle" },
         { type: "dialog", dialog: "reversi", label: "~R~eversi" },
@@ -2675,6 +2845,9 @@ class TVBundleApp {
         this._menuBundleKey = "";
         this._menuGlobalsBound = false;
         this._closeMenus = null;
+        this._stateSyncTimer = null;
+        this._restoringUrlState = false;
+        this._lastUrlStateHash = "";
     }
 
     start() {
@@ -2692,7 +2865,10 @@ class TVBundleApp {
         if (!this.desktop) { return; }
 
         this.dialogManager = new TVDialogManager(this.desktop);
-        this.dialogManager.onChange = () => this._updateStatusLine("");
+        this.dialogManager.onChange = () => {
+            this._updateStatusLine("");
+            this._scheduleUrlStateSync();
+        };
         this._updateStatusLine("");
 
         // Register standard dialogs
@@ -2701,6 +2877,7 @@ class TVBundleApp {
         this._registerDialog("calendar", () => new TVCalendarDialog(this.desktop));
         this._registerDialog("ascii", () => new TVAsciiTableDialog(this.desktop));
         this._registerDialog("calc", () => new TVCalculatorDialog(this.desktop));
+        this._registerDialog("midi", () => new TVMidiPlayerDialog(this.desktop));
         this._registerDialog("colors", () => new TVColorsDialog(this.desktop));
         this._registerDialog("tetris", () => new TVTetrisDialog(this.desktop));
         this._registerDialog("mines", () => new TVMinesDialog(this.desktop));
@@ -2708,6 +2885,7 @@ class TVBundleApp {
         this._registerDialog("sokoban", () => new TVSokobanDialog(this.desktop));
         this._registerDialog("lines", () => new TVLinesDialog(this.desktop));
         this._registerDialog("reversi", () => new TVReversiDialog(this.desktop));
+        this._registerDialog("ludo", () => new TVLudoDialog(this.desktop));
         this._registerDialog("snake", () => new TVSnakeDialog(this.desktop));
         this._registerBundleSearch();
         this.dialogManager.applyActiveStates();
@@ -2728,8 +2906,10 @@ class TVBundleApp {
         this.windowManager = new BundleWindowManager(this.desktop, (hint) => {
             this._updateStatusLine(hint);
             this._syncBundleMenu();
+            this._scheduleUrlStateSync();
         });
         this.windowManager.dialogManager = this.dialogManager;
+        this._bindUrlStateSync();
     }
 
     _updateStatusLine(hint) {
@@ -2847,6 +3027,232 @@ class TVBundleApp {
                 this.dialogManager.open(el.getAttribute("data-tv-dialog-open") || "");
             });
         });
+    }
+
+    _bindUrlStateSync() {
+        window.addEventListener("tv-window-state-change", () => this._scheduleUrlStateSync());
+        document.addEventListener("selectionchange", () => this._scheduleUrlStateSync());
+        document.addEventListener("keyup", () => this._scheduleUrlStateSync());
+        this.desktop.addEventListener("scroll", () => this._scheduleUrlStateSync(), true);
+    }
+
+    _scheduleUrlStateSync() {
+        if (this._restoringUrlState) { return; }
+        window.clearTimeout(this._stateSyncTimer);
+        this._stateSyncTimer = window.setTimeout(() => this._syncUrlState(), 180);
+    }
+
+    _syncUrlState() {
+        if (this._restoringUrlState) { return; }
+        const state = this._captureUrlState();
+        const url = new URL(window.location.href);
+        url.search = "";
+        if (state) {
+            url.hash = encodeUrlState(state);
+        } else if (url.hash.replace(/^#/, "").startsWith(URL_STATE_PREFIX)) {
+            url.hash = "";
+        } else {
+            return;
+        }
+        const next = url.toString();
+        if (next !== window.location.href && next !== this._lastUrlStateHash) {
+            this._lastUrlStateHash = next;
+            window.history.replaceState(null, "", next);
+        }
+    }
+
+    _captureUrlState() {
+        if (!this.dialogManager) { return null; }
+        const windows = [];
+        const targets = [];
+        const addWindow = (target, item) => {
+            if (!target || !item) { return; }
+            windows.push(item);
+            targets.push(target);
+        };
+
+        if (this.windowManager) {
+            for (const [key, element] of this.windowManager.openWindows) {
+                const file = element.dataset.tvStateFile || "";
+                if (!file) { continue; }
+                const viewport = element.querySelector("[data-tv-viewport]");
+                const item = {
+                    t: "h",
+                    f: file,
+                    view: element.dataset.tvStateView || "index",
+                    g: captureWindowGeometry(element),
+                };
+                const topic = element.dataset.tvStateTopic || "";
+                if (topic) { item.topic = topic; }
+                const visibleLine = viewport
+                    ? Array.from(element.querySelectorAll(".tv-topic-line[data-tv-line]"))
+                        .find((line) => line.offsetTop + line.offsetHeight >= viewport.scrollTop)
+                    : null;
+                const line = Number(visibleLine ? visibleLine.dataset.tvLine : element.dataset.tvStateLine);
+                if (Number.isInteger(line) && line > 0) { item.line = line; }
+                if (viewport) { item.s = [Math.round(viewport.scrollLeft), Math.round(viewport.scrollTop)]; }
+                if (element.dataset.tvStateTagKey && element.dataset.tvStateTagValue) {
+                    item.tag = [
+                        element.dataset.tvStateTagKey,
+                        element.dataset.tvStateTagValue,
+                        element.dataset.tvStateTagLabel || element.dataset.tvStateTagKey,
+                    ];
+                }
+                const selection = captureTextSelection(viewport);
+                if (selection) { item.sel = selection; }
+                addWindow("help:" + key, item);
+            }
+        }
+
+        this.desktop.querySelectorAll(".tv-doc-window").forEach((element) => {
+            const file = element.dataset.tvStateFile || "";
+            if (!file) { return; }
+            const viewport = element.querySelector("[data-tv-viewport]");
+            const item = {
+                t: "doc",
+                f: file,
+                g: captureWindowGeometry(element),
+            };
+            if (viewport) { item.s = [Math.round(viewport.scrollLeft), Math.round(viewport.scrollTop)]; }
+            const selection = captureTextSelection(viewport);
+            if (selection) { item.sel = selection; }
+            addWindow("docs", item);
+        });
+
+        this.dialogManager.dialogs.forEach((dialog, name) => {
+            if (name === "welcome" || !dialog || !dialog.isOpen()) { return; }
+            const item = {
+                t: "dlg",
+                name,
+                g: captureWindowGeometry(dialog.dialog, true),
+            };
+            if (typeof dialog.captureUrlState === "function") {
+                const dialogState = dialog.captureUrlState();
+                if (dialogState !== undefined && dialogState !== null) {
+                    item.state = dialogState;
+                }
+            }
+            addWindow(name, item);
+        });
+
+        if (!windows.length) { return null; }
+        const targetIndex = new Map(targets.map((target, index) => [target, index]));
+        const order = [];
+        this.dialogManager.stackOrder.forEach((target) => {
+            const index = targetIndex.get(target);
+            if (Number.isInteger(index) && !order.includes(index)) {
+                order.push(index);
+            }
+        });
+        targets.forEach((_target, index) => {
+            if (!order.includes(index)) { order.push(index); }
+        });
+        const active = targetIndex.has(this.dialogManager.activeTarget)
+            ? targetIndex.get(this.dialogManager.activeTarget)
+            : order[order.length - 1];
+        return { v: 1, a: active, z: order, w: windows };
+    }
+
+    async _restoreUrlState(state) {
+        if (!state || !Array.isArray(state.w) || !state.w.length) { return false; }
+        this._restoringUrlState = true;
+        const targets = [];
+        let restored = false;
+        try {
+            this.dialogManager.close("welcome");
+            for (const item of state.w) {
+                if (!item || typeof item !== "object") { continue; }
+                if (item.t === "h") {
+                    const entry = (catalogData || []).find((candidate) => candidate.file === item.f || candidate.name === item.f);
+                    if (!entry) { continue; }
+                    const bundle = await loadBundle(entry.file);
+                    this._updateSearchData(bundle);
+                    if (item.view === "contents") {
+                        this.windowManager.showContents(bundle);
+                    } else if (item.view === "tag" && Array.isArray(item.tag) && item.tag.length >= 2) {
+                        this.windowManager.showTag(bundle, item.tag[0], item.tag[1], item.tag[2] || item.tag[0]);
+                    } else if (item.view === "index") {
+                        this.windowManager.showIndex(bundle);
+                    } else if (item.topic) {
+                        this.windowManager.showTopic(bundle, item.topic, item.line || null);
+                    } else {
+                        this.windowManager.showDefault(bundle, item.line || null);
+                    }
+                    const key = bundleWindowKey(bundle);
+                    const windowEl = this.windowManager.openWindows.get(key);
+                    this._applyUrlWindowState(windowEl, item, false);
+                    targets.push("help:" + key);
+                    restored = true;
+                } else if (item.t === "doc") {
+                    const entry = (docsCatalogData || []).find((candidate) => candidate.file === item.f || candidate.name === item.f);
+                    if (!entry) { continue; }
+                    const response = await fetch(DOCS_DIR + entry.file);
+                    if (!response.ok) { continue; }
+                    const windowEl = this._openDocWindow(entry.file, await response.text());
+                    this._applyUrlWindowState(windowEl, item, false);
+                    targets.push("docs");
+                    restored = true;
+                } else if (item.t === "dlg" && item.name) {
+                    const dialog = this.dialogManager.open(item.name);
+                    if (!dialog) { continue; }
+                    if (item.state && typeof dialog.restoreUrlState === "function") {
+                        dialog.restoreUrlState(item.state);
+                    }
+                    applyWindowGeometry(dialog.dialog, item.g, true);
+                    dialog.hasPosition = true;
+                    targets.push(item.name);
+                    restored = true;
+                }
+            }
+            if (restored) {
+                this._restoreUrlStack(state, targets);
+                fillBorders();
+                fillDesktopPatterns();
+                this._syncBundleMenu();
+            }
+        } finally {
+            this._restoringUrlState = false;
+            if (restored) { this._syncUrlState(); }
+        }
+        return restored;
+    }
+
+    _applyUrlWindowState(windowEl, item, dialog = false) {
+        if (!windowEl || !item) { return; }
+        applyWindowGeometry(windowEl, item.g, dialog);
+        const viewport = windowEl.querySelector("[data-tv-viewport]");
+        if (viewport && Array.isArray(item.s)) {
+            viewport.scrollLeft = Math.max(0, Number(item.s[0]) || 0);
+            viewport.scrollTop = Math.max(0, Number(item.s[1]) || 0);
+        }
+        if (viewport && item.sel) {
+            restoreTextSelection(viewport, item.sel);
+        }
+    }
+
+    _restoreUrlStack(state, targets) {
+        const order = Array.isArray(state.z) ? state.z : [];
+        const stack = [];
+        order.forEach((index) => {
+            const target = targets[Number(index)];
+            if (target && !stack.includes(target)) { stack.push(target); }
+        });
+        targets.forEach((target) => {
+            if (target && !stack.includes(target)) { stack.push(target); }
+        });
+        this.dialogManager.stackOrder = stack;
+        const activeTarget = targets[Number(state.a)];
+        if (activeTarget) {
+            this.dialogManager.activeTarget = activeTarget;
+        } else if (stack.length) {
+            this.dialogManager.activeTarget = stack[stack.length - 1];
+        } else {
+            this.dialogManager.activateHostWindow();
+            return;
+        }
+        this.dialogManager.applyAllZIndices();
+        this.dialogManager.applyActiveStates();
+        this._updateStatusLine("");
     }
 
     _registerDialog(name, factory) {
@@ -3039,7 +3445,7 @@ class TVBundleApp {
         fillBorders();
         this._bindMenus();
         this._showWelcome();
-        this._handleUrlParams();
+        await this._handleUrlState();
     }
 
     _syncBundleMenu() {
@@ -3056,78 +3462,13 @@ class TVBundleApp {
         this._bindMenus();
     }
 
-    /** Read ?file=, ?topic=, ?line=, ?search=, ?docs= from the URL and act on them. */
-    async _handleUrlParams() {
-        const params = new URLSearchParams(window.location.search);
-        const fileParam = params.get("file");
-        const docsParam = params.get("docs");
-
-        // Handle ?docs= independently of ?file=
-        if (docsParam && docsCatalogData) {
-            const docEntry = docsCatalogData.find(
-                (e) => e.file === docsParam || e.name === docsParam
-            );
-            if (docEntry) {
-                this.dialogManager.close("welcome");
-                try {
-                    const resp = await fetch(DOCS_DIR + docEntry.file);
-                    if (resp.ok) {
-                        const md = await resp.text();
-                        this._openDocWindow(docEntry.file, md);
-                    }
-                } catch (err) {
-                    console.error(`Failed to load doc from URL: ${docEntry.file}`, err);
-                }
-                if (!fileParam) { return; }
-            }
-        }
-
-        if (!fileParam || !catalogData) { return; }
-
-        // Find matching catalog entry (by file path or by name).
-        const entry = catalogData.find(
-            (e) => e.file === fileParam || e.name === fileParam
-        );
-        if (!entry) { return; }
-
-        // Load bundle.
-        const loadingDialog = new TVLoadingDialog(this.desktop);
-        loadingDialog.show(bundleLoadingLabel(entry));
-        try {
-            const bundle = await loadBundle(entry.file, {
-                onProgress: (r, t) => loadingDialog.update(r, t),
-                signal: loadingDialog.signal,
-            });
-            loadingDialog.destroy();
-            this.dialogManager.close("welcome");
-            this._updateSearchData(bundle);
-
-            const topicParam = params.get("topic");
-            const lineParam = params.get("line");
-            const searchParam = params.get("search");
-
-            if (topicParam) {
-                this.windowManager.showTopic(bundle, topicParam, lineParam);
-            } else if (lineParam) {
-                this.windowManager.showDefault(bundle, lineParam);
-            } else {
-                this.windowManager.showDefault(bundle);
-            }
-
-            if (searchParam && this.searchDialog) {
-                this.searchDialog.searchData = { topics: buildUhfSearchIndex(bundle) };
-                this.dialogManager.open("search");
-                const input = this.searchDialog.query("input[type=text]");
-                if (input) {
-                    input.value = searchParam;
-                    input.dispatchEvent(new Event("input", { bubbles: true }));
-                }
-            }
-        } catch (error) {
-            loadingDialog.destroy();
-            if (error.name !== "AbortError") {
-                console.error(`Failed to load bundle from URL param: ${entry.file}`, error);
-            }
+    async _handleUrlState() {
+        const hashState = decodeUrlState(window.location.hash);
+        if (hashState) { await this._restoreUrlState(hashState); }
+        if (window.location.search) {
+            const url = new URL(window.location.href);
+            url.search = "";
+            window.history.replaceState(null, "", url.toString());
         }
     }
 
@@ -3181,6 +3522,8 @@ class TVBundleApp {
         const template = document.createElement("template");
         template.innerHTML = windowHTML.trim();
         const windowEl = template.content.firstElementChild;
+        windowEl.dataset.tvStateType = "doc";
+        windowEl.dataset.tvStateFile = filename;
         this.desktop.appendChild(windowEl);
         bindCloseButtons(windowEl);
 
@@ -3188,11 +3531,6 @@ class TVBundleApp {
         if (this.dialogManager) {
             this.dialogManager.registerWindow("docs", windowEl);
         }
-
-        // Update URL with ?docs= parameter
-        const docsUrl = new URL(window.location);
-        docsUrl.searchParams.set("docs", filename);
-        window.history.replaceState(null, "", docsUrl);
 
         // Init widgets
         const frames = windowEl.querySelectorAll("[data-tv-scroll-frame]");
@@ -3208,10 +3546,6 @@ class TVBundleApp {
                 e.preventDefault();
                 if (this.dialogManager) { this.dialogManager.unregisterWindow("docs"); }
                 windowEl.remove();
-                // Remove ?docs= from URL
-                const closeUrl = new URL(window.location);
-                closeUrl.searchParams.delete("docs");
-                window.history.replaceState(null, "", closeUrl);
                 fillBorders();
                 fillDesktopPatterns();
             });
@@ -3260,6 +3594,7 @@ class TVBundleApp {
 
         fillBorders();
         fillDesktopPatterns();
+        return windowEl;
     }
 
     _showWelcome() {

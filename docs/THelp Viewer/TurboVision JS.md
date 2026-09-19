@@ -6,7 +6,7 @@ THelpViewer uses a modular JavaScript framework inspired by Borland's TurboVisio
 |------|---------|
 | `tv-core.js` | Core widget classes, dialog manager, theme engine, utility functions |
 | `tv-dialogs.js` | Standard dialogs (About, Search, Calculator, Calendar, Colors, ASCII Table) and Screen Saver |
-| `tv-games.js` | Game dialogs (Puzzle, Tetris, Minesweeper, BreakOut, Sokoban, Lines, Reversi) |
+| `tv-games.js` | Game dialogs and rules (Puzzle, Tetris, Minesweeper, BreakOut, Sokoban, Lines, Reversi, Ludo, Snake) |
 | `tv-shell.js` | Menu bar, status line, window resizer, application bootstrap |
 | `tv-bundle-app.js` | Single-page bundle viewer (catalog, window manager, Markdown renderer) |
 
@@ -137,7 +137,7 @@ Constants: `SAVER_FPS = 15`, `SAVER_STAR_COUNT = 60`
 
 ## tv-games.js
 
-Seven game dialog implementations. All extend `TVDialog`.
+Game dialog implementations. All extend `TVDialog`.
 
 ### Common Patterns
 
@@ -157,6 +157,8 @@ Seven game dialog implementations. All extend `TVDialog`.
 | `TVSokobanDialog` | Sokoban | Variable (5 levels) | ←→↑↓ move, R restart, U undo |
 | `TVLinesDialog` | Color Lines | 9×9 | Click select + click destination |
 | `TVReversiDialog` | Reversi vs AI | 8×8 | Click to place, N new game |
+| `TVLudoDialog` | Ludo | 11×11 path map | Roll, click legal piece |
+| `TVSnakeDialog` | Snake | 28×18 | ←→↑↓ move, Enter restart |
 
 ### Tetris Specifics
 

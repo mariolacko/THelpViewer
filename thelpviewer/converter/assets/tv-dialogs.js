@@ -926,6 +926,1113 @@ class TVColorsDialog extends TVDialog {
     }
 }
 
+const TV_MIDI_LIBRARY = Object.freeze([
+    {
+        title: "THelpViewer - Neon Grid",
+        file: "assets/midi/modern-neon-grid.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "THelpViewer - Byte Runner",
+        file: "assets/midi/modern-byte-runner.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "THelpViewer - Soft Circuit",
+        file: "assets/midi/modern-soft-circuit.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "THelpViewer - Terminal Drift",
+        file: "assets/midi/modern-terminal-drift.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "THelpViewer - Night Cache",
+        file: "assets/midi/modern-night-cache.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "THelpViewer - Pixel Rain",
+        file: "assets/midi/modern-pixel-rain.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "THelpViewer - Vector Sunrise",
+        file: "assets/midi/modern-vector-sunrise.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "THelpViewer - Copper Lanes",
+        file: "assets/midi/modern-copper-lanes.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "THelpViewer - Glass Towers",
+        file: "assets/midi/modern-glass-towers.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "THelpViewer - Data Stream",
+        file: "assets/midi/modern-data-stream.mid",
+        credit: "Original demo",
+    },
+    {
+        title: "Komiku - Disco Challenge",
+        file: "assets/midi/oga-komiku-disco-challenge.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - Pop City",
+        file: "assets/midi/oga-komiku-pop-city.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - The Big Dancefloor",
+        file: "assets/midi/oga-komiku-big-dancefloor.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - Everything Is Groovy",
+        file: "assets/midi/oga-komiku-everything-is-groovy.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - Road 1 Chill",
+        file: "assets/midi/oga-komiku-road-1-chill.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - Road 1 Fight",
+        file: "assets/midi/oga-komiku-road-1-fight.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - Road 2 Chill",
+        file: "assets/midi/oga-komiku-road-2-chill.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - Road 3 Fight",
+        file: "assets/midi/oga-komiku-road-3-fight.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - Road 4 Fight",
+        file: "assets/midi/oga-komiku-road-4-fight.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - We Have to Dance Together",
+        file: "assets/midi/oga-komiku-we-have-to-dance-together.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - Dropda Basstion",
+        file: "assets/midi/oga-komiku-dropda-basstion.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Komiku - The Test",
+        file: "assets/midi/oga-komiku-the-test.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Roppy Chop Studios - Broken Arm",
+        file: "assets/midi/oga-roppy-broken-arm.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Roppy Chop Studios - Casual Afternoon",
+        file: "assets/midi/oga-roppy-casual-afternoon.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Roppy Chop Studios - Icy Garden",
+        file: "assets/midi/oga-roppy-icy-garden.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Roppy Chop Studios - Journey Forgotten",
+        file: "assets/midi/oga-roppy-journey-forgotten.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Roppy Chop Studios - No One",
+        file: "assets/midi/oga-roppy-no-one.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Roppy Chop Studios - Standardized Anxiety",
+        file: "assets/midi/oga-roppy-standardized-anxiety.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Roppy Chop Studios - Without Time",
+        file: "assets/midi/oga-roppy-without-time.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "nene - Long Away Home",
+        file: "assets/midi/oga-nene-long-away-home.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "Tozan - Stringsvop",
+        file: "assets/midi/oga-tozan-stringsvop.mid",
+        credit: "OpenGameArt CC0",
+    },
+    {
+        title: "F. Abt - Vocalise No. 1",
+        file: "assets/midi/vocalise-1.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "F. Abt - When the Swallows Homeward Fly",
+        file: "assets/midi/when-the-swallows-homeward-fly.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "J. Andre - Sonatine Op. 34 No. 1",
+        file: "assets/midi/andre-sonatine-op34-1.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "A. Adam - Giselle",
+        file: "assets/midi/giselle.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "A. Adam - Minuit Chretiens",
+        file: "assets/midi/minuit-chretiens.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "S. Adams - The Blue Mountains",
+        file: "assets/midi/blue-mountains.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "I. Albeniz - Rumores de la Caleta",
+        file: "assets/midi/rumores-de-la-caleta.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "C. V. Alkan - Op. 31 No. 1",
+        file: "assets/midi/alkan-op31-1.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "C. V. Alkan - Op. 31 No. 2",
+        file: "assets/midi/alkan-op31-2.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "C. V. Alkan - Toccatina",
+        file: "assets/midi/alkan-toccatina.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "C. P. E. Bach - Rondo",
+        file: "assets/midi/cpe-bach-rondo.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "J. S. Bach - BWV 259",
+        file: "assets/midi/bach-bwv-259.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "J. S. Bach - BWV 269",
+        file: "assets/midi/bach-bwv-269.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "J. S. Bach - BWV 347",
+        file: "assets/midi/bach-bwv-347.mid",
+        credit: "Mutopia Project",
+    },
+    {
+        title: "J. S. Bach - Anna Magdalena 20a",
+        file: "assets/midi/bach-anna-magdalena-20a.mid",
+        credit: "Mutopia Project",
+    },
+    ...Array.from({ length: 15 }, (_unused, index) => {
+        const number = index + 1;
+        return {
+            title: `J. S. Bach - Invention No. ${number}`,
+            file: `assets/midi/bach-invention-${String(number).padStart(2, "0")}.mid`,
+            credit: "Mutopia Project",
+        };
+    }),
+]);
+
+const TV_MIDI_EXTERNAL_SOURCES = Object.freeze([
+    {
+        label: "Commons CC0",
+        title: "Wikimedia - Au clair de la lune",
+        file: "https://upload.wikimedia.org/wikipedia/commons/e/e6/Au_clair_de_le_lune_chant_et_piano.midi",
+        credit: "Wikimedia Commons CC0",
+        external: true,
+    },
+    {
+        label: "Commons PD",
+        title: "Wikimedia - Saint-Saens Op. 166",
+        file: "https://upload.wikimedia.org/wikipedia/commons/5/55/Saint-saens_sonate_hautbois_op166_1er_mouvement_piano.midi",
+        credit: "Wikimedia Commons PD/CC0",
+        external: true,
+    },
+    {
+        label: "ToBeFree 1",
+        title: "ToBeFree - 03 May 2020",
+        file: "https://upload.wikimedia.org/wikipedia/commons/c/c3/03may2020-tobefree-generated.mid",
+        credit: "Wikimedia Commons CC BY-SA 4.0",
+        external: true,
+    },
+    {
+        label: "ToBeFree 2",
+        title: "ToBeFree - Friendship",
+        file: "https://upload.wikimedia.org/wikipedia/commons/2/26/Friendship-tobefree-generated.mid",
+        credit: "Wikimedia Commons CC BY-SA 4.0",
+        external: true,
+    },
+    {
+        label: "ToBeFree 3",
+        title: "ToBeFree - Infinite Adventures",
+        file: "https://upload.wikimedia.org/wikipedia/commons/5/57/Infiniteadventurestheme-tobefree-generated.mid",
+        credit: "Wikimedia Commons CC BY-SA 4.0",
+        external: true,
+    },
+]);
+
+const MIDI_DEFAULT_TEMPO_US = 500000;
+
+function midiReadString(view, state, length) {
+    let text = "";
+    for (let index = 0; index < length; index += 1) {
+        text += String.fromCharCode(view.getUint8(state.offset));
+        state.offset += 1;
+    }
+    return text;
+}
+
+function midiReadU8(view, state) {
+    if (state.offset >= view.byteLength) {
+        throw new Error("Unexpected end of MIDI data.");
+    }
+    const value = view.getUint8(state.offset);
+    state.offset += 1;
+    return value;
+}
+
+function midiReadU16(view, state) {
+    if (state.offset + 2 > view.byteLength) {
+        throw new Error("Unexpected end of MIDI data.");
+    }
+    const value = view.getUint16(state.offset, false);
+    state.offset += 2;
+    return value;
+}
+
+function midiReadU32(view, state) {
+    if (state.offset + 4 > view.byteLength) {
+        throw new Error("Unexpected end of MIDI data.");
+    }
+    const value = view.getUint32(state.offset, false);
+    state.offset += 4;
+    return value;
+}
+
+function midiReadVariableLength(view, state, limit) {
+    let value = 0;
+    for (let count = 0; count < 4; count += 1) {
+        if (state.offset >= limit) {
+            throw new Error("Unexpected end of MIDI variable length value.");
+        }
+        const byte = midiReadU8(view, state);
+        value = (value << 7) | (byte & 0x7F);
+        if ((byte & 0x80) === 0) {
+            return value;
+        }
+    }
+    throw new Error("MIDI variable length value is too long.");
+}
+
+function midiEventDataLength(status) {
+    const type = status & 0xF0;
+    return type === 0xC0 || type === 0xD0 ? 1 : 2;
+}
+
+function parseMidiFile(arrayBuffer) {
+    const view = new DataView(arrayBuffer);
+    const state = { offset: 0 };
+    if (midiReadString(view, state, 4) !== "MThd") {
+        throw new Error("MIDI header not found.");
+    }
+    const headerLength = midiReadU32(view, state);
+    const headerEnd = state.offset + headerLength;
+    const format = midiReadU16(view, state);
+    const trackCount = midiReadU16(view, state);
+    const division = midiReadU16(view, state);
+    state.offset = headerEnd;
+    if ((division & 0x8000) !== 0) {
+        throw new Error("SMPTE MIDI timing is not supported.");
+    }
+    if (format > 1) {
+        throw new Error(`Unsupported MIDI format ${format}.`);
+    }
+    const ticksPerBeat = division || 384;
+    const events = [];
+    let maxTick = 0;
+
+    for (let trackIndex = 0; trackIndex < trackCount; trackIndex += 1) {
+        if (midiReadString(view, state, 4) !== "MTrk") {
+            throw new Error("MIDI track chunk not found.");
+        }
+        const trackLength = midiReadU32(view, state);
+        const trackEnd = state.offset + trackLength;
+        let tick = 0;
+        let runningStatus = 0;
+
+        while (state.offset < trackEnd) {
+            const delta = midiReadVariableLength(view, state, trackEnd);
+            tick += delta;
+            maxTick = Math.max(maxTick, tick);
+            let status = midiReadU8(view, state);
+            if (status < 0x80) {
+                if (!runningStatus) {
+                    throw new Error("MIDI running status without previous status.");
+                }
+                state.offset -= 1;
+                status = runningStatus;
+            } else if (status < 0xF0) {
+                runningStatus = status;
+            } else {
+                runningStatus = 0;
+            }
+
+            if (status === 0xFF) {
+                const metaType = midiReadU8(view, state);
+                const length = midiReadVariableLength(view, state, trackEnd);
+                if (metaType === 0x51 && length >= 3) {
+                    const tempo = (view.getUint8(state.offset) << 16)
+                        | (view.getUint8(state.offset + 1) << 8)
+                        | view.getUint8(state.offset + 2);
+                    events.push({ type: "tempo", tick, tempo });
+                }
+                state.offset += length;
+                if (metaType === 0x2F) {
+                    state.offset = trackEnd;
+                }
+                continue;
+            }
+
+            if (status === 0xF0 || status === 0xF7) {
+                const length = midiReadVariableLength(view, state, trackEnd);
+                state.offset += length;
+                continue;
+            }
+
+            const channel = status & 0x0F;
+            const eventType = status & 0xF0;
+            const dataLength = midiEventDataLength(status);
+            const note = midiReadU8(view, state);
+            const value = dataLength === 2 ? midiReadU8(view, state) : 0;
+            if (eventType === 0x90 && value > 0) {
+                events.push({ type: "noteOn", tick, channel, note, velocity: value });
+            } else if (eventType === 0x80 || (eventType === 0x90 && value === 0)) {
+                events.push({ type: "noteOff", tick, channel, note });
+            }
+        }
+        state.offset = trackEnd;
+    }
+
+    events.sort((left, right) => {
+        if (left.tick !== right.tick) {
+            return left.tick - right.tick;
+        }
+        if (left.type === right.type) {
+            return 0;
+        }
+        return left.type === "tempo" ? -1 : 1;
+    });
+
+    let tempo = MIDI_DEFAULT_TEMPO_US;
+    let lastTick = 0;
+    let seconds = 0;
+    for (const event of events) {
+        seconds += ((event.tick - lastTick) * tempo) / ticksPerBeat / 1000000;
+        event.time = seconds;
+        lastTick = event.tick;
+        if (event.type === "tempo") {
+            tempo = event.tempo || tempo;
+        }
+    }
+
+    const activeNotes = new Map();
+    const notes = [];
+    for (const event of events) {
+        if (event.type === "noteOn") {
+            const key = `${event.channel}:${event.note}`;
+            const pending = activeNotes.get(key) || [];
+            pending.push(event);
+            activeNotes.set(key, pending);
+        } else if (event.type === "noteOff") {
+            const key = `${event.channel}:${event.note}`;
+            const pending = activeNotes.get(key);
+            if (!pending || !pending.length) {
+                continue;
+            }
+            const start = pending.shift();
+            if (!pending.length) {
+                activeNotes.delete(key);
+            }
+            notes.push({
+                time: start.time,
+                duration: Math.max(0.04, event.time - start.time),
+                midi: start.note,
+                velocity: start.velocity,
+                channel: start.channel,
+            });
+        }
+    }
+
+    for (const pending of activeNotes.values()) {
+        for (const start of pending) {
+            notes.push({
+                time: start.time,
+                duration: 0.4,
+                midi: start.note,
+                velocity: start.velocity,
+                channel: start.channel,
+            });
+        }
+    }
+
+    notes.sort((left, right) => left.time - right.time || left.midi - right.midi);
+    const duration = notes.reduce((max, note) => Math.max(max, note.time + note.duration), seconds);
+    if (!notes.length) {
+        throw new Error("No playable MIDI notes found.");
+    }
+    return {
+        format,
+        trackCount,
+        ticksPerBeat,
+        maxTick,
+        notes,
+        duration,
+    };
+}
+
+function midiNoteFrequency(note) {
+    return 440 * Math.pow(2, (note - 69) / 12);
+}
+
+function formatMidiTime(seconds) {
+    const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+    const minutes = Math.floor(safeSeconds / 60);
+    const rest = String(safeSeconds % 60).padStart(2, "0");
+    return `${minutes}:${rest}`;
+}
+
+function normalizeMidiUrl(value) {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) {
+        throw new Error("Enter a MIDI URL first.");
+    }
+    const url = new URL(trimmed, window.location.href);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+        throw new Error("Only HTTP and HTTPS MIDI URLs are supported.");
+    }
+    if (window.location.protocol === "https:" && url.protocol !== "https:") {
+        throw new Error("Use an HTTPS MIDI URL on an HTTPS page.");
+    }
+    return url.href;
+}
+
+function titleFromMidiUrl(url) {
+    try {
+        const parsed = new URL(url);
+        const filename = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || "");
+        const title = filename.replace(/\.(midi?|kar)$/i, "").replace(/[_-]+/g, " ").trim();
+        return title || parsed.hostname || "External MIDI";
+    } catch {
+        return "External MIDI";
+    }
+}
+
+function looksLikeMidiUrl(url) {
+    try {
+        return /\.(mid|midi)(?:$|[?#])/i.test(new URL(url, window.location.href).href);
+    } catch {
+        return false;
+    }
+}
+
+function extractMidiUrlFromHtml(html, baseUrl) {
+    const candidates = [];
+    const attrPattern = /\b(?:href|src)=["']([^"']+\.(?:mid|midi)(?:[?#][^"']*)?)["']/gi;
+    let match = attrPattern.exec(html);
+    while (match) {
+        candidates.push(match[1]);
+        match = attrPattern.exec(html);
+    }
+    const barePattern = /https?:\/\/[^\s"'<>]+?\.(?:mid|midi)(?:[?#][^\s"'<>]*)?/gi;
+    match = barePattern.exec(html);
+    while (match) {
+        candidates.push(match[0]);
+        match = barePattern.exec(html);
+    }
+    for (const candidate of candidates) {
+        try {
+            const url = new URL(candidate, baseUrl).href;
+            if (looksLikeMidiUrl(url)) {
+                return url;
+            }
+        } catch {
+            continue;
+        }
+    }
+    return "";
+}
+
+class TVMidiSynth {
+    constructor() {
+        this.context = null;
+        this.master = null;
+        this.nodes = [];
+        this.progressTimer = null;
+        this.finishTimer = null;
+        this.startedAt = 0;
+        this.sequence = null;
+        this.onProgress = null;
+        this.onDone = null;
+    }
+
+    async ensureContext() {
+        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextCtor) {
+            throw new Error("Web Audio is not available in this browser.");
+        }
+        if (!this.context) {
+            this.context = new AudioContextCtor();
+            this.master = this.context.createGain();
+            this.master.gain.value = 0.72;
+            this.master.connect(this.context.destination);
+        }
+        if (this.context.state === "suspended") {
+            await this.context.resume();
+        }
+        return this.context;
+    }
+
+    async play(sequence, onProgress, onDone) {
+        this.stop(false);
+        const context = await this.ensureContext();
+        this.sequence = sequence;
+        this.onProgress = onProgress;
+        this.onDone = onDone;
+        this.startedAt = context.currentTime + 0.08;
+        this.schedule(sequence);
+        this.progressTimer = window.setInterval(() => this.reportProgress(), 120);
+        this.finishTimer = window.setTimeout(() => this.finish(), Math.max(250, (sequence.duration + 0.25) * 1000));
+        this.reportProgress();
+    }
+
+    schedule(sequence) {
+        const context = this.context;
+        if (!context || !this.master) {
+            return;
+        }
+        for (const note of sequence.notes) {
+            const start = this.startedAt + note.time;
+            const end = start + note.duration;
+            const releaseEnd = end + 0.06;
+            if (releaseEnd <= context.currentTime) {
+                continue;
+            }
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.type = note.channel === 9 ? "square" : (note.channel % 2 ? "triangle" : "sine");
+            oscillator.frequency.setValueAtTime(midiNoteFrequency(note.midi), start);
+            const peak = Math.min(0.09, 0.025 + (note.velocity / 127) * 0.055);
+            gain.gain.setValueAtTime(0.0001, start);
+            gain.gain.linearRampToValueAtTime(peak, start + 0.012);
+            gain.gain.setValueAtTime(peak * 0.78, Math.max(start + 0.02, end - 0.04));
+            gain.gain.exponentialRampToValueAtTime(0.0001, releaseEnd);
+            oscillator.connect(gain);
+            gain.connect(this.master);
+            oscillator.start(start);
+            oscillator.stop(releaseEnd);
+            this.nodes.push({ oscillator, gain });
+        }
+    }
+
+    reportProgress() {
+        if (!this.context || !this.sequence || !this.onProgress) {
+            return;
+        }
+        const elapsed = Math.max(0, this.context.currentTime - this.startedAt);
+        this.onProgress(Math.min(elapsed, this.sequence.duration), this.sequence.duration);
+    }
+
+    finish() {
+        const onDone = this.onDone;
+        const sequence = this.sequence;
+        this.stop(false);
+        if (onDone) {
+            onDone(sequence);
+        }
+    }
+
+    stop(report = true) {
+        if (this.progressTimer !== null) {
+            window.clearInterval(this.progressTimer);
+            this.progressTimer = null;
+        }
+        if (this.finishTimer !== null) {
+            window.clearTimeout(this.finishTimer);
+            this.finishTimer = null;
+        }
+        for (const node of this.nodes) {
+            try { node.oscillator.stop(); } catch { /* already stopped */ }
+            try { node.oscillator.disconnect(); } catch { /* already disconnected */ }
+            try { node.gain.disconnect(); } catch { /* already disconnected */ }
+        }
+        this.nodes = [];
+        const progress = this.onProgress;
+        this.sequence = null;
+        this.onProgress = null;
+        this.onDone = null;
+        if (report && progress) {
+            progress(0, 0);
+        }
+    }
+}
+
+class TVMidiPlayerDialog extends TVDialog {
+    constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const previousButton = new TVButton({
+            dialog: false,
+            className: "tv-midi-control",
+            attrs: { "data-tv-midi-previous": true, title: "Previous track" },
+            label: "◄◄",
+        });
+        const playButton = new TVButton({
+            dialog: false,
+            className: "tv-midi-control is-default",
+            attrs: { "data-tv-midi-play": true },
+            label: "►",
+        });
+        const pauseButton = new TVButton({
+            dialog: false,
+            className: "tv-midi-control",
+            attrs: { "data-tv-midi-pause": true, title: "Pause" },
+            label: "▌▌",
+        });
+        const stopButton = new TVButton({
+            dialog: false,
+            className: "tv-midi-control",
+            attrs: { "data-tv-midi-stop": true },
+            label: "■",
+        });
+        const nextButton = new TVButton({
+            dialog: false,
+            className: "tv-midi-control",
+            attrs: { "data-tv-midi-next": true, title: "Next track" },
+            label: "►►",
+        });
+        const closeButton = new TVButton({
+            dialog: false,
+            className: "tv-midi-close-action",
+            attrs: { "data-tv-midi-close-button": true },
+            label: "Close",
+        });
+        const buttons = new TVButtonStrip({
+            className: "tv-midi-buttons",
+            buttons: [previousButton, playButton, pauseButton, stopButton, nextButton, closeButton],
+        }).renderMarkup();
+        const sourceButtons = TV_MIDI_EXTERNAL_SOURCES.map((source, index) => new TVButton({
+            dialog: false,
+            className: "tv-midi-source-preset",
+            attrs: {
+                "data-tv-midi-source": index,
+                title: `${source.title} (${source.credit})`,
+            },
+            labelMarkup: escapeHtml(source.label),
+        }).renderMarkup()).join("");
+        const display = new TVGroup({
+            className: "tv-midi-display",
+            children: [
+                new TVGroup({
+                    className: "tv-midi-display-line",
+                    children: [
+                        new TVStaticText({ tag: "span", className: "tv-midi-display-label", text: "Track" }),
+                        new TVStaticText({ tag: "span", className: "tv-midi-track-number", attrs: { "data-tv-midi-track-number": true }, text: "01" }),
+                        new TVStaticText({ tag: "span", className: "tv-midi-display-time", attrs: { "data-tv-midi-time": true }, text: "0:00 / 0:00" }),
+                    ],
+                }),
+                new TVStaticText({ className: "tv-midi-display-title", attrs: { "data-tv-midi-display-title": true } }),
+                new TVStaticText({ className: "tv-midi-status", attrs: { "data-tv-midi-status": true }, text: "Ready." }),
+            ],
+        });
+        const meter = new TVGroup({
+            className: "tv-midi-meter",
+            children: [
+                new TVStaticText({ tag: "span", className: "tv-midi-meter-fill", attrs: { "data-tv-midi-meter": true } }),
+            ],
+        });
+        const externalSource = new TVGroup({
+            className: "tv-midi-external",
+            children: [
+                new TVGroup({
+                    className: "tv-midi-url-row",
+                    children: [
+                        new TVStaticText({ tag: "label", className: "tv-midi-url-label", attrs: { for: "tv-midi-url-input" }, text: "URL" }),
+                        new TVInputLine({
+                            className: "tv-midi-url-input",
+                            attrs: {
+                                id: "tv-midi-url-input",
+                                "data-tv-midi-url": true,
+                                spellcheck: "false",
+                                placeholder: "https://example.com/song.mid",
+                            },
+                        }),
+                        new TVButton({
+                            dialog: false,
+                            className: "tv-midi-url-load",
+                            attrs: { "data-tv-midi-load-url": true },
+                            label: "Load",
+                        }),
+                    ],
+                }),
+                new TVGroup({
+                    className: "tv-midi-source-presets",
+                    html: sourceButtons,
+                }),
+            ],
+        });
+        const trackList = TVVerticalListViewer.renderMarkup({
+            rootClass: "tv-midi-track-list",
+            rootAttrs: { "data-tv-midi-track-list": true },
+            viewportClass: "tv-midi-track-viewport",
+            scrollbarClass: "tv-midi-list-scrollbar",
+            arrowClass: "tv-midi-list-arrow",
+            trackClass: "tv-midi-list-track",
+            cellsClass: "tv-midi-list-cells",
+            thumbClass: "tv-midi-list-thumb",
+        });
+        const main = new TVGroup({
+            className: "tv-midi-main",
+            children: [display, meter, buttons, externalSource, trackList],
+        }).renderMarkup();
+        super({
+            desktop,
+            ariaLabel: "MIDI Player",
+            title: "CD/MIDI Player",
+            bodyClass: "tv-midi-body",
+            closeAttrs: {
+                "data-tv-midi-close": true,
+                "aria-label": "Close MIDI player",
+            },
+            bodyMarkup: main,
+            footerMarkup: TVDialog.footerMarkup(),
+            width: "64ch",
+            height: "min(28em, calc(100% - 2em))",
+            left: "4ch",
+            top: "3em",
+        });
+        this.selectedIndex = 0;
+        this.cache = new Map();
+        this.loadSerial = 0;
+        this.isPlaying = false;
+        this.synth = new TVMidiSynth();
+        this.trackNumber = this.query("[data-tv-midi-track-number]");
+        this.displayTitle = this.query("[data-tv-midi-display-title]");
+        this.time = this.query("[data-tv-midi-time]");
+        this.status = this.query("[data-tv-midi-status]");
+        this.meter = this.query("[data-tv-midi-meter]");
+        this.previousButton = this.query("[data-tv-midi-previous]");
+        this.playButton = this.query("[data-tv-midi-play]");
+        this.pauseButton = this.query("[data-tv-midi-pause]");
+        this.stopButton = this.query("[data-tv-midi-stop]");
+        this.nextButton = this.query("[data-tv-midi-next]");
+        this.closeActionButton = this.query("[data-tv-midi-close-button]");
+        this.urlInput = this.query("[data-tv-midi-url]");
+        this.loadUrlButton = this.query("[data-tv-midi-load-url]");
+        this.sourceButtons = this.queryAll("[data-tv-midi-source]");
+        this.trackListBox = new TVVerticalListViewer(this.query("[data-tv-midi-track-list]"), {
+            itemClassName: "tv-midi-track",
+            itemAttrName: "data-tv-midi-track",
+            renderItemMarkup: (track, index, selected) => `
+                <button type="button" class="tv-midi-track${selected ? " is-selected" : ""}" data-tv-midi-track="${index}">
+                    <span class="tv-midi-track-index">${String(index + 1).padStart(2, "0")}</span>
+                    <span class="tv-midi-track-title">${escapeHtml(track.title)}</span>
+                    <span class="tv-midi-track-credit">${escapeHtml(track.credit)}</span>
+                </button>
+            `,
+        });
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+        this.bind();
+        this.trackListBox.setItems(TV_MIDI_LIBRARY, this.selectedIndex);
+        this.updateDisplay();
+    }
+
+    bind() {
+        this.trackListBox.bind({
+            onSelect: (_track, index) => this.selectTrack(index),
+            onActivate: (_track, index) => {
+                this.selectTrack(index);
+                this.playSelected();
+            },
+        });
+        if (this.previousButton) {
+            this.previousButton.addEventListener("click", () => this.previousTrack());
+        }
+        if (this.playButton) {
+            this.playButton.addEventListener("click", () => this.playSelected());
+        }
+        if (this.pauseButton) {
+            this.pauseButton.addEventListener("click", () => this.pausePlayback());
+        }
+        if (this.stopButton) {
+            this.stopButton.addEventListener("click", () => this.stopPlayback());
+        }
+        if (this.nextButton) {
+            this.nextButton.addEventListener("click", () => this.nextTrack());
+        }
+        if (this.closeActionButton) {
+            this.closeActionButton.addEventListener("click", () => this.close());
+        }
+        if (this.loadUrlButton) {
+            this.loadUrlButton.addEventListener("click", () => this.playExternalUrl());
+        }
+        if (this.urlInput) {
+            this.urlInput.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    this.playExternalUrl();
+                }
+            });
+        }
+        this.sourceButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                const index = Number.parseInt(button.getAttribute("data-tv-midi-source"), 10);
+                this.playExternalPreset(index);
+            });
+        });
+    }
+
+    close() {
+        this.stopPlayback();
+        super.close();
+    }
+
+    selectTrack(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= TV_MIDI_LIBRARY.length) {
+            return;
+        }
+        this.selectedIndex = index;
+        this.trackListBox.select(index);
+        this.updateDisplay();
+    }
+
+    previousTrack() {
+        const nextIndex = (this.selectedIndex - 1 + TV_MIDI_LIBRARY.length) % TV_MIDI_LIBRARY.length;
+        this.selectTrack(nextIndex);
+        if (this.isPlaying) {
+            this.playSelected();
+        }
+    }
+
+    nextTrack() {
+        const nextIndex = (this.selectedIndex + 1) % TV_MIDI_LIBRARY.length;
+        this.selectTrack(nextIndex);
+        if (this.isPlaying) {
+            this.playSelected();
+        }
+    }
+
+    selectedTrack() {
+        return TV_MIDI_LIBRARY[this.selectedIndex] || TV_MIDI_LIBRARY[0];
+    }
+
+    updateDisplay() {
+        const track = this.selectedTrack();
+        this.updateTrackDisplay(track, String(this.selectedIndex + 1).padStart(2, "0"));
+        this.updateProgress(0, 0, { status: false });
+    }
+
+    updateTrackDisplay(track, number) {
+        if (this.trackNumber) {
+            this.trackNumber.textContent = number;
+        }
+        if (this.displayTitle) {
+            this.displayTitle.textContent = track.title;
+        }
+        if (this.time) {
+            this.time.textContent = "0:00 / 0:00";
+        }
+    }
+
+    async loadTrack(track) {
+        if (this.cache.has(track.file)) {
+            return this.cache.get(track.file);
+        }
+        let response;
+        try {
+            response = await fetch(track.file);
+        } catch (error) {
+            if (track.external) {
+                throw new Error("Cannot load external source. The server may block browser CORS.");
+            }
+            throw error;
+        }
+        if (!response.ok) {
+            throw new Error(`Cannot load ${track.file} (${response.status}).`);
+        }
+        const contentType = response.headers.get("content-type") || "";
+        if (track.external && !looksLikeMidiUrl(response.url || track.file) && !/midi|audio\/|octet-stream/i.test(contentType)) {
+            let midiUrl = "";
+            try {
+                midiUrl = extractMidiUrlFromHtml(await response.text(), response.url || track.file);
+            } catch {
+                throw new Error("Cannot read external page. The server may block browser CORS.");
+            }
+            if (!midiUrl) {
+                throw new Error("No MIDI download link found on the external page.");
+            }
+            let midiResponse;
+            try {
+                midiResponse = await fetch(midiUrl);
+            } catch {
+                throw new Error("Cannot load MIDI link from external page. The server may block browser CORS.");
+            }
+            if (!midiResponse.ok) {
+                throw new Error(`Cannot load ${midiUrl} (${midiResponse.status}).`);
+            }
+            response = midiResponse;
+        }
+        let sequence;
+        try {
+            sequence = parseMidiFile(await response.arrayBuffer());
+        } catch (error) {
+            if (track.external) {
+                throw new Error(`External source is not a playable MIDI file: ${error.message}`);
+            }
+            throw error;
+        }
+        this.cache.set(track.file, sequence);
+        return sequence;
+    }
+
+    async playSelected() {
+        const track = this.selectedTrack();
+        this.trackListBox.select(this.selectedIndex);
+        await this.playTrack(track, String(this.selectedIndex + 1).padStart(2, "0"));
+    }
+
+    playExternalUrl() {
+        let file;
+        try {
+            file = normalizeMidiUrl(this.urlInput ? this.urlInput.value : "");
+        } catch (error) {
+            this.setStatus(error && error.message ? error.message : "Invalid MIDI URL.");
+            return;
+        }
+        this.playExternalTrack({
+            title: titleFromMidiUrl(file),
+            file,
+            credit: "External URL",
+            external: true,
+        });
+    }
+
+    playExternalPreset(index) {
+        const source = TV_MIDI_EXTERNAL_SOURCES[index];
+        if (!source) {
+            return;
+        }
+        if (this.urlInput) {
+            this.urlInput.value = source.file;
+        }
+        this.playExternalTrack(source);
+    }
+
+    playExternalTrack(track) {
+        this.trackListBox.select(-1);
+        this.playTrack(track, "URL");
+    }
+
+    async playTrack(track, number) {
+        const serial = ++this.loadSerial;
+        this.updateTrackDisplay(track, number);
+        this.setStatus(`Loading ${track.title}...`);
+        this.updateProgress(0, 0, { status: false });
+        if (this.playButton) {
+            this.playButton.disabled = true;
+        }
+        try {
+            const sequence = await this.loadTrack(track);
+            if (serial !== this.loadSerial) {
+                return;
+            }
+            await this.synth.play(
+                sequence,
+                (elapsed, duration) => this.updateProgress(elapsed, duration),
+                () => {
+                    this.isPlaying = false;
+                    this.setStatus(`Finished ${track.title}.`);
+                },
+            );
+            this.isPlaying = true;
+            this.setStatus(`Playing ${track.title} (${formatMidiTime(sequence.duration)}).`);
+        } catch (error) {
+            this.isPlaying = false;
+            this.setStatus(error && error.message ? error.message : "MIDI playback failed.");
+        } finally {
+            if (this.playButton) {
+                this.playButton.disabled = false;
+            }
+        }
+    }
+
+    pausePlayback() {
+        this.loadSerial += 1;
+        this.isPlaying = false;
+        this.synth.stop();
+        this.setStatus("Paused.");
+    }
+
+    stopPlayback(message = "Stopped.") {
+        this.loadSerial += 1;
+        this.isPlaying = false;
+        this.synth.stop();
+        this.updateProgress(0, 0, { status: false });
+        this.setStatus(message);
+    }
+
+    updateProgress(elapsed, duration, { status = true } = {}) {
+        if (this.meter) {
+            const ratio = duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0;
+            this.meter.style.width = `${Math.round(ratio * 100)}%`;
+        }
+        if (this.time) {
+            this.time.textContent = `${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}`;
+        }
+        if (status && duration > 0) {
+            this.setStatus(`Playing ${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}.`);
+        }
+    }
+
+    setStatus(message) {
+        if (this.status) {
+            this.status.textContent = message;
+        }
+    }
+}
+
 class TVSearchDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const okButton = new TVButton({
@@ -1210,6 +2317,7 @@ Object.assign(TV, {
     TVCalculatorDialog,
     TVCalendarDialog,
     TVColorsDialog,
+    TVMidiPlayerDialog,
     TVSearchDialog,
 });
 })();
