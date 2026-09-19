@@ -46,7 +46,7 @@ _TEXT602_UI_THEME: dict[str, str] = {
 }
 
 
-def is_text602_binary(data: bytes) -> bool:
+def is_t602_310_binary(data: bytes) -> bool:
     """Return True when *data* looks like a Text602 or Calc602 help file."""
     return data.startswith(_TEXT602_HDR) or data.startswith(_CALC602_HDR)
 
@@ -103,6 +103,120 @@ _NAV_TITLE_ALIAS_BY_TITLE = {
     'Graf | Nadpis': ('Nadpis grafu',),
 }
 _NAV_GRAPH_TITLE_RE = re.compile(r'([23]D)\s+(?:rovinný|prostorový)\s+graf', re.IGNORECASE)
+_TARGET_OCCURRENCE_SEPARATOR = '\x1f'
+
+
+def _target_ref(title: str, occurrence: int = 1) -> str:
+    if occurrence == 1:
+        return title
+    return f'{_TARGET_OCCURRENCE_SEPARATOR}{occurrence}{_TARGET_OCCURRENCE_SEPARATOR}{title}'
+
+
+# Application-owned HelpCtx ids are not present in the HLP anchor table. These
+# targets were verified against the HelpCtx resource in the original T602.EXE.
+_TEXT602_FIXED_DESTINATIONS: dict[int, tuple[str, int]] = {
+    89: ('Písmo | Výběr fontu               <Ctrl-P>', 1),
+    90: ('Menu Jdi na                       <Alt-J>', 1),
+    91: ('Jdi na | Stránku', 1),
+    92: ('Jdi na | Řádku', 1),
+    93: ('Jdi na | Začátek bloku            <Ctrl-QB>', 1),
+    94: ('Jdi na | Konec bloku              <Ctrl-QK>', 1),
+    95: ('Jdi na | Začátek souboru          <Ctrl-PgUp>', 1),
+    96: ('Jdi na | Konec souboru            <Ctrl-PgDn>', 1),
+    97: ('Jdi na | Najít                    <Ctrl-QF>', 1),
+    98: ('Jdi na | Zaměnit                  <Ctrl-QA>', 1),
+    99: ('Vzorce | Další                    <Ctrl-L>', 1),
+    100: ('Menu okna                         <Alt-O>', 1),
+    101: ('Soubor | Nový', 1),
+    102: ('Menu Klávesnice', 1),
+    103: ('Konfigurace | Myš', 1),
+    104: ('Text602 | Konfigurace', 1),
+    105: ('Text602 | Makra', 1),
+    106: ('Text602 | Rámečky                 <Alt-G>', 1),
+    107: ('Text602 | Kalkulačka              <Alt-Q>', 1),
+    108: ('Text602 | Kartotéka', 1),
+    109: ('Text602 | Kontrola pravopisu      <Alt-L>', 1),
+    110: ('Text602 | Překladové slovníky     <Alt-H>', 1),
+    111: ('Text602 | Obsah', 1),
+    112: ('Text602 | Abecední rejstřík nápovědy.', 1),
+    113: ('Text602 | Informace', 1),
+    114: ('Okna | Výběr', 1),
+    116: ('Makra | Definice                  <Alt-0>', 1),
+    117: ('Makra | Výběr makra               <Alt-=>', 1),
+    118: ('Makra | Načtení', 1),
+    119: ('Makra | Uložení', 1),
+    120: ('Makra | Editace', 1),
+    121: ('Klávesnice | Ruština              <Alt-7>', 1),
+    122: ('Klávesnice | Český psací stroj    <Alt-2>', 1),
+    123: ('Klávesnice | Slovenský psací stroj       <Alt-3>', 1),
+    124: ('Klávesnice | Speciální znaky      <Alt-4>', 1),
+    125: ('Klávesnice | Německá klávesnice   <Alt-6>', 1),
+    126: ('Klávesnice | Uživatelská klávesnice KL8        <Alt-8>', 1),
+    127: ('Klávesnice | Uživatelská klávesnice KL9        <Alt-9>', 1),
+    128: ('Klávesnice | Počítačová klávesnice       <Alt-5>', 1),
+    129: ('Klávesnice | Česká amatérská      <Alt-1>', 1),
+    132: ('Klávesnice | Prohození Z za Y', 1),
+    133: ('Klávesnice | Zobrazení vybrané klávesnice      <Alt-X>', 1),
+    136: ('Dokument | Výběr stylu odstavce   <Alt-Y>', 1),
+    137: ('Řádka | Políčko', 1),
+    139: ('Preview                           <Ctrl+PrtScr>', 1),
+    140: ('Čas odeslání zásilky', 1),
+    141: ('Seznamy adresátů', 1),
+    142: ('Konfigurace | Pravopis', 1),
+    144: ('Text602 | Kalkulačka              <Alt-Q>', 3),
+    146: ('Dělení slov', 1),
+    147: ('Přihlášení uživatele', 1),
+    148: ('Konfigurace  | Styl odstavce STANDARD', 1),
+    149: ('Konfigurace | Pošta&Fax', 1),
+    301: ('Soubor | Otevření                 <F3>', 2),
+    302: ('Soubor | Uložit                   <F2>', 2),
+    303: ('Soubor | Zapsat jako', 2),
+    305: ('Edit | Smazat položku             <Ctrl-Y>', 1),
+    306: ('Soubor | Zhustit', 1),
+    307: ('Soubor | Vyprázdnit', 1),
+    310: ('Záznam | Pro tisk                 <Alt-=>', 1),
+    312: ('Zobrazit | Filtr', 1),
+    313: ('Zobrazit | Zrušené', 1),
+    314: ('Zobrazit | Století', 1),
+    315: ('Jdi na | Začátek souboru', 1),
+    316: ('Jdi na | Konec souboru', 1),
+    317: ('Jdi na | Předchozí záznam         <F7>', 1),
+    318: ('Jdi na | Další záznam             <F8>', 1),
+    321: ('Jdi na | Přeskočit', 1),
+    322: ('Jdi na | První položku', 1),
+    323: ('Jdi na | Poslední položku', 1),
+    324: ('Záznam | Obnovit', 1),
+    326: ('Záznam | Smazat obsah', 1),
+    327: ('Záznam | Zrušený                  <Alt-Mezerník>', 1),
+    328: ('Jdi na | Vyhledat', 1),
+    330: ('Formulář | Navrhnout', 1),
+    331: ('Formulář | Vybrat', 1),
+    332: ('Soubor | Připojit', 1),
+    333: ('Záznam | Nový                     <Ctrl-Enter>', 1),
+    334: ('Zobrazit | Definice filtru', 1),
+    335: ('Soubor | Struktura dat', 1),
+    337: ('Zobrazit | Prohlížeč              <Alt-P>', 1),
+    339: ('Menu Soubor                       <Alt-S>', 1),
+    340: ('Menu Edit                         <Alt-E>', 2),
+    341: ('Menu Zobrazit                     <Alt-Z>', 1),
+    342: ('Menu Formulář                     <Alt-F>', 1),
+    343: ('Menu Záznam                       <Alt-M>', 1),
+    344: ('Text602 | Editor', 1),
+    345: ('Menu Jdi na                       <Alt-J>', 2),
+    348: ('Jdi na | Záznam číslo', 1),
+    349: ('Jdi na | Najít                    <Ctrl-QF>', 2),
+    350: ('Jdi na | Další                    <Ctrl-L>', 1),
+    351: ('Text602 | Statistika', 1),
+    352: ('Menu Text602                      <Alt-T>', 2),
+    353: ('Základní pohyb v nápovědě', 2),
+    354: ('Seznam funkcí kartotéky', 1),
+    355: ('Soubor | Tisk', 2),
+}
+
+_CALC602_FIXED_DESTINATIONS: dict[int, tuple[str, int]] = {
+    133: ('Help | Obsah', 1),
+    134: ('Help | Rejstřík', 1),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +252,7 @@ class _T602Parser:
         self.header_end = data.index(b'\x0e')
         crlf_pos = data.index(b'\r\n', 0, self.header_end)
         self.file_header_str = data[:crlf_pos].decode('ascii', errors='replace')
+        self.is_text602 = data.startswith(_TEXT602_HDR)
         self.header_binary = data[crlf_pos + 2: self.header_end]
         self._current_title: str | None = None
         self._current_flag: int | None = None
@@ -171,6 +286,26 @@ class _T602Parser:
             and len(next_part) == 77
             and set(next_part) == {0x99}
         )
+
+    @classmethod
+    def _is_marked_title_at(cls, parts: list[bytes], idx: int) -> bool:
+        if idx + 3 >= len(parts):
+            return False
+        if parts[idx + 1] != b'\x4f\x00\x00':
+            return False
+        if not cls._is_separator_chunk(parts[idx + 2]) or not cls._is_context_chunk(parts[idx + 3]):
+            return False
+        if cls._looks_binary(parts[idx]):
+            return False
+        title = cls._decode_preview(parts[idx]).strip()
+        return '|' in title
+
+    @classmethod
+    def _is_title_at(cls, parts: list[bytes], idx: int) -> bool:
+        return (
+            idx + 1 < len(parts)
+            and cls._is_title_chunk(parts[idx], parts[idx + 1])
+        ) or cls._is_marked_title_at(parts, idx)
 
     @staticmethod
     def _is_separator_chunk(chunk: bytes) -> bool:
@@ -292,7 +427,7 @@ class _T602Parser:
     def _build_title_aliases(self, parts: list[bytes]) -> dict[str, set[str]]:
         alias_map: dict[str, set[str]] = {}
         for idx in range(len(parts) - 2):
-            if not self._is_title_chunk(parts[idx], parts[idx + 1]):
+            if not self._is_title_at(parts, idx):
                 continue
             title = self._decode_chunk(parts[idx], title=True)
             if not title:
@@ -307,6 +442,53 @@ class _T602Parser:
                 if segments:
                     last = segments[-1]
                     self._register_alias(alias_map, last, title)
+                    if last == 'Otevření':
+                        self._register_alias(alias_map, 'Otevřít', title)
+                    if segments[0] == 'Klávesnice' and 'klávesnice' not in last.casefold():
+                        self._register_alias(alias_map, f'{last} klávesnice', title)
+                    if segments[0] == 'Klávesnice':
+                        if last == 'Uživatelská klávesnice KL8':
+                            self._register_alias(alias_map, 'Uživatelská klávesnice 1', title)
+                            self._register_alias(alias_map, 'Uživatelská 1', title)
+                        if last == 'Uživatelská klávesnice KL9':
+                            self._register_alias(alias_map, 'Uživatelská klávesnice 2', title)
+                            self._register_alias(alias_map, 'Uživatelská 2', title)
+                    if segments[0] == 'Soubor':
+                        if last == 'Nový':
+                            self._register_alias(alias_map, 'Nový soubor', title)
+                        if last == 'Otevření':
+                            self._register_alias(alias_map, 'Otevřít soubor', title)
+                            self._register_alias(alias_map, 'Otevřít databázový soubor', title)
+                        if last == 'Uložit':
+                            self._register_alias(alias_map, 'Uložit soubor', title)
+                            self._register_alias(alias_map, 'Uložit databázový soubor', title)
+                        if last == 'Zapsat jako':
+                            self._register_alias(alias_map, 'Zapsat soubor pod jménem', title)
+                            self._register_alias(alias_map, 'Zapsat databázový soubor pod jménem', title)
+                        if last == 'Import':
+                            self._register_alias(alias_map, 'Import textu', title)
+                        if last == 'Export':
+                            self._register_alias(alias_map, 'Export textu', title)
+                    if segments[0] == 'Blok':
+                        self._register_alias(alias_map, f'{last} bloku', title)
+                    if segments[0] == 'Makra':
+                        if last == 'Načtení':
+                            self._register_alias(alias_map, 'Načtení makra', title)
+                        if last == 'Uložení':
+                            self._register_alias(alias_map, 'Uložení makra', title)
+                        if last == 'Editace':
+                            self._register_alias(alias_map, 'Editace Makra', title)
+                    if segments[0] == 'Formulář':
+                        if last == 'Vybrat':
+                            self._register_alias(alias_map, 'Vybrat formulář', title)
+                        if last == 'Navrhnout':
+                            self._register_alias(alias_map, 'Navrhnout formulář', title)
+                    if segments[0] == 'Text602' and last == 'Obsah':
+                        self._register_alias(alias_map, 'Obsah nápovědy', title)
+                    if segments[0] == 'Text602' and 'Abecední rejstřík nápovědy' in last:
+                        self._register_alias(alias_map, 'Rejstřík', title)
+                        self._register_alias(alias_map, 'Rejstřík nápovědy', title)
+                        self._register_alias(alias_map, 'Abecední rejstřík nápovědy', title)
         return alias_map
 
     def _candidate_targets(self, text: str) -> set[str]:
@@ -414,6 +596,9 @@ class _T602Parser:
                 self._resolve_link_target('Obsah nápovědy')
                 or self._resolve_link_target('Obsah')
             )
+            if self.is_text602:
+                index_target = index_target or _TEXT602_INDEX_TITLE
+                contents_target = contents_target or _TEXT602_CONTENTS_TITLE
             if index_target and contents_target:
                 return (f'{prefix}{{Rejstřík:{index_target}}}  '
                         f'{{Obsah:{contents_target}}}')
@@ -427,10 +612,10 @@ class _T602Parser:
 
     @staticmethod
     def _parse_link_chunk(chunk: bytes):
-        if len(chunk) < 14:
+        if len(chunk) < 7:
             return None, None
         count = int.from_bytes(chunk[:2], 'little')
-        if count <= 0 or count >= 40:
+        if count <= 0 or count > 4096:
             return None, None
         body_len = 2 + count * 5
         remainder = len(chunk) - body_len
@@ -448,73 +633,38 @@ class _T602Parser:
 
     def _parse_link_chunk_sequence(self, parts: list[bytes], start_idx: int):
         part = parts[start_idx]
-        if not self._looks_binary(part):
+        if not self._looks_binary(part) or len(part) < 2:
             return None, 0
-        records, _trailer = self._parse_link_chunk(part)
-        if records:
-            return records, 1
+
+        record_count = int.from_bytes(part[:2], 'little')
+        if record_count <= 0 or record_count > 4096:
+            return None, 1
+        body_len = 2 + record_count * 5
+        max_len = body_len + 7
         raw = part
-        for count in range(2, 5):
-            next_idx = start_idx + count - 1
-            if next_idx >= len(parts):
-                break
-            next_part = parts[next_idx]
-            if self._is_context_chunk(next_part) or not self._looks_binary(next_part):
-                break
-            raw += b'\x0e' + next_part
+        consumed = 1
+        while len(raw) <= max_len:
             records, _trailer = self._parse_link_chunk(raw)
             if records:
-                return records, count
+                return records, consumed
+
+            # A delimiter can also be the final byte of a binary record. It is
+            # absent from `split(0x0E)`, so restore it only when the declared
+            # record count makes the resulting length exact.
+            if len(raw) + 1 in (body_len, max_len):
+                records, _trailer = self._parse_link_chunk(raw + b'\x0e')
+                if records:
+                    return records, consumed
+
+            next_idx = start_idx + consumed
+            if next_idx >= len(parts):
+                break
+            candidate = raw + b'\x0e' + parts[next_idx]
+            if len(candidate) > max_len:
+                break
+            raw = candidate
+            consumed += 1
         return None, 1
-
-    def _parse_late_lookup_records(self, parts: list[bytes]) -> list[tuple[int, int, int]]:
-        """Decode late-file raw 5-byte records used by some Text602/Calc602 screens.
-
-        Unlike local link chunks, these records are packed without an initial
-        count field and may be split by the outer 0x0E delimiter.  The best
-        observed alignment is chosen by scoring plausible `(dest_id, end_pos,
-        text_len)` tuples against known destination ids and monotonically
-        increasing end positions.
-        """
-        if not parts:
-            return []
-        raw = b''.join(part + b'\x0e' for part in parts)
-        best_records: list[tuple[int, int, int]] = []
-        best_score = -1
-        for offset in range(5):
-            usable = len(raw) - offset
-            if usable < 10:
-                continue
-            records: list[tuple[int, int, int]] = []
-            plausible = 0
-            resolved = 0
-            monotonic = 0
-            previous_end = -1
-            for index in range(offset, len(raw) - ((len(raw) - offset) % 5), 5):
-                chunk = raw[index:index + 5]
-                dest_id = chunk[0] | (chunk[1] << 8)
-                end_pos = chunk[2] | (chunk[3] << 8)
-                text_len = chunk[4]
-                records.append((dest_id, end_pos, text_len))
-                if 0 < text_len <= 80 and end_pos < 20000:
-                    plausible += 1
-                if end_pos >= previous_end:
-                    monotonic += 1
-                    previous_end = end_pos
-                if self._resolve_dest_id_target(dest_id):
-                    resolved += 1
-            score = (resolved * 10) + (plausible * 2) + monotonic
-            if score > best_score:
-                best_score = score
-                best_records = records
-
-        if best_score < 0:
-            return []
-        return [
-            (dest_id, end_pos, text_len)
-            for dest_id, end_pos, text_len in best_records
-            if 0 < text_len <= 80 and end_pos < 20000
-        ]
 
     # ── anchor table / destination IDs ──
 
@@ -546,61 +696,19 @@ class _T602Parser:
                             chunk_idx = max(j for j, off in enumerate(offsets) if off <= target_pos)
                             is_title = (
                                 chunk_idx + 1 < len(parts)
-                                and self._is_title_chunk(parts[chunk_idx], parts[chunk_idx + 1])
+                                and self._is_title_at(parts, chunk_idx)
                             )
                             title = self._decode_chunk(parts[chunk_idx], title=is_title)
                             if title:
                                 targets[idx] = title
 
-        # Minimal fallback layer for viewer-internal fixed ids that are not
-        # described by the anchor table. Only label hints are stored here; the
-        # target title is still resolved from titles extracted from the file.
-        known_ids: dict[int, tuple[str, ...]] = {
-            3: ('Zavřít', 'Zavření okna'),
-            91: ('Stránku',),
-            92: ('Řádku',),
-            93: ('Začátek bloku',),
-            94: ('Konec bloku',),
-            95: ('Začátek souboru',),
-            96: ('Konec souboru',),
-            102: ('Klávesnice',),
-            104: ('Konfigurace',),
-            105: ('Makra',),
-            106: ('Rámečky',),
-            107: ('Kalkulátor', 'Kalkulačka'),
-            108: ('Kartotéka',),
-            109: ('Kontrola pravopisu',),
-            110: ('Překladové slovníky',),
-            111: ('Obsah', 'Obsah nápovědy'),
-            112: ('Rejstřík', 'Rejstřík nápovědy', 'Abecední rejstřík nápovědy'),
-            113: ('Informace',),
-            117: ('Výběr', 'Výběr makra'),
-            118: ('Načtení', 'Načtení makra'),
-            119: ('Uložení', 'Uložení makra'),
-            120: ('Editace', 'Editace Makra'),
-            133: ('Obsah', 'Obsah nápovědy'),
-            134: ('Rejstřík', 'Rejstřík nápovědy', 'Abecední rejstřík nápovědy'),
-            315: ('Začátek souboru',),
-            316: ('Konec souboru',),
-            317: ('Předchozí záznam',),
-            318: ('Další záznam', 'Další'),
-            321: ('Přeskočit',),
-            322: ('První položku',),
-            323: ('Poslední položku',),
-            328: ('Vyhledat',),
-            330: ('Navrhnout', 'Navrhnout formulář'),
-            331: ('Vybrat', 'Vybrat formulář'),
-            348: ('Záznam číslo',),
-            349: ('Najít',),
-            350: ('Další',),
-        }
-        for dest_id, label_hints in known_ids.items():
-            self._remember_dest_hint(dest_id, *label_hints)
-            if dest_id in targets:
-                continue
-            target = self._resolve_hint_target(dest_id, label_hints)
-            if target:
-                targets[dest_id] = target
+        fixed_destinations = (
+            _TEXT602_FIXED_DESTINATIONS
+            if self.is_text602
+            else _CALC602_FIXED_DESTINATIONS
+        )
+        for dest_id, (title, occurrence) in fixed_destinations.items():
+            targets[dest_id] = _target_ref(title, occurrence)
         return targets
 
     def _resolve_dest_id_target(self, dest_id: int, text: str | None = None) -> str | None:
@@ -736,27 +844,83 @@ class _T602Parser:
                         line_text = upgraded
             items[item_idx]['text'] = line_text
 
+    def _apply_navigation_link_chunks(self, items: list[dict], link_chunks: list[list]) -> None:
+        records = [record for chunk in link_chunks for record in chunk]
+        if not records:
+            return
+
+        candidates: list[tuple[int, int, int, str]] = []
+        for item_idx, item in enumerate(items):
+            if item['kind'] != 'visible':
+                continue
+            plain = _plain_internal_text(item['text'])
+            item['text'] = plain
+            label_start = len(plain) - len(plain.lstrip(' '))
+            if plain[label_start:].startswith('\u25a0'):
+                label_start += 1
+                while label_start < len(plain) and plain[label_start] == ' ':
+                    label_start += 1
+            label_end = len(plain.rstrip())
+            if label_end > label_start:
+                candidates.append((item_idx, label_start, label_end, plain[label_start:label_end]))
+
+        assignments: list[tuple[int, int, int, str, str, int]] = []
+        candidate_idx = 0
+        for dest_id, _position, text_len in records:
+            while candidate_idx < len(candidates) and len(candidates[candidate_idx][3]) != text_len:
+                candidate_idx += 1
+            if candidate_idx >= len(candidates):
+                return
+            item_idx, label_start, label_end, label = candidates[candidate_idx]
+            target = self._resolve_dest_id_target(dest_id, label) or ''
+            assignments.append((item_idx, label_start, label_end, label, target, dest_id))
+            candidate_idx += 1
+
+        for item_idx, label_start, label_end, label, target, dest_id in assignments:
+            plain = items[item_idx]['text']
+            items[item_idx]['text'] = (
+                plain[:label_start]
+                + '{' + label + ':' + target + ':' + str(dest_id) + '}'
+                + plain[label_end:]
+            )
+
     # ── screen processing ──
 
     def _find_next_title(self, parts: list[bytes], start: int) -> int | None:
-        for idx in range(start, len(parts) - 1):
-            if self._is_title_chunk(parts[idx], parts[idx + 1]):
+        for idx in range(start, len(parts)):
+            if self._is_title_at(parts, idx):
                 return idx
         return None
 
     def _emit_title_block(self, items: list[dict], parts: list[bytes], idx: int) -> int:
         title = self._decode_chunk(parts[idx], title=True)
         self._current_title = title
-        underline_len = len(self._decode_chunk(parts[idx + 1])) if idx + 1 < len(parts) else 0
+        if self._is_marked_title_at(parts, idx):
+            underline_idx = idx + 2
+            meta_idx = idx + 3
+            next_idx = idx + 4
+        else:
+            underline_idx = idx + 1
+            meta_idx = idx + 2
+            next_idx = idx + 2
+        underline_len = len(self._decode_chunk(parts[underline_idx])) if underline_idx < len(parts) else 0
         items.append({
             'kind': '_title_pos',
             'text': title,
             'buffer_len': self._raw_display_len(title) + underline_len,
         })
-        idx += 2  # skip title + underline chunks
-        if idx < len(parts) and self._is_context_chunk(parts[idx]):
-            self._current_flag = parts[idx][2]
-            idx += 1
+        idx = next_idx
+        if meta_idx < len(parts) and self._is_context_chunk(parts[meta_idx]):
+            self._current_flag = parts[meta_idx][2]
+            idx = meta_idx + 1
+        elif meta_idx + 2 < len(parts) and not parts[meta_idx] and len(parts[meta_idx + 1]) == 2:
+            split_meta = b'\x0e' + parts[meta_idx + 1]
+            first_body_len = len(parts[meta_idx + 2]) - 2
+            if int.from_bytes(split_meta[:2], 'little') == first_body_len and split_meta[2] in (0, 1):
+                self._current_flag = split_meta[2]
+                idx = meta_idx + 2
+            else:
+                self._current_flag = None
         else:
             self._current_flag = None
         return idx
@@ -766,17 +930,26 @@ class _T602Parser:
         link_chunks: list[list] = []
         idx = self._emit_title_block(items, parts, start_idx)
         title = self._current_title or ''
+        summary_expected = self._current_flag == 1
+        summary_seen = False
+        summary_gap_pending = False
 
         while idx < len(parts):
             # Next title starts a new screen
-            if idx + 1 < len(parts) and self._is_title_chunk(parts[idx], parts[idx + 1]):
+            if self._is_title_at(parts, idx):
                 if self._current_flag == 0:
                     # FLAG=0: standalone screen, emit and return
-                    self._apply_link_chunks(items, link_chunks)
+                    if title in _NAV_SCREEN_TITLES:
+                        self._apply_navigation_link_chunks(items, link_chunks)
+                    else:
+                        self._apply_link_chunks(items, link_chunks)
                     return _make_screen(title, self._current_flag, items), idx
                 # FLAG!=0 (sub-screen): absorb as blank+sub-title
                 items.append({'kind': 'visible', 'text': ''})
                 idx = self._emit_title_block(items, parts, idx)
+                summary_expected = self._current_flag == 1
+                summary_seen = False
+                summary_gap_pending = False
                 continue
 
             part = parts[idx]
@@ -784,6 +957,7 @@ class _T602Parser:
             if self._is_footer_chunk(part):
                 footer = self._decode_chunk(part)
                 items.append({'kind': 'visible', 'text': ''})
+                summary_gap_pending = False
                 items.append({'kind': 'visible', 'text': self._linkify_text_line(footer)})
                 idx += 1
                 # Skip trailing context/empty chunks after footer
@@ -797,7 +971,7 @@ class _T602Parser:
                 # instead store raw late-file 5-byte records without the count field.
                 post_footer_parts: list[bytes] = []
                 while idx < len(parts):
-                    if idx + 1 < len(parts) and self._is_title_chunk(parts[idx], parts[idx + 1]):
+                    if self._is_title_at(parts, idx):
                         break
                     p = parts[idx]
                     if not self._is_context_chunk(p) and len(p) != 0:
@@ -813,11 +987,10 @@ class _T602Parser:
                         continue
                     local_idx += 1
 
-                late_records = self._parse_late_lookup_records(post_footer_parts)
-                if late_records:
-                    link_chunks.append(late_records)
-
-                self._apply_link_chunks(items, link_chunks)
+                if title in _NAV_SCREEN_TITLES:
+                    self._apply_navigation_link_chunks(items, link_chunks)
+                else:
+                    self._apply_link_chunks(items, link_chunks)
                 return _make_screen(title, self._current_flag, items), (
                     idx if idx < len(parts) else None
                 )
@@ -828,12 +1001,16 @@ class _T602Parser:
                 continue
 
             if self._is_separator_chunk(part):
+                if summary_gap_pending:
+                    items.append({'kind': 'visible', 'text': ''})
+                    summary_gap_pending = False
                 items.append({'kind': 'separator', 'text': ''})
                 idx += 1
                 continue
 
             if len(part) == 0:
                 items.append({'kind': 'visible', 'text': ''})
+                summary_gap_pending = False
                 idx += 1
                 continue
 
@@ -848,13 +1025,23 @@ class _T602Parser:
 
             text = self._decode_chunk(part)
             if text:
+                if summary_gap_pending:
+                    items.append({'kind': 'visible', 'text': ''})
+                    summary_gap_pending = False
                 for line in text.split('\n'):
                     items.append({'kind': 'visible', 'text': self._linkify_text_line(line.rstrip())})
+                if summary_expected and not summary_seen:
+                    summary_seen = True
+                    summary_gap_pending = True
             else:
                 items.append({'kind': 'visible', 'text': ''})
+                summary_gap_pending = False
             idx += 1
 
-        self._apply_link_chunks(items, link_chunks)
+        if title in _NAV_SCREEN_TITLES:
+            self._apply_navigation_link_chunks(items, link_chunks)
+        else:
+            self._apply_link_chunks(items, link_chunks)
         return _make_screen(title, self._current_flag, items), None
 
 
@@ -864,7 +1051,14 @@ def _make_screen(title: str, flag: int | None, items: list[dict]) -> dict:
 
 # ─── UHF 2.0 conversion ──────────────────────────────────────────────────────
 
-_NAV_SCREEN_TITLES = {'Help | Obsah', 'Help | Rejstřík'}
+_TEXT602_CONTENTS_TITLE = 'Text602 | Obsah'
+_TEXT602_INDEX_TITLE = 'Text602 | Abecední rejstřík nápovědy.'
+_NAV_SCREEN_TITLES = {
+    'Help | Obsah',
+    'Help | Rejstřík',
+    _TEXT602_CONTENTS_TITLE,
+    _TEXT602_INDEX_TITLE,
+}
 
 
 @lru_cache(maxsize=8192)
@@ -930,15 +1124,36 @@ def _navigation_lookup_aliases(text: str) -> tuple[str, ...]:
 
 
 def _title_navigation_aliases(title: str) -> tuple[str, ...]:
+    aliases: list[str] = []
     configured = _NAV_TITLE_ALIAS_BY_TITLE.get(title)
     if configured:
-        return configured
+        aliases.extend(configured)
+
+    title_no_hotkey = re.sub(r'\s*<[^>]+>$', '', title).strip()
+    if '|' in title_no_hotkey:
+        section, last = (part.strip() for part in title_no_hotkey.split('|', 1))
+        if section and last:
+            aliases.append(f'{section} {last}')
+        if section == 'Klávesnice':
+            keyboard_aliases = {
+                'Ruština': ('Ruská',),
+                'Český psací stroj': ('Česká profesionální',),
+                'Slovenský psací stroj': ('Slovenská profesionální',),
+                'Speciální znaky': ('Speciální',),
+                'Německá klávesnice': ('Německá',),
+                'Uživatelská klávesnice KL8': ('Uživatelská 1', 'Uživatelská klávesnice 1'),
+                'Uživatelská klávesnice KL9': ('Uživatelská 2', 'Uživatelská klávesnice 2'),
+                'Počítačová klávesnice': ('Anglická podle IBM',),
+                'Prohození Z za Y': ('Prohození Z a Y',),
+            }
+            aliases.extend(keyboard_aliases.get(last, ()))
 
     match = _NAV_GRAPH_TITLE_RE.fullmatch(_T602Parser._title_last_segment(title))
-    if not match:
-        return ()
-    dimension = match.group(1).upper()
-    return (f'{dimension} graf', f'Výběr {dimension} grafu')
+    if match:
+        dimension = match.group(1).upper()
+        aliases.extend((f'{dimension} graf', f'Výběr {dimension} grafu'))
+
+    return tuple(dict.fromkeys(aliases))
 
 
 def _is_candidate_text_line(text: str) -> bool:
@@ -1183,6 +1398,11 @@ def _contextual_navigation_indexes(items: list[dict]) -> list[int]:
         item = items[idx]
         if item['kind'] != 'visible':
             break
+        if '{' in item['text'] or '}' in item['text']:
+            if _navigation_line_span(_plain_internal_text(item['text'])) is None:
+                break
+            idx -= 1
+            continue
         if _navigation_line_span(item['text']) is None:
             break
         indexes.append(idx)
@@ -1214,40 +1434,6 @@ def _linkify_contextual_navigation_lines(screens: list[dict], target_index: _Nav
                 + '}'
                 + item['text'][label_end:]
             )
-
-
-def _linkify_navigation_screens(screens: list[dict], target_index: _NavigationIndex) -> None:
-    for screen in screens:
-        if screen['title'] not in _NAV_SCREEN_TITLES:
-            continue
-        for item in screen['items']:
-            if item['kind'] != 'visible':
-                continue
-            text = item['text']
-            stripped = text.strip()
-            if not stripped or '{' in text:
-                continue
-            if stripped in {'\u25a0 Rejstřík', '\u25a0 Obsah', 'Rejstřík', 'Obsah'}:
-                continue
-            if stripped.startswith('\u25a0'):
-                continue
-            target = _resolve_navigation_target(stripped, screen['title'], target_index)
-            if not target:
-                continue
-            leading = text[:len(text) - len(text.lstrip(' '))]
-            item['text'] = leading + '{' + stripped + ':' + target + '}'
-
-        for item in screen['items']:
-            if item['kind'] != 'visible' or '::' not in item['text'] or '[link:' in item['text']:
-                continue
-            plain = _plain_internal_text(item['text']).strip()
-            if not plain or plain.startswith('\u25a0'):
-                continue
-            target = _resolve_navigation_target(plain, screen['title'], target_index)
-            if not target:
-                continue
-            leading = item['text'][:len(item['text']) - len(item['text'].lstrip(' '))]
-            item['text'] = leading + '{' + plain + ':' + target + '}'
 
 
 def _learn_dest_targets_from_screens(screens: list[dict]) -> dict[int, str]:
@@ -1331,7 +1517,7 @@ def _convert_links(text: str, title_to_ctx: dict[str, int]) -> str:
 
 # ─── Public reader ───────────────────────────────────────────────────────────
 
-class Text602Reader:
+class T602310Reader:
     """Reader for Software602 Text602 and Calc602 help files."""
 
     def __init__(self, source_name: str = "", source_path=None) -> None:
@@ -1339,7 +1525,7 @@ class Text602Reader:
         self.source_path = source_path
 
     def read_bytes(self, data: bytes) -> HelpDocument:
-        if not is_text602_binary(data):
+        if not is_t602_310_binary(data):
             raise ValueError("Input is not a Software602 Text602/Calc602 help file.")
 
         # Detect product name from header
@@ -1355,13 +1541,31 @@ class Text602Reader:
         navigation_index = _build_navigation_target_index(screens)
         _resolve_inline_placeholders(screens, navigation_index)
         _linkify_contextual_navigation_lines(screens, navigation_index)
-        _linkify_navigation_screens(screens, navigation_index)
 
-        # Assign sequential context IDs (1-based); map title → context_id
+        # Assign sequential context IDs (1-based). Occurrence-qualified keys
+        # keep links to duplicate original titles unambiguous.
         title_to_ctx: dict[str, int] = {}
+        title_occurrences: dict[str, int] = {}
         for idx, screen in enumerate(screens, 1):
-            if screen['title'] and screen['title'] not in title_to_ctx:
-                title_to_ctx[screen['title']] = idx
+            title = screen['title']
+            if not title:
+                continue
+            occurrence = title_occurrences.get(title, 0) + 1
+            title_occurrences[title] = occurrence
+            title_to_ctx.setdefault(title, idx)
+            title_to_ctx[_target_ref(title, occurrence)] = idx
+
+        if parser.is_text602:
+            missing_targets = sorted({
+                _target_ref(title, occurrence)
+                for title, occurrence in _TEXT602_FIXED_DESTINATIONS.values()
+                if _target_ref(title, occurrence) not in title_to_ctx
+            })
+            if missing_targets:
+                raise ValueError(
+                    'Text602 HelpCtx targets are missing from the HLP file: '
+                    + ', '.join(repr(target) for target in missing_targets)
+                )
 
         topics: list[TopicRecord] = []
         index_entries: list[IndexEntry] = []

@@ -9,7 +9,7 @@ import struct
 from ..base import HelpDocument, IndexEntry, TopicRecord, ensure_document_index
 from ..codepages import CP437_LOW, KAMENICKY
 from ..uhf_markup import escape_uhf_text
-from .software602 import _T602_BOX, _T602_TEXT, _TEXT602_UI_THEME
+from .t602_310 import _T602_BOX, _T602_TEXT, _TEXT602_UI_THEME
 
 
 K602_MAGIC = b"\x0aK6HLP"
@@ -48,17 +48,19 @@ class K602Reader:
         for entry in entries:
             raw_lines = _parse_topic_lines(data, entry)
             title = _topic_title(raw_lines, entry.context_id)
+            uhf_content = _render_topic_lines(raw_lines)
             topic = TopicRecord(
                 context_id=entry.context_id,
                 raw_lines=[],
                 names=[title],
-                uhf_content=_render_topic_lines(raw_lines),
+                uhf_content=uhf_content,
             )
             topics.append(topic)
-            index_entries.append(IndexEntry(
-                label=title.encode("utf-8"),
-                context_id=entry.context_id,
-            ))
+            if _is_indexable_topic(title, uhf_content):
+                index_entries.append(IndexEntry(
+                    label=title.encode("utf-8"),
+                    context_id=entry.context_id,
+                ))
 
         return ensure_document_index(HelpDocument(
             format_name="k602",
@@ -224,6 +226,24 @@ def _clean_title(title: str) -> str:
     if single_run:
         cleaned_tokens.append("".join(single_run) if len(single_run) >= 3 else " ".join(single_run))
     return " ".join(cleaned_tokens).strip()
+
+
+def _is_indexable_topic(title: str, content: list[str]) -> bool:
+    nonblank = [line.strip() for line in content if line.strip()]
+    if not nonblank:
+        return False
+
+    if len(nonblank) <= 2:
+        first_line = _plain_uhf_text(nonblank[0])
+        second_line = _plain_uhf_text(nonblank[1]) if len(nonblank) == 2 else ""
+        if _clean_title(first_line) == title and (not second_line or _is_rule_text(second_line)):
+            return False
+
+    return True
+
+
+def _plain_uhf_text(text: str) -> str:
+    return text.replace("[b]", "").replace("[/b]", "").replace("[[", "[")
 
 
 def _strip_line_attrs(raw_line: bytes) -> bytes:

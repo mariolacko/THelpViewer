@@ -13,7 +13,7 @@ shared by both products.  It is structurally different from the classic
 `M602 HelpSystem` format and does not use XOR `$FA` encryption.
 
 Current repository validation samples:
-- `T602_310.HLP`
+- `t602_310.hlp`
 - `C602.HLP`
 
 Earlier reverse-engineering notes in this document may still reference older
@@ -56,7 +56,7 @@ per-screen variant: byte 2 (flag) = `0x01`, and bytes 0–1 as LE16 equal the
 raw length of the very first chunk minus 2.
 
 Confirmed on current samples:
-- `T602_310.HLP`: file-level screen meta `1b 00 01` → LE16=27, first chunk len=29=27+2
+- `t602_310.hlp`: file-level screen meta `1b 00 01` → LE16=27, first chunk len=29=27+2
 - `C602.HLP`: file-level screen meta `09 00 01` → LE16=9, first chunk len=11=9+2
 
 ## Chunk Model
@@ -182,6 +182,7 @@ LE16(byte0, byte1) = len(first_body_chunk_raw) - 2
 The first body chunk contains the one-line summary sentence of the topic. Its
 raw length is stored here so that the help viewer can calculate where the
 remaining body content and link hotspots start in the rendered screen buffer.
+The viewer renders this summary as a lead line followed by one blank line.
 
 Verification against `T602_301.HLP` (byte-2=`0x01` topics):
 
@@ -217,14 +218,15 @@ count" as a general rule. The true meaning is unknown.
 The 3-byte raw value is **not** a unique screen identifier. The same bytes can
 occur on unrelated screens (e.g. `d6 01 01` appears on multiple screens).
 
-### Two screens without S602SCREENMETA
+### S602SCREENMETA split by the chunk delimiter
 
 In `T602_301.HLP`, two screens (`Řádka | Vložení času <Alt-C>` and
-`Řádka | Políčko`) have a **2-byte chunk `00 01`** at the position where the
-3-byte S602SCREENMETA is expected. These are the only two exceptions. The
-decompiler reads byte 2 of a 3-byte chunk for screen-type logic; 2-byte chunks
-are handled by the S602MARK path. Both screens are otherwise structurally
-normal.
+`Řádka | Políčko`) appear after splitting as an empty chunk followed by
+`00 01`. Their complete metadata record is `0e 00 01`: its first byte equals
+the outer `0x0E` chunk delimiter and is therefore consumed by the split. The
+LE16 value `0x000e` matches the following first body chunk length minus two.
+An extractor must reconstruct this record instead of emitting the empty chunk
+as a visible blank line.
 
 ## S602MARK Records
 
@@ -291,7 +293,7 @@ Current working interpretation of one 5-byte record:
 | Offset | Size | Meaning                       |
 |--------|------|-------------------------------|
 | +0     | 2    | destination id                |
-| +2     | 2    | rendered hotspot end position |
+| +2     | 2    | rendered-buffer hotspot position |
 | +4     | 1    | highlighted text length       |
 
 Example from the `Soubor | Nový` topic:
@@ -326,26 +328,10 @@ Observed footer text forms in the sample:
 - the common in-topic footer is `■ Rejstřík  Obsah`
 - the final tail footer before the late lookup tables is `■ Obsah nápovědy`
 
-The second field is not the destination. It is the hotspot end position in the
-rendered screen buffer. Together with `len`, it tells the help viewer which
-visible span should be highlighted/clickable:
-
-```text
-hotspot_start = end_pos - len + 1
-```
-
-Example:
-
-- `(id=9, end_pos=400, len=7)` means a 7-character hotspot ending at `400`
-- therefore the clickable span starts at `394`
-- this matches the rendered `Otevřít` label on `Soubor | Nový`
-
-Likewise:
-
-- `(id=3, end_pos=411, len=6)` -> `Zavřít`
-- `(id=18, end_pos=421, len=7)` -> `Manažer`
-- `(id=20, end_pos=432, len=3)` -> `DOS`
-- `(id=21, end_pos=439, len=5)` -> `Konec`
+The second field is not the destination. It is a position in the viewer's
+rendered buffer. The exact coordinate origin differs between ordinary screens
+and the large navigation screens, so it must not be treated unconditionally as
+the hotspot end. The third field is the exact clickable label length.
 
 Important notes:
 
@@ -353,8 +339,45 @@ Important notes:
 - ids above the anchor table range (e.g. T602 `91..120`, C602 `70..154`) are
   special fixed IDs resolved internally by the viewer
 - some IDs appear hardcoded in the viewer (e.g. `111/112` for Rejstřík/Obsah)
-- link hotspot positions (`end_pos`) are in the **viewer's rendered buffer**,
+- link hotspot positions are in the **viewer's rendered buffer**,
   which includes title+underline as the first content
+
+### Application-owned `HelpCtx` IDs
+
+High T602 destination IDs must not be resolved by fuzzy title matching. They
+are application context IDs and are not present in the HLP anchor table. The
+matching original `T602.EXE` contains a named `HelpCtx` resource with 39
+records. Each record is three little-endian words:
+
+```text
+first_context_id, context_count, first_status_string_offset
+```
+
+For example, `(339, 14, 5901)` describes IDs `339..352`. Its consecutive
+length-prefixed status strings identify the card-file commands and menus. They
+confirm, among others:
+
+| ID | Status text / meaning | HLP target |
+|----|-----------------------|------------|
+| 339 | file operations | second `Menu Soubor` family |
+| 340 | data editing | second `Menu Edit` topic |
+| 341 | display options | `Menu Zobrazit` |
+| 342 | form selection/design | `Menu Formulář` |
+| 343 | record operations | `Menu Záznam` |
+| 344 | open the editor window | `Text602 \| Editor` |
+| 345 | go to start/end of the database, etc. | second `Menu Jdi na` topic |
+| 349 | find a database record | second `Jdi na \| Najít` topic |
+| 350 | find the next database record | card-file `Jdi na \| Další` topic |
+
+Several editor and card-file screens deliberately have identical titles. A
+converter must therefore preserve the title occurrence as part of its internal
+target key; a plain `title -> topic` dictionary incorrectly sends card-file
+links to the first editor topic. The original title shown to the user remains
+unchanged.
+
+An extractor processing another executable/HLP pair must read that
+executable's `HelpCtx` resource or provide an exact version-specific context
+map. The HLP file alone cannot derive application-owned destination IDs.
 
 ### Buffer position model
 
@@ -367,16 +390,17 @@ buffer_pos = sum(len(chunk_N) for chunk in [title, underline, body...])
 S602SCREENMETA (3-byte context chunk) is a control code and does NOT
 contribute to the buffer position. The 0x0E delimiter bytes are not counted.
 
-There are at least two distinct 5-byte-record families:
+Both local and large navigation link tables use the same count-prefixed
+container. The difference is only their size and how often an embedded `0x0E`
+splits them into outer chunks:
 
-- local screen link chunks:
-  - start with a 16-bit `count`
-  - followed by `count` 5-byte records
-  - often end with a 7-byte trailer (see below)
-- late-file lookup chunks (`3729..3736`):
-  - are packed as raw 5-byte records without the initial `count`
-  - may end with 0-4 bytes of non-record residue
-  - do not currently look like the same exact container format as local chunks
+- `Text602 | Obsah`: count `178`, followed by `178 × 5` bytes and a 7-byte trailer
+- `Text602 | Abecední rejstřík`: count `168`, followed by `168 × 5` bytes
+
+For navigation tables, records and visible labels are stored in the same order.
+The stored label length identifies the next linked visible label; visible rows
+without a corresponding record remain plain text. This reconstructs all 178
+Contents links without title matching.
 
 Another important consequence of the outer `0x0E` chunk delimiter:
 
@@ -535,7 +559,7 @@ The anchor table is needed only to resolve `dest_id → screen title`.
 
 | File | Entries | dest_id range |
 |------|---------|---------------|
-| T602_310.HLP | 90 entries (0–89) | 0x0168 bytes |
+| t602_310.hlp | 90 entries (0–89) | 0x0168 bytes |
 | C602.HLP | 70 entries (0–69) | 0x0118 bytes |
 
 Dest_ids above the anchor table range (e.g. C602 dest_ids 70–154) are
@@ -580,8 +604,8 @@ Binary header section (bytes after `\r\n`, 15 bytes):
 - File-level S602SCREENMETA: `09 00 01` → LE16=9, first chunk len=11=9+2 ✓
 
 Current observed parser totals on repo sample:
-- `T602_310.HLP`: 194 screens, context flag distribution `0x01 × 180`, `0x00 × 14`
-- `C602.HLP`: 147 screens, context flag distribution `0x01 × 102`, `0x00 × 44`
+- `t602_310.hlp`: 196 screens
+- `C602.HLP`: 149 screens
 
 ## Viewer UI Theme
 
@@ -614,25 +638,11 @@ viewer internally.
 
 ## What Is Still Unknown
 
-The broad file format is understood well enough to parse both current samples,
-but one important family remains only partially decoded:
-
-- post-footer **late lookup records** stored as raw 5-byte tuples
-- used heavily in `Help | Obsah` / `Help | Rejstřík` style navigation screens
-- especially visible in `C602.HLP`, where not every destination can yet be
-  resolved from the anchor table alone
-
-Current parser strategy:
-- trust the anchor table for `dest_id -> title` where available
-- use text-derived aliases from titles and leading body lines
-- use a minimal fallback map only for fixed viewer ids still not described by
-  the decoded structures
-
-Practical consequence:
-- ordinary topic screens are parsed reliably
-- navigation screens are mostly linked correctly
-- a small subset of `C602` `Obsah/Rejstřík` entries still needs the remaining
-  late-lookup format to be fully decoded
+The link-table container is decoded. What remains unresolved by the HLP alone
+is the destination mapping for application-owned context IDs above the anchor
+table range. Those IDs must not be mapped by fuzzy title matching; they require
+an explicit mapping structure from the original input set or must remain
+non-clickable.
 
 ## HLX Round-Trip Markers
 

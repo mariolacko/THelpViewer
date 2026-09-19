@@ -165,6 +165,13 @@
       "reader": "thelpviewer.converter.readers.k602:K602HelpReader"
     },
     {
+      "name": "text602-legacy",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.converter.readers.t602_300:is_t602_300_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.t602_300:T602300Reader"
+    },
+    {
       "name": "m602",
       "source_kind": "compiled",
       "matcher": "thelpviewer.converter.readers.m602:is_m602_binary",
@@ -174,9 +181,9 @@
     {
       "name": "text602",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.software602:is_text602_binary",
+      "matcher": "thelpviewer.converter.readers.t602_310:is_t602_310_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.software602:Text602Reader"
+      "reader": "thelpviewer.converter.readers.t602_310:T602310Reader"
     }
   ],
   "products": [
@@ -1217,7 +1224,7 @@
     {
       "crc32": "8EA2FCF8",
       "filenames": [
-        "T602_310.HLP"
+        "t602_310.hlp"
       ],
       "title": "Text 602 3.10",
       "collection": "Software 602",
@@ -1405,6 +1412,16 @@
       "text_encoding": "cp437",
       "language": "en",
       "help_contents_topic_id": 3
+    },
+    {
+      "crc32": "CCC3E5FB",
+      "filenames": [
+        "t602_300.hlp"
+      ],
+      "title": "Text 602 3.00",
+      "collection": "Software 602",
+      "text_encoding": "utf-8",
+      "language": "cs"
     },
     {
       "crc32": "CD6CFBA7",

@@ -30,7 +30,7 @@ def test_k602_reader_parses_topic_table_and_text_blocks():
     document = _k602_document()
 
     assert len(document.topics) == 115
-    assert len(document.index_entries) == 115
+    assert len(document.index_entries) == 92
     assert document.metadata["table_entry_count"] == 239
     assert document.metadata["topic_count"] == 115
     assert document.metadata["title"] == "Kartotéka 602"
@@ -42,6 +42,17 @@ def test_k602_reader_parses_topic_table_and_text_blocks():
     assert topic.names == ["Nová databáze"]
     assert "  [b]Nová databáze [/b]" in topic.uhf_content
     assert "vytvoření struktury věty datového ([b]DBF[/b]) souboru." in topic.uhf_content
+
+    labels = [entry.label.decode("utf-8") for entry in document.index_entries]
+    assert "Uložení makra" not in labels
+    assert "Příkaz zruší seznam příkazů pro tisk." not in labels
+    assert "Topic 90" not in labels
+    assert "Topic 91" not in labels
+    assert labels.count("Výběr klávesnice") == 8
+
+    macro_stub = next(topic for topic in document.topics if topic.context_id == 18)
+    assert macro_stub.names == ["Uložení makra"]
+    assert macro_stub.uhf_content == ["  Uložení makra", "   ■■■■■■■■■■■■■■■"]
 
 
 def test_k602_strips_line_attributes_without_losing_box_art():
