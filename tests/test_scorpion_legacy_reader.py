@@ -730,7 +730,7 @@ def test_scorpion_v4_reader_decodes_sco_huffman_topics():
     assert document.metadata["scorpion_sco_stream_offset"] == 0x30A
     assert document.metadata["parsed_topic_count"] == 2
     assert [topic.names[0] for topic in document.topics] == ["BATTLE BEAST", "HERETIC"]
-    assert "ITIHFO   - boj bude trvat tři kola místo jednoho" in document.topics[0].uhf_content
+    assert "[fg:15][b]ITIHFO  [/b][/fg] - boj bude trvat tři kola místo jednoho" in document.topics[0].uhf_content
     assert "IDDQD - smrt" in document.topics[1].uhf_content
 
 
@@ -795,7 +795,7 @@ def test_scorpion_sco_reader_labels_joke_index_files():
     assert document.metadata["scorpion_sco_index_status_counts"] == {"plain": 5}
     assert document.metadata["title"] == "Scorpions Cheater 5 - Index vtipů"
     assert document.topics[0].names == ["Index vtipů"]
-    assert "ŘETĚZ,[0001]-" in document.topics[0].uhf_content
+    assert "ŘETĚZ,[[0001]-" in document.topics[0].uhf_content
     assert document.metadata["scorpion_sco_index_entries"][1] == {
         "label": "ŘETĚZ",
         "target_id": "0001",
@@ -877,8 +877,8 @@ def test_scorpion_v6_reader_decodes_scd_lzhuf_index():
     assert document.metadata["scorpion_sco_role"] == "cheat-index"
     assert document.metadata["scorpion_sco_index_entry_count"] > 100
     assert document.topics[0].names == ["Index cheatů"]
-    assert "SEZNAM LABELU,[1234]-" in document.topics[0].uhf_content
-    assert any("A-TRAIN,[0071]*" == line for line in document.topics[0].uhf_content)
+    assert "SEZNAM LABELU,[[1234]-" in document.topics[0].uhf_content
+    assert any("A-TRAIN,[[0071]*" == line for line in document.topics[0].uhf_content)
 
 
 def test_scorpion_v6_reader_decodes_scd_lzhuf_marker_topics():

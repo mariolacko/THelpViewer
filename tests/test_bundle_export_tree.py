@@ -7,6 +7,28 @@ from thelpviewer.converter.writers import bundle as bundle_writer
 from thelpviewer.help_database import HelpDatabaseEntry, crc32_file
 
 
+def test_export_bundle_tree_omits_failed_exports_from_catalog(tmp_path, monkeypatch):
+    input_root = tmp_path / "sources"
+    source = input_root / "broken.hlp"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"broken")
+
+    monkeypatch.setattr(bundle_writer, "iter_help_files", lambda _root: [source])
+    monkeypatch.setattr(bundle_writer, "load_help_database", lambda: object())
+    monkeypatch.setattr(bundle_writer, "lookup_help_database_entry", lambda *_args: None)
+
+    def fail_to_load(_path):
+        raise ValueError("synthetic parse failure")
+
+    monkeypatch.setattr(bundle_writer, "load_document", fail_to_load)
+    output_dir = tmp_path / "preview"
+
+    results = bundle_writer.export_bundle_tree(input_root, output_dir, layout="helps")
+
+    assert [result.format_name for result in results] == ["ERROR"]
+    assert json.loads((output_dir / "catalog.json").read_text(encoding="utf-8")) == []
+
+
 def test_export_bundle_tree_prefers_tdh_candidate_with_more_topics(tmp_path, monkeypatch):
     legacy_source = Path("sources") / "Borland Turbo Debugger 1.0" / "TDHELP.TDH"
     later_source = Path("sources") / "Borland Turbo Assembler 1.0 with Turbo Debugger" / "TDHELP.TDH"
@@ -26,16 +48,18 @@ def test_export_bundle_tree_prefers_tdh_candidate_with_more_topics(tmp_path, mon
             crc32=crc32_file(legacy_copy),
             filenames=("TDHELP.TDH",),
             title="Turbo Debugger Help",
-            collection="Borland Turbo Debugger/Profiler/Assembler",
-            text_encoding="cp437",
-            help_contents_topic_id=1,
-        ),
+                collection="Borland Turbo Debugger/Profiler/Assembler",
+                text_encoding="cp437",
+                help_contents_topic_id=1,
+                product_key="td",
+            ),
         later_copy.resolve(): HelpDatabaseEntry(
             crc32=crc32_file(later_copy),
-            filenames=("TDHELP.TDH",),
-            title="Turbo Debugger Help",
-            collection="Borland Turbo Debugger/Profiler/Assembler",
-        ),
+                filenames=("TDHELP.TDH",),
+                title="Turbo Debugger Help",
+                collection="Borland Turbo Debugger/Profiler/Assembler",
+                product_key="td",
+            ),
     }
 
     monkeypatch.setattr(bundle_writer, "load_help_database", lambda: object())
@@ -67,7 +91,7 @@ def test_export_bundle_tree_prefers_tdh_candidate_with_more_topics(tmp_path, mon
             "source_file": "TDHELP.TDH",
             "source_files": ["TDHELP.TDH"],
             "name": "Turbo Debugger Help",
-            "format": "borland",
+                "format": "tdh",
             "topics": 596,
             "product": "td",
             "product_name": "Borland Turbo Debugger",

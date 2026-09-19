@@ -467,17 +467,19 @@ def test_tdh_2x_sample_exposes_late_context_range():
     help_index_text = "\n".join(document.topics[1].uhf_content)
     assert "[link:topic=2]Help on Help[/link]" in help_index_text
     assert "[link:topic=401]Assembler[/link]" in help_index_text
-    assert "[link:topic=396]Function Keys[/link]" in help_index_text
+    second_index_page = next(topic for topic in document.topics if topic.context_id == document.topics[1].next_context)
+    third_index_page = next(topic for topic in document.topics if topic.context_id == second_index_page.next_context)
+    assert "[link:topic=396]Function Keys[/link]" in "\n".join(third_index_page.uhf_content)
     assert document.contents[0].label == "Help on Help"
     assert document.contents[0].topic_id == 2
 
     ctrl_function_keys = next(topic for topic in document.topics if topic.context_id == 530)
-    assert ctrl_function_keys.uhf_content[0] == "In some cases, a Ctrl function key duplicates"
+    assert "In some cases, a Ctrl function key duplicates" in "\n".join(ctrl_function_keys.uhf_content)
 
-    assert next(topic for topic in document.topics if topic.context_id == 532).names[0] == "Methods"
-    assert next(topic for topic in document.topics if topic.context_id == 533).names[0] == "Object Hierarchy"
-    assert next(topic for topic in document.topics if topic.context_id == 534).names[0] == "Show inherited"
-    assert next(topic for topic in document.topics if topic.context_id == 538).names[0] == "Parents"
+    assert "Methods command" in next(topic for topic in document.topics if topic.context_id == 532).names[0]
+    assert "Object Hierarchy" in next(topic for topic in document.topics if topic.context_id == 533).names[0]
+    assert "Show inherited command" in next(topic for topic in document.topics if topic.context_id == 534).names[0]
+    assert "Parents command" in next(topic for topic in document.topics if topic.context_id == 538).names[0]
     assert next(topic for topic in document.topics if topic.context_id == 537).uhf_content == [""]
     assert next(topic for topic in document.topics if topic.context_id == 539).uhf_content[1] == "Opens an object type Inspector to show the data"
 
@@ -501,22 +503,22 @@ def test_tdh_2x_sample_exposes_late_context_range():
     assert function_commands.uhf_content == [
         "",
         "There are function keys for many commonly used",
-        "functions.  Many of the Alt, Ctrl, and Shifted",
-        "versions of the function keys also invoke",
-        "commands, as described here.",
+        "functions. The regular function keys invoke the",
+        "following commands:",
         "",
-        "The ordinary function keys invoke the following",
-        "commands:",
+        "[link:topic=2]F1  Help[/link]              [link:topic=402]F2  Toggle Breakpoint[/link]",
+        "[link:topic=69]F3  View Module[/link]       [link:topic=83]F4  Go to Cursor[/link]",
+        "[link:topic=98]F5  Zoom Window[/link]       [link:topic=97]F6  Next Window[/link]",
+        "[link:topic=79]F7  Trace Into[/link]        [link:topic=80]F8  Step Over[/link]",
+        "[link:topic=81]F9  Run[/link]               [link:topic=387]F10 Command menu[/link]",
         "",
-        "[link:topic=2]F1  Help[/link]              [link:topic=388]F2  Toggle Breakpoint[/link]",
-        "[link:topic=66]F3  Close Window[/link]      [link:topic=50]F4  Run to Cursor[/link]",
-        "[link:topic=65]F5  Zoom Window[/link]       [link:topic=62]F6  Next Window[/link]",
-        "[link:topic=46]F7  Trace Into[/link]        [link:topic=47]F8  Step Over[/link]",
-        "[link:topic=48]F9  Run[/link]               [link:topic=373]F10 Command menu[/link]",
+        "The function keys are combined with Alt, Ctrl, or",
+        "Shift to invoke still more commands:",
+        "",
     ]
 
     expression = next(topic for topic in document.topics if topic.context_id == 477)
-    assert expression.uhf_content[0] == "An assembler expression can have the following"
+    assert expression.uhf_content[0] == "An assembler expression can contain the following"
     assert expression.uhf_content[1] == "elements:"
     assert [
         (keyword.target_context, keyword.line, keyword.first_column, keyword.last_column)
@@ -600,6 +602,7 @@ def test_tfh_handler_detection_does_not_depend_on_tfh_suffix():
 
     assert handler is not None
     assert handler.name == "tfh"
+    document = TdhHelpReader(source_name="TFHELP.BIN", source_path=Path("TFHELP.BIN")).read_bytes(data)
     assert max(len(line) for topic in document.topics for line in topic.raw_lines) == 49
     assert document.contents[0].label == "Help on Help"
     assert document.contents[0].topic_id == 2

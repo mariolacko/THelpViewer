@@ -9,6 +9,7 @@ full pre-separator prefix for the known sample families.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -766,6 +767,15 @@ def _decode_tdh_topics(
         and page_word != 0
         and not 0 < page_word < context_count
     }
+    topic_boundaries = sorted(
+        {
+            start
+            for context_id, start in enumerate(runtime_starts)
+            if 0 <= start < len(data)
+            and (page_word := page_words[context_id]) is not None
+            and (page_word == 0 or 0 < page_word < context_count)
+        }
+    )
 
     topics: list[TopicRecord] = []
     page_word_counts: dict[str, int] = {}
@@ -774,7 +784,9 @@ def _decode_tdh_topics(
     for context_id, start in enumerate(runtime_starts):
         if start < 0 or start + 2 > len(data):
             break
-        raw_block = data[start:]
+        boundary_index = bisect_right(topic_boundaries, start)
+        block_end = topic_boundaries[boundary_index] if boundary_index < len(topic_boundaries) else len(data)
+        raw_block = data[start:block_end]
         page_word = page_words[context_id]
         if page_word is None:
             break
@@ -787,12 +799,23 @@ def _decode_tdh_topics(
                 return
             alias_owner_by_context.setdefault(alias_context, context_id)
 
+        if out_of_range_context_by_start:
+            # Alias offsets can sit past a visible page boundary. Scan the
+            # runtime stream as the original viewer did, but keep that scan
+            # separate from the bounded text rendered for this topic.
+            _parse_tfh_block(
+                data[start:],
+                text_lead_word=page_word,
+                max_target_context=len(runtime_starts),
+                max_lines=TDH_MAX_SCREEN_LINES,
+                position_callback=note_embedded_alias,
+            )
+
         lines, positional_keywords, trimmed_synthetic_blank = _parse_tfh_block(
             raw_block,
             text_lead_word=page_word,
             max_target_context=len(runtime_starts),
             max_lines=TDH_MAX_SCREEN_LINES,
-            position_callback=note_embedded_alias,
         )
         if trimmed_synthetic_blank:
             trimmed_prefix_topics += 1

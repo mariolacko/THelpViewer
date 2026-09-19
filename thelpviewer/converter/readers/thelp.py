@@ -39,6 +39,11 @@ FORMAT_MARKER_BYTES = bytes((0x14,))
 # Match standalone headers like "Example:", "Examples", "Example 1:".
 # Do not match prose such as "example code for ..." inside an indented list.
 EXAMPLE_HEADER_RE = re.compile(r"^\s*Examples?(?:\s+\d+)?\s*(?:[:.)-]\s*)?$", re.IGNORECASE)
+EXAMPLE_TERMINATOR_RE = re.compile(
+    r"^\s*(?:See Also|Notes?|Remarks?|Warnings?|Syntax|Description|Parameters?|"
+    r"Returns?|Return Value|Errors?)\s*:\s*$",
+    re.IGNORECASE,
+)
 PASCAL_SAMPLE_TOPIC_RE = re.compile(r"^\s*\{?[^{}\s]+\.PAS\}?\s*$", re.IGNORECASE)
 KNOWN_THELP_TITLES: dict[str, str] = {
     "TURBO4": "Turbo Pascal 4",
@@ -804,12 +809,63 @@ class ThelpHelpReader(HelpReaderBase):
             if str(context_id).isdigit() and isinstance(target, dict)
         }
         for topic in document.topics:
-            topic.uhf_content = render_topic_uhf_content(
+            rendered_content = render_topic_uhf_content(
                 topic,
                 decode_bytes=lambda raw: cls._decode_context_text(raw, encoding),
                 topic_ids=topic_ids,
                 fallback_map=fallback_map,
             )
+            topic.uhf_content = cls._restore_sequential_hotspot_tables(rendered_content)
+
+    @classmethod
+    def _restore_sequential_hotspot_tables(cls, lines: list[str]) -> list[str]:
+        """Rebuild THELP tables stored as a flat sequence of linked cells."""
+        restored: list[str] = []
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            restored.append(line)
+            column_count = cls._table_header_column_count(line)
+            if column_count < 2:
+                index += 1
+                continue
+
+            cell_index = index + 1
+            cells: list[str] = []
+            while cell_index < len(lines) and cls._is_sequential_table_cell(lines[cell_index]):
+                cells.append(lines[cell_index])
+                cell_index += 1
+
+            if len(cells) >= column_count and len(cells) % column_count == 0:
+                for offset in range(0, len(cells), column_count):
+                    row_cells = cells[offset:offset + column_count]
+                    restored.append(
+                        row_cells[0] + "".join(f" {cell}" for cell in row_cells[1:])
+                    )
+                index = cell_index
+                continue
+
+            index += 1
+        return restored
+
+    @staticmethod
+    def _table_header_column_count(line: str) -> int:
+        """Return the number of cells described by a top table border."""
+        if "╤" not in line or "╕" not in line:
+            return 0
+        if line.rfind("╕") < line.find("╤"):
+            return 0
+        return line.count("╤") + 1
+
+    @staticmethod
+    def _is_sequential_table_cell(line: str) -> bool:
+        """Return true for one linked cell emitted as its own THELP line."""
+        stripped = line.rstrip()
+        return (
+            stripped.endswith("│")
+            and line.count("[link:") == 1
+            and line.count("[/link]") == 1
+        )
 
     @classmethod
     def _apply_keyword_index_targets(cls, document: HelpDocument) -> None:
@@ -1281,6 +1337,12 @@ class ThelpHelpReader(HelpReaderBase):
             # Skip decorative border lines immediately after the Example
             # heading (e.g. " ▀▀▀▀▀..."). Do not treat them as code.
             if decorative_re.match(decoded) and not saw_code_line:
+                continue
+
+            if saw_code_line and EXAMPLE_TERMINATOR_RE.match(decoded):
+                in_example = False
+                saw_code_line = False
+                pending_blank_indices = []
                 continue
 
             if raw_line[:1] not in (b" ", b"\t"):

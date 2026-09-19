@@ -569,6 +569,11 @@ def _merge_sco_category_documents(
     _append_metadata_transport_key(metadata, "scorpion_sco_role")
     _append_metadata_transport_key(metadata, "scorpion_sco_source_files")
     _append_metadata_transport_key(metadata, "scorpion_sco_merged_category")
+    _append_metadata_transport_key(metadata, "scorpion_sco_marker_topic_count")
+    _append_metadata_transport_key(metadata, "scorpion_sco_index_entry_count")
+    _append_metadata_transport_key(metadata, "scorpion_sco_index_header_count")
+    _append_metadata_transport_key(metadata, "scorpion_sco_index_status_counts")
+    _append_metadata_transport_key(metadata, "scorpion_sco_index_flag_counts")
     return HelpDocument(
         format_name=first_document.format_name,
         source_name=_merged_source_name(source_paths, category),

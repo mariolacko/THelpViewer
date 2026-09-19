@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable
 from pathlib import Path
 
 from thelpviewer.help_database import load_help_database, lookup_help_database_entry
 
 from .exporter import export_file, export_tree
 from .writers.bundle import export_bundle, export_bundle_tree
+
+
+def _fail_on_export_errors(results: Iterable[object]) -> None:
+    """Exit unsuccessfully when an exporter reported a caught exception."""
+    if any(getattr(result, "format_name", None) == "ERROR" for result in results):
+        raise SystemExit(1)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,6 +72,7 @@ def main() -> None:
             for result in results:
                 print(f"{result.format_name}\t{result.input_path.name}\t{result.json_path.name}")
             print(f"TOTAL\t{len(results)}")
+            _fail_on_export_errors(results)
         else:
             help_database = load_help_database()
             result = export_bundle(
@@ -74,6 +82,7 @@ def main() -> None:
                 database_entry=lookup_help_database_entry(input_path, help_database),
             )
             print(f"{result.format_name}\t{result.input_path.name}\t{result.json_path.name}")
+            _fail_on_export_errors((result,))
         return
 
     if input_path.is_dir():
@@ -87,10 +96,12 @@ def main() -> None:
         for result in results:
             print(f"{result.format_name}\t{result.encoding}\t{result.input_path.name}")
         print(f"TOTAL\t{len(results)}")
+        _fail_on_export_errors(results)
         return
 
     result = export_file(input_path, args.output_dir, encoding=args.encoding, dump_json=args.dump_json)
     print(f"{result.format_name}\t{result.encoding}\t{result.input_path.name}")
+    _fail_on_export_errors((result,))
 
 
 if __name__ == "__main__":
