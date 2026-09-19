@@ -1210,6 +1210,8 @@ class ThelpHelpReader(HelpReaderBase):
     def _build_topics(cls, screens: list[dict[str, object]], meta: dict[str, object]) -> list[TopicRecord]:
         """Convert parsed screen dictionaries into typed topic records."""
         topics = []
+        orphan_context_ids: list[int] = []
+        skipped_empty_orphans = 0
         for screen in screens:
             raw_lines, code_line_indices = cls._extract_code_lines(
                 list(screen["lines"]),
@@ -1230,8 +1232,22 @@ class ThelpHelpReader(HelpReaderBase):
                     )
                 )
 
+            context_id = int(screen["id"])
+            if context_id == 0xFFFF:
+                has_topic_data = bool(
+                    any(line.strip() for line in raw_lines)
+                    or positional_keywords
+                    or screen.get("keywords_v5")
+                    or screen.get("indices")
+                )
+                if not has_topic_data:
+                    skipped_empty_orphans += 1
+                    continue
+                context_id = 0x10000 + len(orphan_context_ids)
+                orphan_context_ids.append(context_id)
+
             topic = TopicRecord(
-                context_id=screen["id"],
+                context_id=context_id,
                 raw_lines=raw_lines,
                 index_terms=[cls._normalize_label(name) for name in screen.get("indices", [])],
                 alias_contexts=list(screen.get("alias_ids", [])),
@@ -1244,6 +1260,10 @@ class ThelpHelpReader(HelpReaderBase):
             )
             topic.nav_items = build_directional_nav_items(topic)
             topics.append(topic)
+        if orphan_context_ids:
+            meta["orphan_screen_contexts"] = orphan_context_ids
+        if skipped_empty_orphans:
+            meta["skipped_empty_orphan_screens"] = skipped_empty_orphans
         return topics
 
     @staticmethod

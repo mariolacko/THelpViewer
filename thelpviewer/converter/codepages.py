@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from functools import lru_cache
 
 CP437_LOW = {
     0x01: "\u263A", 0x02: "\u263B", 0x03: "\u2665", 0x04: "\u2666",
@@ -112,11 +113,12 @@ CZECH_SCORE_WORDS = (
 SUSPICIOUS_MOJIBAKE = set("ąćęłńśźżĄĆĘŁŃŚŹŻŢţ¤×çÇëËƒÿŸ")
 
 
-def build_decode_table(from_enc: str, to_enc: str | None) -> list[str]:
-    """Build a byte-to-text lookup table for the requested legacy encoding."""
+@lru_cache(maxsize=None)
+def _cached_decode_table(from_enc: str, to_enc: str | None) -> tuple[str, ...]:
+    """Return an immutable cached byte-to-text lookup table."""
     if to_enc is None:
-        return [chr(i) for i in range(256)]
-    table = []
+        return tuple(chr(i) for i in range(256))
+    table: list[str] = []
     for i in range(32):
         table.append(CP437_LOW.get(i, chr(i)))
     for i in range(32, 128):
@@ -128,12 +130,17 @@ def build_decode_table(from_enc: str, to_enc: str | None) -> list[str]:
         encoding = "latin-1" if from_enc == "latin1" else from_enc
         for i in range(128, 256):
             table.append(bytes([i]).decode(encoding, errors="replace"))
-    return table
+    return tuple(table)
+
+
+def build_decode_table(from_enc: str, to_enc: str | None) -> list[str]:
+    """Build a mutable byte-to-text lookup table for the requested encoding."""
+    return list(_cached_decode_table(from_enc, to_enc))
 
 
 def decode_bytes(data: bytes, encoding: str) -> str:
     """Decode a raw byte string with the project-specific lookup rules."""
-    table = build_decode_table(encoding, "unicode")
+    table = _cached_decode_table(encoding, "unicode")
     return "".join(table[value] for value in data if value != 0x00)
 
 
@@ -147,7 +154,7 @@ def decode_bytes_box_aware(data: bytes, encoding: str) -> str:
     """
     if encoding != "cp852":
         return decode_bytes(data, encoding)
-    table = build_decode_table(encoding, "unicode")
+    table = _cached_decode_table(encoding, "unicode")
     has_left_block = 0xDD in data
     has_right_block = 0xDE in data
     out: list[str] = []

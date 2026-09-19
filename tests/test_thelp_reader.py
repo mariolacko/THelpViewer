@@ -3,6 +3,38 @@ import re
 from thelpviewer.converter.readers.thelp import ThelpHelpReader
 
 
+def _screen(context_id, lines):
+    return {
+        "id": context_id,
+        "alias_ids": [],
+        "lines": lines,
+        "keywords_v4": [],
+        "keywords_v5": [],
+        "indices": [],
+        "is_help_contents": False,
+        "link_up": None,
+        "link_down": None,
+    }
+
+
+def test_orphan_screens_get_unique_synthetic_contexts_and_empty_ones_are_skipped():
+    metadata = {}
+
+    topics = ThelpHelpReader._build_topics(
+        [
+            _screen(7, [b"Normal"]),
+            _screen(0xFFFF, []),
+            _screen(0xFFFF, [b"First orphan"]),
+            _screen(0xFFFF, [b"Second orphan"]),
+        ],
+        metadata,
+    )
+
+    assert [topic.context_id for topic in topics] == [7, 0x10000, 0x10001]
+    assert metadata["orphan_screen_contexts"] == [0x10000, 0x10001]
+    assert metadata["skipped_empty_orphan_screens"] == 1
+
+
 def test_sequential_hotspot_table_cells_are_restored_to_rows():
     header = (
         " "

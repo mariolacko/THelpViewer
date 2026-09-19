@@ -303,7 +303,7 @@ class FBHFHelpReader(HelpReaderBase):
         return ensure_document_index(HelpDocument(
             format_name="fbhf",
             source_name=self.source_name,
-            topics=_build_fbhf_topics(parsed_topics),
+            topics=_build_fbhf_topics(parsed_topics, name_to_num),
             index_entries=_build_fbhf_index_entries(parsed_topics),
             metadata={"name_to_num": name_to_num},
             binary_data=data,
@@ -317,12 +317,12 @@ class FBHFSourceReader(HelpReaderBase):
         """Read one textual FBHF source buffer."""
         if not is_fbhf_source(data):
             raise ValueError("Input does not look like TurboVision FBHF source.")
-        parser = FBHFSourceParser(data)
+        parser = FBHFSourceParser(data, source_name=self.source_name)
         parsed_topics, name_to_num = parser.parse()
         return ensure_document_index(HelpDocument(
             format_name="fbhf",
             source_name=self.source_name,
-            topics=_build_fbhf_topics(parsed_topics),
+            topics=_build_fbhf_topics(parsed_topics, name_to_num),
             index_entries=_build_fbhf_index_entries(parsed_topics),
             comments=parser.comments,
             metadata={"name_to_num": name_to_num, "source_format": "tvhc"},
@@ -331,15 +331,27 @@ class FBHFSourceReader(HelpReaderBase):
 
 
 def _build_fbhf_topics(
-    parsed_topics: list[tuple[list[str], int, list[tuple[bool, bytes]], list[tuple[str, int, int]]]]
+    parsed_topics: list[
+        tuple[list[str], int, list[tuple[bool, bytes]], list[tuple[str | int, int, int]]]
+    ],
+    name_to_num: dict[str, int],
 ) -> list[TopicRecord]:
     """Flatten FBHF paragraphs into the raw line representation used by HTML export."""
+    folded_names = {name.casefold(): context_id for name, context_id in name_to_num.items()}
     topics = []
-    for names, primary_num, paragraphs, _crossrefs in parsed_topics:
+    for names, primary_num, paragraphs, crossrefs in parsed_topics:
+        resolved_refs = []
+        for target, offset, length in crossrefs:
+            target_context = target if isinstance(target, int) else folded_names.get(target.casefold())
+            if target_context is not None:
+                resolved_refs.append((target_context, offset, length))
+
+        marked_paragraphs, sequential_keywords = _mark_fbhf_crossrefs(paragraphs, resolved_refs)
         raw_lines = []
-        for wrap, text in paragraphs:
+        for wrap, text in marked_paragraphs:
             chunks = [chunk.rstrip(b" ") for chunk in text.split(b"\r")] if wrap else list(text.split(b"\r"))
             for chunk in chunks:
+                chunk = chunk.replace(b"\xff", b" ")
                 if not chunk:
                     raw_lines.append(b"")
                 elif wrap:
@@ -354,13 +366,53 @@ def _build_fbhf_topics(
                 raw_lines=raw_lines,
                 names=list(names),
                 index_terms=[names[0].encode("latin-1")] if names else [],
+                sequential_keywords=sequential_keywords,
             )
         )
     return topics
 
 
+def _mark_fbhf_crossrefs(
+    paragraphs: list[tuple[bool, bytes]],
+    crossrefs: list[tuple[int, int, int]],
+) -> tuple[list[tuple[bool, bytes]], list[int]]:
+    """Insert shared hotspot delimiters at FBHF's 1-based stream offsets."""
+    marked_paragraphs: list[tuple[bool, bytes]] = []
+    sequential_keywords: list[int] = []
+    paragraph_offset = 0
+
+    for wrap, text in paragraphs:
+        local_refs: list[tuple[int, int, int]] = []
+        paragraph_end = paragraph_offset + len(text)
+        for target_context, offset, length in crossrefs:
+            start = offset - 1
+            end = start + length
+            if paragraph_offset <= start < end <= paragraph_end:
+                local_refs.append((start - paragraph_offset, end - paragraph_offset, target_context))
+
+        local_refs.sort()
+        marked = bytearray()
+        cursor = 0
+        for start, end, target_context in local_refs:
+            if start < cursor:
+                continue
+            marked.extend(text[cursor:start])
+            marked.append(0x02)
+            marked.extend(text[start:end])
+            marked.append(0x02)
+            sequential_keywords.append(target_context)
+            cursor = end
+        marked.extend(text[cursor:])
+        marked_paragraphs.append((wrap, bytes(marked)))
+        paragraph_offset = paragraph_end
+
+    return marked_paragraphs, sequential_keywords
+
+
 def _build_fbhf_index_entries(
-    parsed_topics: list[tuple[list[str], int, list[tuple[bool, bytes]], list[tuple[str, int, int]]]]
+    parsed_topics: list[
+        tuple[list[str], int, list[tuple[bool, bytes]], list[tuple[str | int, int, int]]]
+    ]
 ) -> list[IndexEntry]:
     """Create index entries for every visible topic alias."""
     entries = []
