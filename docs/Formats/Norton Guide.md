@@ -1,8 +1,10 @@
 # Norton Guide (NG) File Format
 
-_Note: This page summarizes the Norton Guide / Expert Help binary layout as
-used by THelpViewer, based primarily on Dave Pearson's reverse-engineered
-documentation and verified against sample `.NG` files in this repository._
+> Created: 2026-04-07 · Last updated: 2026-09-19
+
+_This page summarizes the Norton Guide / Expert Help binary layout as used by
+THelpViewer. It combines Dave Pearson's reverse-engineered documentation with
+byte-level validation against every `.NG` file in the repository._
 
 ## Overview
 
@@ -24,6 +26,9 @@ Important properties:
 - Text is CP437 and may contain both style escapes and simple space-run
   compression.
 - There is no dedicated global alphabetical index structure in the format.
+- All `MENU` records occur first, followed by all `SHORT` and `LONG` entries.
+- Links contain absolute file offsets, but records themselves must be read
+  sequentially so that unreferenced entries and secondary menus are preserved.
 
 ## Header
 
@@ -42,9 +47,35 @@ The header layout is:
 | Credit line 4 | `char[66]` | Same layout. |
 | Credit line 5 | `char[66]` | Same layout. |
 
-The header does **not** contain an explicit root-topic offset. Readers normally
-start with the first record immediately after the header and then traverse the
-pointer graph.
+The header does **not** contain an explicit root-topic offset. The first record
+starts immediately after the 378-byte header. `Menu count` is the exact number
+of consecutive `MENU` records at the start of the encrypted record stream.
+
+## Physical Record Sequence and Size
+
+Every record begins with the following six bytes, followed by a type-specific
+20-byte fixed header:
+
+| Field | Size | Notes |
+|---|---:|---|
+| ID | `short` | `0` = SHORT, `1` = LONG, `2` = MENU. |
+| Payload Size | `short` | Number of bytes after the 26-byte fixed header. |
+| Type field | `short` | Line count for SHORT/LONG; stored menu count for MENU. |
+
+The next record begins at:
+
+```text
+next_offset = current_offset + 26 + payload_size
+```
+
+`Payload Size` is **not** the complete record length. Valid compact LONG
+entries can have `payload_size = 2`; rejecting values below 8 loses real topics
+and their incoming links.
+
+The reader must first consume exactly `Header.MenuCount` MENU records and then
+continue sequentially through SHORT/LONG records until EOF. Pointer traversal
+alone is insufficient because secondary menus and some entries are not
+reachable from the first menu.
 
 ## Encryption and Text Encoding
 
@@ -67,7 +98,7 @@ Short entries usually act as menu-like lists of labeled jumps to other entries.
 | Field | Size | Notes |
 |---|---:|---|
 | ID | `short` | Always `0`. |
-| Length | `short` | Record length in bytes. |
+| Payload Size | `short` | Bytes after the fixed header; total size is `26 + Payload Size`. |
 | Line Count | `short` | Number of lines in this entry. |
 | Unknown | `short` | Undocumented. |
 | Parent Line | `short` | 1-based line number in the parent entry that points here. |
@@ -75,8 +106,8 @@ Short entries usually act as menu-like lists of labeled jumps to other entries.
 | Menu | `short` | Menu number that points here. |
 | Menu Prompt | `short` | Prompt number inside that menu. |
 | Unknown | `char[8]` | Undocumented. |
-| Line descriptors | variable | In the sampled guides used by THelpViewer, each line uses `WORD text_offset + DWORD target_offset`. The text offset is relative to the fixed 26-byte SHORT header. |
-| Lines | variable | `Line Count` NUL-terminated text lines. Some sampled guides store the last few line strings slightly beyond the nominal record length, so a reader may need a small lookahead past `Length`. |
+| Line descriptors | `6 × Line Count` | Each line uses `WORD text_offset + DWORD target_offset`. The text offset is relative to the fixed 26-byte SHORT header. |
+| Lines | variable | `Line Count` NUL-terminated text lines contained inside the physical record. |
 
 In practice, the human-readable label for many child topics is stored here, not
 inside the child `LONG` record itself.
@@ -88,7 +119,7 @@ Long entries contain the main body text for a topic.
 | Field | Size | Notes |
 |---|---:|---|
 | ID | `short` | Always `1`. |
-| Length | `short` | Record length in bytes. |
+| Payload Size | `short` | Bytes after the fixed header; total size is `26 + Payload Size`. |
 | Line Count | `short` | Number of visible text lines. |
 | See Also Flag | `short` | Non-zero if a see-also section follows the lines. |
 | Parent Line | `short` | 1-based line number in the parent entry that points here. |
@@ -117,13 +148,14 @@ Menu entries provide top-level or intermediate navigation nodes.
 | Field | Size | Notes |
 |---|---:|---|
 | ID | `short` | Always `2`. |
-| Length | `short` | Record length in bytes. |
-| Prompt Count | `short` | Number of prompts in the menu. |
+| Payload Size | `short` | Bytes after the fixed header; total size is `26 + Payload Size`. |
+| Stored Count | `short` | Actual prompt count plus one. `Prompt Count = Stored Count - 1`. |
 | Unknown | `char[20]` | Undocumented. |
 | Pointers | `long[Prompt Count]` | Target entry for each menu prompt. |
-| Unknown | variable | Sample guides appear to contain additional per-prompt offset data here; the exact structure is not fully documented. |
+| Unknown tables | `char[8 × (Prompt Count + 1)]` | Two undocumented arrays which must be skipped before reading text. |
 | Title | variable | Menu title, NUL-terminated string when present. |
-| Prompts | variable | `Prompt Count` menu labels. In sampled guides the prompt-string tail may also extend slightly past the nominal record length. |
+| Prompts | variable | Exactly `Prompt Count` NUL-terminated menu labels. |
+| Unknown | `char` | One trailing byte after the prompt strings. |
 
 The root screen of a guide is often a `MENU` record rather than a `SHORT` or
 `LONG` topic.
@@ -145,12 +177,30 @@ Instead:
 For a faithful converter, parent-derived labels should take precedence over the
 first visible line of a `LONG` topic whenever both are available.
 
-Two practical notes from the sample corpus in this repository:
+Practical notes from the sample corpus in this repository:
 
 - `SHORT` entries are more reliably parsed from their per-line text offsets than
   by assuming the text lines begin immediately after a flat pointer table.
-- `MENU` and `SHORT` string tails may continue a little beyond the formal
-  `Length` field, so strict truncation at `Length` can lose the last labels.
+- The stored MENU count includes one non-prompt slot. Reading it directly as
+  `Prompt Count` consumes the first unknown-table value as a phantom pointer.
+- Two final LONG entries use the exact file size as their terminal `Next`
+  value. This is equivalent to no next page, not a topic offset.
+
+## Repository Validation
+
+The current repository corpus contains 58 NG files with this physical layout:
+
+| Record class | Count |
+|---|---:|
+| MENU | 120 |
+| SHORT + LONG | 21,189 |
+| Total topics | 21,309 |
+
+Reading all records sequentially produces the same 21,309 topic offsets and
+resolves every internal text link, positioned hotspot, and non-terminal
+directional navigation target. The converter deliberately does not strip
+unresolved link markup as a repair strategy; a missing target is treated as a
+parser or source-data error to investigate.
 
 ## External References
 

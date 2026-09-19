@@ -6,7 +6,6 @@ Format reference: https://www.davep.org/norton-guides/file-format/
 from __future__ import annotations
 
 from pathlib import Path
-import re
 from typing import Optional
 
 from ..base import (
@@ -24,7 +23,6 @@ from ..uhf_markup import (
     UhfLinkSpan,
     UhfStyleSpan,
     format_uhf_link,
-    parse_uhf_link_target,
     render_uhf_line,
 )
 
@@ -35,7 +33,6 @@ NG_HEADER_SIZE = 2 + 2 + 2 + 2 + 40 + 5 * 66  # = 378
 # Sentinel value used for "no pointer" in NG files
 _NO_PTR = 0xFFFFFFFF
 _BOX_TRIM_CHARS = " \t\u2500\u2502\u250c\u2510\u2514\u2518\u251c\u2524\u252c\u2534\u253c\u2550\u2551\u2554\u2557\u255a\u255d\u2560\u2563\u2566\u2569\u256c\u2580\u2584\u2588\u258c\u2590\u2591\u2592\u2593\u25a0-=|_"
-_UHF_LINK_RE = re.compile(r"\[link:([^\]]+)\](.*?)\[/link\]")
 
 
 def is_ng_binary(data: bytes) -> bool:
@@ -116,6 +113,7 @@ class NGReader(HelpReaderBase):
         # Header is stored in plain CP437 (not encrypted).
         self.magic = d[:2].decode("ascii", errors="replace")
         self.version = int.from_bytes(d[2:4], "little")
+        self.menu_count = int.from_bytes(d[6:8], "little")
         self.title = d[8:48].split(b"\x00")[0].decode(self.encoding, errors="replace").strip()
         self.credit_lines: list[str] = []
         for i in range(5):
@@ -169,10 +167,12 @@ class NGReader(HelpReaderBase):
         root_offset = NG_HEADER_SIZE
         for delta in range(0, 64, 2):
             candidate = root_offset + delta
-            blk = _decrypt(data[candidate: candidate + 8])
+            blk = _decrypt(data[candidate: candidate + 6])
+            if len(blk) < 6:
+                continue
             eid = int.from_bytes(blk[0:2], "little")
             elen = int.from_bytes(blk[2:4], "little")
-            if eid in (0, 1, 2) and 8 < elen <= 65536:
+            if eid in (0, 1, 2) and candidate + 26 + elen <= len(data):
                 return candidate
         return root_offset
 
@@ -181,8 +181,7 @@ class NGReader(HelpReaderBase):
         data: bytes,
         root_offset: int,
     ) -> tuple[list[TopicRecord], list[IndexEntry], int | None]:
-        """Walk all reachable blocks and build the TopicRecord list."""
-        visited: set[int] = set()
+        """Read every physical record and build the TopicRecord list."""
         topics_by_offset: dict[int, TopicRecord] = {}
         topic_order: list[int] = []
         record_kind: dict[int, str] = {}
@@ -190,20 +189,29 @@ class NGReader(HelpReaderBase):
         direct_child_labels: dict[int, str] = {}
         menu_specs: dict[int, tuple[list[int], str, list[str]]] = {}
 
-        stack: list[int] = [root_offset]
-        while stack:
-            offset = stack.pop()
-            if offset in visited or offset <= 0 or offset >= len(data):
-                continue
-            visited.add(offset)
+        offset = root_offset
+        record_index = 0
+        while offset < len(data):
+            if offset + 26 > len(data):
+                raise ValueError(f"Truncated Norton Guide record header at offset {offset}")
 
-            raw = data[offset: offset + 65536]
-            block = _decrypt(raw)
-            eid = int.from_bytes(block[0:2], "little")
-            elen = int.from_bytes(block[2:4], "little")
-            if elen < 8 or elen > len(raw):
-                continue
-            entry = block[: min(len(block), elen + 512)]
+            header = _decrypt(data[offset: offset + 26])
+            eid = int.from_bytes(header[0:2], "little")
+            payload_size = int.from_bytes(header[2:4], "little")
+            record_end = offset + 26 + payload_size
+            if record_end > len(data):
+                raise ValueError(
+                    f"Truncated Norton Guide record at offset {offset}: "
+                    f"expected {26 + payload_size} bytes"
+                )
+
+            if record_index < self.menu_count:
+                if eid != 2:
+                    raise ValueError(f"Expected Norton Guide MENU record at offset {offset}, got {eid}")
+            elif eid not in (0, 1):
+                raise ValueError(f"Unknown Norton Guide entry type {eid} at offset {offset}")
+
+            entry = _decrypt(data[offset:record_end])
 
             if eid == 2:
                 topic, child_offsets, title, prompt_labels = self._build_menu_topic(
@@ -220,13 +228,8 @@ class NGReader(HelpReaderBase):
                         cleaned = self._clean_label(label)
                         if child_offset not in (0, _NO_PTR) and self._is_usable_label(cleaned):
                             direct_child_labels.setdefault(child_offset, cleaned)
-                for child_offset in reversed(child_offsets):
-                    if child_offset not in (0, _NO_PTR) and child_offset not in visited:
-                        stack.append(child_offset)
-                continue
-
-            if eid == 0:
-                topic, child_offsets, child_labels, parent_line = self._build_short_topic(
+            elif eid == 0:
+                topic, _child_offsets, child_labels, parent_line = self._build_short_topic(
                     entry,
                     offset,
                     is_help_contents=(offset == root_offset),
@@ -240,30 +243,27 @@ class NGReader(HelpReaderBase):
                         cleaned = self._clean_label(label)
                         if child_offset not in (0, _NO_PTR) and self._is_usable_label(cleaned):
                             direct_child_labels.setdefault(child_offset, cleaned)
-                    if topic.up_context not in (None, 0, _NO_PTR) and topic.up_context not in visited:
-                        stack.append(topic.up_context)
-                for child_offset in reversed(child_offsets):
-                    if child_offset not in (0, _NO_PTR) and child_offset not in visited:
-                        stack.append(child_offset)
-                continue
-
-            if eid == 1:
-                topic, related_offsets, parent_line = self._build_long_topic(entry, offset)
+            else:
+                topic, _related_offsets, parent_line = self._build_long_topic(entry, offset)
                 if topic is not None:
                     topics_by_offset[offset] = topic
                     topic_order.append(offset)
                     record_kind[offset] = "long"
                     parent_line_by_topic[offset] = parent_line
-                for related_offset in reversed(related_offsets):
-                    if related_offset not in (0, _NO_PTR) and related_offset not in visited:
-                        stack.append(related_offset)
+
+            offset = record_end
+            record_index += 1
 
         self._finalize_menu_topics(topics_by_offset, menu_specs)
         self._resolve_topic_names(topics_by_offset, topic_order, record_kind, parent_line_by_topic, direct_child_labels)
 
         valid_topic_ids = set(topics_by_offset)
         for topic in topics_by_offset.values():
-            _remove_unresolved_ng_links(topic, valid_topic_ids)
+            # A few compilers use the byte immediately after the final record
+            # as the terminal NEXT value instead of 0 or 0xFFFFFFFF.
+            for attribute in ("up_context", "down_context", "prev_context", "next_context"):
+                if getattr(topic, attribute) == len(data):
+                    setattr(topic, attribute, None)
             topic.nav_items = merge_nav_items(
                 extract_nav_items_from_uhf(topic.uhf_content, valid_topic_ids=valid_topic_ids),
                 build_directional_nav_items(topic),
@@ -285,7 +285,7 @@ class NGReader(HelpReaderBase):
         is_help_contents: bool,
     ) -> tuple[TopicRecord | None, list[int], str, list[str]]:
         """Parse a MENU entry into a TopicRecord."""
-        prompt_count = int.from_bytes(entry[4:6], "little")
+        prompt_count = max(0, int.from_bytes(entry[4:6], "little") - 1)
         child_offsets: list[int] = []
         for i in range(prompt_count):
             base = 26 + i * 4
@@ -600,61 +600,29 @@ class NGReader(HelpReaderBase):
     # ------------------------------------------------------------------
 
     def _extract_menu_text(self, entry: bytes, prompt_count: int) -> tuple[str, list[str]]:
-        """Best-effort extraction of MENU title and prompt labels.
-
-        The high-level MENU layout is documented, but sample databases often
-        contain extra offset tables or truncated tails that make the string area
-        awkward to locate by fixed offsets alone. This helper looks for the
-        first printable text run after the pointer table and then parses the
-        remaining NUL-terminated strings conservatively.
-        """
-        scan_start = 26 + prompt_count * 4
-        text_start = self._find_menu_text_start(entry, scan_start)
-        if text_start is None:
+        """Extract a MENU title and its prompt labels from the fixed layout."""
+        text_start = 26 + prompt_count * 4 + (prompt_count + 1) * 8
+        if text_start >= len(entry):
             return "", []
 
-        strings: list[str] = []
-        index = text_start
-        while index < len(entry):
-            while index < len(entry) and entry[index] == 0:
-                index += 1
+        def read_label(index: int) -> tuple[str, int]:
             if index >= len(entry):
-                break
-            end = entry.find(b"\x00", index)
-            if end == -1:
-                chunk = entry[index:]
-                index = len(entry)
-            else:
-                chunk = entry[index:end]
-                index = end + 1
-            text = self._clean_label(chunk.decode(self.encoding, errors="replace"))
-            if text:
-                strings.append(text)
-
-        if not strings:
-            return "", []
-        if len(strings) > prompt_count:
-            return strings[0], strings[1:1 + prompt_count]
-        if len(strings) < prompt_count:
-            return strings[0], strings[1:]
-        return "", strings[:prompt_count]
-
-    @staticmethod
-    def _find_menu_text_start(entry: bytes, scan_start: int) -> int | None:
-        """Return the first plausible text start after a MENU pointer table."""
-        for index in range(scan_start, len(entry)):
-            if entry[index] == 0:
-                continue
+                return "", len(entry)
             end = entry.find(b"\x00", index)
             if end == -1:
                 end = len(entry)
-            chunk = entry[index:end]
-            stripped = chunk.strip(b" \t")
-            if len(stripped) < 3:
-                continue
-            if any(65 <= value <= 90 or 97 <= value <= 122 or 48 <= value <= 57 for value in stripped):
-                return index
-        return None
+                next_index = end
+            else:
+                next_index = end + 1
+            raw = entry[index:end].replace(b"\xff", b" ")
+            return self._clean_label(raw.decode(self.encoding, errors="replace")), next_index
+
+        title, index = read_label(text_start)
+        prompts: list[str] = []
+        for _ in range(prompt_count):
+            prompt, index = read_label(index)
+            prompts.append(prompt)
+        return title, prompts
 
     @staticmethod
     def _clean_label(text: str) -> str:
@@ -814,26 +782,3 @@ def _expand_text_to_uhf_parts(raw: bytes, encoding: str) -> tuple[str, list[UhfS
 def _format_ng_link(link: UhfLinkSpan, label: str) -> str:
     """Render one NG internal pointer as a UHF link."""
     return format_uhf_link(label, topic_id=link.target_context, line=link.target_line)
-
-
-def _remove_unresolved_ng_links(topic: TopicRecord, valid_topic_ids: set[int]) -> None:
-    """Keep visible NG labels but discard pointers to records that were not parsed."""
-    def replace_link(match: re.Match[str]) -> str:
-        target = parse_uhf_link_target(match.group(1))
-        if not target or isinstance(target.get("source_file"), str):
-            return match.group(0)
-        topic_id = target.get("topic_id")
-        if isinstance(topic_id, int) and topic_id not in valid_topic_ids:
-            return match.group(2)
-        return match.group(0)
-
-    topic.uhf_content = [_UHF_LINK_RE.sub(replace_link, line) for line in topic.uhf_content]
-    topic.positional_keywords = [
-        keyword
-        for keyword in topic.positional_keywords
-        if keyword.target_context in valid_topic_ids
-    ]
-    for attribute in ("up_context", "down_context", "prev_context", "next_context"):
-        target_context = getattr(topic, attribute)
-        if target_context is not None and target_context not in valid_topic_ids:
-            setattr(topic, attribute, None)
