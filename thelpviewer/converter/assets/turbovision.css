@@ -1081,12 +1081,12 @@ button.tv-status-item {
 .tv-doc-document table {
     border-collapse: collapse;
     margin: 0;
-    width: max-content;
-    min-width: 100%;
-    table-layout: auto;
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
     white-space: normal;
     word-break: normal;
-    overflow-wrap: normal;
+    overflow-wrap: anywhere;
     line-height: 1em;
 }
 .tv-doc-document th,
@@ -1095,7 +1095,7 @@ button.tv-status-item {
     text-align: left;
     white-space: normal;
     word-break: normal;
-    overflow-wrap: normal;
+    overflow-wrap: anywhere;
     hyphens: manual;
     line-height: 1em;
 }
@@ -2700,7 +2700,7 @@ button.tv-status-item {
     grid-template-columns: 1ch 3ch repeat(7, 2ch) 3ch 1ch;
     grid-template-rows: repeat(7, 1em);
     line-height: 1em;
-    background: #000000;
+    background: var(--tv-dialog-bg);
     overflow: hidden;
 }
 
@@ -2708,6 +2708,11 @@ button.tv-status-item {
 .tv-tetris-preview-pad {
     display: block;
     height: 1em;
+}
+
+.tv-tetris-preview-pad,
+[data-tv-tetris-preview] .tv-tetris-cell {
+    background: #000000;
 }
 
 /* ── Minesweeper ───────────────────────────────────────────────── */

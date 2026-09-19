@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 
@@ -7,6 +8,23 @@ import pytest
 
 
 NODE = shutil.which("node")
+CSS_PATHS = (
+    Path("www/assets/turbovision.css"),
+    Path("thelpviewer/converter/assets/turbovision.css"),
+)
+
+
+def test_document_tables_fit_and_wrap_inside_the_viewport():
+    assert CSS_PATHS[0].read_bytes() == CSS_PATHS[1].read_bytes()
+    css = CSS_PATHS[0].read_text(encoding="utf-8")
+    table_rule = re.search(r"\.tv-doc-document table \{(.*?)\n\}", css, re.DOTALL)
+    assert table_rule is not None
+    declarations = table_rule.group(1)
+
+    assert "width: 100%;" in declarations
+    assert "max-width: 100%;" in declarations
+    assert "table-layout: fixed;" in declarations
+    assert "overflow-wrap: anywhere;" in declarations
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the browser asset regression test")

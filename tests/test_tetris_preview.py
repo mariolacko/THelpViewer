@@ -4,6 +4,10 @@ import re
 
 
 GAMES_PATH = Path("thelpviewer/converter/assets/tv-games.js")
+CSS_PATHS = (
+    Path("thelpviewer/converter/assets/turbovision.css"),
+    Path("www/assets/turbovision.css"),
+)
 
 
 def _javascript_constant(source: str, name: str) -> int:
@@ -30,3 +34,19 @@ def test_every_tetris_piece_has_a_cell_margin_inside_the_next_preview():
         cols = [cell[1] for cell in figure]
         assert max(rows) - min(rows) + 1 <= preview_rows - 2
         assert max(cols) - min(cols) + 1 <= preview_cols - 2
+
+
+def test_tetris_next_frame_uses_dialog_background_outside_the_black_preview():
+    assert CSS_PATHS[0].read_bytes() == CSS_PATHS[1].read_bytes()
+    css = CSS_PATHS[0].read_text(encoding="utf-8")
+
+    preview_rule = re.search(r"\[data-tv-tetris-preview\] \{(.*?)\n\}", css, re.DOTALL)
+    assert preview_rule is not None
+    assert "background: var(--tv-dialog-bg);" in preview_rule.group(1)
+
+    assert re.search(
+        r"\.tv-tetris-preview-pad,\s*"
+        r"\[data-tv-tetris-preview\] \.tv-tetris-cell \{[^}]*background: #000000;",
+        css,
+        re.DOTALL,
+    )

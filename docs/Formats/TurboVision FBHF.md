@@ -12,22 +12,13 @@ All multi-byte integers are little-endian.
 
 ### 2.1 File Layout
 
-```
-┌──────────────────────────────────────┐  Offset 0
-│  Magic: "FBHF" ($46 $48 $42 $46)    │  4 bytes
-├──────────────────────────────────────┤  Offset 4
-│  FileSize − 8 (LongInt)             │  4 bytes
-├──────────────────────────────────────┤  Offset 8
-│  IndexPos (LongInt)                  │  4 bytes → points to Index
-├──────────────────────────────────────┤  Offset 12
-│  Topic 0: ObjType(Word) + Store()   │  variable
-│  Topic 1: ObjType(Word) + Store()   │
-│  ...                                 │
-│  Topic N: ObjType(Word) + Store()   │
-├──────────────────────────────────────┤  Offset = IndexPos
-│  Index: ObjType(Word) + Store()     │  THelpIndex
-└──────────────────────────────────────┘
-```
+| Offset | Field | Size / meaning |
+|---:|---|---|
+| `0` | Magic `FBHF` (`$46 $48 $42 $46`) | 4 bytes |
+| `4` | `FileSize - 8` | `LongInt`, 4 bytes |
+| `8` | `IndexPos` | `LongInt`, 4 bytes; points to the index object |
+| `12` | Topic objects: `ObjType(Word) + Store()` | Variable; topics 0 through N are consecutive |
+| `IndexPos` | Index object: `ObjType(Word) + Store()` | Variable `THelpIndex` object |
 
 Each object is written by `TStream.Put`:
 1. ObjType (Word) from StreamRec registration
@@ -53,27 +44,16 @@ To build a compatible FBHF compiler:
 
 Written by `THelpTopic.Store(var S: TStream)`:
 
-```
-┌──────────────────────────────────────────┐
-│  NumParagraphs (Integer = 2 bytes)       │
-├──────────────────────────────────────────┤
-│  Paragraph 0:                            │
-│    Size (Integer = 2 bytes)              │  text byte count
-│    Wrap (Boolean = 1 byte)               │  0=non-wrapping, 1=wrapping
-│    Text (Size bytes)                     │  raw paragraph content
-│  Paragraph 1: ...                        │
-│  ...                                     │
-├──────────────────────────────────────────┤
-│  NumCrossRefs (Integer = 2 bytes)        │
-├──────────────────────────────────────────┤
-│  CrossRef 0:                             │
-│    Ref (Word = 2 bytes)                  │  target context number
-│    Offset (Integer = 2 bytes, signed)    │  1-based byte offset in topic
-│    Length (Byte = 1 byte)                │  highlighted text length
-│  CrossRef 1: ...                         │
-│  ...                                     │
-└──────────────────────────────────────────┘
-```
+| Order | Field | Size | Meaning |
+|---:|---|---:|---|
+| 1 | `NumParagraphs` | 2 bytes | Number of paragraph records |
+| 2 | `Size` | 2 bytes | Text byte count for each paragraph |
+| 3 | `Wrap` | 1 byte | `0` = non-wrapping, `1` = wrapping |
+| 4 | `Text` | `Size` bytes | Raw paragraph content; steps 2–4 repeat for every paragraph |
+| 5 | `NumCrossRefs` | 2 bytes | Number of cross-reference records |
+| 6 | `Ref` | 2 bytes | Target context number for each cross-reference |
+| 7 | `Offset` | 2 bytes, signed | 1-based byte offset in the topic |
+| 8 | `Length` | 1 byte | Highlighted text length; steps 6–8 repeat for every cross-reference |
 
 **Important details:**
 
@@ -127,16 +107,10 @@ Two variants exist depending on HELPFILE.PAS version:
 
 Written by TP6's `THelpIndex.Store`:
 
-```
-┌──────────────────────────────────────┐
-│  Size (Word = 2 bytes)               │  allocated array size
-├──────────────────────────────────────┤
-│  Index[0] (LongInt = 4 bytes)        │  file position of topic 0
-│  Index[1] ...                        │  ...or -1 ($FFFFFFFF) if unused
-│  ...                                 │
-│  Index[Size-1]                       │
-└──────────────────────────────────────┘
-```
+| Order | Field | Size | Meaning |
+|---:|---|---:|---|
+| 1 | `Size` | 2 bytes | Allocated array size |
+| 2 | `Index[0..Size-1]` | 4 bytes each | Topic file position, or `-1` (`$FFFFFFFF`) when unused |
 
 Context number = array index. `Index[ctx]` = file offset of topic,
 or `-1` if context not defined.
@@ -147,23 +121,12 @@ or `-1` if context not defined.
 
 Written by BP7's `THelpIndex.Store`:
 
-```
-┌──────────────────────────────────────┐
-│  Used (Word = 2 bytes)               │  number of active entries
-├──────────────────────────────────────┤
-│  Size (Word = 2 bytes)               │  allocated array size (≥ Used)
-├──────────────────────────────────────┤
-│  Contexts[0] (Word = 2 bytes)        │  sorted context numbers
-│  Contexts[1] ...                     │  unused slots = $FFFF
-│  ...                                 │
-│  Contexts[Size-1]                    │
-├──────────────────────────────────────┤
-│  Positions[0] (LongInt = 4 bytes)    │  file position for Contexts[0]
-│  Positions[1] ...                    │  unused slots = -1
-│  ...                                 │
-│  Positions[Size-1]                   │
-└──────────────────────────────────────┘
-```
+| Order | Field | Size | Meaning |
+|---:|---|---:|---|
+| 1 | `Used` | 2 bytes | Number of active entries |
+| 2 | `Size` | 2 bytes | Allocated array size; at least `Used` |
+| 3 | `Contexts[0..Size-1]` | 2 bytes each | Sorted context numbers; unused slots are `$FFFF` |
+| 4 | `Positions[0..Size-1]` | 4 bytes each | File positions corresponding to `Contexts`; unused slots are `-1` |
 
 Contexts array is sorted for binary search.
 Size is rounded up: `Size = ((Used + Delta) div Delta) * Delta` where `Delta = 10`.
