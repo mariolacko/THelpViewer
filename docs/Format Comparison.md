@@ -46,7 +46,7 @@ Turbo Vision FBHF, Software602 M602, textual HLX source.
 2. NG has no dedicated global alphabetical index table; a converter can synthesise one from menu prompts, short-entry labels, and parent-derived `LONG` labels.
 3. Norton Guide encodes these as inline escape sequences (`^B`, `^U`, `^N`, `^R`, `^Ann`). The current reader surfaces them as UHF style spans even though the plain `raw_lines` view is de-styled.
 4. Implied / fixed values: NG is always 76 chars wide; FBHF is always 50 × 18.
-5. QuickHelp `:l N` command (`.freeze` directive) freezes the first N lines so they remain visible while the user scrolls. **Not yet parsed** by the reader.
+5. QuickHelp `:l N` command (`.freeze` directive) freezes the first N lines so they remain visible while the user scrolls. The reader stores this as `frozen_rows`.
 
 ---
 
@@ -57,7 +57,7 @@ Turbo Vision FBHF, Software602 M602, textual HLX source.
 | Format | Storage |
 |---|---|
 | **THELP** | Sequential zero-based integer; matches the order of `RT_CONTEXT` records in the binary. |
-| **Norton Guide** | Absolute byte offset of the block inside the `.NG` file (32-bit). Short entries point to Long entries by their file offset. |
+| **Norton Guide** | Absolute byte offset of the block inside the `.NG` file (32-bit). Records are enumerated sequentially using `next = offset + 26 + payload_size`; links then resolve those physical offsets. |
 | **QuickHelp** | Sequential zero-based integer; index into the `TopicIndex` array in the file header. Context strings in `ContextMap` are resolved to these integers at load time. |
 | **FBHF** | Sequential integer starting at 2; derived from the `.topic name[=N]` declarations in the textual source. |
 | **M602** | Sequential integer derived from the tail index at the end of the binary file. |
@@ -154,7 +154,7 @@ Turbo Vision FBHF, Software602 M602, textual HLX source.
 | **Author / copyright** | First lines of stamp string (product-specific) | Five 66-byte credit lines starting at offset 48 | Not present | Not present | Not present | Not present |
 | **Display width (chars)** | `width` field in file header | Implied 76 (fixed) | `DisplayWidth` WORD at offset `0x0C` | Implied 50 (fixed) | Not present | `;WIDTH N` |
 | **Display height (rows)** | `height` field in file header | Not present | Not present | Implied 18 (fixed) | Not present | `;HEIGHT N` |
-| **Frozen rows (scroll-lock)** | Not present | Not present | `:l N` command (`.freeze` directive) per topic — first N lines stay fixed during scroll. Not yet parsed. | Not present | Not present | Not present |
+| **Frozen rows (scroll-lock)** | Not present | Not present | `:l N` command (`.freeze` directive) per topic — parsed into `frozen_rows`, so the first N lines stay fixed during scroll. | Not present | Not present | Not present |
 | **Encoding** | CP437 implied by format | CP437 fixed | CP437 fixed | Latin-1 (source) | Latin-1 / CP852 guessed | Guessed from content |
 | **Format / text version** | Two bytes at start of binary: `format_version`, `text_version`; determines binary layout variant | Not versioned | Version `0x0002` fixed | Not versioned | Not versioned | Derived from `;STAMP` |
 

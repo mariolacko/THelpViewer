@@ -507,6 +507,13 @@ Generic writers do not contain Scorpion-specific logic. `bundle.py` asks the
 extension layer for optional source groups and document variants, and `json.py`
 only emits custom metadata named in `transport_metadata_keys`.
 
+Merged legacy SCO category bundles retain the source-validation counters in
+that allowlist, including `scorpion_sco_marker_topic_count`,
+`scorpion_sco_index_entry_count`, `scorpion_sco_index_header_count`,
+`scorpion_sco_index_status_counts`, and `scorpion_sco_index_flag_counts`.
+These fields must survive the merge so generated bundles can still be audited
+against the individual SCO index structures.
+
 ## Modern DAT Extractor Recipe
 
 This is the primary format documented by this file. It covers the verified

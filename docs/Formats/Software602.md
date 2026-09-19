@@ -1,6 +1,6 @@
 # Software602 Help Formats
 
-> Created: 2026-03-29 · Last updated: 2026-06-20
+> Created: 2026-03-29 · Last updated: 2026-09-19
 
 Software602 products use multiple incompatible `.HLP` families. They should
 not be treated as one binary format.

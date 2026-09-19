@@ -1,6 +1,6 @@
 # Software602 T6HLP Help Format
 
-> Created: 2026-06-20 · Last updated: 2026-06-20
+> Created: 2026-06-20 · Last updated: 2026-09-19
 
 Used by: Text602 3.00.
 Observed sample: `t602_300.hlp`, CRC32 `CCC3E5FB`.

@@ -1,6 +1,6 @@
 # Software602 Text-Family Help Format
 
-> Created: 2026-04-03 · Last updated: 2026-04-18
+> Created: 2026-04-03 · Last updated: 2026-09-19
 
 Used by: Software602 word-processor and spreadsheet products.
 

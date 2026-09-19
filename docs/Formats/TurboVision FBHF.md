@@ -1,6 +1,6 @@
 # TurboVision FBHF Format
 
-> Created: 2026-03-29 · Last updated: 2026-03-29
+> Created: 2026-03-29 · Last updated: 2026-09-19
 
 Used by: Turbo Vision applications (TP6, TP7, BP7). Created by TVHC compiler.
 File extension: `.HLP`.
@@ -88,6 +88,18 @@ Written by `THelpTopic.Store(var S: TStream)`:
   algorithm doesn't break inside hyperlink text.
 - **Cross-ref target resolution is case-insensitive.** TVHC compares names
   by `UpStr`, not by exact case.
+
+#### Converter cross-reference reconstruction
+
+The binary and textual readers resolve every cross-reference target through
+the complete case-insensitive topic-name map before rendering. The stored
+1-based global byte range is then projected back into its paragraph and
+preserved as a real UHF link; it must not be discarded while flattening
+paragraphs into display lines.
+
+Inside the linked range, `$FF` is rendered as a normal space. This preserves
+both the visible label and the original word-wrap protection used by
+Turbo Vision.
 
 #### Paragraph Text Encoding
 

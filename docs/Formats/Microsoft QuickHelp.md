@@ -1,6 +1,6 @@
 # Microsoft QuickHelp LN Format
 
-> Created: 2026-04-07 · Last updated: 2026-04-08
+> Created: 2026-04-07 · Last updated: 2026-09-19
 
 Used by: Microsoft QuickBasic 4.5, QuickC 2.0, MASM 6, PWB, LINK, later CodeView bundles, and compatible products.
 File extension: `.HLP` (LN binary database).
@@ -173,9 +173,10 @@ Parameters follow immediately (no separator between command byte and parameter).
 | `x` | comment text | — | Author/editor annotation; never displayed (compiler metadata) |
 | `u` | — | — | Observed in QBX; meaning unknown |
 
-**Implementation note:** the reader extracts only `:n` into `topic.names[]`.
-All other command lines are silently filtered from `raw_lines` (they are
-invisible metadata that do not affect display).
+**Implementation note:** the reader extracts `:n`, `:l`, `:c`, `:i`, and `:g`
+into topic names, frozen-row count, category navigation, list state, and popup
+state respectively. Other command lines remain invisible and are filtered from
+`raw_lines`.
 
 ---
 
@@ -214,9 +215,11 @@ If the context string is non-empty it is looked up in the `ContextMap`.
 If the context string is empty, the following `WORD` gives the topic index
 directly.
 
-Links whose context strings are unresolvable are handled as navigation
-actions (§9).  Cross-file references are resolved against sibling QuickHelp
-`.HLP` files in the same source directory when a unique match exists.
+Links whose context strings are built-in commands are handled as navigation
+actions (§9). Cross-file references are resolved against sibling QuickHelp
+`.HLP` files in the same source directory. An explicit `FILE.HLP!context`
+reference is preserved as an external link even if that file or context is not
+currently available.
 
 ---
 
@@ -281,8 +284,35 @@ Index respectively.  These are treated the same as `!HV` and `!VX`.
 | `-9996` | Contents (numeric predefined context) |
 | `-9997` | Index (numeric predefined context) |
 
-All other unresolved cross-database context strings (`database!context`)
-are left as plain text.
+### 9.5 Cross-file help links
+
+QuickHelp references can name another database explicitly, for example:
+
+```text
+CV.HLP!cv.contents
+```
+
+The converter preserves this as a UHF link containing the source filename and
+alias. If the sibling file is present, it also stores the resolved topic id:
+
+```text
+[link:file=CV.HLP,topic=90,alias=cv.contents]...[/link]
+```
+
+If the explicitly named file is absent, the link remains real and keeps
+`file=CV.HLP,alias=cv.contents`; it is not downgraded to plain text. It starts
+working automatically when a matching bundle is later added to the catalog.
+
+A bare unresolved alias is searched across sibling `.HLP` files and becomes an
+external link only when exactly one file matches. Ambiguous bare aliases stay
+plain because the source format does not identify which database was intended.
+
+At display time, duplicate filenames such as `CV.HLP`, `PWB.HLP`, `LINK.HLP`,
+or `UTILERR.HLP` are resolved in this order:
+
+1. same catalog collection/group as the current help file;
+2. same product and version;
+3. first remaining filename match as a compatibility fallback.
 
 ---
 

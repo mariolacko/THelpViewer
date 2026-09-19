@@ -1,6 +1,6 @@
 # Borland Turbo Debugger/Profiler Runtime Help
 
-> Created: 2026-05-14 · Last updated: 2026-05-17
+> Created: 2026-05-14 · Last updated: 2026-09-19
 
 Used by: Borland Turbo Debugger 1.0/2.x and Borland Turbo Profiler.
 File extensions: `.TDH`, `.TFH`.
@@ -161,12 +161,18 @@ At each computed TDH topic start:
 
 - the first big-endian word is a per-page control / next-context field
 - visible text begins immediately after that word
-- topic termination is found in the text stream itself; TDH does not rely on a
-  stored explicit block length for each topic
+- there is no explicit per-topic byte length, so the next distinct computed
+  topic start is the hard upper boundary for visible decoding
+- text terminators inside that bounded range still end the rendered topic
 - the runtime page parser renders at most `15` visible lines per TDH page
 
 When the leading control word is a valid in-range context id, it behaves as the
 runtime next-page target.
+
+Alias discovery is intentionally separate from visible decoding. Some legacy
+alias markers sit beyond a topic's visible boundary, so the reader performs a
+second unbounded runtime-stream scan only for alias positions. Bytes found by
+that scan must not leak into the rendered text of the preceding topic.
 
 ## 4. TFH Outer Layout
 

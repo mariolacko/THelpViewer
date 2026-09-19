@@ -1,6 +1,6 @@
 # Borland THELP Format
 
-> Created: 2026-03-29 · Last updated: 2026-05-11
+> Created: 2026-03-29 · Last updated: 2026-09-19
 
 Used by: Turbo Pascal 4–5.5, Turbo C, Turbo Assembler, Borland Sprint,
 Sidekick, Eureka. File extensions: `.HLP`, `.TPH`, `.TCH`, `.TAH`, and other
@@ -200,6 +200,12 @@ The current parser treats `0xFFFFFF` entries as aliases to the header's
 Help Contents context when the file header defines one. In the original
 viewers this is the help contents screen, not the alphabetical index.
 
+Physical text screens which are not assigned a context-table id arrive at the
+reader with the sentinel context `0xFFFF`. Non-empty orphan screens are still
+real content and receive stable synthetic export contexts beginning at
+`0x10000`; only completely empty orphan records are omitted. The assigned ids
+and empty-orphan count are retained in parser metadata.
+
 ### 1.6 Compression Record (RecType=5)
 
 | Offset | Size | Field     | Description                      |
@@ -262,6 +268,18 @@ Observed in sample files:
 For HTML export this means `0x05` / `0x10 0x05` should not be rendered as CP437
 glyphs such as `♣` or `►♣`; they behave as structural delimiters for a code
 example block.
+
+Some files contain no explicit example delimiter and use a visible heading such
+as `Example:`. In that fallback mode, headings such as `See Also:`, `Notes:`,
+`Remarks:`, `Syntax:`, `Description:`, `Parameters:`, `Returns:`, and `Errors:`
+terminate the inferred code block even when indentation would otherwise keep it
+open.
+
+New-format sequential hotspots can also encode a table as a border line followed
+by one linked cell per physical line. A top border containing `╤ ... ╕` defines
+the column count; the renderer groups the following linked cells back into rows
+without altering their targets. Treating those cells as unrelated topic lines
+breaks both the table layout and the original hotspot ordering.
 
 ### 1.8 Keyword Record (RecType=3)
 
