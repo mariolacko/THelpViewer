@@ -68,3 +68,25 @@ def test_quickc_250_marker_nav_buttons_are_reader_rendered():
     assert "[nav:index]Index[/nav]" in nav_line
     assert "[nav:back]Back[/nav]" in nav_line
     assert "◄[b]Contents[/b]►" not in nav_line
+
+
+def test_existing_external_quickhelp_target_keeps_file_topic_and_alias():
+    path = Path("sources") / "Microsoft QuickBASIC Extended 7.1" / "BC.HLP"
+    doc = load_document(path)
+
+    assert any(
+        "[link:file=CV.HLP,topic=90,alias=cv.contents]" in line
+        for topic in doc.topics
+        for line in topic.uhf_content
+    )
+
+
+def test_missing_external_quickhelp_target_remains_a_real_link():
+    path = Path("sources") / "Microsoft QuickC, C, and C++ 6.0" / "PWB.HLP"
+    doc = load_document(path)
+
+    assert any(
+        "[link:file=misc.hlp,alias=pwbrmake]" in line
+        for topic in doc.topics
+        for line in topic.uhf_content
+    )

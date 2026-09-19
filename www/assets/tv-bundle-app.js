@@ -306,7 +306,37 @@ function normalizeSourceFileStem(value) {
     return name.replace(/\.[^.]+$/, "");
 }
 
-function findCatalogEntryBySourceFile(sourceFile) {
+function preferredCatalogEntry(entries, preferredBundle = null) {
+    if (!entries.length) {
+        return null;
+    }
+    const preferredFile = String((preferredBundle || {})._catalogFile || "").trim();
+    const preferredEntry = preferredFile && Array.isArray(catalogData)
+        ? catalogData.find((entry) => normalizeSourceFileName(entry.file || "") === normalizeSourceFileName(preferredFile))
+        : null;
+    if (!preferredEntry) {
+        return entries[0];
+    }
+
+    const preferredGroup = normalizeSourceFileName(preferredEntry.group || "");
+    const sameGroup = preferredGroup
+        ? entries.find((entry) => normalizeSourceFileName(entry.group || "") === preferredGroup)
+        : null;
+    if (sameGroup) {
+        return sameGroup;
+    }
+
+    const preferredProduct = normalizeSourceFileName(preferredEntry.product || "");
+    const preferredVersion = normalizeSourceFileName(preferredEntry.version || "");
+    const sameProductVersion = entries.find((entry) =>
+        preferredProduct
+        && normalizeSourceFileName(entry.product || "") === preferredProduct
+        && normalizeSourceFileName(entry.version || "") === preferredVersion
+    );
+    return sameProductVersion || entries[0];
+}
+
+function findCatalogEntryBySourceFile(sourceFile, preferredBundle = null) {
     const wanted = normalizeSourceFileName(sourceFile);
     if (!wanted || !Array.isArray(catalogData)) {
         return null;
@@ -326,7 +356,8 @@ function findCatalogEntryBySourceFile(sourceFile) {
         return values;
     };
     // Check explicit source files and the source_files array
-    let found = catalogData.find((entry) => sourceFiles(entry).some((value) => normalizeSourceFileName(value) === wanted)) || null;
+    let matches = catalogData.filter((entry) => sourceFiles(entry).some((value) => normalizeSourceFileName(value) === wanted));
+    let found = preferredCatalogEntry(matches, preferredBundle);
     if (found) { return found; }
 
     // Check bundle file path (catalog entry 'file')
@@ -336,11 +367,11 @@ function findCatalogEntryBySourceFile(sourceFile) {
     const wantedStem = normalizeSourceFileStem(sourceFile);
     if (!wantedStem) { return null; }
 
-    found = catalogData.find((entry) =>
+    matches = catalogData.filter((entry) =>
         sourceFiles(entry).some((value) => normalizeSourceFileStem(value) === wantedStem)
         || normalizeSourceFileStem(entry.file || "") === wantedStem
-    ) || null;
-    return found;
+    );
+    return preferredCatalogEntry(matches, preferredBundle);
 }
 
 function bundleLoadingLabel(value, fallback = "") {
@@ -1964,7 +1995,7 @@ class BundleWindowManager {
             return false;
         };
 
-        const entry = findCatalogEntryBySourceFile(sourceFile);
+        const entry = findCatalogEntryBySourceFile(sourceFile, fallbackBundle || this.currentBundle);
         if (!entry) {
             if (showFallback(fallbackBundle, resolveMissingSourceTopicFallback(fallbackBundle, sourceFile, topicRef))) {
                 return;

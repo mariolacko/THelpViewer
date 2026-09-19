@@ -6,6 +6,7 @@ Format reference: https://www.davep.org/norton-guides/file-format/
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Optional
 
 from ..base import (
@@ -19,7 +20,13 @@ from ..base import (
     extract_nav_items_from_uhf,
     merge_nav_items,
 )
-from ..uhf_markup import UhfLinkSpan, UhfStyleSpan, format_uhf_link, render_uhf_line
+from ..uhf_markup import (
+    UhfLinkSpan,
+    UhfStyleSpan,
+    format_uhf_link,
+    parse_uhf_link_target,
+    render_uhf_line,
+)
 
 # Size of the NG file header in bytes:
 #   magic(2) + unknown(2) + unknown(2) + menu_count(2) + title(40) + 5×credit_line(66)
@@ -28,6 +35,7 @@ NG_HEADER_SIZE = 2 + 2 + 2 + 2 + 40 + 5 * 66  # = 378
 # Sentinel value used for "no pointer" in NG files
 _NO_PTR = 0xFFFFFFFF
 _BOX_TRIM_CHARS = " \t\u2500\u2502\u250c\u2510\u2514\u2518\u251c\u2524\u252c\u2534\u253c\u2550\u2551\u2554\u2557\u255a\u255d\u2560\u2563\u2566\u2569\u256c\u2580\u2584\u2588\u258c\u2590\u2591\u2592\u2593\u25a0-=|_"
+_UHF_LINK_RE = re.compile(r"\[link:([^\]]+)\](.*?)\[/link\]")
 
 
 def is_ng_binary(data: bytes) -> bool:
@@ -255,6 +263,7 @@ class NGReader(HelpReaderBase):
 
         valid_topic_ids = set(topics_by_offset)
         for topic in topics_by_offset.values():
+            _remove_unresolved_ng_links(topic, valid_topic_ids)
             topic.nav_items = merge_nav_items(
                 extract_nav_items_from_uhf(topic.uhf_content, valid_topic_ids=valid_topic_ids),
                 build_directional_nav_items(topic),
@@ -805,3 +814,26 @@ def _expand_text_to_uhf_parts(raw: bytes, encoding: str) -> tuple[str, list[UhfS
 def _format_ng_link(link: UhfLinkSpan, label: str) -> str:
     """Render one NG internal pointer as a UHF link."""
     return format_uhf_link(label, topic_id=link.target_context, line=link.target_line)
+
+
+def _remove_unresolved_ng_links(topic: TopicRecord, valid_topic_ids: set[int]) -> None:
+    """Keep visible NG labels but discard pointers to records that were not parsed."""
+    def replace_link(match: re.Match[str]) -> str:
+        target = parse_uhf_link_target(match.group(1))
+        if not target or isinstance(target.get("source_file"), str):
+            return match.group(0)
+        topic_id = target.get("topic_id")
+        if isinstance(topic_id, int) and topic_id not in valid_topic_ids:
+            return match.group(2)
+        return match.group(0)
+
+    topic.uhf_content = [_UHF_LINK_RE.sub(replace_link, line) for line in topic.uhf_content]
+    topic.positional_keywords = [
+        keyword
+        for keyword in topic.positional_keywords
+        if keyword.target_context in valid_topic_ids
+    ]
+    for attribute in ("up_context", "down_context", "prev_context", "next_context"):
+        target_context = getattr(topic, attribute)
+        if target_context is not None and target_context not in valid_topic_ids:
+            setattr(topic, attribute, None)

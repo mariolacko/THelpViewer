@@ -707,7 +707,7 @@ def _render_bundle_index_html() -> str:
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20260506a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20260719b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20260621m"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260705a"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260919a"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"
