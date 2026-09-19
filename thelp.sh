@@ -243,17 +243,24 @@ docker_daemon_running() {
     docker info >/dev/null 2>&1
 }
 
+server_process_matches() {
+    local pid="$1"
+    local command_line
+    command_line="$(ps -p "${pid}" -o command= 2>/dev/null || true)"
+    [[ "${command_line}" == *"uvicorn thelpviewer.server.app:app"* ]]
+}
+
 server_running() {
     if [ ! -f "${PID_FILE}" ]; then
         return 1
     fi
     local pid
     pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
-    if [ -z "${pid}" ]; then
+    if [[ ! "${pid}" =~ ^[1-9][0-9]*$ ]]; then
         rm -f "${PID_FILE}"
         return 1
     fi
-    if kill -0 "${pid}" 2>/dev/null; then
+    if kill -0 "${pid}" 2>/dev/null && server_process_matches "${pid}"; then
         return 0
     fi
     rm -f "${PID_FILE}"
@@ -325,7 +332,7 @@ stop_server() {
     fi
     local pid
     pid="$(cat "${PID_FILE}")"
-    kill "${pid}"
+    kill -- "${pid}"
     rm -f "${PID_FILE}"
     echo "[thelp] stopped server pid ${pid}."
 }
@@ -533,10 +540,16 @@ if $do_build; then
     echo "Groups: ${active_build_groups[*]}"
     echo ""
     cd "${SCRIPT_DIR}"
-    mkdir -p "${STATE_DIR}" "$(dirname "${HELPS_DIR}")"
-    build_tmp_dir="$(mktemp -d "${STATE_DIR}/helps-build.XXXXXX")"
+    build_parent_dir="$(dirname "${HELPS_DIR}")"
+    mkdir -p "${STATE_DIR}" "${build_parent_dir}"
+    build_tmp_dir="$(mktemp -d "${build_parent_dir}/.helps-build.XXXXXX")"
     build_backup_dir="${HELPS_DIR}.prev.$$"
     rm -rf "${build_backup_dir}"
+
+    if [ ${#build_groups[@]} -gt 0 ] && [ -d "${HELPS_DIR}" ]; then
+        cp -a "${HELPS_DIR}/." "${build_tmp_dir}/"
+        remove_group_outputs "${build_tmp_dir}" "${active_build_groups[@]}"
+    fi
 
     mapfile -t build_roots < <(selected_build_source_roots "${active_build_groups[@]}")
     if [ ${#build_roots[@]} -eq 0 ]; then
@@ -546,7 +559,7 @@ if $do_build; then
     fi
 
     for build_root in "${build_roots[@]}"; do
-        echo "[thelp] build root: ${build_root#${SOURCES_DIR}/}"
+        echo "[thelp] build root: ${build_root#"${SOURCES_DIR}"/}"
         if ! "${PYTHON_BIN}" -m thelpviewer.converter --bundle --bundle-layout helps "${build_root}" "${build_tmp_dir}"; then
             rm -rf "${build_tmp_dir}"
             echo "[thelp] build failed."
@@ -555,34 +568,24 @@ if $do_build; then
     done
 
     echo "[thelp] rebuilding staged catalog."
-    "${PYTHON_BIN}" tools/rebuild_catalog.py "${build_tmp_dir}" --output "${build_tmp_dir}/catalog.json"
-
-    if [ ${#build_groups[@]} -eq 0 ]; then
-        if [ -e "${HELPS_DIR}" ]; then
-            mv "${HELPS_DIR}" "${build_backup_dir}"
-        fi
-        if ! mv "${build_tmp_dir}" "${HELPS_DIR}"; then
-            echo "[thelp] failed to activate new help bundles."
-            if [ -e "${build_backup_dir}" ]; then
-                mv "${build_backup_dir}" "${HELPS_DIR}" || true
-            fi
-            rm -rf "${build_tmp_dir}"
-            exit 1
-        fi
-        rm -rf "${build_backup_dir}"
-    else
-        mkdir -p "${HELPS_DIR}"
-        remove_group_outputs "${HELPS_DIR}" "${active_build_groups[@]}"
-        while IFS= read -r -d '' staged_path; do
-            staged_name="$(basename "$staged_path")"
-            if [ "$staged_name" = "catalog.json" ]; then
-                continue
-            fi
-            mv "$staged_path" "${HELPS_DIR}/$staged_name"
-        done < <(find "${build_tmp_dir}" -mindepth 1 -maxdepth 1 -print0)
+    if ! "${PYTHON_BIN}" tools/rebuild_catalog.py "${build_tmp_dir}" --output "${build_tmp_dir}/catalog.json"; then
         rm -rf "${build_tmp_dir}"
-        "${PYTHON_BIN}" tools/rebuild_catalog.py "${HELPS_DIR}" --output "${HELPS_DIR}/catalog.json"
+        echo "[thelp] failed to rebuild the staged catalog."
+        exit 1
     fi
+
+    if [ -e "${HELPS_DIR}" ]; then
+        mv "${HELPS_DIR}" "${build_backup_dir}"
+    fi
+    if ! mv "${build_tmp_dir}" "${HELPS_DIR}"; then
+        echo "[thelp] failed to activate new help bundles."
+        if [ -e "${build_backup_dir}" ]; then
+            mv "${build_backup_dir}" "${HELPS_DIR}" || true
+        fi
+        rm -rf "${build_tmp_dir}"
+        exit 1
+    fi
+    rm -rf "${build_backup_dir}"
     echo "Build complete."
     echo ""
 fi

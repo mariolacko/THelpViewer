@@ -159,6 +159,24 @@ def _extract_with_7zz(path: Path, dest: Path, tools: ExtractorTools) -> tuple[bo
     return False, stderr[:300] or None
 
 
+def _extraction_tree_is_safe(dest: Path) -> bool:
+    """Reject symlinks and paths resolving outside an extraction directory."""
+    root = dest.resolve()
+    for item in dest.rglob("*"):
+        if item.is_symlink():
+            return False
+        try:
+            item.resolve().relative_to(root)
+        except (OSError, ValueError):
+            return False
+    return True
+
+
+def _discard_unsafe_extraction(dest: Path) -> None:
+    shutil.rmtree(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+
+
 def _read_head(path: Path, size: int = 16) -> bytes:
     with path.open("rb") as handle:
         return handle.read(size)
@@ -170,14 +188,28 @@ def extract_file(path: Path, dest: Path, tools: ExtractorTools) -> bool:
         print(f"    [error] Cannot extract {path.name}: no extractor available")
         return False
 
+    if dest.is_symlink():
+        print(f"    [extract error] {path.name}: extraction directory is a symbolic link")
+        return False
     dest.mkdir(parents=True, exist_ok=True)
     ok, unar_error = _extract_with_unar(path, dest, tools)
     if ok:
-        return True
+        if _extraction_tree_is_safe(dest):
+            return True
+        _discard_unsafe_extraction(dest)
+        print(f"    [extract error] {path.name}: archive contains an unsafe symbolic link")
+        return False
+    if tools.unar:
+        _discard_unsafe_extraction(dest)
     ok, sevenzip_error = _extract_with_7zz(path, dest, tools)
     if ok:
-        return True
+        if _extraction_tree_is_safe(dest):
+            return True
+        _discard_unsafe_extraction(dest)
+        print(f"    [extract error] {path.name}: archive contains an unsafe symbolic link")
+        return False
     error = sevenzip_error or unar_error
+    _discard_unsafe_extraction(dest)
     if error:
         print(f"    [extract error] {path.name}: {error}")
     return False

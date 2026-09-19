@@ -15,6 +15,8 @@ from pathlib import Path
 
 REQUEST_DELAY = 1.5
 DOWNLOAD_DELAY = 3.0
+RETRY_DELAY = 5.0
+MAX_RETRY_AFTER = 300
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -74,6 +76,15 @@ def get_opener() -> urllib.request.OpenerDirector:
     return _opener
 
 
+def _retry_delay(headers: object, default: int) -> int:
+    """Return a bounded numeric Retry-After delay."""
+    try:
+        value = int(getattr(headers, "get")("Retry-After", default))
+    except (AttributeError, TypeError, ValueError):
+        value = default
+    return min(max(value, 0), MAX_RETRY_AFTER)
+
+
 def fetch_html(url: str, retries: int = 3, encoding: str | None = None) -> str:
     """Fetch one HTML page with retries and optional forced text encoding."""
     opener = get_opener()
@@ -89,17 +100,17 @@ def fetch_html(url: str, retries: int = 3, encoding: str | None = None) -> str:
                 return resp.read().decode(charset, errors="replace")
         except urllib.error.HTTPError as exc:
             if exc.code == 429:
-                wait = int(exc.headers.get("Retry-After", 30))
+                wait = _retry_delay(exc.headers, 30)
                 print(f"  [429] waiting {wait}s …")
                 time.sleep(wait)
                 continue
             if attempt == retries - 1:
                 raise
-            time.sleep(5)
+            time.sleep(RETRY_DELAY)
         except Exception:
             if attempt == retries - 1:
                 raise
-            time.sleep(5)
+            time.sleep(RETRY_DELAY)
     raise RuntimeError(f"fetch_html failed: {url}")
 
 
@@ -151,14 +162,20 @@ def download_file(url: str, dest: Path, retries: int = 3) -> Path:
             if tmp.exists():
                 tmp.unlink()
             if exc.code == 429:
-                wait = int(exc.headers.get("Retry-After", 60))
+                wait = _retry_delay(exc.headers, 60)
                 print(f"\r    [429] waiting {wait}s (attempt {attempt + 1}/{retries}) …")
                 time.sleep(wait)
+                continue
+            if 500 <= exc.code < 600 and attempt < retries - 1:
+                time.sleep(RETRY_DELAY)
                 continue
             raise RuntimeError(f"HTTP {exc.code}: {url}") from exc
         except Exception as exc:
             if tmp.exists():
                 tmp.unlink()
+            if attempt < retries - 1:
+                time.sleep(RETRY_DELAY)
+                continue
             raise RuntimeError(f"Download failed: {url}: {exc}") from exc
 
     raise RuntimeError(f"Download failed after {retries} attempts: {url}")

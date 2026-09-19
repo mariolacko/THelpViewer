@@ -3,6 +3,7 @@ from __future__ import annotations
 from importlib.util import module_from_spec, spec_from_file_location
 from io import BytesIO
 from pathlib import Path
+import sys
 import zipfile
 
 
@@ -12,6 +13,7 @@ def _load_zip_implode_module():
     assert spec is not None
     assert spec.loader is not None
     module = module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 

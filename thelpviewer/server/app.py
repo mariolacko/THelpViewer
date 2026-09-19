@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -88,34 +87,26 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         else:
             resolved = (config.docs_dir / doc_path).resolve()
             docs_root = config.docs_dir.resolve()
-            if not str(resolved).startswith(str(docs_root)):
+            if not resolved.is_relative_to(docs_root):
+                raise HTTPException(status_code=404)
+            if resolved.suffix.casefold() != ".md":
                 raise HTTPException(status_code=404)
             if not resolved.is_file():
                 raise HTTPException(status_code=404)
             path = resolved
-        # Volitelně: určete media_type podle přípony
         return Response(path.read_bytes(), media_type="text/markdown")
 
     @app.get("/config.json")
     def runtime_config() -> JSONResponse:
-        payload = {
-            "web_dir": str(config.web_dir),
-            "index_path": str(config.index_path),
-            "helps_dir": str(config.helps_dir),
-            "docs_dir": str(config.docs_dir),
-            "assets_dir": str(config.assets_dir),
-            "readme_path": str(config.readme_path),
-            "changelog_path": str(config.changelog_path),
-            "state_dir": str(config.state_dir),
-            "virtual_docs": [
-                {
-                    "file": request_path,
-                    "disk_path": str(disk_path),
-                }
-                for request_path, disk_path in config.virtual_docs
-            ],
-        }
-        return JSONResponse(json.loads(json.dumps(payload)))
+        return JSONResponse(
+            {
+                "index_url": "/",
+                "assets_url": "/assets/",
+                "helps_url": "/helps/",
+                "docs_url": "/docs/",
+                "virtual_docs": [request_path for request_path, _disk_path in config.virtual_docs],
+            }
+        )
 
     return app
 
