@@ -282,3 +282,11 @@ compatibility with old Turbo Vision applications.
 - [x] Phase 6.6: separated the Markdown Editor content colors from the
   customizable Viewer palette. A browser regression deliberately changes the
   Viewer text background to green and verifies that Docs remains blue/yellow.
+- [x] Phase 6.7: made `TVVerticalListViewer` a real `TVListBox` subclass and
+  centralized list row geometry, focus/selection colors and viewport layout.
+  Colors, Widget Gallery, File Open and history now use the same Turbo Vision
+  dialog-list palette. Checkbox/radio groups use the original cluster normal,
+  selected, shortcut and disabled colors across the whole row. File Open is
+  bound before catalog loading completes and waits for HELP/DOCS data instead
+  of exposing an empty dialog. Widget Gallery now also exercises an enabled
+  scrollbar, static text, hotkeys, disabled states and `TVMessageBox`.

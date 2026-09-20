@@ -2965,6 +2965,7 @@ class TVBundleApp {
         this._stateSyncTimer = null;
         this._restoringUrlState = false;
         this._lastUrlStateHash = "";
+        this._catalogReady = null;
     }
 
     start() {
@@ -3011,7 +3012,8 @@ class TVBundleApp {
         this.dialogManager.applyActiveStates();
 
         // Fetch catalog dynamically and build menu
-        this._loadCatalog();
+        this._catalogReady = this._loadCatalog();
+        this._bindMenus();
 
         // Layout
         fillBorders();
@@ -3911,9 +3913,16 @@ class TVBundleApp {
         document.querySelectorAll("[data-tv-file-open]").forEach((element) => {
             if (element.dataset.tvMenuBound === "1") { return; }
             element.dataset.tvMenuBound = "1";
-            element.addEventListener("click", (event) => {
+            element.addEventListener("click", async (event) => {
                 event.preventDefault();
                 closeMenus();
+                if (this._catalogReady) {
+                    try {
+                        await this._catalogReady;
+                    } catch (error) {
+                        console.error("Unable to load the file catalog", error);
+                    }
+                }
                 this.dialogManager.open("fileopen");
             });
         });

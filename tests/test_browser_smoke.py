@@ -160,8 +160,48 @@ async function run() {
 
     await send("Page.enable");
     await send("Runtime.enable");
+    await send("Network.enable");
+    await send("Network.emulateNetworkConditions", {
+        offline: false,
+        latency: 700,
+        downloadThroughput: -1,
+        uploadThroughput: -1,
+    });
     await send("Page.navigate", { url: appUrl });
     await send("Page.bringToFront");
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const open = document.querySelector('[data-tv-file-open][data-tv-menu-bound="1"]');
+            if (open) { open.click(); resolve(true); return; }
+            if (Date.now() >= deadline) { reject(new Error('Open was not bound while catalogs loaded')); return; }
+            setTimeout(check, 20);
+        };
+        check();
+    })`, true);
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+                element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
+            );
+            const entries = dialog?.querySelectorAll('[data-tv-file-open-file-index]').length || 0;
+            if (dialog && !dialog.closest('.tv-dialog-overlay').hidden && entries >= 2) {
+                resolve(true);
+                return;
+            }
+            if (Date.now() >= deadline) { reject(new Error('Open stayed empty while catalogs loaded')); return; }
+            setTimeout(check, 50);
+        };
+        check();
+    })`, true);
+    await key("Escape", "Escape", 0, true);
+    await send("Network.emulateNetworkConditions", {
+        offline: false,
+        latency: 0,
+        downloadThroughput: -1,
+        uploadThroughput: -1,
+    });
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 10000;
         const check = () => {
@@ -394,7 +434,6 @@ async function run() {
         const item = dialog.querySelector('[data-tv-colors-item].is-selected');
         const result = {
             itemFocused: document.activeElement === item,
-            currentGroups: dialog.querySelectorAll('.tv-colors-listviewer.is-current').length,
             groupColors: stylePair(group),
             itemColors: stylePair(item),
         };
@@ -402,7 +441,7 @@ async function run() {
         return result;
     })()`);
     if (
-        !colorsListFocus.itemFocused || colorsListFocus.currentGroups !== 1
+        !colorsListFocus.itemFocused
         || colorsListFocus.groupColors.join() !== ['rgb(0, 170, 170)', 'rgb(255, 255, 85)'].join()
         || colorsListFocus.itemColors.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()
     ) {
@@ -552,6 +591,16 @@ async function run() {
         const infoRow = dialog.querySelector('[data-tv-row="status"]');
         const infoRect = info.getBoundingClientRect();
         const rowRect = infoRow.getBoundingClientRect();
+        const viewport = dialog.querySelector('[data-tv-gallery-list] [data-tv-list-viewport]');
+        const firstItem = dialog.querySelector('[data-tv-gallery-list-index="0"]');
+        const normalItem = dialog.querySelector('[data-tv-gallery-list-index="1"]');
+        const check = dialog.querySelector('[data-tv-checkbox-index="0"]');
+        const disabledCheck = dialog.querySelector('[data-tv-checkbox-index="2"]');
+        const radio = dialog.querySelector('[data-tv-radio-index="0"]');
+        const stylePair = (element) => {
+            const style = getComputedStyle(element);
+            return [style.backgroundColor, style.color];
+        };
         return {
             open: true,
             checks: dialog.querySelectorAll('[data-tv-gallery-checks] input[type="checkbox"]').length,
@@ -562,7 +611,17 @@ async function run() {
             selectedIndex: dialog.querySelector('[data-tv-gallery-list-index].is-selected')?.dataset.tvGalleryListIndex,
             listFocused: document.activeElement === clickedItem,
             disabledButtons: dialog.querySelectorAll('.tv-dialog-button:disabled').length,
+            messageButtons: dialog.querySelectorAll('[data-tv-gallery-message]').length,
+            staticTexts: dialog.querySelectorAll('[data-tv-gallery-static]').length,
             status: dialog.querySelector('[data-tv-row="status"]')?.textContent || '',
+            firstRowOffset: Math.abs(firstItem.getBoundingClientRect().top - viewport.getBoundingClientRect().top),
+            scrollbarEnabled: !dialog.querySelector('[data-tv-gallery-list]').classList.contains('is-disabled'),
+            listNormalColors: stylePair(normalItem),
+            listFocusedColors: stylePair(clickedItem),
+            checkColors: stylePair(check),
+            radioColors: stylePair(radio),
+            disabledCheckColors: stylePair(disabledCheck),
+            checkHotkeyColor: getComputedStyle(check.querySelector('.tv-hotkey')).color,
             infoRightBorder: infoRow.textContent.endsWith('│'),
             infoRowFits: rowRect.right <= infoRect.right + 0.5 && info.scrollWidth <= info.clientWidth,
             infoSideColors: Array.from(infoRow.querySelectorAll('[data-tv-info-side]'))
@@ -574,14 +633,38 @@ async function run() {
     })()`);
     if (
         !gallery.open || !gallerySetup.labelFocus || gallery.checks !== 3 || gallery.radios !== 3
-        || gallery.disabledChoices !== 2 || gallery.listItems !== 5 || gallery.selectedItems !== 1
+        || gallery.disabledChoices !== 2 || gallery.listItems !== 10 || gallery.selectedItems !== 1
         || gallery.selectedIndex !== '2' || !gallery.listFocused
-        || gallery.disabledButtons !== 1 || !gallery.status.includes('Selected: TListViewer')
+        || gallery.disabledButtons !== 1 || gallery.messageButtons !== 1 || gallery.staticTexts !== 1
+        || !gallery.status.includes('Selected: TListViewer') || gallery.firstRowOffset > 0.5
+        || !gallery.scrollbarEnabled
+        || gallery.listNormalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
+        || gallery.listFocusedColors.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()
+        || gallery.checkColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
+        || gallery.radioColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
+        || gallery.disabledCheckColors.join() !== ['rgb(170, 170, 170)', 'rgb(85, 85, 85)'].join()
+        || gallery.checkHotkeyColor !== 'rgb(255, 255, 85)'
         || !gallery.infoRightBorder || !gallery.infoRowFits
         || gallery.infoSideColors.some((color) => color !== 'rgb(255, 255, 255)')
         || !gallery.frameSidesAligned
     ) {
         throw new Error(`Widget Gallery controls are incomplete: ${JSON.stringify(gallery)}`);
+    }
+    await evaluate(`document.querySelector('[data-tv-gallery-message]').click()`);
+    await pause();
+    const messageOpen = await evaluate(`(() => {
+        const box = document.querySelector('.tv-msgbox-window');
+        return Boolean(box && !box.closest('.tv-dialog-overlay').hidden)
+            && box.querySelector('.tv-dialog-title-text')?.textContent === 'Information';
+    })()`);
+    if (!messageOpen) { throw new Error('Widget Gallery message box did not open'); }
+    await key("Escape", "Escape", 0, true);
+    await pause();
+    const messageResult = await evaluate(
+        `document.querySelector('[data-tv-row="status"]')?.textContent || ''`
+    );
+    if (!messageResult.includes('Message: cancel')) {
+        throw new Error(`Widget Gallery message box did not report Cancel: ${messageResult}`);
     }
     await key("Escape", "Escape", 0, true);
     await pause();
@@ -615,6 +698,13 @@ async function run() {
         const title = dialog.querySelector('.tv-dialog-title-text');
         const dialogRect = dialog.getBoundingClientRect();
         const titleRect = title.getBoundingClientRect();
+        const selectedItem = dialog.querySelector('[data-tv-file-open-file-index].is-selected');
+        const normalItem = Array.from(dialog.querySelectorAll('[data-tv-file-open-file-index]'))
+            .find((element) => element !== selectedItem);
+        const stylePair = (element) => {
+            const style = getComputedStyle(element);
+            return [style.backgroundColor, style.color];
+        };
         input.focus();
         return {
             open: !dialog.closest('.tv-dialog-overlay').hidden,
@@ -634,6 +724,8 @@ async function run() {
             path: (dialog.querySelector('[data-tv-file-open-path]')?.textContent || '').trim(),
             name: input.value,
             focused: document.activeElement === input,
+            selectedColors: stylePair(selectedItem),
+            normalColors: stylePair(normalItem),
         };
     })()`);
     if (
@@ -644,6 +736,8 @@ async function run() {
         || fileOpen.twoColumnFlow !== "column" || !fileOpen.horizontalScrollbar
         || fileOpen.path !== ["THelpViewer:", "DOCS", "*.*"].join(String.fromCharCode(92))
         || !fileOpen.name || !fileOpen.focused
+        || fileOpen.selectedColors.join() !== ['rgb(0, 170, 170)', 'rgb(255, 255, 85)'].join()
+        || fileOpen.normalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
     ) {
         throw new Error(`File Open dialog is incomplete: ${JSON.stringify(fileOpen)}`);
     }

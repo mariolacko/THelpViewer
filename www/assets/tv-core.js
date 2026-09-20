@@ -1419,6 +1419,13 @@ class TVListBox extends TVWidget {
         this.selectedIndex = -1;
         this.selectHandler = null;
         this.activateHandler = null;
+        if (this.root) {
+            this.root.dataset.tvListBox = "1";
+        }
+    }
+
+    itemsRoot() {
+        return this.root;
     }
 
     itemSelector() {
@@ -1452,7 +1459,7 @@ class TVListBox extends TVWidget {
         ].filter(Boolean).join(" ");
         return `
             <div role="option" tabindex="-1" class="${className}" ${this.itemAttrName}="${index}">
-                <span class="tv-colors-list-text">${this.defaultContent(item, index)}</span>
+                <span class="tv-vlist-text tv-colors-list-text">${this.defaultContent(item, index)}</span>
             </div>
         `;
     }
@@ -1466,8 +1473,9 @@ class TVListBox extends TVWidget {
 
     setItems(items = [], selectedIndex = -1) {
         this.items = Array.isArray(items) ? [...items] : [];
-        if (this.root) {
-            this.root.innerHTML = this.items.map((item, index) => this.itemMarkup(item, index)).join("");
+        const itemsRoot = this.itemsRoot();
+        if (itemsRoot) {
+            itemsRoot.innerHTML = this.items.map((item, index) => this.itemMarkup(item, index)).join("");
         }
         this.select(selectedIndex, { scroll: false });
     }
@@ -1486,16 +1494,18 @@ class TVListBox extends TVWidget {
     }
 
     selectedElement() {
-        return this.root
-            ? this.root.querySelector(`${this.itemSelector()}[${this.itemAttrName}="${this.selectedIndex}"]`)
+        const itemsRoot = this.itemsRoot();
+        return itemsRoot
+            ? itemsRoot.querySelector(`${this.itemSelector()}[${this.itemAttrName}="${this.selectedIndex}"]`)
             : null;
     }
 
     updateSelectionUi(scroll = true) {
-        if (!this.root) {
+        const itemsRoot = this.itemsRoot();
+        if (!itemsRoot) {
             return;
         }
-        const elements = this.queryAll(this.itemSelector());
+        const elements = Array.from(itemsRoot.querySelectorAll(this.itemSelector()));
         elements.forEach((element, index) => {
             const value = Number.parseInt(element.getAttribute(this.itemAttrName), 10);
             const selected = value === this.selectedIndex;
@@ -1511,27 +1521,29 @@ class TVListBox extends TVWidget {
 
     ensureSelectionVisible() {
         const element = this.selectedElement();
-        if (!element || !this.root) {
+        const itemsRoot = this.itemsRoot();
+        if (!element || !itemsRoot) {
             return;
         }
         const elementRect = element.getBoundingClientRect();
-        const rootRect = this.root.getBoundingClientRect();
+        const rootRect = itemsRoot.getBoundingClientRect();
         if (elementRect.top < rootRect.top) {
-            this.root.scrollTop -= rootRect.top - elementRect.top;
+            itemsRoot.scrollTop -= rootRect.top - elementRect.top;
         } else if (elementRect.bottom > rootRect.bottom) {
-            this.root.scrollTop += elementRect.bottom - rootRect.bottom;
+            itemsRoot.scrollTop += elementRect.bottom - rootRect.bottom;
         }
     }
 
     bind({ onSelect = null, onActivate = null } = {}) {
         this.selectHandler = onSelect;
         this.activateHandler = onActivate;
-        if (!this.root || this.root.dataset.tvListBoxBound === "1") {
+        const itemsRoot = this.itemsRoot();
+        if (!itemsRoot || itemsRoot.dataset.tvListBoxBound === "1") {
             return;
         }
-        this.root.dataset.tvListBoxBound = "1";
-        this.root.setAttribute("role", "listbox");
-        this.root.addEventListener("click", (event) => {
+        itemsRoot.dataset.tvListBoxBound = "1";
+        itemsRoot.setAttribute("role", "listbox");
+        itemsRoot.addEventListener("click", (event) => {
             const index = this.resolveIndex(event.target);
             if (index < 0) {
                 return;
@@ -1541,7 +1553,7 @@ class TVListBox extends TVWidget {
                 this.selectHandler(this.items[index], index, event);
             }
         });
-        this.root.addEventListener("dblclick", (event) => {
+        itemsRoot.addEventListener("dblclick", (event) => {
             const index = this.resolveIndex(event.target);
             if (index < 0) {
                 return;
@@ -1551,7 +1563,7 @@ class TVListBox extends TVWidget {
                 this.activateHandler(this.items[index], index, event);
             }
         });
-        this.root.addEventListener("keydown", (event) => this.onKeyDown(event));
+        itemsRoot.addEventListener("keydown", (event) => this.onKeyDown(event));
     }
 
     onKeyDown(event) {
@@ -1600,7 +1612,7 @@ class TVListBox extends TVWidget {
     }
 }
 
-class TVVerticalListViewer extends TVWidget {
+class TVVerticalListViewer extends TVListBox {
     static renderMarkup({
         rootClass = "",
         rootAttrs = {},
@@ -1613,9 +1625,11 @@ class TVVerticalListViewer extends TVWidget {
     } = {}) {
         const rootAttrString = attrsToString(rootAttrs);
         const rootAttrsText = rootAttrString ? ` ${rootAttrString}` : "";
+        const rootClasses = ["tv-vlist-viewer", rootClass].filter(Boolean).join(" ");
+        const viewportClasses = ["tv-vlist-viewport", viewportClass].filter(Boolean).join(" ");
         return `
-            <div class="${escapeHtml(rootClass)}"${rootAttrsText}>
-                <div class="${escapeHtml(viewportClass)}" data-tv-list-viewport></div>
+            <div class="${escapeHtml(rootClasses)}"${rootAttrsText}>
+                <div class="${escapeHtml(viewportClasses)}" data-tv-list-viewport></div>
                 <div class="${escapeHtml(scrollbarClass)}" aria-hidden="true">
                     <button type="button" class="${escapeHtml(arrowClass)}" data-tv-list-backward tabindex="-1">${escapeHtml(displayCp437Char(30))}</button>
                     <div class="${escapeHtml(trackClass)}" data-tv-list-track>
@@ -1635,16 +1649,13 @@ class TVVerticalListViewer extends TVWidget {
         renderItemContent = null,
         renderItemMarkup = null,
     } = {}) {
-        super(root);
-        this.itemClassName = itemClassName;
-        this.itemAttrName = itemAttrName;
-        this.selectedClassName = selectedClassName;
-        this.renderItemContent = renderItemContent;
-        this.renderItemMarkup = renderItemMarkup;
-        this.items = [];
-        this.selectedIndex = -1;
-        this.selectHandler = null;
-        this.activateHandler = null;
+        super(root, {
+            itemClassName,
+            itemAttrName,
+            selectedClassName,
+            renderItemContent,
+            renderItemMarkup,
+        });
         this.repeatTimer = null;
         this.viewport = this.query("[data-tv-list-viewport]");
         this.track = this.query("[data-tv-list-track]");
@@ -1660,17 +1671,8 @@ class TVVerticalListViewer extends TVWidget {
         }
     }
 
-    itemSelector() {
-        return `[${this.itemAttrName}]`;
-    }
-
-    resolveIndex(target) {
-        const element = target && target.closest ? target.closest(this.itemSelector()) : null;
-        if (!element) {
-            return -1;
-        }
-        const value = Number.parseInt(element.getAttribute(this.itemAttrName), 10);
-        return Number.isInteger(value) ? value : -1;
+    itemsRoot() {
+        return this.viewport;
     }
 
     resolvePointerIndex(event) {
@@ -1687,80 +1689,16 @@ class TVVerticalListViewer extends TVWidget {
         return this.resolveIndex(event?.target);
     }
 
-    defaultContent(item, index) {
-        if (this.renderItemContent) {
-            return this.renderItemContent(item, index);
-        }
-        if (typeof item === "string") {
-            return escapeHtml(item);
-        }
-        return escapeHtml(item && item.label ? item.label : "");
-    }
-
-    defaultMarkup(item, index) {
-        const className = [
-            this.itemClassName,
-            index === this.selectedIndex ? this.selectedClassName : "",
-        ].filter(Boolean).join(" ");
-        return `
-            <div role="option" tabindex="-1" class="${className}" ${this.itemAttrName}="${index}">
-                <span class="tv-colors-list-text">${this.defaultContent(item, index)}</span>
-            </div>
-        `;
-    }
-
-    itemMarkup(item, index) {
-        if (this.renderItemMarkup) {
-            return this.renderItemMarkup(item, index, index === this.selectedIndex);
-        }
-        return this.defaultMarkup(item, index);
-    }
-
     setItems(items = [], selectedIndex = -1) {
-        this.items = Array.isArray(items) ? [...items] : [];
         if (this.viewport) {
-            this.viewport.innerHTML = this.items.map((item, index) => this.itemMarkup(item, index)).join("");
             this.viewport.scrollTop = 0;
         }
-        this.select(selectedIndex, { scroll: false });
+        super.setItems(items, selectedIndex);
         this.updateScrollbar();
     }
 
     select(index, { scroll = true } = {}) {
-        if (!Number.isInteger(index) || index < 0 || index >= this.items.length) {
-            this.selectedIndex = -1;
-        } else {
-            this.selectedIndex = index;
-        }
-        this.updateSelectionUi(scroll);
-    }
-
-    selectedItem() {
-        return this.selectedIndex >= 0 ? this.items[this.selectedIndex] : null;
-    }
-
-    selectedElement() {
-        return this.viewport
-            ? this.viewport.querySelector(`${this.itemSelector()}[${this.itemAttrName}="${this.selectedIndex}"]`)
-            : null;
-    }
-
-    updateSelectionUi(scroll = true) {
-        if (!this.viewport) {
-            return;
-        }
-        const elements = Array.from(this.viewport.querySelectorAll(this.itemSelector()));
-        elements.forEach((element, index) => {
-            const value = Number.parseInt(element.getAttribute(this.itemAttrName), 10);
-            const selected = value === this.selectedIndex;
-            element.setAttribute("role", "option");
-            element.classList.toggle(this.selectedClassName, selected);
-            element.setAttribute("aria-selected", selected ? "true" : "false");
-            element.tabIndex = selected || (this.selectedIndex < 0 && index === 0) ? 0 : -1;
-        });
-        if (scroll) {
-            this.ensureSelectionVisible();
-        }
+        super.select(index, { scroll });
         this.updateScrollbar();
     }
 
@@ -3003,7 +2941,8 @@ class TVCheckBoxes extends TVWidget {
                 disabled: Boolean(option.disabled),
                 ...(option.attrs || {}),
             });
-            return `<label class="tv-checkbox-item" data-tv-checkbox-index="${index}"><input ${inputAttrs}><span class="tv-checkbox-mark" aria-hidden="true"></span> <span class="tv-choice-label">${escapeHtml(option.label || "")}</span></label>`;
+            const className = `tv-checkbox-item${option.disabled ? " is-disabled" : ""}`;
+            return `<label class="${className}" data-tv-checkbox-index="${index}"><input ${inputAttrs}><span class="tv-checkbox-mark" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
         }).join("");
         return new TVListViewer({
             className: this.className,
@@ -3038,7 +2977,8 @@ class TVRadioButtons extends TVWidget {
                 disabled: Boolean(option.disabled),
                 ...(option.attrs || {}),
             });
-            return `<label class="tv-radio-item" data-tv-radio-index="${index}"><input ${inputAttrs}><span class="tv-radio-mark" aria-hidden="true"></span> <span class="tv-choice-label">${escapeHtml(option.label || "")}</span></label>`;
+            const className = `tv-radio-item${option.disabled ? " is-disabled" : ""}`;
+            return `<label class="${className}" data-tv-radio-index="${index}"><input ${inputAttrs}><span class="tv-radio-mark" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
         }).join("");
         return new TVListViewer({
             className: this.className,

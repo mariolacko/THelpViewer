@@ -112,7 +112,7 @@ root.querySelector = (selector) => ({
 }[selector] || null);
 
 const source = fs.readFileSync(process.argv[1], "utf8");
-const start = source.indexOf("class TVVerticalListViewer");
+const start = source.indexOf("class TVListBox");
 const end = source.indexOf("\nclass TVVerticalScrollArea", start);
 eval(source.slice(start, end) + "\nglobalThis.TestList = TVVerticalListViewer;");
 
@@ -201,6 +201,8 @@ global.escapeHtml = (value) => String(value)
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+global.renderHotkeyMarkup = (value) => escapeHtml(value)
+    .replace(/~(.)~/g, '<span class="tv-hotkey">$1</span>');
 global.attrsToString = (attrs = {}) => Object.entries(attrs)
     .filter(([, value]) => value !== false && value !== null && value !== undefined)
     .map(([key, value]) => value === true ? key : `${key}="${escapeHtml(value)}"`)
@@ -231,6 +233,9 @@ if (!checks.includes('type="checkbox"') || !checks.includes("checked") || !check
 }
 if (!checks.includes("One &lt; two") || !checks.includes("tv-checkbox-mark")) {
     throw new Error("checkbox label or DOS mark is incomplete");
+}
+if (!checks.includes('class="tv-checkbox-item is-disabled"')) {
+    throw new Error("disabled checkbox does not expose its palette state");
 }
 
 const radios = new TestRadios({

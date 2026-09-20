@@ -38,7 +38,8 @@ Core widget hierarchy and infrastructure.
 - **TVListBox** — Interactive selectable list. `setItems(items, index)`,
   `select(index)`, `bind({onSelect, onActivate})`; click selects and
   double-click/Enter activates.
-- **TVVerticalListViewer** — List with scrollbar integration, roving tab focus,
+- **TVVerticalListViewer** — `TVListBox` subclass with scrollbar integration,
+  shared row rendering and palette, roving tab focus,
   pointer-coordinate row selection, Arrow, Home/End and Page Up/Down keyboard
   navigation. Visibility is measured against the real viewport rectangle, so
   focus changes cannot introduce an offset between a drawn and clicked row.
@@ -199,7 +200,7 @@ Standard application dialogs.
 | Class | Purpose |
 |-------|---------|
 | `TVAboutDialog` | About / splash screen |
-| `TVWidgetGalleryDialog` | Interactive gallery for shared labels, inputs, choices, list focus/activation, framed information and buttons |
+| `TVWidgetGalleryDialog` | Interactive gallery for shared labels, inputs, choices, list focus/activation and scrolling, static/framed information, buttons and message boxes |
 | `TVFileOpenDialog` | Keyboard-accessible virtual file picker for generated HELP bundles and Markdown documentation, with persistent history |
 | `TVSearchDialog` | Full-text search across topics |
 | `TVAsciiTableDialog` | CP437 character table (0–255) |
@@ -235,7 +236,10 @@ The selectors support arrow-key navigation.
 - Arrow keys move within a column, Left/Right move by one eight-row column,
   Page Up/Down move by two columns, and double-click/Enter activates an entry.
 - `Alt+N`, `Alt+F` and `Alt+O` focus Name, the file list and Open respectively.
-- The ten most recently opened catalog entries are stored in local storage; missing catalog entries are ignored
+- The ten most recently opened catalog entries are stored in local storage;
+  missing catalog entries are ignored.
+- Open waits for the asynchronous HELP/DOCS catalogs when invoked during
+  startup, so the dialog cannot open with an unconfigured empty list.
 
 ## tv-screensaver.js
 

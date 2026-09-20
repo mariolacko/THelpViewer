@@ -2087,37 +2087,11 @@ button.tv-status-item {
 .tv-colors-listviewer {
     position: absolute;
     top: 2em;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 1ch;
     height: 11em;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    background: var(--tv-dialog-list-normal-bg);
-    color: var(--tv-dialog-list-normal-fg);
 }
 
 .tv-colors-list-viewport {
-    display: grid;
-    grid-auto-rows: 1em;
-    align-content: start;
-    min-width: 0;
     height: 11em;
-    min-height: 0;
-    max-height: none;
-    background: var(--tv-dialog-list-normal-bg);
-    color: var(--tv-dialog-list-normal-fg);
-    overflow: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    box-sizing: border-box;
-    line-height: 1;
-}
-
-.tv-colors-list-viewport::-webkit-scrollbar {
-    width: 0;
-    height: 0;
 }
 
 .tv-colors-listviewer.is-disabled .tv-vlist-arrow {
@@ -2176,43 +2150,7 @@ button.tv-status-item {
     outline-offset: -1px;
 }
 
-.tv-colors-list-item {
-    display: grid;
-    align-items: center;
-    justify-items: start;
-    width: 100%;
-    min-width: 0;
-    height: 1em;
-    min-height: 1em;
-    max-height: 1em;
-    padding: 0 0 0 1ch;
-    border: 0;
-    font: inherit;
-    appearance: none;
-    cursor: pointer;
-    text-align: left;
-    background: var(--tv-dialog-list-normal-bg);
-    color: var(--tv-dialog-list-normal-fg);
-    white-space: pre;
-    line-height: 1;
-    overflow: hidden;
-    text-overflow: clip;
-    box-sizing: border-box;
-    outline: none;
-}
-
-.tv-colors-list-item.is-selected {
-    background: var(--tv-dialog-list-selected-bg);
-    color: var(--tv-dialog-list-selected-fg);
-    outline: none;
-}
-
-.tv-colors-listviewer.is-current:not(.is-inactive) .tv-colors-list-item.is-selected {
-    background: var(--tv-dialog-list-focused-bg);
-    color: var(--tv-dialog-list-focused-fg);
-    outline: none;
-}
-
+.tv-vlist-text,
 .tv-colors-list-text {
     display: block;
     width: 100%;
@@ -2869,6 +2807,38 @@ button.tv-status-item {
 
 /* ── Shared vertical list scrollbar ────────────────────────────── */
 
+.tv-vlist-viewer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1ch;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--tv-dialog-list-normal-bg);
+    color: var(--tv-dialog-list-normal-fg);
+}
+
+.tv-vlist-viewport {
+    display: grid;
+    grid-auto-rows: 1em;
+    align-content: start;
+    min-width: 0;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    box-sizing: border-box;
+    line-height: 1;
+    background: var(--tv-dialog-list-normal-bg);
+    color: var(--tv-dialog-list-normal-fg);
+}
+
+.tv-vlist-viewport::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
 .tv-vlist-scrollbar {
     display: grid;
     grid-template-rows: 1em minmax(0, 1fr) 1em;
@@ -2946,6 +2916,24 @@ button.tv-status-item {
 }
 
 .tv-vlist-item {
+    display: grid;
+    align-items: center;
+    justify-items: start;
+    width: 100%;
+    min-width: 0;
+    height: 1em;
+    min-height: 1em;
+    max-height: 1em;
+    padding: 0 1ch;
+    border: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    outline: none;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+    text-align: left;
+    white-space: pre;
     background: var(--tv-dialog-list-normal-bg);
     color: var(--tv-dialog-list-normal-fg);
 }
@@ -2955,7 +2943,7 @@ button.tv-status-item {
     color: var(--tv-dialog-list-selected-fg);
 }
 
-[data-tv-list-viewer]:not(.is-inactive):focus-within .tv-vlist-item.is-selected {
+[data-tv-list-box]:not(.is-inactive):focus-within .tv-vlist-item.is-selected {
     background: var(--tv-dialog-list-focused-bg);
     color: var(--tv-dialog-list-focused-fg);
 }
@@ -3026,30 +3014,15 @@ button.tv-status-item {
 }
 
 .tv-widget-gallery-listviewer {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 1ch;
     height: 6em;
-    background: var(--tv-dialog-input-bg);
-    color: var(--tv-dialog-input-fg);
-    overflow: hidden;
 }
 
 .tv-widget-gallery-list {
     height: 6em;
-    overflow: hidden;
 }
 
-.tv-widget-gallery-list-item {
-    height: 1em;
-    padding: 0 1ch;
-    white-space: pre;
-}
-
-.tv-widget-gallery-list-item.is-selected,
-.tv-widget-gallery-list-item:focus-visible {
-    color: var(--tv-hover-fg);
-    background: var(--tv-hover-bg);
-    outline: none;
+.tv-widget-gallery-static {
+    grid-column: 1 / -1;
 }
 
 .tv-widget-gallery-info .tv-info-box {
@@ -3140,8 +3113,8 @@ button.tv-status-item {
     width: 31ch;
     height: 8em;
     overflow: hidden;
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
+    background: var(--tv-dialog-list-normal-bg);
+    color: var(--tv-dialog-list-normal-fg);
     line-height: 1;
 }
 
@@ -3153,19 +3126,10 @@ button.tv-status-item {
     padding: 0 1ch;
     overflow: hidden;
     box-sizing: border-box;
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
     font: inherit;
     line-height: 1;
     text-align: left;
     white-space: pre;
-}
-
-.tv-file-open-list-item.is-selected,
-.tv-file-open-list-item:focus-visible {
-    outline: none;
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
 }
 
 .tv-file-open-hscroll {
@@ -3270,20 +3234,7 @@ button.tv-status-item {
 }
 
 .tv-file-open-history-item {
-    height: 1em;
-    padding: 0 1ch;
-    overflow: hidden;
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
-    line-height: 1;
-    white-space: pre;
-}
-
-.tv-file-open-history-item.is-selected,
-.tv-file-open-history-item:focus-visible {
-    outline: none;
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
+    padding-right: 0;
 }
 
 .tv-checkbox-item,
@@ -3295,6 +3246,11 @@ button.tv-status-item {
     display: block;
     background: var(--tv-palette-dialog-cluster-normal-bg);
     color: var(--tv-palette-dialog-cluster-normal-fg);
+}
+
+.tv-checkbox-item .tv-hotkey,
+.tv-radio-item .tv-hotkey {
+    color: var(--tv-palette-dialog-cluster-shortcut-fg);
 }
 
 .tv-choice-input {
@@ -3321,21 +3277,19 @@ button.tv-status-item {
     content: "(·)";
 }
 
-.tv-choice-input:focus-visible + .tv-checkbox-mark,
-.tv-choice-input:focus-visible + .tv-radio-mark {
+.tv-checkbox-item:focus-within,
+.tv-radio-item:focus-within {
     color: var(--tv-palette-dialog-cluster-selected-fg);
     background: var(--tv-palette-dialog-cluster-selected-bg);
 }
 
-.tv-choice-input:focus-visible ~ .tv-choice-label {
-    color: var(--tv-palette-dialog-cluster-selected-fg);
-    background: var(--tv-palette-dialog-cluster-selected-bg);
-}
-
-.tv-choice-input:disabled + .tv-checkbox-mark,
-.tv-choice-input:disabled + .tv-radio-mark,
-.tv-choice-input:disabled ~ .tv-choice-label {
-    opacity: 0.5;
+.tv-checkbox-item.is-disabled,
+.tv-radio-item.is-disabled,
+.tv-checkbox-item.is-disabled .tv-hotkey,
+.tv-radio-item.is-disabled .tv-hotkey {
+    cursor: default;
+    background: var(--tv-palette-dialog-button-disabled-bg);
+    color: var(--tv-palette-dialog-button-disabled-fg);
 }
 
 .tv-game-border {

@@ -26,6 +26,7 @@ const {
     TVCheckBoxes,
     TVRadioButtons,
     TVButton,
+    TVMessageBox,
     normalizeSearchText,
     fillBorders,
     MONTH_NAMES,
@@ -91,19 +92,23 @@ class TVWidgetGalleryDialog extends TVDialog {
         const checks = new TVCheckBoxes({
             attrs: { "data-tv-gallery-checks": true },
             options: [
-                { label: "Frames", value: "frames", checked: true },
-                { label: "Shadows", value: "shadows", checked: true },
-                { label: "Disabled", value: "disabled", disabled: true },
+                { label: "~F~rames", value: "frames", checked: true },
+                { label: "~S~hadows", value: "shadows", checked: true },
+                { label: "D~i~sabled", value: "disabled", disabled: true },
             ],
         });
         const radios = new TVRadioButtons({
             attrs: { "data-tv-gallery-radios": true },
             name: "tv-widget-gallery-mode",
             options: [
-                { label: "Text", value: "text", checked: true },
-                { label: "Graphics", value: "graphics" },
-                { label: "Mono", value: "mono", disabled: true },
+                { label: "~T~ext", value: "text", checked: true },
+                { label: "~G~raphics", value: "graphics" },
+                { label: "~M~ono", value: "mono", disabled: true },
             ],
+        });
+        const staticText = new TVStaticText({
+            text: "Static text · label hotkeys · disabled states",
+            attrs: { "data-tv-gallery-static": true },
         });
         const infoBox = new TVInfoBox({
             title: "Event log",
@@ -124,6 +129,10 @@ class TVWidgetGalleryDialog extends TVDialog {
                 new TVButton({
                     attrs: { "data-tv-gallery-apply": true },
                     label: "~A~pply",
+                }),
+                new TVButton({
+                    attrs: { "data-tv-gallery-message": true },
+                    label: "~M~essage",
                 }),
                 new TVButton({
                     attrs: { disabled: true },
@@ -168,6 +177,10 @@ class TVWidgetGalleryDialog extends TVDialog {
                             <div class="tv-widget-gallery-heading">Info box</div>
                             ${infoBox.renderMarkup()}
                         </section>
+                        <section class="tv-widget-gallery-panel tv-widget-gallery-static">
+                            <div class="tv-widget-gallery-heading">Static text</div>
+                            ${staticText.renderMarkup()}
+                        </section>
                     </div>
                     ${buttons.renderMarkup()}
                 </div>
@@ -183,12 +196,25 @@ class TVWidgetGalleryDialog extends TVDialog {
         this.radios = this.query("[data-tv-gallery-radios]");
         this.okButton = this.query("[data-tv-gallery-ok]");
         this.applyButton = this.query("[data-tv-gallery-apply]");
+        this.messageButton = this.query("[data-tv-gallery-message]");
         this.infoBox = infoBox.resolve(this.dialog);
+        this.messageBox = null;
         this.listBox = new TVVerticalListViewer(this.query("[data-tv-gallery-list]"), {
             itemClassName: "tv-widget-gallery-list-item",
             itemAttrName: "data-tv-gallery-list-index",
         });
-        this.listBox.setItems(["TDialog", "TInputLine", "TListViewer", "TButton", "TScrollBar"], 0);
+        this.listBox.setItems([
+            "TDialog",
+            "TInputLine",
+            "TListViewer",
+            "TButton",
+            "TScrollBar",
+            "TCheckBoxes",
+            "TRadioButtons",
+            "TStaticText",
+            "TLabel",
+            "TMessageBox",
+        ], 0);
         this.listBox.bind({
             onSelect: (item) => this.setStatus(`Selected: ${item}`),
             onActivate: (item) => this.setStatus(`Activated: ${item}`),
@@ -211,6 +237,19 @@ class TVWidgetGalleryDialog extends TVDialog {
         }
         if (this.applyButton) {
             this.applyButton.addEventListener("click", () => this.setStatus("Apply command"));
+        }
+        if (this.messageButton) {
+            this.messageButton.addEventListener("click", async () => {
+                if (!this.messageBox) {
+                    this.messageBox = new TVMessageBox(this.desktop);
+                }
+                const command = await this.messageBox.show({
+                    type: TVMessageBox.MF_INFORMATION,
+                    lines: ["Turbo Vision message box"],
+                    buttons: TVMessageBox.MF_OK_CANCEL,
+                });
+                this.setStatus(`Message: ${command}`);
+            });
         }
         if (this.okButton) {
             this.okButton.addEventListener("click", () => this.close());
@@ -1389,12 +1428,6 @@ class TVColorsDialog extends TVDialog {
         });
         this.itemBox.bind({
             onSelect: (_item, index) => this.onItemSelect(index),
-        });
-        this.dialog.addEventListener("focusin", (event) => {
-            const currentList = event.target.closest(".tv-colors-listviewer");
-            for (const list of [this.groupList, this.itemList]) {
-                list?.classList.toggle("is-current", list === currentList);
-            }
         });
         if (this.foreground) {
             this.foreground.addEventListener("click", (event) => this.onSelectorClick(event, "fg"));
