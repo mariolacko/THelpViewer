@@ -357,5 +357,6 @@ if (byCommand.next.disabled || byCommand.previous.disabled) {
     assert result.returncode == 0, result.stderr
 
     css = css_paths[0].read_text(encoding="utf-8")
-    assert '--tv-menu-disabled: #555555;' in css
+    assert '--tv-palette-menu-disabled-fg: #555555;' in css
+    assert '--tv-menu-disabled: var(--tv-palette-menu-disabled-fg);' in css
     assert '.tv-menu-popup-item[aria-disabled="true"]' in css

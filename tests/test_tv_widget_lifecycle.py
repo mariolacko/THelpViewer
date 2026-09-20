@@ -226,7 +226,7 @@ def test_active_window_state_controls_scrollbars_and_scopes_frame_redraw():
     css = css_paths[0].read_text(encoding="utf-8")
 
     frame_state = core[
-        core.index("function updateWindowFrameState"):
+        core.index("function windowFrameMode"):
         core.index("function fillDesktopPatterns")
     ]
     assert 'windowElement.querySelectorAll(".tv-scrollbar")' in frame_state

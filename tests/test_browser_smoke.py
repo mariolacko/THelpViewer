@@ -245,6 +245,27 @@ async function run() {
     );
     if (!windowListClosed) { throw new Error("Escape did not close the Window List dialog"); }
 
+    const themeRoundTrip = await evaluate(`(() => {
+        const TV = window.THelpViewerTV;
+        TV.applyThemeAndSyncPalette('dark', false);
+        const dark = getComputedStyle(document.documentElement);
+        const darkHelp = dark.getPropertyValue('--tv-palette-help-text-bg').trim();
+        TV.applyThemeAndSyncPalette('default', false);
+        const restored = getComputedStyle(document.documentElement);
+        return {
+            appPaletteLength: TV.TV2_APP_COLOR_ATTRIBUTES.length,
+            darkHelp,
+            help: restored.getPropertyValue('--tv-palette-help-text-bg').trim(),
+            dialogPassive: restored.getPropertyValue('--tv-palette-dialog-frame-passive-fg').trim(),
+        };
+    })()`);
+    if (
+        themeRoundTrip.appPaletteLength !== 135 || themeRoundTrip.darkHelp !== '#000000'
+        || themeRoundTrip.help !== '#00aaaa' || themeRoundTrip.dialogPassive !== '#000000'
+    ) {
+        throw new Error(`Theme/palette round trip is broken: ${JSON.stringify(themeRoundTrip)}`);
+    }
+
     const desktopDotBeforeColors = await evaluate(
         `getComputedStyle(document.documentElement).getPropertyValue('--tv-desktop-dot').trim()`
     );
@@ -325,6 +346,51 @@ async function run() {
     ) {
         throw new Error(`Colors dialog differs from Turbo Vision 2.0: ${JSON.stringify(colors)}`);
     }
+    const sharedPalette = await evaluate(`(() => {
+        const palette = window.THelpViewerTV.buildDefaultColorPalette();
+        const viewer = palette.find((group) => group.name === 'Viewer');
+        const puzzle = palette.find((group) => group.name === 'Puzzle');
+        window.THelpViewerTV.setColorPaletteAttribute(palette, 8, 0x4F);
+        return {
+            viewerDefaults: viewer.items.map((item) => item.attr),
+            puzzleDefaults: puzzle.items.map((item) => item.attr),
+            sharedPassive: [viewer.items[0].attr, puzzle.items[0].attr],
+        };
+    })()`);
+    if (
+        sharedPalette.viewerDefaults.slice(1).join() !== [0x1F, 0x1A, 0x31, 0x31, 0x1E].join()
+        || sharedPalette.puzzleDefaults.slice(1).join() !== [0x1F, 0x1A, 0x31, 0x31, 0x1E, 0x71].join()
+        || sharedPalette.sharedPassive.join() !== [0x4F, 0x4F].join()
+    ) {
+        throw new Error(`Shared TV 2.0 palette indexes are broken: ${JSON.stringify(sharedPalette)}`);
+    }
+    await evaluate(`document.querySelector('[data-tv-dialog-open="about"]').click()`);
+    await pause();
+    const passiveColors = await evaluate(`(() => {
+        const colorsDialog = document.querySelector('.tv-colors-window');
+        const selected = colorsDialog.querySelector('[data-tv-colors-group].is-selected');
+        const corner = colorsDialog.querySelector('.tv-dialog-titlebar > .tv-border-corner');
+        const stylePair = (element) => {
+            const style = getComputedStyle(element);
+            return [style.backgroundColor, style.color];
+        };
+        return {
+            inactive: colorsDialog.classList.contains('is-window-inactive'),
+            cornerGlyph: corner.textContent,
+            cornerColors: stylePair(corner),
+            selectedColors: stylePair(selected),
+            closeHidden: colorsDialog.querySelector('[data-tv-close-button]').hidden,
+        };
+    })()`);
+    if (
+        !passiveColors.inactive || passiveColors.cornerGlyph !== '┌' || !passiveColors.closeHidden
+        || passiveColors.cornerColors.join() !== ['rgb(170, 170, 170)', 'rgb(0, 0, 0)'].join()
+        || passiveColors.selectedColors.join() !== ['rgb(0, 170, 170)', 'rgb(255, 255, 85)'].join()
+    ) {
+        throw new Error(`Inactive Colors state differs from Turbo Vision 2.0: ${JSON.stringify(passiveColors)}`);
+    }
+    await evaluate(`document.querySelector('[data-tv-about-close]').click()`);
+    await pause();
     await evaluate(`document.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').focus()`);
     const foregroundBefore = await evaluate(
         `Number(document.activeElement.getAttribute('data-tv-color-index'))`

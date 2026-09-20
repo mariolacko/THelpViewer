@@ -85,7 +85,9 @@ Static methods:
   - `query(selector)` — Shortcut for `this.dialog.querySelector()`
   - Constructor options `modal`, `keyboard`, `escapeCloses` and
     `defaultButtonSelector` customize shared interaction without duplicating
-    document-level key handlers.
+    document-level key handlers. The `palette` option selects the owner palette
+    (`dialog`, `viewer`, `calendar` or `ascii`) while the shared frame renderer
+    keeps identical active/passive/drag semantics.
 
 ### TVDialogManager
 
@@ -145,9 +147,19 @@ Custom scrollbar for `[data-tv-scroll-frame]` containers. Handles thumb drag, tr
 
 ### Theme Engine
 
+- `initializeTVTheme()` — Shared shell/bundle startup, including stored theme
+  and palette restoration
 - `applyThemePreset(preset)` — Apply "light", "dark", or "auto" theme
 - `applyColorPalette(palette)` — Apply custom color palette from `DOS_COLORS`
+- `setColorPaletteAttribute(palette, index, attr)` — Update every Color-dialog
+  view that references the same 1-based `cpAppColor` index
 - `readStoredThemePreset()` / `readStoredColorPalette()` — Read from localStorage
+
+The default color source is the exact 135-entry Turbo Vision 2.0
+`cpAppColor`. `COLOR_GROUPS` does not own duplicate colors: Viewer and Puzzle,
+for example, both reference indexes 8–14. CSS first resolves an owner palette
+for a window/dialog and then derives its current active, passive or dragging
+frame state. Common list and scrollbar controls inherit from that owner.
 
 ### Utility Functions
 

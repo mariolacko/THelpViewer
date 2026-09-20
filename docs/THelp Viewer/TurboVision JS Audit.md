@@ -146,13 +146,32 @@ compatibility with old Turbo Vision applications.
     continuous title line, overlays the close control at its DOS coordinates,
     centers the title over the whole frame and hides the control on passive
     frames.
+19. **The color model did not represent the Turbo Vision application palette.**
+    Color groups owned independent copies of attributes, even when the
+    original `TColorItem`s referenced the same 1-based `cpAppColor` entry.
+    Thus Viewer and Puzzle could disagree about indexes 8–14, later groups
+    overwrote earlier CSS variables, and a broad descendant rule replaced
+    passive frame colors with active colors.
+    **Resolved in Phase 6.1:** `tv-core.js` now contains the exact 135-entry
+    Turbo Vision 2.0 `cpAppColor` table. Color groups are views over shared
+    palette indexes, edits propagate to every view of an index, and CSS uses
+    owner-scoped semantic tokens for Help, Viewer/Puzzle, Calendar, ASCII and
+    gray Dialog palettes. Passive dialogs now use app entry 32 (`0x70`) and
+    passive HELP windows use entry 128 (`0x37`).
+20. **Frame and theme state had multiple competing implementations.** Standard
+    windows and dialogs used different `--tv-current-*` variables, dragging
+    used hard-coded colors, and shell/bundle startup duplicated theme loading.
+    **Resolved in Phase 6.2:** both window types share one owner/current frame
+    contract and one active/passive/drag glyph table; `TVDialog` selects its
+    owner palette through `palette`, controls inherit scrollbar/list colors
+    from that owner, and both applications call `initializeTVTheme()`.
 
 ## Component assessment
 
 | Area | Assessment |
 |---|---|
 | Desktop, CP437 frames and shadows | Good |
-| Active/passive window drawing | Good |
+| Active/passive/drag window drawing | Shared state and source-accurate palette/glyph mapping |
 | Mouse move, resize and scrollbars | Good, including explicit cleanup lifecycle |
 | Menus and status line | Shared keyboard model and dynamic window-command state complete |
 | Dialogs and buttons | Shared keyboard, modal and focus model complete; `TFrame` title geometry matches TV 2.0 |
@@ -242,3 +261,11 @@ compatibility with old Turbo Vision applications.
   `TColorDialog` 61×18 cell geometry, restored its original list attributes,
   controls and two-line sample, and added selector keyboard navigation plus
   cancel/restore coverage.
+- [x] Phase 6.1: replaced duplicated group colors with the exact shared,
+  1-based `cpAppColor` model and owner-scoped Help, Viewer/Puzzle, Calendar,
+  ASCII and Dialog CSS palettes.
+- [x] Phase 6.2: unified `TWindow`/`TDialog` active, passive and dragging frame
+  state, removed the global passive-color override, made common controls use
+  their owner's palette, and centralized theme initialization.
+- [x] Phase 6.3: added real-Chrome regressions for shared Viewer/Puzzle indexes,
+  inactive Colors list state, passive frame color/glyph and hidden frame icons.
