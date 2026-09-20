@@ -17,7 +17,7 @@ compatibility with old Turbo Vision applications.
 
 - All eight JavaScript assets pass `node --check`.
 - The source assets and their checked-in `www/assets` mirrors are identical.
-- The complete automated suite passes: 215 tests.
+- The complete automated suite passes: 216 tests.
 - Existing automated coverage is strong for converters and selected rendering
   regressions, but it does not yet exercise browser focus, modal behaviour or
   complete keyboard menu navigation.
@@ -212,3 +212,4 @@ compatibility with old Turbo Vision applications.
 - [x] Phase 4.3: independent language detection for contiguous code blocks.
 - [x] Phase 4.4: Gregorian leap-year handling in Calendar.
 - [x] Phase 4.5: shared screen-saver idle start, resize and focus lifecycle.
+- [x] Phase 5.1: dependency-free real-Chrome menu/focus smoke-test foundation.
