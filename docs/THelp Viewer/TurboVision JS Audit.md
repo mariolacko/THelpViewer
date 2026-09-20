@@ -17,7 +17,7 @@ compatibility with old Turbo Vision applications.
 
 - All eight JavaScript assets pass `node --check`.
 - The source assets and their checked-in `www/assets` mirrors are identical.
-- The complete automated suite passes: 217 tests.
+- The complete automated suite passes: 218 tests.
 - Existing automated coverage is strong for converters and selected rendering
   regressions, but it does not yet exercise browser focus, modal behaviour or
   complete keyboard menu navigation.
@@ -185,6 +185,28 @@ compatibility with old Turbo Vision applications.
     supplied deployment URL. Against `http://127.0.0.1:5448/`, Help Files/Open
     displays its loading state and then the populated HELP/DOCS tree. Asset
     versions were advanced so an already open browser can fetch the fixes.
+24. **Several regressions shared one missing ownership boundary.** Norton
+    Guides used the icon background for the title while moving, File Open did
+    not explicitly own its row foreground and input-history arrow color, and
+    wide Markdown tables were forced into fixed columns with mid-word breaks.
+    **Resolved in Phase 7.2:** moving windows retain their source title roles,
+    File Open explicitly uses the dialog input/list palette, and Docs tables
+    size their columns from content and use the window's horizontal scrollbar.
+    The exact reported VISTA/DEBUG/TCHELP/README URL is a real-Chrome fixture.
+25. **The hierarchy and scrollbar duplication matched the audit warning.**
+    HELP and Docs hand-built the same frame, `TVDialog` bypassed a window base,
+    list behaviour lived in `TVListBox`, and lists, menus and windows each
+    implemented scroll repetition and thumb movement. **Resolved in Phase
+    7.3:** `TVWindow : TVGroup` owns standard window markup, `TVDialog :
+    TVWindow`, `TVListBox : TVListViewer`, and CheckBoxes/RadioButtons inherit
+    `TVCluster`. `TVScrollBar` is the only scroll engine; the old exported
+    names remain compatibility aliases or delegating facades.
+26. **Games only retained one best score and the MIDI dialog exposed every
+    advanced source control at once.** **Resolved in Phase 7.4:** all nine games
+    use one persistent, sorted ten-entry Hall of Fame component, with lower
+    scores preferred for timed/move-count games. MIDI now opens as a compact
+    transport and track list; URL and preset sources remain available through
+    `More`.
 
 ## Component assessment
 
@@ -192,14 +214,14 @@ compatibility with old Turbo Vision applications.
 |---|---|
 | Desktop, CP437 frames and shadows | Good |
 | Active/passive/drag window drawing | Shared state and source-accurate palette/glyph mapping |
-| Mouse move, resize and scrollbars | Good, including explicit cleanup lifecycle |
+| Mouse move, resize and scrollbars | One shared `TVScrollBar`, including explicit cleanup lifecycle |
 | Menus and status line | Shared keyboard model and dynamic window-command state complete |
-| Dialogs and buttons | Shared keyboard, modal and focus model complete; `TFrame` title geometry matches TV 2.0 |
+| Windows, dialogs and buttons | `TVWindow : TVGroup`, `TVDialog : TVWindow`; shared keyboard, modal, focus and frame model |
 | InputLine | Usable native input, limited Turbo Vision semantics |
-| ListBox/ListViewer | Selection, activation, keyboard and roving focus complete |
-| CheckBoxes/RadioButtons | Native behaviour with DOS-style rendering |
+| ListBox/ListViewer | Correct inheritance; selection, activation, keyboard and roving focus complete |
+| CheckBoxes/RadioButtons | Shared `TVCluster` with native behaviour and DOS-style rendering |
 | MessageBox | Hardened and tested; application adoption remains |
-| Games | Playable; focus, timers and keyboard consistency need work |
+| Games | Playable with shared top-ten Hall of Fame, focus, timer and keyboard policy |
 | Screen savers | Shared idle start, resize lifecycle and focus restoration complete |
 | Syntax highlighter | Pascal, C and ASM detection is scoped per code block |
 
@@ -217,19 +239,19 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 |---|---|---|
 | `TView` | `TVWidget` | Present as the basic DOM helper. Add a no-op `destroy()` contract before more dynamic widgets are introduced. |
 | `TGroup : TView` | `TVGroup : TVWidget` | Present as a markup composer, but it does not own child lifecycles, focus order or event propagation as `TGroup` does. |
-| `TWindow : TGroup` | No `TVWindow` class | Highest-priority structural gap. HELP and Docs build almost identical window HTML in two places and combine it with `BundleWindowManager`, `TVDialogManager`, `TurboVisionWindowResizer` and `TurboVisionScrollbar`. |
-| `TDialog : TWindow` | `TVDialog : TVWidget` | Behaviour is now good, but inheritance is wrong. It should reuse a future `TVWindow` frame, activation, move, close and destroy lifecycle. |
-| `TFrame : TView` | `TVFrame : TVWidget` | Present and shared by dialogs. Window frames still use separate handwritten markup. |
-| `TScrollBar : TView` | `TurboVisionScrollbar` plus three local renderers | Behaviour is present, type and rendering are duplicated. Promote one `TVScrollBar` component. |
-| `TScroller : TView` | `TVVerticalScrollArea` and window-specific code | Partial. Needs one axis-aware `TVScroller` composition using `TVScrollBar`. |
-| `TListViewer : TView` | `TVListViewer : TVWidget` | The JS class is only a markup wrapper; it is not the functional list base from TV 2.0. |
-| `TListBox : TListViewer` | `TVListBox : TVWidget` | Functionally useful, but the hierarchy is inverted. Move selection/navigation into `TVListViewer`, then let `TVListBox` supply data. |
+| `TWindow : TGroup` | `TVWindow : TVGroup` | Implemented; HELP and Docs use its common frame, title controls, client and scrollbar composition. |
+| `TDialog : TWindow` | `TVDialog : TVWindow` | Correct hierarchy while preserving modal, keyboard, focus, move and destroy behaviour. |
+| `TFrame : TView` | `TVFrame : TVWidget` | Present and shared by dialogs; `TVWindow` owns the separate standard-window composition. |
+| `TScrollBar : TView` | `TVScrollBar` | One axis-aware renderer and interaction engine for windows, lists and menus. `TurboVisionScrollbar` remains an API alias. |
+| `TScroller : TView` | `TVVerticalScrollArea` compatibility facade and window composition | Partial class parity, but both delegate to `TVScrollBar`; no second scroll algorithm remains. |
+| `TListViewer : TView` | `TVListViewer : TVWidget` | Functional selection, activation, keyboard and roving-focus base. |
+| `TListBox : TListViewer` | `TVListBox : TVListViewer` | Correct hierarchy; specialised vertical lists add shared scroll composition. |
 | `TStaticText : TView` | `TVStaticText : TVWidget` | Present. |
 | `TLabel : TStaticText` | `TVLabel : TVStaticText` | Correct hierarchy and native label association. |
 | `TInputLine : TView` | `TVInputLine : TVWidget` | Present through native input; selection, validation and horizontal indicator semantics are incomplete. |
 | `TButton : TView` | `TVButton : TVWidget` | Present with default, selected, disabled and mnemonic states. |
-| `TCluster : TView` | Missing | CheckBoxes and RadioButtons duplicate option rendering. Introduce `TVCluster` and keep the dedicated cluster palette, including disabled index 62. |
-| `TRadioButtons`, `TCheckBoxes : TCluster` | Both extend `TVWidget` | Behaviour works; migrate them to the shared `TVCluster`. |
+| `TCluster : TView` | `TVCluster : TVWidget` | Implemented with common native-input, option and DOS-mark rendering. |
+| `TRadioButtons`, `TCheckBoxes : TCluster` | Both extend `TVCluster` | Correct shared hierarchy and cluster palette. |
 | `TMultiCheckBoxes : TCluster` | Missing | Add after `TVCluster`; it is useful for flags/options and for Widget Gallery coverage. |
 
 ### Menus, application and standard dialogs
@@ -265,39 +287,26 @@ not be copied merely for name parity.
 
 ### Confirmed duplication and maintenance risks
 
-1. HELP and Docs contain separate copies of the complete window frame,
-   caption, controls, client area and scrollbars.
-2. Scrollbar markup/logic exists in `renderScrollbar`,
-   `TurboVisionScrollbar`, `TVVerticalListViewer`, `TVVerticalScrollArea` and
-   the menu-popup scrollbar functions.
-3. CheckBoxes and RadioButtons duplicate option markup because `TVCluster` is
-   absent.
+1. HELP and Docs previously contained separate frame copies; both now use
+   `TVWindow.renderMarkup()`.
+2. Scrollbar algorithms were consolidated into `TVScrollBar`; compatibility
+   facades delegate to it and menu/list renderers use its markup.
+3. CheckBoxes and RadioButtons now share `TVCluster` option rendering.
 4. File Open history and file lists implement specialised list/scroll
    behaviour outside the original reusable History and FileList roles.
 5. `TVApplication` and `TVBundleApp` duplicate theme/chrome/layout bootstrap,
    global resize handlers and desktop ownership.
-6. Some list, scroll-area and menu scrollbars install anonymous document/window
-   listeners. Those listeners cannot be removed by `destroy()` and should be
-   converted to stored callbacks during the scrollbar consolidation.
+6. Shared scrollbar listeners are stored and removed by `destroy()`.
 
 ### Next implementation order
 
-1. Add browser snapshots/assertions for every Widget Gallery state and keep the
-   external-Docker smoke test in CI-capable form.
-2. Introduce `TVWindow : TVGroup` around the existing, already tested window
-   markup and lifecycle; migrate HELP and Docs one at a time.
-3. Make `TVDialog : TVWindow` while preserving its current modal, keyboard and
-   focus behaviour. This is the change most likely to stop recurring frame
-   regressions.
-4. Consolidate `TVScrollBar` and `TVScroller`, including removable listeners;
-   then reuse them in windows, lists, menus and search.
-5. Correct `TVListViewer`/`TVListBox` inheritance and extract FileList and
-   History controls without changing File Open behaviour.
-6. Add `TVCluster`, migrate CheckBoxes/RadioButtons, then add
-   `TVMultiCheckBoxes`.
-7. Consolidate `TVMenuView` and a small `TVDesktop` owner. Keep `TVApplication`
+1. Extract FileList and History controls without changing the now-tested File
+   Open geometry or Docker behaviour.
+2. Add `TVMultiCheckBoxes` on the completed `TVCluster` base and exercise it in
+   Widget Gallery.
+3. Consolidate `TVMenuView` and a small `TVDesktop` owner. Keep `TVApplication`
    and `TVBundleApp` as thin product-specific compositions.
-8. Add the user-facing controls below only after their shared prerequisites,
+4. Add the user-facing controls below only after their shared prerequisites,
    so new dialogs exercise the common implementation rather than create more
    duplicates.
 
@@ -440,5 +449,11 @@ Recommended games remain:
   Guides and every other UHF theme, added the original Cluster Disabled palette
   entry, verified File Open against the running Docker service, and recorded the
   complete hierarchy, duplication and missing-component comparison.
-- [ ] Phase 7.2: introduce the shared `TVWindow` composition and migrate HELP
-  and Docs without changing their tested appearance or URL state.
+- [x] Phase 7.2: fixed the Norton moving-title palette, File Open text/arrow
+  colors and content-sized Markdown tables; the exact reported multi-window
+  URL is covered in real Chrome.
+- [x] Phase 7.3: introduced `TVWindow`, corrected `TVDialog`, `TVListViewer`,
+  `TVListBox` and `TVCluster` inheritance, migrated HELP/Docs frame markup and
+  consolidated windows, lists and menus on one `TVScrollBar` engine.
+- [x] Phase 7.4: added one ten-entry Hall of Fame implementation to all nine
+  games and made MIDI compact by default with advanced sources behind `More`.
