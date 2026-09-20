@@ -189,6 +189,8 @@ Standard application dialogs.
 - `configure(entries, onOpen)` — Populate the browser-safe virtual filesystem and install its open callback
 - HELP and DOCS roots expose catalog groups as directories; selecting a root lists all of its files recursively
 - File and directory lists use the shared list-viewer keyboard model
+- `TVVerticalListViewer.renderMarkup({ frameTitle })` supplies reusable
+  CP437 top, side and bottom frames with the scrollbar embedded at the right
 - `Alt+N`, `Alt+H` and `Alt+O` focus Name, show History and open the selected file
 - The ten most recently opened catalog entries are stored in local storage; missing catalog entries are ignored
 

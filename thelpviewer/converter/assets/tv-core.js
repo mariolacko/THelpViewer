@@ -1533,6 +1533,7 @@ class TVVerticalListViewer extends TVWidget {
         rootClass = "",
         rootAttrs = {},
         viewportClass = "",
+        frameTitle = "",
         scrollbarClass = "tv-vlist-scrollbar",
         arrowClass = "tv-vlist-arrow",
         trackClass = "tv-vlist-track",
@@ -1541,9 +1542,8 @@ class TVVerticalListViewer extends TVWidget {
     } = {}) {
         const rootAttrString = attrsToString(rootAttrs);
         const rootAttrsText = rootAttrString ? ` ${rootAttrString}` : "";
-        return `
-            <div class="${escapeHtml(rootClass)}"${rootAttrsText}>
-                <div class="${escapeHtml(viewportClass)}" data-tv-list-viewport></div>
+        const viewport = `<div class="${escapeHtml(viewportClass)}" data-tv-list-viewport></div>`;
+        const scrollbar = `
                 <div class="${escapeHtml(scrollbarClass)}" aria-hidden="true">
                     <button type="button" class="${escapeHtml(arrowClass)}" data-tv-list-backward tabindex="-1">${escapeHtml(displayCp437Char(30))}</button>
                     <div class="${escapeHtml(trackClass)}" data-tv-list-track>
@@ -1552,6 +1552,34 @@ class TVVerticalListViewer extends TVWidget {
                     </div>
                     <button type="button" class="${escapeHtml(arrowClass)}" data-tv-list-forward tabindex="-1">${escapeHtml(displayCp437Char(31))}</button>
                 </div>
+        `;
+        if (frameTitle) {
+            return `
+                <div class="${escapeHtml([rootClass, "tv-vlist-framed"].filter(Boolean).join(" "))}"${rootAttrsText}>
+                    <div class="tv-vlist-frame-bar tv-vlist-frame-top" aria-hidden="true">
+                        <span class="tv-border-corner">┌</span>
+                        <span class="tv-border-fill" data-tv-border-fill="─"></span>
+                        <span class="tv-vlist-frame-title"> ${escapeHtml(frameTitle)} </span>
+                        <span class="tv-border-fill" data-tv-border-fill="─"></span>
+                        <span class="tv-border-corner">┐</span>
+                    </div>
+                    <div class="tv-vlist-frame-body">
+                        <span class="tv-vlist-frame-side" data-tv-border-side="│" aria-hidden="true"></span>
+                        ${viewport}
+                        ${scrollbar}
+                    </div>
+                    <div class="tv-vlist-frame-bar tv-vlist-frame-bottom" aria-hidden="true">
+                        <span class="tv-border-corner">└</span>
+                        <span class="tv-border-fill" data-tv-border-fill="─"></span>
+                        <span class="tv-border-corner">┘</span>
+                    </div>
+                </div>
+            `;
+        }
+        return `
+            <div class="${escapeHtml(rootClass)}"${rootAttrsText}>
+                ${viewport}
+                ${scrollbar}
             </div>
         `;
     }

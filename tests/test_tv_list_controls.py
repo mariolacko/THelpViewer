@@ -116,6 +116,21 @@ const start = source.indexOf("class TVVerticalListViewer");
 const end = source.indexOf("\nclass TVVerticalScrollArea", start);
 eval(source.slice(start, end) + "\nglobalThis.TestList = TVVerticalListViewer;");
 
+const framedMarkup = TestList.renderMarkup({
+    rootClass: "test-list",
+    viewportClass: "test-viewport",
+    frameTitle: "Files",
+});
+if (
+    !framedMarkup.includes("tv-vlist-framed")
+    || !framedMarkup.includes("tv-vlist-frame-top")
+    || !framedMarkup.includes(" Files ")
+    || !framedMarkup.includes('data-tv-border-side="│"')
+    || !framedMarkup.includes("└")
+) {
+    throw new Error("framed list markup is incomplete");
+}
+
 const selected = [];
 const activated = [];
 const list = new TestList(root, { itemAttrName: "data-test-index" });

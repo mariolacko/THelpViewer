@@ -305,6 +305,9 @@ async function run() {
             docsDirectory: true,
             files: dialog.querySelectorAll('[data-tv-file-open-file-index]').length,
             directories: dialog.querySelectorAll('[data-tv-file-open-directory-index]').length,
+            framedLists: dialog.querySelectorAll('.tv-file-open-listviewer.tv-vlist-framed').length,
+            fileFrameBars: dialog.querySelectorAll('[data-tv-file-open-files] .tv-vlist-frame-bar').length,
+            fileFrameSide: dialog.querySelector('[data-tv-file-open-files] .tv-vlist-frame-side')?.textContent || '',
             path: dialog.querySelector('[data-tv-file-open-path]')?.textContent || '',
             name: input.value,
             focused: document.activeElement === input,
@@ -313,6 +316,7 @@ async function run() {
     if (
         !fileOpen.open || fileOpen.modal !== "true" || !fileOpen.docsDirectory
         || fileOpen.files < 1 || fileOpen.directories < 2
+        || fileOpen.framedLists !== 3 || fileOpen.fileFrameBars !== 2 || !fileOpen.fileFrameSide
         || fileOpen.path !== "THelpViewer:\\DOCS" || !fileOpen.name || !fileOpen.focused
     ) {
         throw new Error(`File Open dialog is incomplete: ${JSON.stringify(fileOpen)}`);

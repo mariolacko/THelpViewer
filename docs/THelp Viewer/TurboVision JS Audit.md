@@ -215,4 +215,5 @@ compatibility with old Turbo Vision applications.
 - [x] Phase 5.1: dependency-free real-Chrome menu/focus smoke-test foundation.
 - [x] Phase 5.2: interactive Turbo Vision Widget Gallery/Test dialog.
 - [x] Phase 5.3: catalog-backed File Open dialog with HELP/DOCS directories,
-  keyboard navigation and persistent input history.
+  keyboard navigation, persistent input history and shared CP437-framed list
+  viewers verified in Safari.

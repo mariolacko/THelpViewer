@@ -271,19 +271,19 @@ class TVFileOpenDialog extends TVDialog {
                     <div class="tv-file-open-path" data-tv-file-open-path></div>
                     <div class="tv-file-open-lists">
                         <section class="tv-file-open-panel">
-                            <div class="tv-file-open-heading">Files</div>
                             ${TVVerticalListViewer.renderMarkup({
                                 rootClass: "tv-file-open-listviewer",
                                 rootAttrs: { "data-tv-file-open-files": true },
                                 viewportClass: "tv-file-open-list",
+                                frameTitle: "Files",
                             })}
                         </section>
                         <section class="tv-file-open-panel">
-                            <div class="tv-file-open-heading">Directories</div>
                             ${TVVerticalListViewer.renderMarkup({
                                 rootClass: "tv-file-open-listviewer",
                                 rootAttrs: { "data-tv-file-open-directories": true },
                                 viewportClass: "tv-file-open-list",
+                                frameTitle: "Directories",
                             })}
                         </section>
                     </div>
@@ -300,6 +300,7 @@ class TVFileOpenDialog extends TVDialog {
                             rootClass: "tv-file-open-listviewer tv-file-open-history-listviewer",
                             rootAttrs: { "data-tv-file-open-history-list": true },
                             viewportClass: "tv-file-open-list",
+                            frameTitle: "History",
                         })}
                     </div>
                     ${buttons.renderMarkup()}
@@ -463,6 +464,9 @@ class TVFileOpenDialog extends TVDialog {
         const selectedName = this.nameInput?.value || "";
         const selectedIndex = Math.max(0, files.findIndex((entry) => entry.fileName === selectedName));
         this.fileList.setItems(files, files.length ? selectedIndex : -1);
+        if (!selectedName && files.length) {
+            this.selectFile(files[selectedIndex]);
+        }
         if (this.pathLabel) {
             this.pathLabel.textContent = `THelpViewer:\\${this.currentDirectory}`;
         }
