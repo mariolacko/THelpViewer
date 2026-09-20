@@ -373,6 +373,69 @@ async function run() {
     })()`);
     if (!escapeClosedHistoryOnly) { throw new Error("Escape did not close File Open history first"); }
     await key("Escape", "Escape", 0, true);
+
+    const restoredHash = "#tv=1.eyJ2IjoxLCJhIjowLCJ6IjpbMSwwXSwidyI6W3sidCI6ImgiLCJmIjoiQm9ybGFuZCBTaWRla2ljayAyL3NrMi5qc29uLmd6IiwidmlldyI6InRvcGljIiwiZyI6WzIxNywxMjYsNTQsMjEsMF0sInRvcGljIjoiMTI4IiwibGluZSI6MSwicyI6WzAsMF19LHsidCI6ImRsZyIsIm5hbWUiOiJmaWxlb3BlbiIsImciOlsyMzcsMTQyLDQ5LDE5LDBdfV19";
+    await send("Page.navigate", { url: appUrl + "?restore=1" + restoredHash });
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const open = document.querySelector('[data-tv-file-open-files]');
+            const more = document.querySelector('[data-tv-line="17"] [data-tv-bundle-topic="327"]');
+            if (open?.querySelectorAll('[data-tv-file-open-file-index]').length >= 2 && more) {
+                resolve(true);
+                return;
+            }
+            if (Date.now() >= deadline) { reject(new Error('saved File Open state did not restore')); return; }
+            setTimeout(check, 50);
+        };
+        check();
+    })`, true);
+    const restored = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
+        );
+        const overlay = dialog.closest('.tv-dialog-overlay');
+        const helpWindow = document.querySelector('[data-tv-bundle-window]');
+        const titlebar = dialog.querySelector('.tv-dialog-titlebar');
+        titlebar.dispatchEvent(new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 300,
+            clientY: 160,
+        }));
+        const moving = dialog.classList.contains('is-dragging');
+        const movingCorner = titlebar.querySelector('.tv-border-corner')?.textContent;
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        return {
+            entries: dialog.querySelectorAll('[data-tv-file-open-file-index]').length,
+            active: dialog.classList.contains('is-window-active'),
+            dialogZ: Number(getComputedStyle(overlay).zIndex),
+            helpZ: Number(getComputedStyle(helpWindow).zIndex),
+            moreTarget: document.querySelector('[data-tv-line="17"] [data-tv-bundle-topic="327"]')?.textContent,
+            moving,
+            movingCorner,
+            restingCorner: titlebar.querySelector('.tv-border-corner')?.textContent,
+        };
+    })()`);
+    if (
+        restored.entries < 2 || !restored.active || restored.dialogZ <= restored.helpZ
+        || restored.moreTarget !== "<more>" || !restored.moving
+        || restored.movingCorner !== "┌" || restored.restingCorner !== "╔"
+    ) {
+        throw new Error(`Saved File Open state is incomplete: ${JSON.stringify(restored)}`);
+    }
+    await key("Escape", "Escape", 0, true);
+    await evaluate(`document.querySelector('[data-tv-line="17"] [data-tv-bundle-topic="327"]').click()`);
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 5000;
+        const check = () => {
+            const body = document.querySelector('[data-tv-bundle-window] [data-tv-viewport]')?.textContent || '';
+            if (body.includes('Use the Edit|Paste command')) { resolve(true); return; }
+            if (Date.now() >= deadline) { reject(new Error('THELP continuation did not open')); return; }
+            setTimeout(check, 50);
+        };
+        check();
+    })`, true);
     socket.close();
 }
 

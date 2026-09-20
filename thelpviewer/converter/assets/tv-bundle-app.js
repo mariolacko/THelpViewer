@@ -1314,6 +1314,9 @@ function wrapTopicLineMarkup(lineNumber, html, extraClass = "") {
 function renderUhfTopicLines(topic, bundle) {
     const lines = [];
     const content = Array.isArray(topic && topic.content) ? topic.content : [];
+    const downTarget = topic && topic.nav && topic.nav.Down
+        ? normalizeTopicRef(bundle, topic.nav.Down.topic_id)
+        : null;
     let inCodeBlock = false;
     let lineNumber = 0;
 
@@ -1330,6 +1333,14 @@ function renderUhfTopicLines(topic, bundle) {
         if (line === "[rule]") {
             lineNumber += 1;
             lines.push(wrapTopicLineMarkup(lineNumber, renderUhfRule(bundle), "tv-topic-line-rule"));
+            return;
+        }
+        if (!inCodeBlock && raw.trim().toLowerCase() === "<more>" && downTarget) {
+            lineNumber += 1;
+            lines.push(wrapTopicLineMarkup(
+                lineNumber,
+                `<a href="#" data-tv-bundle-topic="${escapeHtml(downTarget)}">&lt;more&gt;</a>`,
+            ));
             return;
         }
         if (inCodeBlock) {
@@ -3383,8 +3394,19 @@ class TVBundleApp {
         targets.forEach((target) => {
             if (target && !stack.includes(target)) { stack.push(target); }
         });
+        const modalTargets = stack.filter((target) => {
+            const dialog = this.dialogManager.get(target);
+            return dialog && dialog.modal && dialog.isOpen();
+        });
+        if (modalTargets.length) {
+            const modalNames = new Set(modalTargets);
+            const nonModalTargets = stack.filter((target) => !modalNames.has(target));
+            stack.splice(0, stack.length, ...nonModalTargets, ...modalTargets);
+        }
         this.dialogManager.stackOrder = stack;
-        const activeTarget = targets[Number(state.a)];
+        const activeTarget = modalTargets.length
+            ? modalTargets[modalTargets.length - 1]
+            : targets[Number(state.a)];
         if (activeTarget) {
             this.dialogManager.activeTarget = activeTarget;
         } else if (stack.length) {

@@ -35,6 +35,21 @@ def test_orphan_screens_get_unique_synthetic_contexts_and_empty_ones_are_skipped
     assert metadata["skipped_empty_orphan_screens"] == 1
 
 
+def test_more_marker_links_to_the_thelp_down_continuation():
+    first = _screen(128, [b"First page", b"<more>"])
+    first["link_down"] = 327
+    document = ThelpHelpReader("SK2.HLP")._build_document(
+        {},
+        [first, _screen(327, [b"Second page"])],
+        [],
+        binary_data=None,
+    )
+
+    ThelpHelpReader.refresh_rendered_uhf_content(document, encoding="cp437")
+
+    assert document.topics[0].uhf_content[-1] == "[link:topic=327]<more>[/link]"
+
+
 def test_sequential_hotspot_table_cells_are_restored_to_rows():
     header = (
         " "

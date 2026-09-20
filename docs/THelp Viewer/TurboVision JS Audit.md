@@ -229,3 +229,7 @@ compatibility with old Turbo Vision applications.
   a single two-column list, horizontal scrolling, persistent input history and
   Turbo Vision 2.0 cell geometry. Shared `TVFrame` title drawing was corrected
   and is covered by unit and real-Chrome geometry tests.
+- [x] Phase 5.4: preserved single-line drag frames for windows and dialogs,
+  modal-first URL-state restoration, and functional THELP `<more>` continuation
+  links. The reported Sidekick 2 topic 128/File Open URL is a browser regression
+  fixture.

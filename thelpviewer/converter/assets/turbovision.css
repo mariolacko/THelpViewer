@@ -989,7 +989,8 @@ button.tv-status-item {
     color: #55ff55;
 }
 
-.tv-window.is-resizing {
+.tv-window.is-resizing,
+.tv-window.is-moving {
     --tv-current-frame: #55ff55;
     --tv-current-title-bg: var(--tv-window);
     --tv-current-title-fg: #55ff55;
@@ -1001,7 +1002,13 @@ button.tv-status-item {
 .tv-window.is-resizing .tv-border-fill,
 .tv-window.is-resizing .tv-border-side,
 .tv-window.is-resizing .tv-scroll-corner-left,
-.tv-window.is-resizing .tv-grow-handle {
+.tv-window.is-resizing .tv-grow-handle,
+.tv-window.is-moving .tv-border-top,
+.tv-window.is-moving .tv-border-corner,
+.tv-window.is-moving .tv-border-fill,
+.tv-window.is-moving .tv-border-side,
+.tv-window.is-moving .tv-scroll-corner-left,
+.tv-window.is-moving .tv-grow-handle {
     color: #55ff55;
 }
 

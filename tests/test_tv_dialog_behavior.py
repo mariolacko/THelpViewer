@@ -140,6 +140,20 @@ const regular = buildDialog();
 regular.instance.open();
 if (document.activeElement !== regular.dialogElement) { throw new Error("dialog did not receive focus"); }
 
+regular.instance.startDrag({
+    target: regular.dialogElement,
+    clientX: 10,
+    clientY: 10,
+    preventDefault() {},
+});
+if (!regular.dialogElement.classList.contains("is-dragging")) {
+    throw new Error("dialog move frame state was not preserved");
+}
+regular.instance.onDragEnd();
+if (regular.dialogElement.classList.contains("is-dragging")) {
+    throw new Error("dialog move frame state was not cleared");
+}
+
 const enter = keyEvent("Enter", regular.dialogElement);
 regular.instance.onDialogKeyDown(enter);
 if (regular.defaultButton.clicked !== 1 || !enter.defaultPrevented) {

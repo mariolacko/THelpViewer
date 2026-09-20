@@ -705,7 +705,9 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
     if (!windowElement) {
         return;
     }
-    const singleFrame = !dialog && windowElement.classList.contains("is-resizing");
+    const singleFrame = windowElement.classList.contains("is-resizing")
+        || windowElement.classList.contains("is-moving")
+        || (dialog && windowElement.classList.contains("is-dragging"));
     const topBar = dialog
         ? windowElement.querySelector(".tv-dialog-titlebar")
         : windowElement.querySelector(".tv-border-top");
@@ -3343,6 +3345,8 @@ class TVDialog extends TVWidget {
             startLeft: Number.parseFloat(style.getPropertyValue("--tv-dialog-left")) || this.dialog.offsetLeft,
             startTop: Number.parseFloat(style.getPropertyValue("--tv-dialog-top")) || this.dialog.offsetTop,
         };
+        this.dialog.classList.add("is-dragging");
+        updateWindowFrameState(this.dialog, true, { dialog: true });
         document.addEventListener("mousemove", this.onDragMove);
         document.addEventListener("mouseup", this.onDragEnd);
     }
@@ -3364,6 +3368,8 @@ class TVDialog extends TVWidget {
 
     onDragEnd = () => {
         this.dragState = null;
+        this.dialog.classList.remove("is-dragging");
+        updateWindowFrameState(this.dialog, this.isActive(), { dialog: true });
         document.removeEventListener("mousemove", this.onDragMove);
         document.removeEventListener("mouseup", this.onDragEnd);
         if (this.manager && this.manager.onChange) {

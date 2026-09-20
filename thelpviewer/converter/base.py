@@ -489,6 +489,15 @@ def render_topic_uhf_content(
             content.append("[/code]")
             in_code_block = False
 
+        decoded_line = decode_bytes(raw_line)
+        if (
+            not line_is_code
+            and decoded_line.strip().casefold() == "<more>"
+            and topic.down_context in topic_ids
+        ):
+            content.append(format_uhf_link("<more>", topic_id=topic.down_context))
+            continue
+
         line_number = line_index + 1
         if line_number in positional_by_line:
             content.append(
@@ -516,7 +525,7 @@ def render_topic_uhf_content(
                 sequential_index = next_index
                 continue
 
-        content.append(_escape_uhf_segment(raw_line, decode_bytes))
+        content.append(escape_uhf_text(decoded_line))
 
     if in_code_block:
         content.append("[/code]")

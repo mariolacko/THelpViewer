@@ -76,7 +76,9 @@ Static methods:
   - `close()` hides a reusable dialog; `destroy()` permanently removes a
     dynamic dialog, its drag listeners and its manager registration.
   - `bindCommonClose(callback)` — Bind the common close action
-  - `bindDrag()` — Enable title bar drag
+  - `bindDrag()` — Enable title bar drag. While moving, the shared frame uses
+    the single-line Turbo Vision drag glyphs and restores its active/passive
+    frame after mouse release.
   - `setManager(manager, name)` — Register with TVDialogManager
   - `focusableElements()` — Return the current keyboard focus cycle
   - `onDialogKeyDown(event)` — Shared Escape, default Enter and Tab handling
@@ -106,6 +108,10 @@ Manages dialog lifecycle, z-ordering, and active state.
 - `canDispatchCommand(command)` — Report whether the active target accepts a command
 - `applyAllZIndices()` — Recalculate z-index stack
 - `applyActiveStates()` — Update `is-window-active` / `is-window-inactive` classes
+
+URL-state restoration keeps every open modal dialog above ordinary windows
+and makes the top modal active, even when an older serialized stack recorded
+an invalid background position for it.
 
 ### TVMenuController
 

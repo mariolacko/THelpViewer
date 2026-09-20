@@ -167,6 +167,14 @@ const resizer = new TestResizer(windowElement);
 if (!resizeHandle.listeners.has("mousedown") || !moveHandle.listeners.has("mousedown") || !window.listeners.has("beforeunload")) {
     throw new Error("resizer did not bind its resources");
 }
+resizer.setMoveFrame(true);
+if (!windowElement.classList.contains("is-moving")) {
+    throw new Error("move frame state was not preserved");
+}
+resizer.setMoveFrame(false);
+if (windowElement.classList.contains("is-moving")) {
+    throw new Error("move frame state was not cleared");
+}
 resizer.destroy();
 resizer.destroy();
 if (resizeHandle.listeners.has("mousedown") || moveHandle.listeners.has("mousedown") || window.listeners.has("beforeunload")) {
@@ -226,6 +234,7 @@ def test_active_window_state_controls_scrollbars_and_scopes_frame_redraw():
     assert "listRoot._tvListViewer.setActive(active)" in frame_state
     assert "fillBorders(windowElement)" in frame_state
     assert "fillBorders();" not in frame_state
+    assert 'windowElement.classList.contains("is-moving")' in frame_state
     assert '.tv-scrollbar, .tv-menu-bar' not in shell
     assert ".tv-scrollbar.is-inactive" in css
     assert ".tv-vlist-scrollbar.is-inactive" in css

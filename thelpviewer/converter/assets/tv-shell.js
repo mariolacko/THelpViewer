@@ -325,6 +325,7 @@ class TurboVisionWindowResizer {
         if (this.windowElement.classList.contains("is-resizing")) {
             return;
         }
+        this.windowElement.classList.toggle("is-moving", active);
         this.setWindowFrame(active);
     }
 
@@ -575,6 +576,7 @@ class TurboVisionWindowResizer {
             this.moveHandle.removeEventListener("mousedown", this.onMoveHandleMouseDown);
         }
         this.windowElement.classList.remove("is-resizing");
+        this.windowElement.classList.remove("is-moving");
     }
 }
 

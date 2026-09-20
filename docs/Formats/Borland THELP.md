@@ -1,6 +1,6 @@
 # Borland THELP Format
 
-> Created: 2026-03-29 · Last updated: 2026-09-19
+> Created: 2026-03-29 · Last updated: 2026-09-20
 
 Used by: Turbo Pascal 4–5.5, Turbo C, Turbo Assembler, Borland Sprint,
 Sidekick, Eureka. File extensions: `.HLP`, `.TPH`, `.TCH`, `.TAH`, and other
@@ -305,6 +305,12 @@ Followed by `KeyWordCnt` keyword entries (9 bytes each):
 | +7     | 2    | Context     | Word | Target screen context ID  |
 
 When `DownContext = 0`, this is the last page of a multi-page screen.
+
+Sidekick 2 displays the literal final-line marker `<more>` on screens that
+continue through a non-zero `DownContext`. This marker is navigation, not
+ordinary text: normalized UHF therefore emits it as a link to `DownContext`.
+The bundle renderer also recognizes the raw marker for compatibility with
+bundles generated before this normalization was added.
 
 `LeftBtn/RightBtn/UpBtn/DownBtn` are 1-based keyword-navigation button
 indices used by old-format viewers. They are not derivable from position
