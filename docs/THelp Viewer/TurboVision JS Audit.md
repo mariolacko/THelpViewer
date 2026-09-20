@@ -249,6 +249,16 @@ compatibility with old Turbo Vision applications.
     HELP editor; and `TVOutline : TVVerticalListViewer` drives HELP Contents and
     Change Directory. Mastermind is the tenth game and uses the shared Hall of
     Fame.
+33. **The History control still differed from Turbo Vision at the glyph and
+    popup levels, Search commands were always enabled, and Mastermind inherited
+    an incompatible button minimum width.** **Resolved in Phase 7.9:** the
+    source-defined `THistory::icon` sequence (`\xDE~\x19~\xDD`) now paints its
+    side glyphs with the Arrow attribute and its highlighted down-arrow with
+    the Sides attribute; all History consumers use one compact framed
+    `TVHistoryWindow` without gray padding. Find is enabled only for an active
+    HELP/Docs target and Find Again only after that target has a query.
+    Mastermind has centered, inset content and its five-column color controls
+    explicitly override the generic eleven-column button minimum.
 
 ## Component assessment
 
@@ -519,3 +529,8 @@ Recommended games remain:
   History-backed active-window Find/Find Again flow, reusable `TVOutline` for
   HELP Contents and Change Directory, and Mastermind as the tenth Hall of Fame
   game. Unit and Docker-backed real-Chrome coverage exercise the new paths.
+- [x] Phase 7.9: matched the original segmented History icon attributes and
+  compact framed popup, made Find/Find Again availability follow the active
+  target and query, and corrected Mastermind geometry plus its inherited
+  button-width conflict. Docker-backed Chrome checks dimensions, palettes,
+  command states and clipping.

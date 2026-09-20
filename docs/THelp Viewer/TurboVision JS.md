@@ -261,6 +261,8 @@ The selectors support arrow-key navigation.
 - `performFind()` / `findAgain()` — Execute the supplied target callbacks.
 - The bundle Search menu exposes Find (`Ctrl+F`), Find Again (`Ctrl+L`) and
   topic-index Search (`F3`) as distinct commands.
+- Find is disabled without an active HELP/Docs window. Find Again remains
+  disabled until the active target has a previous query.
 
 ### TVFileOpenDialog
 
@@ -269,6 +271,9 @@ The selectors support arrow-key navigation.
 - `TVFileList`, `TVHistory`, `TVHistoryViewer` and `TVHistoryWindow` provide the
   reusable file-list, persistent model, list and popup roles. The old
   `TVFileListBox` export remains a compatibility alias.
+- `TVHistoryWindow` renders the source-compatible framed popup shared by File
+  Open, Change Directory and Find. Its default geometry is 30×8 character
+  cells for the 28-cell File Open input, with no padding outside the frame.
 - The layout follows Turbo Vision 2.0 `TFileDialog`: one unframed, two-column
   `TFileList`, a horizontal scrollbar, Name input with a three-cell History
   control, Open/Cancel buttons and the two-line `TFileInfoPane` at the bottom.
@@ -347,7 +352,8 @@ also suspends the owning game until the prompt is destroyed.
 
 All ten games use the same persistent, sorted ten-entry Hall of Fame. The
 pure `MastermindGame` rule class correctly handles repeated colors when
-calculating exact and misplaced pegs.
+calculating exact and misplaced pegs. Its dialog reserves an inset around the
+board and keeps all color, action and status controls inside the client area.
 
 ### Tetris Specifics
 
