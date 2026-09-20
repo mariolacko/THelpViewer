@@ -279,3 +279,6 @@ compatibility with old Turbo Vision applications.
   list clicks by resolving the pointer against current row rectangles. The
   browser regression now uses a real DevTools mouse event instead of DOM
   `.click()`, which had hidden the one-row targeting defect.
+- [x] Phase 6.6: separated the Markdown Editor content colors from the
+  customizable Viewer palette. A browser regression deliberately changes the
+  Viewer text background to green and verifies that Docs remains blue/yellow.

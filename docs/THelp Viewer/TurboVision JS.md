@@ -139,8 +139,9 @@ The bundle desktop keeps one managed window per opened HELP bundle and one per
 Markdown document. `F6`/`Shift-F6`, Window List, Tile and Cascade all operate
 on the same `TVDialogManager` stack. Dynamic windows use distinct persisted
 geometry keys, so moving or maximizing one does not overwrite another.
-Markdown documentation uses the Viewer/Editor content palette explicitly:
-blue background with yellow base text in the default TV 2.0 palette.
+Markdown documentation uses a dedicated Editor palette: blue background with
+yellow base text. These two colors stay fixed across themes and Viewer palette
+customization; headings, links and syntax accents may use their own colors.
 
 ### TurboVisionScrollbar
 

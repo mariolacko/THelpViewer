@@ -82,6 +82,10 @@
     --tv-palette-help-keyword-bg: #00aaaa; --tv-palette-help-keyword-fg: #ffff55;
     --tv-palette-help-keyword-selected-bg: #0000aa; --tv-palette-help-keyword-selected-fg: #ffff55;
 
+    /* The Markdown editor keeps the classic DOS editor colors in every theme. */
+    --tv-editor-bg: #0000aa;
+    --tv-editor-fg: #ffff55;
+
     /* Compatibility aliases. Components below select an owner palette locally. */
     --tv-desktop: var(--tv-palette-desktop-bg);
     --tv-desktop-dot: var(--tv-palette-desktop-fg);
@@ -1142,8 +1146,8 @@ button.tv-status-item {
     --tv-owner-scroll-page-fg: var(--tv-palette-viewer-scroll-page-fg);
     --tv-owner-scroll-controls-bg: var(--tv-palette-viewer-scroll-controls-bg);
     --tv-owner-scroll-controls-fg: var(--tv-palette-viewer-scroll-controls-fg);
-    --tv-owner-content-bg: var(--tv-palette-viewer-text-bg);
-    --tv-owner-content-fg: var(--tv-palette-viewer-text-fg);
+    --tv-owner-content-bg: var(--tv-editor-bg);
+    --tv-owner-content-fg: var(--tv-editor-fg);
     --tv-window-bg: var(--tv-owner-content-bg);
     --tv-window-fg: var(--tv-owner-content-fg);
     --tv-current-frame: var(--tv-owner-frame-active-fg);

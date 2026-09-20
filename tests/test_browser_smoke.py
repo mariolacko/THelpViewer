@@ -205,6 +205,27 @@ async function run() {
     if (docColors.viewport.join() !== editorColors.join() || docColors.content.join() !== editorColors.join()) {
         throw new Error(`Documentation does not use the Editor palette: ${JSON.stringify(docColors)}`);
     }
+    const docPaletteIsolation = await evaluate(`(() => {
+        const TV = window.THelpViewerTV;
+        const palette = TV.buildDefaultColorPalette();
+        TV.setColorPaletteAttribute(palette, 13, 0x2F);
+        TV.applyColorPalette(palette, false);
+        const doc = document.querySelector('.tv-doc-window');
+        const viewport = getComputedStyle(doc.querySelector('.tv-viewport'));
+        const content = getComputedStyle(doc.querySelector('.tv-doc-document'));
+        const result = {
+            viewport: [viewport.backgroundColor, viewport.color],
+            content: [content.backgroundColor, content.color],
+        };
+        TV.applyColorPalette(TV.buildDefaultColorPalette(), false);
+        return result;
+    })()`);
+    if (
+        docPaletteIsolation.viewport.join() !== editorColors.join()
+        || docPaletteIsolation.content.join() !== editorColors.join()
+    ) {
+        throw new Error(`Viewer palette changed the fixed Editor colors: ${JSON.stringify(docPaletteIsolation)}`);
+    }
 
     await evaluate(`(() => {
         const item = document.querySelector('[data-tv-window-cmd]');
