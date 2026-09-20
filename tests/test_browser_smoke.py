@@ -867,10 +867,15 @@ async function run() {
             visibleText: docItems.every((element) => {
                 const text = element.querySelector('.tv-vlist-text');
                 const style = getComputedStyle(text);
+                const itemRect = element.getBoundingClientRect();
+                const textRect = text.getBoundingClientRect();
                 return Boolean(text.textContent.trim()) && style.visibility === 'visible'
-                    && style.opacity === '1' && style.color !== style.backgroundColor;
+                    && style.opacity === '1' && style.color !== style.backgroundColor
+                    && textRect.height > 0 && textRect.top >= itemRect.top
+                    && textRect.bottom <= itemRect.bottom;
             }),
-            historyArrowColor: getComputedStyle(dialog.querySelector('.tv-file-open-history-button .tv-hotkey')).color,
+            historyArrowColors: stylePair(dialog.querySelector('.tv-file-open-history-arrow')),
+            historySideColors: stylePair(dialog.querySelector('.tv-file-open-history-side')),
         };
     })()`);
     if (
@@ -885,7 +890,9 @@ async function run() {
         || fileOpen.selectedTextColors.join() !== ['rgb(0, 170, 170)', 'rgb(255, 255, 85)'].join()
         || fileOpen.normalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || fileOpen.normalTextColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
-        || !fileOpen.visibleText || fileOpen.historyArrowColor !== 'rgb(85, 255, 85)'
+        || !fileOpen.visibleText
+        || fileOpen.historyArrowColors.join() !== ['rgb(0, 170, 0)', 'rgb(0, 0, 0)'].join()
+        || fileOpen.historySideColors.join() !== ['rgb(170, 170, 170)', 'rgb(0, 170, 0)'].join()
     ) {
         throw new Error(`File Open dialog is incomplete: ${JSON.stringify(fileOpen)}`);
     }
@@ -1118,6 +1125,27 @@ async function run() {
         throw new Error(`README table layout is broken: ${JSON.stringify(readmeTable)}`);
     }
 
+    await evaluate(`(() => {
+        const readme = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
+            element.querySelector('.tv-window-caption')?.textContent === 'README'
+        );
+        const link = readme?.querySelector('a[href="docs/THelp%20Viewer/Bundle.md"]');
+        if (!link) { throw new Error('README Bundle link is missing'); }
+        link.click();
+    })()`);
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const bundleDoc = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
+                element.querySelector('.tv-window-caption')?.textContent === 'THelp Viewer/Bundle'
+            );
+            if (bundleDoc) { resolve(true); return; }
+            if (Date.now() >= deadline) { reject(new Error('README docs/ link did not open in the viewer')); return; }
+            setTimeout(check, 50);
+        };
+        check();
+    })`, true);
+
     await evaluate(`document.querySelector('[data-tv-dialog-open="midi"]').click()`);
     await pause();
     const midiCompact = await evaluate(`(() => {
@@ -1127,6 +1155,9 @@ async function run() {
         const advanced = dialog?.querySelector('[data-tv-midi-advanced]');
         const list = dialog?.querySelector('[data-tv-midi-track-list]');
         const side = dialog?.querySelector('.tv-dialog-body > .tv-border-side');
+        const displayParts = Array.from(dialog?.querySelectorAll(
+            '.tv-midi-display-label, .tv-midi-track-number, .tv-midi-display-time, .tv-midi-display-title, .tv-midi-status'
+        ) || []);
         return {
             open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
             advancedHidden: Boolean(advanced?.hidden),
@@ -1134,9 +1165,18 @@ async function run() {
             sharedScrollbar: Boolean(list?.querySelector('.tv-scrollbar-y [data-role="thumb"]')),
             height: dialog?.getBoundingClientRect().height || 0,
             sideGlyphs: side?.textContent.split('\\n').length || 0,
+            displayTextVisible: displayParts.length === 5 && displayParts.every((element) => {
+                const style = getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return Boolean(element.textContent.trim()) && rect.width > 0 && rect.height > 0
+                    && style.color !== style.backgroundColor;
+            }),
         };
     })()`);
-    if (!midiCompact.open || !midiCompact.advancedHidden || !midiCompact.moreCollapsed || !midiCompact.sharedScrollbar) {
+    if (
+        !midiCompact.open || !midiCompact.advancedHidden || !midiCompact.moreCollapsed
+        || !midiCompact.sharedScrollbar || !midiCompact.displayTextVisible
+    ) {
         throw new Error(`MIDI compact mode is incomplete: ${JSON.stringify(midiCompact)}`);
     }
     await evaluate(`document.querySelector('[data-tv-midi-more]').click()`);

@@ -9,13 +9,14 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
+from ..public_docs import is_public_doc_path
 from .config import AppConfig, load_config
 
 
 def _virtual_docs_map(config: AppConfig) -> dict[str, Path]:
     virtual_docs: dict[str, Path] = {}
     for request_path, disk_path in config.virtual_docs:
-        if disk_path.is_file():
+        if is_public_doc_path(request_path) and disk_path.is_file():
             virtual_docs[request_path] = disk_path
     return virtual_docs
 
@@ -36,6 +37,8 @@ def _docs_catalog(config: AppConfig) -> list[dict[str, str]]:
         for md_path in sorted(config.docs_dir.rglob("*.md")):
             rel = md_path.relative_to(config.docs_dir)
             file_name = str(rel).replace("\\", "/")
+            if not is_public_doc_path(file_name):
+                continue
             if file_name in virtual_docs:
                 continue
             entry: dict[str, str] = {
@@ -80,7 +83,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     @app.get("/docs/{doc_path:path}")
     async def docs_file(doc_path: str) -> Response:
-        if doc_path == "catalog.json":
+        if doc_path == "catalog.json" or not is_public_doc_path(doc_path):
             raise HTTPException(status_code=404)
         virtual_docs = _virtual_docs_map(config)
         if doc_path in virtual_docs:

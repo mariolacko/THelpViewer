@@ -226,6 +226,21 @@ compatibility with old Turbo Vision applications.
     `TVMultiCheckBoxes`, bounded `TVTerminal`, read-only `TVEditor` and
     `TVIndicator` are shared controls; Widget Gallery and Docs exercise them in
     real Chrome.
+30. **Rendered File Open rows and the MIDI display contained text that was
+    present in the DOM but clipped or painted black-on-black.** The shared
+    `TVListViewer` template inserted formatting whitespace before its text
+    span; in the one-cell-high, `white-space: pre` file rows that moved the
+    visible label outside the clipped row. The generic static-text rule also
+    overrode MIDI's earlier one-class color rules. **Resolved in Phase 7.7:**
+    list rows now render without structural whitespace, MIDI declares its
+    static-text palette through the shared control token, and browser coverage
+    checks the text rectangles and computed foreground/background pairs.
+31. **History used InputLine colors and public Docs exposed internal working
+    papers.** **Resolved in Phase 7.7:** the three-cell History icon now uses
+    the original `THistory` arrow/sides palette mapping, runtime and static
+    exports omit `* Audit.md` and `* RE Notes.md`, and public documentation no
+    longer links to those private files. Repository-relative `docs/...` links
+    in the public README are normalized by the viewer and exercised in Chrome.
 
 ## Component assessment
 
@@ -485,3 +500,6 @@ Recommended games remain:
 - [x] Phase 7.6: extracted FileList and all three History roles, added Change
   Directory, MultiCheckBoxes, Terminal/Event Log and a read-only
   Editor/Indicator pair for Docs, with shared-control and browser regressions.
+- [x] Phase 7.7: fixed shared list-row text clipping, restored the original
+  History and visible MIDI-display colors, validated public Markdown links and
+  excluded Audit/RE working papers from runtime and exported Docs trees.

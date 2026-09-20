@@ -526,7 +526,7 @@ class TVFileOpenDialog extends TVDialog {
                     <div class="tv-file-open-name-label">${nameLabel.renderMarkup()}</div>
                     <div class="tv-file-open-name-input">${nameInput.renderMarkup()}</div>
                     <button type="button" class="tv-file-open-history-button" data-tv-file-open-history
-                            aria-label="History" disabled>▐<span class="tv-hotkey">↓</span>▌</button>
+                            aria-label="History" disabled><span class="tv-file-open-history-side">▐</span><span class="tv-file-open-history-arrow">↓</span><span class="tv-file-open-history-side">▌</span></button>
                     <div class="tv-file-open-files-label">${filesLabel.renderMarkup()}</div>
                     <div class="tv-file-open-file-list" data-tv-file-open-files></div>
                     <div class="tv-file-open-hscroll" data-tv-file-open-hscroll aria-hidden="true">
@@ -897,7 +897,7 @@ class TVChangeDirectoryDialog extends TVDialog {
                     <div class="tv-change-dir-path-label">${directoryLabel.renderMarkup()}</div>
                     <div class="tv-change-dir-path-input">${directoryInput.renderMarkup()}</div>
                     <button type="button" class="tv-file-open-history-button tv-change-dir-history-button"
-                            data-tv-change-dir-history aria-label="Directory history" disabled>▐<span class="tv-hotkey">↓</span>▌</button>
+                            data-tv-change-dir-history aria-label="Directory history" disabled><span class="tv-file-open-history-side">▐</span><span class="tv-file-open-history-arrow">↓</span><span class="tv-file-open-history-side">▌</span></button>
                     <div class="tv-change-dir-tree-label">${treeLabel.renderMarkup()}</div>
                     ${TVVerticalListViewer.renderMarkup({
                         rootClass: "tv-change-dir-listviewer",

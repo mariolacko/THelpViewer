@@ -21,6 +21,7 @@ from thelpviewer.help_database import (
     load_help_manifest,
     lookup_help_database_entry,
 )
+from thelpviewer.public_docs import is_public_doc_path
 from .html import (
     GENERATOR_AUTHORS,
     GENERATOR_VERSION,
@@ -648,6 +649,8 @@ def _copy_docs(docs_source: Path, docs_target: Path, *,
 
     for md_path in sorted(docs_source.rglob("*.md")):
         rel = md_path.relative_to(docs_source)
+        if not is_public_doc_path(rel):
+            continue
         dest = docs_target / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(md_path, dest)
@@ -701,14 +704,14 @@ def _render_bundle_index_html() -> str:
 <meta name="twitter:image" content="{SITE_ASSET_DIR_NAME}/Thelp.png">
 <meta name="theme-color" content="#000080">
 <meta name="GENERATOR" content="THelp Viewer Converter {GENERATOR_VERSION}">
-<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260920q">
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20260920n"></script>
+<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260920r">
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20260920o"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js?v=20260621n"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20260920l"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20260920m"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20260506a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20260920d"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20260920g"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260920k"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260920l"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"

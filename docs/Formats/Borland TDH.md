@@ -9,7 +9,7 @@ These files are not Borland THELP/TPH/TCH streams. They do not contain the
 THELP signature `$*$* &&&&$*$` and must be detected and parsed separately.
 
 Detailed reverse-engineering history, runtime traces, and unresolved questions
-live in [Borland TDH RE Notes.md](Borland%20TDH%20RE%20Notes.md).
+are kept in internal project notes rather than the public format reference.
 
 All visible multi-byte integers in the on-disk outer structures are
 big-endian unless stated otherwise. In the TDH runtime map, each word is later
@@ -26,8 +26,8 @@ That status is now also covered by end-to-end bundle export regression checks
 for the current legacy TDH, later 2.x TDH, and TFH samples rather than only by
 reader-local decode assertions.
 The exact proof addresses, helper entrypoints, and byte-level runtime traces
-stay in [Borland TDH RE Notes.md](Borland%20TDH%20RE%20Notes.md); this document
-only keeps the stable format-level conclusions.
+stay in those internal notes; this document only keeps the stable format-level
+conclusions.
 
 ## 1. Family Overview
 
@@ -91,7 +91,7 @@ Known header values:
 The first word is a byte-size field, not a fixed TDH version signature.
 
 Current sample-specific probe offsets, payload-prefix comparisons, and other
-byte-level evidence stay in [Borland TDH RE Notes.md](Borland%20TDH%20RE%20Notes.md).
+byte-level evidence stay in the internal reverse-engineering notes.
 
 ### 3.1 Runtime Context Map
 
@@ -139,9 +139,9 @@ In other words, for the known TDH sample families the current reader status is
 already `decoded` at the text/topic-addressing layer. The remaining uncertainty
 is limited to exact 1.0-to-2.x namespace reconstruction near the front edge of
 the late 2.x tail plus a few runtime implementation details already tracked in
-[Borland TDH RE Notes.md](Borland%20TDH%20RE%20Notes.md). Exact `TD.EXE`
-helper addresses, runtime buffers, the `600` vs. `596` preload nuance, and the
-detailed anchor list for the observed high-context drift stay there.
+the internal reverse-engineering notes. Exact `TD.EXE` helper addresses,
+runtime buffers, the `600` vs. `596` preload nuance, and the detailed anchor
+list for the observed high-context drift stay there.
 
 Each map entry is interpreted as `sign16(word)`, not as an unsigned block size.
 

@@ -3728,16 +3728,28 @@ class TVBundleApp {
             });
         }
 
-        // Intercept .md links to open in-viewer instead of navigating
+        // Intercept Markdown links to open in-viewer instead of navigating.
+        // Root README files keep repository-relative "docs/..." links, while
+        // the public viewer already serves that directory at DOCS_DIR.
         const self = this;
         const baseDir = filename.includes("/") ? filename.replace(/[^/]+$/, "") : "";
         windowEl.querySelectorAll("a[href]").forEach((link) => {
             const href = link.getAttribute("href");
-            if (href && href.endsWith(".md")) {
+            let decodedHref = "";
+            try {
+                decodedHref = decodeURIComponent(href || "");
+            } catch {
+                return;
+            }
+            const hrefPath = decodedHref.split(/[?#]/, 1)[0];
+            if (hrefPath && hrefPath.toLowerCase().endsWith(".md")) {
                 link.addEventListener("click", async (e) => {
                     e.preventDefault();
                     // Resolve relative path and normalize ../
-                    const raw = baseDir ? baseDir + decodeURIComponent(href) : decodeURIComponent(href);
+                    const repositoryRelative = hrefPath.replace(/^\/?docs\//i, "");
+                    const raw = repositoryRelative !== hrefPath
+                        ? repositoryRelative
+                        : baseDir + hrefPath;
                     const parts = raw.split("/");
                     const normalized = [];
                     for (const p of parts) {

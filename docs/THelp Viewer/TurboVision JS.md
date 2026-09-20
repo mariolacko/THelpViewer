@@ -1,7 +1,7 @@
 # TurboVision JS — API Documentation
 
-The current behavioural audit and implementation order are tracked in
-[TurboVision JS Audit](TurboVision%20JS%20Audit.md).
+The behavioural audit and implementation order are maintained as internal
+project documents and are not part of the public Docs catalog.
 
 THelpViewer uses a modular JavaScript framework inspired by Borland's TurboVision TUI toolkit. The runtime assets are served from `www/assets/`:
 
@@ -398,6 +398,11 @@ Single-page application for browsing help file bundles.
 The Help Files menu uses `product_name`, `version`, and `menu_name` from
 `helps/catalog.json` to render product → version → file. Entries without
 `product_name` are shown as direct Help Files items.
+
+The public Docs catalog and static site export omit internal files named
+`* Audit.md` or `* RE Notes.md`. Markdown links are resolved inside the viewer;
+repository-relative `docs/...` links in the root README are translated to the
+public Docs root instead of opening a broken `docs/docs/...` URL.
 
 ### BundleWindowManager
 

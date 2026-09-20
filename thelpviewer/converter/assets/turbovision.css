@@ -66,7 +66,7 @@
     --tv-palette-dialog-input-selected-bg: #00aa00; --tv-palette-dialog-input-selected-fg: #ffffff;
     --tv-palette-dialog-input-arrow-bg: #0000aa; --tv-palette-dialog-input-arrow-fg: #55ff55;
     --tv-palette-dialog-history-button-bg: #00aa00; --tv-palette-dialog-history-button-fg: #000000;
-    --tv-palette-dialog-history-sides-bg: #aaaaaa; --tv-palette-dialog-history-sides-fg: #0000aa;
+    --tv-palette-dialog-history-sides-bg: #aaaaaa; --tv-palette-dialog-history-sides-fg: #00aa00;
     --tv-palette-dialog-history-page-bg: #00aaaa; --tv-palette-dialog-history-page-fg: #0000aa;
     --tv-palette-dialog-history-controls-bg: #00aaaa; --tv-palette-dialog-history-controls-fg: #0000aa;
     --tv-palette-dialog-list-normal-bg: #00aaaa; --tv-palette-dialog-list-normal-fg: #000000;
@@ -2281,23 +2281,28 @@ button.tv-status-item {
 }
 
 .tv-midi-display-label {
+    --tv-control-static-fg: #aaaaaa;
     color: #aaaaaa;
 }
 
 .tv-midi-track-number {
+    --tv-control-static-fg: #ffff55;
     color: #ffff55;
 }
 
 .tv-midi-display-time {
     justify-self: end;
+    --tv-control-static-fg: #ffff55;
     color: #ffff55;
 }
 
 .tv-midi-display-title {
+    --tv-control-static-fg: #ffffff;
     color: #ffffff;
 }
 
 .tv-midi-status {
+    --tv-control-static-fg: #55ff55;
     background: #000000;
     color: #55ff55;
 }
@@ -3219,8 +3224,8 @@ button.tv-status-item {
     height: 1em;
     overflow: hidden;
     cursor: pointer;
-    background: var(--tv-dialog-input-bg);
-    color: var(--tv-dialog-input-fg);
+    background: var(--tv-palette-dialog-history-button-bg);
+    color: var(--tv-palette-dialog-history-button-fg);
     line-height: 1;
     white-space: pre;
 }
@@ -3236,8 +3241,20 @@ button.tv-status-item {
     cursor: default;
 }
 
-.tv-file-open-history-button .tv-hotkey {
-    color: var(--tv-palette-dialog-input-arrow-fg);
+.tv-file-open-history-button > span {
+    display: inline-block;
+    width: 1ch;
+    height: 1em;
+}
+
+.tv-file-open-history-arrow {
+    background: var(--tv-palette-dialog-history-button-bg);
+    color: var(--tv-palette-dialog-history-button-fg);
+}
+
+.tv-file-open-history-side {
+    background: var(--tv-palette-dialog-history-sides-bg);
+    color: var(--tv-palette-dialog-history-sides-fg);
 }
 
 .tv-file-open-files-label {

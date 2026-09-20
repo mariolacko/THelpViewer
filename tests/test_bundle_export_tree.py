@@ -7,6 +7,24 @@ from thelpviewer.converter.writers import bundle as bundle_writer
 from thelpviewer.help_database import HelpDatabaseEntry, crc32_file
 
 
+def test_copy_docs_omits_internal_audits_and_reverse_engineering_notes(tmp_path):
+    docs_source = tmp_path / "source"
+    docs_target = tmp_path / "public"
+    docs_source.mkdir()
+    (docs_source / "Format.md").write_text("public", encoding="utf-8")
+    (docs_source / "Runtime Audit.md").write_text("private", encoding="utf-8")
+    (docs_source / "Format RE Notes.md").write_text("private", encoding="utf-8")
+
+    bundle_writer._copy_docs(docs_source, docs_target)
+
+    assert (docs_target / "Format.md").read_text(encoding="utf-8") == "public"
+    assert not (docs_target / "Runtime Audit.md").exists()
+    assert not (docs_target / "Format RE Notes.md").exists()
+    assert json.loads((docs_target / "catalog.json").read_text(encoding="utf-8")) == [
+        {"file": "Format.md", "name": "Format"}
+    ]
+
+
 def test_export_bundle_tree_omits_failed_exports_from_catalog(tmp_path, monkeypatch):
     input_root = tmp_path / "sources"
     source = input_root / "broken.hlp"

@@ -1626,11 +1626,7 @@ class TVListViewer extends TVWidget {
             this.itemClassName,
             index === this.selectedIndex ? this.selectedClassName : "",
         ].filter(Boolean).join(" ");
-        return `
-            <div role="option" tabindex="-1" class="${className}" ${this.itemAttrName}="${index}">
-                <span class="tv-vlist-text tv-colors-list-text">${this.defaultContent(item, index)}</span>
-            </div>
-        `;
+        return `<div role="option" tabindex="-1" class="${className}" ${this.itemAttrName}="${index}"><span class="tv-vlist-text tv-colors-list-text">${this.defaultContent(item, index)}</span></div>`;
     }
 
     itemMarkup(item, index) {
