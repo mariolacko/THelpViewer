@@ -2201,8 +2201,7 @@ button.tv-status-item {
     outline: none;
 }
 
-.tv-colors-listviewer:not(.is-inactive) .tv-colors-list-item:focus-visible,
-.tv-colors-listviewer:not(.is-inactive):focus-within .tv-colors-list-item.is-selected {
+.tv-colors-listviewer.is-current:not(.is-inactive) .tv-colors-list-item.is-selected {
     background: var(--tv-dialog-list-focused-bg);
     color: var(--tv-dialog-list-focused-fg);
     outline: none;
@@ -2237,11 +2236,11 @@ button.tv-status-item {
 
 .tv-colors-dialog-buttons {
     position: absolute;
-    left: 35ch;
+    left: 23ch;
     top: 14em;
     display: flex;
     gap: 2ch;
-    width: 22ch;
+    width: 34ch;
     height: 2em;
 }
 

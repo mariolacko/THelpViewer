@@ -191,7 +191,7 @@ Standard application dialogs.
 | Class | Purpose |
 |-------|---------|
 | `TVAboutDialog` | About / splash screen |
-| `TVWidgetGalleryDialog` | Interactive gallery for shared labels, inputs, choices, lists, frames and buttons |
+| `TVWidgetGalleryDialog` | Interactive gallery for shared labels, inputs, choices, list focus/activation, framed information and buttons |
 | `TVFileOpenDialog` | Keyboard-accessible virtual file picker for generated HELP bundles and Markdown documentation, with persistent history |
 | `TVSearchDialog` | Full-text search across topics |
 | `TVAsciiTableDialog` | CP437 character table (0–255) |
@@ -202,9 +202,12 @@ Standard application dialogs.
 `TVColorsDialog` follows the Turbo Vision 2.0 `TColorDialog` 61×18 cell
 geometry from `colorsel.cpp`: Group and Item lists, 4×4 foreground and 4×2
 background selectors, a two-line sample, and the original OK/Cancel controls.
+THelpViewer additionally provides Reset, which previews the exact default
+`cpAppColor` palette; OK persists it and Cancel/Escape restores the palette
+that was active when the dialog opened.
 Its list states use the original color attributes (`0x30`, `0x2F`, `0x3E`),
-the selectors support arrow-key navigation, and Cancel/Escape restores the
-palette that was active when the dialog opened.
+and only the list that owns keyboard focus uses the focused-row attribute.
+The selectors support arrow-key navigation.
 
 ### TVSearchDialog
 

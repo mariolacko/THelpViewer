@@ -173,7 +173,7 @@ class TVWidgetGalleryDialog extends TVDialog {
                 </div>
             `,
             footerMarkup: TVDialog.footerMarkup(),
-            width: "66ch",
+            width: "68ch",
             height: "min(23em, calc(100% - 2em))",
             left: "3ch",
             top: "2em",
@@ -1277,11 +1277,15 @@ class TVColorsDialog extends TVDialog {
         });
         const cancelButton = new TVButton({
             attrs: { "data-tv-colors-cancel": true },
-            label: 'Cancel',
+            label: '~C~ancel',
+        });
+        const resetButton = new TVButton({
+            attrs: { "data-tv-colors-reset": true },
+            label: '~R~eset',
         });
         const buttonStrip = new TVButtonStrip({
             className: "tv-colors-dialog-buttons",
-            buttons: [okButton, cancelButton],
+            buttons: [resetButton, okButton, cancelButton],
         }).renderMarkup();
         const groupTitle = new TVLabel({
             text: "~G~roup",
@@ -1356,6 +1360,7 @@ class TVColorsDialog extends TVDialog {
         this.display = this.query("[data-tv-colors-display]");
         this.okButton = this.query("[data-tv-colors-ok]");
         this.cancelButton = this.query("[data-tv-colors-cancel]");
+        this.resetButton = this.query("[data-tv-colors-reset]");
         this.groupBox = new TVVerticalListViewer(this.groupList, {
             itemClassName: "tv-colors-list-item",
             itemAttrName: "data-tv-colors-group",
@@ -1385,6 +1390,12 @@ class TVColorsDialog extends TVDialog {
         this.itemBox.bind({
             onSelect: (_item, index) => this.onItemSelect(index),
         });
+        this.dialog.addEventListener("focusin", (event) => {
+            const currentList = event.target.closest(".tv-colors-listviewer");
+            for (const list of [this.groupList, this.itemList]) {
+                list?.classList.toggle("is-current", list === currentList);
+            }
+        });
         if (this.foreground) {
             this.foreground.addEventListener("click", (event) => this.onSelectorClick(event, "fg"));
             this.foreground.addEventListener("keydown", (event) => this.onSelectorKeyDown(event, "fg"));
@@ -1398,6 +1409,9 @@ class TVColorsDialog extends TVDialog {
         }
         if (this.cancelButton) {
             this.cancelButton.addEventListener("click", () => this.cancel());
+        }
+        if (this.resetButton) {
+            this.resetButton.addEventListener("click", () => this.resetPalette());
         }
     }
 
@@ -1511,6 +1525,22 @@ class TVColorsDialog extends TVDialog {
     cancel() {
         applyColorPalette(this.previousPalette, false);
         this.close();
+    }
+
+    resetPalette() {
+        const groupIndexes = this.pendingPalette.map((group) => group.index);
+        this.pendingPalette = buildDefaultColorPalette();
+        this.pendingPalette.forEach((group, index) => {
+            const previousIndex = groupIndexes[index];
+            if (Number.isInteger(previousIndex) && previousIndex >= 0 && previousIndex < group.items.length) {
+                group.index = previousIndex;
+            }
+        });
+        applyColorPalette(this.pendingPalette, false);
+        this.renderGroups();
+        this.renderItems();
+        this.renderSelectors();
+        this.renderDisplay();
     }
 
     renderGroups() {

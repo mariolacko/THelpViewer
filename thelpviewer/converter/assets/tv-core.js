@@ -1916,6 +1916,7 @@ class TVVerticalListViewer extends TVWidget {
                 if (this.selectHandler) {
                     this.selectHandler(this.items[index], index, event);
                 }
+                this.selectedElement()?.focus();
             });
             this.viewport.addEventListener("dblclick", (event) => {
                 const index = this.resolveIndex(event.target);

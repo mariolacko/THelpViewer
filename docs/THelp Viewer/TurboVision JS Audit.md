@@ -17,7 +17,7 @@ compatibility with old Turbo Vision applications.
 
 - All eight JavaScript assets pass `node --check`.
 - The source assets and their checked-in `www/assets` mirrors are identical.
-- The complete automated suite passes: 216 tests.
+- The complete automated suite passes: 217 tests.
 - Existing automated coverage is strong for converters and selected rendering
   regressions, but it does not yet exercise browser focus, modal behaviour or
   complete keyboard menu navigation.
@@ -269,3 +269,8 @@ compatibility with old Turbo Vision applications.
   their owner's palette, and centralized theme initialization.
 - [x] Phase 6.3: added real-Chrome regressions for shared Viewer/Puzzle indexes,
   inactive Colors list state, passive frame color/glyph and hidden frame icons.
+- [x] Phase 6.4: made `TVVerticalListViewer` retain roving focus after click
+  handlers redraw their rows, restored distinct current/selected Colors-list
+  states, added a non-persistent Reset preview, and widened Widget Gallery so
+  the complete 30-column Event Log frame remains visible. Real-Chrome coverage
+  verifies click selection, focus, event text and the right-hand frame edge.

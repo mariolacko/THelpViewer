@@ -326,7 +326,7 @@ async function run() {
         foreground: [44, 2, 12, 4],
         background: [44, 8, 12, 2],
         display: [43, 11, 14, 2],
-        buttons: [35, 14, 22, 2],
+        buttons: [23, 14, 34, 2],
     };
     const expectedDialogAttrs = [
         0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E,
@@ -335,7 +335,7 @@ async function run() {
         0x3E, 0x31, 0x13,
     ];
     if (
-        !colors.open || colors.buttonCount !== 2 || colors.resetCount !== 0
+        !colors.open || colors.buttonCount !== 3 || colors.resetCount !== 1
         || colors.foregroundColors !== 16 || colors.backgroundColors !== 8 || colors.sampleRows !== 2
         || !colors.groupFocused
         || colors.groupNormalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
@@ -345,6 +345,45 @@ async function run() {
         || Object.entries(expectedColorsGeometry).some(([key, value]) => colors[key].join() !== value.join())
     ) {
         throw new Error(`Colors dialog differs from Turbo Vision 2.0: ${JSON.stringify(colors)}`);
+    }
+    const colorsListFocus = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-colors-window');
+        const stylePair = (element) => {
+            const style = getComputedStyle(element);
+            return [style.backgroundColor, style.color];
+        };
+        dialog.querySelector('[data-tv-colors-group="2"]').click();
+        dialog.querySelector('[data-tv-colors-item="1"]').click();
+        const group = dialog.querySelector('[data-tv-colors-group].is-selected');
+        const item = dialog.querySelector('[data-tv-colors-item].is-selected');
+        const result = {
+            itemFocused: document.activeElement === item,
+            currentGroups: dialog.querySelectorAll('.tv-colors-listviewer.is-current').length,
+            groupColors: stylePair(group),
+            itemColors: stylePair(item),
+        };
+        group.click();
+        return result;
+    })()`);
+    if (
+        !colorsListFocus.itemFocused || colorsListFocus.currentGroups !== 1
+        || colorsListFocus.groupColors.join() !== ['rgb(0, 170, 170)', 'rgb(255, 255, 85)'].join()
+        || colorsListFocus.itemColors.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()
+    ) {
+        throw new Error(`Colors list focus is inconsistent: ${JSON.stringify(colorsListFocus)}`);
+    }
+    const colorsReset = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-colors-window');
+        const expected = window.THelpViewerTV.buildDefaultColorPalette()[2].items[1].attr & 0x0F;
+        const changed = (expected + 1) % 16;
+        dialog.querySelector('[data-tv-colors-foreground] [data-tv-color-index="' + changed + '"]').click();
+        const changedIndex = Number(dialog.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').dataset.tvColorIndex);
+        dialog.querySelector('[data-tv-colors-reset]').click();
+        const resetIndex = Number(dialog.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').dataset.tvColorIndex);
+        return { expected, changed, changedIndex, resetIndex };
+    })()`);
+    if (colorsReset.changedIndex !== colorsReset.changed || colorsReset.resetIndex !== colorsReset.expected) {
+        throw new Error(`Colors Reset did not restore defaults: ${JSON.stringify(colorsReset)}`);
     }
     const sharedPalette = await evaluate(`(() => {
         const palette = window.THelpViewerTV.buildDefaultColorPalette();
@@ -434,21 +473,32 @@ async function run() {
         const label = dialog.querySelector('label[for="tv-widget-gallery-name"]');
         const input = dialog.querySelector('#tv-widget-gallery-name');
         label.click();
+        const labelFocus = document.activeElement === input;
         dialog.querySelector('[data-tv-gallery-apply]').click();
+        const clickedItem = dialog.querySelector('[data-tv-gallery-list-index="2"]');
+        clickedItem.click();
         const body = dialog.querySelector('.tv-widget-gallery-body');
         const bodyRect = body.getBoundingClientRect();
         const sideRects = Array.from(body.querySelectorAll(':scope > .tv-border-side'))
             .map((element) => element.getBoundingClientRect());
+        const info = dialog.querySelector('.tv-widget-gallery-info .tv-info-box');
+        const infoRow = dialog.querySelector('[data-tv-row="status"]');
+        const infoRect = info.getBoundingClientRect();
+        const rowRect = infoRow.getBoundingClientRect();
         return {
             open: true,
-            labelFocus: document.activeElement === input,
+            labelFocus,
             checks: dialog.querySelectorAll('[data-tv-gallery-checks] input[type="checkbox"]').length,
             radios: dialog.querySelectorAll('[data-tv-gallery-radios] input[type="radio"]').length,
             disabledChoices: dialog.querySelectorAll('.tv-choice-input:disabled').length,
             listItems: dialog.querySelectorAll('[data-tv-gallery-list-index]').length,
             selectedItems: dialog.querySelectorAll('[data-tv-gallery-list-index].is-selected').length,
+            selectedIndex: dialog.querySelector('[data-tv-gallery-list-index].is-selected')?.dataset.tvGalleryListIndex,
+            listFocused: document.activeElement === clickedItem,
             disabledButtons: dialog.querySelectorAll('.tv-dialog-button:disabled').length,
             status: dialog.querySelector('[data-tv-row="status"]')?.textContent || '',
+            infoRightBorder: infoRow.textContent.endsWith('│'),
+            infoRowFits: rowRect.right <= infoRect.right + 0.5 && info.scrollWidth <= info.clientWidth,
             frameSidesAligned: sideRects.length === 2 && sideRects.every((rect) =>
                 Math.abs(rect.top - bodyRect.top) < 1 && Math.abs(rect.height - bodyRect.height) < 1
             ),
@@ -457,8 +507,9 @@ async function run() {
     if (
         !gallery.open || !gallery.labelFocus || gallery.checks !== 3 || gallery.radios !== 3
         || gallery.disabledChoices !== 2 || gallery.listItems !== 5 || gallery.selectedItems !== 1
-        || gallery.disabledButtons !== 1 || !gallery.status.includes('Apply command')
-        || !gallery.frameSidesAligned
+        || gallery.selectedIndex !== '2' || !gallery.listFocused
+        || gallery.disabledButtons !== 1 || !gallery.status.includes('Selected: TListViewer')
+        || !gallery.infoRightBorder || !gallery.infoRowFits || !gallery.frameSidesAligned
     ) {
         throw new Error(`Widget Gallery controls are incomplete: ${JSON.stringify(gallery)}`);
     }
