@@ -165,6 +165,26 @@ compatibility with old Turbo Vision applications.
     contract and one active/passive/drag glyph table; `TVDialog` selects its
     owner palette through `palette`, controls inherit scrollbar/list colors
     from that owner, and both applications call `initializeTVTheme()`.
+21. **Per-format HELP themes stopped at legacy CSS aliases.** UHF themes such
+    as Norton Guides supplied different frame, title, title-text and icon
+    colors, but the shared window frame only read the newer owner-frame
+    variables. The Norton title, `[■]` and `[↑]` controls therefore inherited
+    the frame color. **Resolved in Phase 7.1:** the shared window contract now
+    has separate active/passive title and icon roles, and UHF themes populate
+    both the compatibility aliases and the owner-scoped roles. Norton Guides
+    is covered in real Chrome, including frame, title, icons and scrollbar.
+22. **Disabled choice controls used the disabled-button palette entry.** The
+    original `TCluster` maps disabled choices through dialog entry 31, which
+    is application palette index 62 (`0x38`) in the gray dialog. CheckBoxes and
+    RadioButtons instead used button-disabled index 44 (`0x78`). **Resolved in
+    Phase 7.1:** index 62 is now editable as `Cluster disabled` in Colors and
+    shared by both choice controls.
+23. **Docker Open needed an end-to-end deployment check.** The routes and both
+    catalogs were valid, but the browser test only started its own server.
+    **Resolved in Phase 7.1:** the same physical-click smoke test can target a
+    supplied deployment URL. Against `http://127.0.0.1:5448/`, Help Files/Open
+    displays its loading state and then the populated HELP/DOCS tree. Asset
+    versions were advanced so an already open browser can fetch the fixes.
 
 ## Component assessment
 
@@ -182,6 +202,127 @@ compatibility with old Turbo Vision applications.
 | Games | Playable; focus, timers and keyboard consistency need work |
 | Screen savers | Shared idle start, resize lifecycle and focus restoration complete |
 | Syntax highlighter | Pascal, C and ASM detection is scoped per code block |
+
+## Phase 7 structural comparison with Turbo Vision 2.0
+
+The source comparison uses `magiblot/tvision` commit
+`b4831e2ca16652db327fb7cc964f1c8c2d512524`, especially `views.h`,
+`dialogs.h`, `menus.h`, `stddlg.h`, `editors.h`, `help.h`, `colorsel.h`,
+`outline.h` and `textview.h`. That project is a minimally altered port of the
+Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
+
+### Core hierarchy
+
+| Turbo Vision 2.0 | Current JavaScript | Result and required change |
+|---|---|---|
+| `TView` | `TVWidget` | Present as the basic DOM helper. Add a no-op `destroy()` contract before more dynamic widgets are introduced. |
+| `TGroup : TView` | `TVGroup : TVWidget` | Present as a markup composer, but it does not own child lifecycles, focus order or event propagation as `TGroup` does. |
+| `TWindow : TGroup` | No `TVWindow` class | Highest-priority structural gap. HELP and Docs build almost identical window HTML in two places and combine it with `BundleWindowManager`, `TVDialogManager`, `TurboVisionWindowResizer` and `TurboVisionScrollbar`. |
+| `TDialog : TWindow` | `TVDialog : TVWidget` | Behaviour is now good, but inheritance is wrong. It should reuse a future `TVWindow` frame, activation, move, close and destroy lifecycle. |
+| `TFrame : TView` | `TVFrame : TVWidget` | Present and shared by dialogs. Window frames still use separate handwritten markup. |
+| `TScrollBar : TView` | `TurboVisionScrollbar` plus three local renderers | Behaviour is present, type and rendering are duplicated. Promote one `TVScrollBar` component. |
+| `TScroller : TView` | `TVVerticalScrollArea` and window-specific code | Partial. Needs one axis-aware `TVScroller` composition using `TVScrollBar`. |
+| `TListViewer : TView` | `TVListViewer : TVWidget` | The JS class is only a markup wrapper; it is not the functional list base from TV 2.0. |
+| `TListBox : TListViewer` | `TVListBox : TVWidget` | Functionally useful, but the hierarchy is inverted. Move selection/navigation into `TVListViewer`, then let `TVListBox` supply data. |
+| `TStaticText : TView` | `TVStaticText : TVWidget` | Present. |
+| `TLabel : TStaticText` | `TVLabel : TVStaticText` | Correct hierarchy and native label association. |
+| `TInputLine : TView` | `TVInputLine : TVWidget` | Present through native input; selection, validation and horizontal indicator semantics are incomplete. |
+| `TButton : TView` | `TVButton : TVWidget` | Present with default, selected, disabled and mnemonic states. |
+| `TCluster : TView` | Missing | CheckBoxes and RadioButtons duplicate option rendering. Introduce `TVCluster` and keep the dedicated cluster palette, including disabled index 62. |
+| `TRadioButtons`, `TCheckBoxes : TCluster` | Both extend `TVWidget` | Behaviour works; migrate them to the shared `TVCluster`. |
+| `TMultiCheckBoxes : TCluster` | Missing | Add after `TVCluster`; it is useful for flags/options and for Widget Gallery coverage. |
+
+### Menus, application and standard dialogs
+
+| Turbo Vision 2.0 | Current JavaScript | Result and required change |
+|---|---|---|
+| `TMenuView`, `TMenuBar`, `TMenuBox` | `TVMenuBar` and `TVMenuBox` independently extend `TVWidget` | Keyboard behaviour is shared by `TVMenuController`, but rendering/inheritance is not. Add `TVMenuView` only after windows and scrollbars are consolidated. |
+| `TStatusLine` | `TVStatusLine` | Present and functional. |
+| `TBackground`, `TDeskTop`, `TProgram`, `TApplication` | CSS desktop plus `TVApplication`/`TVBundleApp` | Behaviour exists, but the two application bootstraps duplicate initialization, resize listeners and window ownership. A small `TVDesktop` owner should replace that overlap. |
+| `THistory`, `THistoryViewer`, `THistoryWindow` | File Open has a custom history popup | User-visible behaviour is present only inside File Open. Extract the original three roles so InputLine and later dialogs can reuse history. |
+| `TFileInputLine`, `TSortedListBox`, `TFileList`, `TFileInfoPane` | Native input, `TVFileListBox`, and inline info markup | File Open visually follows TV 2.0, but its reusable parts are not classes. Extract them without changing the dialog geometry. |
+| `TFileDialog : TDialog` | `TVFileOpenDialog : TVDialog` | Present and catalog-backed. The browser verifies both startup loading and populated states. |
+| `TDirListBox`, `TChDirDialog` | Missing | Recommended next standard dialog; it naturally exercises tree/list navigation and history. |
+| `TColorSelector`, `TColorDisplay`, `TColorGroupList`, `TColorItemList` | Logic embedded in `TVColorsDialog` | Visually and behaviourally covered, but the selectors and lists should become reusable widgets after the list-base refactor. |
+
+### Viewer, editor and specialised controls
+
+| Turbo Vision 2.0 | Current JavaScript | Result and required change |
+|---|---|---|
+| `THelpViewer : TScroller`, `THelpWindow : TWindow` | Bundle rendering and `BundleWindowManager` | Feature-rich, but not represented by reusable classes. Migrate after `TVWindow`/`TVScroller`; do not rewrite the parser or UHF renderer. |
+| `TEditor`, `TMemo`, `TFileEditor`, `TEditWindow`, `TIndicator` | Docs is a read-only styled viewport | Missing. A read-only `TVEditor`/`TVIndicator` pair is the first useful subset; editing and clipboard can follow later. |
+| `TOutlineViewer`, `TOutline` | Missing | Good fit for HELP Contents and a Change Directory dialog after the list/scroller work. |
+| `TTextDevice`, `TTerminal` | Event Log is `TVInfoBox` markup | Missing. A bounded `TVTerminal` would replace ad-hoc logs and provide a reusable append/scroll test target. |
+| `TParamText` | Missing | Low-cost addition once `TVStaticText` is stable. |
+| Validators | Native HTML constraints only | Optional. Add range/filter validators when editable dialogs need them, not as unused infrastructure. |
+| Collections, streams, resources and draw buffers | Not implemented | Intentionally out of scope for the browser. JavaScript, DOM and UHF JSON already provide these low-level services. |
+
+The answer to “do we have every Turbo Vision element?” is therefore **no**.
+All important visible primitives have either a working implementation or a
+close functional equivalent, but several are composites rather than correctly
+layered classes. Low-level DOS object streaming and draw-buffer classes should
+not be copied merely for name parity.
+
+### Confirmed duplication and maintenance risks
+
+1. HELP and Docs contain separate copies of the complete window frame,
+   caption, controls, client area and scrollbars.
+2. Scrollbar markup/logic exists in `renderScrollbar`,
+   `TurboVisionScrollbar`, `TVVerticalListViewer`, `TVVerticalScrollArea` and
+   the menu-popup scrollbar functions.
+3. CheckBoxes and RadioButtons duplicate option markup because `TVCluster` is
+   absent.
+4. File Open history and file lists implement specialised list/scroll
+   behaviour outside the original reusable History and FileList roles.
+5. `TVApplication` and `TVBundleApp` duplicate theme/chrome/layout bootstrap,
+   global resize handlers and desktop ownership.
+6. Some list, scroll-area and menu scrollbars install anonymous document/window
+   listeners. Those listeners cannot be removed by `destroy()` and should be
+   converted to stored callbacks during the scrollbar consolidation.
+
+### Next implementation order
+
+1. Add browser snapshots/assertions for every Widget Gallery state and keep the
+   external-Docker smoke test in CI-capable form.
+2. Introduce `TVWindow : TVGroup` around the existing, already tested window
+   markup and lifecycle; migrate HELP and Docs one at a time.
+3. Make `TVDialog : TVWindow` while preserving its current modal, keyboard and
+   focus behaviour. This is the change most likely to stop recurring frame
+   regressions.
+4. Consolidate `TVScrollBar` and `TVScroller`, including removable listeners;
+   then reuse them in windows, lists, menus and search.
+5. Correct `TVListViewer`/`TVListBox` inheritance and extract FileList and
+   History controls without changing File Open behaviour.
+6. Add `TVCluster`, migrate CheckBoxes/RadioButtons, then add
+   `TVMultiCheckBoxes`.
+7. Consolidate `TVMenuView` and a small `TVDesktop` owner. Keep `TVApplication`
+   and `TVBundleApp` as thin product-specific compositions.
+8. Add the user-facing controls below only after their shared prerequisites,
+   so new dialogs exercise the common implementation rather than create more
+   duplicates.
+
+### Proposed new dialogs and games
+
+Recommended dialogs, in order:
+
+1. **Change Directory (`TChDirDialog`)** — directory tree, Revert, Chdir and
+   shared History; immediately validates ListBox, Outline and InputLine.
+2. **History Viewer** — reusable `THistoryWindow` for File Open, Search and
+   future editor fields.
+3. **Read-only Source/Text Editor** — `TEditor`/`TIndicator`, selection,
+   Go To Line, Find and Find Again; Docs can then use an actual editor view.
+4. **Find/Replace dialog** — after the editor exists, with validators and
+   history rather than a standalone one-off implementation.
+5. **Outline/Contents dialog** — reusable tree for HELP contents and directory
+   navigation.
+6. **Terminal/Event Log dialog** — bounded append-only log with scrolling,
+   copy and clear, replacing the gallery's static log imitation.
+
+Recommended games remain:
+
+1. **Mastermind** — compact dialog, buttons, keyboard and color-state testing.
+2. **Tron Light Cycles** — timer, simultaneous input and inactive-window pause.
+3. **Tower of Hanoi** — focus, drag/keyboard actions and move history.
 
 ## Resolution order
 
@@ -295,3 +436,9 @@ compatibility with old Turbo Vision applications.
   real-Chrome menu click now covers this startup path. Split the Colors reset
   action into per-item Default and full-palette Reset All, with scope-specific
   browser regression coverage.
+- [x] Phase 7.1: restored per-format title/frame/icon/scrollbar roles for Norton
+  Guides and every other UHF theme, added the original Cluster Disabled palette
+  entry, verified File Open against the running Docker service, and recorded the
+  complete hierarchy, duplication and missing-component comparison.
+- [ ] Phase 7.2: introduce the shared `TVWindow` composition and migrate HELP
+  and Docs without changing their tested appearance or URL state.
