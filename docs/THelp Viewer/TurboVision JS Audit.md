@@ -17,7 +17,7 @@ compatibility with old Turbo Vision applications.
 
 - All eight JavaScript assets pass `node --check`.
 - The source assets and their checked-in `www/assets` mirrors are identical.
-- The complete automated suite passes: 219 tests.
+- The complete automated suite passes: 222 tests.
 - Real-Chrome coverage exercises focus, modal behaviour, keyboard menus,
   dynamic dialog resizing and exact reported multi-window URLs in addition to
   converter-level regressions.
@@ -241,6 +241,14 @@ compatibility with old Turbo Vision applications.
     exports omit `* Audit.md` and `* RE Notes.md`, and public documentation no
     longer links to those private files. Repository-relative `docs/...` links
     in the public README are normalized by the viewer and exercised in Chrome.
+32. **Menu/desktop ownership, active-window Find and hierarchical views were
+    the next remaining structural gaps.** **Resolved in Phase 7.8:**
+    `TVMenuBar` and `TVMenuBox` now share `TVMenuView`; both applications use a
+    small `TVDesktop` owner for the dialog manager and global layout lifecycle;
+    a History-backed Find dialog routes `Ctrl+F`/`Ctrl+L` to the active Docs or
+    HELP editor; and `TVOutline : TVVerticalListViewer` drives HELP Contents and
+    Change Directory. Mastermind is the tenth game and uses the shared Hall of
+    Fame.
 
 ## Component assessment
 
@@ -249,14 +257,14 @@ compatibility with old Turbo Vision applications.
 | Desktop, CP437 frames and shadows | Good |
 | Active/passive/drag window drawing | Shared state and source-accurate palette/glyph mapping |
 | Mouse move, resize and scrollbars | One shared `TVScrollBar`, including explicit cleanup lifecycle |
-| Menus and status line | Shared keyboard model and dynamic window-command state complete |
+| Menus and status line | Shared `TVMenuView`, keyboard model and dynamic window-command state complete |
 | Windows, dialogs and buttons | `TVWindow : TVGroup`, `TVDialog : TVWindow`; shared keyboard, modal, focus and frame model |
 | InputLine | Usable native input, limited Turbo Vision semantics |
 | ListBox/ListViewer | Correct inheritance; selection, activation, keyboard and roving focus complete |
 | CheckBoxes/RadioButtons/MultiCheckBoxes | Shared `TVCluster` hierarchy with native or multistate behaviour and DOS-style rendering |
 | MessageBox | Hardened and tested; application adoption remains |
-| Editor/Terminal | Read-only Docs editor with indicator and bounded reusable terminal are present |
-| Games | Playable with shared top-ten Hall of Fame, focus, timer and keyboard policy |
+| Editor/Terminal/Outline | Active-window Find, read-only editor with indicator, bounded terminal and reusable hierarchical outline are present |
+| Games | Ten playable games with shared top-ten Hall of Fame, focus, timer and keyboard policy |
 | Screen savers | Shared idle start, resize lifecycle and focus restoration complete |
 | Syntax highlighter | Pascal, C and ASM detection is scoped per code block |
 
@@ -293,13 +301,13 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 
 | Turbo Vision 2.0 | Current JavaScript | Result and required change |
 |---|---|---|
-| `TMenuView`, `TMenuBar`, `TMenuBox` | `TVMenuBar` and `TVMenuBox` independently extend `TVWidget` | Keyboard behaviour is shared by `TVMenuController`, but rendering/inheritance is not. Add `TVMenuView` only after windows and scrollbars are consolidated. |
+| `TMenuView`, `TMenuBar`, `TMenuBox` | `TVMenuBar`, `TVMenuBox : TVMenuView` | Shared rendering hierarchy plus one `TVMenuController` interaction model. |
 | `TStatusLine` | `TVStatusLine` | Present and functional. |
-| `TBackground`, `TDeskTop`, `TProgram`, `TApplication` | CSS desktop plus `TVApplication`/`TVBundleApp` | Behaviour exists, but the two application bootstraps duplicate initialization, resize listeners and window ownership. A small `TVDesktop` owner should replace that overlap. |
+| `TBackground`, `TDeskTop`, `TProgram`, `TApplication` | CSS background, `TVDesktop : TVGroup`, `TVApplication`/`TVBundleApp` | Shared desktop owns layout, clocks and the dialog manager; product-specific applications retain navigation and content composition. |
 | `THistory`, `THistoryViewer`, `THistoryWindow` | `TVHistory`, `TVHistoryViewer`, `TVHistoryWindow` | Shared by File Open and Change Directory; storage, list interaction and popup lifecycle are separate roles. |
 | `TFileInputLine`, `TSortedListBox`, `TFileList`, `TFileInfoPane` | Native input, `TVFileList`, and inline info markup | File list behaviour is reusable and the old name is an alias; specialised InputLine and InfoPane classes remain optional. |
 | `TFileDialog : TDialog` | `TVFileOpenDialog : TVDialog` | Present and catalog-backed. The browser verifies both startup loading and populated states. |
-| `TDirListBox`, `TChDirDialog` | Shared list viewer and `TVChangeDirectoryDialog` | Present as a browser-safe HELP/DOCS directory tree with Chdir, Revert and History. |
+| `TDirListBox`, `TChDirDialog` | `TVOutline` and `TVChangeDirectoryDialog` | Present as a browser-safe HELP/DOCS directory tree with Chdir, Revert and History. |
 | `TColorSelector`, `TColorDisplay`, `TColorGroupList`, `TColorItemList` | Logic embedded in `TVColorsDialog` | Visually and behaviourally covered, but the selectors and lists should become reusable widgets after the list-base refactor. |
 
 ### Viewer, editor and specialised controls
@@ -308,7 +316,7 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 |---|---|---|
 | `THelpViewer : TScroller`, `THelpWindow : TWindow` | Bundle rendering and `BundleWindowManager` | Feature-rich, but not represented by reusable classes. Migrate after `TVWindow`/`TVScroller`; do not rewrite the parser or UHF renderer. |
 | `TEditor`, `TMemo`, `TFileEditor`, `TEditWindow`, `TIndicator` | `TVEditor` and `TVIndicator` used by Docs | Read-only subset supports selection, Find/Find Again and position reporting; mutation, clipboard commands and file saving remain out of scope. |
-| `TOutlineViewer`, `TOutline` | Missing | Good fit for HELP Contents and a Change Directory dialog after the list/scroller work. |
+| `TOutlineViewer`, `TOutline` | `TVOutline : TVVerticalListViewer` | Implemented for HELP Contents and Change Directory with shared scrolling, selection, activation and expand/collapse keys. |
 | `TTextDevice`, `TTerminal` | `TVTerminal` | Bounded append/clear control now drives Widget Gallery's framed Event Log. |
 | `TParamText` | Missing | Low-cost addition once `TVStaticText` is stable. |
 | Validators | Native HTML constraints only | Optional. Add range/filter validators when editable dialogs need them, not as unused infrastructure. |
@@ -329,19 +337,20 @@ not be copied merely for name parity.
 3. CheckBoxes and RadioButtons now share `TVCluster` option rendering.
 4. File Open and Change Directory share History/FileList roles; their virtual
    filesystem adaptation remains intentionally application-specific.
-5. `TVApplication` and `TVBundleApp` duplicate theme/chrome/layout bootstrap,
-   global resize handlers and desktop ownership.
+5. `TVApplication` and `TVBundleApp` retain product-specific bootstrap, while
+   `TVDesktop` now owns their shared dialog manager and global layout lifecycle.
 6. Shared scrollbar listeners are stored and removed by `destroy()`.
 
 ### Next implementation order
 
-1. Consolidate `TVMenuView` and a small `TVDesktop` owner. Keep `TVApplication`
-   and `TVBundleApp` as thin product-specific compositions.
-2. Add a Find dialog backed by shared History and route it to the active
-   `TVEditor`/HELP viewer.
-3. Add `TVOutline` for HELP Contents and directory trees, then migrate Change
-   Directory without changing its tested behaviour.
-4. Add Mastermind as the next game and use MultiCheckBoxes in its options.
+1. Add Find options (case sensitivity and whole words) through shared cluster
+   controls, then add Replace only when editable documents exist.
+2. Extract HELP viewing into explicit `TVHelpViewer`/`TVHelpWindow` classes
+   without changing converter or UHF rendering semantics.
+3. Add reusable `TVParamText` and validators when a real editable dialog needs
+   them; avoid unused name-parity infrastructure.
+4. Add Tron Light Cycles, followed by Tower of Hanoi, using the established
+   inactive-window and Hall-of-Fame policies.
 
 ### Proposed new dialogs and games
 
@@ -355,19 +364,22 @@ Completed additions:
    position reporting.
 4. **Terminal/Event Log** — bounded append/clear log replacing the gallery's
    static row.
+5. **Find dialog** — shared History and active HELP/Docs target routing.
+6. **Outline/Contents** — reusable tree used by HELP Contents and Change
+   Directory.
+7. **Mastermind** — compact keyboard/pointer game with duplicate-color scoring
+   and the shared Hall of Fame.
 
 Recommended dialogs, in order:
 
-1. **Find/Replace dialog** — after the editor exists, with validators and
-   history rather than a standalone one-off implementation.
-2. **Outline/Contents dialog** — reusable tree for HELP contents and directory
-   navigation.
+1. **Find options / later Replace** — case/word options now; Replace only after
+   editable document support exists.
+2. **Go To Line** — a small validator-backed Editor dialog.
 
 Recommended games remain:
 
-1. **Mastermind** — compact dialog, buttons, keyboard and color-state testing.
-2. **Tron Light Cycles** — timer, simultaneous input and inactive-window pause.
-3. **Tower of Hanoi** — focus, drag/keyboard actions and move history.
+1. **Tron Light Cycles** — timer, simultaneous input and inactive-window pause.
+2. **Tower of Hanoi** — focus, drag/keyboard actions and move history.
 
 ## Resolution order
 
@@ -503,3 +515,7 @@ Recommended games remain:
 - [x] Phase 7.7: fixed shared list-row text clipping, restored the original
   History and visible MIDI-display colors, validated public Markdown links and
   excluded Audit/RE working papers from runtime and exported Docs trees.
+- [x] Phase 7.8: added shared `TVMenuView` and `TVDesktop` ownership, a
+  History-backed active-window Find/Find Again flow, reusable `TVOutline` for
+  HELP Contents and Change Directory, and Mastermind as the tenth Hall of Fame
+  game. Unit and Docker-backed real-Chrome coverage exercise the new paths.

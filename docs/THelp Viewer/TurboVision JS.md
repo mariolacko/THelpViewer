@@ -9,7 +9,7 @@ THelpViewer uses a modular JavaScript framework inspired by Borland's TurboVisio
 |------|---------|
 | `tv-core.js` | Core widget classes, dialog manager, theme engine, utility functions |
 | `tv-dialogs.js` | Standard dialogs (About, Search, Calculator, Calendar, Colors, ASCII Table, MIDI Player) |
-| `tv-games.js` | Game dialogs and rules (Puzzle, Tetris, Minesweeper, BreakOut, Sokoban, Lines, Reversi, Ludo, Snake) |
+| `tv-games.js` | Game dialogs and rules (Puzzle, Tetris, Minesweeper, BreakOut, Sokoban, Lines, Reversi, Ludo, Mastermind, Snake) |
 | `tv-screensaver.js` | Screen saver base class and animated modes |
 | `tv-highlight.js` | Pascal, C and ASM syntax highlighting |
 | `tv-shell.js` | Menu bar, status line, window resizer, application bootstrap |
@@ -45,8 +45,12 @@ Core widget hierarchy and infrastructure.
   focus changes cannot introduce an offset between a drawn and clicked row.
   While its dialog is inactive, the scrollbar keeps its Turbo Vision palette
   but ignores input.
+- **TVOutline** — Tree-oriented `TVVerticalListViewer` with shared selection,
+  scrolling and activation plus expand/collapse state and Left/Right keyboard
+  navigation. HELP Contents and Change Directory both use it.
 - **TVVerticalScrollArea** — Generic scroll container.
-- **TVMenuBox** — Menu popup with items.
+- **TVMenuView** — Shared menu rendering base.
+- **TVMenuBox** — `TVMenuView` popup subclass.
 - **TVCheckBoxes** — Native checkbox group rendered with DOS `[ ]` / `[X]`
   marks; supports click, Space, focus and disabled state.
 - **TVRadioButtons** — Native mutually exclusive radio group rendered with DOS
@@ -135,6 +139,13 @@ URL-state restoration keeps every open modal dialog above ordinary windows
 and makes the top modal active, even when an older serialized stack recorded
 an invalid background position for it.
 
+### TVDesktop
+
+Small `TVGroup` owner shared by the generated-page and bundle applications.
+It owns the desktop root, one `TVDialogManager`, border/background layout,
+clock updates and the global load/resize lifecycle. Product-specific startup
+and navigation remain in `TVApplication` and `TVBundleApp`.
+
 ### TVMenuController
 
 Shared mouse and keyboard state machine used by both the generated-page shell
@@ -217,6 +228,7 @@ Standard application dialogs.
 | `TVWidgetGalleryDialog` | Interactive gallery for shared labels, inputs, choices, list focus/activation and scrolling, static/framed information, buttons and message boxes |
 | `TVFileOpenDialog` | Keyboard-accessible virtual file picker for generated HELP bundles and Markdown documentation, with persistent history |
 | `TVChangeDirectoryDialog` | Turbo Vision-style virtual directory tree with Chdir, Revert and shared persistent History |
+| `TVFindDialog` | Active-window Find dialog with persistent shared History |
 | `TVSearchDialog` | Full-text search across topics |
 | `TVAsciiTableDialog` | CP437 character table (0–255) |
 | `TVCalculatorDialog` | DOS-style calculator |
@@ -240,6 +252,15 @@ The selectors support arrow-key navigation.
 - `renderResults(query)` — Update result list UI
 - `moveSelection(delta)` — Navigate result list
 - `openSelected()` — Open the highlighted result (override for custom navigation)
+
+### TVFindDialog
+
+- `configure({find, findAgain, targetLabel})` — Bind the dialog to the active
+  read-only Editor or HELP viewport.
+- `open(initialQuery)` — Open with an optional query and refresh History.
+- `performFind()` / `findAgain()` — Execute the supplied target callbacks.
+- The bundle Search menu exposes Find (`Ctrl+F`), Find Again (`Ctrl+L`) and
+  topic-index Search (`F3`) as distinct commands.
 
 ### TVFileOpenDialog
 
@@ -268,8 +289,8 @@ The selectors support arrow-key navigation.
   File Open.
 - Chdir updates File Open's current directory; Revert restores the directory
   that was active when the dialog opened.
-- Directory input, tree list, history popup, keyboard mnemonics and the shared
-  list scrollbar are available without browser filesystem privileges.
+- Directory input, `TVOutline` tree, history popup, keyboard mnemonics and the
+  shared list scrollbar are available without browser filesystem privileges.
 
 ## tv-screensaver.js
 
@@ -321,7 +342,12 @@ also suspends the owning game until the prompt is destroyed.
 | `TVLinesDialog` | Color Lines | 9×9 | Click select + click destination |
 | `TVReversiDialog` | Reversi vs AI | 8×8 | Click to place, N new game |
 | `TVLudoDialog` | Ludo | 11×11 path map | Roll, click legal piece |
+| `TVMastermindDialog` | Mastermind | 4 pegs, 6 colors, 10 turns | 1–6 choose color, ←→ select peg, Enter/G guess, N new |
 | `TVSnakeDialog` | Snake | 28×18 | ←→↑↓ move, Enter restart |
+
+All ten games use the same persistent, sorted ten-entry Hall of Fame. The
+pure `MastermindGame` rule class correctly handles repeated colors when
+calculating exact and misplaced pegs.
 
 ### Tetris Specifics
 
@@ -344,7 +370,7 @@ Application shell: menus, status bar, window management, initialization.
 
 | Class | Purpose |
 |-------|---------|
-| `TVMenuBar` | Renders menu bar items and hotkeys |
+| `TVMenuBar` | `TVMenuView` subclass that renders menu bar items and hotkeys |
 | `TVStatusLine` | Renders status line items |
 | `TurboVisionWindowResizer` | Window drag-move and resize, double-click maximize |
 | `TurboVisionMenus` | Generated-page adapter for the shared `TVMenuController` |
@@ -354,11 +380,13 @@ Application shell: menus, status bar, window management, initialization.
 
 Entry point. Called via `TV.initTurboVision()`.
 
-- `start()` — Calls `initTheme()`, `initChrome()`, `initLayout()`, `initShellWidgets()`
+- `start()` — Initializes theme, chrome, shared desktop/widgets and layout
 - `initTheme()` — Reads stored theme from localStorage, applies it
 - `initChrome()` — Initializes menu bar and status line
-- `initLayout()` — Calls `fillBorders()`, `fillDesktopPatterns()`, starts clock timer, binds resize
-- `initShellWidgets()` — Initializes scrollbars, resizers, dialog manager, registers all dialogs, sets up screen saver with 5-minute idle auto-start
+- `initLayout()` — Delegates border/background, clock and resize ownership to
+  `TVDesktop.startLayout()`.
+- `initShellWidgets()` — Creates `TVDesktop`, initializes scrollbars and
+  resizers, registers dialogs and sets up the five-minute idle screen saver.
 
 ### TurboVisionWindowResizer
 
@@ -393,7 +421,11 @@ Single-page application for browsing help file bundles.
 - `_loadCatalog()` — Fetches `helps/catalog.json` and `docs/catalog.json`
 - `_openDocWindow(filename, markdown)` — Opens rendered Markdown in a doc window (z-index 5, above help windows but below menu bar)
 - `_registerDialog(name, factory)` — Creates and registers a dialog with the dialog manager
-- Registered dialogs: about, puzzle, calendar, ascii, calc, colors, tetris, mines, breakout, sokoban, lines, reversi, search
+- Registered dialogs include About, File Open, Change Directory, Find, topic
+  Search, the utility dialogs and all ten games including Mastermind.
+- Find targets the currently active HELP or Docs window through `TVEditor`;
+  HELP viewports receive a lifecycle-managed read-only adapter only when first
+  searched.
 
 The Help Files menu uses `product_name`, `version`, and `menu_name` from
 `helps/catalog.json` to render product → version → file. Entries without
@@ -408,6 +440,7 @@ public Docs root instead of opening a broken `docs/docs/...` URL.
 
 - `showIndex()` — Display bundle index (topic list)
 - `showTopic(bundle, contextHex)` — Display a specific topic
+- `showContents(bundle)` — Display hierarchical contents through `TVOutline`
 - `goBack()` — Navigate history
 - `tile()`, `cascade()` — Arrange open windows
 - `closeAll()` — Close all open help windows
