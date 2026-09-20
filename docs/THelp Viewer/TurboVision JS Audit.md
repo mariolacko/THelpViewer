@@ -238,3 +238,7 @@ compatibility with old Turbo Vision applications.
 - [x] Phase 5.5: kept inactive scrollbars on their original Turbo Vision palette
   while disabling their input, and restored continuous Widget Gallery dialog
   sides by moving content padding inside the shared frame.
+- [x] Phase 5.6: rebuilt the Colors dialog on the Turbo Vision 2.0
+  `TColorDialog` 61×18 cell geometry, restored its original list attributes,
+  controls and two-line sample, and added selector keyboard navigation plus
+  cancel/restore coverage.

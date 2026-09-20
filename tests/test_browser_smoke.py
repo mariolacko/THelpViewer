@@ -245,6 +245,119 @@ async function run() {
     );
     if (!windowListClosed) { throw new Error("Escape did not close the Window List dialog"); }
 
+    const desktopDotBeforeColors = await evaluate(
+        `getComputedStyle(document.documentElement).getPropertyValue('--tv-desktop-dot').trim()`
+    );
+    await evaluate(`document.querySelector('[data-tv-dialog-open="colors"]').click()`);
+    await pause();
+    const colors = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Colors'
+        );
+        if (!dialog) { return { open: false }; }
+        const main = dialog.querySelector('.tv-colors-main');
+        const mainRect = main.getBoundingClientRect();
+        const cellWidth = mainRect.width / 59;
+        const cellHeight = mainRect.height / 16;
+        const offset = (selector) => {
+            const rect = dialog.querySelector(selector).getBoundingClientRect();
+            return [
+                Math.round((rect.left - mainRect.left) / cellWidth),
+                Math.round((rect.top - mainRect.top) / cellHeight),
+                Math.round(rect.width / cellWidth),
+                Math.round(rect.height / cellHeight),
+            ];
+        };
+        const groupItems = dialog.querySelectorAll('[data-tv-colors-group]');
+        const itemSelected = dialog.querySelector('[data-tv-colors-item].is-selected');
+        const groupSelected = dialog.querySelector('[data-tv-colors-group].is-selected');
+        const stylePair = (element) => {
+            const style = getComputedStyle(element);
+            return [style.backgroundColor, style.color];
+        };
+        const dialogDefaults = window.THelpViewerTV.buildDefaultColorPalette()
+            .find((group) => group.name === 'Dialogs/Calc');
+        return {
+            open: !dialog.closest('.tv-dialog-overlay').hidden,
+            size: [Math.round(mainRect.width / cellWidth) + 2, Math.round(mainRect.height / cellHeight) + 2],
+            groupList: offset('.tv-colors-groups-listviewer'),
+            itemList: offset('.tv-colors-items-listviewer'),
+            foreground: offset('.tv-colors-foreground'),
+            background: offset('.tv-colors-background'),
+            display: offset('.tv-colors-display'),
+            buttons: offset('.tv-colors-dialog-buttons'),
+            buttonCount: dialog.querySelectorAll('.tv-colors-dialog-buttons .tv-dialog-button').length,
+            resetCount: dialog.querySelectorAll('[data-tv-colors-reset]').length,
+            foregroundColors: dialog.querySelectorAll('[data-tv-colors-foreground] .tv-color-cell').length,
+            backgroundColors: dialog.querySelectorAll('[data-tv-colors-background] .tv-color-cell').length,
+            sampleRows: dialog.querySelectorAll('.tv-colors-display-sample br').length + 1,
+            groupNormalColors: stylePair(groupItems[1]),
+            groupFocusedColors: stylePair(groupSelected),
+            itemSelectedColors: stylePair(itemSelected),
+            groupFocused: document.activeElement === groupSelected,
+            dialogDefaultAttrs: dialogDefaults.items.map((item) => item.attr),
+        };
+    })()`);
+    const expectedColorsGeometry = {
+        size: [61, 18],
+        groupList: [2, 2, 16, 11],
+        itemList: [20, 2, 21, 11],
+        foreground: [44, 2, 12, 4],
+        background: [44, 8, 12, 2],
+        display: [43, 11, 14, 2],
+        buttons: [35, 14, 22, 2],
+    };
+    const expectedDialogAttrs = [
+        0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E,
+        0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30, 0x3F, 0x3E,
+        0x1F, 0x2F, 0x1A, 0x20, 0x72, 0x31, 0x31, 0x30, 0x2F,
+        0x3E, 0x31, 0x13,
+    ];
+    if (
+        !colors.open || colors.buttonCount !== 2 || colors.resetCount !== 0
+        || colors.foregroundColors !== 16 || colors.backgroundColors !== 8 || colors.sampleRows !== 2
+        || !colors.groupFocused
+        || colors.groupNormalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
+        || colors.groupFocusedColors.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()
+        || colors.itemSelectedColors.join() !== ['rgb(0, 170, 170)', 'rgb(255, 255, 85)'].join()
+        || colors.dialogDefaultAttrs.join() !== expectedDialogAttrs.join()
+        || Object.entries(expectedColorsGeometry).some(([key, value]) => colors[key].join() !== value.join())
+    ) {
+        throw new Error(`Colors dialog differs from Turbo Vision 2.0: ${JSON.stringify(colors)}`);
+    }
+    await evaluate(`document.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').focus()`);
+    const foregroundBefore = await evaluate(
+        `Number(document.activeElement.getAttribute('data-tv-color-index'))`
+    );
+    await key("ArrowRight", "ArrowRight", 0, true);
+    const foregroundAfter = await evaluate(
+        `Number(document.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').getAttribute('data-tv-color-index'))`
+    );
+    if (foregroundAfter !== (foregroundBefore + 1) % 16) {
+        throw new Error(`Colors selector ignored ArrowRight: ${foregroundBefore} -> ${foregroundAfter}`);
+    }
+    const colorsActiveBeforeEscape = await evaluate(
+        `document.querySelector('.tv-colors-window').classList.contains('is-window-active')`
+    );
+    const colorsFocusBeforeEscape = await evaluate(
+        `({tag: document.activeElement?.tagName, color: document.activeElement?.getAttribute('data-tv-color-index'), connected: document.activeElement?.isConnected})`
+    );
+    const colorsEscapePrevented = await key("Escape", "Escape", 0, true);
+    await pause();
+    const desktopDotAfterColors = await evaluate(
+        `getComputedStyle(document.documentElement).getPropertyValue('--tv-desktop-dot').trim()`
+    );
+    const colorsClosed = await evaluate(
+        `document.querySelector('.tv-colors-window').closest('.tv-dialog-overlay').hidden`
+    );
+    if (
+        !colorsActiveBeforeEscape || !colorsEscapePrevented || !colorsClosed
+        || colorsFocusBeforeEscape.tag !== 'BUTTON' || !colorsFocusBeforeEscape.connected
+        || desktopDotAfterColors !== desktopDotBeforeColors
+    ) {
+        throw new Error(`Colors cancel did not restore the palette: ${desktopDotBeforeColors} -> ${desktopDotAfterColors}; closed=${colorsClosed}; active=${colorsActiveBeforeEscape}; prevented=${colorsEscapePrevented}; focus=${JSON.stringify(colorsFocusBeforeEscape)}`);
+    }
+
     await evaluate(`document.querySelector('[data-tv-dialog-open="widgets"]').click()`);
     await pause();
     const gallery = await evaluate(`(() => {

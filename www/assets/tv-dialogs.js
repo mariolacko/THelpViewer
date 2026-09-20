@@ -8,9 +8,7 @@ const {
     displayCp437Char,
     cloneColorPalette,
     buildDefaultColorPalette,
-    buildPaletteFromCurrentStyle,
     applyColorPalette,
-    applyThemePreset,
     dosColor,
     DOS_COLORS,
     COLOR_GROUPS,
@@ -1271,43 +1269,42 @@ class TVColorsDialog extends TVDialog {
         const okButton = new TVButton({
             className: "is-default",
             attrs: { "data-tv-colors-ok": true },
-            label: '~O~K',
+            label: 'O~K~',
         });
         const cancelButton = new TVButton({
             attrs: { "data-tv-colors-cancel": true },
-            label: '~C~ancel',
-        });
-        const resetButton = new TVButton({
-            attrs: { "data-tv-colors-reset": true },
-            label: '~R~eset',
+            label: 'Cancel',
         });
         const buttonStrip = new TVButtonStrip({
             className: "tv-colors-dialog-buttons",
-            buttons: [okButton, resetButton, cancelButton],
+            buttons: [okButton, cancelButton],
         }).renderMarkup();
         const groupTitle = new TVLabel({
             text: "~G~roup",
             hotkey: true,
+            className: "tv-colors-group-label",
         }).renderMarkup();
         const itemTitle = new TVLabel({
             text: "~I~tem",
             hotkey: true,
+            className: "tv-colors-item-label",
         }).renderMarkup();
         const fgTitle = new TVLabel({
             text: "~F~oreground",
             hotkey: true,
+            className: "tv-colors-foreground-label",
         }).renderMarkup();
         const bgTitle = new TVLabel({
             text: "~B~ackground",
             hotkey: true,
-        }).renderMarkup();
-        const sampleTitle = new TVStaticText({
-            text: "Text",
+            className: "tv-colors-background-label",
         }).renderMarkup();
         super({
             desktop,
             ariaLabel: "Colors",
             title: "Colors",
+            windowClass: "tv-colors-window",
+            bodyClass: "tv-colors-body",
             closeAttrs: {
                 "data-tv-colors-close": true,
                 "aria-label": "Close colors dialog",
@@ -1318,7 +1315,7 @@ class TVColorsDialog extends TVDialog {
                         <div class="tv-colors-column">
                             ${groupTitle}
                             ${TVVerticalListViewer.renderMarkup({
-                                rootClass: "tv-colors-listviewer",
+                                rootClass: "tv-colors-listviewer tv-colors-groups-listviewer",
                                 rootAttrs: { "data-tv-colors-groups": true },
                                 viewportClass: "tv-colors-list-viewport",
                             })}
@@ -1326,17 +1323,16 @@ class TVColorsDialog extends TVDialog {
                         <div class="tv-colors-column">
                             ${itemTitle}
                             ${TVVerticalListViewer.renderMarkup({
-                                rootClass: "tv-colors-listviewer",
+                                rootClass: "tv-colors-listviewer tv-colors-items-listviewer",
                                 rootAttrs: { "data-tv-colors-items": true },
                                 viewportClass: "tv-colors-list-viewport",
                             })}
                         </div>
                         <div class="tv-colors-side">
                             ${fgTitle}
-                            <div class="tv-colors-selector" data-tv-colors-foreground></div>
+                            <div class="tv-colors-selector tv-colors-foreground" data-tv-colors-foreground></div>
                             ${bgTitle}
-                            <div class="tv-colors-selector is-background" data-tv-colors-background></div>
-                            ${sampleTitle}
+                            <div class="tv-colors-selector tv-colors-background is-background" data-tv-colors-background></div>
                             <div class="tv-colors-display" data-tv-colors-display></div>
                         </div>
                     </div>
@@ -1355,7 +1351,6 @@ class TVColorsDialog extends TVDialog {
         this.background = this.query("[data-tv-colors-background]");
         this.display = this.query("[data-tv-colors-display]");
         this.okButton = this.query("[data-tv-colors-ok]");
-        this.resetButton = this.query("[data-tv-colors-reset]");
         this.cancelButton = this.query("[data-tv-colors-cancel]");
         this.groupBox = new TVVerticalListViewer(this.groupList, {
             itemClassName: "tv-colors-list-item",
@@ -1388,15 +1383,14 @@ class TVColorsDialog extends TVDialog {
         });
         if (this.foreground) {
             this.foreground.addEventListener("click", (event) => this.onSelectorClick(event, "fg"));
+            this.foreground.addEventListener("keydown", (event) => this.onSelectorKeyDown(event, "fg"));
         }
         if (this.background) {
             this.background.addEventListener("click", (event) => this.onSelectorClick(event, "bg"));
+            this.background.addEventListener("keydown", (event) => this.onSelectorKeyDown(event, "bg"));
         }
         if (this.okButton) {
             this.okButton.addEventListener("click", () => this.confirm());
-        }
-        if (this.resetButton) {
-            this.resetButton.addEventListener("click", () => this.resetPalette());
         }
         if (this.cancelButton) {
             this.cancelButton.addEventListener("click", () => this.cancel());
@@ -1414,6 +1408,7 @@ class TVColorsDialog extends TVDialog {
         window.requestAnimationFrame(() => {
             this.groupBox.updateScrollbar();
             this.itemBox.updateScrollbar();
+            this.groupBox.selectedElement()?.focus();
         });
     }
 
@@ -1456,6 +1451,7 @@ class TVColorsDialog extends TVDialog {
         if (!item) {
             return;
         }
+        const keepFocus = document.activeElement === button;
         if (type === "fg") {
             item.attr = (item.attr & 0xF0) | (colorIndex & 0x0F);
         } else {
@@ -1465,6 +1461,35 @@ class TVColorsDialog extends TVDialog {
         this.renderItems();
         this.renderSelectors();
         this.renderDisplay();
+        if (keepFocus) {
+            const selector = type === "fg" ? this.foreground : this.background;
+            window.requestAnimationFrame(() => {
+                selector?.querySelector(`[data-tv-color-index="${colorIndex}"]`)?.focus();
+            });
+        }
+    }
+
+    onSelectorKeyDown(event, type) {
+        const button = event.target.closest("[data-tv-color-index]");
+        if (!button || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+            return;
+        }
+        const maxColor = type === "bg" ? 7 : 15;
+        let color = Number.parseInt(button.getAttribute("data-tv-color-index"), 10);
+        if (event.key === "ArrowLeft") {
+            color = color > 0 ? color - 1 : maxColor;
+        } else if (event.key === "ArrowRight") {
+            color = color < maxColor ? color + 1 : 0;
+        } else if (event.key === "ArrowUp") {
+            color = color > 3 ? color - 4 : (color === 0 ? maxColor : color + maxColor - 4);
+        } else {
+            color = color < maxColor - 3 ? color + 4 : (color === maxColor ? 0 : color - maxColor + 4);
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const selector = type === "fg" ? this.foreground : this.background;
+        selector?.querySelector(`[data-tv-color-index="${color}"]`)?.click();
+        selector?.querySelector(`[data-tv-color-index="${color}"]`)?.focus();
     }
 
     selectedItem() {
@@ -1480,20 +1505,6 @@ class TVColorsDialog extends TVDialog {
     cancel() {
         applyColorPalette(this.previousPalette, false);
         this.close();
-    }
-
-    resetPalette() {
-        applyThemePreset(TV.getActiveThemePreset(), false);
-        this.pendingPalette = cloneColorPalette(buildPaletteFromCurrentStyle());
-        applyColorPalette(this.pendingPalette, false);
-        this.renderGroups();
-        this.renderItems();
-        this.renderSelectors();
-        this.renderDisplay();
-        window.requestAnimationFrame(() => {
-            this.groupBox.updateScrollbar();
-            this.itemBox.updateScrollbar();
-        });
     }
 
     renderGroups() {
@@ -1529,6 +1540,9 @@ class TVColorsDialog extends TVDialog {
         const cells = [];
         for (let index = 0; index < count; index += 1) {
             const isSelected = index === selected;
+            const content = isSelected
+                ? `${escapeHtml(displayCp437Char(219))}<span class="tv-color-cell-marker">${escapeHtml(marker)}</span>${escapeHtml(displayCp437Char(219))}`
+                : escapeHtml(icon);
             cells.push(`
                 <button
                     type="button"
@@ -1536,7 +1550,9 @@ class TVColorsDialog extends TVDialog {
                     data-tv-color-index="${index}"
                     style="--tv-color-cell:${DOS_COLORS[index]};"
                     aria-label="Color ${index}"
-                >${escapeHtml(isSelected ? `${displayCp437Char(219)}${marker}${displayCp437Char(219)}` : icon)}</button>
+                    aria-pressed="${isSelected ? "true" : "false"}"
+                    tabindex="${isSelected ? "0" : "-1"}"
+                >${content}</button>
             `);
         }
         return cells.join("");
@@ -1552,7 +1568,8 @@ class TVColorsDialog extends TVDialog {
         }
         const fg = dosColor(item.attr, 0);
         const bg = dosColor(item.attr, 4);
-        this.display.innerHTML = `<span class="tv-colors-display-sample" style="color:${fg};background:${bg};">${escapeHtml("Text Text Text ")}</span>`;
+        const text = escapeHtml("Text Text Text ");
+        this.display.innerHTML = `<span class="tv-colors-display-sample" style="color:${fg};background:${bg};">${text}<br>${text}</span>`;
     }
 }
 

@@ -54,6 +54,14 @@
     --tv-dialog-button-shadow-fg: #000000;
     --tv-dialog-input-bg: #0000aa;
     --tv-dialog-input-fg: #ffff55;
+    --tv-dialog-list-normal-bg: #00aaaa;
+    --tv-dialog-list-normal-fg: #000000;
+    --tv-dialog-list-focused-bg: #00aa00;
+    --tv-dialog-list-focused-fg: #ffffff;
+    --tv-dialog-list-selected-bg: #00aaaa;
+    --tv-dialog-list-selected-fg: #ffff55;
+    --tv-dialog-list-divider-bg: #00aaaa;
+    --tv-dialog-list-divider-fg: #0000aa;
     --tv-calc-display-bg: #0000aa;
     --tv-calc-display-fg: #aaaaaa;
     --tv-window-dark: #0000aa;
@@ -1864,35 +1872,60 @@ button.tv-status-item {
     opacity: 0.85;
 }
 
+.tv-colors-body {
+    overflow: hidden;
+}
+
 .tv-colors-main {
-    min-width: 0;
-    min-height: 0;
-    padding: 1ch;
+    position: relative;
+    width: 59ch;
+    height: 16em;
+    min-width: 59ch;
+    min-height: 16em;
+    overflow: hidden;
     background: var(--tv-dialog-bg);
 }
 
-.tv-colors-panels {
-    display: grid;
-    grid-template-columns: 16ch 21ch 16ch;
-    gap: 1ch;
-    align-items: start;
-}
-
+.tv-colors-panels,
 .tv-colors-column,
 .tv-colors-side {
-    min-width: 0;
-    display: grid;
-    gap: 1ch;
-    align-content: start;
+    display: contents;
+}
+
+.tv-colors-group-label,
+.tv-colors-item-label,
+.tv-colors-foreground-label,
+.tv-colors-background-label {
+    position: absolute;
+    height: 1em;
+}
+
+.tv-colors-group-label { left: 1ch; top: 1em; width: 6ch; }
+.tv-colors-item-label { left: 19ch; top: 1em; width: 5ch; }
+.tv-colors-foreground-label { left: 44ch; top: 1em; width: 12ch; }
+.tv-colors-background-label { left: 44ch; top: 7em; width: 12ch; }
+
+.tv-colors-groups-listviewer {
+    left: 2ch;
+    width: 16ch;
+}
+
+.tv-colors-items-listviewer {
+    left: 20ch;
+    width: 21ch;
 }
 
 .tv-colors-listviewer {
+    position: absolute;
+    top: 2em;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 1ch;
+    height: 11em;
     min-width: 0;
-    min-height: 11em;
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
+    min-height: 0;
+    overflow: hidden;
+    background: var(--tv-dialog-list-normal-bg);
+    color: var(--tv-dialog-list-normal-fg);
 }
 
 .tv-colors-list-viewport {
@@ -1900,10 +1933,11 @@ button.tv-status-item {
     grid-auto-rows: 1em;
     align-content: start;
     min-width: 0;
-    min-height: 11em;
-    max-height: 11em;
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
+    height: 11em;
+    min-height: 0;
+    max-height: none;
+    background: var(--tv-dialog-list-normal-bg);
+    color: var(--tv-dialog-list-normal-fg);
     overflow: auto;
     overflow-x: hidden;
     scrollbar-width: none;
@@ -1922,11 +1956,24 @@ button.tv-status-item {
 }
 
 .tv-colors-selector {
+    position: absolute;
+    left: 44ch;
     display: grid;
     grid-template-columns: repeat(4, 3ch);
     grid-auto-rows: 1em;
+    width: 12ch;
     background: var(--tv-dialog-bg);
     color: var(--tv-dialog-fg);
+}
+
+.tv-colors-foreground {
+    top: 2em;
+    height: 4em;
+}
+
+.tv-colors-background {
+    top: 8em;
+    height: 2em;
 }
 
 .tv-colors-selector.is-background {
@@ -1945,12 +1992,13 @@ button.tv-status-item {
     appearance: none;
     cursor: pointer;
     white-space: pre;
-    background: var(--tv-color-cell);
+    background: #000000;
     color: var(--tv-color-cell);
 }
 
-.tv-color-cell.is-selected {
-    color: #ffffff;
+.tv-color-cell[data-tv-color-index="0"].is-selected .tv-color-cell-marker {
+    background: #aaaaaa;
+    color: #000000;
 }
 
 .tv-color-cell:hover,
@@ -1974,8 +2022,8 @@ button.tv-status-item {
     appearance: none;
     cursor: pointer;
     text-align: left;
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
+    background: var(--tv-dialog-list-normal-bg);
+    color: var(--tv-dialog-list-normal-fg);
     white-space: pre;
     line-height: 1;
     overflow: hidden;
@@ -1984,11 +2032,17 @@ button.tv-status-item {
     outline: none;
 }
 
+.tv-colors-list-item.is-selected {
+    background: var(--tv-dialog-list-selected-bg);
+    color: var(--tv-dialog-list-selected-fg);
+    outline: none;
+}
+
 .tv-colors-list-item:hover,
 .tv-colors-list-item:focus-visible,
-.tv-colors-list-item.is-selected {
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
+.tv-colors-listviewer:focus-within .tv-colors-list-item.is-selected {
+    background: var(--tv-dialog-list-focused-bg);
+    color: var(--tv-dialog-list-focused-fg);
     outline: none;
 }
 
@@ -2002,22 +2056,35 @@ button.tv-status-item {
 }
 
 .tv-colors-display {
-    min-height: 1em;
+    position: absolute;
+    left: 43ch;
+    top: 11em;
+    width: 14ch;
+    height: 2em;
+    overflow: hidden;
     background: var(--tv-dialog-bg);
     white-space: pre;
 }
 
 .tv-colors-display-sample {
-    display: inline-block;
-    min-width: 14ch;
-    padding: 0 1ch;
+    display: block;
+    width: 14ch;
+    height: 2em;
+    overflow: hidden;
 }
 
 .tv-colors-dialog-buttons {
+    position: absolute;
+    left: 35ch;
+    top: 14em;
     display: flex;
-    gap: 1ch;
-    justify-content: flex-end;
-    margin-top: 1ch;
+    gap: 2ch;
+    width: 22ch;
+    height: 2em;
+}
+
+.tv-colors-dialog-buttons .tv-dialog-button {
+    min-width: 10ch;
 }
 
 .tv-midi-body {

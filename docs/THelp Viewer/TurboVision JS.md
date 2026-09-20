@@ -187,6 +187,13 @@ Standard application dialogs.
 | `TVCalendarDialog` | Month calendar with navigation and Gregorian leap-year handling |
 | `TVColorsDialog` | Color palette customization editor |
 
+`TVColorsDialog` follows the Turbo Vision 2.0 `TColorDialog` 61×18 cell
+geometry from `colorsel.cpp`: Group and Item lists, 4×4 foreground and 4×2
+background selectors, a two-line sample, and the original OK/Cancel controls.
+Its list states use the original color attributes (`0x30`, `0x2F`, `0x3E`),
+the selectors support arrow-key navigation, and Cancel/Escape restores the
+palette that was active when the dialog opened.
+
 ### TVSearchDialog
 
 - `search(query)` — Filter topics by query
