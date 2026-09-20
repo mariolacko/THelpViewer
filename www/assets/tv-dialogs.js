@@ -419,6 +419,7 @@ class TVFileOpenDialog extends TVDialog {
             modal: true,
         });
         this.entries = [];
+        this.configured = false;
         this.currentDirectory = "";
         this.currentItems = [];
         this.onOpen = null;
@@ -471,6 +472,7 @@ class TVFileOpenDialog extends TVDialog {
                 historyKey: `${kind}:${entry.file}`,
             };
         }).filter((entry) => entry.file && entry.fileName);
+        this.configured = true;
         this.onOpen = typeof onOpen === "function" ? onOpen : null;
         if (!this.directoryExists(this.currentDirectory)) {
             this.currentDirectory = "";
@@ -548,6 +550,12 @@ class TVFileOpenDialog extends TVDialog {
     }
 
     buildItems() {
+        if (!this.configured) {
+            return [{ type: "status", label: "Loading HELP/DOCS..." }];
+        }
+        if (!this.entries.length) {
+            return [{ type: "status", label: "No HELP or DOCS files" }];
+        }
         const prefix = this.currentDirectory ? `${this.currentDirectory}\\` : "";
         const directories = new Map();
         const files = [];
@@ -595,7 +603,7 @@ class TVFileOpenDialog extends TVDialog {
     }
 
     selectItem(item) {
-        if (!item || !this.nameInput) { return; }
+        if (!item || item.type === "status" || !this.nameInput) { return; }
         this.nameInput.value = item.type === "file" ? item.entry.fileName : `${item.label}*.*`;
         this.updateInfo(item);
     }
@@ -607,6 +615,8 @@ class TVFileOpenDialog extends TVDialog {
         if (!this.detailLabel) { return; }
         if (!item) {
             this.detailLabel.textContent = "";
+        } else if (item.type === "status") {
+            this.detailLabel.textContent = ` ${item.label}`;
         } else if (item.type === "file") {
             const format = String(item.entry.format || (item.entry.kind === "doc" ? "Markdown" : "Help")).toUpperCase();
             const topics = Number.isInteger(item.entry.topics) ? `  ${item.entry.topics} topics` : "";
@@ -620,7 +630,7 @@ class TVFileOpenDialog extends TVDialog {
         if (!item) { return; }
         if (item.type === "file") {
             this.openEntry(item.entry);
-        } else {
+        } else if (item.type === "directory" || item.type === "parent") {
             this.currentDirectory = item.path;
             this.refresh();
             this.fileList.selectedElement()?.focus();
@@ -1318,13 +1328,17 @@ class TVColorsDialog extends TVDialog {
             attrs: { "data-tv-colors-cancel": true },
             label: '~C~ancel',
         });
-        const resetButton = new TVButton({
-            attrs: { "data-tv-colors-reset": true },
-            label: '~R~eset',
+        const resetAllButton = new TVButton({
+            attrs: { "data-tv-colors-reset-all": true },
+            label: '~R~eset All',
+        });
+        const defaultButton = new TVButton({
+            attrs: { "data-tv-colors-default": true },
+            label: '~D~efault',
         });
         const buttonStrip = new TVButtonStrip({
             className: "tv-colors-dialog-buttons",
-            buttons: [resetButton, okButton, cancelButton],
+            buttons: [defaultButton, resetAllButton, okButton, cancelButton],
         }).renderMarkup();
         const groupTitle = new TVLabel({
             text: "~G~roup",
@@ -1399,7 +1413,8 @@ class TVColorsDialog extends TVDialog {
         this.display = this.query("[data-tv-colors-display]");
         this.okButton = this.query("[data-tv-colors-ok]");
         this.cancelButton = this.query("[data-tv-colors-cancel]");
-        this.resetButton = this.query("[data-tv-colors-reset]");
+        this.defaultButton = this.query("[data-tv-colors-default]");
+        this.resetAllButton = this.query("[data-tv-colors-reset-all]");
         this.groupBox = new TVVerticalListViewer(this.groupList, {
             itemClassName: "tv-colors-list-item",
             itemAttrName: "data-tv-colors-group",
@@ -1443,8 +1458,11 @@ class TVColorsDialog extends TVDialog {
         if (this.cancelButton) {
             this.cancelButton.addEventListener("click", () => this.cancel());
         }
-        if (this.resetButton) {
-            this.resetButton.addEventListener("click", () => this.resetPalette());
+        if (this.defaultButton) {
+            this.defaultButton.addEventListener("click", () => this.restoreSelectedDefault());
+        }
+        if (this.resetAllButton) {
+            this.resetAllButton.addEventListener("click", () => this.resetAllColors());
         }
     }
 
@@ -1560,7 +1578,22 @@ class TVColorsDialog extends TVDialog {
         this.close();
     }
 
-    resetPalette() {
+    restoreSelectedDefault() {
+        const group = this.pendingPalette[this.selectedGroup];
+        const item = group?.items[group.index];
+        const defaultItem = buildDefaultColorPalette()[this.selectedGroup]?.items[group?.index];
+        if (!item || !defaultItem) {
+            return;
+        }
+        setColorPaletteAttribute(this.pendingPalette, item.paletteIndex, defaultItem.attr);
+        applyColorPalette(this.pendingPalette, false);
+        this.renderGroups();
+        this.renderItems();
+        this.renderSelectors();
+        this.renderDisplay();
+    }
+
+    resetAllColors() {
         const groupIndexes = this.pendingPalette.map((group) => group.index);
         this.pendingPalette = buildDefaultColorPalette();
         this.pendingPalette.forEach((group, index) => {

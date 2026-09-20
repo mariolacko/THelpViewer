@@ -173,12 +173,48 @@ async function run() {
         const deadline = Date.now() + 10000;
         const check = () => {
             const open = document.querySelector('[data-tv-file-open][data-tv-menu-bound="1"]');
-            if (open) { open.click(); resolve(true); return; }
+            if (open) { resolve(true); return; }
             if (Date.now() >= deadline) { reject(new Error('Open was not bound while catalogs loaded')); return; }
             setTimeout(check, 20);
         };
         check();
     })`, true);
+    const helpMenuPoint = await evaluate(`(() => {
+        const open = document.querySelector('[data-tv-file-open]');
+        const toggle = open.closest('[data-tv-menu-root]').querySelector('[data-tv-menu-toggle]');
+        const rect = toggle.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    })()`);
+    await send('Input.dispatchMouseEvent', {
+        type: 'mousePressed', x: helpMenuPoint.x, y: helpMenuPoint.y, button: 'left', clickCount: 1,
+    });
+    await send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased', x: helpMenuPoint.x, y: helpMenuPoint.y, button: 'left', clickCount: 1,
+    });
+    await pause();
+    const openPoint = await evaluate(`(() => {
+        const open = document.querySelector('[data-tv-file-open]');
+        const rect = open.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    })()`);
+    await send('Input.dispatchMouseEvent', {
+        type: 'mousePressed', x: openPoint.x, y: openPoint.y, button: 'left', clickCount: 1,
+    });
+    await send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased', x: openPoint.x, y: openPoint.y, button: 'left', clickCount: 1,
+    });
+    const loadingOpen = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
+        );
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
+            status: dialog?.querySelector('[data-tv-file-open-detail]')?.textContent.trim() || '',
+        };
+    })()`);
+    if (!loadingOpen.open || loadingOpen.status !== 'Loading HELP/DOCS...') {
+        throw new Error(`Open did not show its loading state immediately: ${JSON.stringify(loadingOpen)}`);
+    }
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 10000;
         const check = () => {
@@ -384,7 +420,8 @@ async function run() {
             display: offset('.tv-colors-display'),
             buttons: offset('.tv-colors-dialog-buttons'),
             buttonCount: dialog.querySelectorAll('.tv-colors-dialog-buttons .tv-dialog-button').length,
-            resetCount: dialog.querySelectorAll('[data-tv-colors-reset]').length,
+            resetAllCount: dialog.querySelectorAll('[data-tv-colors-reset-all]').length,
+            defaultCount: dialog.querySelectorAll('[data-tv-colors-default]').length,
             foregroundColors: dialog.querySelectorAll('[data-tv-colors-foreground] .tv-color-cell').length,
             backgroundColors: dialog.querySelectorAll('[data-tv-colors-background] .tv-color-cell').length,
             sampleRows: dialog.querySelectorAll('.tv-colors-display-sample br').length + 1,
@@ -402,7 +439,7 @@ async function run() {
         foreground: [44, 2, 12, 4],
         background: [44, 8, 12, 2],
         display: [43, 11, 14, 2],
-        buttons: [23, 14, 34, 2],
+        buttons: [5, 14, 52, 2],
     };
     const expectedDialogAttrs = [
         0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E,
@@ -411,7 +448,7 @@ async function run() {
         0x3E, 0x31, 0x13,
     ];
     if (
-        !colors.open || colors.buttonCount !== 3 || colors.resetCount !== 1
+        !colors.open || colors.buttonCount !== 4 || colors.resetAllCount !== 1 || colors.defaultCount !== 1
         || colors.foregroundColors !== 16 || colors.backgroundColors !== 8 || colors.sampleRows !== 2
         || !colors.groupFocused
         || colors.groupNormalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
@@ -449,16 +486,48 @@ async function run() {
     }
     const colorsReset = await evaluate(`(() => {
         const dialog = document.querySelector('.tv-colors-window');
-        const expected = window.THelpViewerTV.buildDefaultColorPalette()[2].items[1].attr & 0x0F;
-        const changed = (expected + 1) % 16;
-        dialog.querySelector('[data-tv-colors-foreground] [data-tv-color-index="' + changed + '"]').click();
-        const changedIndex = Number(dialog.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').dataset.tvColorIndex);
-        dialog.querySelector('[data-tv-colors-reset]').click();
-        const resetIndex = Number(dialog.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').dataset.tvColorIndex);
-        return { expected, changed, changedIndex, resetIndex };
+        const defaults = window.THelpViewerTV.buildDefaultColorPalette()[2].items;
+        const foreground = () => Number(
+            dialog.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').dataset.tvColorIndex
+        );
+        const chooseItem = (index) => dialog.querySelector('[data-tv-colors-item="' + index + '"]').click();
+        const chooseForeground = (index) => dialog
+            .querySelector('[data-tv-colors-foreground] [data-tv-color-index="' + index + '"]').click();
+
+        chooseItem(1);
+        const expectedFirst = defaults[1].attr & 0x0F;
+        const changedFirst = (expectedFirst + 1) % 16;
+        chooseForeground(changedFirst);
+
+        chooseItem(2);
+        const expectedSecond = defaults[2].attr & 0x0F;
+        const changedSecond = (expectedSecond + 2) % 16;
+        chooseForeground(changedSecond);
+
+        chooseItem(1);
+        dialog.querySelector('[data-tv-colors-default]').click();
+        const defaultedFirst = foreground();
+        chooseItem(2);
+        const preservedSecond = foreground();
+
+        dialog.querySelector('[data-tv-colors-reset-all]').click();
+        const resetSecond = foreground();
+        return {
+            expectedFirst,
+            expectedSecond,
+            changedFirst,
+            changedSecond,
+            defaultedFirst,
+            preservedSecond,
+            resetSecond,
+        };
     })()`);
-    if (colorsReset.changedIndex !== colorsReset.changed || colorsReset.resetIndex !== colorsReset.expected) {
-        throw new Error(`Colors Reset did not restore defaults: ${JSON.stringify(colorsReset)}`);
+    if (
+        colorsReset.defaultedFirst !== colorsReset.expectedFirst
+        || colorsReset.preservedSecond !== colorsReset.changedSecond
+        || colorsReset.resetSecond !== colorsReset.expectedSecond
+    ) {
+        throw new Error(`Colors Default/Reset All did not restore the expected scope: ${JSON.stringify(colorsReset)}`);
     }
     const sharedPalette = await evaluate(`(() => {
         const palette = window.THelpViewerTV.buildDefaultColorPalette();

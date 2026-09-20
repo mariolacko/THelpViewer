@@ -211,8 +211,9 @@ Standard application dialogs.
 `TVColorsDialog` follows the Turbo Vision 2.0 `TColorDialog` 61×18 cell
 geometry from `colorsel.cpp`: Group and Item lists, 4×4 foreground and 4×2
 background selectors, a two-line sample, and the original OK/Cancel controls.
-THelpViewer additionally provides Reset, which previews the exact default
-`cpAppColor` palette; OK persists it and Cancel/Escape restores the palette
+THelpViewer additionally provides Default, which restores only the selected
+item's original `cpAppColor` attribute, and Reset All, which previews the full
+default palette. OK persists the preview; Cancel/Escape restores the palette
 that was active when the dialog opened.
 Its list states use the original color attributes (`0x30`, `0x2F`, `0x3E`),
 and only the list that owns keyboard focus uses the focused-row attribute.
@@ -238,8 +239,9 @@ The selectors support arrow-key navigation.
 - `Alt+N`, `Alt+F` and `Alt+O` focus Name, the file list and Open respectively.
 - The ten most recently opened catalog entries are stored in local storage;
   missing catalog entries are ignored.
-- Open waits for the asynchronous HELP/DOCS catalogs when invoked during
-  startup, so the dialog cannot open with an unconfigured empty list.
+- Open is available during asynchronous HELP/DOCS catalog loading. It opens
+  immediately with a visible loading row, refreshes itself when the catalogs
+  arrive, and shows an explicit empty-state row if neither catalog has files.
 
 ## tv-screensaver.js
 

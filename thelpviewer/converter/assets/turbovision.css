@@ -2180,11 +2180,11 @@ button.tv-status-item {
 
 .tv-colors-dialog-buttons {
     position: absolute;
-    left: 23ch;
+    left: 5ch;
     top: 14em;
     display: flex;
     gap: 2ch;
-    width: 34ch;
+    width: 52ch;
     height: 2em;
 }
 

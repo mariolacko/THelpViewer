@@ -3011,9 +3011,12 @@ class TVBundleApp {
         this._registerBundleSearch();
         this.dialogManager.applyActiveStates();
 
-        // Fetch catalog dynamically and build menu
-        this._catalogReady = this._loadCatalog();
+        // Show a usable File/Open command immediately, then replace the menus
+        // with their complete catalog-backed contents when loading finishes.
+        buildBundleMenuBar([], null);
+        fillBorders();
         this._bindMenus();
+        this._catalogReady = this._loadCatalog();
 
         // Layout
         fillBorders();
@@ -3913,16 +3916,9 @@ class TVBundleApp {
         document.querySelectorAll("[data-tv-file-open]").forEach((element) => {
             if (element.dataset.tvMenuBound === "1") { return; }
             element.dataset.tvMenuBound = "1";
-            element.addEventListener("click", async (event) => {
+            element.addEventListener("click", (event) => {
                 event.preventDefault();
                 closeMenus();
-                if (this._catalogReady) {
-                    try {
-                        await this._catalogReady;
-                    } catch (error) {
-                        console.error("Unable to load the file catalog", error);
-                    }
-                }
                 this.dialogManager.open("fileopen");
             });
         });

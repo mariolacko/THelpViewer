@@ -290,3 +290,8 @@ compatibility with old Turbo Vision applications.
   bound before catalog loading completes and waits for HELP/DOCS data instead
   of exposing an empty dialog. Widget Gallery now also exercises an enabled
   scrollbar, static text, hotkeys, disabled states and `TVMessageBox`.
+- [x] Phase 6.8: made Help Files/Open available before catalog loading finishes
+  and open synchronously with explicit loading and empty states; a physical
+  real-Chrome menu click now covers this startup path. Split the Colors reset
+  action into per-item Default and full-palette Reset All, with scope-specific
+  browser regression coverage.
