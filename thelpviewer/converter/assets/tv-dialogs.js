@@ -23,6 +23,7 @@ const {
     TVListViewer,
     TVListBox,
     TVVerticalListViewer,
+    TVOutline,
     TVInfoBox,
     TVTerminal,
     TVButtonStrip,
@@ -925,6 +926,7 @@ class TVChangeDirectoryDialog extends TVDialog {
         });
         this.entries = [];
         this.directories = [];
+        this.directoryTree = [];
         this.currentDirectory = "";
         this.initialDirectory = "";
         this.onChange = null;
@@ -936,10 +938,11 @@ class TVChangeDirectoryDialog extends TVDialog {
         this.cancelButton = this.query("[data-tv-change-dir-cancel]");
         this.historyButton = this.query("[data-tv-change-dir-history]");
         this.historyPopup = this.query("[data-tv-change-dir-history-popup]");
-        this.directoryList = new TVVerticalListViewer(this.query("[data-tv-change-dir-list]"), {
+        this.directoryList = new TVOutline(this.query("[data-tv-change-dir-list]"), {
             itemClassName: "tv-change-dir-item",
             itemAttrName: "data-tv-change-dir-index",
-            renderItemContent: (item) => escapeHtml(item.label),
+            getKey: (item) => item.path,
+            getLabel: (item) => item.label,
         });
         this.historyList = new TVHistoryViewer(this.query("[data-tv-change-dir-history-list]"), {
             itemClassName: "tv-file-open-history-item",
@@ -998,6 +1001,18 @@ class TVChangeDirectoryDialog extends TVDialog {
                 label: path ? `${"  ".repeat(depth - 1)}${name}\\` : "THelpViewer:\\",
             };
         });
+        const byPath = new Map(this.directories.map((item) => [item.path, { ...item, children: [] }]));
+        for (const item of byPath.values()) {
+            if (!item.path) { continue; }
+            const parts = item.path.split("\\");
+            parts.pop();
+            byPath.get(parts.join("\\"))?.children.push(item);
+        }
+        for (const item of byPath.values()) {
+            item.label = item.path ? `${item.path.split("\\").pop()}\\` : "THelpViewer:\\";
+            item.children.sort((left, right) => left.label.localeCompare(right.label));
+        }
+        this.directoryTree = byPath.has("") ? [byPath.get("")] : [];
         this.historyWindow.refresh();
     }
 
@@ -1052,8 +1067,7 @@ class TVChangeDirectoryDialog extends TVDialog {
     setDirectory(path) {
         const item = this.findDirectory(path) || this.directories[0] || { path: "" };
         this.currentDirectory = item.path;
-        const index = this.directories.indexOf(item);
-        this.directoryList.setItems(this.directories, index);
+        this.directoryList.setTree(this.directoryTree, item.path, { expandAll: true });
         this.updatePath();
         return Boolean(item);
     }
@@ -1062,8 +1076,7 @@ class TVChangeDirectoryDialog extends TVDialog {
         const item = this.findDirectory(path);
         if (!item) { return false; }
         this.currentDirectory = item.path;
-        const index = this.directories.indexOf(item);
-        this.directoryList.select(index);
+        this.directoryList.selectKey(item.path);
         this.updatePath();
         return true;
     }
@@ -3187,6 +3200,143 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 }
 
+class TVFindDialog extends TVDialog {
+    constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const findButton = new TVButton({
+            className: "is-default",
+            attrs: { "data-tv-find-confirm": true },
+            label: "~F~ind",
+        });
+        const cancelButton = new TVButton({
+            attrs: { "data-tv-find-cancel": true },
+            label: "Cancel",
+        });
+        super({
+            desktop,
+            ariaLabel: "Find text",
+            title: "Find",
+            bodyClass: "tv-find-body",
+            closeAttrs: { "data-tv-find-close": true, "aria-label": "Close Find" },
+            bodyMarkup: `
+                <div class="tv-find-main">
+                    <div class="tv-find-label">${new TVLabel({ text: "~T~ext to find", hotkey: true, forId: "tv-find-text" }).renderMarkup()}</div>
+                    <div class="tv-find-input">${new TVInputLine({ attrs: {
+                        id: "tv-find-text",
+                        autocomplete: "off",
+                        spellcheck: "false",
+                        "data-tv-find-input": true,
+                    } }).renderMarkup()}</div>
+                    <button type="button" class="tv-file-open-history-button tv-find-history-button"
+                            data-tv-find-history aria-label="Find history" disabled><span class="tv-file-open-history-side">▐</span><span class="tv-file-open-history-arrow">↓</span><span class="tv-file-open-history-side">▌</span></button>
+                    <div class="tv-find-confirm">${findButton.renderMarkup()}</div>
+                    <div class="tv-find-cancel">${cancelButton.renderMarkup()}</div>
+                    <div class="tv-find-status" data-tv-find-status></div>
+                    <div class="tv-file-open-history-popup tv-find-history-popup" data-tv-find-history-popup hidden>
+                        ${TVVerticalListViewer.renderMarkup({
+                            rootClass: "tv-file-open-history-listviewer",
+                            rootAttrs: { "data-tv-find-history-list": true },
+                            viewportClass: "tv-file-open-history-list",
+                        })}
+                    </div>
+                </div>
+            `,
+            footerMarkup: TVDialog.footerMarkup(),
+            width: "49ch",
+            height: "10em",
+            modal: true,
+        });
+        this.history = new TVHistory("thelp:find-history");
+        this.findHandler = null;
+        this.findAgainHandler = null;
+        this.targetLabel = "active window";
+        this.input = this.query("[data-tv-find-input]");
+        this.status = this.query("[data-tv-find-status]");
+        this.findButton = this.query("[data-tv-find-confirm]");
+        this.cancelButton = this.query("[data-tv-find-cancel]");
+        this.historyButton = this.query("[data-tv-find-history]");
+        this.historyPopup = this.query("[data-tv-find-history-popup]");
+        this.historyList = new TVHistoryViewer(this.query("[data-tv-find-history-list]"), {
+            itemClassName: "tv-file-open-history-item",
+            itemAttrName: "data-tv-find-history-index",
+            renderItemContent: (item) => escapeHtml(item.value),
+        });
+        this.historyWindow = new TVHistoryWindow({
+            button: this.historyButton,
+            popup: this.historyPopup,
+            viewer: this.historyList,
+            items: () => this.history.keys().map((value) => ({ historyKey: value, value })),
+            onSelect: (item, activate) => {
+                if (this.input) { this.input.value = item.value; }
+                this.historyWindow.hide();
+                if (activate) { this.performFind(); }
+                else { this.input?.focus(); }
+            },
+        });
+        this.findButton?.addEventListener("click", () => this.performFind());
+        this.cancelButton?.addEventListener("click", () => this.close());
+        this.input?.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                this.performFind();
+            }
+        });
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    configure({ find = null, findAgain = null, targetLabel = "active window" } = {}) {
+        this.findHandler = typeof find === "function" ? find : null;
+        this.findAgainHandler = typeof findAgain === "function" ? findAgain : null;
+        this.targetLabel = String(targetLabel || "active window");
+        this.historyWindow.refresh();
+    }
+
+    open(initialQuery = "") {
+        if (this.input && initialQuery) { this.input.value = initialQuery; }
+        if (this.status) { this.status.textContent = `Find in ${this.targetLabel}`; }
+        this.historyWindow.refresh();
+        super.open();
+        this.input?.focus();
+        this.input?.select();
+    }
+
+    performFind() {
+        const query = String(this.input?.value || "").trim();
+        if (!query || !this.findHandler) {
+            if (this.status) { this.status.textContent = "Enter text to find."; }
+            return false;
+        }
+        this.history.remember(query);
+        this.historyWindow.refresh();
+        const found = Boolean(this.findHandler(query));
+        if (this.status) {
+            this.status.textContent = found ? `Found in ${this.targetLabel}` : `Text not found in ${this.targetLabel}`;
+        }
+        if (found) { this.close(); }
+        return found;
+    }
+
+    findAgain() {
+        return this.findAgainHandler ? Boolean(this.findAgainHandler()) : false;
+    }
+
+    close() {
+        this.historyWindow.hide();
+        super.close();
+    }
+
+    onDialogKeyDown(event) {
+        if (event.key === "Escape" && this.historyWindow.isOpen()) {
+            event.preventDefault();
+            event.stopPropagation();
+            this.historyWindow.hide();
+            this.historyButton?.focus();
+            return;
+        }
+        super.onDialogKeyDown(event);
+    }
+}
+
 class TVSearchDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const okButton = new TVButton({
@@ -3479,6 +3629,7 @@ Object.assign(TV, {
     TVCalendarDialog,
     TVColorsDialog,
     TVMidiPlayerDialog,
+    TVFindDialog,
     TVSearchDialog,
 });
 })();

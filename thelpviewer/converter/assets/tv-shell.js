@@ -7,16 +7,15 @@ const {
     TVWidget,
     TVStaticText,
     TVButton,
+    TVMenuView,
     TVMenuBox,
+    TVDesktop,
     escapeHtml,
     renderHotkeyMarkup,
     fillBorders,
-    fillDesktopPatterns,
-    updateClocks,
     bindCloseButtons,
     applyThemeAndSyncPalette,
     initializeTVTheme,
-    TVDialogManager,
     TV_COMMANDS,
     TVMenuController,
     TVAboutDialog,
@@ -38,7 +37,7 @@ const {
     highlightCodeExamples,
 } = TV;
 
-class TVMenuBar extends TVWidget {
+class TVMenuBar extends TVMenuView {
     constructor(container, context) {
         super(container);
         this.context = context;
@@ -652,6 +651,7 @@ class TVApplication {
         this.searchDialog = null;
         this.menus = null;
         this.dialogManager = null;
+        this.desktopView = null;
         this.screenSaver = null;
         this.scrollbars = [];
         this.resizers = [];
@@ -685,7 +685,8 @@ class TVApplication {
     initShellWidgets() {
         const desktop = document.querySelector(".tv-desktop") || document.body;
         const hostWindow = document.querySelector("[data-tv-window]");
-        this.dialogManager = new TVDialogManager(desktop);
+        this.desktopView = new TVDesktop(desktop);
+        this.dialogManager = this.desktopView.dialogManager;
         this.scrollbars = Array.from(document.querySelectorAll("[data-tv-scroll-frame]"), (frame) => new TVScrollBar(frame));
         this.resizers = Array.from(document.querySelectorAll("[data-tv-window]"), (windowElement) => new TurboVisionWindowResizer(windowElement));
         const hostResizer = this.resizers.find((resizer) => resizer.windowElement === hostWindow);
@@ -744,22 +745,14 @@ class TVApplication {
 
     initLayout() {
         highlightCodeExamples(document);
-        fillBorders();
-        fillDesktopPatterns();
-        updateClocks();
-        window.setInterval(updateClocks, 1000);
-        window.addEventListener("resize", fillBorders, { passive: true });
-        window.addEventListener("resize", fillDesktopPatterns, { passive: true });
-        window.addEventListener("load", fillBorders, { passive: true });
-        window.addEventListener("load", fillDesktopPatterns, { passive: true });
-        window.addEventListener("load", updateClocks, { passive: true });
+        this.desktopView?.startLayout();
     }
 
     start() {
         this.initTheme();
         this.initChrome();
-        this.initLayout();
         this.initShellWidgets();
+        this.initLayout();
     }
 }
 

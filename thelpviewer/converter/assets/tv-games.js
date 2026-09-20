@@ -323,8 +323,78 @@ class LudoGame {
     }
 }
 
+class MastermindGame {
+    constructor(random = Math.random, { codeLength = 4, colorCount = 6, maxTurns = 10 } = {}) {
+        this.random = typeof random === "function" ? random : Math.random;
+        this.codeLength = codeLength;
+        this.colorCount = colorCount;
+        this.maxTurns = maxTurns;
+        this.reset();
+    }
+
+    reset(secret = null) {
+        this.secret = Array.isArray(secret) && secret.length === this.codeLength
+            ? secret.map((value) => this._normalizeColor(value))
+            : Array.from({ length: this.codeLength }, () => Math.floor(this.random() * this.colorCount));
+        this.currentGuess = new Array(this.codeLength).fill(0);
+        this.cursor = 0;
+        this.turns = [];
+        this.status = "playing";
+        return this;
+    }
+
+    _normalizeColor(value) {
+        const color = Number(value);
+        return Number.isInteger(color) && color >= 0 && color < this.colorCount ? color : 0;
+    }
+
+    setPeg(position, color) {
+        if (this.status !== "playing" || position < 0 || position >= this.codeLength) { return false; }
+        this.currentGuess[position] = this._normalizeColor(color);
+        this.cursor = Math.min(this.codeLength - 1, position + 1);
+        return true;
+    }
+
+    evaluate(guess) {
+        let exact = 0;
+        const secretCounts = new Array(this.colorCount).fill(0);
+        const guessCounts = new Array(this.colorCount).fill(0);
+        for (let index = 0; index < this.codeLength; index += 1) {
+            if (guess[index] === this.secret[index]) {
+                exact += 1;
+            } else {
+                secretCounts[this.secret[index]] += 1;
+                guessCounts[guess[index]] += 1;
+            }
+        }
+        const misplaced = secretCounts.reduce(
+            (total, count, color) => total + Math.min(count, guessCounts[color]),
+            0,
+        );
+        return { exact, misplaced };
+    }
+
+    submitGuess() {
+        if (this.status !== "playing") { return null; }
+        const guess = this.currentGuess.slice();
+        const result = this.evaluate(guess);
+        const turn = { guess, ...result };
+        this.turns.push(turn);
+        if (result.exact === this.codeLength) {
+            this.status = "won";
+        } else if (this.turns.length >= this.maxTurns) {
+            this.status = "lost";
+        } else {
+            this.currentGuess = new Array(this.codeLength).fill(0);
+            this.cursor = 0;
+        }
+        return turn;
+    }
+}
+
 const LUDO_RULES_EXPORTS = {
     LudoGame,
+    MastermindGame,
     LUDO_BASE_POSITIONS,
     LUDO_COMMON_PATH,
     LUDO_DEFAULT_MODES,
@@ -455,6 +525,7 @@ const HALL_OF_FAME_GAMES = Object.freeze({
     lines: { title: "Lines", unit: "points", legacyKey: "tv-lines-best" },
     reversi: { title: "Reversi", unit: "margin" },
     ludo: { title: "Ludo", unit: "moves", lowerIsBetter: true },
+    mastermind: { title: "Mastermind", unit: "turns", lowerIsBetter: true },
     snake: { title: "Snake", unit: "points", legacyKey: "tv-snake-best" },
 });
 
@@ -3370,6 +3441,149 @@ class TVLudoDialog extends TVDialog {
     }
 }
 
+// ── Mastermind ───────────────────────────────────────────────────────
+
+class TVMastermindDialog extends TVDialog {
+    constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const paletteButtons = Array.from({ length: 6 }, (_, color) => new TVButton({
+            x: 27 + (color % 3) * 6,
+            y: 1 + Math.floor(color / 3) * 2,
+            w: 5,
+            attrs: { type: "button", "data-tv-mastermind-color": color },
+            className: `tv-mastermind-color tv-mastermind-color-${color}`,
+            label: String(color + 1),
+        }));
+        const body = new TVGroup({
+            w: 44, h: 13,
+            children: [
+                new TVStaticText({ x: 0, y: 0, w: 24, h: 10, attrs: { "data-tv-mastermind-board": true } }),
+                new TVStaticText({ x: 27, y: 0, w: 17, text: "Colors" }),
+                ...paletteButtons,
+                new TVButton({ x: 27, y: 6, w: 11, className: "is-default", attrs: { type: "button", "data-tv-mastermind-guess": true }, label: "~G~uess" }),
+                new TVButton({ x: 27, y: 8, w: 11, attrs: { type: "button", "data-tv-mastermind-new": true }, label: "~N~ew" }),
+                new TVStaticText({ x: 0, y: 11, w: 44, attrs: { "data-tv-mastermind-status": true } }),
+            ],
+        }).renderMarkup();
+        super({
+            desktop,
+            windowClass: "tv-mastermind-window",
+            ariaLabel: "Mastermind",
+            title: "Mastermind",
+            closeAttrs: { "data-tv-mastermind-close": true, "aria-label": "Close Mastermind" },
+            bodyMarkup: body,
+            footerMarkup: TVDialog.footerMarkup(),
+            width: "48ch",
+            height: "min(17em, calc(100% - 2em))",
+            left: "7ch",
+            top: "2em",
+        });
+        installHallOfFame(this, "mastermind");
+        this.game = new MastermindGame();
+        this.board = this.query("[data-tv-mastermind-board]");
+        this.status = this.query("[data-tv-mastermind-status]");
+        this.guessButton = this.query("[data-tv-mastermind-guess]");
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+        this.bind();
+        this.render();
+    }
+
+    bind() {
+        this.root.addEventListener("click", (event) => {
+            const colorButton = event.target.closest("[data-tv-mastermind-color]");
+            if (colorButton) {
+                this.setColor(Number(colorButton.dataset.tvMastermindColor));
+                return;
+            }
+            const peg = event.target.closest("[data-tv-mastermind-peg]");
+            if (peg) {
+                this.game.cursor = Number(peg.dataset.tvMastermindPeg);
+                this.render();
+                return;
+            }
+            if (event.target.closest("[data-tv-mastermind-guess]")) { this.submitGuess(); }
+            if (event.target.closest("[data-tv-mastermind-new]")) { this.newGame(); }
+        });
+        this._onKeyDown = (event) => {
+            if (!this.isActive()) { return; }
+            if (/^[1-6]$/.test(event.key)) {
+                event.preventDefault();
+                this.setColor(Number(event.key) - 1);
+            } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                const step = event.key === "ArrowLeft" ? -1 : 1;
+                this.game.cursor = (this.game.cursor + step + this.game.codeLength) % this.game.codeLength;
+                this.render();
+            } else if (event.key === "Enter" || event.key.toLocaleLowerCase() === "g") {
+                event.preventDefault();
+                this.submitGuess();
+            } else if (event.key.toLocaleLowerCase() === "n") {
+                event.preventDefault();
+                this.newGame();
+            }
+        };
+        document.addEventListener("keydown", this._onKeyDown);
+    }
+
+    setColor(color) {
+        const position = this.game.cursor;
+        if (this.game.setPeg(position, color)) { this.render(); }
+    }
+
+    submitGuess() {
+        const turn = this.game.submitGuess();
+        if (!turn) { return; }
+        this.render();
+        if (this.game.status === "won") {
+            submitHallOfFameScore(this, "mastermind", this.game.turns.length);
+        }
+    }
+
+    newGame() {
+        this.game.reset();
+        this.render();
+    }
+
+    renderPeg(color, { current = false, position = -1 } = {}) {
+        const classes = [
+            "tv-mastermind-peg",
+            `tv-mastermind-color-${color}`,
+            current && position === this.game.cursor ? "is-selected" : "",
+        ].filter(Boolean).join(" ");
+        const attrs = current ? ` type="button" data-tv-mastermind-peg="${position}"` : "";
+        const tag = current ? "button" : "span";
+        return `<${tag}${attrs} class="${classes}" aria-label="Color ${color + 1}">●</${tag}>`;
+    }
+
+    render() {
+        if (!this.board) { return; }
+        const rows = [];
+        for (let index = 0; index < this.game.maxTurns; index += 1) {
+            const turn = this.game.turns[index];
+            const isCurrent = this.game.status === "playing" && index === this.game.turns.length;
+            const pegs = turn
+                ? turn.guess.map((color) => this.renderPeg(color)).join("")
+                : isCurrent
+                    ? this.game.currentGuess.map((color, position) => this.renderPeg(color, { current: true, position })).join("")
+                    : '<span class="tv-mastermind-empty">· · · ·</span>';
+            const feedback = turn ? ` ${"●".repeat(turn.exact)}${"○".repeat(turn.misplaced)}` : "";
+            rows.push(`<div class="tv-mastermind-row${isCurrent ? " is-current" : ""}"><span>${String(index + 1).padStart(2, " ")}.</span>${pegs}<span class="tv-mastermind-feedback">${feedback}</span></div>`);
+        }
+        this.board.innerHTML = rows.join("");
+        if (this.guessButton) { this.guessButton.disabled = this.game.status !== "playing"; }
+        if (this.status) {
+            if (this.game.status === "won") {
+                this.status.textContent = `Code broken in ${this.game.turns.length} turn(s).`;
+            } else if (this.game.status === "lost") {
+                this.status.innerHTML = `No turns left. Code: ${this.game.secret.map((color) => this.renderPeg(color)).join("")}`;
+            } else {
+                this.status.textContent = "1-6 choose color, arrows move, Enter guesses.";
+            }
+        }
+        fillBorders(this.root);
+    }
+}
+
 // ── Snake ────────────────────────────────────────────────────────────
 
 const SNAKE_COLS = 20;
@@ -3657,6 +3871,7 @@ Object.assign(TV, {
     TVLinesDialog,
     TVReversiDialog,
     TVLudoDialog,
+    TVMastermindDialog,
     TVSnakeDialog,
 });
 })(typeof window !== "undefined" ? window : globalThis);

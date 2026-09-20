@@ -28,11 +28,43 @@ def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
     assert "const HALL_OF_FAME_LIMIT = 10" in helper
     assert "function showHallOfFame(ownerDialog, game)" in helper
     assert "manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg)" in helper
-    assert source.count("installHallOfFame(this,") == 9
-    for game in ("puzzle", "tetris", "mines", "breakout", "sokoban", "lines", "reversi", "ludo", "snake"):
+    assert source.count("installHallOfFame(this,") == 10
+    for game in ("puzzle", "tetris", "mines", "breakout", "sokoban", "lines", "reversi", "ludo", "mastermind", "snake"):
         assert f'installHallOfFame(this, "{game}")' in source
         assert f'"{game}": {{ title:' in helper or f'{game}: {{ title:' in helper
-    assert source.count('submitHallOfFameScore(this, "') >= 9
+    assert source.count('submitHallOfFameScore(this, "') >= 10
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for Mastermind behavior tests")
+def test_mastermind_scores_exact_and_misplaced_pegs_with_duplicates():
+    script = r'''
+const { MastermindGame } = require(process.argv[1]);
+const game = new MastermindGame(() => 0);
+game.reset([0, 0, 1, 2]);
+game.currentGuess = [0, 1, 0, 3];
+const first = game.submitGuess();
+if (first.exact !== 1 || first.misplaced !== 2 || game.status !== "playing") {
+    throw new Error(`bad duplicate scoring: ${JSON.stringify(first)}`);
+}
+game.currentGuess = [0, 0, 1, 2];
+const win = game.submitGuess();
+if (win.exact !== 4 || win.misplaced !== 0 || game.status !== "won" || game.turns.length !== 2) {
+    throw new Error("winning guess was not recorded");
+}
+const loss = new MastermindGame(() => 0, { maxTurns: 1 });
+loss.reset([0, 0, 0, 0]);
+loss.currentGuess = [1, 1, 1, 1];
+loss.submitGuess();
+if (loss.status !== "lost" || loss.submitGuess() !== null) {
+    throw new Error("turn limit was not enforced");
+}
+'''
+    result = subprocess.run(
+        [NODE, "-e", script, str(GAME_PATHS[0].resolve())],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_games_pause_background_work_and_clear_transient_input():

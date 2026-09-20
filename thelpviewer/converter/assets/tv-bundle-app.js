@@ -7,12 +7,11 @@ const {
     renderHotkeyMarkup,
     fillBorders,
     fillDesktopPatterns,
-    updateClocks,
     applyThemeAndSyncPalette,
     initializeTVTheme,
-    TVDialogManager,
     TV_COMMANDS,
     TVMenuController,
+    TVDesktop,
     TVAboutDialog,
     TVPuzzleDialog,
     TVCalendarDialog,
@@ -23,6 +22,7 @@ const {
     TVFileOpenDialog,
     TVChangeDirectoryDialog,
     TVMidiPlayerDialog,
+    TVFindDialog,
     TVSearchDialog,
     TVTetrisDialog,
     TVMinesDialog,
@@ -31,12 +31,14 @@ const {
     TVLinesDialog,
     TVReversiDialog,
     TVLudoDialog,
+    TVMastermindDialog,
     TVSnakeDialog,
     TVScreenSaver,
     TVWindow,
     TVWidget,
     TVIndicator,
     TVEditor,
+    TVOutline,
     TVButton,
     TVMenuBox,
     measureCells,
@@ -1750,12 +1752,15 @@ function renderIndexSection(anchor, label, entries) {
 }
 
 function renderBundleContents(bundle) {
-    const nodes = Array.isArray(bundle.contents) ? bundle.contents : [];
     return [
         `<div class="tv-document tv-index-document tv-contents-document">`,
         `<div class="tv-index-heading">Contents</div>`,
         `<div class="tv-contents-tree">`,
-        renderContentsNodes(nodes),
+        TVOutline.renderMarkup({
+            rootClass: "tv-contents-outline",
+            rootAttrs: { "data-tv-contents-outline": true, "data-tv-outline": true },
+            viewportClass: "tv-contents-outline-viewport",
+        }),
         `</div>`,
         `</div>`,
     ].join("\n");
@@ -1841,6 +1846,14 @@ function renderTopicContent(bundle, topic) {
 
 function destroyWindowWidgets(windowEl) {
     if (!windowEl) { return; }
+    if (windowEl._tvOutline) {
+        windowEl._tvOutline.destroy();
+        windowEl._tvOutline = null;
+    }
+    if (windowEl._tvFindEditor) {
+        windowEl._tvFindEditor.destroy();
+        windowEl._tvFindEditor = null;
+    }
     if (windowEl._tvEditor) {
         windowEl._tvEditor.destroy();
         windowEl._tvEditor = null;
@@ -2132,6 +2145,14 @@ class BundleWindowManager {
         const existing = this.openWindows.get(key);
         if (existing) {
             existing._tvBundle = bundle;
+            if (existing._tvOutline) {
+                existing._tvOutline.destroy();
+                existing._tvOutline = null;
+            }
+            if (existing._tvFindEditor) {
+                existing._tvFindEditor.destroy();
+                existing._tvFindEditor = null;
+            }
             // Update content in existing window
             const viewport = existing.querySelector("[data-tv-viewport]");
             if (viewport) {
@@ -2146,6 +2167,7 @@ class BundleWindowManager {
             }
             highlightCodeExamples(existing);
             this._bindTopicLinks(existing, bundle);
+            this._initContentsOutline(existing, bundle);
             applyStateData(existing);
             if (this.dialogManager) { this.dialogManager.activateWindow("help:" + key); }
             fillBorders();
@@ -2165,6 +2187,7 @@ class BundleWindowManager {
         this._initWindowWidgets(windowEl);
         highlightCodeExamples(windowEl);
         this._bindTopicLinks(windowEl, bundle);
+        this._initContentsOutline(windowEl, bundle);
         this._bindCloseButton(windowEl, key);
         this._bindZoomButton(windowEl);
         if (this.dialogManager) {
@@ -2179,12 +2202,41 @@ class BundleWindowManager {
     }
 
     _initWindowWidgets(windowEl) {
-        const frames = windowEl.querySelectorAll("[data-tv-scroll-frame]");
+        const frames = Array.from(windowEl.querySelectorAll("[data-tv-scroll-frame]"))
+            .filter((frame) => !frame.hasAttribute("data-tv-outline"));
         windowEl._tvScrollbars = Array.from(frames, (frame) => new TVScrollBar(frame));
         this.scrollbars.push(...windowEl._tvScrollbars);
         const resizer = new TurboVisionWindowResizer(windowEl);
         windowEl._tvResizer = resizer;
         this.resizers.push(resizer);
+    }
+
+    _initContentsOutline(windowEl, bundle) {
+        const root = windowEl.querySelector("[data-tv-contents-outline]");
+        if (!root || !Array.isArray(bundle.contents)) { return; }
+        const withKeys = (nodes, prefix = "") => nodes.map((node, index) => ({
+            ...node,
+            _outlineKey: `${prefix}${index}`,
+            children: withKeys(Array.isArray(node.children) ? node.children : [], `${prefix}${index}/`),
+        }));
+        const outline = new TVOutline(root, {
+            itemClassName: "tv-contents-outline-item",
+            itemAttrName: "data-tv-contents-outline-index",
+            getKey: (node) => node._outlineKey,
+            getLabel: (node) => node.label || "",
+            renderNodeContent: (node) => {
+                const label = escapeHtml(String(node.label || ""));
+                const targetAttrs = buildBundleTargetDataset(node);
+                return Object.keys(targetAttrs).length
+                    ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...targetAttrs })}>${label}</a>`
+                    : label;
+            },
+        });
+        outline.setTree(withKeys(bundle.contents), null, { expandAll: true });
+        outline.bind({
+            onActivate: () => outline.selectedElement()?.querySelector("a")?.click(),
+        });
+        windowEl._tvOutline = outline;
     }
 
     _destroyWindowWidgets(windowEl) {
@@ -2867,6 +2919,30 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
     const docsItems = buildDocsMenuItems(docsCatalogData || []);
     const docsRootHTML = renderMenuRoot(renderHotkeyMarkup("~D~ocs"), docsItems);
 
+    const searchRootHTML = renderMenuRoot(
+        renderHotkeyMarkup("~S~earch"),
+        [
+            new TVButton({
+                dialog: false,
+                className: "tv-menu-popup-item",
+                attrs: { type: "button", "data-tv-find": true },
+                labelMarkup: renderHotkeyMarkup("~F~ind") + '<span class="tv-menu-hotkey">Ctrl-F</span>',
+            }),
+            new TVButton({
+                dialog: false,
+                className: "tv-menu-popup-item",
+                attrs: { type: "button", "data-tv-find-again": true },
+                labelMarkup: renderHotkeyMarkup("Find ~A~gain") + '<span class="tv-menu-hotkey">Ctrl-L</span>',
+            }),
+            new TVButton({
+                dialog: false,
+                className: "tv-menu-popup-item",
+                attrs: { type: "button", "data-tv-dialog-open": "search" },
+                labelMarkup: renderHotkeyMarkup("Search ~T~opics") + '<span class="tv-menu-hotkey">F3</span>',
+            }),
+        ],
+    );
+
     // Windows menu (TV standard)
     const winPopupItems = [
         { cmd: "tile", label: "~T~ile", hotkey: "" },
@@ -2895,6 +2971,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { type: "dialog", dialog: "breakout", label: "~B~reakOut" },
         { type: "dialog", dialog: "lines", label: "~L~ines" },
         { type: "dialog", dialog: "ludo", label: "L~u~do" },
+        { type: "dialog", dialog: "mastermind", label: "M~a~stermind" },
         { type: "dialog", dialog: "mines", label: "~M~ines" },
         { type: "dialog", dialog: "puzzle", label: "~P~uzzle" },
         { type: "dialog", dialog: "reversi", label: "~R~eversi" },
@@ -2921,6 +2998,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         sysRootHTML,
         fileRootHTML,
         docsRootHTML,
+        searchRootHTML,
         gamesRootHTML,
         winRootHTML,
         bundleContentsRootHTML ? `<div class="tv-menu-separator" aria-hidden="true">│</div>` : ``,
@@ -2935,6 +3013,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
 class TVBundleApp {
     constructor() {
         this.desktop = null;
+        this.desktopView = null;
         this.windowManager = null;
         this.dialogManager = null;
         this.menuController = null;
@@ -2944,16 +3023,19 @@ class TVBundleApp {
         this._restoringUrlState = false;
         this._lastUrlStateHash = "";
         this._catalogReady = null;
+        this.lastFindTarget = null;
     }
 
     start() {
         // Theme
         initializeTVTheme();
 
-        this.desktop = document.querySelector("[data-tv-bundle-desktop]");
-        if (!this.desktop) { return; }
+        const desktopRoot = document.querySelector("[data-tv-bundle-desktop]");
+        if (!desktopRoot) { return; }
+        this.desktopView = new TVDesktop(desktopRoot);
+        this.desktop = this.desktopView.root;
 
-        this.dialogManager = new TVDialogManager(this.desktop);
+        this.dialogManager = this.desktopView.dialogManager;
         this.dialogManager.onChange = () => {
             const activeBundle = this.windowManager
                 ? this.windowManager.syncActiveTarget(this.dialogManager.activeTarget)
@@ -2979,6 +3061,7 @@ class TVBundleApp {
         this._registerDialog("widgets", () => new TVWidgetGalleryDialog(this.desktop));
         this.fileOpenDialog = this._registerDialog("fileopen", () => new TVFileOpenDialog(this.desktop));
         this.changeDirectoryDialog = this._registerDialog("chdir", () => new TVChangeDirectoryDialog(this.desktop));
+        this.findDialog = this._registerDialog("find", () => new TVFindDialog(this.desktop));
         this._registerDialog("tetris", () => new TVTetrisDialog(this.desktop));
         this._registerDialog("mines", () => new TVMinesDialog(this.desktop));
         this._registerDialog("breakout", () => new TVBreakOutDialog(this.desktop));
@@ -2986,6 +3069,7 @@ class TVBundleApp {
         this._registerDialog("lines", () => new TVLinesDialog(this.desktop));
         this._registerDialog("reversi", () => new TVReversiDialog(this.desktop));
         this._registerDialog("ludo", () => new TVLudoDialog(this.desktop));
+        this._registerDialog("mastermind", () => new TVMastermindDialog(this.desktop));
         this._registerDialog("snake", () => new TVSnakeDialog(this.desktop));
         this._registerBundleSearch();
         this.dialogManager.applyActiveStates();
@@ -2998,14 +3082,7 @@ class TVBundleApp {
         this._catalogReady = this._loadCatalog();
 
         // Layout
-        fillBorders();
-        fillDesktopPatterns();
-        updateClocks();
-        window.setInterval(updateClocks, 1000);
-        window.addEventListener("resize", fillBorders, { passive: true });
-        window.addEventListener("resize", fillDesktopPatterns, { passive: true });
-        window.addEventListener("load", fillBorders, { passive: true });
-        window.addEventListener("load", fillDesktopPatterns, { passive: true });
+        this.desktopView.startLayout();
 
         this.windowManager = new BundleWindowManager(this.desktop, (hint) => {
             this._updateStatusLine(hint);
@@ -3809,6 +3886,48 @@ class TVBundleApp {
         }
     }
 
+    _activeFindTarget() {
+        const managerName = this.dialogManager?.activeTarget || "";
+        if (!managerName.startsWith("help:") && !managerName.startsWith("doc:")) {
+            return null;
+        }
+        const windowEl = this.dialogManager.windows.get(managerName);
+        if (!windowEl?.isConnected) { return null; }
+        let editor = windowEl._tvEditor || windowEl._tvFindEditor || null;
+        if (!editor) {
+            const viewport = windowEl.querySelector("[data-tv-viewport]");
+            if (!viewport) { return null; }
+            editor = new TVEditor(viewport, { readOnly: true });
+            windowEl._tvFindEditor = editor;
+        }
+        const caption = windowEl.querySelector(".tv-window-caption")?.textContent?.trim();
+        return { managerName, windowEl, editor, caption: caption || "active window" };
+    }
+
+    _openFind() {
+        const target = this._activeFindTarget() || this.lastFindTarget;
+        if (!target?.windowEl?.isConnected || !target.editor || !this.findDialog) { return false; }
+        this.lastFindTarget = target;
+        this.findDialog.configure({
+            targetLabel: target.caption,
+            find: (query) => target.editor.find(query, { fromStart: true }),
+            findAgain: () => target.editor.findNext(),
+        });
+        this.dialogManager.open("find");
+        return true;
+    }
+
+    _findAgain() {
+        const target = this._activeFindTarget() || this.lastFindTarget;
+        if (!target?.windowEl?.isConnected || !target.editor) {
+            return this._openFind();
+        }
+        this.lastFindTarget = target;
+        if (!target.editor.lastQuery) { return this._openFind(); }
+        this.dialogManager.activateWindow(target.managerName);
+        return target.editor.findNext();
+    }
+
     _showWelcome() {
         const {
             TVDialog,
@@ -3855,6 +3974,22 @@ class TVBundleApp {
     }
 
     _handleMenuShortcut(event) {
+        const key = String(event.key || "").toLocaleLowerCase();
+        if ((event.ctrlKey || event.metaKey) && !event.altKey && key === "f") {
+            event.preventDefault();
+            this._openFind();
+            return;
+        }
+        if ((event.ctrlKey || event.metaKey) && !event.altKey && key === "l") {
+            event.preventDefault();
+            this._findAgain();
+            return;
+        }
+        if (event.key === "F3" && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+            event.preventDefault();
+            this.dialogManager.open("search");
+            return;
+        }
         if (event.key === "F5" && !event.ctrlKey && !event.altKey && !event.shiftKey) {
             event.preventDefault();
             this.dialogManager.dispatchCommand(TV_COMMANDS.ZOOM);
@@ -3885,6 +4020,26 @@ class TVBundleApp {
             this.menuController.refresh();
         }
         const closeMenus = () => this.menuController.closeMenus();
+
+        document.querySelectorAll("[data-tv-find]").forEach((element) => {
+            if (element.dataset.tvMenuBound === "1") { return; }
+            element.dataset.tvMenuBound = "1";
+            element.addEventListener("click", (event) => {
+                event.preventDefault();
+                closeMenus();
+                this._openFind();
+            });
+        });
+
+        document.querySelectorAll("[data-tv-find-again]").forEach((element) => {
+            if (element.dataset.tvMenuBound === "1") { return; }
+            element.dataset.tvMenuBound = "1";
+            element.addEventListener("click", (event) => {
+                event.preventDefault();
+                closeMenus();
+                this._findAgain();
+            });
+        });
 
         document.querySelectorAll("[data-tv-file-open]").forEach((element) => {
             if (element.dataset.tvMenuBound === "1") { return; }

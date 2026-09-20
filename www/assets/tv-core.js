@@ -1984,6 +1984,153 @@ class TVVerticalListViewer extends TVListBox {
     }
 }
 
+class TVOutline extends TVVerticalListViewer {
+    constructor(root = null, {
+        getChildren = (node) => node?.children || [],
+        getKey = (node) => node?.key ?? node?.path ?? node?.id ?? node?.label,
+        getLabel = (node) => node?.label ?? "",
+        renderNodeContent = null,
+        ...options
+    } = {}) {
+        super(root, options);
+        this.getChildren = getChildren;
+        this.getKey = getKey;
+        this.getLabel = getLabel;
+        this.renderNodeContent = renderNodeContent;
+        this.renderItemContent = (entry) => this.renderEntry(entry);
+        this.tree = [];
+        this.expanded = new Set();
+        this.nodeSelectHandler = null;
+        this.nodeActivateHandler = null;
+    }
+
+    nodeKey(node, fallback = "") {
+        const key = this.getKey(node);
+        return String(key == null ? fallback : key);
+    }
+
+    childrenOf(node) {
+        const children = this.getChildren(node);
+        return Array.isArray(children) ? children : [];
+    }
+
+    expandAll(nodes = this.tree, prefix = "") {
+        nodes.forEach((node, index) => {
+            const key = this.nodeKey(node, `${prefix}${index}`);
+            const children = this.childrenOf(node);
+            if (children.length) {
+                this.expanded.add(key);
+                this.expandAll(children, `${key}/`);
+            }
+        });
+    }
+
+    flatten(nodes = this.tree, depth = 0, parentKey = "") {
+        const result = [];
+        nodes.forEach((node, index) => {
+            const key = this.nodeKey(node, `${parentKey}${index}`);
+            const children = this.childrenOf(node);
+            const entry = {
+                node,
+                key,
+                parentKey,
+                depth,
+                hasChildren: children.length > 0,
+                expanded: children.length > 0 && this.expanded.has(key),
+            };
+            result.push(entry);
+            if (entry.expanded) {
+                result.push(...this.flatten(children, depth + 1, key));
+            }
+        });
+        return result;
+    }
+
+    renderEntry(entry) {
+        const indent = "  ".repeat(entry.depth);
+        const marker = entry.hasChildren ? (entry.expanded ? "▼ " : "► ") : "· ";
+        const content = this.renderNodeContent
+            ? this.renderNodeContent(entry.node, entry)
+            : escapeHtml(String(this.getLabel(entry.node)));
+        return `${escapeHtml(indent + marker)}${content}`;
+    }
+
+    setTree(nodes = [], selectedKey = null, { expandAll = false } = {}) {
+        this.tree = Array.isArray(nodes) ? nodes : [];
+        this.expanded.clear();
+        if (expandAll) { this.expandAll(); }
+        this.refreshTree(selectedKey);
+    }
+
+    refreshTree(selectedKey = this.selectedEntry()?.key ?? null) {
+        const entries = this.flatten();
+        const index = selectedKey == null
+            ? (entries.length ? 0 : -1)
+            : entries.findIndex((entry) => entry.key === String(selectedKey));
+        super.setItems(entries, index >= 0 ? index : (entries.length ? 0 : -1));
+    }
+
+    selectedEntry() {
+        return super.selectedItem();
+    }
+
+    selectedItem() {
+        return this.selectedEntry()?.node || null;
+    }
+
+    indexForKey(key) {
+        return this.items.findIndex((entry) => entry.key === String(key));
+    }
+
+    selectKey(key, options = {}) {
+        const index = this.indexForKey(key);
+        this.select(index, options);
+        return index >= 0;
+    }
+
+    toggle(index, expanded = null) {
+        const entry = this.items[index];
+        if (!entry?.hasChildren) { return false; }
+        const shouldExpand = expanded == null ? !this.expanded.has(entry.key) : Boolean(expanded);
+        if (shouldExpand) { this.expanded.add(entry.key); }
+        else { this.expanded.delete(entry.key); }
+        this.refreshTree(entry.key);
+        return true;
+    }
+
+    bind({ onSelect = null, onActivate = null } = {}) {
+        this.nodeSelectHandler = onSelect;
+        this.nodeActivateHandler = onActivate;
+        if (this.viewport && this.viewport.dataset.tvOutlineKeysBound !== "1") {
+            this.viewport.dataset.tvOutlineKeysBound = "1";
+            this.viewport.addEventListener("keydown", (event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") { return; }
+                const index = this.resolveIndex(event.target);
+                const entry = this.items[index];
+                if (!entry) { return; }
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if (event.key === "ArrowRight") {
+                    if (entry.hasChildren && !entry.expanded) {
+                        this.toggle(index, true);
+                    } else if (entry.hasChildren) {
+                        this.select(index + 1);
+                    }
+                } else if (entry.hasChildren && entry.expanded) {
+                    this.toggle(index, false);
+                } else if (entry.parentKey) {
+                    this.selectKey(entry.parentKey);
+                }
+                this.selectedElement()?.focus({ preventScroll: true });
+            }, true);
+        }
+        super.bind({
+            onSelect: (entry, index, event) => this.nodeSelectHandler?.(entry.node, index, event),
+            onActivate: (entry, index, event) => this.nodeActivateHandler?.(entry.node, index, event),
+        });
+    }
+}
+
 class TVVerticalScrollArea extends TVWidget {
     static renderMarkup({
         rootClass = "",
@@ -2031,7 +2178,15 @@ class TVVerticalScrollArea extends TVWidget {
     }
 }
 
-class TVMenuBox extends TVWidget {
+class TVMenuView extends TVWidget {
+    renderItems(items = []) {
+        return items.map((item) => (
+            typeof item === "string" ? item : item?.renderMarkup?.() || ""
+        ));
+    }
+}
+
+class TVMenuBox extends TVMenuView {
     constructor({
         className = "tv-menu-popup",
         attrs = {},
@@ -2052,9 +2207,8 @@ class TVMenuBox extends TVWidget {
         });
         // Split items into segments at separator strings to render them as body-level rows.
         const segments = [[]];
-        for (const item of this.items) {
-            const html = typeof item === "string" ? item : item.renderMarkup();
-            if (typeof item === "string" && html.indexOf("tv-menu-popup-separator") !== -1) {
+        for (const html of this.renderItems(this.items)) {
+            if (html.indexOf("tv-menu-popup-separator") !== -1) {
                 segments.push("separator");
                 segments.push([]);
             } else {
@@ -4147,6 +4301,44 @@ class TVScrollBar {
 
 const TurboVisionScrollbar = TVScrollBar;
 
+class TVDesktop extends TVGroup {
+    constructor(root = document.querySelector(".tv-desktop") || document.body) {
+        super({});
+        this.root = root;
+        this.dialogManager = new TVDialogManager(root);
+        this.layoutStarted = false;
+        this.clockTimer = null;
+        this.onResize = () => {
+            fillBorders();
+            fillDesktopPatterns();
+        };
+        this.onLoad = () => {
+            this.onResize();
+            updateClocks();
+        };
+    }
+
+    startLayout() {
+        if (this.layoutStarted) { return; }
+        this.layoutStarted = true;
+        this.onLoad();
+        this.clockTimer = window.setInterval(updateClocks, 1000);
+        window.addEventListener("resize", this.onResize, { passive: true });
+        window.addEventListener("load", this.onLoad, { passive: true });
+    }
+
+    destroy() {
+        if (!this.layoutStarted) { return; }
+        this.layoutStarted = false;
+        if (this.clockTimer !== null) {
+            window.clearInterval(this.clockTimer);
+            this.clockTimer = null;
+        }
+        window.removeEventListener("resize", this.onResize);
+        window.removeEventListener("load", this.onLoad);
+    }
+}
+
 Object.assign(TV, {
     SCROLL_REPEAT_MS,
     TRACK_CHAR,
@@ -4204,7 +4396,9 @@ Object.assign(TV, {
     TVEditor,
     TVListBox,
     TVVerticalListViewer,
+    TVOutline,
     TVVerticalScrollArea,
+    TVMenuView,
     TVMenuBox,
     TVMenuController,
     TVButtonStrip,
@@ -4218,6 +4412,7 @@ Object.assign(TV, {
     TVDialog,
     TVMessageBox,
     TVDialogManager,
+    TVDesktop,
     TVScrollBar,
     TurboVisionScrollbar,
 });

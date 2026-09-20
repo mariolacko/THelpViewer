@@ -324,6 +324,42 @@ async function run() {
         throw new Error(`Documentation is not using the read-only editor: ${JSON.stringify(docEditor)}`);
     }
 
+    const findNeedle = await evaluate(`(() => {
+        const root = document.querySelector('.tv-doc-window [data-tv-editor]');
+        const value = (root?.textContent.match(/[A-Za-z]{7,}/) || [])[0] || '';
+        window.__tvFindNeedle = value;
+        return value;
+    })()`);
+    if (!findNeedle) { throw new Error('Documentation has no searchable word'); }
+    await key("f", "KeyF", 2);
+    await pause();
+    const findOpen = await evaluate(`(() => {
+        const input = document.querySelector('[data-tv-find-input]');
+        if (!input || input.closest('.tv-dialog-overlay')?.hidden) { return false; }
+        input.value = window.__tvFindNeedle;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+        return true;
+    })()`);
+    if (!findOpen) { throw new Error('Ctrl-F did not open Find for the active document'); }
+    await key("Enter", "Enter", 0, true);
+    await pause();
+    const findResult = await evaluate(`(() => ({
+        closed: document.querySelector('[data-tv-find-input]')?.closest('.tv-dialog-overlay')?.hidden,
+        selection: window.getSelection()?.toString() || '',
+        history: JSON.parse(localStorage.getItem('thelp:find-history') || '[]'),
+    }))()`);
+    if (!findResult.closed || findResult.selection.toLocaleLowerCase() !== findNeedle.toLocaleLowerCase()
+        || !findResult.history.includes(findNeedle)) {
+        throw new Error(`Find did not search the active editor: ${JSON.stringify(findResult)}`);
+    }
+    await key("l", "KeyL", 2);
+    await pause();
+    const findAgainSelection = await evaluate(`window.getSelection()?.toString() || ''`);
+    if (findAgainSelection.toLocaleLowerCase() !== findNeedle.toLocaleLowerCase()) {
+        throw new Error(`Find Again lost the active query: ${findAgainSelection}`);
+    }
+
     await evaluate(`(() => {
         const item = document.querySelector('[data-tv-window-cmd]');
         const root = item && item.closest('[data-tv-menu-root]');
@@ -784,7 +820,7 @@ async function run() {
         );
         const slash = String.fromCharCode(92);
         const docs = Array.from(dialog?.querySelectorAll('[data-tv-change-dir-index]') || []).find((item) =>
-            item.textContent.trim() === 'DOCS' + slash
+            item.textContent.trim().endsWith('DOCS' + slash)
         );
         docs?.click();
         const selectedPath = dialog?.querySelector('[data-tv-change-dir-path]')?.value;
@@ -795,6 +831,9 @@ async function run() {
             open: Boolean(dialog),
             directories: dialog?.querySelectorAll('[data-tv-change-dir-index]').length || 0,
             sharedScrollbar: Boolean(dialog?.querySelector('[data-tv-change-dir-list] .tv-scrollbar-y')),
+            outline: dialog?.querySelector('[data-tv-change-dir-list]')?.dataset.tvListViewer === '1'
+                && Array.from(dialog?.querySelectorAll('[data-tv-change-dir-index]') || [])
+                    .some((item) => /[▼►]/.test(item.textContent)),
             selectedPath,
             revertedPath,
             closed: Boolean(dialog?.closest('.tv-dialog-overlay').hidden),
@@ -803,7 +842,7 @@ async function run() {
         };
     })()`);
     if (
-        !changeDirectory.open || changeDirectory.directories < 3 || !changeDirectory.sharedScrollbar
+        !changeDirectory.open || changeDirectory.directories < 3 || !changeDirectory.sharedScrollbar || !changeDirectory.outline
         || !changeDirectory.selectedPath.endsWith('DOCS' + changeDirectory.slash)
         || changeDirectory.revertedPath !== 'THelpViewer:' + changeDirectory.slash
         || !changeDirectory.closed || changeDirectory.history[0] !== '.'
@@ -1232,6 +1271,24 @@ async function run() {
     if (tvcHelpTable.links !== 3 || tvcHelpTable.separators !== 3) {
         throw new Error(`TVCHELP table row is malformed: ${JSON.stringify(tvcHelpTable)}`);
     }
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="mastermind"]').click()`);
+    await pause();
+    const mastermind = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Mastermind'
+        );
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
+            rows: dialog?.querySelectorAll('.tv-mastermind-row').length || 0,
+            colors: dialog?.querySelectorAll('[data-tv-mastermind-color]').length || 0,
+            hall: dialog?.querySelector('.tv-game-hall-control')?.textContent || '',
+        };
+    })()`);
+    if (!mastermind.open || mastermind.rows !== 10 || mastermind.colors !== 6 || mastermind.hall !== '[H]') {
+        throw new Error(`Mastermind dialog is incomplete: ${JSON.stringify(mastermind)}`);
+    }
+    await key("Escape", "Escape", 0, true);
 
     await evaluate(`document.querySelector('[data-tv-dialog-open="puzzle"]').click()`);
     await pause();

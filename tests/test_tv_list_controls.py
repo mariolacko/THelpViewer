@@ -30,6 +30,10 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVMultiCheckBoxes extends TVCluster" in source
     assert "class TVTerminal extends TVWidget" in source
     assert "class TVEditor extends TVWidget" in source
+    assert "class TVOutline extends TVVerticalListViewer" in source
+    assert "class TVMenuView extends TVWidget" in source
+    assert "class TVMenuBox extends TVMenuView" in source
+    assert "class TVDesktop extends TVGroup" in source
     assert source.count("class TVScrollBar") == 1
     assert source.count("startRepeat(event, axis, direction)") == 1
     assert 'this.scrollbarWidget = this.root ? new TVScrollBar(this.root) : null' in source
@@ -41,6 +45,7 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVHistoryViewer extends TVVerticalListViewer" in dialogs
     assert "class TVHistoryWindow extends TVWindow" in dialogs
     assert "class TVChangeDirectoryDialog extends TVDialog" in dialogs
+    assert "new TVOutline(this.query" in dialogs
     assert "new TVFileList(this.query" in dialogs
     assert "new TVHistoryWindow({" in dialogs
 

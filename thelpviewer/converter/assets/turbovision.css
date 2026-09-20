@@ -1448,13 +1448,30 @@ button.tv-status-item {
 }
 
 .tv-contents-tree {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35em;
+    height: calc(100% - 1em);
+    min-height: 6em;
 }
 
-.tv-contents-children {
-    margin-left: 2ch;
+.tv-contents-outline,
+.tv-contents-outline-viewport {
+    height: 100%;
+}
+
+.tv-contents-outline-item {
+    min-height: 1em;
+    padding: 0 1ch;
+    background: var(--tv-help-pane);
+    color: var(--tv-text);
+}
+
+.tv-contents-outline-item.is-selected {
+    background: var(--tv-hover-bg);
+    color: var(--tv-hover-fg);
+}
+
+.tv-contents-outline-item.is-selected a {
+    background: inherit;
+    color: inherit;
 }
 
 .tv-index-group-label {
@@ -2633,6 +2650,36 @@ button.tv-status-item {
 .tv-search-body {
     grid-template-columns: 1ch minmax(0, 1fr) 12ch 1ch;
 }
+
+.tv-find-body {
+    overflow: hidden;
+}
+
+.tv-find-main {
+    position: relative;
+    width: 47ch;
+    height: 8em;
+    background: var(--tv-dialog-bg);
+    color: var(--tv-dialog-fg);
+}
+
+.tv-find-label,
+.tv-find-input,
+.tv-find-confirm,
+.tv-find-cancel,
+.tv-find-status {
+    position: absolute;
+}
+
+.tv-find-label { left: 1ch; top: 1em; }
+.tv-find-input { left: 2ch; top: 2em; width: 30ch; }
+.tv-find-input .tv-input-line { width: 30ch; height: 1em; box-sizing: border-box; }
+.tv-find-history-button { left: 32ch; top: 2em; }
+.tv-find-confirm, .tv-find-cancel { left: 35ch; width: 10ch; height: 2em; }
+.tv-find-confirm { top: 1em; }
+.tv-find-cancel { top: 4em; }
+.tv-find-status { left: 2ch; top: 5em; width: 31ch; height: 2em; overflow: hidden; }
+.tv-find-history-popup { left: 1ch; top: 1em; width: 34ch; height: 7em; }
 
 .tv-search-main {
     grid-template-rows: auto 1em minmax(0, 1fr);
@@ -4217,6 +4264,71 @@ button.tv-status-item {
 /* ── Snake ─────────────────────────────────────────────────────── */
 
 /* Snake: uses position:absolute via x,y,w,h bounds */
+
+.tv-mastermind-window .tv-dialog-body {
+    background: var(--tv-dialog-bg);
+    color: var(--tv-dialog-fg);
+}
+
+[data-tv-mastermind-board] {
+    white-space: normal;
+    font-variant-numeric: tabular-nums;
+}
+
+.tv-mastermind-row {
+    display: grid;
+    grid-template-columns: 3ch repeat(4, 2ch) 1fr;
+    height: 1em;
+    line-height: 1;
+}
+
+.tv-mastermind-row.is-current {
+    color: var(--tv-palette-dialog-list-focused-fg);
+    background: var(--tv-palette-dialog-list-focused-bg);
+}
+
+.tv-mastermind-peg {
+    display: inline-block;
+    width: 2ch;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    line-height: 1;
+    text-align: center;
+}
+
+button.tv-mastermind-peg {
+    cursor: pointer;
+}
+
+.tv-mastermind-peg.is-selected {
+    color: var(--tv-palette-dialog-label-shortcut-fg);
+    background: var(--tv-palette-dialog-list-focused-bg);
+}
+
+.tv-mastermind-color-0 { color: #ff5555; }
+.tv-mastermind-color-1 { color: #55ff55; }
+.tv-mastermind-color-2 { color: #ffff55; }
+.tv-mastermind-color-3 { color: #5555ff; }
+.tv-mastermind-color-4 { color: #ff55ff; }
+.tv-mastermind-color-5 { color: #55ffff; }
+
+.tv-mastermind-color.tv-dialog-button {
+    color: inherit;
+}
+
+.tv-mastermind-feedback {
+    color: var(--tv-dialog-fg);
+    white-space: nowrap;
+}
+
+.tv-mastermind-empty {
+    grid-column: span 4;
+    width: 8ch;
+    color: var(--tv-palette-dialog-button-disabled-fg);
+}
 
 [data-tv-snake-field] {
     display: grid;
