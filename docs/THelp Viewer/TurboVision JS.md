@@ -98,6 +98,8 @@ Manages dialog lifecycle, z-ordering, and active state.
 - `dispatchCommand(command)` — Send a command to the active dialog, viewer,
   document or host window
 - `cycleTarget(delta)` — Activate the next or previous managed window/dialog
+- `openTargets()` / `openWindowCount()` — Report currently usable managed targets
+- `canDispatchCommand(command)` — Report whether the active target accepts a command
 - `applyAllZIndices()` — Recalculate z-index stack
 - `applyActiveStates()` — Update `is-window-active` / `is-window-inactive` classes
 
@@ -113,7 +115,8 @@ and the bundle viewer.
 - `destroy()` — Remove the controller's document-level listeners
 - Supports `F10`, Alt mnemonics, popup mnemonics, arrows, `Home`, `End`,
   `Enter`, Space, Tab/Shift+Tab and `Esc`, including remembered selection and
-  focus restoration.
+  focus restoration. Disabled commands are skipped by mouse, keyboard and
+  mnemonic navigation.
 
 The bundle desktop keeps one managed window per opened HELP bundle and one per
 Markdown document. `F6`/`Shift-F6`, Window List, Tile and Cascade all operate

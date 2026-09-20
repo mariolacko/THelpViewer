@@ -23,6 +23,8 @@
     --tv-appbar-active-bg: #00aa00;
     --tv-appbar-active-text: #000000;
     --tv-appbar-active-hotkey: #aa0000;
+    --tv-menu-disabled: #555555;
+    --tv-menu-selected-disabled: #555555;
     --tv-help-pane: #00aa00;
     --tv-window: #00aaaa;
     --tv-search-results-pane: var(--tv-window);
@@ -535,6 +537,24 @@ button.tv-status-item {
 .tv-menu-popup-item:focus-visible .tv-menu-hotkey,
 .tv-menu-popup-item.is-menu-selected .tv-menu-hotkey {
     color: var(--tv-appbar-active-text);
+}
+
+.tv-menu-popup-item:disabled,
+.tv-menu-popup-item[aria-disabled="true"],
+.tv-menu-popup-item.is-disabled {
+    color: var(--tv-menu-disabled);
+    background: var(--tv-dialog-bg);
+    cursor: default;
+    pointer-events: none;
+}
+
+.tv-menu-popup-item:disabled .tv-hotkey,
+.tv-menu-popup-item:disabled .tv-menu-hotkey,
+.tv-menu-popup-item[aria-disabled="true"] .tv-hotkey,
+.tv-menu-popup-item[aria-disabled="true"] .tv-menu-hotkey,
+.tv-menu-popup-item.is-disabled .tv-hotkey,
+.tv-menu-popup-item.is-disabled .tv-menu-hotkey {
+    color: var(--tv-menu-disabled);
 }
 
 .tv-menu-clock {

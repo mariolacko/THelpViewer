@@ -2974,6 +2974,7 @@ class TVBundleApp {
                 this._updateSearchData(activeBundle);
                 this._syncBundleMenu();
             }
+            this._updateWindowMenuState();
             this._updateStatusLine("");
             this._scheduleUrlStateSync();
         };
@@ -3081,6 +3082,31 @@ class TVBundleApp {
         items.push(`<a class="tv-status-link" href="https://github.com/mariolacko/THelpViewer" target="_blank" rel="noopener">GitHub</a>`);
         statusLine.innerHTML = items.join("");
         this._bindStatusButtons();
+    }
+
+    _updateWindowMenuState() {
+        if (!this.dialogManager) { return; }
+        const windowCount = this.dialogManager.openWindowCount();
+        const targetCount = this.dialogManager.openTargets().length;
+        const states = {
+            tile: windowCount > 0,
+            cascade: windowCount > 0,
+            list: targetCount > 0,
+            zoom: this.dialogManager.canDispatchCommand(TV_COMMANDS.ZOOM),
+            next: this.dialogManager.canDispatchCommand(TV_COMMANDS.NEXT),
+            previous: this.dialogManager.canDispatchCommand(TV_COMMANDS.PREVIOUS),
+            close: this.dialogManager.canDispatchCommand(TV_COMMANDS.CLOSE),
+        };
+        document.querySelectorAll("[data-tv-window-cmd]").forEach((item) => {
+            const enabled = Boolean(states[item.dataset.tvWindowCmd]);
+            item.disabled = !enabled;
+            item.setAttribute("aria-disabled", enabled ? "false" : "true");
+            item.classList.toggle("is-disabled", !enabled);
+            if (!enabled) {
+                item.classList.remove("is-menu-selected");
+                item.tabIndex = -1;
+            }
+        });
     }
 
     _bindStatusButtons() {
@@ -3956,6 +3982,7 @@ class TVBundleApp {
             });
         });
 
+        this._updateWindowMenuState();
     }
 }
 

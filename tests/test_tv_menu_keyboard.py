@@ -224,3 +224,138 @@ def test_shell_and_bundle_use_the_shared_menu_controller():
     assert "menuController.refresh()" in bundle
     assert "_menuGlobalsBound" not in bundle
     assert ".tv-menu-popup-item.is-menu-selected" in css
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for command-state behavior tests")
+def test_dialog_manager_reports_commands_available_for_the_active_target():
+    assert CORE_PATHS[0].read_bytes() == CORE_PATHS[1].read_bytes()
+    script = r'''
+const fs = require("fs");
+const source = fs.readFileSync(process.argv[1], "utf8");
+const start = source.indexOf("class TVDialogManager");
+const end = source.indexOf("// ── TVMessageBox", start);
+const HOST_WINDOW_TOKEN = "__host__";
+const TV_COMMANDS = {
+    CLOSE: "close", CANCEL: "cancel", ZOOM: "zoom", NEXT: "next", PREVIOUS: "previous",
+};
+global.document = { querySelector: () => null, body: {} };
+eval(source.slice(start, end) + "\nglobalThis.TestDialogManager = TVDialogManager;");
+
+const manager = new TestDialogManager({});
+if (manager.canDispatchCommand(TV_COMMANDS.CLOSE) || manager.canDispatchCommand(TV_COMMANDS.NEXT)) {
+    throw new Error("commands were enabled without a managed target");
+}
+const first = { isConnected: true };
+manager.windows.set("first", first);
+manager.windowCommands.set("first", { close() {}, zoom() {} });
+manager.stackOrder = ["first"];
+manager.activeTarget = "first";
+if (!manager.canDispatchCommand(TV_COMMANDS.CLOSE) || !manager.canDispatchCommand(TV_COMMANDS.ZOOM)) {
+    throw new Error("active window commands were not enabled");
+}
+if (manager.canDispatchCommand(TV_COMMANDS.NEXT) || manager.openWindowCount() !== 1) {
+    throw new Error("Next was enabled for only one window");
+}
+manager.windows.set("second", { isConnected: true });
+manager.stackOrder.push("second");
+if (!manager.canDispatchCommand(TV_COMMANDS.NEXT) || !manager.canDispatchCommand(TV_COMMANDS.PREVIOUS)) {
+    throw new Error("window cycling was not enabled for multiple targets");
+}
+manager.dialogs.set("dialog", { isOpen: () => true });
+manager.stackOrder.push("dialog");
+manager.activeTarget = "dialog";
+if (!manager.canDispatchCommand(TV_COMMANDS.CLOSE) || manager.canDispatchCommand(TV_COMMANDS.ZOOM)) {
+    throw new Error("dialog command state did not replace the active window state");
+}
+'''
+    result = subprocess.run(
+        [NODE, "-e", script, str(CORE_PATHS[0])],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for command-state behavior tests")
+def test_bundle_window_menu_reflects_dynamic_command_state():
+    bundle_paths = (
+        Path("www/assets/tv-bundle-app.js"),
+        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+    )
+    css_paths = (
+        Path("www/assets/turbovision.css"),
+        Path("thelpviewer/converter/assets/turbovision.css"),
+    )
+    assert bundle_paths[0].read_bytes() == bundle_paths[1].read_bytes()
+    assert css_paths[0].read_bytes() == css_paths[1].read_bytes()
+    script = r'''
+const fs = require("fs");
+const source = fs.readFileSync(process.argv[1], "utf8");
+const start = source.indexOf("class TVBundleApp");
+const end = source.indexOf("// ── Bootstrap", start);
+const TV_COMMANDS = { CLOSE: "close", ZOOM: "zoom", NEXT: "next", PREVIOUS: "previous" };
+eval(source.slice(start, end) + "\nglobalThis.TestBundleApp = TVBundleApp;");
+
+function item(command) {
+    const classes = new Set();
+    const attributes = new Map();
+    return {
+        dataset: { tvWindowCmd: command },
+        disabled: false,
+        tabIndex: 0,
+        classList: {
+            toggle(name, enabled) { enabled ? classes.add(name) : classes.delete(name); },
+            remove(name) { classes.delete(name); },
+            contains(name) { return classes.has(name); },
+        },
+        setAttribute(name, value) { attributes.set(name, value); },
+        getAttribute(name) { return attributes.get(name); },
+    };
+}
+const items = ["tile", "cascade", "list", "zoom", "next", "previous", "close"].map(item);
+global.document = { querySelectorAll: () => items };
+const app = Object.create(TestBundleApp.prototype);
+let windowCount = 0;
+let targetCount = 0;
+const enabledCommands = new Set();
+app.dialogManager = {
+    openWindowCount: () => windowCount,
+    openTargets: () => new Array(targetCount),
+    canDispatchCommand: (command) => enabledCommands.has(command),
+};
+app._updateWindowMenuState();
+if (items.some((entry) => !entry.disabled || entry.getAttribute("aria-disabled") !== "true")) {
+    throw new Error("window commands were enabled without open targets");
+}
+
+windowCount = 1;
+targetCount = 1;
+enabledCommands.add(TV_COMMANDS.CLOSE);
+enabledCommands.add(TV_COMMANDS.ZOOM);
+app._updateWindowMenuState();
+const byCommand = Object.fromEntries(items.map((entry) => [entry.dataset.tvWindowCmd, entry]));
+for (const command of ["tile", "cascade", "list", "zoom", "close"]) {
+    if (byCommand[command].disabled || byCommand[command].classList.contains("is-disabled")) {
+        throw new Error(`${command} was not enabled for an active window`);
+    }
+}
+if (!byCommand.next.disabled || !byCommand.previous.disabled) {
+    throw new Error("cycling was enabled for a single target");
+}
+enabledCommands.add(TV_COMMANDS.NEXT);
+enabledCommands.add(TV_COMMANDS.PREVIOUS);
+app._updateWindowMenuState();
+if (byCommand.next.disabled || byCommand.previous.disabled) {
+    throw new Error("cycling was not enabled for multiple targets");
+}
+'''
+    result = subprocess.run(
+        [NODE, "-e", script, str(bundle_paths[0])],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+    css = css_paths[0].read_text(encoding="utf-8")
+    assert '--tv-menu-disabled: #555555;' in css
+    assert '.tv-menu-popup-item[aria-disabled="true"]' in css

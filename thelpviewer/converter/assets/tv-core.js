@@ -350,8 +350,10 @@ const COLOR_GROUPS = [
 const COLOR_ITEM_DEFAULTS = {
     "Desktop/Color": { attr: 0x71, bg: ["--tv-desktop"], fg: ["--tv-desktop-dot"] },
     "Menus/Normal": { attr: 0x70, bg: ["--tv-appbar-bg"], fg: ["--tv-appbar-text"] },
+    "Menus/Disabled": { attr: 0x78, fg: ["--tv-menu-disabled"] },
     "Menus/Shortcut": { attr: 0x74, fg: ["--tv-appbar-hotkey"] },
     "Menus/Selected": { attr: 0x20, bg: ["--tv-appbar-active-bg"], fg: ["--tv-appbar-active-text"] },
+    "Menus/Selected disabled": { attr: 0x28, fg: ["--tv-menu-selected-disabled"] },
     "Menus/Shortcut selected": { attr: 0x24, fg: ["--tv-appbar-active-hotkey"] },
     "Dialogs/Calc/Frame/background": { attr: 0x70, bg: ["--tv-dialog-bg"], fg: ["--tv-dialog-frame", "--tv-dialog-title"] },
     "Dialogs/Calc/Frame icons": { attr: 0x72, fg: ["--tv-dialog-icon"] },
@@ -3593,12 +3595,7 @@ class TVDialogManager {
     }
 
     cycleTarget(delta = 1) {
-        const targets = this.stackOrder.filter((name) => {
-            const dialog = this.dialogs.get(name);
-            if (dialog) { return dialog.isOpen(); }
-            const windowElement = this.windows.get(name);
-            return Boolean(windowElement && windowElement.isConnected);
-        });
+        const targets = this.openTargets();
         if (!targets.length) {
             return false;
         }
@@ -3615,11 +3612,38 @@ class TVDialogManager {
         return true;
     }
 
+    openTargets() {
+        return this.stackOrder.filter((name) => {
+            const dialog = this.dialogs.get(name);
+            if (dialog) { return dialog.isOpen(); }
+            const windowElement = this.windows.get(name);
+            return Boolean(windowElement && windowElement.isConnected);
+        });
+    }
+
+    openWindowCount() {
+        return Array.from(this.windows.values()).filter((element) => element?.isConnected).length;
+    }
+
+    canDispatchCommand(command) {
+        if (command === TV_COMMANDS.NEXT || command === TV_COMMANDS.PREVIOUS) {
+            return this.openTargets().length > 1;
+        }
+        const target = this.activeTarget;
+        const dialog = this.dialogs.get(target);
+        if (dialog && dialog.isOpen()) {
+            return command === TV_COMMANDS.CLOSE || command === TV_COMMANDS.CANCEL;
+        }
+        return typeof this.windowCommands.get(target)?.[command] === "function";
+    }
+
     dispatchCommand(command) {
         if (command === TV_COMMANDS.NEXT) {
+            if (!this.canDispatchCommand(command)) { return false; }
             return this.cycleTarget(1);
         }
         if (command === TV_COMMANDS.PREVIOUS) {
+            if (!this.canDispatchCommand(command)) { return false; }
             return this.cycleTarget(-1);
         }
         const target = this.activeTarget;

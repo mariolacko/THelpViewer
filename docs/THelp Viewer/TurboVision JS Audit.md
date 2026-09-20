@@ -17,7 +17,7 @@ compatibility with old Turbo Vision applications.
 
 - All eight JavaScript assets pass `node --check`.
 - The source assets and their checked-in `www/assets` mirrors are identical.
-- The complete automated suite passes: 213 tests.
+- The complete automated suite passes: 215 tests.
 - Existing automated coverage is strong for converters and selected rendering
   regressions, but it does not yet exercise browser focus, modal behaviour or
   complete keyboard menu navigation.
@@ -30,10 +30,11 @@ compatibility with old Turbo Vision applications.
    Turbo Vision interaction model: `F10`, Alt shortcuts, arrow navigation,
    `Home`, `End`, `Enter`, submenu return with `Esc`/Left, remembered selection
    and dynamically enabled or disabled commands.
-   **Keyboard portion resolved in Phase 2.1:** shell and bundle menus now share
-   one state machine with `F10`, Alt and popup mnemonics, arrows, Home/End,
-   Enter, Space, Tab, nested Escape return, remembered selection and focus
-   restoration. Dynamic command enablement remains part of the desktop work.
+   **Resolved in Phases 2.1 and 2.4:** shell and bundle menus share one state
+   machine with `F10`, Alt and popup mnemonics, arrows, Home/End, Enter, Space,
+   Tab, nested Escape return, remembered selection and focus restoration.
+   Window commands now derive their enabled state from the active managed
+   target and the number of open windows.
 2. **Dialog keyboard behaviour is duplicated and inconsistent.** `Esc`,
    default-button `Enter`, Tab order and focus restoration are not provided by
    `TVDialog`. In the bundle viewer, `Esc` closes Search and most games but not
@@ -141,8 +142,8 @@ compatibility with old Turbo Vision applications.
 | Desktop, CP437 frames and shadows | Good |
 | Active/passive window drawing | Good |
 | Mouse move, resize and scrollbars | Good, including explicit cleanup lifecycle |
-| Menus and status line | Shared keyboard model complete; dynamic command state remains |
-| Dialogs and buttons | Visually good, shared keyboard/focus model incomplete |
+| Menus and status line | Shared keyboard model and dynamic window-command state complete |
+| Dialogs and buttons | Shared keyboard, modal and focus model complete |
 | InputLine | Usable native input, limited Turbo Vision semantics |
 | ListBox/ListViewer | Selection, activation, keyboard and roving focus complete |
 | CheckBoxes/RadioButtons | Native behaviour with DOS-style rendering |
@@ -202,6 +203,7 @@ compatibility with old Turbo Vision applications.
 - [x] Phase 2.1: complete keyboard menu state machine and mnemonics.
 - [x] Phase 2.2: multi-window desktop, Window List, Tile, Cascade, Next and Previous.
 - [x] Phase 2.3: explicit destroy lifecycle for dynamic windows and widgets.
+- [x] Phase 2.4: dynamic Windows-menu command state.
 - [x] Phase 3.1: native Label association and list keyboard/activation model.
 - [x] Phase 3.2: functional CheckBoxes, RadioButtons and MessageBox hardening.
 - [x] Phase 3.3: inactive scrollbar state and window-scoped frame redraw.
