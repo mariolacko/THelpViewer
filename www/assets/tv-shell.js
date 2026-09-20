@@ -14,12 +14,8 @@ const {
     fillDesktopPatterns,
     updateClocks,
     bindCloseButtons,
-    applyThemePreset,
     applyThemeAndSyncPalette,
-    readStoredThemePreset,
-    readStoredColorPalette,
-    applyColorPalette,
-    buildPaletteFromCurrentStyle,
+    initializeTVTheme,
     TVDialogManager,
     TV_COMMANDS,
     TVMenuController,
@@ -677,14 +673,7 @@ class TVApplication {
     }
 
     initTheme() {
-        document.documentElement.classList.add("tv-js");
-        applyThemePreset(readStoredThemePreset(), false);
-        const storedPalette = readStoredColorPalette();
-        if (storedPalette) {
-            applyColorPalette(storedPalette, false);
-        } else {
-            TV.setActiveColorPalette(buildPaletteFromCurrentStyle());
-        }
+        initializeTVTheme();
     }
 
     initChrome() {

@@ -15,64 +15,132 @@
 :root {
     --tv-font-text: "IBM VGA 8x16 Plus", "IBM VGA 8x16", monospace;
     --tv-font-chrome: "IBM VGA 8x16", "IBM VGA 8x16 Plus", monospace;
-    --tv-desktop: #aaaaaa;
-    --tv-desktop-dot: #0000aa;
-    --tv-appbar-bg: #aaaaaa;
-    --tv-appbar-text: #000000;
-    --tv-appbar-hotkey: #aa0000;
-    --tv-appbar-active-bg: #00aa00;
-    --tv-appbar-active-text: #000000;
-    --tv-appbar-active-hotkey: #aa0000;
-    --tv-menu-disabled: #555555;
-    --tv-menu-selected-disabled: #555555;
-    --tv-help-pane: #00aa00;
-    --tv-window: #00aaaa;
-    --tv-search-results-pane: var(--tv-window);
-    --tv-puzzle-pane: var(--tv-window);
-    --tv-puzzle-normal: #000000;
-    --tv-puzzle-highlight: #ffffff;
-    --tv-calendar-pane: #00aaaa;
-    --tv-calendar-normal: #000000;
-    --tv-calendar-current: #ffffff;
-    --tv-ascii-pane: #aaaaaa;
-    --tv-ascii-text: #000000;
-    --tv-dialog-bg: #aaaaaa;
-    --tv-dialog-fg: #000000;
-    --tv-dialog-frame: #ffffff;
-    --tv-dialog-title: #ffffff;
-    --tv-dialog-icon: #55ff55;
-    --tv-dialog-frame-passive: #ffffff;
-    --tv-dialog-title-passive: #aaaaaa;
-    --tv-dialog-title-text-passive: #ffffff;
-    --tv-dialog-icon-passive: #ffffff;
-    --tv-dialog-button-face: var(--tv-help-pane);
-    --tv-dialog-button-fg: #000000;
-    --tv-dialog-button-disabled: #555555;
-    --tv-dialog-button-edge-bg: #aaaaaa;
-    --tv-dialog-button-edge-fg: #000000;
-    --tv-dialog-button-shadow-bg: #aaaaaa;
-    --tv-dialog-button-shadow-fg: #000000;
-    --tv-dialog-input-bg: #0000aa;
-    --tv-dialog-input-fg: #ffff55;
-    --tv-dialog-list-normal-bg: #00aaaa;
-    --tv-dialog-list-normal-fg: #000000;
-    --tv-dialog-list-focused-bg: #00aa00;
-    --tv-dialog-list-focused-fg: #ffffff;
-    --tv-dialog-list-selected-bg: #00aaaa;
-    --tv-dialog-list-selected-fg: #ffff55;
-    --tv-dialog-list-divider-bg: #00aaaa;
-    --tv-dialog-list-divider-fg: #0000aa;
+    /* Exact TV 2.0 cpAppColor entries used by the web implementation. */
+    --tv-palette-desktop-bg: #aaaaaa; --tv-palette-desktop-fg: #0000aa;
+    --tv-palette-menu-normal-bg: #aaaaaa; --tv-palette-menu-normal-fg: #000000;
+    --tv-palette-menu-disabled-bg: #aaaaaa; --tv-palette-menu-disabled-fg: #555555;
+    --tv-palette-menu-shortcut-bg: #aaaaaa; --tv-palette-menu-shortcut-fg: #aa0000;
+    --tv-palette-menu-selected-bg: #00aa00; --tv-palette-menu-selected-fg: #000000;
+    --tv-palette-menu-selected-disabled-bg: #00aa00; --tv-palette-menu-selected-disabled-fg: #555555;
+    --tv-palette-menu-selected-shortcut-bg: #00aa00; --tv-palette-menu-selected-shortcut-fg: #aa0000;
+    --tv-palette-viewer-frame-passive-bg: #0000aa; --tv-palette-viewer-frame-passive-fg: #aaaaaa;
+    --tv-palette-viewer-frame-active-bg: #0000aa; --tv-palette-viewer-frame-active-fg: #ffffff;
+    --tv-palette-viewer-frame-icons-bg: #0000aa; --tv-palette-viewer-frame-icons-fg: #55ff55;
+    --tv-palette-viewer-scroll-page-bg: #00aaaa; --tv-palette-viewer-scroll-page-fg: #0000aa;
+    --tv-palette-viewer-scroll-controls-bg: #00aaaa; --tv-palette-viewer-scroll-controls-fg: #0000aa;
+    --tv-palette-viewer-text-bg: #0000aa; --tv-palette-viewer-text-fg: #ffff55;
+    --tv-palette-viewer-highlight-bg: #aaaaaa; --tv-palette-viewer-highlight-fg: #0000aa;
+    --tv-palette-calendar-frame-passive-bg: #00aaaa; --tv-palette-calendar-frame-passive-fg: #aaaaaa;
+    --tv-palette-calendar-frame-active-bg: #00aaaa; --tv-palette-calendar-frame-active-fg: #ffffff;
+    --tv-palette-calendar-frame-icons-bg: #00aaaa; --tv-palette-calendar-frame-icons-fg: #55ff55;
+    --tv-palette-calendar-scroll-page-bg: #0000aa; --tv-palette-calendar-scroll-page-fg: #00aaaa;
+    --tv-palette-calendar-scroll-controls-bg: #0000aa; --tv-palette-calendar-scroll-controls-fg: #00aaaa;
+    --tv-palette-calendar-text-bg: #00aaaa; --tv-palette-calendar-text-fg: #ffff55;
+    --tv-palette-calendar-current-bg: #00aa00; --tv-palette-calendar-current-fg: #0000aa;
+    --tv-palette-ascii-frame-passive-bg: #aaaaaa; --tv-palette-ascii-frame-passive-fg: #000000;
+    --tv-palette-ascii-frame-active-bg: #aaaaaa; --tv-palette-ascii-frame-active-fg: #ffffff;
+    --tv-palette-ascii-frame-icons-bg: #aaaaaa; --tv-palette-ascii-frame-icons-fg: #55ff55;
+    --tv-palette-ascii-scroll-page-bg: #0000aa; --tv-palette-ascii-scroll-page-fg: #00aaaa;
+    --tv-palette-ascii-scroll-controls-bg: #0000aa; --tv-palette-ascii-scroll-controls-fg: #00aaaa;
+    --tv-palette-ascii-text-bg: #aaaaaa; --tv-palette-ascii-text-fg: #000000;
+    --tv-palette-dialog-frame-passive-bg: #aaaaaa; --tv-palette-dialog-frame-passive-fg: #000000;
+    --tv-palette-dialog-frame-active-bg: #aaaaaa; --tv-palette-dialog-frame-active-fg: #ffffff;
+    --tv-palette-dialog-frame-icons-bg: #aaaaaa; --tv-palette-dialog-frame-icons-fg: #55ff55;
+    --tv-palette-dialog-scroll-page-bg: #0000aa; --tv-palette-dialog-scroll-page-fg: #00aaaa;
+    --tv-palette-dialog-scroll-controls-bg: #0000aa; --tv-palette-dialog-scroll-controls-fg: #00aaaa;
+    --tv-palette-dialog-static-bg: #aaaaaa; --tv-palette-dialog-static-fg: #000000;
+    --tv-palette-dialog-label-normal-bg: #aaaaaa; --tv-palette-dialog-label-normal-fg: #000000;
+    --tv-palette-dialog-label-selected-bg: #aaaaaa; --tv-palette-dialog-label-selected-fg: #ffffff;
+    --tv-palette-dialog-label-shortcut-bg: #aaaaaa; --tv-palette-dialog-label-shortcut-fg: #ffff55;
+    --tv-palette-dialog-button-normal-bg: #00aa00; --tv-palette-dialog-button-normal-fg: #000000;
+    --tv-palette-dialog-button-default-bg: #00aa00; --tv-palette-dialog-button-default-fg: #55ffff;
+    --tv-palette-dialog-button-selected-bg: #00aa00; --tv-palette-dialog-button-selected-fg: #ffffff;
+    --tv-palette-dialog-button-disabled-bg: #aaaaaa; --tv-palette-dialog-button-disabled-fg: #555555;
+    --tv-palette-dialog-button-shortcut-bg: #00aa00; --tv-palette-dialog-button-shortcut-fg: #ffff55;
+    --tv-palette-dialog-button-shadow-bg: #aaaaaa; --tv-palette-dialog-button-shadow-fg: #000000;
+    --tv-palette-dialog-cluster-normal-bg: #00aaaa; --tv-palette-dialog-cluster-normal-fg: #000000;
+    --tv-palette-dialog-cluster-selected-bg: #00aaaa; --tv-palette-dialog-cluster-selected-fg: #ffffff;
+    --tv-palette-dialog-cluster-shortcut-bg: #00aaaa; --tv-palette-dialog-cluster-shortcut-fg: #ffff55;
+    --tv-palette-dialog-input-normal-bg: #0000aa; --tv-palette-dialog-input-normal-fg: #ffffff;
+    --tv-palette-dialog-input-selected-bg: #00aa00; --tv-palette-dialog-input-selected-fg: #ffffff;
+    --tv-palette-dialog-input-arrow-bg: #0000aa; --tv-palette-dialog-input-arrow-fg: #55ff55;
+    --tv-palette-dialog-history-button-bg: #00aa00; --tv-palette-dialog-history-button-fg: #000000;
+    --tv-palette-dialog-history-sides-bg: #aaaaaa; --tv-palette-dialog-history-sides-fg: #0000aa;
+    --tv-palette-dialog-history-page-bg: #00aaaa; --tv-palette-dialog-history-page-fg: #0000aa;
+    --tv-palette-dialog-history-controls-bg: #00aaaa; --tv-palette-dialog-history-controls-fg: #0000aa;
+    --tv-palette-dialog-list-normal-bg: #00aaaa; --tv-palette-dialog-list-normal-fg: #000000;
+    --tv-palette-dialog-list-focused-bg: #00aa00; --tv-palette-dialog-list-focused-fg: #ffffff;
+    --tv-palette-dialog-list-selected-bg: #00aaaa; --tv-palette-dialog-list-selected-fg: #ffff55;
+    --tv-palette-dialog-list-divider-bg: #00aaaa; --tv-palette-dialog-list-divider-fg: #0000aa;
+    --tv-palette-dialog-info-bg: #0000aa; --tv-palette-dialog-info-fg: #00aaaa;
+    --tv-palette-help-frame-passive-bg: #00aaaa; --tv-palette-help-frame-passive-fg: #aaaaaa;
+    --tv-palette-help-frame-active-bg: #00aaaa; --tv-palette-help-frame-active-fg: #ffffff;
+    --tv-palette-help-frame-icons-bg: #00aaaa; --tv-palette-help-frame-icons-fg: #55ff55;
+    --tv-palette-help-scroll-page-bg: #0000aa; --tv-palette-help-scroll-page-fg: #00aaaa;
+    --tv-palette-help-scroll-controls-bg: #0000aa; --tv-palette-help-scroll-controls-fg: #00aaaa;
+    --tv-palette-help-text-bg: #00aaaa; --tv-palette-help-text-fg: #000000;
+    --tv-palette-help-keyword-bg: #00aaaa; --tv-palette-help-keyword-fg: #ffff55;
+    --tv-palette-help-keyword-selected-bg: #0000aa; --tv-palette-help-keyword-selected-fg: #ffff55;
+
+    /* Compatibility aliases. Components below select an owner palette locally. */
+    --tv-desktop: var(--tv-palette-desktop-bg);
+    --tv-desktop-dot: var(--tv-palette-desktop-fg);
+    --tv-appbar-bg: var(--tv-palette-menu-normal-bg);
+    --tv-appbar-text: var(--tv-palette-menu-normal-fg);
+    --tv-appbar-hotkey: var(--tv-palette-menu-shortcut-fg);
+    --tv-appbar-active-bg: var(--tv-palette-menu-selected-bg);
+    --tv-appbar-active-text: var(--tv-palette-menu-selected-fg);
+    --tv-appbar-active-hotkey: var(--tv-palette-menu-selected-shortcut-fg);
+    --tv-menu-disabled: var(--tv-palette-menu-disabled-fg);
+    --tv-menu-selected-disabled: var(--tv-palette-menu-selected-disabled-fg);
+    --tv-help-pane: var(--tv-palette-help-text-bg);
+    --tv-window: var(--tv-palette-help-text-bg);
+    --tv-search-results-pane: var(--tv-palette-dialog-info-bg);
+    --tv-puzzle-pane: var(--tv-palette-viewer-text-bg);
+    --tv-puzzle-normal: var(--tv-palette-viewer-text-fg);
+    --tv-puzzle-highlight: var(--tv-palette-viewer-highlight-fg);
+    --tv-calendar-pane: var(--tv-palette-calendar-text-bg);
+    --tv-calendar-normal: var(--tv-palette-calendar-text-fg);
+    --tv-calendar-current: var(--tv-palette-calendar-current-fg);
+    --tv-ascii-pane: var(--tv-palette-ascii-text-bg);
+    --tv-ascii-text: var(--tv-palette-ascii-text-fg);
+    --tv-dialog-bg: var(--tv-palette-dialog-frame-active-bg);
+    --tv-dialog-fg: var(--tv-palette-dialog-static-fg);
+    --tv-dialog-frame: var(--tv-palette-dialog-frame-active-fg);
+    --tv-dialog-title: var(--tv-palette-dialog-frame-active-fg);
+    --tv-dialog-icon: var(--tv-palette-dialog-frame-icons-fg);
+    --tv-dialog-frame-passive: var(--tv-palette-dialog-frame-passive-fg);
+    --tv-dialog-title-passive: var(--tv-palette-dialog-frame-passive-bg);
+    --tv-dialog-title-text-passive: var(--tv-palette-dialog-frame-passive-fg);
+    --tv-dialog-icon-passive: var(--tv-palette-dialog-frame-passive-fg);
+    --tv-dialog-button-face: var(--tv-palette-dialog-button-normal-bg);
+    --tv-dialog-button-fg: var(--tv-palette-dialog-button-normal-fg);
+    --tv-dialog-button-disabled: var(--tv-palette-dialog-button-disabled-fg);
+    --tv-dialog-button-edge-bg: var(--tv-palette-dialog-button-shadow-bg);
+    --tv-dialog-button-edge-fg: var(--tv-palette-dialog-button-shadow-fg);
+    --tv-dialog-button-shadow-bg: var(--tv-palette-dialog-button-shadow-bg);
+    --tv-dialog-button-shadow-fg: var(--tv-palette-dialog-button-shadow-fg);
+    --tv-dialog-input-bg: var(--tv-palette-dialog-input-normal-bg);
+    --tv-dialog-input-fg: var(--tv-palette-dialog-input-normal-fg);
+    --tv-dialog-list-normal-bg: var(--tv-palette-dialog-list-normal-bg);
+    --tv-dialog-list-normal-fg: var(--tv-palette-dialog-list-normal-fg);
+    --tv-dialog-list-focused-bg: var(--tv-palette-dialog-list-focused-bg);
+    --tv-dialog-list-focused-fg: var(--tv-palette-dialog-list-focused-fg);
+    --tv-dialog-list-selected-bg: var(--tv-palette-dialog-list-selected-bg);
+    --tv-dialog-list-selected-fg: var(--tv-palette-dialog-list-selected-fg);
+    --tv-dialog-list-divider-bg: var(--tv-palette-dialog-list-divider-bg);
+    --tv-dialog-list-divider-fg: var(--tv-palette-dialog-list-divider-fg);
     --tv-calc-display-bg: #0000aa;
     --tv-calc-display-fg: #aaaaaa;
     --tv-window-dark: #0000aa;
-    --tv-title: #00aaaa;
-    --tv-title-text: #ffffff;
-    --tv-icon: #55ff55;
-    --tv-frame-passive: #aaaaaa;
-    --tv-title-passive: #00aaaa;
-    --tv-title-text-passive: #ffffff;
-    --tv-icon-passive: #ffffff;
-    --tv-text: #000000;
+    --tv-title: var(--tv-palette-help-frame-active-bg);
+    --tv-title-text: var(--tv-palette-help-frame-active-fg);
+    --tv-icon: var(--tv-palette-help-frame-icons-fg);
+    --tv-frame-passive: var(--tv-palette-help-frame-passive-fg);
+    --tv-title-passive: var(--tv-palette-help-frame-passive-bg);
+    --tv-title-text-passive: var(--tv-palette-help-frame-passive-fg);
+    --tv-icon-passive: var(--tv-palette-help-frame-passive-fg);
+    --tv-text: var(--tv-palette-help-text-fg);
     --tv-muted: #ffffff;
     --tv-link: #ffff55;
     --tv-hover-bg: #0000aa;
@@ -81,13 +149,13 @@
     --tv-shadow-soft: rgba(0, 0, 0, 0.58);
     --tv-shadow-offset-x: 2ch;
     --tv-shadow-offset-y: 1em;
-    --tv-page-area: #0000aa;
-    --tv-arrow-bg: #0000aa;
-    --tv-arrow-fg: #00aaaa;
-    --tv-scroll-glyph: #00aaaa;
+    --tv-page-area: var(--tv-palette-help-scroll-page-bg);
+    --tv-arrow-bg: var(--tv-palette-help-scroll-controls-bg);
+    --tv-arrow-fg: var(--tv-palette-help-scroll-controls-fg);
+    --tv-scroll-glyph: var(--tv-palette-help-scroll-page-fg);
     --tv-thumb-bg: transparent;
-    --tv-thumb-fg: #00aaaa;
-    --tv-frame-line: #ffffff;
+    --tv-thumb-fg: var(--tv-palette-help-scroll-controls-fg);
+    --tv-frame-line: var(--tv-palette-help-frame-active-fg);
     --tv-code-bg: var(--tv-page-area);
     --tv-code-text: #ffff55;
     --tv-code-keyword: #ffffff;
@@ -117,10 +185,6 @@ code,
     font-family: var(--tv-font-text) !important;
     font-size: var(--tv-cell-size);
     line-height: 1;
-    --tv-frame-passive: var(--tv-frame-line);
-    --tv-title-passive: var(--tv-title);
-    --tv-title-text-passive: var(--tv-title-text);
-    --tv-icon-passive: var(--tv-icon);
     font-weight: normal;
     font-kerning: none;
     font-variant-ligatures: none;
@@ -627,22 +691,39 @@ button.tv-status-item {
     margin: 0;
     left: var(--tv-window-left, 1ch);
     top: var(--tv-window-top, 1ch);
-    background: var(--tv-window);
-    color: var(--tv-text);
-    --tv-current-frame: var(--tv-frame-line);
-    --tv-current-title-bg: var(--tv-title);
-    --tv-current-title-fg: var(--tv-title-text);
-    --tv-current-icon: var(--tv-icon);
+    --tv-owner-frame-passive-bg: var(--tv-palette-help-frame-passive-bg);
+    --tv-owner-frame-passive-fg: var(--tv-palette-help-frame-passive-fg);
+    --tv-owner-frame-active-bg: var(--tv-palette-help-frame-active-bg);
+    --tv-owner-frame-active-fg: var(--tv-palette-help-frame-active-fg);
+    --tv-owner-frame-icons-bg: var(--tv-palette-help-frame-icons-bg);
+    --tv-owner-frame-icons-fg: var(--tv-palette-help-frame-icons-fg);
+    --tv-owner-scroll-page-bg: var(--tv-palette-help-scroll-page-bg);
+    --tv-owner-scroll-page-fg: var(--tv-palette-help-scroll-page-fg);
+    --tv-owner-scroll-controls-bg: var(--tv-palette-help-scroll-controls-bg);
+    --tv-owner-scroll-controls-fg: var(--tv-palette-help-scroll-controls-fg);
+    --tv-owner-content-bg: var(--tv-palette-help-text-bg);
+    --tv-owner-content-fg: var(--tv-palette-help-text-fg);
+    --tv-current-frame: var(--tv-owner-frame-active-fg);
+    --tv-current-title-bg: var(--tv-owner-frame-active-bg);
+    --tv-current-title-fg: var(--tv-owner-frame-active-fg);
+    --tv-current-icon: var(--tv-owner-frame-icons-fg);
+    --tv-scrollbar-bg: var(--tv-owner-scroll-page-bg);
+    --tv-scrollbar-glyph: var(--tv-owner-scroll-page-fg);
+    --tv-scrollbar-arrow-bg: var(--tv-owner-scroll-controls-bg);
+    --tv-scrollbar-arrow-fg: var(--tv-owner-scroll-controls-fg);
+    --tv-scrollbar-thumb-fg: var(--tv-owner-scroll-controls-fg);
+    background: var(--tv-owner-content-bg);
+    color: var(--tv-owner-content-fg);
     box-shadow:
         var(--tv-shadow-offset-x) var(--tv-shadow-offset-y) 0 var(--tv-shadow-soft);
     overflow: hidden;
 }
 
 .tv-window.is-window-inactive {
-    --tv-current-frame: var(--tv-frame-passive);
-    --tv-current-title-bg: var(--tv-title-passive);
-    --tv-current-title-fg: var(--tv-title-text-passive);
-    --tv-current-icon: var(--tv-icon-passive);
+    --tv-current-frame: var(--tv-owner-frame-passive-fg);
+    --tv-current-title-bg: var(--tv-owner-frame-passive-bg);
+    --tv-current-title-fg: var(--tv-owner-frame-passive-fg);
+    --tv-current-icon: var(--tv-owner-frame-passive-fg);
 }
 
 .tv-window.is-maximized {
@@ -753,7 +834,7 @@ button.tv-status-item {
 }
 
 .tv-dialog-close-control .tv-close-glyph {
-    color: var(--tv-current-dialog-icon);
+    color: var(--tv-current-icon);
 }
 
 .tv-frame {
@@ -972,8 +1053,8 @@ button.tv-status-item {
     height: 1em;
     padding: 0;
     border: 0;
-    background: var(--tv-window);
-    color: #55ff55;
+    background: var(--tv-owner-content-bg);
+    color: var(--tv-owner-frame-icons-fg);
     font: inherit;
     white-space: pre;
     display: grid;
@@ -983,20 +1064,20 @@ button.tv-status-item {
 
 .tv-grow-handle:hover,
 .tv-grow-handle:focus-visible {
-    background: var(--tv-window);
-    color: #55ff55;
+    background: var(--tv-owner-content-bg);
+    color: var(--tv-owner-frame-icons-fg);
 }
 
 .tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-grow-handle {
-    color: #55ff55;
+    color: var(--tv-owner-frame-icons-fg);
 }
 
 .tv-window.is-resizing,
 .tv-window.is-moving {
-    --tv-current-frame: #55ff55;
-    --tv-current-title-bg: var(--tv-window);
-    --tv-current-title-fg: #55ff55;
-    --tv-current-icon: #55ff55;
+    --tv-current-frame: var(--tv-owner-frame-icons-fg);
+    --tv-current-title-bg: var(--tv-owner-frame-icons-bg);
+    --tv-current-title-fg: var(--tv-owner-frame-icons-fg);
+    --tv-current-icon: var(--tv-owner-frame-icons-fg);
 }
 
 .tv-window.is-resizing .tv-border-top,
@@ -1011,7 +1092,7 @@ button.tv-status-item {
 .tv-window.is-moving .tv-border-side,
 .tv-window.is-moving .tv-scroll-corner-left,
 .tv-window.is-moving .tv-grow-handle {
-    color: #55ff55;
+    color: var(--tv-owner-frame-icons-fg);
 }
 
 .tv-document,
@@ -1051,12 +1132,24 @@ button.tv-status-item {
 
 /* Documentation window — blue info theme, uses central button styling via custom properties */
 .tv-doc-window {
-    --tv-window-bg: var(--tv-window-dark, #0000aa);
-    --tv-window-fg: var(--tv-desktop-fg, #ffff55);
-    --tv-current-frame: #ffffff;
-    --tv-current-title-bg: var(--tv-window-bg);
-    --tv-current-title-fg: #ffffff;
-    --tv-current-icon: var(--tv-icon);
+    --tv-owner-frame-passive-bg: var(--tv-palette-viewer-frame-passive-bg);
+    --tv-owner-frame-passive-fg: var(--tv-palette-viewer-frame-passive-fg);
+    --tv-owner-frame-active-bg: var(--tv-palette-viewer-frame-active-bg);
+    --tv-owner-frame-active-fg: var(--tv-palette-viewer-frame-active-fg);
+    --tv-owner-frame-icons-bg: var(--tv-palette-viewer-frame-icons-bg);
+    --tv-owner-frame-icons-fg: var(--tv-palette-viewer-frame-icons-fg);
+    --tv-owner-scroll-page-bg: var(--tv-palette-viewer-scroll-page-bg);
+    --tv-owner-scroll-page-fg: var(--tv-palette-viewer-scroll-page-fg);
+    --tv-owner-scroll-controls-bg: var(--tv-palette-viewer-scroll-controls-bg);
+    --tv-owner-scroll-controls-fg: var(--tv-palette-viewer-scroll-controls-fg);
+    --tv-owner-content-bg: var(--tv-palette-viewer-text-bg);
+    --tv-owner-content-fg: var(--tv-palette-viewer-text-fg);
+    --tv-window-bg: var(--tv-owner-content-bg);
+    --tv-window-fg: var(--tv-owner-content-fg);
+    --tv-current-frame: var(--tv-owner-frame-active-fg);
+    --tv-current-title-bg: var(--tv-owner-frame-active-bg);
+    --tv-current-title-fg: var(--tv-owner-frame-active-fg);
+    --tv-current-icon: var(--tv-owner-frame-icons-fg);
     background: var(--tv-window-bg);
     color: var(--tv-window-fg);
 }
@@ -1079,13 +1172,13 @@ button.tv-status-item {
     color: var(--tv-current-frame);
 }
 .tv-doc-window.is-window-inactive {
-    --tv-current-frame: var(--tv-frame-passive);
-    --tv-current-title-bg: var(--tv-window-bg);
-    --tv-current-title-fg: var(--tv-title-text-passive);
-    --tv-current-icon: var(--tv-icon-passive);
+    --tv-current-frame: var(--tv-owner-frame-passive-fg);
+    --tv-current-title-bg: var(--tv-owner-frame-passive-bg);
+    --tv-current-title-fg: var(--tv-owner-frame-passive-fg);
+    --tv-current-icon: var(--tv-owner-frame-passive-fg);
 }
 .tv-doc-window .tv-grow-handle {
-    color: #55ff55;
+    color: var(--tv-owner-frame-icons-fg);
 }
 .tv-doc-document {
     font-family: inherit;
@@ -1448,21 +1541,44 @@ button.tv-status-item {
     grid-template-rows: 1em minmax(0, 1fr) 1em;
     overflow: hidden;
     pointer-events: auto;
-    background: var(--tv-dialog-bg);
-    color: var(--tv-dialog-fg);
-    --tv-current-dialog-frame: var(--tv-dialog-frame);
-    --tv-current-dialog-title-bg: var(--tv-dialog-bg);
-    --tv-current-dialog-title-fg: var(--tv-dialog-title);
-    --tv-current-dialog-icon: var(--tv-dialog-icon);
+    --tv-owner-frame-passive-bg: var(--tv-palette-dialog-frame-passive-bg);
+    --tv-owner-frame-passive-fg: var(--tv-palette-dialog-frame-passive-fg);
+    --tv-owner-frame-active-bg: var(--tv-palette-dialog-frame-active-bg);
+    --tv-owner-frame-active-fg: var(--tv-palette-dialog-frame-active-fg);
+    --tv-owner-frame-icons-bg: var(--tv-palette-dialog-frame-icons-bg);
+    --tv-owner-frame-icons-fg: var(--tv-palette-dialog-frame-icons-fg);
+    --tv-owner-scroll-page-bg: var(--tv-palette-dialog-scroll-page-bg);
+    --tv-owner-scroll-page-fg: var(--tv-palette-dialog-scroll-page-fg);
+    --tv-owner-scroll-controls-bg: var(--tv-palette-dialog-scroll-controls-bg);
+    --tv-owner-scroll-controls-fg: var(--tv-palette-dialog-scroll-controls-fg);
+    --tv-owner-content-bg: var(--tv-palette-dialog-frame-active-bg);
+    --tv-owner-content-fg: var(--tv-palette-dialog-static-fg);
+    --tv-current-frame: var(--tv-owner-frame-active-fg);
+    --tv-current-title-bg: var(--tv-owner-frame-active-bg);
+    --tv-current-title-fg: var(--tv-owner-frame-active-fg);
+    --tv-current-icon: var(--tv-owner-frame-icons-fg);
+    --tv-scrollbar-bg: var(--tv-owner-scroll-page-bg);
+    --tv-scrollbar-glyph: var(--tv-owner-scroll-page-fg);
+    --tv-scrollbar-arrow-bg: var(--tv-owner-scroll-controls-bg);
+    --tv-scrollbar-arrow-fg: var(--tv-owner-scroll-controls-fg);
+    --tv-scrollbar-thumb-fg: var(--tv-owner-scroll-controls-fg);
+    --tv-control-static-bg: var(--tv-palette-dialog-static-bg);
+    --tv-control-static-fg: var(--tv-palette-dialog-static-fg);
+    --tv-control-label-bg: var(--tv-palette-dialog-label-normal-bg);
+    --tv-control-label-fg: var(--tv-palette-dialog-label-normal-fg);
+    --tv-control-label-selected-bg: var(--tv-palette-dialog-label-selected-bg);
+    --tv-control-label-selected-fg: var(--tv-palette-dialog-label-selected-fg);
+    background: var(--tv-owner-content-bg);
+    color: var(--tv-owner-content-fg);
     box-shadow:
         var(--tv-shadow-offset-x) var(--tv-shadow-offset-y) 0 var(--tv-shadow-soft);
 }
 
 .tv-dialog-window.is-window-inactive {
-    --tv-current-dialog-frame: var(--tv-dialog-frame-passive);
-    --tv-current-dialog-title-bg: var(--tv-dialog-bg);
-    --tv-current-dialog-title-fg: var(--tv-dialog-title-text-passive);
-    --tv-current-dialog-icon: var(--tv-dialog-icon-passive);
+    --tv-current-frame: var(--tv-owner-frame-passive-fg);
+    --tv-current-title-bg: var(--tv-owner-frame-passive-bg);
+    --tv-current-title-fg: var(--tv-owner-frame-passive-fg);
+    --tv-current-icon: var(--tv-owner-frame-passive-fg);
 }
 
 
@@ -1493,33 +1609,80 @@ button.tv-status-item {
 }
 
 /* Dialogs with custom colors override CSS custom properties via windowClass */
-.tv-puzzle-window {
-    background: var(--tv-puzzle-pane);
-    color: var(--tv-puzzle-normal);
+.tv-dialog-window[data-tv-palette="viewer"] {
+    --tv-owner-frame-passive-bg: var(--tv-palette-viewer-frame-passive-bg);
+    --tv-owner-frame-passive-fg: var(--tv-palette-viewer-frame-passive-fg);
+    --tv-owner-frame-active-bg: var(--tv-palette-viewer-frame-active-bg);
+    --tv-owner-frame-active-fg: var(--tv-palette-viewer-frame-active-fg);
+    --tv-owner-frame-icons-bg: var(--tv-palette-viewer-frame-icons-bg);
+    --tv-owner-frame-icons-fg: var(--tv-palette-viewer-frame-icons-fg);
+    --tv-owner-scroll-page-bg: var(--tv-palette-viewer-scroll-page-bg);
+    --tv-owner-scroll-page-fg: var(--tv-palette-viewer-scroll-page-fg);
+    --tv-owner-scroll-controls-bg: var(--tv-palette-viewer-scroll-controls-bg);
+    --tv-owner-scroll-controls-fg: var(--tv-palette-viewer-scroll-controls-fg);
+    --tv-owner-content-bg: var(--tv-palette-viewer-text-bg);
+    --tv-owner-content-fg: var(--tv-palette-viewer-text-fg);
+    --tv-control-static-bg: var(--tv-owner-content-bg);
+    --tv-control-static-fg: var(--tv-owner-content-fg);
+    --tv-control-label-bg: var(--tv-owner-content-bg);
+    --tv-control-label-fg: var(--tv-owner-content-fg);
 }
 
-.tv-calendar-window {
-    background: var(--tv-calendar-pane);
-    color: var(--tv-calendar-normal);
-    --tv-current-dialog-frame: var(--tv-calendar-normal);
-    --tv-current-dialog-title-bg: var(--tv-calendar-pane);
-    --tv-current-dialog-title-fg: var(--tv-calendar-normal);
-    --tv-current-dialog-icon: var(--tv-calendar-current);
+.tv-dialog-window[data-tv-palette="calendar"] {
+    --tv-owner-frame-passive-bg: var(--tv-palette-calendar-frame-passive-bg);
+    --tv-owner-frame-passive-fg: var(--tv-palette-calendar-frame-passive-fg);
+    --tv-owner-frame-active-bg: var(--tv-palette-calendar-frame-active-bg);
+    --tv-owner-frame-active-fg: var(--tv-palette-calendar-frame-active-fg);
+    --tv-owner-frame-icons-bg: var(--tv-palette-calendar-frame-icons-bg);
+    --tv-owner-frame-icons-fg: var(--tv-palette-calendar-frame-icons-fg);
+    --tv-owner-scroll-page-bg: var(--tv-palette-calendar-scroll-page-bg);
+    --tv-owner-scroll-page-fg: var(--tv-palette-calendar-scroll-page-fg);
+    --tv-owner-scroll-controls-bg: var(--tv-palette-calendar-scroll-controls-bg);
+    --tv-owner-scroll-controls-fg: var(--tv-palette-calendar-scroll-controls-fg);
+    --tv-owner-content-bg: var(--tv-palette-calendar-text-bg);
+    --tv-owner-content-fg: var(--tv-palette-calendar-text-fg);
+    --tv-control-static-bg: var(--tv-owner-content-bg);
+    --tv-control-static-fg: var(--tv-owner-content-fg);
+    --tv-control-label-bg: var(--tv-owner-content-bg);
+    --tv-control-label-fg: var(--tv-owner-content-fg);
 }
 
-.tv-calendar-window.is-window-inactive {
-    --tv-current-dialog-frame: var(--tv-calendar-normal);
-    --tv-current-dialog-title-bg: var(--tv-calendar-pane);
-    --tv-current-dialog-title-fg: var(--tv-calendar-normal);
-    --tv-current-dialog-icon: var(--tv-calendar-current);
+.tv-dialog-window[data-tv-palette="ascii"] {
+    --tv-owner-frame-passive-bg: var(--tv-palette-ascii-frame-passive-bg);
+    --tv-owner-frame-passive-fg: var(--tv-palette-ascii-frame-passive-fg);
+    --tv-owner-frame-active-bg: var(--tv-palette-ascii-frame-active-bg);
+    --tv-owner-frame-active-fg: var(--tv-palette-ascii-frame-active-fg);
+    --tv-owner-frame-icons-bg: var(--tv-palette-ascii-frame-icons-bg);
+    --tv-owner-frame-icons-fg: var(--tv-palette-ascii-frame-icons-fg);
+    --tv-owner-scroll-page-bg: var(--tv-palette-ascii-scroll-page-bg);
+    --tv-owner-scroll-page-fg: var(--tv-palette-ascii-scroll-page-fg);
+    --tv-owner-scroll-controls-bg: var(--tv-palette-ascii-scroll-controls-bg);
+    --tv-owner-scroll-controls-fg: var(--tv-palette-ascii-scroll-controls-fg);
+    --tv-owner-content-bg: var(--tv-palette-ascii-text-bg);
+    --tv-owner-content-fg: var(--tv-palette-ascii-text-fg);
+    --tv-control-static-bg: var(--tv-owner-content-bg);
+    --tv-control-static-fg: var(--tv-owner-content-fg);
+    --tv-control-label-bg: var(--tv-owner-content-bg);
+    --tv-control-label-fg: var(--tv-owner-content-fg);
+}
+
+.tv-puzzle-window { background: var(--tv-puzzle-pane); color: var(--tv-puzzle-normal); }
+.tv-calendar-window { background: var(--tv-calendar-pane); color: var(--tv-calendar-normal); }
+.tv-ascii-window { background: var(--tv-ascii-pane); color: var(--tv-ascii-text); }
+
+.tv-dialog-window.is-dragging {
+    --tv-current-frame: var(--tv-owner-frame-icons-fg);
+    --tv-current-title-bg: var(--tv-owner-frame-icons-bg);
+    --tv-current-title-fg: var(--tv-owner-frame-icons-fg);
+    --tv-current-icon: var(--tv-owner-frame-icons-fg);
 }
 
 .tv-dialog-titlebar,
 .tv-dialog-footer {
     display: grid;
     align-items: stretch;
-    background: var(--tv-current-dialog-title-bg);
-    color: var(--tv-current-dialog-frame);
+    background: var(--tv-current-title-bg);
+    color: var(--tv-current-frame);
 }
 
 .tv-dialog-titlebar {
@@ -1536,11 +1699,11 @@ button.tv-status-item {
     display: grid;
     grid-template-columns: 1ch minmax(0, 1fr) 1ch;
     min-height: 0;
-    background: var(--tv-dialog-bg);
+    background: var(--tv-owner-content-bg);
 }
 
 .tv-dialog-body .tv-border-side {
-    color: var(--tv-current-dialog-frame);
+    color: var(--tv-current-frame);
 }
 
 .tv-calendar-body {
@@ -1554,8 +1717,8 @@ button.tv-status-item {
     line-height: 1;
     min-height: 1em;
     height: 1em;
-    background: var(--tv-current-dialog-title-bg);
-    color: var(--tv-current-dialog-title-fg);
+    background: var(--tv-current-title-bg);
+    color: var(--tv-current-title-fg);
     white-space: pre;
 }
 
@@ -1580,13 +1743,13 @@ button.tv-status-item {
     appearance: none;
     cursor: pointer;
     padding: 0;
-    color: var(--tv-current-dialog-title-fg);
+    color: var(--tv-current-title-fg);
 }
 
 .tv-dialog-close-control:hover,
 .tv-dialog-close-control:focus-visible {
-    background: var(--tv-current-dialog-title-bg) !important;
-    color: var(--tv-current-dialog-title-fg) !important;
+    background: var(--tv-current-title-bg) !important;
+    color: var(--tv-current-title-fg) !important;
     outline: none;
 }
 
@@ -1595,14 +1758,14 @@ button.tv-status-item {
 .tv-dialog-window .tv-dialog-footer .tv-border-corner,
 .tv-dialog-window .tv-dialog-footer .tv-border-fill,
 .tv-dialog-window .tv-border-side {
-    color: var(--tv-current-dialog-frame);
+    color: var(--tv-current-frame);
 }
 
 .tv-dialog-window .tv-dialog-titlebar .tv-border-corner,
 .tv-dialog-window .tv-dialog-titlebar .tv-border-fill,
 .tv-dialog-window .tv-dialog-footer .tv-border-corner,
 .tv-dialog-window .tv-dialog-footer .tv-border-fill {
-    background: var(--tv-current-dialog-title-bg);
+    background: var(--tv-current-title-bg);
 }
 
 .tv-dialog-window .tv-dialog-titlebar .tv-border-fill,
@@ -1621,7 +1784,7 @@ button.tv-status-item {
 .tv-ascii-body > .tv-border-side,
 .tv-ascii-body > .tv-border-corner,
 .tv-ascii-body > .tv-border-separator {
-    color: var(--tv-current-dialog-frame);
+    color: var(--tv-current-frame);
 }
 
 .tv-ascii-body > .tv-border-side {
@@ -1632,7 +1795,7 @@ button.tv-status-item {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--tv-dialog-bg);
+    background: var(--tv-owner-content-bg);
 }
 
 .tv-ascii-body > .tv-border-separator {
@@ -1689,7 +1852,7 @@ button.tv-status-item {
 .tv-calc-main {
     grid-template-rows: 1em 2em 10em;
     padding: 1em 1ch 0;
-    background: var(--tv-dialog-bg);
+    background: var(--tv-owner-content-bg);
     color: var(--tv-dialog-fg);
 }
 
@@ -2038,9 +2201,8 @@ button.tv-status-item {
     outline: none;
 }
 
-.tv-colors-list-item:hover,
-.tv-colors-list-item:focus-visible,
-.tv-colors-listviewer:focus-within .tv-colors-list-item.is-selected {
+.tv-colors-listviewer:not(.is-inactive) .tv-colors-list-item:focus-visible,
+.tv-colors-listviewer:not(.is-inactive):focus-within .tv-colors-list-item.is-selected {
     background: var(--tv-dialog-list-focused-bg);
     color: var(--tv-dialog-list-focused-fg);
     outline: none;
@@ -2418,11 +2580,21 @@ button.tv-status-item {
 
 .tv-static-text {
     white-space: pre;
+    color: var(--tv-control-static-fg, inherit);
 }
 
 .tv-label {
     white-space: pre;
-    color: var(--tv-dialog-fg);
+    color: var(--tv-control-label-fg, var(--tv-dialog-fg));
+}
+
+.tv-label:focus-within {
+    background: var(--tv-control-label-selected-bg, var(--tv-palette-dialog-label-selected-bg));
+    color: var(--tv-control-label-selected-fg, var(--tv-palette-dialog-label-selected-fg));
+}
+
+.tv-label .tv-hotkey {
+    color: var(--tv-palette-dialog-label-shortcut-fg);
 }
 
 .tv-title {
@@ -2439,6 +2611,11 @@ button.tv-status-item {
     color: var(--tv-dialog-input-fg);
     font: inherit;
     appearance: none;
+}
+
+.tv-input-line::selection {
+    background: var(--tv-palette-dialog-input-selected-bg);
+    color: var(--tv-palette-dialog-input-selected-fg);
 }
 
 .tv-search-results-panel {
@@ -2497,17 +2674,15 @@ button.tv-status-item {
     font: inherit;
     appearance: none;
     cursor: pointer;
-    background: transparent;
-    color: var(--tv-dialog-button-fg);
     white-space: pre;
     box-shadow: none;
     background: transparent !important;
-    color: inherit !important;
+    color: var(--tv-palette-dialog-button-normal-fg) !important;
     overflow: hidden;
 }
 
 .tv-dialog-button.is-default {
-    color: #000000;
+    color: var(--tv-palette-dialog-button-default-fg) !important;
 }
 
 .tv-dialog-button-face {
@@ -2515,7 +2690,7 @@ button.tv-status-item {
     grid-template-columns: minmax(0, 1fr) 1ch;
     align-items: center;
     min-height: 1em;
-    background: var(--tv-dialog-button-face);
+    background: var(--tv-palette-dialog-button-normal-bg);
     color: inherit;
     white-space: pre;
 }
@@ -2548,8 +2723,24 @@ button.tv-status-item {
 }
 
 .tv-dialog-button:focus-visible .tv-dialog-button-face {
-    background: var(--tv-dialog-button-face);
-    color: var(--tv-dialog-button-fg);
+    background: var(--tv-palette-dialog-button-selected-bg);
+    color: var(--tv-palette-dialog-button-selected-fg);
+}
+
+.tv-dialog-button.is-default .tv-dialog-button-face {
+    background: var(--tv-palette-dialog-button-default-bg);
+    color: var(--tv-palette-dialog-button-default-fg);
+}
+
+.tv-dialog-button.is-default:focus-visible .tv-dialog-button-face,
+.tv-dialog-button:active .tv-dialog-button-face,
+.tv-dialog-button.is-pressed .tv-dialog-button-face {
+    background: var(--tv-palette-dialog-button-selected-bg);
+    color: var(--tv-palette-dialog-button-selected-fg);
+}
+
+.tv-dialog-button .tv-hotkey {
+    color: var(--tv-palette-dialog-button-shortcut-fg);
 }
 
 .tv-dialog-button:active {
@@ -2564,17 +2755,20 @@ button.tv-status-item {
 .tv-dialog-button:focus-visible,
 .tv-dialog-button.is-active {
     background: transparent !important;
-    color: inherit !important;
 }
 
 .tv-dialog-button:disabled {
-    color: var(--tv-dialog-button-disabled) !important;
+    color: var(--tv-palette-dialog-button-disabled-fg) !important;
     cursor: default;
+}
+
+.tv-dialog-button:disabled .tv-dialog-button-face {
+    background: var(--tv-palette-dialog-button-disabled-bg);
 }
 
 .tv-dialog-button:disabled .tv-dialog-button-label,
 .tv-dialog-button:disabled .tv-hotkey {
-    color: var(--tv-dialog-button-disabled);
+    color: var(--tv-palette-dialog-button-disabled-fg);
 }
 
 .tv-dialog-button:active .tv-dialog-button-face,
@@ -2673,8 +2867,8 @@ button.tv-status-item {
 .tv-vlist-scrollbar {
     display: grid;
     grid-template-rows: 1em minmax(0, 1fr) 1em;
-    background: var(--tv-page-area);
-    color: var(--tv-scroll-glyph);
+    background: var(--tv-owner-scroll-page-bg, var(--tv-page-area));
+    color: var(--tv-owner-scroll-page-fg, var(--tv-scroll-glyph));
     user-select: none;
 }
 
@@ -2695,8 +2889,8 @@ button.tv-status-item {
     min-height: 1em;
     padding: 0;
     border: 0;
-    background: var(--tv-arrow-bg);
-    color: var(--tv-arrow-fg);
+    background: var(--tv-owner-scroll-controls-bg, var(--tv-arrow-bg));
+    color: var(--tv-owner-scroll-controls-fg, var(--tv-arrow-fg));
     font: inherit;
     display: grid;
     place-items: center;
@@ -2706,7 +2900,7 @@ button.tv-status-item {
 .tv-vlist-track {
     position: relative;
     overflow: hidden;
-    background: var(--tv-page-area);
+    background: var(--tv-owner-scroll-page-bg, var(--tv-page-area));
 }
 
 .tv-vlist-cells,
@@ -2738,12 +2932,27 @@ button.tv-status-item {
 
 .tv-vlist-scroll-cell {
     background: transparent;
-    color: var(--tv-scroll-glyph);
+    color: var(--tv-owner-scroll-page-fg, var(--tv-scroll-glyph));
 }
 
 .tv-vlist-thumb-cell {
     background: var(--tv-thumb-bg);
-    color: var(--tv-thumb-fg);
+    color: var(--tv-owner-scroll-controls-fg, var(--tv-thumb-fg));
+}
+
+.tv-vlist-item {
+    background: var(--tv-dialog-list-normal-bg);
+    color: var(--tv-dialog-list-normal-fg);
+}
+
+.tv-vlist-item.is-selected {
+    background: var(--tv-dialog-list-selected-bg);
+    color: var(--tv-dialog-list-selected-fg);
+}
+
+[data-tv-list-viewer]:not(.is-inactive):focus-within .tv-vlist-item.is-selected {
+    background: var(--tv-dialog-list-focused-bg);
+    color: var(--tv-dialog-list-focused-fg);
 }
 
 /* ── Shared game panel styles ──────────────────────────────────── */
@@ -2764,7 +2973,7 @@ button.tv-status-item {
 }
 
 [data-tv-info-frame] {
-    color: var(--tv-current-dialog-frame);
+    color: var(--tv-current-frame);
     white-space: pre;
     line-height: 1em;
 }
@@ -3078,6 +3287,8 @@ button.tv-status-item {
     cursor: pointer;
     white-space: pre;
     display: block;
+    background: var(--tv-palette-dialog-cluster-normal-bg);
+    color: var(--tv-palette-dialog-cluster-normal-fg);
 }
 
 .tv-choice-input {
@@ -3106,8 +3317,13 @@ button.tv-status-item {
 
 .tv-choice-input:focus-visible + .tv-checkbox-mark,
 .tv-choice-input:focus-visible + .tv-radio-mark {
-    color: var(--tv-hover-fg);
-    background: var(--tv-hover-bg);
+    color: var(--tv-palette-dialog-cluster-selected-fg);
+    background: var(--tv-palette-dialog-cluster-selected-bg);
+}
+
+.tv-choice-input:focus-visible ~ .tv-choice-label {
+    color: var(--tv-palette-dialog-cluster-selected-fg);
+    background: var(--tv-palette-dialog-cluster-selected-bg);
 }
 
 .tv-choice-input:disabled + .tv-checkbox-mark,
@@ -3117,7 +3333,7 @@ button.tv-status-item {
 }
 
 .tv-game-border {
-    color: var(--tv-current-dialog-frame);
+    color: var(--tv-current-frame);
 }
 
 /* ── Tetris ────────────────────────────────────────────────────── */
@@ -3543,7 +3759,7 @@ button.tv-status-item {
 }
 
 .tv-ludo-ascii-path {
-    color: var(--tv-current-dialog-frame);
+    color: var(--tv-current-frame);
     display: inline-block;
     height: 1em;
     line-height: 1em;
@@ -3564,7 +3780,7 @@ button.tv-status-item {
 }
 
 .tv-ludo-ascii-cell {
-    color: var(--tv-current-dialog-frame);
+    color: var(--tv-current-frame);
 }
 
 .tv-ludo-ascii-piece {

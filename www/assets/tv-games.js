@@ -465,6 +465,7 @@ class TVPuzzleDialog extends TVDialog {
         super({
             desktop,
             windowClass: "tv-puzzle-window",
+            palette: "viewer",
             ariaLabel: "Puzzle",
             title: "Puzzle",
             closeAttrs: {

@@ -8,12 +8,8 @@ const {
     fillBorders,
     fillDesktopPatterns,
     updateClocks,
-    applyThemePreset,
     applyThemeAndSyncPalette,
-    readStoredThemePreset,
-    readStoredColorPalette,
-    applyColorPalette,
-    buildPaletteFromCurrentStyle,
+    initializeTVTheme,
     TVDialogManager,
     TV_COMMANDS,
     TVMenuController,
@@ -2973,14 +2969,7 @@ class TVBundleApp {
 
     start() {
         // Theme
-        document.documentElement.classList.add("tv-js");
-        applyThemePreset(readStoredThemePreset(), false);
-        const storedPalette = readStoredColorPalette();
-        if (storedPalette) {
-            applyColorPalette(storedPalette, false);
-        } else {
-            TV.setActiveColorPalette(buildPaletteFromCurrentStyle());
-        }
+        initializeTVTheme();
 
         this.desktop = document.querySelector("[data-tv-bundle-desktop]");
         if (!this.desktop) { return; }

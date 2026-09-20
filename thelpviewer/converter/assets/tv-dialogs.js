@@ -7,6 +7,7 @@ const {
     renderHotkeyMarkup,
     displayCp437Char,
     cloneColorPalette,
+    setColorPaletteAttribute,
     buildDefaultColorPalette,
     applyColorPalette,
     dosColor,
@@ -708,6 +709,8 @@ class TVAsciiTableDialog extends TVDialog {
         });
         super({
             desktop,
+            windowClass: "tv-ascii-window",
+            palette: "ascii",
             ariaLabel: "ASCII Table",
             title: "ASCII Chart",
             bodyClass: "tv-ascii-body",
@@ -1167,6 +1170,7 @@ class TVCalendarDialog extends TVDialog {
         super({
             desktop,
             windowClass: "tv-calendar-window",
+            palette: "calendar",
             ariaLabel: "Calendar",
             title: "Calendar",
             bodyClass: "tv-calendar-body",
@@ -1452,11 +1456,13 @@ class TVColorsDialog extends TVDialog {
             return;
         }
         const keepFocus = document.activeElement === button;
+        let attr;
         if (type === "fg") {
-            item.attr = (item.attr & 0xF0) | (colorIndex & 0x0F);
+            attr = (item.attr & 0xF0) | (colorIndex & 0x0F);
         } else {
-            item.attr = ((colorIndex & 0x0F) << 4) | (item.attr & 0x0F);
+            attr = ((colorIndex & 0x0F) << 4) | (item.attr & 0x0F);
         }
+        setColorPaletteAttribute(this.pendingPalette, item.paletteIndex, attr);
         applyColorPalette(this.pendingPalette, false);
         this.renderItems();
         this.renderSelectors();

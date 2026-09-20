@@ -210,9 +210,6 @@ const THEME_PRESETS = {
         },
     },
 };
-const THEME_VARIABLE_KEYS = [...new Set(
-    Object.values(THEME_PRESETS).flatMap((preset) => Object.keys(preset.vars))
-)];
 const DEFAULT_UI_CONFIG = Object.freeze({
     menu: {
         popup: [
@@ -251,161 +248,160 @@ const DEFAULT_UI_CONFIG = Object.freeze({
         { type: "link", href: "https://github.com/mariolacko/THelpViewer", label: "GitHub" },
     ],
 });
-const COLOR_GROUPS = [
-    {
-        name: "Desktop",
-        items: ["Color"],
-    },
-    {
-        name: "Menus",
-        items: [
-            "Normal",
-            "Disabled",
-            "Shortcut",
-            "Selected",
-            "Selected disabled",
-            "Shortcut selected",
-        ],
-    },
-    {
-        name: "Dialogs/Calc",
-        items: [
-            "Frame/background",
-            "Frame icons",
-            "Scroll bar page",
-            "Scroll bar icons",
-            "Static text",
-            "Label normal",
-            "Label selected",
-            "Label shortcut",
-            "Button normal",
-            "Button default",
-            "Button selected",
-            "Button disabled",
-            "Button shortcut",
-            "Button shadow",
-            "Cluster normal",
-            "Cluster selected",
-            "Cluster shortcut",
-            "Input normal",
-            "Input selected",
-            "Input arrow",
-            "History button",
-            "History sides",
-            "History bar page",
-            "History bar icons",
-            "List normal",
-            "List focused",
-            "List selected",
-            "List divider",
-            "Information pane",
-        ],
-    },
-    {
-        name: "Viewer",
-        items: [
-            "Frame passive",
-            "Frame active",
-            "Frame icons",
-            "Scroll bar page",
-            "Scroll bar icons",
-            "Text",
-        ],
-    },
-    {
-        name: "Puzzle",
-        items: [
-            "Frame passive",
-            "Frame active",
-            "Frame icons",
-            "Scroll bar page",
-            "Scroll bar icons",
-            "Normal text",
-            "Highlighted text",
-        ],
-    },
-    {
-        name: "Calendar",
-        items: [
-            "Frame passive",
-            "Frame active",
-            "Frame icons",
-            "Scroll bar page",
-            "Scroll bar icons",
-            "Normal text",
-            "Current day",
-        ],
-    },
-    {
-        name: "Ascii table",
-        items: [
-            "Frame passive",
-            "Frame active",
-            "Frame icons",
-            "Scroll bar page",
-            "Scroll bar icons",
-            "Text",
-        ],
-    },
-];
-const COLOR_ITEM_DEFAULTS = {
-    "Desktop/Color": { attr: 0x71, bg: ["--tv-desktop"], fg: ["--tv-desktop-dot"] },
-    "Menus/Normal": { attr: 0x70, bg: ["--tv-appbar-bg"], fg: ["--tv-appbar-text"] },
-    "Menus/Disabled": { attr: 0x78, fg: ["--tv-menu-disabled"] },
-    "Menus/Shortcut": { attr: 0x74, fg: ["--tv-appbar-hotkey"] },
-    "Menus/Selected": { attr: 0x20, bg: ["--tv-appbar-active-bg"], fg: ["--tv-appbar-active-text"] },
-    "Menus/Selected disabled": { attr: 0x28, fg: ["--tv-menu-selected-disabled"] },
-    "Menus/Shortcut selected": { attr: 0x24, fg: ["--tv-appbar-active-hotkey"] },
-    "Dialogs/Calc/Frame/background": { attr: 0x7F, bg: ["--tv-dialog-bg"], fg: ["--tv-dialog-frame", "--tv-dialog-title"] },
-    "Dialogs/Calc/Frame icons": { attr: 0x7A, fg: ["--tv-dialog-icon"] },
-    "Dialogs/Calc/Scroll bar page": { attr: 0x13, bg: ["--tv-page-area"], fg: ["--tv-scroll-glyph"] },
-    "Dialogs/Calc/Scroll bar icons": { attr: 0x13, bg: ["--tv-arrow-bg"], fg: ["--tv-arrow-fg", "--tv-thumb-fg"] },
-    "Dialogs/Calc/Static text": { attr: 0x70, fg: ["--tv-dialog-fg", "--tv-dialog-title"] },
-    "Dialogs/Calc/Label normal": { attr: 0x70, fg: ["--tv-dialog-fg", "--tv-dialog-title"] },
-    "Dialogs/Calc/Label selected": { attr: 0x7F },
-    "Dialogs/Calc/Label shortcut": { attr: 0x7E },
-    "Dialogs/Calc/Button normal": { attr: 0x20, bg: ["--tv-dialog-button-face"], fg: ["--tv-dialog-button-fg"] },
-    "Dialogs/Calc/Button default": { attr: 0x2B },
-    "Dialogs/Calc/Button selected": { attr: 0x2F },
-    "Dialogs/Calc/Button disabled": { attr: 0x78, fg: ["--tv-dialog-button-disabled"] },
-    "Dialogs/Calc/Button shortcut": { attr: 0x2E },
-    "Dialogs/Calc/Button shadow": { attr: 0x70, bg: ["--tv-dialog-button-shadow-bg", "--tv-dialog-button-edge-bg"], fg: ["--tv-dialog-button-shadow-fg", "--tv-dialog-button-edge-fg"] },
-    "Dialogs/Calc/Cluster normal": { attr: 0x30 },
-    "Dialogs/Calc/Cluster selected": { attr: 0x3F },
-    "Dialogs/Calc/Cluster shortcut": { attr: 0x3E },
-    "Dialogs/Calc/Input normal": { attr: 0x1F, bg: ["--tv-dialog-input-bg"], fg: ["--tv-dialog-input-fg"] },
-    "Dialogs/Calc/Input selected": { attr: 0x2F },
-    "Dialogs/Calc/Input arrow": { attr: 0x1A },
-    "Dialogs/Calc/History button": { attr: 0x20 },
-    "Dialogs/Calc/History sides": { attr: 0x72 },
-    "Dialogs/Calc/History bar page": { attr: 0x31 },
-    "Dialogs/Calc/History bar icons": { attr: 0x31 },
-    "Dialogs/Calc/List normal": { attr: 0x30, bg: ["--tv-dialog-list-normal-bg"], fg: ["--tv-dialog-list-normal-fg"] },
-    "Dialogs/Calc/List focused": { attr: 0x2F, bg: ["--tv-dialog-list-focused-bg"], fg: ["--tv-dialog-list-focused-fg"] },
-    "Dialogs/Calc/List selected": { attr: 0x3E, bg: ["--tv-dialog-list-selected-bg"], fg: ["--tv-dialog-list-selected-fg"] },
-    "Dialogs/Calc/List divider": { attr: 0x31, bg: ["--tv-dialog-list-divider-bg"], fg: ["--tv-dialog-list-divider-fg"] },
-    "Dialogs/Calc/Information pane": { attr: 0x13, bg: ["--tv-search-results-pane"] },
-    "Viewer/Frame passive": { attr: 0x37, bg: ["--tv-title-passive"], fg: ["--tv-frame-passive"] },
-    "Viewer/Frame active": { attr: 0x3F, bg: ["--tv-title"], fg: ["--tv-frame-line", "--tv-title-text"] },
-    "Viewer/Frame icons": { attr: 0x3A, fg: ["--tv-icon", "--tv-icon-passive"] },
-    "Viewer/Text": { attr: 0x20, bg: ["--tv-window"], fg: ["--tv-text"] },
-    "Puzzle/Frame passive": { attr: 0x70, bg: ["--tv-dialog-bg"], fg: ["--tv-dialog-frame-passive"] },
-    "Puzzle/Frame active": { attr: 0x70, bg: ["--tv-dialog-bg"], fg: ["--tv-dialog-frame", "--tv-dialog-title"] },
-    "Puzzle/Frame icons": { attr: 0x72, fg: ["--tv-dialog-icon", "--tv-dialog-icon-passive"] },
-    "Puzzle/Normal text": { attr: 0x30, bg: ["--tv-puzzle-pane"], fg: ["--tv-puzzle-normal"] },
-    "Puzzle/Highlighted text": { attr: 0x3F, fg: ["--tv-puzzle-highlight"] },
-    "Calendar/Frame passive": { attr: 0x70, bg: ["--tv-dialog-bg"], fg: ["--tv-dialog-frame-passive"] },
-    "Calendar/Frame active": { attr: 0x70, bg: ["--tv-dialog-bg"], fg: ["--tv-dialog-frame", "--tv-dialog-title"] },
-    "Calendar/Frame icons": { attr: 0x72, fg: ["--tv-dialog-icon", "--tv-dialog-icon-passive"] },
-    "Calendar/Normal text": { attr: 0x30, bg: ["--tv-calendar-pane"], fg: ["--tv-calendar-normal"] },
-    "Calendar/Current day": { attr: 0x3F, fg: ["--tv-calendar-current"] },
-    "Ascii table/Frame passive": { attr: 0x70, bg: ["--tv-dialog-bg"], fg: ["--tv-dialog-frame-passive"] },
-    "Ascii table/Frame active": { attr: 0x70, bg: ["--tv-dialog-bg"], fg: ["--tv-dialog-frame", "--tv-dialog-title"] },
-    "Ascii table/Frame icons": { attr: 0x72, fg: ["--tv-dialog-icon", "--tv-dialog-icon-passive"] },
-    "Ascii table/Text": { attr: 0x70, bg: ["--tv-ascii-pane"], fg: ["--tv-ascii-text"] },
-};
-const COLOR_PALETTE_VARIABLE_KEYS = [...new Set(
-    Object.values(COLOR_ITEM_DEFAULTS).flatMap((entry) => [...(entry.bg || []), ...(entry.fg || [])])
+// Borland Turbo Vision 2.0 cpAppColor. Palette indexes are 1-based.
+const TV2_APP_COLOR_ATTRIBUTES = Object.freeze([
+    0x71, 0x70, 0x78, 0x74, 0x20, 0x28, 0x24, 0x17, 0x1F, 0x1A, 0x31, 0x31, 0x1E, 0x71, 0x1F,
+    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x21, 0x3F, 0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x7F, 0x7E,
+    0x70, 0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30,
+    0x3F, 0x3E, 0x1F, 0x2F, 0x1A, 0x20, 0x72, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00,
+    0x17, 0x1F, 0x1A, 0x71, 0x71, 0x1E, 0x17, 0x1F, 0x1E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x10, 0x30,
+    0x3F, 0x3E, 0x70, 0x2F, 0x7A, 0x20, 0x12, 0x31, 0x31, 0x30, 0x2F, 0x3E, 0x31, 0x13, 0x38, 0x00,
+    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x3E, 0x30, 0x3F, 0x3E, 0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x30, 0x70,
+    0x7F, 0x7E, 0x1F, 0x2F, 0x1A, 0x20, 0x32, 0x31, 0x71, 0x70, 0x2F, 0x7E, 0x71, 0x13, 0x78, 0x00,
+    0x37, 0x3F, 0x3A, 0x13, 0x13, 0x30, 0x3E, 0x1E,
+]);
+
+const TV2_PALETTE_TOKENS = Object.freeze({
+    1: "desktop",
+    2: "menu-normal", 3: "menu-disabled", 4: "menu-shortcut",
+    5: "menu-selected", 6: "menu-selected-disabled", 7: "menu-selected-shortcut",
+    8: "viewer-frame-passive", 9: "viewer-frame-active", 10: "viewer-frame-icons",
+    11: "viewer-scroll-page", 12: "viewer-scroll-controls", 13: "viewer-text", 14: "viewer-highlight",
+    16: "calendar-frame-passive", 17: "calendar-frame-active", 18: "calendar-frame-icons",
+    19: "calendar-scroll-page", 20: "calendar-scroll-controls", 21: "calendar-text", 22: "calendar-current",
+    24: "ascii-frame-passive", 25: "ascii-frame-active", 26: "ascii-frame-icons",
+    27: "ascii-scroll-page", 28: "ascii-scroll-controls", 29: "ascii-text",
+    32: "dialog-frame-passive", 33: "dialog-frame-active", 34: "dialog-frame-icons",
+    35: "dialog-scroll-page", 36: "dialog-scroll-controls", 37: "dialog-static",
+    38: "dialog-label-normal", 39: "dialog-label-selected", 40: "dialog-label-shortcut",
+    41: "dialog-button-normal", 42: "dialog-button-default", 43: "dialog-button-selected",
+    44: "dialog-button-disabled", 45: "dialog-button-shortcut", 46: "dialog-button-shadow",
+    47: "dialog-cluster-normal", 48: "dialog-cluster-selected", 49: "dialog-cluster-shortcut",
+    50: "dialog-input-normal", 51: "dialog-input-selected", 52: "dialog-input-arrow",
+    53: "dialog-history-button", 54: "dialog-history-sides", 55: "dialog-history-page",
+    56: "dialog-history-controls", 57: "dialog-list-normal", 58: "dialog-list-focused",
+    59: "dialog-list-selected", 60: "dialog-list-divider", 61: "dialog-info",
+    128: "help-frame-passive", 129: "help-frame-active", 130: "help-frame-icons",
+    131: "help-scroll-page", 132: "help-scroll-controls", 133: "help-text",
+    134: "help-keyword", 135: "help-keyword-selected",
+});
+
+function paletteVariables(paletteIndex) {
+    const token = TV2_PALETTE_TOKENS[paletteIndex];
+    return token ? {
+        bg: [`--tv-palette-${token}-bg`],
+        fg: [`--tv-palette-${token}-fg`],
+    } : { bg: [], fg: [] };
+}
+
+const COLOR_GROUP_DEFINITIONS = Object.freeze([
+    { name: "Desktop", items: [["Color", 1]] },
+    { name: "Menus", items: [
+        ["Normal", 2], ["Disabled", 3], ["Shortcut", 4], ["Selected", 5],
+        ["Selected disabled", 6], ["Shortcut selected", 7],
+    ] },
+    { name: "Dialogs/Calc", items: [
+        ["Frame/background", 33], ["Frame icons", 34], ["Scroll bar page", 35], ["Scroll bar icons", 36],
+        ["Static text", 37], ["Label normal", 38], ["Label selected", 39], ["Label shortcut", 40],
+        ["Button normal", 41], ["Button default", 42], ["Button selected", 43], ["Button disabled", 44],
+        ["Button shortcut", 45], ["Button shadow", 46], ["Cluster normal", 47], ["Cluster selected", 48],
+        ["Cluster shortcut", 49], ["Input normal", 50], ["Input selected", 51], ["Input arrow", 52],
+        ["History button", 53], ["History sides", 54], ["History bar page", 55], ["History bar icons", 56],
+        ["List normal", 57], ["List focused", 58], ["List selected", 59], ["List divider", 60],
+        ["Information pane", 61],
+    ] },
+    { name: "Viewer", items: [
+        ["Frame passive", 8], ["Frame active", 9], ["Frame icons", 10],
+        ["Scroll bar page", 11], ["Scroll bar icons", 12], ["Text", 13],
+    ] },
+    { name: "Puzzle", items: [
+        ["Frame passive", 8], ["Frame active", 9], ["Frame icons", 10],
+        ["Scroll bar page", 11], ["Scroll bar icons", 12], ["Normal text", 13], ["Highlighted text", 14],
+    ] },
+    { name: "Calendar", items: [
+        ["Frame passive", 16], ["Frame active", 17], ["Frame icons", 18],
+        ["Scroll bar page", 19], ["Scroll bar icons", 20], ["Normal text", 21], ["Current day", 22],
+    ] },
+    { name: "Ascii table", items: [
+        ["Frame passive", 24], ["Frame active", 25], ["Frame icons", 26],
+        ["Scroll bar page", 27], ["Scroll bar icons", 28], ["Text", 29],
+    ] },
+]);
+
+const COLOR_GROUPS = COLOR_GROUP_DEFINITIONS.map((group) => ({
+    name: group.name,
+    items: group.items.map(([name]) => name),
+}));
+const EDITABLE_PALETTE_INDEXES = [...new Set(
+    COLOR_GROUP_DEFINITIONS.flatMap((group) => group.items.map(([, paletteIndex]) => paletteIndex))
+)];
+const COLOR_PALETTE_VARIABLE_KEYS = EDITABLE_PALETTE_INDEXES.flatMap((paletteIndex) => {
+    const variables = paletteVariables(paletteIndex);
+    return [...variables.bg, ...variables.fg];
+});
+const THEME_PALETTE_TARGETS = Object.freeze({
+    "--tv-desktop": ["--tv-palette-desktop-bg"],
+    "--tv-desktop-dot": ["--tv-palette-desktop-fg"],
+    "--tv-appbar-bg": ["--tv-palette-menu-normal-bg"],
+    "--tv-appbar-text": ["--tv-palette-menu-normal-fg"],
+    "--tv-appbar-hotkey": ["--tv-palette-menu-shortcut-fg"],
+    "--tv-appbar-active-bg": ["--tv-palette-menu-selected-bg"],
+    "--tv-appbar-active-text": ["--tv-palette-menu-selected-fg"],
+    "--tv-appbar-active-hotkey": ["--tv-palette-menu-selected-shortcut-fg"],
+    "--tv-help-pane": ["--tv-palette-help-text-bg"],
+    "--tv-window": ["--tv-palette-help-text-bg"],
+    "--tv-search-results-pane": ["--tv-palette-dialog-info-bg"],
+    "--tv-puzzle-pane": ["--tv-palette-viewer-text-bg"],
+    "--tv-puzzle-normal": ["--tv-palette-viewer-text-fg"],
+    "--tv-puzzle-highlight": ["--tv-palette-viewer-highlight-fg"],
+    "--tv-calendar-pane": ["--tv-palette-calendar-text-bg"],
+    "--tv-calendar-normal": ["--tv-palette-calendar-text-fg"],
+    "--tv-calendar-current": ["--tv-palette-calendar-current-fg"],
+    "--tv-ascii-pane": ["--tv-palette-ascii-text-bg"],
+    "--tv-ascii-text": ["--tv-palette-ascii-text-fg"],
+    "--tv-title": ["--tv-palette-help-frame-active-bg"],
+    "--tv-title-text": ["--tv-palette-help-frame-active-fg"],
+    "--tv-icon": ["--tv-palette-help-frame-icons-fg"],
+    "--tv-frame-passive": ["--tv-palette-help-frame-passive-fg"],
+    "--tv-title-passive": ["--tv-palette-help-frame-passive-bg"],
+    "--tv-title-text-passive": ["--tv-palette-help-frame-passive-fg"],
+    "--tv-icon-passive": ["--tv-palette-help-frame-passive-fg"],
+    "--tv-text": ["--tv-palette-help-text-fg"],
+    "--tv-link": ["--tv-palette-help-keyword-fg"],
+    "--tv-hover-bg": ["--tv-palette-help-keyword-selected-bg"],
+    "--tv-hover-fg": ["--tv-palette-help-keyword-selected-fg"],
+    "--tv-page-area": ["--tv-palette-help-scroll-page-bg"],
+    "--tv-scroll-glyph": ["--tv-palette-help-scroll-page-fg"],
+    "--tv-arrow-bg": ["--tv-palette-help-scroll-controls-bg"],
+    "--tv-arrow-fg": ["--tv-palette-help-scroll-controls-fg"],
+    "--tv-thumb-fg": ["--tv-palette-help-scroll-controls-fg"],
+    "--tv-frame-line": ["--tv-palette-help-frame-active-fg"],
+    "--tv-dialog-bg": ["--tv-palette-dialog-frame-active-bg"],
+    "--tv-dialog-fg": ["--tv-palette-dialog-static-fg"],
+    "--tv-dialog-frame": ["--tv-palette-dialog-frame-active-fg"],
+    "--tv-dialog-title": ["--tv-palette-dialog-frame-active-fg"],
+    "--tv-dialog-icon": ["--tv-palette-dialog-frame-icons-fg"],
+    "--tv-dialog-frame-passive": ["--tv-palette-dialog-frame-passive-fg"],
+    "--tv-dialog-title-passive": ["--tv-palette-dialog-frame-passive-bg"],
+    "--tv-dialog-title-text-passive": ["--tv-palette-dialog-frame-passive-fg"],
+    "--tv-dialog-icon-passive": ["--tv-palette-dialog-frame-passive-fg"],
+    "--tv-dialog-input-bg": ["--tv-palette-dialog-input-normal-bg"],
+    "--tv-dialog-input-fg": ["--tv-palette-dialog-input-normal-fg"],
+    "--tv-dialog-button-face": ["--tv-palette-dialog-button-normal-bg"],
+    "--tv-dialog-button-fg": ["--tv-palette-dialog-button-normal-fg"],
+    "--tv-dialog-button-disabled": ["--tv-palette-dialog-button-disabled-fg"],
+    "--tv-dialog-button-shadow-bg": ["--tv-palette-dialog-button-shadow-bg"],
+    "--tv-dialog-button-shadow-fg": ["--tv-palette-dialog-button-shadow-fg"],
+    "--tv-dialog-button-edge-bg": ["--tv-palette-dialog-button-shadow-bg"],
+    "--tv-dialog-button-edge-fg": ["--tv-palette-dialog-button-shadow-fg"],
+});
+function themeVariableTargets(key) {
+    return THEME_PALETTE_TARGETS[key] || [key];
+}
+const THEME_VARIABLE_KEYS = [...new Set(
+    Object.values(THEME_PRESETS).flatMap((preset) => (
+        Object.keys(preset.vars).flatMap(themeVariableTargets)
+    ))
 )];
 let activeThemePreset = "default";
 let activeColorPalette = null;
@@ -434,6 +430,7 @@ function cloneColorPalette(palette) {
         items: group.items.map((item) => ({
             name: item.name,
             key: item.key,
+            paletteIndex: item.paletteIndex,
             attr: item.attr,
             bg: item.bg ? [...item.bg] : [],
             fg: item.fg ? [...item.fg] : [],
@@ -442,20 +439,37 @@ function cloneColorPalette(palette) {
 }
 
 function buildDefaultColorPalette() {
-    return COLOR_GROUPS.map((group) => ({
+    return COLOR_GROUP_DEFINITIONS.map((group) => ({
         name: group.name,
         index: 0,
-        items: group.items.map((name) => {
-            const defaults = COLOR_ITEM_DEFAULTS[colorItemKey(group.name, name)] || {};
+        items: group.items.map(([name, paletteIndex]) => {
+            const variables = paletteVariables(paletteIndex);
             return {
                 name,
                 key: colorItemKey(group.name, name),
-                attr: defaults.attr ?? 0x70,
-                bg: [...(defaults.bg || [])],
-                fg: [...(defaults.fg || [])],
+                paletteIndex,
+                attr: TV2_APP_COLOR_ATTRIBUTES[paletteIndex - 1] ?? 0x70,
+                bg: [...variables.bg],
+                fg: [...variables.fg],
             };
         }),
     }));
+}
+
+function setColorPaletteAttribute(palette, paletteIndex, attr) {
+    if (!Number.isInteger(paletteIndex) || !Number.isInteger(attr) || attr < 0 || attr > 0xFF) {
+        return false;
+    }
+    let changed = false;
+    palette.forEach((group) => {
+        group.items.forEach((item) => {
+            if (item.paletteIndex === paletteIndex) {
+                item.attr = attr;
+                changed = true;
+            }
+        });
+    });
+    return changed;
 }
 
 function serializeColorPalette(palette) {
@@ -470,6 +484,7 @@ function restoreColorPalette(serialized) {
     if (!Array.isArray(serialized)) {
         return palette;
     }
+    const restoredAttributes = new Map();
     serialized.forEach((savedGroup, groupIndex) => {
         const targetGroup = palette[groupIndex];
         if (!targetGroup || !savedGroup) {
@@ -481,11 +496,21 @@ function restoreColorPalette(serialized) {
         }
         if (Array.isArray(savedGroup.attrs)) {
             savedGroup.attrs.forEach((attr, itemIndex) => {
-                if (targetGroup.items[itemIndex] && Number.isInteger(attr) && attr >= 0 && attr <= 0xFF) {
-                    targetGroup.items[itemIndex].attr = attr;
+                const targetItem = targetGroup.items[itemIndex];
+                if (
+                    targetItem
+                    && Number.isInteger(attr)
+                    && attr >= 0
+                    && attr <= 0xFF
+                    && !restoredAttributes.has(targetItem.paletteIndex)
+                ) {
+                    restoredAttributes.set(targetItem.paletteIndex, attr);
                 }
             });
         }
+    });
+    restoredAttributes.forEach((attr, paletteIndex) => {
+        setColorPaletteAttribute(palette, paletteIndex, attr);
     });
     return palette;
 }
@@ -585,15 +610,23 @@ function buildPaletteFromCurrentStyle() {
 function applyColorPalette(palette, persist = false) {
     const root = document.documentElement;
     COLOR_PALETTE_VARIABLE_KEYS.forEach((key) => root.style.removeProperty(key));
+    const attributes = new Map();
     palette.forEach((group) => {
         group.items.forEach((item) => {
-            const fg = dosColor(item.attr, 0);
-            const bg = dosColor(item.attr, 4);
-            item.bg.forEach((key) => root.style.setProperty(key, bg));
-            item.fg.forEach((key) => root.style.setProperty(key, fg));
+            if (!attributes.has(item.paletteIndex)) {
+                attributes.set(item.paletteIndex, item.attr);
+            }
         });
     });
-    activeColorPalette = cloneColorPalette(palette);
+    attributes.forEach((attr, paletteIndex) => {
+        const variables = paletteVariables(paletteIndex);
+        variables.bg.forEach((key) => root.style.setProperty(key, dosColor(attr, 4)));
+        variables.fg.forEach((key) => root.style.setProperty(key, dosColor(attr, 0)));
+    });
+    activeColorPalette = buildDefaultColorPalette();
+    attributes.forEach((attr, paletteIndex) => {
+        setColorPaletteAttribute(activeColorPalette, paletteIndex, attr);
+    });
     if (persist) {
         persistColorPalette(activeColorPalette);
     }
@@ -624,7 +657,9 @@ function applyThemePreset(name, persist = false) {
     const preset = THEME_PRESETS[presetName];
     const root = document.documentElement;
     THEME_VARIABLE_KEYS.forEach((key) => root.style.removeProperty(key));
-    Object.entries(preset.vars).forEach(([key, value]) => root.style.setProperty(key, value));
+    Object.entries(preset.vars).forEach(([key, value]) => {
+        themeVariableTargets(key).forEach((target) => root.style.setProperty(target, value));
+    });
     activeThemePreset = requestedName;
     if (persist) {
         persistThemePreset(requestedName);
@@ -638,6 +673,18 @@ function applyThemeAndSyncPalette(name, persist = false) {
     const palette = buildPaletteFromCurrentStyle();
     applyColorPalette(palette, persist);
     return palette;
+}
+
+function initializeTVTheme() {
+    document.documentElement.classList.add("tv-js");
+    applyThemePreset(readStoredThemePreset(), false);
+    const storedPalette = readStoredColorPalette();
+    if (storedPalette) {
+        applyColorPalette(storedPalette, false);
+    } else {
+        activeColorPalette = buildPaletteFromCurrentStyle();
+    }
+    return cloneColorPalette(activeColorPalette);
 }
 
 function isLeapYear(year) {
@@ -712,30 +759,20 @@ function setBorderSide(element, char) {
     }
 }
 
-function updateWindowFrameState(windowElement, active, { dialog = false } = {}) {
-    if (!windowElement) {
-        return;
-    }
-    const singleFrame = windowElement.classList.contains("is-resizing")
+const TV_FRAME_GLYPHS = Object.freeze({
+    active: Object.freeze({ horizontal: "═", vertical: "║", topLeft: "╔", topRight: "╗", bottomLeft: "╚", bottomRight: "╝" }),
+    passive: Object.freeze({ horizontal: "─", vertical: "│", topLeft: "┌", topRight: "┐", bottomLeft: "└", bottomRight: "┘" }),
+    dragging: Object.freeze({ horizontal: "─", vertical: "│", topLeft: "┌", topRight: "┐", bottomLeft: "└", bottomRight: "┘" }),
+});
+
+function windowFrameMode(windowElement, active, dialog) {
+    const dragging = windowElement.classList.contains("is-resizing")
         || windowElement.classList.contains("is-moving")
         || (dialog && windowElement.classList.contains("is-dragging"));
-    const topBar = dialog
-        ? windowElement.querySelector(".tv-dialog-titlebar")
-        : windowElement.querySelector(".tv-border-top");
-    const bottomBar = dialog
-        ? windowElement.querySelector(".tv-dialog-footer")
-        : windowElement.querySelector(".tv-bottom-bar");
-    const topCorners = topBar ? Array.from(topBar.querySelectorAll(".tv-border-corner")) : [];
-    const bottomCorners = bottomBar ? Array.from(bottomBar.querySelectorAll(".tv-border-corner")) : [];
-    const topFills = topBar ? Array.from(topBar.querySelectorAll(".tv-border-fill")) : [];
-    const bottomFills = bottomBar ? Array.from(bottomBar.querySelectorAll(".tv-border-fill")) : [];
-    const sides = dialog
-        ? Array.from(windowElement.querySelectorAll("[data-tv-border-side]"))
-        : Array.from(windowElement.querySelectorAll(".tv-border-side-left"));
-    const closeButton = windowElement.querySelector("[data-tv-close-button]");
-    const closeGlyph = windowElement.querySelector("[data-tv-close-glyph]");
-    const resizeHandle = !dialog ? windowElement.querySelector("[data-tv-resize-handle]") : null;
+    return dragging ? "dragging" : (active ? "active" : "passive");
+}
 
+function setOwnedWidgetsActive(windowElement, active) {
     const scrollbarWidgets = new Set();
     windowElement.querySelectorAll(".tv-scrollbar").forEach((scrollbar) => {
         if (scrollbar._tvScrollbar) {
@@ -751,37 +788,60 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
             listRoot._tvListViewer.setActive(active);
         }
     });
+}
 
-    const horiz = singleFrame ? "─" : (active ? "═" : "─");
-    const vert = singleFrame ? "│" : (active ? "║" : "│");
-    const tl = singleFrame ? "┌" : (active ? "╔" : "┌");
-    const tr = singleFrame ? "┐" : (active ? "╗" : "┐");
-    const bl = singleFrame ? "└" : (active ? "╚" : "└");
-    const br = singleFrame ? "┘" : (active ? "╝" : "┘");
+function updateWindowFrameState(windowElement, active, { dialog = false } = {}) {
+    if (!windowElement) {
+        return;
+    }
+    const frameMode = windowFrameMode(windowElement, active, dialog);
+    const glyphs = TV_FRAME_GLYPHS[frameMode];
+    const topBar = dialog
+        ? windowElement.querySelector(".tv-dialog-titlebar")
+        : windowElement.querySelector(".tv-border-top");
+    const bottomBar = dialog
+        ? windowElement.querySelector(".tv-dialog-footer")
+        : windowElement.querySelector(".tv-bottom-bar");
+    const topCorners = topBar ? Array.from(topBar.querySelectorAll(".tv-border-corner")) : [];
+    const bottomCorners = bottomBar ? Array.from(bottomBar.querySelectorAll(".tv-border-corner")) : [];
+    const topFills = topBar ? Array.from(topBar.querySelectorAll(".tv-border-fill")) : [];
+    const bottomFills = bottomBar ? Array.from(bottomBar.querySelectorAll(".tv-border-fill")) : [];
+    const sides = dialog
+        ? Array.from(windowElement.querySelectorAll("[data-tv-border-side]"))
+        : Array.from(windowElement.querySelectorAll(".tv-border-side-left"));
+    const closeButton = windowElement.querySelector("[data-tv-close-button]");
+    const closeGlyph = windowElement.querySelector("[data-tv-close-glyph]");
+    const zoomButton = windowElement.querySelector("[data-tv-zoom-glyph]")?.closest("button, a");
+    const resizeHandle = !dialog ? windowElement.querySelector("[data-tv-resize-handle]") : null;
+
+    setOwnedWidgetsActive(windowElement, active);
+    if (closeButton) {
+        closeButton.hidden = !active;
+    }
+    if (zoomButton) {
+        zoomButton.hidden = !active;
+    }
 
     if (topCorners[0]) {
-        topCorners[0].textContent = tl;
+        topCorners[0].textContent = glyphs.topLeft;
     }
     if (topCorners[topCorners.length - 1]) {
-        topCorners[topCorners.length - 1].textContent = tr;
+        topCorners[topCorners.length - 1].textContent = glyphs.topRight;
     }
-    topFills.forEach((element) => setBorderFill(element, horiz));
-    sides.forEach((element) => setBorderSide(element, vert));
+    topFills.forEach((element) => setBorderFill(element, glyphs.horizontal));
+    sides.forEach((element) => setBorderSide(element, glyphs.vertical));
 
     if (dialog) {
-        if (closeButton) {
-            closeButton.hidden = !active;
-        }
         if (bottomCorners[0]) {
-            bottomCorners[0].textContent = bl;
+            bottomCorners[0].textContent = glyphs.bottomLeft;
         }
         if (bottomCorners[bottomCorners.length - 1]) {
-            bottomCorners[bottomCorners.length - 1].textContent = br;
+            bottomCorners[bottomCorners.length - 1].textContent = glyphs.bottomRight;
         }
-        bottomFills.forEach((element) => setBorderFill(element, horiz));
+        bottomFills.forEach((element) => setBorderFill(element, glyphs.horizontal));
 
         // Update internal separator T-connectors (e.g. ASCII table ╟/╢)
-        const tMap = active && !singleFrame
+        const tMap = frameMode === "active"
             ? { "├": "╟", "┤": "╢", "┬": "╤", "┴": "╧" }
             : { "╟": "├", "╢": "┤", "╤": "┬", "╧": "┴" };
         const bodyCorners = Array.from(windowElement.querySelectorAll(".tv-border-corner"))
@@ -793,11 +853,11 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
     } else {
         const leftCorner = windowElement.querySelector(".tv-scroll-corner-left");
         if (leftCorner) {
-            leftCorner.textContent = bl;
+            leftCorner.textContent = glyphs.bottomLeft;
         }
-        bottomFills.forEach((element) => setBorderFill(element, horiz));
+        bottomFills.forEach((element) => setBorderFill(element, glyphs.horizontal));
         if (resizeHandle) {
-            resizeHandle.textContent = active ? "─┘" : "─┘";
+            resizeHandle.textContent = `${glyphs.horizontal}${glyphs.bottomRight}`;
         }
     }
 
@@ -1388,6 +1448,7 @@ class TVListBox extends TVWidget {
 
     defaultMarkup(item, index) {
         const className = [
+            "tv-vlist-item",
             this.itemClassName,
             index === this.selectedIndex ? this.selectedClassName : "",
         ].filter(Boolean).join(" ");
@@ -3053,6 +3114,7 @@ class TVFrame extends TVWidget {
         footerMarkup,
         bodyBorders = true,
         modal = false,
+        palette = "dialog",
     }) {
         const overlayClasses = ["tv-dialog-overlay", modal ? "is-modal" : "", overlayClass].filter(Boolean).join(" ");
         const windowClasses = ["tv-dialog-window", windowClass].filter(Boolean).join(" ");
@@ -3077,7 +3139,7 @@ class TVFrame extends TVWidget {
         }
         return `
             <div class="${overlayClasses}" hidden>
-                <div class="${windowClasses}" role="dialog" aria-modal="${modal ? "true" : "false"}" aria-label="${escapeHtml(ariaLabel)}">
+                <div class="${windowClasses}" data-tv-palette="${escapeHtml(palette)}" role="dialog" aria-modal="${modal ? "true" : "false"}" aria-label="${escapeHtml(ariaLabel)}">
                     <div class="${titlebarClasses}">
                         <span class="tv-border-corner" aria-hidden="true">╔</span>
                         <span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>
@@ -3122,6 +3184,7 @@ class TVDialog extends TVWidget {
         left,
         top,
         modal = false,
+        palette = "dialog",
         keyboard = true,
         escapeCloses = true,
         defaultButtonSelector = ".tv-dialog-button.is-default",
@@ -3142,6 +3205,7 @@ class TVDialog extends TVWidget {
                 footerMarkup,
                 bodyBorders,
                 modal,
+                palette,
             })
         );
         super(root);
@@ -4198,6 +4262,9 @@ Object.assign(TV, {
     PUZZLE_START,
     PUZZLE_HIGHLIGHT_MAP,
     DOS_COLORS,
+    TV2_APP_COLOR_ATTRIBUTES,
+    TV2_PALETTE_TOKENS,
+    TV_FRAME_GLYPHS,
     THEME_PRESETS,
     DEFAULT_UI_CONFIG,
     TV_COMMANDS,
@@ -4210,7 +4277,9 @@ Object.assign(TV, {
     readStoredThemePreset,
     applyThemePreset,
     applyThemeAndSyncPalette,
+    initializeTVTheme,
     cloneColorPalette,
+    setColorPaletteAttribute,
     dosColor,
     isLeapYear,
     dayOfWeek,
