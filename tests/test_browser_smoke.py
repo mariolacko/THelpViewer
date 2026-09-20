@@ -243,6 +243,45 @@ async function run() {
         `!Array.from(document.querySelectorAll('.tv-dialog-title-text')).some((element) => element.textContent === 'Window List')`
     );
     if (!windowListClosed) { throw new Error("Escape did not close the Window List dialog"); }
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="widgets"]').click()`);
+    await pause();
+    const gallery = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Widget Gallery'
+        );
+        if (!dialog) { return { open: false }; }
+        const label = dialog.querySelector('label[for="tv-widget-gallery-name"]');
+        const input = dialog.querySelector('#tv-widget-gallery-name');
+        label.click();
+        dialog.querySelector('[data-tv-gallery-apply]').click();
+        return {
+            open: true,
+            labelFocus: document.activeElement === input,
+            checks: dialog.querySelectorAll('[data-tv-gallery-checks] input[type="checkbox"]').length,
+            radios: dialog.querySelectorAll('[data-tv-gallery-radios] input[type="radio"]').length,
+            disabledChoices: dialog.querySelectorAll('.tv-choice-input:disabled').length,
+            listItems: dialog.querySelectorAll('[data-tv-gallery-list-index]').length,
+            selectedItems: dialog.querySelectorAll('[data-tv-gallery-list-index].is-selected').length,
+            disabledButtons: dialog.querySelectorAll('.tv-dialog-button:disabled').length,
+            status: dialog.querySelector('[data-tv-row="status"]')?.textContent || '',
+        };
+    })()`);
+    if (
+        !gallery.open || !gallery.labelFocus || gallery.checks !== 3 || gallery.radios !== 3
+        || gallery.disabledChoices !== 2 || gallery.listItems !== 5 || gallery.selectedItems !== 1
+        || gallery.disabledButtons !== 1 || !gallery.status.includes('Apply command')
+    ) {
+        throw new Error(`Widget Gallery controls are incomplete: ${JSON.stringify(gallery)}`);
+    }
+    await key("Escape", "Escape", 0, true);
+    await pause();
+    const galleryClosed = await evaluate(
+        `Array.from(document.querySelectorAll('.tv-dialog-title-text'))
+            .filter((element) => element.textContent === 'Widget Gallery')
+            .every((element) => element.closest('.tv-dialog-overlay').hidden)`
+    );
+    if (!galleryClosed) { throw new Error("Escape did not close Widget Gallery"); }
     socket.close();
 }
 

@@ -21,7 +21,10 @@ const {
     TVGroup,
     TVListViewer,
     TVVerticalListViewer,
+    TVInfoBox,
     TVButtonStrip,
+    TVCheckBoxes,
+    TVRadioButtons,
     TVButton,
     normalizeSearchText,
     fillBorders,
@@ -67,6 +70,160 @@ class TVAboutDialog extends TVDialog {
         if (this.okButton) {
             this.okButton.addEventListener("click", () => this.close());
         }
+    }
+}
+
+class TVWidgetGalleryDialog extends TVDialog {
+    constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const nameLabel = new TVLabel({
+            text: "~N~ame:",
+            hotkey: true,
+            forId: "tv-widget-gallery-name",
+        });
+        const nameInput = new TVInputLine({
+            attrs: {
+                id: "tv-widget-gallery-name",
+                value: "Turbo Vision",
+                autocomplete: "off",
+                "data-tv-gallery-name": true,
+            },
+        });
+        const checks = new TVCheckBoxes({
+            attrs: { "data-tv-gallery-checks": true },
+            options: [
+                { label: "Frames", value: "frames", checked: true },
+                { label: "Shadows", value: "shadows", checked: true },
+                { label: "Disabled", value: "disabled", disabled: true },
+            ],
+        });
+        const radios = new TVRadioButtons({
+            attrs: { "data-tv-gallery-radios": true },
+            name: "tv-widget-gallery-mode",
+            options: [
+                { label: "Text", value: "text", checked: true },
+                { label: "Graphics", value: "graphics" },
+                { label: "Mono", value: "mono", disabled: true },
+            ],
+        });
+        const infoBox = new TVInfoBox({
+            title: "Event log",
+            name: "gallery-status",
+            w: 30,
+            children: [
+                new TVStaticText({ tag: "span", name: "status", attrs: { "data-tv-info-row": true } }),
+            ],
+        });
+        const buttons = new TVButtonStrip({
+            className: "tv-widget-gallery-buttons",
+            buttons: [
+                new TVButton({
+                    className: "is-default",
+                    attrs: { "data-tv-gallery-ok": true },
+                    label: "~O~K",
+                }),
+                new TVButton({
+                    attrs: { "data-tv-gallery-apply": true },
+                    label: "~A~pply",
+                }),
+                new TVButton({
+                    attrs: { disabled: true },
+                    label: "Disabled",
+                }),
+            ],
+        });
+
+        super({
+            desktop,
+            ariaLabel: "Widget Gallery",
+            title: "Widget Gallery",
+            bodyClass: "tv-widget-gallery-body",
+            closeAttrs: {
+                "data-tv-gallery-close": true,
+                "aria-label": "Close widget gallery",
+            },
+            bodyMarkup: `
+                <div class="tv-widget-gallery-main">
+                    <div class="tv-widget-gallery-field">
+                        ${nameLabel.renderMarkup()}
+                        ${nameInput.renderMarkup()}
+                    </div>
+                    <div class="tv-widget-gallery-samples">
+                        <section class="tv-widget-gallery-panel">
+                            <div class="tv-widget-gallery-heading">Check boxes</div>
+                            ${checks.renderMarkup()}
+                        </section>
+                        <section class="tv-widget-gallery-panel">
+                            <div class="tv-widget-gallery-heading">Radio buttons</div>
+                            ${radios.renderMarkup()}
+                        </section>
+                        <section class="tv-widget-gallery-panel">
+                            <div class="tv-widget-gallery-heading">List viewer</div>
+                            ${TVVerticalListViewer.renderMarkup({
+                                rootClass: "tv-widget-gallery-listviewer",
+                                rootAttrs: { "data-tv-gallery-list": true },
+                                viewportClass: "tv-widget-gallery-list",
+                            })}
+                        </section>
+                        <section class="tv-widget-gallery-panel tv-widget-gallery-info">
+                            <div class="tv-widget-gallery-heading">Info box</div>
+                            ${infoBox.renderMarkup()}
+                        </section>
+                    </div>
+                    ${buttons.renderMarkup()}
+                </div>
+            `,
+            footerMarkup: TVDialog.footerMarkup(),
+            width: "66ch",
+            height: "min(23em, calc(100% - 2em))",
+            left: "3ch",
+            top: "2em",
+        });
+        this.nameInput = this.query("[data-tv-gallery-name]");
+        this.checks = this.query("[data-tv-gallery-checks]");
+        this.radios = this.query("[data-tv-gallery-radios]");
+        this.okButton = this.query("[data-tv-gallery-ok]");
+        this.applyButton = this.query("[data-tv-gallery-apply]");
+        this.infoBox = infoBox.resolve(this.dialog);
+        this.listBox = new TVVerticalListViewer(this.query("[data-tv-gallery-list]"), {
+            itemClassName: "tv-widget-gallery-list-item",
+            itemAttrName: "data-tv-gallery-list-index",
+        });
+        this.listBox.setItems(["TDialog", "TInputLine", "TListViewer", "TButton", "TScrollBar"], 0);
+        this.listBox.bind({
+            onSelect: (item) => this.setStatus(`Selected: ${item}`),
+            onActivate: (item) => this.setStatus(`Activated: ${item}`),
+        });
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+        this.bindGallery();
+        this.setStatus("Ready");
+    }
+
+    bindGallery() {
+        if (this.nameInput) {
+            this.nameInput.addEventListener("input", () => this.setStatus(`Name: ${this.nameInput.value || "(empty)"}`));
+        }
+        for (const group of [this.checks, this.radios]) {
+            group?.addEventListener("change", (event) => {
+                const input = event.target.closest("input");
+                if (input) { this.setStatus(`${input.value}: ${input.checked ? "on" : "off"}`); }
+            });
+        }
+        if (this.applyButton) {
+            this.applyButton.addEventListener("click", () => this.setStatus("Apply command"));
+        }
+        if (this.okButton) {
+            this.okButton.addEventListener("click", () => this.close());
+        }
+    }
+
+    open() {
+        super.open();
+        window.requestAnimationFrame(() => this.listBox.updateScrollbar());
+    }
+
+    setStatus(message) {
+        this.infoBox.updateRow("status", message);
     }
 }
 
@@ -2314,6 +2471,7 @@ class TVSearchDialog extends TVDialog {
 
 Object.assign(TV, {
     TVAboutDialog,
+    TVWidgetGalleryDialog,
     TVAsciiTableDialog,
     TVCalculatorDialog,
     TVCalendarDialog,

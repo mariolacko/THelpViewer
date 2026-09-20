@@ -213,3 +213,4 @@ compatibility with old Turbo Vision applications.
 - [x] Phase 4.4: Gregorian leap-year handling in Calendar.
 - [x] Phase 4.5: shared screen-saver idle start, resize and focus lifecycle.
 - [x] Phase 5.1: dependency-free real-Chrome menu/focus smoke-test foundation.
+- [x] Phase 5.2: interactive Turbo Vision Widget Gallery/Test dialog.

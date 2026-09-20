@@ -29,6 +29,7 @@ const {
     TVAsciiTableDialog,
     TVCalculatorDialog,
     TVColorsDialog,
+    TVWidgetGalleryDialog,
     TVMidiPlayerDialog,
     TVSearchDialog,
     TVScreenSaver,
@@ -725,6 +726,7 @@ class TVApplication {
         this.registerDialog("calc", () => new TVCalculatorDialog(desktop));
         this.registerDialog("midi", () => new TVMidiPlayerDialog(desktop));
         this.registerDialog("colors", () => new TVColorsDialog(desktop));
+        this.registerDialog("widgets", () => new TVWidgetGalleryDialog(desktop));
         this.searchDialog = this.registerDialog("search", () => new TVSearchDialog(desktop));
         if (this.searchDialog) {
             this.dialogManager.bindOpeners("[data-tv-search-open]", "search");

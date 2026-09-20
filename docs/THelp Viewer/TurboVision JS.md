@@ -169,6 +169,7 @@ Standard application dialogs.
 | Class | Purpose |
 |-------|---------|
 | `TVAboutDialog` | About / splash screen |
+| `TVWidgetGalleryDialog` | Interactive gallery for shared labels, inputs, choices, lists, frames and buttons |
 | `TVSearchDialog` | Full-text search across topics |
 | `TVAsciiTableDialog` | CP437 character table (0–255) |
 | `TVCalculatorDialog` | DOS-style calculator |

@@ -23,6 +23,7 @@ const {
     TVAsciiTableDialog,
     TVCalculatorDialog,
     TVColorsDialog,
+    TVWidgetGalleryDialog,
     TVMidiPlayerDialog,
     TVSearchDialog,
     TVTetrisDialog,
@@ -2825,6 +2826,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { type: "dialog", dialog: "calc", label: "~C~alculator" },
         { type: "dialog", dialog: "midi", label: "~M~IDI Player" },
         { type: "dialog", dialog: "colors", label: "C~o~lors" },
+        { type: "dialog", dialog: "widgets", label: "~W~idget Gallery" },
         { type: "separator" },
         { type: "submenu", label: "~S~creen saver", items: [
             { type: "saver", mode: "stars", label: "~S~tars" },
@@ -2988,6 +2990,7 @@ class TVBundleApp {
         this._registerDialog("calc", () => new TVCalculatorDialog(this.desktop));
         this._registerDialog("midi", () => new TVMidiPlayerDialog(this.desktop));
         this._registerDialog("colors", () => new TVColorsDialog(this.desktop));
+        this._registerDialog("widgets", () => new TVWidgetGalleryDialog(this.desktop));
         this._registerDialog("tetris", () => new TVTetrisDialog(this.desktop));
         this._registerDialog("mines", () => new TVMinesDialog(this.desktop));
         this._registerDialog("breakout", () => new TVBreakOutDialog(this.desktop));

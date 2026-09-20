@@ -223,6 +223,7 @@ const DEFAULT_UI_CONFIG = Object.freeze({
             { type: "dialog", dialog: "calc", label: "~C~alculator" },
             { type: "dialog", dialog: "midi", label: "~M~IDI Player" },
             { type: "dialog", dialog: "colors", label: "C~o~lors" },
+            { type: "dialog", dialog: "widgets", label: "~W~idget Gallery" },
             { type: "separator" },
             { type: "submenu", label: "~S~creen saver", items: [
                 { type: "saver", mode: "stars", label: "~S~tars" },
@@ -366,6 +367,7 @@ const COLOR_ITEM_DEFAULTS = {
     "Dialogs/Calc/Button normal": { attr: 0x20, bg: ["--tv-dialog-button-face"], fg: ["--tv-dialog-button-fg"] },
     "Dialogs/Calc/Button default": { attr: 0x20, bg: ["--tv-dialog-button-face"], fg: ["--tv-dialog-button-fg"] },
     "Dialogs/Calc/Button selected": { attr: 0x1E, bg: ["--tv-dialog-button-face"], fg: ["--tv-dialog-button-fg"] },
+    "Dialogs/Calc/Button disabled": { attr: 0x28, fg: ["--tv-dialog-button-disabled"] },
     "Dialogs/Calc/Button shortcut": { attr: 0x24, fg: ["--tv-appbar-hotkey"] },
     "Dialogs/Calc/Button shadow": { attr: 0x70, bg: ["--tv-dialog-button-shadow-bg", "--tv-dialog-button-edge-bg"], fg: ["--tv-dialog-button-shadow-fg", "--tv-dialog-button-edge-fg"] },
     "Dialogs/Calc/Input normal": { attr: 0x1E, bg: ["--tv-dialog-input-bg"], fg: ["--tv-dialog-input-fg"] },

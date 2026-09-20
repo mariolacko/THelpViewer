@@ -47,6 +47,7 @@
     --tv-dialog-icon-passive: #ffffff;
     --tv-dialog-button-face: var(--tv-help-pane);
     --tv-dialog-button-fg: #000000;
+    --tv-dialog-button-disabled: #555555;
     --tv-dialog-button-edge-bg: #aaaaaa;
     --tv-dialog-button-edge-fg: #000000;
     --tv-dialog-button-shadow-bg: #aaaaaa;
@@ -2492,6 +2493,16 @@ button.tv-status-item {
     color: inherit !important;
 }
 
+.tv-dialog-button:disabled {
+    color: var(--tv-dialog-button-disabled) !important;
+    cursor: default;
+}
+
+.tv-dialog-button:disabled .tv-dialog-button-label,
+.tv-dialog-button:disabled .tv-hotkey {
+    color: var(--tv-dialog-button-disabled);
+}
+
 .tv-dialog-button:active .tv-dialog-button-face,
 .tv-dialog-button.is-pressed .tv-dialog-button-face {
     transform: translate(1ch, 0);
@@ -2690,6 +2701,78 @@ button.tv-status-item {
     color: var(--tv-dialog-fg);
     white-space: pre;
     line-height: 1em;
+}
+
+.tv-widget-gallery-body {
+    padding: 1em 2ch;
+    overflow: auto;
+}
+
+.tv-widget-gallery-main {
+    display: grid;
+    gap: 1em;
+    min-width: 58ch;
+}
+
+.tv-widget-gallery-field {
+    display: grid;
+    grid-template-columns: 8ch minmax(20ch, 1fr);
+    gap: 1ch;
+    align-items: center;
+}
+
+.tv-widget-gallery-samples {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(26ch, 1fr));
+    gap: 1em 2ch;
+}
+
+.tv-widget-gallery-panel {
+    min-width: 0;
+}
+
+.tv-widget-gallery-heading {
+    margin-bottom: 0.25em;
+    color: var(--tv-dialog-fg);
+    text-decoration: underline;
+}
+
+.tv-widget-gallery-listviewer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1ch;
+    height: 6em;
+    background: var(--tv-dialog-input-bg);
+    color: var(--tv-dialog-input-fg);
+    overflow: hidden;
+}
+
+.tv-widget-gallery-list {
+    height: 6em;
+    overflow: hidden;
+}
+
+.tv-widget-gallery-list-item {
+    height: 1em;
+    padding: 0 1ch;
+    white-space: pre;
+}
+
+.tv-widget-gallery-list-item.is-selected,
+.tv-widget-gallery-list-item:focus-visible {
+    color: var(--tv-hover-fg);
+    background: var(--tv-hover-bg);
+    outline: none;
+}
+
+.tv-widget-gallery-info .tv-info-box {
+    width: 30ch;
+    max-width: 100%;
+}
+
+.tv-widget-gallery-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 2ch;
 }
 
 .tv-checkbox-item,
