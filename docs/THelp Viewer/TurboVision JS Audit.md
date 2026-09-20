@@ -274,3 +274,8 @@ compatibility with old Turbo Vision applications.
   states, added a non-persistent Reset preview, and widened Widget Gallery so
   the complete 30-column Event Log frame remains visible. Real-Chrome coverage
   verifies click selection, focus, event text and the right-hand frame edge.
+- [x] Phase 6.5: restored the explicit blue/yellow Editor palette for Markdown
+  documents, unified all four `TVInfoBox` frame sides, and corrected physical
+  list clicks by resolving the pointer against current row rectangles. The
+  browser regression now uses a real DevTools mouse event instead of DOM
+  `.click()`, which had hidden the one-row targeting defect.

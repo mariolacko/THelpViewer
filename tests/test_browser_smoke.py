@@ -191,6 +191,21 @@ async function run() {
         check();
     })`, true);
 
+    const docColors = await evaluate(`(() => {
+        const doc = document.querySelector('.tv-doc-window');
+        const viewport = doc.querySelector('.tv-viewport');
+        const content = doc.querySelector('.tv-doc-document');
+        const pair = (element) => {
+            const style = getComputedStyle(element);
+            return [style.backgroundColor, style.color];
+        };
+        return { viewport: pair(viewport), content: pair(content) };
+    })()`);
+    const editorColors = ['rgb(0, 0, 170)', 'rgb(255, 255, 85)'];
+    if (docColors.viewport.join() !== editorColors.join() || docColors.content.join() !== editorColors.join()) {
+        throw new Error(`Documentation does not use the Editor palette: ${JSON.stringify(docColors)}`);
+    }
+
     await evaluate(`(() => {
         const item = document.querySelector('[data-tv-window-cmd]');
         const root = item && item.closest('[data-tv-menu-root]');
@@ -465,7 +480,7 @@ async function run() {
 
     await evaluate(`document.querySelector('[data-tv-dialog-open="widgets"]').click()`);
     await pause();
-    const gallery = await evaluate(`(() => {
+    const gallerySetup = await evaluate(`(() => {
         const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Widget Gallery'
         );
@@ -475,8 +490,39 @@ async function run() {
         label.click();
         const labelFocus = document.activeElement === input;
         dialog.querySelector('[data-tv-gallery-apply]').click();
+        return {
+            open: true,
+            labelFocus,
+        };
+    })()`);
+    if (!gallerySetup.open) { throw new Error('Widget Gallery did not open'); }
+    await pause();
+    const galleryPoint = await evaluate(`(() => {
+        const item = document.querySelector('[data-tv-gallery-list-index="2"]');
+        const rect = item.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    })()`);
+    await send('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x: galleryPoint.x,
+        y: galleryPoint.y,
+        button: 'left',
+        clickCount: 1,
+    });
+    await send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x: galleryPoint.x,
+        y: galleryPoint.y,
+        button: 'left',
+        clickCount: 1,
+    });
+    await pause();
+    const gallery = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Widget Gallery'
+        );
+        if (!dialog) { return { open: false }; }
         const clickedItem = dialog.querySelector('[data-tv-gallery-list-index="2"]');
-        clickedItem.click();
         const body = dialog.querySelector('.tv-widget-gallery-body');
         const bodyRect = body.getBoundingClientRect();
         const sideRects = Array.from(body.querySelectorAll(':scope > .tv-border-side'))
@@ -487,7 +533,6 @@ async function run() {
         const rowRect = infoRow.getBoundingClientRect();
         return {
             open: true,
-            labelFocus,
             checks: dialog.querySelectorAll('[data-tv-gallery-checks] input[type="checkbox"]').length,
             radios: dialog.querySelectorAll('[data-tv-gallery-radios] input[type="radio"]').length,
             disabledChoices: dialog.querySelectorAll('.tv-choice-input:disabled').length,
@@ -499,17 +544,21 @@ async function run() {
             status: dialog.querySelector('[data-tv-row="status"]')?.textContent || '',
             infoRightBorder: infoRow.textContent.endsWith('│'),
             infoRowFits: rowRect.right <= infoRect.right + 0.5 && info.scrollWidth <= info.clientWidth,
+            infoSideColors: Array.from(infoRow.querySelectorAll('[data-tv-info-side]'))
+                .map((element) => getComputedStyle(element).color),
             frameSidesAligned: sideRects.length === 2 && sideRects.every((rect) =>
                 Math.abs(rect.top - bodyRect.top) < 1 && Math.abs(rect.height - bodyRect.height) < 1
             ),
         };
     })()`);
     if (
-        !gallery.open || !gallery.labelFocus || gallery.checks !== 3 || gallery.radios !== 3
+        !gallery.open || !gallerySetup.labelFocus || gallery.checks !== 3 || gallery.radios !== 3
         || gallery.disabledChoices !== 2 || gallery.listItems !== 5 || gallery.selectedItems !== 1
         || gallery.selectedIndex !== '2' || !gallery.listFocused
         || gallery.disabledButtons !== 1 || !gallery.status.includes('Selected: TListViewer')
-        || !gallery.infoRightBorder || !gallery.infoRowFits || !gallery.frameSidesAligned
+        || !gallery.infoRightBorder || !gallery.infoRowFits
+        || gallery.infoSideColors.some((color) => color !== 'rgb(255, 255, 255)')
+        || !gallery.frameSidesAligned
     ) {
         throw new Error(`Widget Gallery controls are incomplete: ${JSON.stringify(gallery)}`);
     }

@@ -39,8 +39,11 @@ Core widget hierarchy and infrastructure.
   `select(index)`, `bind({onSelect, onActivate})`; click selects and
   double-click/Enter activates.
 - **TVVerticalListViewer** — List with scrollbar integration, roving tab focus,
-  Arrow, Home/End and Page Up/Down keyboard navigation. While its dialog is
-  inactive, the scrollbar keeps its Turbo Vision palette but ignores input.
+  pointer-coordinate row selection, Arrow, Home/End and Page Up/Down keyboard
+  navigation. Visibility is measured against the real viewport rectangle, so
+  focus changes cannot introduce an offset between a drawn and clicked row.
+  While its dialog is inactive, the scrollbar keeps its Turbo Vision palette
+  but ignores input.
 - **TVVerticalScrollArea** — Generic scroll container.
 - **TVMenuBox** — Menu popup with items.
 - **TVCheckBoxes** — Native checkbox group rendered with DOS `[ ]` / `[X]`
@@ -63,6 +66,8 @@ Static methods:
 - `TVInfoBox.separator(width, title)` → `"├── Title ──┤"`
 - `TVInfoBox.rowHtml(width, content, borderClass)` → `"│ content    │"` (as HTML with styled border span)
 - `TVInfoBox.applyBorders(width, specs)` — Batch apply header/footer/separator to DOM elements.
+
+Header, footer and both row-side glyphs inherit the same current frame color.
 
 ### TVFrame & TVDialog
 
@@ -134,6 +139,8 @@ The bundle desktop keeps one managed window per opened HELP bundle and one per
 Markdown document. `F6`/`Shift-F6`, Window List, Tile and Cascade all operate
 on the same `TVDialogManager` stack. Dynamic windows use distinct persisted
 geometry keys, so moving or maximizing one does not overwrite another.
+Markdown documentation uses the Viewer/Editor content palette explicitly:
+blue background with yellow base text in the default TV 2.0 palette.
 
 ### TurboVisionScrollbar
 

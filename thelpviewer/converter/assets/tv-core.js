@@ -1349,9 +1349,8 @@ class TVInfoBox extends TVWidget {
         const el = this._rows[name];
         if (!el) { return; }
         const w = this.innerW;
-        const B = this.borderClass
-            ? `<span class="${escapeHtml(this.borderClass)}">\u2502</span>`
-            : "\u2502";
+        const classAttr = this.borderClass ? ` class="${escapeHtml(this.borderClass)}"` : "";
+        const B = `<span data-tv-info-side${classAttr}>\u2502</span>`;
         const padding = " ".repeat(Math.max(0, w - 1 - contentLen));
         el.innerHTML = B + " " + html + padding + B;
     }
@@ -1385,9 +1384,8 @@ class TVInfoBox extends TVWidget {
 
     /** │ Label: value │  (as innerHTML with styled border) */
     static rowHtml(width, content, borderClass) {
-        const B = borderClass
-            ? `<span class="${escapeHtml(borderClass)}">\u2502</span>`
-            : "\u2502";
+        const classAttr = borderClass ? ` class="${escapeHtml(borderClass)}"` : "";
+        const B = `<span data-tv-info-side${classAttr}>\u2502</span>`;
         return B + " " + escapeHtml(content) + " ".repeat(Math.max(0, width - 1 - content.length)) + B;
     }
 
@@ -1516,15 +1514,12 @@ class TVListBox extends TVWidget {
         if (!element || !this.root) {
             return;
         }
-        const top = element.offsetTop;
-        const bottom = top + element.offsetHeight;
-        const viewTop = this.root.scrollTop;
-        const viewBottom = viewTop + this.root.clientHeight;
-
-        if (top < viewTop) {
-            this.root.scrollTop = top;
-        } else if (bottom > viewBottom) {
-            this.root.scrollTop = bottom - this.root.clientHeight;
+        const elementRect = element.getBoundingClientRect();
+        const rootRect = this.root.getBoundingClientRect();
+        if (elementRect.top < rootRect.top) {
+            this.root.scrollTop -= rootRect.top - elementRect.top;
+        } else if (elementRect.bottom > rootRect.bottom) {
+            this.root.scrollTop += elementRect.bottom - rootRect.bottom;
         }
     }
 
@@ -1678,6 +1673,20 @@ class TVVerticalListViewer extends TVWidget {
         return Number.isInteger(value) ? value : -1;
     }
 
+    resolvePointerIndex(event) {
+        if (event && (event.clientX !== 0 || event.clientY !== 0) && this.viewport) {
+            const element = Array.from(this.viewport.querySelectorAll(this.itemSelector())).find((item) => {
+                const rect = item.getBoundingClientRect();
+                return event.clientX >= rect.left && event.clientX < rect.right
+                    && event.clientY >= rect.top && event.clientY < rect.bottom;
+            });
+            if (element) {
+                return this.resolveIndex(element);
+            }
+        }
+        return this.resolveIndex(event?.target);
+    }
+
     defaultContent(item, index) {
         if (this.renderItemContent) {
             return this.renderItemContent(item, index);
@@ -1760,15 +1769,12 @@ class TVVerticalListViewer extends TVWidget {
         if (!element || !this.viewport) {
             return;
         }
-        const top = element.offsetTop;
-        const bottom = top + element.offsetHeight;
-        const viewTop = this.viewport.scrollTop;
-        const viewBottom = viewTop + this.viewport.clientHeight;
-
-        if (top < viewTop) {
-            this.viewport.scrollTop = top;
-        } else if (bottom > viewBottom) {
-            this.viewport.scrollTop = bottom - this.viewport.clientHeight;
+        const elementRect = element.getBoundingClientRect();
+        const viewportRect = this.viewport.getBoundingClientRect();
+        if (elementRect.top < viewportRect.top) {
+            this.viewport.scrollTop -= viewportRect.top - elementRect.top;
+        } else if (elementRect.bottom > viewportRect.bottom) {
+            this.viewport.scrollTop += elementRect.bottom - viewportRect.bottom;
         }
     }
 
@@ -1908,7 +1914,7 @@ class TVVerticalListViewer extends TVWidget {
         if (this.viewport) {
             this.viewport.setAttribute("role", "listbox");
             this.viewport.addEventListener("click", (event) => {
-                const index = this.resolveIndex(event.target);
+                const index = this.resolvePointerIndex(event);
                 if (index < 0) {
                     return;
                 }
@@ -1916,10 +1922,10 @@ class TVVerticalListViewer extends TVWidget {
                 if (this.selectHandler) {
                     this.selectHandler(this.items[index], index, event);
                 }
-                this.selectedElement()?.focus();
+                this.selectedElement()?.focus({ preventScroll: true });
             });
             this.viewport.addEventListener("dblclick", (event) => {
-                const index = this.resolveIndex(event.target);
+                const index = this.resolvePointerIndex(event);
                 if (index < 0) {
                     return;
                 }
@@ -1943,6 +1949,7 @@ class TVVerticalListViewer extends TVWidget {
                     } else if (this.selectHandler) {
                         this.selectHandler(this.items[index], index, event);
                     }
+                    this.selectedElement()?.focus({ preventScroll: true });
                     return;
                 } else if (event.key === " ") {
                     event.preventDefault();
@@ -1951,6 +1958,7 @@ class TVVerticalListViewer extends TVWidget {
                     if (this.selectHandler) {
                         this.selectHandler(this.items[index], index, event);
                     }
+                    this.selectedElement()?.focus({ preventScroll: true });
                     return;
                 } else if (event.key === "ArrowDown") {
                     next = Math.min(this.items.length - 1, index + 1);
@@ -1970,11 +1978,10 @@ class TVVerticalListViewer extends TVWidget {
                 event.preventDefault();
                 event.stopPropagation();
                 this.select(next);
-                const element = this.selectedElement();
-                if (element) { element.focus(); }
                 if (this.selectHandler && next !== index) {
                     this.selectHandler(this.items[next], next, event);
                 }
+                this.selectedElement()?.focus({ preventScroll: true });
             });
             this.viewport.addEventListener("scroll", () => this.updateScrollbar(), { passive: true });
             this.viewport.addEventListener("wheel", () => this.updateScrollbar(), { passive: true });
