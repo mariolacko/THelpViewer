@@ -1065,17 +1065,72 @@ async function run() {
         );
         const advanced = dialog?.querySelector('[data-tv-midi-advanced]');
         const list = dialog?.querySelector('[data-tv-midi-track-list]');
+        const side = dialog?.querySelector('.tv-dialog-body > .tv-border-side');
         return {
             open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
             advancedHidden: Boolean(advanced?.hidden),
             moreCollapsed: dialog?.querySelector('[data-tv-midi-more]')?.getAttribute('aria-expanded') === 'false',
             sharedScrollbar: Boolean(list?.querySelector('.tv-scrollbar-y [data-role="thumb"]')),
+            height: dialog?.getBoundingClientRect().height || 0,
+            sideGlyphs: side?.textContent.split('\\n').length || 0,
         };
     })()`);
     if (!midiCompact.open || !midiCompact.advancedHidden || !midiCompact.moreCollapsed || !midiCompact.sharedScrollbar) {
         throw new Error(`MIDI compact mode is incomplete: ${JSON.stringify(midiCompact)}`);
     }
+    await evaluate(`document.querySelector('[data-tv-midi-more]').click()`);
+    await pause();
+    const midiExpanded = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'CD/MIDI Player'
+        );
+        const side = dialog?.querySelector('.tv-dialog-body > .tv-border-side');
+        return {
+            advancedVisible: !dialog?.querySelector('[data-tv-midi-advanced]')?.hidden,
+            moreExpanded: dialog?.querySelector('[data-tv-midi-more]')?.getAttribute('aria-expanded') === 'true',
+            height: dialog?.getBoundingClientRect().height || 0,
+            sideGlyphs: side?.textContent.split('\\n').length || 0,
+        };
+    })()`);
+    if (
+        !midiExpanded.advancedVisible || !midiExpanded.moreExpanded
+        || midiExpanded.height <= midiCompact.height
+        || midiExpanded.sideGlyphs <= midiCompact.sideGlyphs
+    ) {
+        throw new Error(`MIDI expanded frame was not redrawn: ${JSON.stringify({ midiCompact, midiExpanded })}`);
+    }
     await key("Escape", "Escape", 0, true);
+
+    const tableState = "#tv=1.eyJ2IjoxLCJhIjoxLCJ6IjpbMCwyLDFdLCJ3IjpbeyJ0IjoiaCIsImYiOiJOb3J0b24gR3VpZGVzL2RlYnVnLmpzb24uZ3oiLCJ2aWV3IjoidG9waWMiLCJnIjpbMCw0Miw4MiwyNCwwXSwidG9waWMiOiI1NzU2NCIsImxpbmUiOjEsInMiOlswLDBdfSx7InQiOiJoIiwiZiI6IkJvcmxhbmQgQysrIDMueC90dmNoZWxwLmpzb24uZ3oiLCJ2aWV3IjoidG9waWMiLCJnIjpbMTk1LDE0MCw4NCwyOCwwXSwidG9waWMiOiIxMjEiLCJsaW5lIjoxOCwicyI6WzAsMzI4XX0seyJ0IjoiZGxnIiwibmFtZSI6ImNhbGVuZGFyIiwiZyI6WzMyNSwyMDYsMjcsMTEsMF19XX0";
+    await send("Page.navigate", { url: appUrl + "?thelp-table=1" + tableState });
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const row = Array.from(document.querySelectorAll('[data-tv-bundle-window] .tv-topic-line')).find((line) =>
+                line.textContent.includes('allocateDiscardable')
+            );
+            if (row?.textContent.includes('append') && row?.textContent.includes(' at ')) {
+                resolve(true);
+                return;
+            }
+            if (Date.now() >= deadline) { reject(new Error('TVCHELP table rows did not restore')); return; }
+            setTimeout(check, 50);
+        };
+        check();
+    })`, true);
+    const tvcHelpTable = await evaluate(`(() => {
+        const row = Array.from(document.querySelectorAll('[data-tv-bundle-window] .tv-topic-line')).find((line) =>
+            line.textContent.includes('allocateDiscardable')
+        );
+        return {
+            links: row?.querySelectorAll('a[data-tv-bundle-topic]').length || 0,
+            separators: Array.from(row?.textContent || '').filter((char) => char === '│').length,
+            text: row?.textContent,
+        };
+    })()`);
+    if (tvcHelpTable.links !== 3 || tvcHelpTable.separators !== 3) {
+        throw new Error(`TVCHELP table row is malformed: ${JSON.stringify(tvcHelpTable)}`);
+    }
 
     await evaluate(`document.querySelector('[data-tv-dialog-open="puzzle"]').click()`);
     await pause();

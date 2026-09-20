@@ -94,6 +94,25 @@ def test_sequential_hotspot_table_cells_are_restored_to_rows():
     ]
 
 
+def test_sequential_hotspot_table_restores_inside_link_separators_and_partial_row():
+    header = " " + "\u2550" * 5 + "\u2564" + "\u2550" * 5 + "\u2564" + "\u2550" * 5 + "\u2555"
+    cells = [
+        "[link:topic=1]  alpha\u2502[/link]",
+        "[link:topic=2]  beta \u2502[/link]",
+        "[link:topic=3]  gamma\u2502[/link]",
+        "[link:topic=4]  omega\u2502[/link]",
+    ]
+
+    restored = ThelpHelpReader._restore_sequential_hotspot_tables([header, *cells, "tail"])
+
+    assert restored == [
+        header,
+        f"{cells[0]} {cells[1]} {cells[2]}",
+        cells[3],
+        "tail",
+    ]
+
+
 def test_example_code_detection_stops_before_see_also_heading():
     raw_lines = [
         b" Example:",

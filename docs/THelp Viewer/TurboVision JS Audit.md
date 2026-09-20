@@ -17,10 +17,10 @@ compatibility with old Turbo Vision applications.
 
 - All eight JavaScript assets pass `node --check`.
 - The source assets and their checked-in `www/assets` mirrors are identical.
-- The complete automated suite passes: 218 tests.
-- Existing automated coverage is strong for converters and selected rendering
-  regressions, but it does not yet exercise browser focus, modal behaviour or
-  complete keyboard menu navigation.
+- The complete automated suite passes: 219 tests.
+- Real-Chrome coverage exercises focus, modal behaviour, keyboard menus,
+  dynamic dialog resizing and exact reported multi-window URLs in addition to
+  converter-level regressions.
 
 ## Findings
 
@@ -207,6 +207,18 @@ compatibility with old Turbo Vision applications.
     scores preferred for timed/move-count games. MIDI now opens as a compact
     transport and track list; URL and preset sources remain available through
     `More`.
+27. **Dialogs that changed their CSS size directly left a stale character
+    frame.** MIDI's `More` expanded the body but did not refill its side
+    glyphs, so the frame ended at the old height. **Resolved in Phase 7.5:**
+    `TVDialog.setSize()` is the shared size mutation path and redraws the
+    affected frame; MIDI uses it for both compact and expanded sizes.
+28. **Some THELP hotspot tables remained flattened into one cell per line.**
+    The normalizer recognized `│` only after `[/link]`, while Borland
+    `TVCHELP.TCH` stores it inside the hotspot and permits an incomplete final
+    row. **Resolved in Phase 7.5:** both encodings and partial rows are restored
+    generically. A 64-file THELP corpus audit found 53 tables and no remaining
+    malformed first rows; all ten affected bundles already present in `helps/`
+    were regenerated.
 
 ## Component assessment
 
@@ -457,3 +469,7 @@ Recommended games remain:
   consolidated windows, lists and menus on one `TVScrollBar` engine.
 - [x] Phase 7.4: added one ten-entry Hall of Fame implementation to all nine
   games and made MIDI compact by default with advanced sources behind `More`.
+- [x] Phase 7.5: added shared `TVDialog.setSize()` frame redraw, fixed MIDI
+  expansion, restored both Borland THELP sequential-table encodings including
+  incomplete final rows, regenerated the ten affected installed bundles and
+  covered the exact reported TVCHELP URL in real Chrome.

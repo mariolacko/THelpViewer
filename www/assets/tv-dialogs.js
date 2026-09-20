@@ -2604,10 +2604,9 @@ class TVMidiPlayerDialog extends TVDialog {
         if (this.moreButton) {
             this.moreButton.textContent = expanded ? "Less" : "More";
         }
-        this.dialog.style.setProperty(
-            "--tv-dialog-height",
-            expanded ? "min(27em, calc(100% - 2em))" : "min(23em, calc(100% - 2em))",
-        );
+        this.setSize({
+            height: expanded ? "min(27em, calc(100% - 2em))" : "min(23em, calc(100% - 2em))",
+        });
         this.trackListBox.updateScrollbar();
     }
 

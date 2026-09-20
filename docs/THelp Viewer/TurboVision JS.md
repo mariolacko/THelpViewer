@@ -70,15 +70,21 @@ Static methods:
 
 Header, footer and both row-side glyphs inherit the same current frame color.
 
-### TVFrame & TVDialog
+### TVFrame, TVWindow & TVDialog
 
 - **TVFrame** — Generates dialog window markup (titlebar, body, footer, borders).
   Its active frame uses the Turbo Vision 2.0 double-line glyphs; the passive
   frame uses single-line glyphs and omits the close control. The close control
   is overlaid at columns 2–4 and the title is centered over one continuous
   frame line, matching `TFrame` rather than participating in the layout.
-- **TVDialog** — Managed dialog/window with overlay; it may be modal or non-modal.
+- **TVWindow** — Shared `TVGroup` base and standard window-frame composition
+  used by HELP, Docs and dialogs.
+- **TVDialog** — `TVWindow` subclass with a managed overlay; it may be modal or
+  non-modal.
   - `open()`, `close()`, `destroy()`, `center()`, `isOpen()`, `isActive()`
+  - `setSize({width, height})` — Change CSS dimensions and immediately redraw
+    the affected character frame. Dynamic dialogs must use this instead of
+    setting `--tv-dialog-width` or `--tv-dialog-height` directly.
   - `close()` hides a reusable dialog; `destroy()` permanently removes a
     dynamic dialog, its drag listeners and its manager registration.
   - `bindCommonClose(callback)` — Bind the common close action

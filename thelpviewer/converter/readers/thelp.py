@@ -836,7 +836,7 @@ class ThelpHelpReader(HelpReaderBase):
                 cells.append(lines[cell_index])
                 cell_index += 1
 
-            if len(cells) >= column_count and len(cells) % column_count == 0:
+            if len(cells) >= column_count:
                 for offset in range(0, len(cells), column_count):
                     row_cells = cells[offset:offset + column_count]
                     restored.append(
@@ -862,7 +862,7 @@ class ThelpHelpReader(HelpReaderBase):
         """Return true for one linked cell emitted as its own THELP line."""
         stripped = line.rstrip()
         return (
-            stripped.endswith("│")
+            (stripped.endswith("│") or stripped.endswith("│[/link]"))
             and line.count("[link:") == 1
             and line.count("[/link]") == 1
         )

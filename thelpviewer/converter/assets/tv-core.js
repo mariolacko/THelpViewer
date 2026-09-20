@@ -3013,6 +3013,16 @@ class TVDialog extends TVWindow {
         this.dialog.style.setProperty("--tv-dialog-top", `${top}px`);
     }
 
+    setSize({ width, height } = {}) {
+        if (width) {
+            this.dialog.style.setProperty("--tv-dialog-width", width);
+        }
+        if (height) {
+            this.dialog.style.setProperty("--tv-dialog-height", height);
+        }
+        fillBorders(this.dialog);
+    }
+
     bindCommonClose(onClose = () => this.close()) {
         this.closeAction = onClose;
         this.overlay.addEventListener("click", (event) => {

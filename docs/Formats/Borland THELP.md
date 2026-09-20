@@ -278,8 +278,12 @@ open.
 New-format sequential hotspots can also encode a table as a border line followed
 by one linked cell per physical line. A top border containing `╤ ... ╕` defines
 the column count; the renderer groups the following linked cells back into rows
-without altering their targets. Treating those cells as unrelated topic lines
-breaks both the table layout and the original hotspot ordering.
+without altering their targets. Depending on the producer, the trailing `│`
+separator can be either inside or immediately after the hotspot, and the final
+row does not need to contain every column. Both variants occur in Borland's own
+files; `TVCHELP.TCH` topic 121, for example, contains 463 linked cells for a
+three-column table. Treating those cells as unrelated topic lines breaks both
+the table layout and the original hotspot ordering.
 
 ### 1.8 Keyword Record (RecType=3)
 
