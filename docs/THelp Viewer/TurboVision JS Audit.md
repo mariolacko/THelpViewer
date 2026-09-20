@@ -219,6 +219,13 @@ compatibility with old Turbo Vision applications.
     generically. A 64-file THELP corpus audit found 53 tables and no remaining
     malformed first rows; all ten affected bundles already present in `helps/`
     were regenerated.
+29. **File Open still owned private History/FileList behaviour and several
+    useful TV 2.0 controls were absent.** **Resolved in Phase 7.6:**
+    `TVFileList`, `TVHistory`, `TVHistoryViewer` and `TVHistoryWindow` are
+    reusable roles used by File Open and the new Change Directory dialog.
+    `TVMultiCheckBoxes`, bounded `TVTerminal`, read-only `TVEditor` and
+    `TVIndicator` are shared controls; Widget Gallery and Docs exercise them in
+    real Chrome.
 
 ## Component assessment
 
@@ -231,8 +238,9 @@ compatibility with old Turbo Vision applications.
 | Windows, dialogs and buttons | `TVWindow : TVGroup`, `TVDialog : TVWindow`; shared keyboard, modal, focus and frame model |
 | InputLine | Usable native input, limited Turbo Vision semantics |
 | ListBox/ListViewer | Correct inheritance; selection, activation, keyboard and roving focus complete |
-| CheckBoxes/RadioButtons | Shared `TVCluster` with native behaviour and DOS-style rendering |
+| CheckBoxes/RadioButtons/MultiCheckBoxes | Shared `TVCluster` hierarchy with native or multistate behaviour and DOS-style rendering |
 | MessageBox | Hardened and tested; application adoption remains |
+| Editor/Terminal | Read-only Docs editor with indicator and bounded reusable terminal are present |
 | Games | Playable with shared top-ten Hall of Fame, focus, timer and keyboard policy |
 | Screen savers | Shared idle start, resize lifecycle and focus restoration complete |
 | Syntax highlighter | Pascal, C and ASM detection is scoped per code block |
@@ -264,7 +272,7 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 | `TButton : TView` | `TVButton : TVWidget` | Present with default, selected, disabled and mnemonic states. |
 | `TCluster : TView` | `TVCluster : TVWidget` | Implemented with common native-input, option and DOS-mark rendering. |
 | `TRadioButtons`, `TCheckBoxes : TCluster` | Both extend `TVCluster` | Correct shared hierarchy and cluster palette. |
-| `TMultiCheckBoxes : TCluster` | Missing | Add after `TVCluster`; it is useful for flags/options and for Widget Gallery coverage. |
+| `TMultiCheckBoxes : TCluster` | `TVMultiCheckBoxes : TVCluster` | Implemented with configurable states, disabled/focus rendering and Widget Gallery coverage. |
 
 ### Menus, application and standard dialogs
 
@@ -273,10 +281,10 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 | `TMenuView`, `TMenuBar`, `TMenuBox` | `TVMenuBar` and `TVMenuBox` independently extend `TVWidget` | Keyboard behaviour is shared by `TVMenuController`, but rendering/inheritance is not. Add `TVMenuView` only after windows and scrollbars are consolidated. |
 | `TStatusLine` | `TVStatusLine` | Present and functional. |
 | `TBackground`, `TDeskTop`, `TProgram`, `TApplication` | CSS desktop plus `TVApplication`/`TVBundleApp` | Behaviour exists, but the two application bootstraps duplicate initialization, resize listeners and window ownership. A small `TVDesktop` owner should replace that overlap. |
-| `THistory`, `THistoryViewer`, `THistoryWindow` | File Open has a custom history popup | User-visible behaviour is present only inside File Open. Extract the original three roles so InputLine and later dialogs can reuse history. |
-| `TFileInputLine`, `TSortedListBox`, `TFileList`, `TFileInfoPane` | Native input, `TVFileListBox`, and inline info markup | File Open visually follows TV 2.0, but its reusable parts are not classes. Extract them without changing the dialog geometry. |
+| `THistory`, `THistoryViewer`, `THistoryWindow` | `TVHistory`, `TVHistoryViewer`, `TVHistoryWindow` | Shared by File Open and Change Directory; storage, list interaction and popup lifecycle are separate roles. |
+| `TFileInputLine`, `TSortedListBox`, `TFileList`, `TFileInfoPane` | Native input, `TVFileList`, and inline info markup | File list behaviour is reusable and the old name is an alias; specialised InputLine and InfoPane classes remain optional. |
 | `TFileDialog : TDialog` | `TVFileOpenDialog : TVDialog` | Present and catalog-backed. The browser verifies both startup loading and populated states. |
-| `TDirListBox`, `TChDirDialog` | Missing | Recommended next standard dialog; it naturally exercises tree/list navigation and history. |
+| `TDirListBox`, `TChDirDialog` | Shared list viewer and `TVChangeDirectoryDialog` | Present as a browser-safe HELP/DOCS directory tree with Chdir, Revert and History. |
 | `TColorSelector`, `TColorDisplay`, `TColorGroupList`, `TColorItemList` | Logic embedded in `TVColorsDialog` | Visually and behaviourally covered, but the selectors and lists should become reusable widgets after the list-base refactor. |
 
 ### Viewer, editor and specialised controls
@@ -284,9 +292,9 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 | Turbo Vision 2.0 | Current JavaScript | Result and required change |
 |---|---|---|
 | `THelpViewer : TScroller`, `THelpWindow : TWindow` | Bundle rendering and `BundleWindowManager` | Feature-rich, but not represented by reusable classes. Migrate after `TVWindow`/`TVScroller`; do not rewrite the parser or UHF renderer. |
-| `TEditor`, `TMemo`, `TFileEditor`, `TEditWindow`, `TIndicator` | Docs is a read-only styled viewport | Missing. A read-only `TVEditor`/`TVIndicator` pair is the first useful subset; editing and clipboard can follow later. |
+| `TEditor`, `TMemo`, `TFileEditor`, `TEditWindow`, `TIndicator` | `TVEditor` and `TVIndicator` used by Docs | Read-only subset supports selection, Find/Find Again and position reporting; mutation, clipboard commands and file saving remain out of scope. |
 | `TOutlineViewer`, `TOutline` | Missing | Good fit for HELP Contents and a Change Directory dialog after the list/scroller work. |
-| `TTextDevice`, `TTerminal` | Event Log is `TVInfoBox` markup | Missing. A bounded `TVTerminal` would replace ad-hoc logs and provide a reusable append/scroll test target. |
+| `TTextDevice`, `TTerminal` | `TVTerminal` | Bounded append/clear control now drives Widget Gallery's framed Event Log. |
 | `TParamText` | Missing | Low-cost addition once `TVStaticText` is stable. |
 | Validators | Native HTML constraints only | Optional. Add range/filter validators when editable dialogs need them, not as unused infrastructure. |
 | Collections, streams, resources and draw buffers | Not implemented | Intentionally out of scope for the browser. JavaScript, DOM and UHF JSON already provide these low-level services. |
@@ -304,40 +312,41 @@ not be copied merely for name parity.
 2. Scrollbar algorithms were consolidated into `TVScrollBar`; compatibility
    facades delegate to it and menu/list renderers use its markup.
 3. CheckBoxes and RadioButtons now share `TVCluster` option rendering.
-4. File Open history and file lists implement specialised list/scroll
-   behaviour outside the original reusable History and FileList roles.
+4. File Open and Change Directory share History/FileList roles; their virtual
+   filesystem adaptation remains intentionally application-specific.
 5. `TVApplication` and `TVBundleApp` duplicate theme/chrome/layout bootstrap,
    global resize handlers and desktop ownership.
 6. Shared scrollbar listeners are stored and removed by `destroy()`.
 
 ### Next implementation order
 
-1. Extract FileList and History controls without changing the now-tested File
-   Open geometry or Docker behaviour.
-2. Add `TVMultiCheckBoxes` on the completed `TVCluster` base and exercise it in
-   Widget Gallery.
-3. Consolidate `TVMenuView` and a small `TVDesktop` owner. Keep `TVApplication`
+1. Consolidate `TVMenuView` and a small `TVDesktop` owner. Keep `TVApplication`
    and `TVBundleApp` as thin product-specific compositions.
-4. Add the user-facing controls below only after their shared prerequisites,
-   so new dialogs exercise the common implementation rather than create more
-   duplicates.
+2. Add a Find dialog backed by shared History and route it to the active
+   `TVEditor`/HELP viewer.
+3. Add `TVOutline` for HELP Contents and directory trees, then migrate Change
+   Directory without changing its tested behaviour.
+4. Add Mastermind as the next game and use MultiCheckBoxes in its options.
 
 ### Proposed new dialogs and games
 
+Completed additions:
+
+1. **Change Directory (`TChDirDialog`)** — virtual directory tree, Revert,
+   Chdir and shared History.
+2. **History Viewer roles** — reusable model, viewer and popup window used by
+   File Open and Change Directory.
+3. **Read-only Editor/Indicator** — Docs selection, Find/Find Again and cursor
+   position reporting.
+4. **Terminal/Event Log** — bounded append/clear log replacing the gallery's
+   static row.
+
 Recommended dialogs, in order:
 
-1. **Change Directory (`TChDirDialog`)** — directory tree, Revert, Chdir and
-   shared History; immediately validates ListBox, Outline and InputLine.
-2. **History Viewer** — reusable `THistoryWindow` for File Open, Search and
-   future editor fields.
-3. **Read-only Source/Text Editor** — `TEditor`/`TIndicator`, selection,
-   Go To Line, Find and Find Again; Docs can then use an actual editor view.
-4. **Find/Replace dialog** — after the editor exists, with validators and
+1. **Find/Replace dialog** — after the editor exists, with validators and
    history rather than a standalone one-off implementation.
-5. **Outline/Contents dialog** — reusable tree for HELP contents and directory
+2. **Outline/Contents dialog** — reusable tree for HELP contents and directory
    navigation.
-6. **Terminal/Event Log dialog** — bounded append-only log with scrolling,
-   copy and clear, replacing the gallery's static log imitation.
 
 Recommended games remain:
 
@@ -473,3 +482,6 @@ Recommended games remain:
   expansion, restored both Borland THELP sequential-table encodings including
   incomplete final rows, regenerated the ten affected installed bundles and
   covered the exact reported TVCHELP URL in real Chrome.
+- [x] Phase 7.6: extracted FileList and all three History roles, added Change
+  Directory, MultiCheckBoxes, Terminal/Event Log and a read-only
+  Editor/Indicator pair for Docs, with shared-control and browser regressions.

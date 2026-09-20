@@ -308,6 +308,21 @@ async function run() {
     ) {
         throw new Error(`Viewer palette changed the fixed Editor colors: ${JSON.stringify(docPaletteIsolation)}`);
     }
+    const docEditor = await evaluate(`(() => {
+        const doc = document.querySelector('.tv-doc-window');
+        const editor = doc?._tvEditor;
+        const root = doc?.querySelector('[data-tv-editor]');
+        const word = (root?.textContent.match(/[A-Za-z]{6,}/) || [])[0] || '';
+        return {
+            attached: editor instanceof window.THelpViewerTV.TVEditor,
+            readOnly: root?.getAttribute('aria-readonly'),
+            found: word ? editor.find(word, { fromStart: true }) : false,
+            indicator: doc?.querySelector('.tv-editor-indicator')?.textContent,
+        };
+    })()`);
+    if (!docEditor.attached || docEditor.readOnly !== 'true' || !docEditor.found || !docEditor.indicator.startsWith('RO')) {
+        throw new Error(`Documentation is not using the read-only editor: ${JSON.stringify(docEditor)}`);
+    }
 
     await evaluate(`(() => {
         const item = document.querySelector('[data-tv-window-cmd]');
@@ -663,7 +678,8 @@ async function run() {
         const sideRects = Array.from(body.querySelectorAll(':scope > .tv-border-side'))
             .map((element) => element.getBoundingClientRect());
         const info = dialog.querySelector('.tv-widget-gallery-info .tv-info-box');
-        const infoRow = dialog.querySelector('[data-tv-row="status"]');
+        const infoRows = Array.from(dialog.querySelectorAll('[data-tv-terminal-line]'));
+        const infoRow = infoRows.at(-1);
         const infoRect = info.getBoundingClientRect();
         const rowRect = infoRow.getBoundingClientRect();
         const viewport = dialog.querySelector('[data-tv-gallery-list] [data-tv-list-viewport]');
@@ -672,14 +688,20 @@ async function run() {
         const check = dialog.querySelector('[data-tv-checkbox-index="0"]');
         const disabledCheck = dialog.querySelector('[data-tv-checkbox-index="2"]');
         const radio = dialog.querySelector('[data-tv-radio-index="0"]');
+        const multiCheck = dialog.querySelector('[data-tv-multicheck-index="0"] [data-tv-multicheck-state]');
         const stylePair = (element) => {
             const style = getComputedStyle(element);
             return [style.backgroundColor, style.color];
         };
+        multiCheck.click();
         return {
             open: true,
             checks: dialog.querySelectorAll('[data-tv-gallery-checks] input[type="checkbox"]').length,
             radios: dialog.querySelectorAll('[data-tv-gallery-radios] input[type="radio"]').length,
+            multiChecks: dialog.querySelectorAll('[data-tv-gallery-multichecks] [data-tv-multicheck-state]').length,
+            multiStates: Array.from(dialog.querySelectorAll('[data-tv-gallery-multichecks] [data-tv-multicheck-state]'))
+                .map((element) => element.getAttribute('aria-checked')),
+            multiCycled: multiCheck.getAttribute('aria-checked'),
             disabledChoices: dialog.querySelectorAll('.tv-choice-input:disabled').length,
             listItems: dialog.querySelectorAll('[data-tv-gallery-list-index]').length,
             selectedItems: dialog.querySelectorAll('[data-tv-gallery-list-index].is-selected').length,
@@ -688,7 +710,8 @@ async function run() {
             disabledButtons: dialog.querySelectorAll('.tv-dialog-button:disabled').length,
             messageButtons: dialog.querySelectorAll('[data-tv-gallery-message]').length,
             staticTexts: dialog.querySelectorAll('[data-tv-gallery-static]').length,
-            status: dialog.querySelector('[data-tv-row="status"]')?.textContent || '',
+            status: dialog.querySelector('[data-tv-gallery-terminal]')?.textContent || '',
+            terminalRows: infoRows.length,
             firstRowOffset: Math.abs(firstItem.getBoundingClientRect().top - viewport.getBoundingClientRect().top),
             scrollbarEnabled: !dialog.querySelector('[data-tv-gallery-list]').classList.contains('is-disabled'),
             listNormalColors: stylePair(normalItem),
@@ -708,10 +731,13 @@ async function run() {
     })()`);
     if (
         !gallery.open || !gallerySetup.labelFocus || gallery.checks !== 3 || gallery.radios !== 3
-        || gallery.disabledChoices !== 2 || gallery.listItems !== 10 || gallery.selectedItems !== 1
+        || gallery.multiChecks !== 3 || gallery.multiStates.join() !== ['true', 'true', 'mixed'].join()
+        || gallery.multiCycled !== 'true'
+        || gallery.disabledChoices !== 2 || gallery.listItems !== 13 || gallery.selectedItems !== 1
         || gallery.selectedIndex !== '2' || !gallery.listFocused
         || gallery.disabledButtons !== 1 || gallery.messageButtons !== 1 || gallery.staticTexts !== 1
-        || !gallery.status.includes('Selected: TListViewer') || gallery.firstRowOffset > 0.5
+        || !gallery.status.includes('Selected: TListViewer') || !gallery.status.includes('mode: state 1')
+        || gallery.firstRowOffset > 0.5
         || !gallery.scrollbarEnabled
         || gallery.listNormalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || gallery.listFocusedColors.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()
@@ -719,7 +745,7 @@ async function run() {
         || gallery.radioColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || gallery.disabledCheckColors.join() !== ['rgb(0, 170, 170)', 'rgb(85, 85, 85)'].join()
         || gallery.checkHotkeyColor !== 'rgb(255, 255, 85)'
-        || !gallery.infoRightBorder || !gallery.infoRowFits
+        || gallery.terminalRows !== 3 || !gallery.infoRightBorder || !gallery.infoRowFits
         || gallery.infoSideColors.some((color) => color !== 'rgb(255, 255, 255)')
         || !gallery.frameSidesAligned
     ) {
@@ -736,7 +762,7 @@ async function run() {
     await key("Escape", "Escape", 0, true);
     await pause();
     const messageResult = await evaluate(
-        `document.querySelector('[data-tv-row="status"]')?.textContent || ''`
+        `document.querySelector('[data-tv-gallery-terminal]')?.textContent || ''`
     );
     if (!messageResult.includes('Message: cancel')) {
         throw new Error(`Widget Gallery message box did not report Cancel: ${messageResult}`);
@@ -749,6 +775,41 @@ async function run() {
             .every((element) => element.closest('.tv-dialog-overlay').hidden)`
     );
     if (!galleryClosed) { throw new Error("Escape did not close Widget Gallery"); }
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="chdir"]').click()`);
+    await pause();
+    const changeDirectory = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Change Directory'
+        );
+        const slash = String.fromCharCode(92);
+        const docs = Array.from(dialog?.querySelectorAll('[data-tv-change-dir-index]') || []).find((item) =>
+            item.textContent.trim() === 'DOCS' + slash
+        );
+        docs?.click();
+        const selectedPath = dialog?.querySelector('[data-tv-change-dir-path]')?.value;
+        dialog?.querySelector('[data-tv-change-dir-revert]')?.click();
+        const revertedPath = dialog?.querySelector('[data-tv-change-dir-path]')?.value;
+        dialog?.querySelector('[data-tv-change-dir-confirm]')?.click();
+        return {
+            open: Boolean(dialog),
+            directories: dialog?.querySelectorAll('[data-tv-change-dir-index]').length || 0,
+            sharedScrollbar: Boolean(dialog?.querySelector('[data-tv-change-dir-list] .tv-scrollbar-y')),
+            selectedPath,
+            revertedPath,
+            closed: Boolean(dialog?.closest('.tv-dialog-overlay').hidden),
+            history: JSON.parse(localStorage.getItem('thelp:directory-history') || '[]'),
+            slash,
+        };
+    })()`);
+    if (
+        !changeDirectory.open || changeDirectory.directories < 3 || !changeDirectory.sharedScrollbar
+        || !changeDirectory.selectedPath.endsWith('DOCS' + changeDirectory.slash)
+        || changeDirectory.revertedPath !== 'THelpViewer:' + changeDirectory.slash
+        || !changeDirectory.closed || changeDirectory.history[0] !== '.'
+    ) {
+        throw new Error(`Change Directory is incomplete: ${JSON.stringify(changeDirectory)}`);
+    }
 
     await evaluate(`document.querySelector('[data-tv-file-open]').click()`);
     await pause();

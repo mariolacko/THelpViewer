@@ -27,10 +27,22 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVCluster extends TVWidget" in source
     assert "class TVCheckBoxes extends TVCluster" in source
     assert "class TVRadioButtons extends TVCluster" in source
+    assert "class TVMultiCheckBoxes extends TVCluster" in source
+    assert "class TVTerminal extends TVWidget" in source
+    assert "class TVEditor extends TVWidget" in source
     assert source.count("class TVScrollBar") == 1
     assert source.count("startRepeat(event, axis, direction)") == 1
     assert 'this.scrollbarWidget = this.root ? new TVScrollBar(this.root) : null' in source
     assert 'popup._tvMenuPopupScrollbar = main ? new TVScrollBar(main) : null' in source
+
+    dialogs = DIALOG_PATHS[0].read_text(encoding="utf-8")
+    assert DIALOG_PATHS[0].read_bytes() == DIALOG_PATHS[1].read_bytes()
+    assert "class TVFileList extends TVListBox" in dialogs
+    assert "class TVHistoryViewer extends TVVerticalListViewer" in dialogs
+    assert "class TVHistoryWindow extends TVWindow" in dialogs
+    assert "class TVChangeDirectoryDialog extends TVDialog" in dialogs
+    assert "new TVFileList(this.query" in dialogs
+    assert "new TVHistoryWindow({" in dialogs
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the list control test")

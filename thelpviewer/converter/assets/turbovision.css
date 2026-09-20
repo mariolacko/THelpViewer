@@ -1168,6 +1168,27 @@ button.tv-status-item {
     background: var(--tv-window-bg);
     color: var(--tv-window-fg);
 }
+
+.tv-editor-indicator {
+    display: block;
+    width: 10ch;
+    min-width: 10ch;
+    height: 1em;
+    overflow: hidden;
+    background: var(--tv-editor-bg);
+    color: var(--tv-editor-fg);
+    line-height: 1;
+    white-space: pre;
+    text-align: center;
+}
+
+[data-tv-editor] {
+    outline: none;
+}
+
+[data-tv-editor]:focus {
+    outline: none;
+}
 .tv-doc-window .tv-shell,
 .tv-doc-window .tv-border-row,
 .tv-doc-window .tv-border-corner,
@@ -3082,6 +3103,21 @@ button.tv-status-item {
     line-height: 1em;
 }
 
+.tv-terminal {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    color: var(--tv-dialog-fg);
+    white-space: pre;
+    line-height: 1em;
+}
+
+.tv-terminal [data-tv-terminal-line] {
+    display: block;
+    height: 1em;
+    overflow: hidden;
+}
+
 .tv-widget-gallery-body {
     overflow: hidden;
 }
@@ -3366,8 +3402,111 @@ button.tv-status-item {
     padding-right: 0;
 }
 
+.tv-change-dir-body {
+    overflow: hidden;
+}
+
+.tv-change-dir-main {
+    position: relative;
+    width: 44ch;
+    height: 16em;
+    min-width: 44ch;
+    min-height: 16em;
+    background: var(--tv-dialog-bg);
+    color: var(--tv-dialog-fg);
+}
+
+.tv-change-dir-path-label,
+.tv-change-dir-tree-label,
+.tv-change-dir-path-input,
+.tv-change-dir-listviewer,
+.tv-change-dir-confirm-button,
+.tv-change-dir-revert-button,
+.tv-change-dir-cancel-button,
+.tv-change-dir-detail {
+    position: absolute;
+}
+
+.tv-change-dir-path-label {
+    left: 1ch;
+    top: 1em;
+}
+
+.tv-change-dir-path-input {
+    left: 2ch;
+    top: 2em;
+    width: 29ch;
+}
+
+.tv-change-dir-path-input .tv-input-line {
+    width: 29ch;
+    height: 1em;
+    box-sizing: border-box;
+}
+
+.tv-change-dir-history-button {
+    left: 31ch;
+    top: 2em;
+}
+
+.tv-change-dir-tree-label {
+    left: 1ch;
+    top: 4em;
+}
+
+.tv-change-dir-listviewer {
+    left: 2ch;
+    top: 5em;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1ch;
+    width: 29ch;
+    height: 8em;
+    overflow: hidden;
+}
+
+.tv-change-dir-list {
+    display: grid;
+    grid-auto-rows: 1em;
+    align-content: start;
+    height: 8em;
+    overflow: hidden;
+}
+
+.tv-change-dir-confirm-button,
+.tv-change-dir-revert-button,
+.tv-change-dir-cancel-button {
+    left: 33ch;
+    width: 10ch;
+    height: 2em;
+}
+
+.tv-change-dir-confirm-button { top: 4em; }
+.tv-change-dir-revert-button { top: 7em; }
+.tv-change-dir-cancel-button { top: 10em; }
+
+.tv-change-dir-detail {
+    left: 2ch;
+    top: 14em;
+    width: 40ch;
+    height: 1em;
+    overflow: hidden;
+    white-space: pre;
+}
+
+.tv-change-dir-history-popup {
+    left: 1ch;
+    top: 1em;
+    width: 34ch;
+    height: 10em;
+}
+
+.tv-multicheck-item.is-disabled .tv-multicheck-button {
+    cursor: default;
+}
+
 .tv-checkbox-item,
-.tv-radio-item {
+.tv-radio-item,
+.tv-multicheck-item {
     all: unset;
     position: relative;
     cursor: pointer;
@@ -3378,7 +3517,8 @@ button.tv-status-item {
 }
 
 .tv-checkbox-item .tv-hotkey,
-.tv-radio-item .tv-hotkey {
+.tv-radio-item .tv-hotkey,
+.tv-multicheck-item .tv-hotkey {
     color: var(--tv-palette-dialog-cluster-shortcut-fg);
 }
 
@@ -3388,6 +3528,15 @@ button.tv-status-item {
     height: 1px;
     opacity: 0;
     pointer-events: none;
+}
+
+.tv-multicheck-button {
+    all: unset;
+    display: block;
+    width: 100%;
+    cursor: pointer;
+    color: inherit;
+    background: inherit;
 }
 
 .tv-checkbox-mark::before {
@@ -3407,15 +3556,18 @@ button.tv-status-item {
 }
 
 .tv-checkbox-item:focus-within,
-.tv-radio-item:focus-within {
+.tv-radio-item:focus-within,
+.tv-multicheck-item:focus-within {
     color: var(--tv-palette-dialog-cluster-selected-fg);
     background: var(--tv-palette-dialog-cluster-selected-bg);
 }
 
 .tv-checkbox-item.is-disabled,
 .tv-radio-item.is-disabled,
+.tv-multicheck-item.is-disabled,
 .tv-checkbox-item.is-disabled .tv-hotkey,
-.tv-radio-item.is-disabled .tv-hotkey {
+.tv-radio-item.is-disabled .tv-hotkey,
+.tv-multicheck-item.is-disabled .tv-hotkey {
     cursor: default;
     background: var(--tv-palette-dialog-cluster-disabled-bg);
     color: var(--tv-palette-dialog-cluster-disabled-fg);

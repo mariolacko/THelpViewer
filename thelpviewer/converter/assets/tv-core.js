@@ -1402,6 +1402,174 @@ class TVInfoBox extends TVWidget {
     }
 }
 
+class TVTerminal extends TVWidget {
+    constructor({
+        className = "",
+        attrs = {},
+        width = 28,
+        rows = 3,
+        maxLines = 100,
+        lines = [],
+    } = {}) {
+        super();
+        this.className = className;
+        this.attrs = attrs;
+        this.width = width;
+        this.rows = rows;
+        this.maxLines = maxLines;
+        this.lines = Array.isArray(lines) ? lines.map(String).slice(-maxLines) : [];
+    }
+
+    renderMarkup() {
+        const className = ["tv-terminal", this.className].filter(Boolean).join(" ");
+        const attrString = attrsToString({ role: "log", "aria-live": "polite", ...this.attrs });
+        const rows = Array.from({ length: this.rows }, (_unused, index) => (
+            `<span data-tv-terminal-line="${index}"></span>`
+        )).join("");
+        return `<div class="${escapeHtml(className)}" ${attrString}>${rows}</div>`;
+    }
+
+    bind(root) {
+        this.root = root;
+        this.render();
+        return this;
+    }
+
+    append(value) {
+        const nextLines = String(value ?? "").split(/\r?\n/);
+        this.lines.push(...nextLines);
+        if (this.lines.length > this.maxLines) {
+            this.lines.splice(0, this.lines.length - this.maxLines);
+        }
+        this.render();
+    }
+
+    clear() {
+        this.lines = [];
+        this.render();
+    }
+
+    render() {
+        if (!this.root) { return; }
+        const visible = this.lines.slice(-this.rows);
+        const offset = this.rows - visible.length;
+        this.queryAll("[data-tv-terminal-line]").forEach((element, index) => {
+            const text = index >= offset ? visible[index - offset] : "";
+            const clipped = Array.from(text).slice(0, Math.max(0, this.width - 1)).join("");
+            element.innerHTML = TVInfoBox.rowHtml(this.width, clipped);
+        });
+    }
+}
+
+class TVIndicator extends TVWidget {
+    constructor({ className = "", attrs = {} } = {}) {
+        super();
+        this.className = className;
+        this.attrs = attrs;
+    }
+
+    renderMarkup() {
+        const className = ["tv-editor-indicator", this.className].filter(Boolean).join(" ");
+        const attrString = attrsToString({ "aria-live": "polite", ...this.attrs });
+        return `<span class="${escapeHtml(className)}" ${attrString}>RO  1:1</span>`;
+    }
+
+    update(line, column) {
+        if (this.root) { this.root.textContent = `RO  ${line}:${column}`; }
+    }
+}
+
+class TVEditor extends TVWidget {
+    constructor(root, { indicator = null, readOnly = true } = {}) {
+        super(root);
+        this.indicator = indicator;
+        this.readOnly = readOnly;
+        this.lastQuery = "";
+        this.lastMatchEnd = 0;
+        this.onSelectionChange = () => this.updateIndicator();
+        if (this.root) {
+            this.root.dataset.tvEditor = "1";
+            this.root.setAttribute("role", "document");
+            this.root.setAttribute("aria-readonly", readOnly ? "true" : "false");
+            if (!this.root.hasAttribute("tabindex")) { this.root.tabIndex = 0; }
+            this.root.addEventListener("keyup", this.onSelectionChange);
+            this.root.addEventListener("mouseup", this.onSelectionChange);
+            document.addEventListener("selectionchange", this.onSelectionChange);
+        }
+        this.updateIndicator();
+    }
+
+    selectionOffset() {
+        const selection = window.getSelection();
+        if (!selection || !selection.anchorNode || !this.root?.contains(selection.anchorNode)) { return 0; }
+        const range = document.createRange();
+        range.selectNodeContents(this.root);
+        range.setEnd(selection.anchorNode, selection.anchorOffset);
+        return range.toString().length;
+    }
+
+    updateIndicator() {
+        if (!this.root || !this.indicator) { return; }
+        const text = this.root.textContent || "";
+        const offset = Math.min(text.length, this.selectionOffset());
+        const before = text.slice(0, offset);
+        const lines = before.split("\n");
+        this.indicator.update(lines.length, (lines[lines.length - 1] || "").length + 1);
+    }
+
+    textNodeAt(offset) {
+        const walker = document.createTreeWalker(this.root, NodeFilter.SHOW_TEXT);
+        let remaining = offset;
+        let node = walker.nextNode();
+        while (node) {
+            if (remaining <= node.nodeValue.length) {
+                return { node, offset: remaining };
+            }
+            remaining -= node.nodeValue.length;
+            node = walker.nextNode();
+        }
+        return null;
+    }
+
+    find(query, { fromStart = false } = {}) {
+        const value = String(query || "");
+        if (!this.root || !value) { return false; }
+        const text = this.root.textContent || "";
+        const start = fromStart || value !== this.lastQuery ? 0 : this.lastMatchEnd;
+        let index = text.toLocaleLowerCase().indexOf(value.toLocaleLowerCase(), start);
+        if (index < 0 && start > 0) {
+            index = text.toLocaleLowerCase().indexOf(value.toLocaleLowerCase());
+        }
+        if (index < 0) { return false; }
+        const first = this.textNodeAt(index);
+        const last = this.textNodeAt(index + value.length);
+        if (!first || !last) { return false; }
+        const range = document.createRange();
+        range.setStart(first.node, first.offset);
+        range.setEnd(last.node, last.offset);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        first.node.parentElement?.scrollIntoView({ block: "center" });
+        this.lastQuery = value;
+        this.lastMatchEnd = index + value.length;
+        this.updateIndicator();
+        return true;
+    }
+
+    findNext() {
+        return this.find(this.lastQuery);
+    }
+
+    destroy() {
+        if (!this.root) { return; }
+        this.root.removeEventListener("keyup", this.onSelectionChange);
+        this.root.removeEventListener("mouseup", this.onSelectionChange);
+        document.removeEventListener("selectionchange", this.onSelectionChange);
+        this.root = null;
+    }
+}
+
 class TVListViewer extends TVWidget {
     constructor(root = null, {
         itemClassName = "",
@@ -2603,6 +2771,71 @@ class TVRadioButtons extends TVCluster {
             itemAttr: "data-tv-radio-index",
             markClass: "tv-radio-mark",
         });
+    }
+}
+
+class TVMultiCheckBoxes extends TVCluster {
+    constructor(options = {}) {
+        super({
+            ...options,
+            type: "button",
+            itemClass: "tv-multicheck-item",
+            itemAttr: "data-tv-multicheck-index",
+            markClass: "tv-multicheck-mark",
+        });
+        this.states = Array.isArray(options.states) && options.states.length > 1
+            ? options.states.map(String)
+            : [" ", "X", "?"];
+        this.changeHandler = null;
+    }
+
+    renderMarkup() {
+        const items = this.options.map((option, index) => {
+            const state = Math.max(0, Math.min(
+                this.states.length - 1,
+                Number.isInteger(option.state) ? option.state : 0,
+            ));
+            const ariaChecked = state === 0 ? "false" : (state === 1 ? "true" : "mixed");
+            const attrs = attrsToString({
+                type: "button",
+                class: "tv-multicheck-button",
+                disabled: Boolean(option.disabled),
+                role: "checkbox",
+                "aria-checked": ariaChecked,
+                "data-tv-multicheck-state": state,
+            });
+            const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
+            return `<label class="${className}" ${this.itemAttr}="${index}"><button ${attrs}><span class="${this.markClass}" aria-hidden="true">[${escapeHtml(this.states[state])}]</span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></button></label>`;
+        }).join("");
+        return new TVMarkupList({ className: this.className, attrs: this.attrs, items: [items] }).renderMarkup();
+    }
+
+    bind(root, onChange = null) {
+        this.root = root;
+        this.changeHandler = onChange;
+        if (!root || root.dataset.tvMultiCheckBound === "1") { return this; }
+        root.dataset.tvMultiCheckBound = "1";
+        root.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-tv-multicheck-state]");
+            if (!button || button.disabled) { return; }
+            const item = button.closest(`[${this.itemAttr}]`);
+            const index = Number.parseInt(item?.getAttribute(this.itemAttr) || "", 10);
+            this.cycle(index, button);
+        });
+        return this;
+    }
+
+    cycle(index, button = null) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.options.length) { return; }
+        const target = button || this.query(`[${this.itemAttr}="${index}"] [data-tv-multicheck-state]`);
+        if (!target || target.disabled) { return; }
+        const state = (Number.parseInt(target.dataset.tvMulticheckState || "0", 10) + 1) % this.states.length;
+        target.dataset.tvMulticheckState = String(state);
+        target.setAttribute("aria-checked", state === 0 ? "false" : (state === 1 ? "true" : "mixed"));
+        const mark = target.querySelector(`.${this.markClass}`);
+        if (mark) { mark.textContent = `[${this.states[state]}]`; }
+        this.options[index].state = state;
+        if (this.changeHandler) { this.changeHandler(this.options[index], state, index); }
     }
 }
 
@@ -3970,6 +4203,9 @@ Object.assign(TV, {
     TVListViewer,
     TVGroup,
     TVInfoBox,
+    TVTerminal,
+    TVIndicator,
+    TVEditor,
     TVListBox,
     TVVerticalListViewer,
     TVVerticalScrollArea,
@@ -3979,6 +4215,7 @@ Object.assign(TV, {
     TVCluster,
     TVCheckBoxes,
     TVRadioButtons,
+    TVMultiCheckBoxes,
     TVButton,
     TVFrame,
     TVWindow,

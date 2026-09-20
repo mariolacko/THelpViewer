@@ -51,6 +51,14 @@ Core widget hierarchy and infrastructure.
   marks; supports click, Space, focus and disabled state.
 - **TVRadioButtons** — Native mutually exclusive radio group rendered with DOS
   `( )` / `(·)` marks. An explicit `name` may be supplied.
+- **TVMultiCheckBoxes** — `TVCluster` subclass with configurable three-state
+  DOS marks, keyboard-focusable buttons, disabled state and `aria-checked`.
+- **TVTerminal** — Bounded append-only line buffer. `append(text)`, `clear()`
+  and `bind(root)` update a fixed set of framed terminal rows.
+- **TVEditor** and **TVIndicator** — Read-only document control with selection,
+  `find()`, `findNext()`, cursor position reporting and explicit lifecycle.
+  Markdown Docs windows instantiate this pair instead of using a styled
+  viewport alone.
 - **TVButtonStrip** — Row of buttons.
 - **TVButton** — Button with optional dialog shadow. `constructor({labelMarkup, dialog, className, ...})`.
 - **TVMessageBox** — Modal Promise-based message box with OK/Cancel and
@@ -208,6 +216,7 @@ Standard application dialogs.
 | `TVAboutDialog` | About / splash screen |
 | `TVWidgetGalleryDialog` | Interactive gallery for shared labels, inputs, choices, list focus/activation and scrolling, static/framed information, buttons and message boxes |
 | `TVFileOpenDialog` | Keyboard-accessible virtual file picker for generated HELP bundles and Markdown documentation, with persistent history |
+| `TVChangeDirectoryDialog` | Turbo Vision-style virtual directory tree with Chdir, Revert and shared persistent History |
 | `TVSearchDialog` | Full-text search across topics |
 | `TVAsciiTableDialog` | CP437 character table (0–255) |
 | `TVCalculatorDialog` | DOS-style calculator |
@@ -235,6 +244,10 @@ The selectors support arrow-key navigation.
 ### TVFileOpenDialog
 
 - `configure(entries, onOpen)` — Populate the browser-safe virtual filesystem and install its open callback
+- `setDirectory(path)` — Select the virtual directory shared with Change Directory.
+- `TVFileList`, `TVHistory`, `TVHistoryViewer` and `TVHistoryWindow` provide the
+  reusable file-list, persistent model, list and popup roles. The old
+  `TVFileListBox` export remains a compatibility alias.
 - The layout follows Turbo Vision 2.0 `TFileDialog`: one unframed, two-column
   `TFileList`, a horizontal scrollbar, Name input with a three-cell History
   control, Open/Cancel buttons and the two-line `TFileInfoPane` at the bottom.
@@ -248,6 +261,15 @@ The selectors support arrow-key navigation.
 - Open is available during asynchronous HELP/DOCS catalog loading. It opens
   immediately with a visible loading row, refreshes itself when the catalogs
   arrive, and shows an explicit empty-state row if neither catalog has files.
+
+### TVChangeDirectoryDialog
+
+- Uses the same normalized HELP/DOCS virtual tree and History implementation as
+  File Open.
+- Chdir updates File Open's current directory; Revert restores the directory
+  that was active when the dialog opened.
+- Directory input, tree list, history popup, keyboard mnemonics and the shared
+  list scrollbar are available without browser filesystem privileges.
 
 ## tv-screensaver.js
 

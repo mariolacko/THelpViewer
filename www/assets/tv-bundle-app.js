@@ -21,6 +21,7 @@ const {
     TVColorsDialog,
     TVWidgetGalleryDialog,
     TVFileOpenDialog,
+    TVChangeDirectoryDialog,
     TVMidiPlayerDialog,
     TVSearchDialog,
     TVTetrisDialog,
@@ -34,6 +35,8 @@ const {
     TVScreenSaver,
     TVWindow,
     TVWidget,
+    TVIndicator,
+    TVEditor,
     TVButton,
     TVMenuBox,
     measureCells,
@@ -1838,6 +1841,10 @@ function renderTopicContent(bundle, topic) {
 
 function destroyWindowWidgets(windowEl) {
     if (!windowEl) { return; }
+    if (windowEl._tvEditor) {
+        windowEl._tvEditor.destroy();
+        windowEl._tvEditor = null;
+    }
     const scrollbars = Array.isArray(windowEl._tvScrollbars) ? windowEl._tvScrollbars : [];
     scrollbars.forEach((scrollbar) => scrollbar.destroy());
     windowEl._tvScrollbars = [];
@@ -2506,7 +2513,13 @@ function buildCatalogMenuItems(catalog) {
         attrs: { type: "button", "data-tv-file-open": true },
         labelMarkup: renderHotkeyMarkup("~O~pen..."),
     });
-    if (!catalog.length) { return [openItem]; }
+    const changeDirectoryItem = new TVButton({
+        dialog: false,
+        className: "tv-menu-popup-item",
+        attrs: { type: "button", "data-tv-dialog-open": "chdir" },
+        labelMarkup: renderHotkeyMarkup("~C~hange dir..."),
+    });
+    if (!catalog.length) { return [openItem, changeDirectoryItem]; }
 
     const directItems = [];
     const productMap = new Map();
@@ -2530,7 +2543,7 @@ function buildCatalogMenuItems(catalog) {
         versionNode.direct.push(catalogMenuEntryButton(entry));
     });
 
-    const items = [openItem, renderMenuPopupSeparator(), ...directItems];
+    const items = [openItem, changeDirectoryItem, renderMenuPopupSeparator(), ...directItems];
     if (directItems.length && products.length) {
         items.push(renderMenuPopupSeparator());
     }
@@ -2965,6 +2978,7 @@ class TVBundleApp {
         this._registerDialog("colors", () => new TVColorsDialog(this.desktop));
         this._registerDialog("widgets", () => new TVWidgetGalleryDialog(this.desktop));
         this.fileOpenDialog = this._registerDialog("fileopen", () => new TVFileOpenDialog(this.desktop));
+        this.changeDirectoryDialog = this._registerDialog("chdir", () => new TVChangeDirectoryDialog(this.desktop));
         this._registerDialog("tetris", () => new TVTetrisDialog(this.desktop));
         this._registerDialog("mines", () => new TVMinesDialog(this.desktop));
         this._registerDialog("breakout", () => new TVBreakOutDialog(this.desktop));
@@ -3574,25 +3588,30 @@ class TVBundleApp {
         } else {
             docsCatalogData = [];
         }
+        const entries = [
+            ...catalogData.map((entry) => ({
+                ...entry,
+                kind: "help",
+                fileName: entry.source_file || entry.name,
+            })),
+            ...docsCatalogData.map((entry) => ({
+                ...entry,
+                kind: "doc",
+                fileName: String(entry.file || "").split("/").pop() || entry.name,
+            })),
+        ];
         if (this.fileOpenDialog) {
-            const entries = [
-                ...catalogData.map((entry) => ({
-                    ...entry,
-                    kind: "help",
-                    fileName: entry.source_file || entry.name,
-                })),
-                ...docsCatalogData.map((entry) => ({
-                    ...entry,
-                    kind: "doc",
-                    fileName: String(entry.file || "").split("/").pop() || entry.name,
-                })),
-            ];
             this.fileOpenDialog.configure(entries, (entry) => {
                 if (entry.kind === "doc") {
                     this._openDocFile(entry.file);
                 } else {
                     this._openBundleFile(entry.file, entry.name);
                 }
+            });
+        }
+        if (this.changeDirectoryDialog) {
+            this.changeDirectoryDialog.configure(entries, (directory) => {
+                this.fileOpenDialog?.setDirectory(directory);
             });
         }
         buildBundleMenuBar(catalogData, null);
@@ -3637,7 +3656,7 @@ class TVBundleApp {
         this.docWindows.delete(docKey);
         const htmlContent = renderMarkdown(markdownText);
         const title = filename.replace(/\.md$/i, "").replace(/_/g, " ");
-        const contentHTML = `<div class="tv-document tv-doc-document">${htmlContent}</div>`;
+        const contentHTML = `<div class="tv-document tv-doc-document" data-tv-doc-editor>${htmlContent}</div>`;
         const w = { cols: 78, rows: 24, min_cols: 40, min_rows: 8 };
         const style = `--tv-window-cols:${w.cols}; --tv-window-rows:${w.rows}; --tv-window-min-cols:${w.min_cols}; --tv-window-min-rows:${w.min_rows};`;
         const windowHTML = TVWindow.renderMarkup({
@@ -3659,6 +3678,11 @@ class TVBundleApp {
         bindCloseButtons(windowEl);
 
         // Init widgets
+        const indicator = new TVIndicator();
+        indicator.root = TVWidget.fromHTML(indicator.renderMarkup());
+        const horizontalScrollbar = windowEl.querySelector(".tv-bottom-bar > .tv-scrollbar-x");
+        horizontalScrollbar?.before(indicator.root);
+        windowEl._tvEditor = new TVEditor(windowEl.querySelector("[data-tv-doc-editor]"), { indicator });
         const frames = windowEl.querySelectorAll("[data-tv-scroll-frame]");
         windowEl._tvScrollbars = Array.from(frames, (frame) => new TVScrollBar(frame));
         windowEl._tvResizer = new TurboVisionWindowResizer(windowEl);
