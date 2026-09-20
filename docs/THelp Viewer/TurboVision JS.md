@@ -1,16 +1,24 @@
 # TurboVision JS — API Documentation
 
+The current behavioural audit and implementation order are tracked in
+[TurboVision JS Audit](TurboVision%20JS%20Audit.md).
+
 THelpViewer uses a modular JavaScript framework inspired by Borland's TurboVision TUI toolkit. The runtime assets are served from `www/assets/`:
 
 | File | Purpose |
 |------|---------|
 | `tv-core.js` | Core widget classes, dialog manager, theme engine, utility functions |
-| `tv-dialogs.js` | Standard dialogs (About, Search, Calculator, Calendar, Colors, ASCII Table) and Screen Saver |
+| `tv-dialogs.js` | Standard dialogs (About, Search, Calculator, Calendar, Colors, ASCII Table, MIDI Player) |
 | `tv-games.js` | Game dialogs and rules (Puzzle, Tetris, Minesweeper, BreakOut, Sokoban, Lines, Reversi, Ludo, Snake) |
+| `tv-screensaver.js` | Screen saver base class and animated modes |
+| `tv-highlight.js` | Pascal, C and ASM syntax highlighting |
 | `tv-shell.js` | Menu bar, status line, window resizer, application bootstrap |
 | `tv-bundle-app.js` | Single-page bundle viewer (catalog, window manager, Markdown renderer) |
 
 All modules share a single namespace: `window.THelpViewerTV` (aliased as `TV`).
+The syntax highlighter detects Pascal, C and ASM independently for each
+contiguous code block, so one topic can safely contain examples in several
+languages.
 
 ---
 
@@ -22,17 +30,28 @@ Core widget hierarchy and infrastructure.
 
 - **TVWidget** — Base for all UI components. `constructor(root=null)`.
 - **TVStaticText** — Renders text or HTML. `constructor({tag, text, html, className, attrs})`.
-- **TVLabel** — Text label with hotkey markup. `constructor({text, forId, hotkey, ...})`.
+- **TVLabel** — Text label with hotkey markup. With `forId` it emits a native
+  `<label for="…">`; otherwise it emits a presentational `<span>`.
 - **TVInputLine** — `<input>` element. `constructor({className, attrs})`.
 - **TVGroup** — Container with children. `constructor({tag, className, attrs, children, html})`.
 - **TVListViewer** — Static list. `constructor({tag, className, attrs, items})`.
-- **TVListBox** — Interactive selectable list. `setItems(items, index)`, `select(index)`, `bind({onSelect, onActivate})`.
-- **TVVerticalListViewer** — List with scrollbar integration.
+- **TVListBox** — Interactive selectable list. `setItems(items, index)`,
+  `select(index)`, `bind({onSelect, onActivate})`; click selects and
+  double-click/Enter activates.
+- **TVVerticalListViewer** — List with scrollbar integration, roving tab focus,
+  Arrow, Home/End and Page Up/Down keyboard navigation, and a passive
+  scrollbar while its dialog is inactive.
 - **TVVerticalScrollArea** — Generic scroll container.
 - **TVMenuBox** — Menu popup with items.
-- **TVCheckBoxes** — Checkbox group.
+- **TVCheckBoxes** — Native checkbox group rendered with DOS `[ ]` / `[X]`
+  marks; supports click, Space, focus and disabled state.
+- **TVRadioButtons** — Native mutually exclusive radio group rendered with DOS
+  `( )` / `(·)` marks. An explicit `name` may be supplied.
 - **TVButtonStrip** — Row of buttons.
 - **TVButton** — Button with optional dialog shadow. `constructor({labelMarkup, dialog, className, ...})`.
+- **TVMessageBox** — Modal Promise-based message box with OK/Cancel and
+  Yes/No/Cancel flag combinations, mnemonics and default-button keyboard
+  handling.
 
 ### TVInfoBox
 
@@ -48,28 +67,68 @@ Static methods:
 ### TVFrame & TVDialog
 
 - **TVFrame** — Generates dialog window markup (titlebar, body, footer, borders).
-- **TVDialog** — Modal dialog with overlay.
-  - `open()`, `close()`, `center()`, `isOpen()`, `isActive()`
-  - `bindCommonClose(callback)` — Bind close button + Escape key
+- **TVDialog** — Managed dialog/window with overlay; it may be modal or non-modal.
+  - `open()`, `close()`, `destroy()`, `center()`, `isOpen()`, `isActive()`
+  - `close()` hides a reusable dialog; `destroy()` permanently removes a
+    dynamic dialog, its drag listeners and its manager registration.
+  - `bindCommonClose(callback)` — Bind the common close action
   - `bindDrag()` — Enable title bar drag
   - `setManager(manager, name)` — Register with TVDialogManager
+  - `focusableElements()` — Return the current keyboard focus cycle
+  - `onDialogKeyDown(event)` — Shared Escape, default Enter and Tab handling
   - `query(selector)` — Shortcut for `this.dialog.querySelector()`
+  - Constructor options `modal`, `keyboard`, `escapeCloses` and
+    `defaultButtonSelector` customize shared interaction without duplicating
+    document-level key handlers.
 
 ### TVDialogManager
 
 Manages dialog lifecycle, z-ordering, and active state.
 
 - `register(name, dialog)` — Register a named dialog
+- `unregister(name, dialog)` — Remove a dynamic dialog registration safely
+- `registerWindow(name, element, commands)` — Register a managed window and
+  its command handlers
+- `setHostWindow(element, commands)` — Register the generated page's host
+  window and its command handlers
 - `open(name, {exclusive})` — Open a dialog (optionally closing others)
 - `close(name)` — Close a dialog
 - `bringToFront(name)` — Activate and focus a dialog
 - `activateHostWindow()` — Deactivate all dialogs, activate host window
-- `applyZIndices()` — Recalculate z-index stack
+- `dispatchCommand(command)` — Send a command to the active dialog, viewer,
+  document or host window
+- `cycleTarget(delta)` — Activate the next or previous managed window/dialog
+- `applyAllZIndices()` — Recalculate z-index stack
 - `applyActiveStates()` — Update `is-window-active` / `is-window-inactive` classes
+
+### TVMenuController
+
+Shared mouse and keyboard state machine used by both the generated-page shell
+and the bundle viewer.
+
+- `refresh()` — Discover and bind a newly rendered menu tree
+- `openMenu(root)` / `closeMenus()` — Open or close the active top-level menu
+- `openSubmenu(toggle)` / `closeSubmenu(popup)` — Manage nested menu levels
+- `moveSelection(delta)` — Move the roving selection through enabled items
+- `destroy()` — Remove the controller's document-level listeners
+- Supports `F10`, Alt mnemonics, popup mnemonics, arrows, `Home`, `End`,
+  `Enter`, Space, Tab/Shift+Tab and `Esc`, including remembered selection and
+  focus restoration.
+
+The bundle desktop keeps one managed window per opened HELP bundle and one per
+Markdown document. `F6`/`Shift-F6`, Window List, Tile and Cascade all operate
+on the same `TVDialogManager` stack. Dynamic windows use distinct persisted
+geometry keys, so moving or maximizing one does not overwrite another.
 
 ### TurboVisionScrollbar
 
 Custom scrollbar for `[data-tv-scroll-frame]` containers. Handles thumb drag, track clicks, arrow buttons, wheel events.
+
+- `refresh()` — Re-observe replaced viewport content and redraw both axes.
+- `setActive(active)` — Enable input for the active window or switch both axes
+  to passive, non-interactive rendering.
+- `destroy()` — Stop repeat/drag state and detach element/global listeners and
+  the `ResizeObserver`.
 
 ### Theme Engine
 
@@ -92,13 +151,15 @@ Custom scrollbar for `[data-tv-scroll-frame]` containers. Handles thumb drag, tr
 
 - `DOS_COLORS` — 16 standard DOS color strings
 - `THEME_PRESETS` — 5 predefined theme configurations
+- `TV_COMMANDS` — Shared `menu`, `close`, `zoom`, `resize`, `next`,
+  `previous`, `ok`, `cancel` and `default` command identifiers
 - `PUZZLE_START`, `PUZZLE_HIGHLIGHT_MAP` — 15-puzzle initial state
 
 ---
 
 ## tv-dialogs.js
 
-Standard application dialogs and screen saver.
+Standard application dialogs.
 
 ### Dialogs
 
@@ -108,7 +169,7 @@ Standard application dialogs and screen saver.
 | `TVSearchDialog` | Full-text search across topics |
 | `TVAsciiTableDialog` | CP437 character table (0–255) |
 | `TVCalculatorDialog` | DOS-style calculator |
-| `TVCalendarDialog` | Month calendar with navigation |
+| `TVCalendarDialog` | Month calendar with navigation and Gregorian leap-year handling |
 | `TVColorsDialog` | Color palette customization editor |
 
 ### TVSearchDialog
@@ -118,12 +179,18 @@ Standard application dialogs and screen saver.
 - `moveSelection(delta)` — Navigate result list
 - `openSelected()` — Open the highlighted result (override for custom navigation)
 
+## tv-screensaver.js
+
 ### TVScreenSaver
 
 Fullscreen overlay with animated modes.
 
-- `start(mode)` — Start saver: `"stars"`, `"bounce"`, `"clock"`, `"matrix"`
-- `stop()` — Dismiss (also triggered by click or keypress)
+- `start()` — Start the selected saver instance and preserve current focus
+- `stop()` — Dismiss, detach resize handling and restore focus (also triggered by click or keypress)
+- `TVScreenSaver.installIdleStart()` — Install the shared five-minute idle trigger once per page
+
+Both the generated-page shell and bundle application install the same idle
+trigger. Active modes remeasure and reinitialize after a browser resize.
 
 Mode descriptions:
 - **stars** — Falling star characters with random colors
@@ -139,12 +206,16 @@ Constants: `SAVER_FPS = 15`, `SAVER_STAR_COUNT = 60`
 
 Game dialog implementations. All extend `TVDialog`.
 
+Game timers and CPU turns run only while their dialog is active. The dynamic
+high-score name prompt is registered as a managed modal dialog, so opening it
+also suspends the owning game until the prompt is destroyed.
+
 ### Common Patterns
 
 - Each game has `open()` → `super.open()` → `newGame()` → `fillBorders(this.dialog)`
 - Info panels use `TVInfoBox` for framed borders
 - Best score stored in localStorage as JSON `{score, name}` via `loadBest(key)` / `saveBest(key, score, name)`
-- `showBestNamePrompt(desktop, score, callback)` — Shows name input dialog on new high score
+- `showBestNamePrompt(ownerDialog, score, callback)` — Shows a managed modal name input dialog on new high score
 
 ### Games
 
@@ -152,7 +223,7 @@ Game dialog implementations. All extend `TVDialog`.
 |-------|------|------|-------------|
 | `TVPuzzleDialog` | 15-puzzle | 4×4 | Click tiles |
 | `TVTetrisDialog` | Tetris / Pentix | 12×18 | ←→ move, ↑ rotate, ↓/Space drop, P pause, X pentix |
-| `TVMinesDialog` | Minesweeper | 9×9 (10 mines) | Click reveal, Right-click flag |
+| `TVMinesDialog` | Minesweeper | 9×9 (10 mines) | Click or Space/Enter reveal, Right-click or F flag, arrows/Home/End move cursor; first reveal is safe |
 | `TVBreakOutDialog` | BreakOut | 14×20 | ←→ paddle, Space launch |
 | `TVSokobanDialog` | Sokoban | Variable (5 levels) | ←→↑↓ move, R restart, U undo |
 | `TVLinesDialog` | Color Lines | 9×9 | Click select + click destination |
@@ -184,7 +255,7 @@ Application shell: menus, status bar, window management, initialization.
 | `TVMenuBar` | Renders menu bar items and hotkeys |
 | `TVStatusLine` | Renders status line items |
 | `TurboVisionWindowResizer` | Window drag-move and resize, double-click maximize |
-| `TurboVisionMenus` | Menu popup interaction (open with mouse/keyboard, navigate) |
+| `TurboVisionMenus` | Generated-page adapter for the shared `TVMenuController` |
 | `TVApplication` | Main application coordinator |
 
 ### TVApplication
@@ -201,7 +272,9 @@ Entry point. Called via `TV.initTurboVision()`.
 
 - Draggable title bar (move), resize handle (bottom-right corner)
 - `maximize()`, `restore()`, `toggleMaximize()`
-- Persists geometry to localStorage per `data-tv-window-id`
+- Persists geometry to localStorage per optional `data-tv-window-storage-key`
+- `destroy()` persists the final geometry and detaches drag, handle and
+  `beforeunload` listeners.
 
 ### TVAppContext
 

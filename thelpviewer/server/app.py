@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from .. import __version__
 from .config import AppConfig, load_config
 
 
@@ -49,7 +50,7 @@ def _docs_catalog(config: AppConfig) -> list[dict[str, str]]:
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
     config = config or load_config()
-    app = FastAPI(title="THelpViewer", version="2.0")
+    app = FastAPI(title="THelpViewer", version=__version__)
     app.state.config = config
 
     app.mount(

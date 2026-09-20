@@ -12,6 +12,8 @@ class TVScreenSaver {
     static _overlay = null;
     static _canvas = null;
     static _active = null;
+    static _idleTimer = null;
+    static _idleBound = false;
 
     static _ensureOverlay() {
         if (TVScreenSaver._overlay) {
@@ -41,6 +43,33 @@ class TVScreenSaver {
         return TVScreenSaver._active;
     }
 
+    static installIdleStart(timeoutMs = 5 * 60 * 1000) {
+        if (TVScreenSaver._idleBound) {
+            return;
+        }
+        const saverNames = Object.keys(TVScreenSaver.modes || {});
+        if (!saverNames.length) {
+            return;
+        }
+        const resetIdleTimer = () => {
+            if (TVScreenSaver._idleTimer !== null) {
+                clearTimeout(TVScreenSaver._idleTimer);
+            }
+            TVScreenSaver._idleTimer = setTimeout(() => {
+                TVScreenSaver._idleTimer = null;
+                if (!TVScreenSaver.active) {
+                    const name = saverNames[Math.floor(Math.random() * saverNames.length)];
+                    new TVScreenSaver.modes[name]().start();
+                }
+            }, timeoutMs);
+        };
+        for (const eventName of ["mousemove", "mousedown", "keydown", "scroll", "touchstart"]) {
+            document.addEventListener(eventName, resetIdleTimer, { passive: true });
+        }
+        TVScreenSaver._idleBound = true;
+        resetIdleTimer();
+    }
+
     constructor() {
         TVScreenSaver._ensureOverlay();
         this.overlay = TVScreenSaver._overlay;
@@ -49,17 +78,27 @@ class TVScreenSaver {
         this.timerId = null;
         this.cols = 80;
         this.rows = 25;
+        this.previousFocus = null;
+        this._onResize = () => {
+            if (!this.running) { return; }
+            this._measure();
+            this.init();
+            this.tick();
+        };
     }
 
     start() {
+        const previousFocus = TVScreenSaver._active?.previousFocus || document.activeElement;
         TVScreenSaver.stop();
         TVScreenSaver._active = this;
+        this.previousFocus = previousFocus instanceof HTMLElement ? previousFocus : null;
         this.overlay.hidden = false;
         this.overlay.tabIndex = 0;
         this.overlay.focus();
         this.running = true;
         this._measure();
         this.init();
+        window.addEventListener("resize", this._onResize, { passive: true });
         this.timerId = setInterval(() => {
             if (this.running) { this.tick(); }
         }, 1000 / SAVER_FPS);
@@ -72,9 +111,15 @@ class TVScreenSaver {
             clearInterval(this.timerId);
             this.timerId = null;
         }
+        window.removeEventListener("resize", this._onResize);
         this.canvas.textContent = "";
         if (TVScreenSaver._active === this) {
             TVScreenSaver._active = null;
+        }
+        const previousFocus = this.previousFocus;
+        this.previousFocus = null;
+        if (previousFocus?.isConnected) {
+            previousFocus.focus();
         }
     }
 

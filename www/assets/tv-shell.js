@@ -21,6 +21,8 @@ const {
     applyColorPalette,
     buildPaletteFromCurrentStyle,
     TVDialogManager,
+    TV_COMMANDS,
+    TVMenuController,
     TVAboutDialog,
     TVPuzzleDialog,
     TVCalendarDialog,
@@ -32,8 +34,6 @@ const {
     TVScreenSaver,
     TurboVisionScrollbar,
     measureCells,
-    resetMenuPopupLayout,
-    fitMenuPopupToViewport,
     SCROLL_REPEAT_MS,
     TRACK_CHAR,
     DISABLED_TRACK_CHAR,
@@ -224,27 +224,32 @@ class TurboVisionWindowResizer {
         this.moveState = null;
         this.storageKey = this.buildStorageKey();
         this.restoreSnapshot = null;
+        this.destroyed = false;
+        this.onHandleMouseDown = (event) => this.startResize(event);
+        this.onMoveHandleMouseDown = (event) => this.startMove(event);
+        this.onBeforeUnload = () => this.persistState();
         this.bind();
         if (!this.restoreState()) {
             this.centerWindow();
             this.restoreSnapshot = this.captureGeometry();
         }
-        window.addEventListener("beforeunload", () => this.persistState(), { passive: true });
+        window.addEventListener("beforeunload", this.onBeforeUnload, { passive: true });
     }
 
     bind() {
         if (this.handle) {
-            this.handle.addEventListener("mousedown", (event) => this.startResize(event));
+            this.handle.addEventListener("mousedown", this.onHandleMouseDown);
         }
         if (this.moveHandle) {
             this.lastMoveDown = 0;
-            this.moveHandle.addEventListener("mousedown", (event) => this.startMove(event));
+            this.moveHandle.addEventListener("mousedown", this.onMoveHandleMouseDown);
         }
     }
 
     buildStorageKey() {
         const path = window.location.pathname.replace(/[^/]*$/, "");
-        return `thelp:window:${path}`;
+        const identity = this.windowElement.dataset.tvWindowStorageKey || "";
+        return identity ? `thelp:window:${path}:${identity}` : `thelp:window:${path}`;
     }
 
     centerWindow() {
@@ -548,80 +553,83 @@ class TurboVisionWindowResizer {
         this.persistState();
         window.dispatchEvent(new CustomEvent("tv-window-state-change"));
     };
+
+    destroy() {
+        if (this.destroyed) { return; }
+        if (this.windowElement.isConnected) {
+            this.persistState();
+        }
+        this.destroyed = true;
+        this.dragState = null;
+        this.moveState = null;
+        document.removeEventListener("mousemove", this.onResizeMove);
+        document.removeEventListener("mouseup", this.onResizeEnd);
+        document.removeEventListener("mousemove", this.onMoveDrag);
+        document.removeEventListener("mouseup", this.onMoveEnd);
+        window.removeEventListener("beforeunload", this.onBeforeUnload);
+        if (this.handle) {
+            this.handle.removeEventListener("mousedown", this.onHandleMouseDown);
+        }
+        if (this.moveHandle) {
+            this.moveHandle.removeEventListener("mousedown", this.onMoveHandleMouseDown);
+        }
+        this.windowElement.classList.remove("is-resizing");
+    }
 }
 
-class TurboVisionMenus {
+class TurboVisionMenus extends TVMenuController {
     constructor(dialogManager) {
+        super();
         this.desktop = document.querySelector(".tv-desktop") || document.body;
-        this.menuRoots = Array.from(document.querySelectorAll("[data-tv-menu-root]"));
-        this.activeRoot = null;
         this.dialogManager = dialogManager;
-        this.bind();
+        this.onUnhandledKeyDown = (event) => this.onApplicationKeyDown(event);
+        this.bindActions();
     }
 
-        bind() {
-            this.menuRoots.forEach((root) => {
-                const toggle = root.querySelector("[data-tv-menu-toggle]");
-                if (!toggle) {
-                    return;
-            }
-            toggle.addEventListener("click", (event) => this.onToggleClick(event, root));
-            root.addEventListener("mouseenter", () => {
-                if (this.activeRoot && this.activeRoot !== root) {
-                    this.openMenu(root);
-                }
-            });
+    bindActions() {
+        document.querySelectorAll("[data-tv-dialog-open]").forEach((element) => {
+            element.addEventListener("click", (event) => this.onDialogOpen(event, element.getAttribute("data-tv-dialog-open") || ""));
         });
+        document.querySelectorAll("[data-tv-theme-set]").forEach((element) => {
+            element.addEventListener("click", (event) => this.onThemeSet(event, element.getAttribute("data-tv-theme-set") || "default"));
+        });
+    }
 
-            document.querySelectorAll("[data-tv-dialog-open]").forEach((element) => {
-                element.addEventListener("click", (event) => this.onDialogOpen(event, element.getAttribute("data-tv-dialog-open") || ""));
-            });
-            document.querySelectorAll("[data-tv-theme-set]").forEach((element) => {
-                element.addEventListener("click", (event) => this.onThemeSet(event, element.getAttribute("data-tv-theme-set") || "default"));
-            });
-
-            document.addEventListener("click", (event) => this.onDocumentClick(event));
-            document.addEventListener("keydown", (event) => this.onKeyDown(event));
-
-            this.bindSubmenus();
-        }
-
-    onToggleClick(event, root) {
+    onDialogOpen(event, name) {
         event.preventDefault();
-        if (this.activeRoot === root) {
-            this.closeMenus();
-        } else {
-            this.openMenu(root);
+        this.closeMenus();
+        this.dialogManager.open(name);
+    }
+
+    onThemeSet(event, themeName) {
+        event.preventDefault();
+        this.closeMenus();
+        applyThemeAndSyncPalette(themeName || "default", true);
+        if (this.dialogManager) {
+            this.dialogManager.applyActiveStates();
+        }
+        if (window.THelpViewerTV && typeof window.THelpViewerTV.fillBorders === "function") {
+            window.THelpViewerTV.fillBorders();
         }
     }
 
-        onDialogOpen(event, name) {
-            event.preventDefault();
-            this.closeMenus();
-            this.dialogManager.open(name);
-        }
-
-        onThemeSet(event, themeName) {
-            event.preventDefault();
-            this.closeMenus();
-            applyThemeAndSyncPalette(themeName || "default", true);
-            if (this.dialogManager) {
-                this.dialogManager.applyActiveStates();
-            }
-            if (window.THelpViewerTV && typeof window.THelpViewerTV.fillBorders === "function") {
-                window.THelpViewerTV.fillBorders();
-            }
-        }
-
-    onDocumentClick(event) {
-        if (event.target.closest("[data-tv-menu-root]")) {
+    onApplicationKeyDown(event) {
+        if (event.defaultPrevented) {
             return;
         }
-        this.closeMenus();
-    }
-
-    onKeyDown(event) {
-        if (event.defaultPrevented) {
+        if (event.key === "F5" && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+            event.preventDefault();
+            this.dialogManager.dispatchCommand(TV_COMMANDS.ZOOM);
+            return;
+        }
+        if (event.key === "F3" && event.altKey && !event.ctrlKey && !event.shiftKey) {
+            event.preventDefault();
+            this.dialogManager.dispatchCommand(TV_COMMANDS.CLOSE);
+            return;
+        }
+        if (event.key === "F6" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            this.dialogManager.dispatchCommand(event.shiftKey ? TV_COMMANDS.PREVIOUS : TV_COMMANDS.NEXT);
             return;
         }
         if (event.key === "Escape") {
@@ -635,102 +643,8 @@ class TurboVisionMenus {
             if (this.dialogManager.isOpen("calc")) {
                 return;
             }
-            if (this.activeRoot) {
-                event.preventDefault();
-                this.closeMenus();
-            }
         }
     }
-
-    openMenu(root) {
-        this.closeMenus();
-        const popup = root.querySelector("[data-tv-menu-popup]");
-        const toggle = root.querySelector("[data-tv-menu-toggle]");
-        if (!popup || !toggle) {
-            return;
-        }
-        popup.hidden = false;
-        toggle.setAttribute("aria-expanded", "true");
-        toggle.classList.add("is-current");
-        this.activeRoot = root;
-        requestAnimationFrame(() => {
-            fitMenuPopupToViewport(root, popup);
-            fillBorders(popup);
-        });
-    }
-
-    closeMenus() {
-        this.closeSubmenus();
-        this.menuRoots.forEach((root) => {
-            const popup = root.querySelector("[data-tv-menu-popup]");
-            const toggle = root.querySelector("[data-tv-menu-toggle]");
-            if (popup) {
-                popup.hidden = true;
-                resetMenuPopupLayout(popup);
-            }
-            if (toggle) {
-                toggle.setAttribute("aria-expanded", "false");
-                toggle.classList.remove("is-current");
-            }
-        });
-        this.activeRoot = null;
-    }
-
-    closeSubmenus() {
-        document.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
-            popup.hidden = true;
-            resetMenuPopupLayout(popup);
-        });
-        document.querySelectorAll("[data-tv-submenu-toggle]").forEach((el) => {
-            el.classList.remove("is-submenu-open");
-        });
-    }
-
-    positionSubmenu(root, popup) {
-        fitMenuPopupToViewport(root, popup);
-    }
-
-    bindSubmenus() {
-        document.querySelectorAll("[data-tv-submenu-toggle]").forEach((toggle) => {
-            const root = toggle.closest("[data-tv-submenu-root]");
-            if (!root) { return; }
-            const popup = root.querySelector("[data-tv-submenu-popup]");
-            if (!popup) { return; }
-
-            toggle.addEventListener("click", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                const isOpen = !popup.hidden;
-                this.closeSubmenus();
-                if (!isOpen) {
-                    popup.hidden = false;
-                    toggle.classList.add("is-submenu-open");
-                    requestAnimationFrame(() => {
-                        this.positionSubmenu(root, popup);
-                        fillBorders(popup);
-                    });
-                }
-            });
-
-            root.addEventListener("mouseenter", () => {
-                this.closeSubmenus();
-                popup.hidden = false;
-                toggle.classList.add("is-submenu-open");
-                requestAnimationFrame(() => {
-                    this.positionSubmenu(root, popup);
-                    fillBorders(popup);
-                });
-            });
-
-            root.addEventListener("mouseleave", (event) => {
-                const related = event.relatedTarget;
-                if (related && (popup.contains(related) || root.contains(related))) { return; }
-                popup.hidden = true;
-                toggle.classList.remove("is-submenu-open");
-            });
-        });
-    }
-
 }
 
 class TVApplication {
@@ -780,14 +694,25 @@ class TVApplication {
         const desktop = document.querySelector(".tv-desktop") || document.body;
         const hostWindow = document.querySelector("[data-tv-window]");
         this.dialogManager = new TVDialogManager(desktop);
-        this.dialogManager.setHostWindow(hostWindow);
         this.scrollbars = Array.from(document.querySelectorAll("[data-tv-scroll-frame]"), (frame) => new TurboVisionScrollbar(frame));
         this.resizers = Array.from(document.querySelectorAll("[data-tv-window]"), (windowElement) => new TurboVisionWindowResizer(windowElement));
+        const hostResizer = this.resizers.find((resizer) => resizer.windowElement === hostWindow);
+        this.dialogManager.setHostWindow(hostWindow, hostWindow ? {
+            [TV_COMMANDS.CLOSE]: () => hostWindow.querySelector(".tv-close-control")?.click(),
+            [TV_COMMANDS.ZOOM]: () => {
+                if (!hostResizer) { return; }
+                if (hostWindow.classList.contains("is-maximized")) {
+                    hostResizer.restore();
+                } else {
+                    hostResizer.maximize();
+                }
+            },
+        } : {});
         this.menus = new TurboVisionMenus(this.dialogManager);
         if (hostWindow && hostWindow.dataset.tvHostWindowBound !== "1") {
             hostWindow.dataset.tvHostWindowBound = "1";
             hostWindow.addEventListener("mousedown", (event) => {
-                if (event.target.closest(".tv-close-control, .tv-grow-handle, .tv-scrollbar, .tv-menu-bar, .tv-status-line")) {
+                if (event.target.closest(".tv-close-control, .tv-grow-handle, .tv-menu-bar, .tv-status-line")) {
                     return;
                 }
                 this.dialogManager.activateHostWindow();
@@ -818,23 +743,7 @@ class TVApplication {
                 if (saver) { saver.start(); }
             });
         });
-        // Auto-start screensaver after 5 minutes of inactivity
-        const SAVER_IDLE_MS = 5 * 60 * 1000;
-        const saverNames = Object.keys(saverModes);
-        let saverIdleTimer = null;
-        const resetIdleTimer = () => {
-            if (saverIdleTimer !== null) { clearTimeout(saverIdleTimer); }
-            saverIdleTimer = setTimeout(() => {
-                if (!TVScreenSaver.active) {
-                    const mode = saverNames[Math.floor(Math.random() * saverNames.length)];
-                    savers[mode].start();
-                }
-            }, SAVER_IDLE_MS);
-        };
-        for (const evt of ["mousemove", "mousedown", "keydown", "scroll", "touchstart"]) {
-            document.addEventListener(evt, resetIdleTimer, { passive: true });
-        }
-        resetIdleTimer();
+        TVScreenSaver.installIdleStart();
         if (this.errors.length) {
             window.THelpViewerTVInitErrors = this.errors;
         }

@@ -382,7 +382,10 @@ function saveBest(key, score, name) {
     catch { /* ignore */ }
 }
 
-function showBestNamePrompt(desktop, score, callback) {
+let bestNamePromptSequence = 0;
+
+function showBestNamePrompt(ownerDialog, score, callback) {
+    const desktop = ownerDialog?.desktop || document.querySelector(".tv-desktop") || document.body;
     const body = new TVGroup({
         w: 28, h: 10,
         children: [
@@ -410,12 +413,19 @@ function showBestNamePrompt(desktop, score, callback) {
         footerMarkup: TVDialog.footerMarkup(),
         width: "32ch",
         height: "min(13em, calc(100% - 2em))",
+        modal: true,
     });
     const input = dlg.query("[data-tv-best-name-input]");
+    const manager = ownerDialog?.manager || null;
+    if (manager) {
+        manager.register(`highscore:${++bestNamePromptSequence}`, dlg);
+    }
+    let finished = false;
     const finish = () => {
+        if (finished) { return; }
+        finished = true;
         const name = (input ? input.value.trim() : "") || "Player";
-        dlg.close();
-        dlg.overlay.remove();
+        dlg.destroy();
         callback(name);
     };
     dlg.bindCommonClose(() => finish());
@@ -977,8 +987,7 @@ class TVTetrisDialog extends TVDialog {
     _checkBest() {
         if (this.score > this.bestScore) {
             this.bestScore = this.score;
-            const desktop = this.overlay ? this.overlay.parentElement : document.querySelector(".tv-desktop") || document.body;
-            showBestNamePrompt(desktop, this.score, (name) => {
+            showBestNamePrompt(this, this.score, (name) => {
                 this.bestName = name;
                 this._saveBest();
                 this.renderInfo();
@@ -1178,6 +1187,9 @@ class TVMinesDialog extends TVDialog {
         this.gameOver = false;
         this.won = false;
         this.started = false;
+        this.minesPlaced = false;
+        this.cursorRow = 0;
+        this.cursorCol = 0;
         this.timerId = null;
         this.seconds = 0;
 
@@ -1194,10 +1206,7 @@ class TVMinesDialog extends TVDialog {
         if (this.faceBtn) {
             this.faceBtn.addEventListener("click", () => this.newGame());
         }
-        this._onKeyDown = (event) => {
-            if (!this.isActive()) { return; }
-            if (event.key === "Escape") { event.preventDefault(); this.close(); }
-        };
+        this._onKeyDown = (event) => this.onKeyDown(event);
         document.addEventListener("keydown", this._onKeyDown);
     }
 
@@ -1218,18 +1227,30 @@ class TVMinesDialog extends TVDialog {
         this.gameOver = false;
         this.won = false;
         this.started = false;
+        this.minesPlaced = false;
+        this.cursorRow = 0;
+        this.cursorCol = 0;
         this.seconds = 0;
         this.stopTimer();
+        this.render();
+    }
 
-        let placed = 0;
-        while (placed < MINES_COUNT) {
-            const r = Math.floor(Math.random() * MINES_ROWS);
-            const c = Math.floor(Math.random() * MINES_COLS);
-            if (this.board[r][c] !== -1) {
-                this.board[r][c] = -1;
-                placed++;
+    placeMines(safeRow, safeCol) {
+        const cells = [];
+        for (let r = 0; r < MINES_ROWS; r++) {
+            for (let c = 0; c < MINES_COLS; c++) {
+                if (r !== safeRow || c !== safeCol) {
+                    cells.push([r, c]);
+                }
             }
         }
+        for (let index = cells.length - 1; index > 0; index--) {
+            const swapIndex = Math.floor(Math.random() * (index + 1));
+            [cells[index], cells[swapIndex]] = [cells[swapIndex], cells[index]];
+        }
+        cells.slice(0, MINES_COUNT).forEach(([r, c]) => {
+            this.board[r][c] = -1;
+        });
         for (let r = 0; r < MINES_ROWS; r++) {
             for (let c = 0; c < MINES_COLS; c++) {
                 if (this.board[r][c] === -1) { continue; }
@@ -1246,12 +1267,13 @@ class TVMinesDialog extends TVDialog {
                 this.board[r][c] = count;
             }
         }
-        this.render();
+        this.minesPlaced = true;
     }
 
     startTimer() {
         this.stopTimer();
         this.timerId = setInterval(() => {
+            if (!this.isActive()) { return; }
             this.seconds++;
             if (this.timerEl) { this.timerEl.textContent = String(this.seconds); }
         }, 1000);
@@ -1269,11 +1291,9 @@ class TVMinesDialog extends TVDialog {
         if (!cell) { return; }
         const r = Number.parseInt(cell.getAttribute("data-tv-mine-r"), 10);
         const c = Number.parseInt(cell.getAttribute("data-tv-mine-c"), 10);
-        if (this.gameOver || this.won) { return; }
-        if (this.flagged[r][c]) { return; }
-        if (!this.started) { this.started = true; this.startTimer(); }
-        this.reveal(r, c);
-        this.render();
+        this.cursorRow = r;
+        this.cursorCol = c;
+        this.revealCell(r, c, true);
     }
 
     onCellRightClick(event) {
@@ -1282,10 +1302,68 @@ class TVMinesDialog extends TVDialog {
         if (!cell) { return; }
         const r = Number.parseInt(cell.getAttribute("data-tv-mine-r"), 10);
         const c = Number.parseInt(cell.getAttribute("data-tv-mine-c"), 10);
-        if (this.gameOver || this.won) { return; }
-        if (this.revealed[r][c]) { return; }
+        this.cursorRow = r;
+        this.cursorCol = c;
+        this.toggleFlag(r, c, true);
+    }
+
+    onKeyDown(event) {
+        if (!this.isActive()) { return; }
+        if (event.key === "Escape") {
+            event.preventDefault();
+            this.close();
+            return;
+        }
+        const targetButton = event.target?.closest?.("button");
+        if (targetButton && !targetButton.matches("[data-tv-mine-r]")) { return; }
+        let nextRow = this.cursorRow;
+        let nextCol = this.cursorCol;
+        if (event.key === "ArrowUp") {
+            nextRow = Math.max(0, nextRow - 1);
+        } else if (event.key === "ArrowDown") {
+            nextRow = Math.min(MINES_ROWS - 1, nextRow + 1);
+        } else if (event.key === "ArrowLeft") {
+            nextCol = Math.max(0, nextCol - 1);
+        } else if (event.key === "ArrowRight") {
+            nextCol = Math.min(MINES_COLS - 1, nextCol + 1);
+        } else if (event.key === "Home") {
+            nextCol = 0;
+        } else if (event.key === "End") {
+            nextCol = MINES_COLS - 1;
+        } else if (event.key === " " || event.key === "Enter") {
+            event.preventDefault();
+            this.revealCell(this.cursorRow, this.cursorCol, true);
+            return;
+        } else if (event.key === "f" || event.key === "F") {
+            event.preventDefault();
+            this.toggleFlag(this.cursorRow, this.cursorCol, true);
+            return;
+        } else {
+            return;
+        }
+        event.preventDefault();
+        this.cursorRow = nextRow;
+        this.cursorCol = nextCol;
+        this.render(true);
+    }
+
+    revealCell(r, c, focusCursor = false) {
+        if (this.gameOver || this.won || this.flagged[r][c]) { return; }
+        if (!this.minesPlaced) {
+            this.placeMines(r, c);
+        }
+        if (!this.started) {
+            this.started = true;
+            this.startTimer();
+        }
+        this.reveal(r, c);
+        this.render(focusCursor);
+    }
+
+    toggleFlag(r, c, focusCursor = false) {
+        if (this.gameOver || this.won || this.revealed[r][c]) { return; }
         this.flagged[r][c] = !this.flagged[r][c];
-        this.render();
+        this.render(focusCursor);
     }
 
     reveal(r, c) {
@@ -1325,28 +1403,33 @@ class TVMinesDialog extends TVDialog {
         }
     }
 
-    render() {
+    render(focusCursor = false) {
         if (!this.gridEl) { return; }
         const NUM_COLORS = ["", "#0000aa", "#00aa00", "#aa0000", "#000080", "#800000", "#008080", "#000000", "#555555"];
         const lines = [];
         for (let r = 0; r < MINES_ROWS; r++) {
             const cells = [];
             for (let c = 0; c < MINES_COLS; c++) {
-                const attrs = `data-tv-mine-r="${r}" data-tv-mine-c="${c}"`;
+                const isCursor = r === this.cursorRow && c === this.cursorCol;
+                const cursorClass = isCursor ? " is-cursor" : "";
+                const stateLabel = this.revealed[r][c]
+                    ? (this.board[r][c] === -1 ? "mine" : `revealed ${this.board[r][c] || "empty"}`)
+                    : (this.flagged[r][c] ? "flagged" : "hidden");
+                const attrs = `type="button" tabindex="${isCursor ? 0 : -1}" aria-label="Row ${r + 1}, column ${c + 1}, ${stateLabel}" data-tv-mine-r="${r}" data-tv-mine-c="${c}"`;
                 if (this.revealed[r][c]) {
                     if (this.board[r][c] === -1) {
-                        const cls = this.gameOver ? "tv-mines-cell tv-mines-bomb" : "tv-mines-cell";
+                        const cls = this.gameOver ? `tv-mines-cell tv-mines-bomb${cursorClass}` : `tv-mines-cell${cursorClass}`;
                         cells.push(`<button class="${cls}" ${attrs}>💣</button>`);
                     } else if (this.board[r][c] === 0) {
-                        cells.push(`<button class="tv-mines-cell tv-mines-empty" ${attrs}> </button>`);
+                        cells.push(`<button class="tv-mines-cell tv-mines-empty${cursorClass}" ${attrs}> </button>`);
                     } else {
                         const color = NUM_COLORS[this.board[r][c]] || "#000";
-                        cells.push(`<button class="tv-mines-cell tv-mines-number" style="color:${color}" ${attrs}>${this.board[r][c]}</button>`);
+                        cells.push(`<button class="tv-mines-cell tv-mines-number${cursorClass}" style="color:${color}" ${attrs}>${this.board[r][c]}</button>`);
                     }
                 } else if (this.flagged[r][c]) {
-                    cells.push(`<button class="tv-mines-cell tv-mines-flag" ${attrs}>⚑</button>`);
+                    cells.push(`<button class="tv-mines-cell tv-mines-flag${cursorClass}" ${attrs}>⚑</button>`);
                 } else {
-                    cells.push(`<button class="tv-mines-cell tv-mines-hidden" ${attrs}>■</button>`);
+                    cells.push(`<button class="tv-mines-cell tv-mines-hidden${cursorClass}" ${attrs}>■</button>`);
                 }
             }
             lines.push(cells.join(""));
@@ -1361,6 +1444,12 @@ class TVMinesDialog extends TVDialog {
             if (this.won) { label.textContent = "☺"; }
             else if (this.gameOver) { label.textContent = "☹"; }
             else { label.textContent = "☺"; }
+        }
+        if (focusCursor) {
+            const cursor = this.gridEl.querySelector(
+                `[data-tv-mine-r="${this.cursorRow}"][data-tv-mine-c="${this.cursorCol}"]`
+            );
+            if (cursor) { cursor.focus(); }
         }
     }
 }
@@ -1480,8 +1569,10 @@ class TVBreakOutDialog extends TVDialog {
             }
         };
         this._onKeyUp = (event) => { this.keysDown.delete(event.key); };
+        this._onWindowBlur = () => this.keysDown.clear();
         document.addEventListener("keydown", this._onKeyDown);
         document.addEventListener("keyup", this._onKeyUp);
+        window.addEventListener("blur", this._onWindowBlur);
         const newBtn = this.query("[data-tv-break-new]");
         if (newBtn) { newBtn.addEventListener("click", () => this.newGame()); }
     }
@@ -1493,6 +1584,7 @@ class TVBreakOutDialog extends TVDialog {
 
     close() {
         this.stopTimer();
+        this.keysDown.clear();
         super.close();
     }
 
@@ -1537,7 +1629,10 @@ class TVBreakOutDialog extends TVDialog {
         this.stopTimer();
         const delay = Math.max(30, 80 - this.level * 5);
         this.timerId = setInterval(() => {
-            if (!this.isActive()) { return; }
+            if (!this.isActive()) {
+                this.keysDown.clear();
+                return;
+            }
             this.tick();
         }, delay);
     }
@@ -1627,8 +1722,7 @@ class TVBreakOutDialog extends TVDialog {
     _checkBest() {
         if (this.score > this.bestScore) {
             this.bestScore = this.score;
-            const desktop = this.overlay ? this.overlay.parentElement : document.querySelector(".tv-desktop") || document.body;
-            showBestNamePrompt(desktop, this.score, (name) => {
+            showBestNamePrompt(this, this.score, (name) => {
                 this.bestName = name;
                 this._saveBest();
                 this.renderInfo();
@@ -2130,8 +2224,7 @@ class TVLinesDialog extends TVDialog {
     _checkBest() {
         if (this.score > this.bestScore) {
             this.bestScore = this.score;
-            const desktop = this.overlay ? this.overlay.parentElement : document.querySelector(".tv-desktop") || document.body;
-            showBestNamePrompt(desktop, this.score, (name) => {
+            showBestNamePrompt(this, this.score, (name) => {
                 this.bestName = name;
                 this._saveBest();
                 this.renderInfo();
@@ -2316,6 +2409,7 @@ class TVReversiDialog extends TVDialog {
         this.board = [];
         this.currentPlayer = 1;
         this.gameOver = false;
+        this.computerTimer = null;
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
@@ -2342,7 +2436,15 @@ class TVReversiDialog extends TVDialog {
         THelpViewerTV.fillBorders(this.dialog);
     }
 
+    close() {
+        window.clearTimeout(this.computerTimer);
+        this.computerTimer = null;
+        super.close();
+    }
+
     newGame() {
+        window.clearTimeout(this.computerTimer);
+        this.computerTimer = null;
         this.board = Array.from({ length: REVERSI_SIZE }, () => new Array(REVERSI_SIZE).fill(0));
         const mid = REVERSI_SIZE / 2;
         this.board[mid - 1][mid - 1] = 2;
@@ -2427,8 +2529,21 @@ class TVReversiDialog extends TVDialog {
         this.render();
         // If it's computer's turn, play after a short delay
         if (!this.gameOver && this.currentPlayer === 2) {
-            setTimeout(() => this._computerMove(), 300);
+            this._scheduleComputerMove();
         }
+    }
+
+    _scheduleComputerMove() {
+        window.clearTimeout(this.computerTimer);
+        this.computerTimer = window.setTimeout(() => {
+            this.computerTimer = null;
+            if (!this.isOpen() || this.gameOver || this.currentPlayer !== 2) { return; }
+            if (!this.isActive()) {
+                this._scheduleComputerMove();
+                return;
+            }
+            this._computerMove();
+        }, 300);
     }
 
     _computerMove() {
@@ -2772,7 +2887,12 @@ class TVLudoDialog extends TVDialog {
         this.cpuTimer = null;
         if (this.animating || !this.isOpen() || this.game.winner !== null || this.game.playerMode() !== "cpu") { return; }
         this.cpuTimer = window.setTimeout(() => {
+            this.cpuTimer = null;
             if (this.animating || !this.isOpen() || this.game.playerMode() !== "cpu") { return; }
+            if (!this.isActive()) {
+                this.scheduleCpu();
+                return;
+            }
             if (this.game.phase === "roll") {
                 this.game.roll();
                 this.selectedPiece = null;
@@ -3211,7 +3331,10 @@ class TVSnakeDialog extends TVDialog {
     startTimer() {
         this.stopTimer();
         const delay = SNAKE_DELAYS[Math.min(this.level - 1, SNAKE_DELAYS.length - 1)];
-        this.timerId = setInterval(() => this.tick(), delay);
+        this.timerId = setInterval(() => {
+            if (!this.isActive()) { return; }
+            this.tick();
+        }, delay);
     }
 
     stopTimer() {
@@ -3274,8 +3397,7 @@ class TVSnakeDialog extends TVDialog {
     _checkBest() {
         if (this.score > this.bestScore) {
             this.bestScore = this.score;
-            const desktop = this.overlay ? this.overlay.parentElement : document.querySelector(".tv-desktop") || document.body;
-            showBestNamePrompt(desktop, this.score, (name) => {
+            showBestNamePrompt(this, this.score, (name) => {
                 this.bestName = name;
                 this._saveBest();
                 this.renderInfo();

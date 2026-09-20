@@ -477,6 +477,7 @@ button.tv-status-item {
 
 .tv-submenu-toggle:hover,
 .tv-submenu-toggle:focus-visible,
+.tv-submenu-toggle.is-menu-selected,
 .tv-submenu-toggle.is-submenu-open {
     background: var(--tv-appbar-active-bg);
     color: var(--tv-appbar-active-text);
@@ -517,19 +518,22 @@ button.tv-status-item {
 }
 
 .tv-menu-popup-item:hover,
-.tv-menu-popup-item:focus-visible {
+.tv-menu-popup-item:focus-visible,
+.tv-menu-popup-item.is-menu-selected {
     background: var(--tv-appbar-active-bg);
     color: var(--tv-appbar-active-text);
     outline: none;
 }
 
 .tv-menu-popup-item:hover .tv-hotkey,
-.tv-menu-popup-item:focus-visible .tv-hotkey {
+.tv-menu-popup-item:focus-visible .tv-hotkey,
+.tv-menu-popup-item.is-menu-selected .tv-hotkey {
     color: var(--tv-appbar-active-hotkey);
 }
 
 .tv-menu-popup-item:hover .tv-menu-hotkey,
-.tv-menu-popup-item:focus-visible .tv-menu-hotkey {
+.tv-menu-popup-item:focus-visible .tv-menu-hotkey,
+.tv-menu-popup-item.is-menu-selected .tv-menu-hotkey {
     color: var(--tv-appbar-active-text);
 }
 
@@ -660,6 +664,7 @@ button.tv-status-item {
 }
 
 .tv-border-fill {
+    contain: inline-size;
     overflow: hidden;
     min-width: 0;
 }
@@ -790,6 +795,23 @@ button.tv-status-item {
 
 .tv-scrollbar {
     display: none;
+}
+
+.tv-scrollbar.is-inactive {
+    --tv-scrollbar-glyph: var(--tv-frame-passive);
+    --tv-scrollbar-arrow-fg: var(--tv-frame-passive);
+    --tv-scrollbar-thumb-fg: var(--tv-frame-passive);
+}
+
+.tv-scrollbar.is-inactive .tv-scroll-arrow,
+.tv-scrollbar.is-inactive .tv-thumb-cell,
+.tv-scrollbar.is-disabled .tv-scroll-arrow {
+    cursor: default;
+}
+
+.tv-scrollbar.is-inactive .tv-scroll-arrow,
+.tv-scrollbar.is-disabled .tv-scroll-arrow {
+    pointer-events: none;
 }
 
 .tv-js .tv-scrollbar {
@@ -1379,6 +1401,10 @@ button.tv-status-item {
 
 .tv-dialog-overlay[hidden] {
     display: none;
+}
+
+.tv-dialog-overlay.is-modal {
+    pointer-events: auto;
 }
 
 .tv-dialog-window {
@@ -2547,6 +2573,18 @@ button.tv-status-item {
     user-select: none;
 }
 
+.tv-vlist-scrollbar.is-inactive {
+    color: var(--tv-frame-passive);
+    pointer-events: none;
+}
+
+.tv-vlist-scrollbar.is-inactive .tv-vlist-arrow,
+.tv-vlist-scrollbar.is-inactive .tv-vlist-scroll-cell,
+.tv-vlist-scrollbar.is-inactive .tv-vlist-thumb-cell {
+    color: var(--tv-frame-passive);
+    cursor: default;
+}
+
 .tv-vlist-arrow {
     width: 1ch;
     min-width: 1ch;
@@ -2634,13 +2672,50 @@ button.tv-status-item {
     line-height: 1em;
 }
 
+.tv-checkbox-item,
 .tv-radio-item {
     all: unset;
+    position: relative;
     cursor: pointer;
     white-space: pre;
     display: block;
 }
 
+.tv-choice-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.tv-checkbox-mark::before {
+    content: "[ ]";
+}
+
+.tv-choice-input:checked + .tv-checkbox-mark::before {
+    content: "[X]";
+}
+
+.tv-radio-mark::before {
+    content: "( )";
+}
+
+.tv-choice-input:checked + .tv-radio-mark::before {
+    content: "(·)";
+}
+
+.tv-choice-input:focus-visible + .tv-checkbox-mark,
+.tv-choice-input:focus-visible + .tv-radio-mark {
+    color: var(--tv-hover-fg);
+    background: var(--tv-hover-bg);
+}
+
+.tv-choice-input:disabled + .tv-checkbox-mark,
+.tv-choice-input:disabled + .tv-radio-mark,
+.tv-choice-input:disabled ~ .tv-choice-label {
+    opacity: 0.5;
+}
 
 .tv-game-border {
     color: var(--tv-current-dialog-frame);
@@ -2771,6 +2846,12 @@ button.tv-status-item {
 .tv-mines-hidden:hover {
     background: #ffffff;
     color: #000000;
+}
+
+.tv-mines-cell.is-cursor,
+.tv-mines-cell:focus-visible {
+    outline: 1px solid var(--tv-hover-fg);
+    outline-offset: -1px;
 }
 
 .tv-mines-empty {

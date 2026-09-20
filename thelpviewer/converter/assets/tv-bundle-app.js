@@ -15,6 +15,8 @@ const {
     applyColorPalette,
     buildPaletteFromCurrentStyle,
     TVDialogManager,
+    TV_COMMANDS,
+    TVMenuController,
     TVAboutDialog,
     TVPuzzleDialog,
     TVCalendarDialog,
@@ -39,9 +41,6 @@ const {
     TurboVisionScrollbar,
     TurboVisionWindowResizer,
     bindCloseButtons,
-    updateWindowFrameState,
-    resetMenuPopupLayout,
-    fitMenuPopupToViewport,
     SCROLL_REPEAT_MS,
     TRACK_CHAR,
     DISABLED_TRACK_CHAR,
@@ -478,7 +477,7 @@ function bundleWindowSpec(bundle) {
         cols,
         rows,
         min_cols: hasExplicitCols ? cols : Math.min(cols, 82),
-        min_rows: Math.min(rows, 25),
+        min_rows: hasExplicitRows ? rows : Math.min(rows, 25),
     };
 }
 
@@ -1547,6 +1546,7 @@ class TVLoadingDialog {
             width: "40ch",
             height: "min(9em, calc(100% - 2em))",
             top: "5em",
+            modal: true,
         });
         this.dialog.bindDrag();
 
@@ -1627,8 +1627,7 @@ class TVLoadingDialog {
             window.clearTimeout(this.destroyTimer);
             this.destroyTimer = null;
         }
-        this.dialog.close();
-        this.dialog.overlay.remove();
+        this.dialog.destroy();
     }
 
     cancel() {
@@ -1863,6 +1862,17 @@ function renderTopicContent(bundle, topic) {
 
 // ── Window manager ──────────────────────────────────────────────────
 
+function destroyWindowWidgets(windowEl) {
+    if (!windowEl) { return; }
+    const scrollbars = Array.isArray(windowEl._tvScrollbars) ? windowEl._tvScrollbars : [];
+    scrollbars.forEach((scrollbar) => scrollbar.destroy());
+    windowEl._tvScrollbars = [];
+    if (windowEl._tvResizer) {
+        windowEl._tvResizer.destroy();
+        windowEl._tvResizer = null;
+    }
+}
+
 class BundleWindowManager {
     constructor(desktop, onNavigate) {
         this.desktop = desktop;
@@ -2096,6 +2106,30 @@ class BundleWindowManager {
         }
     }
 
+    syncActiveTarget(target) {
+        if (!String(target || "").startsWith("help:")) {
+            return null;
+        }
+        const key = String(target).slice(5);
+        const windowEl = this.openWindows.get(key);
+        const bundle = windowEl?._tvBundle || null;
+        if (!windowEl || !bundle) {
+            return null;
+        }
+        this.currentBundle = bundle;
+        this.currentContextHex = windowEl.dataset.tvStateTopic || null;
+        this.currentLineNumber = this._normalizeLineNumber(windowEl.dataset.tvStateLine);
+        this.currentView = windowEl.dataset.tvStateView || "index";
+        this.currentTag = windowEl.dataset.tvStateTagKey && windowEl.dataset.tvStateTagValue
+            ? {
+                key: windowEl.dataset.tvStateTagKey,
+                value: windowEl.dataset.tvStateTagValue,
+                label: windowEl.dataset.tvStateTagLabel || windowEl.dataset.tvStateTagKey,
+            }
+            : null;
+        return bundle;
+    }
+
     _openWindow(bundle, contentHTML, caption) {
         const key = bundleWindowKey(bundle);
         const applyStateData = (windowEl) => {
@@ -2116,12 +2150,14 @@ class BundleWindowManager {
         };
         const existing = this.openWindows.get(key);
         if (existing) {
+            existing._tvBundle = bundle;
             // Update content in existing window
             const viewport = existing.querySelector("[data-tv-viewport]");
             if (viewport) {
                 viewport.innerHTML = contentHTML;
                 viewport.scrollTop = 0;
                 viewport.scrollLeft = 0;
+                (existing._tvScrollbars || []).forEach((scrollbar) => scrollbar.refresh());
             }
             const captionEl = existing.querySelector(".tv-window-caption");
             if (captionEl) {
@@ -2130,21 +2166,17 @@ class BundleWindowManager {
             highlightCodeExamples(existing);
             this._bindTopicLinks(existing, bundle);
             applyStateData(existing);
+            if (this.dialogManager) { this.dialogManager.activateWindow("help:" + key); }
             fillBorders();
             return existing;
         }
-
-        // Close existing windows (without resetting navigation state).
-        for (const [k, el] of this.openWindows) {
-            if (this.dialogManager) { this.dialogManager.unregisterWindow("help:" + k); }
-            el.remove();
-        }
-        this.openWindows.clear();
 
         const windowHTML = buildWindowHTML(bundle, contentHTML, caption);
         const template = document.createElement("template");
         template.innerHTML = windowHTML.trim();
         const windowEl = template.content.firstElementChild;
+        windowEl._tvBundle = bundle;
+        windowEl.dataset.tvWindowStorageKey = "help:" + key;
         this.desktop.appendChild(windowEl);
         bindCloseButtons(windowEl);
         this.openWindows.set(key, windowEl);
@@ -2154,7 +2186,12 @@ class BundleWindowManager {
         this._bindTopicLinks(windowEl, bundle);
         this._bindCloseButton(windowEl, key);
         this._bindZoomButton(windowEl);
-        if (this.dialogManager) { this.dialogManager.registerWindow("help:" + key, windowEl); }
+        if (this.dialogManager) {
+            this.dialogManager.registerWindow("help:" + key, windowEl, {
+                [TV_COMMANDS.CLOSE]: () => this.close(key),
+                [TV_COMMANDS.ZOOM]: () => this.toggleZoom(windowEl),
+            });
+        }
         fillBorders();
         fillDesktopPatterns();
         return windowEl;
@@ -2162,10 +2199,19 @@ class BundleWindowManager {
 
     _initWindowWidgets(windowEl) {
         const frames = windowEl.querySelectorAll("[data-tv-scroll-frame]");
-        for (const frame of frames) {
-            this.scrollbars.push(new TurboVisionScrollbar(frame));
-        }
-        this.resizers.push(new TurboVisionWindowResizer(windowEl));
+        windowEl._tvScrollbars = Array.from(frames, (frame) => new TurboVisionScrollbar(frame));
+        this.scrollbars.push(...windowEl._tvScrollbars);
+        const resizer = new TurboVisionWindowResizer(windowEl);
+        windowEl._tvResizer = resizer;
+        this.resizers.push(resizer);
+    }
+
+    _destroyWindowWidgets(windowEl) {
+        const scrollbars = Array.isArray(windowEl?._tvScrollbars) ? windowEl._tvScrollbars : [];
+        const resizer = windowEl?._tvResizer || null;
+        destroyWindowWidgets(windowEl);
+        this.scrollbars = this.scrollbars.filter((widget) => !scrollbars.includes(widget));
+        this.resizers = this.resizers.filter((widget) => widget !== resizer);
     }
 
     _bindTopicLinks(windowEl, bundle) {
@@ -2240,16 +2286,7 @@ class BundleWindowManager {
         if (!closeBtn) { return; }
         closeBtn.addEventListener("click", (event) => {
             event.preventDefault();
-            windowEl.remove();
-            this.openWindows.delete(key);
-            if (this.dialogManager) { this.dialogManager.unregisterWindow("help:" + key); }
-            this.currentBundle = null;
-            this.currentContextHex = null;
-            this.currentView = "index";
-            this.currentTag = null;
-            fillBorders();
-            fillDesktopPatterns();
-            if (this.onNavigate) { this.onNavigate(""); }
+            this.close(key);
         });
     }
 
@@ -2281,8 +2318,19 @@ class BundleWindowManager {
     close(key) {
         const existing = this.openWindows.get(key);
         if (existing) {
+            this._destroyWindowWidgets(existing);
             existing.remove();
             this.openWindows.delete(key);
+            if (this.dialogManager) { this.dialogManager.unregisterWindow("help:" + key); }
+            if (this.currentBundle && bundleWindowKey(this.currentBundle) === key) {
+                this.currentBundle = null;
+                this.currentContextHex = null;
+                this.currentLineNumber = null;
+                this.currentView = "index";
+                this.currentTag = null;
+            }
+            fillBorders();
+            fillDesktopPatterns();
             if (this.onNavigate) { this.onNavigate(""); }
         }
     }
@@ -2290,6 +2338,7 @@ class BundleWindowManager {
     closeAll() {
         for (const [key, el] of this.openWindows) {
             if (this.dialogManager) { this.dialogManager.unregisterWindow("help:" + key); }
+            this._destroyWindowWidgets(el);
             el.remove();
         }
         this.openWindows.clear();
@@ -2302,10 +2351,7 @@ class BundleWindowManager {
     }
 
     tile() {
-        const wins = [...this.openWindows.values()];
-        const docs = [...this.desktop.querySelectorAll(".tv-doc-window")];
-        const dialogs = this._visibleDialogs();
-        const all = [...wins, ...docs, ...dialogs];
+        const all = this.dialogManager ? [...this.dialogManager.windows.values()] : [...this.openWindows.values()];
         if (all.length === 0) { return; }
         const cell = TV.measureCells ? TV.measureCells() : { width: 9, height: 16 };
         const dw = this.desktop.clientWidth;
@@ -2324,15 +2370,18 @@ class BundleWindowManager {
             el.style.setProperty("--tv-window-rows", String(wRows));
             const g = el.querySelector("[data-tv-zoom-glyph]");
             if (g) { g.textContent = "↑"; }
+            if (el._tvResizer) {
+                el._tvResizer.restoreSnapshot = el._tvResizer.captureGeometry();
+                el._tvResizer.persistState();
+            }
         });
         fillBorders();
+        fillDesktopPatterns();
+        window.dispatchEvent(new CustomEvent("tv-window-state-change"));
     }
 
     cascade() {
-        const wins = [...this.openWindows.values()];
-        const docs = [...this.desktop.querySelectorAll(".tv-doc-window")];
-        const dialogs = this._visibleDialogs();
-        const all = [...wins, ...docs, ...dialogs];
+        const all = this.dialogManager ? [...this.dialogManager.windows.values()] : [...this.openWindows.values()];
         if (all.length === 0) { return; }
         const cell = TV.measureCells ? TV.measureCells() : { width: 9, height: 16 };
         const dw = this.desktop.clientWidth;
@@ -2348,18 +2397,14 @@ class BundleWindowManager {
             el.style.setProperty("--tv-window-rows", String(baseRows));
             const g = el.querySelector("[data-tv-zoom-glyph]");
             if (g) { g.textContent = "↑"; }
+            if (el._tvResizer) {
+                el._tvResizer.restoreSnapshot = el._tvResizer.captureGeometry();
+                el._tvResizer.persistState();
+            }
         });
         fillBorders();
-    }
-
-    _visibleDialogs() {
-        const overlays = this.desktop.querySelectorAll(".tv-dialog-overlay:not([hidden])");
-        const dialogs = [];
-        for (const overlay of overlays) {
-            const win = overlay.querySelector(".tv-dialog-window");
-            if (win) { dialogs.push(win); }
-        }
-        return dialogs;
+        fillDesktopPatterns();
+        window.dispatchEvent(new CustomEvent("tv-window-state-change"));
     }
 
 }
@@ -2658,8 +2703,31 @@ function renderMarkdown(md) {
 
     function isTableRow(line) { return line.trim().startsWith("|") && line.trim().endsWith("|"); }
     function isSepRow(line) { return /^\|[-:\s|]+\|$/.test(line.trim()); }
+    function splitTableCells(line) {
+        const row = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+        const cells = [];
+        let cell = "";
+        let inCode = false;
+        for (let i = 0; i < row.length; i++) {
+            const char = row[i];
+            if (char === "`") {
+                inCode = !inCode;
+                cell += char;
+            } else if (char === "\\" && row[i + 1] === "|") {
+                cell += "|";
+                i++;
+            } else if (char === "|" && !inCode) {
+                cells.push(cell);
+                cell = "";
+            } else {
+                cell += char;
+            }
+        }
+        cells.push(cell);
+        return cells;
+    }
     function parseRow(line, tag) {
-        const cells = line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+        const cells = splitTableCells(line);
         return "<tr>" + cells.map((c) => `<${tag}>${inlineMarkup(c.trim())}</${tag}>`).join("") + "</tr>";
     }
 
@@ -2811,6 +2879,8 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { cmd: "cascade", label: "C~a~scade", hotkey: "" },
         { cmd: "list", label: "Window ~L~ist", hotkey: "Alt-0" },
         { cmd: "zoom", label: "~Z~oom", hotkey: "F5" },
+        { cmd: "next", label: "~N~ext", hotkey: "F6" },
+        { cmd: "previous", label: "~P~revious", hotkey: "Shift-F6" },
         { cmd: "close", label: "~C~lose", hotkey: "Alt-F3" },
     ];
     const winRootHTML = renderMenuRoot(
@@ -2873,9 +2943,9 @@ class TVBundleApp {
         this.desktop = null;
         this.windowManager = null;
         this.dialogManager = null;
+        this.menuController = null;
+        this.docWindows = new Map();
         this._menuBundleKey = "";
-        this._menuGlobalsBound = false;
-        this._closeMenus = null;
         this._stateSyncTimer = null;
         this._restoringUrlState = false;
         this._lastUrlStateHash = "";
@@ -2897,6 +2967,13 @@ class TVBundleApp {
 
         this.dialogManager = new TVDialogManager(this.desktop);
         this.dialogManager.onChange = () => {
+            const activeBundle = this.windowManager
+                ? this.windowManager.syncActiveTarget(this.dialogManager.activeTarget)
+                : null;
+            if (activeBundle) {
+                this._updateSearchData(activeBundle);
+                this._syncBundleMenu();
+            }
             this._updateStatusLine("");
             this._scheduleUrlStateSync();
         };
@@ -3013,9 +3090,7 @@ class TVBundleApp {
         if (closeAllBtn) {
             closeAllBtn.addEventListener("click", (event) => {
                 event.preventDefault();
-                this.windowManager.closeAll();
-                fillBorders();
-                fillDesktopPatterns();
+                this.dialogManager.dispatchCommand(TV_COMMANDS.CLOSE);
             });
         }
         const backBtn = statusLine.querySelector("[data-tv-bundle-back]");
@@ -3147,7 +3222,7 @@ class TVBundleApp {
             if (viewport) { item.s = [Math.round(viewport.scrollLeft), Math.round(viewport.scrollTop)]; }
             const selection = captureTextSelection(viewport);
             if (selection) { item.sel = selection; }
-            addWindow("docs", item);
+            addWindow(element.dataset.tvManagerName || ("doc:" + file), item);
         });
 
         this.dialogManager.dialogs.forEach((dialog, name) => {
@@ -3221,7 +3296,7 @@ class TVBundleApp {
                     if (!response.ok) { continue; }
                     const windowEl = this._openDocWindow(entry.file, await response.text());
                     this._applyUrlWindowState(windowEl, item, false);
-                    targets.push("docs");
+                    targets.push(windowEl.dataset.tvManagerName || ("doc:" + entry.file));
                     restored = true;
                 } else if (item.t === "dlg" && item.name) {
                     const dialog = this.dialogManager.open(item.name);
@@ -3283,6 +3358,8 @@ class TVBundleApp {
         }
         this.dialogManager.applyAllZIndices();
         this.dialogManager.applyActiveStates();
+        const bundle = this.windowManager.syncActiveTarget(this.dialogManager.activeTarget);
+        if (bundle) { this._updateSearchData(bundle); }
         this._updateStatusLine("");
     }
 
@@ -3330,12 +3407,23 @@ class TVBundleApp {
         if (this.windowManager) {
             for (const [key, el] of this.windowManager.openWindows) {
                 const caption = el.querySelector(".tv-window-caption");
-                items.push({ label: caption ? caption.textContent : key, type: "window", key, element: el });
+                items.push({
+                    label: caption ? caption.textContent : key,
+                    type: "window",
+                    key,
+                    managerName: "help:" + key,
+                    element: el,
+                });
             }
         }
         this.desktop.querySelectorAll(".tv-doc-window").forEach((el) => {
             const caption = el.querySelector(".tv-window-caption");
-            items.push({ label: caption ? caption.textContent : "Document", type: "doc", element: el });
+            items.push({
+                label: caption ? caption.textContent : "Document",
+                type: "doc",
+                managerName: el.dataset.tvManagerName || "",
+                element: el,
+            });
         });
         if (this.dialogManager) {
             this.dialogManager.dialogs.forEach((dialog, name) => {
@@ -3377,6 +3465,7 @@ class TVBundleApp {
             footerMarkup: TVDialog.footerMarkup(),
             width: "40ch",
             height: "min(14em, calc(100% - 2em))",
+            modal: true,
         });
 
         const itemsContainer = dialog.query(".tv-winlist-items");
@@ -3409,12 +3498,8 @@ class TVBundleApp {
 
         const cleanup = () => {
             observer.disconnect();
-            dialog.close();
-            dialog.overlay.remove();
-            if (this.dialogManager) {
-                this.dialogManager.dialogs.delete("windowlist");
-            }
-            document.removeEventListener("keydown", onKey);
+            dialog.dialog.removeEventListener("keydown", onKey);
+            dialog.destroy();
         };
 
         dialog.bindCommonClose(cleanup);
@@ -3425,9 +3510,8 @@ class TVBundleApp {
             if (!item) { return; }
             if (item.type === "dialog" && this.dialogManager) {
                 this.dialogManager.bringToFront(item.key);
-            } else if ((item.type === "window" || item.type === "doc") && item.element) {
-                this.desktop.appendChild(item.element);
-                updateWindowFrameState(item.element, true);
+            } else if ((item.type === "window" || item.type === "doc") && this.dialogManager) {
+                this.dialogManager.activateWindow(item.managerName);
             }
             cleanup();
         };
@@ -3439,7 +3523,7 @@ class TVBundleApp {
             if (event.key === "ArrowUp") { event.preventDefault(); selectedIdx = (selectedIdx - 1 + items.length) % items.length; updateSelection(); return; }
             if (event.key === "Enter") { event.preventDefault(); activate(selectedIdx); return; }
         };
-        document.addEventListener("keydown", onKey);
+        dialog.dialog.addEventListener("keydown", onKey);
 
         dialog.overlay.addEventListener("click", (event) => {
             const btn = event.target.closest("[data-tv-winlist-idx]");
@@ -3504,6 +3588,14 @@ class TVBundleApp {
     }
 
     _openDocWindow(filename, markdownText) {
+        const docKey = String(filename || "");
+        const managerName = "doc:" + docKey;
+        const existing = this.docWindows.get(docKey);
+        if (existing?.isConnected) {
+            this.dialogManager.activateWindow(managerName);
+            return existing;
+        }
+        this.docWindows.delete(docKey);
         const htmlContent = renderMarkdown(markdownText);
         const title = filename.replace(/\.md$/i, "").replace(/_/g, " ");
         const contentHTML = `<div class="tv-document tv-doc-document">${htmlContent}</div>`;
@@ -3544,41 +3636,52 @@ class TVBundleApp {
             `</main>`,
         ].join("\n");
 
-        // Close previous doc windows
-        this.desktop.querySelectorAll(".tv-doc-window").forEach((el) => {
-            if (this.dialogManager) { this.dialogManager.unregisterWindow("docs"); }
-            el.remove();
-        });
-
         const template = document.createElement("template");
         template.innerHTML = windowHTML.trim();
         const windowEl = template.content.firstElementChild;
         windowEl.dataset.tvStateType = "doc";
         windowEl.dataset.tvStateFile = filename;
+        windowEl.dataset.tvManagerName = managerName;
+        windowEl.dataset.tvWindowStorageKey = managerName;
+        this.docWindows.set(docKey, windowEl);
         this.desktop.appendChild(windowEl);
         bindCloseButtons(windowEl);
 
-        // Register with window manager for focus/z-index management
-        if (this.dialogManager) {
-            this.dialogManager.registerWindow("docs", windowEl);
-        }
-
         // Init widgets
         const frames = windowEl.querySelectorAll("[data-tv-scroll-frame]");
-        for (const frame of frames) {
-            new TurboVisionScrollbar(frame);
+        windowEl._tvScrollbars = Array.from(frames, (frame) => new TurboVisionScrollbar(frame));
+        windowEl._tvResizer = new TurboVisionWindowResizer(windowEl);
+
+        const closeWindow = () => {
+            if (this.dialogManager) { this.dialogManager.unregisterWindow(managerName); }
+            this.docWindows.delete(docKey);
+            destroyWindowWidgets(windowEl);
+            windowEl.remove();
+            fillBorders();
+            fillDesktopPatterns();
+        };
+        const toggleWindowZoom = () => {
+            const isMax = windowEl.classList.toggle("is-maximized");
+            const glyph = windowEl.querySelector("[data-tv-zoom-glyph]");
+            if (glyph) { glyph.textContent = isMax ? "↓" : "↑"; }
+            fillBorders();
+            fillDesktopPatterns();
+        };
+
+        // Register with window manager for focus/z-index and shared commands.
+        if (this.dialogManager) {
+            this.dialogManager.registerWindow(managerName, windowEl, {
+                [TV_COMMANDS.CLOSE]: closeWindow,
+                [TV_COMMANDS.ZOOM]: toggleWindowZoom,
+            });
         }
-        new TurboVisionWindowResizer(windowEl);
 
         // Close button
         const closeBtn = windowEl.querySelector("[data-tv-close-button]");
         if (closeBtn) {
             closeBtn.addEventListener("click", (e) => {
                 e.preventDefault();
-                if (this.dialogManager) { this.dialogManager.unregisterWindow("docs"); }
-                windowEl.remove();
-                fillBorders();
-                fillDesktopPatterns();
+                closeWindow();
             });
         }
         // Zoom
@@ -3586,11 +3689,7 @@ class TVBundleApp {
         if (zoomBtn) {
             zoomBtn.addEventListener("click", (e) => {
                 e.preventDefault();
-                const isMax = windowEl.classList.toggle("is-maximized");
-                const glyph = windowEl.querySelector("[data-tv-zoom-glyph]");
-                if (glyph) { glyph.textContent = isMax ? "↓" : "↑"; }
-                fillBorders();
-                fillDesktopPatterns();
+                toggleWindowZoom();
             });
         }
 
@@ -3657,51 +3756,53 @@ class TVBundleApp {
             footerMarkup: TVDialog.footerMarkup(),
             width: "34ch",
             height: "min(12em, calc(100% - 2em))",
+            modal: true,
         });
         dialog.bindCommonClose(() => {
-            dialog.close();
-            dialog.overlay.remove();
+            dialog.destroy();
         });
         dialog.bindDrag();
         const ok = dialog.query("[data-tv-welcome-ok]");
         if (ok) {
             ok.addEventListener("click", () => {
-                dialog.close();
-                dialog.overlay.remove();
+                dialog.destroy();
             });
         }
         this.dialogManager.register("welcome", dialog);
         this.dialogManager.open("welcome");
     }
 
-    _bindMenus() {
-        const menuRoots = Array.from(document.querySelectorAll("[data-tv-menu-root]"));
-        let activeRoot = null;
+    _handleMenuShortcut(event) {
+        if (event.key === "F5" && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+            event.preventDefault();
+            this.dialogManager.dispatchCommand(TV_COMMANDS.ZOOM);
+            return;
+        }
+        if (event.key === "F3" && event.altKey && !event.ctrlKey && !event.shiftKey) {
+            event.preventDefault();
+            this.dialogManager.dispatchCommand(TV_COMMANDS.CLOSE);
+            return;
+        }
+        if (event.key === "0" && event.altKey && !event.ctrlKey && !event.shiftKey) {
+            event.preventDefault();
+            this._showWindowList();
+            return;
+        }
+        if (event.key === "F6" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            this.dialogManager.dispatchCommand(event.shiftKey ? TV_COMMANDS.PREVIOUS : TV_COMMANDS.NEXT);
+        }
+    }
 
-        menuRoots.forEach((root) => {
-            const toggle = root.querySelector("[data-tv-menu-toggle]");
-            if (!toggle || toggle.dataset.tvMenuBound === "1") { return; }
-            toggle.dataset.tvMenuBound = "1";
-            toggle.addEventListener("click", (event) => {
-                event.preventDefault();
-                if (activeRoot === root) {
-                    closeMenus();
-                } else {
-                    closeMenus();
-                    const popup = root.querySelector("[data-tv-menu-popup]");
-                    if (popup) {
-                        popup.hidden = false;
-                        toggle.setAttribute("aria-expanded", "true");
-                        toggle.classList.add("is-current");
-                        activeRoot = root;
-                        requestAnimationFrame(() => {
-                            fitMenuPopupToViewport(root, popup);
-                            fillBorders(popup);
-                        });
-                    }
-                }
+    _bindMenus() {
+        if (!this.menuController) {
+            this.menuController = new TVMenuController({
+                onUnhandledKeyDown: (event) => this._handleMenuShortcut(event),
             });
-        });
+        } else {
+            this.menuController.refresh();
+        }
+        const closeMenus = () => this.menuController.closeMenus();
 
         document.querySelectorAll("[data-tv-dialog-open]").forEach((element) => {
             if (element.dataset.tvMenuBound === "1") { return; }
@@ -3811,11 +3912,13 @@ class TVBundleApp {
                 closeMenus();
                 const cmd = element.dataset.tvWindowCmd;
                 if (cmd === "zoom") {
-                    this.windowManager.toggleZoom();
+                    this.dialogManager.dispatchCommand(TV_COMMANDS.ZOOM);
                 } else if (cmd === "close") {
-                    this.windowManager.closeAll();
-                    fillBorders();
-                    fillDesktopPatterns();
+                    this.dialogManager.dispatchCommand(TV_COMMANDS.CLOSE);
+                } else if (cmd === "next") {
+                    this.dialogManager.dispatchCommand(TV_COMMANDS.NEXT);
+                } else if (cmd === "previous") {
+                    this.dialogManager.dispatchCommand(TV_COMMANDS.PREVIOUS);
                 } else if (cmd === "tile") {
                     this.windowManager.tile();
                 } else if (cmd === "cascade") {
@@ -3840,6 +3943,7 @@ class TVBundleApp {
                 }
             });
         });
+        TVScreenSaver.installIdleStart();
 
         document.querySelectorAll("[data-tv-bundle-back]").forEach((element) => {
             if (element.dataset.tvMenuBound === "1") { return; }
@@ -3852,142 +3956,6 @@ class TVBundleApp {
             });
         });
 
-        if (!this._menuGlobalsBound) {
-            this._menuGlobalsBound = true;
-            document.addEventListener("click", (event) => {
-                if (!event.target.closest("[data-tv-menu-root]")) {
-                    if (this._closeMenus) {
-                        this._closeMenus();
-                    }
-                }
-            });
-
-            document.addEventListener("keydown", (event) => {
-                if (event.key === "Escape") {
-                    const openMenu = document.querySelector("[data-tv-menu-root] [data-tv-menu-popup]:not([hidden])");
-                    if (!openMenu) {
-                        return;
-                    }
-                    event.preventDefault();
-                    if (this._closeMenus) {
-                        this._closeMenus();
-                    }
-                    return;
-                }
-                // F5 → Zoom
-                if (event.key === "F5" && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-                    event.preventDefault();
-                    this.windowManager.toggleZoom();
-                    return;
-                }
-                // Alt-F3 → Close
-                if (event.key === "F3" && event.altKey && !event.ctrlKey && !event.shiftKey) {
-                    event.preventDefault();
-                    this.windowManager.closeAll();
-                    fillBorders();
-                    fillDesktopPatterns();
-                    return;
-                }
-                // Alt-0 → Window List
-                if (event.key === "0" && event.altKey && !event.ctrlKey && !event.shiftKey) {
-                    event.preventDefault();
-                    this._showWindowList();
-                    return;
-                }
-            });
-        }
-
-        function closeMenus() {
-            closeSubmenus();
-            menuRoots.forEach((root) => {
-                const popup = root.querySelector("[data-tv-menu-popup]");
-                const toggle = root.querySelector("[data-tv-menu-toggle]");
-                if (popup) {
-                    popup.hidden = true;
-                    resetMenuPopupLayout(popup);
-                }
-                if (toggle) {
-                    toggle.setAttribute("aria-expanded", "false");
-                    toggle.classList.remove("is-current");
-                }
-            });
-            activeRoot = null;
-        }
-        this._closeMenus = closeMenus;
-
-        function closeSubmenus() {
-            document.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
-                closeSubmenuPopup(popup);
-            });
-        }
-
-        function directSubmenuChild(root, selector) {
-            return Array.from(root.children).find((child) => child.matches?.(selector)) || null;
-        }
-
-        function closeSubmenuPopup(popup) {
-            popup.hidden = true;
-            resetMenuPopupLayout(popup);
-            const popupRoot = popup.closest("[data-tv-submenu-root]");
-            const toggle = popupRoot ? directSubmenuChild(popupRoot, "[data-tv-submenu-toggle]") : null;
-            if (toggle) {
-                toggle.classList.remove("is-submenu-open");
-            }
-        }
-
-        function closeSubmenusOutsidePath(root, activePopup) {
-            document.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
-                if (popup === activePopup || popup.contains(root)) {
-                    return;
-                }
-                closeSubmenuPopup(popup);
-            });
-        }
-
-        // Bind submenu toggles: hover opens nested popup.
-        document.querySelectorAll("[data-tv-submenu-toggle]").forEach((toggle) => {
-            if (toggle.dataset.tvMenuBound === "1") { return; }
-            toggle.dataset.tvMenuBound = "1";
-            const root = toggle.closest("[data-tv-submenu-root]");
-            if (!root) { return; }
-            const popup = directSubmenuChild(root, "[data-tv-submenu-popup]");
-            if (!popup) { return; }
-
-            toggle.addEventListener("click", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                const isOpen = !popup.hidden;
-                if (!isOpen) {
-                    closeSubmenusOutsidePath(root, popup);
-                    popup.hidden = false;
-                    toggle.classList.add("is-submenu-open");
-                    requestAnimationFrame(() => {
-                        fitMenuPopupToViewport(root, popup);
-                        fillBorders(popup);
-                    });
-                } else {
-                    closeSubmenuPopup(popup);
-                }
-            });
-
-            root.addEventListener("mouseenter", () => {
-                closeSubmenusOutsidePath(root, popup);
-                popup.hidden = false;
-                toggle.classList.add("is-submenu-open");
-                requestAnimationFrame(() => {
-                    fitMenuPopupToViewport(root, popup);
-                    fillBorders(popup);
-                });
-            });
-
-            root.addEventListener("mouseleave", (event) => {
-                // Only close if mouse isn't moving to the submenu popup
-                const related = event.relatedTarget;
-                if (related && (popup.contains(related) || root.contains(related))) { return; }
-                popup.hidden = true;
-                toggle.classList.remove("is-submenu-open");
-            });
-        });
     }
 }
 

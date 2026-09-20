@@ -10,9 +10,10 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from ... import __authors__ as GENERATOR_AUTHORS
+from ... import __version__ as GENERATOR_VERSION
 from ..base import HelpDocument, PositionedKeyword, TopicRecord, context_nav_action
 from ..codepages import build_decode_table, decode_bytes_box_aware
-from .. import __version__ as GENERATOR_VERSION
 
 
 BOX_TRIM_CHARS = " \t\u2500\u2502\u250c\u2510\u2514\u2518\u251c\u2524\u252c\u2534\u253c\u2550\u2551\u2554\u2557\u255a\u255d\u2560\u2563\u2566\u2569\u256c\u2580\u2584\u2588\u258c\u2590\u2591\u2592\u2593\u25a0\u2261"
@@ -20,7 +21,6 @@ BOX_ONLY_CHARS = set(BOX_TRIM_CHARS.strip() + "-_=|")
 PACKAGE_ASSET_DIR = Path(__file__).resolve().parent.parent / "assets"
 SITE_ASSET_DIR_NAME = "assets"
 TV_DESKTOP_PATTERN_CHAR = "░"
-GENERATOR_AUTHORS = "Mario Lacko + Copilot"
 GENERATOR_LICENSE = "GPL-3.0"
 TV_SCROLL_GLYPHS = {
     "y": ("▲", "▼"),

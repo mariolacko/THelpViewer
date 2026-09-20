@@ -335,6 +335,29 @@ function hlLineAsm(escaped) {
     return parts.join("");
 }
 
+function isAdjacentCodeLine(previous, current) {
+    const previousLine = previous.closest?.(".tv-topic-line");
+    const currentLine = current.closest?.(".tv-topic-line");
+    if (previousLine || currentLine) {
+        return Boolean(previousLine && currentLine && previousLine.nextElementSibling === currentLine);
+    }
+    if (previous.parentElement !== current.parentElement) {
+        return false;
+    }
+    let node = previous.nextSibling;
+    while (node && node !== current) {
+        if (
+            node.nodeType !== Node.TEXT_NODE
+            || node.textContent.trim()
+            || (node.textContent.match(/\n/g) || []).length > 1
+        ) {
+            return false;
+        }
+        node = node.nextSibling;
+    }
+    return node === current;
+}
+
 function highlightCodeExamples(container) {
     const scope = container && container.querySelectorAll ? container : document;
     const examples = Array.from(scope.querySelectorAll(".code-example"));
@@ -342,53 +365,65 @@ function highlightCodeExamples(container) {
         return;
     }
 
-    const lang = detectCodeLang(examples.map((el) => el.textContent || "").join("\n"));
-    let inPascalAsm = false;
-    let inCBlockComment = false;
-    let inCPreprocContinuation = false;
-    let inPascalBlockComment = false;
-
+    const blocks = [];
     examples.forEach((el) => {
-        const raw = el.textContent || "";
-        el.classList.remove("code-lang-c", "code-lang-pascal", "code-lang-asm");
-
-        if (!raw.trim()) {
-            return;
+        const block = blocks[blocks.length - 1];
+        if (!block || !isAdjacentCodeLine(block[block.length - 1], el)) {
+            blocks.push([el]);
+        } else {
+            block.push(el);
         }
+    });
 
-        if (lang === "c") {
-            el.classList.add("code-lang-c");
-            const result = hlLineC(raw, inCBlockComment, inCPreprocContinuation);
+    blocks.forEach((block) => {
+        const lang = detectCodeLang(block.map((el) => el.textContent || "").join("\n"));
+        let inPascalAsm = false;
+        let inCBlockComment = false;
+        let inCPreprocContinuation = false;
+        let inPascalBlockComment = false;
+
+        block.forEach((el) => {
+            const raw = el.textContent || "";
+            el.classList.remove("code-lang-c", "code-lang-pascal", "code-lang-asm");
+
+            if (!raw.trim()) {
+                return;
+            }
+
+            if (lang === "c") {
+                el.classList.add("code-lang-c");
+                const result = hlLineC(raw, inCBlockComment, inCPreprocContinuation);
+                el.innerHTML = result.html;
+                inCBlockComment = result.inBlockComment;
+                inCPreprocContinuation = result.inPreprocContinuation;
+                return;
+            }
+
+            if (lang === "asm") {
+                el.classList.add("code-lang-asm");
+                el.innerHTML = spanWrap("code-asm", hlLineAsm(esc(raw)));
+                return;
+            }
+
+            if (inPascalAsm && !/\bend\b/i.test(raw)) {
+                el.classList.add("code-lang-asm");
+                el.innerHTML = spanWrap("code-asm", hlLineAsm(esc(raw)));
+                return;
+            }
+
+            el.classList.add("code-lang-pascal");
+            const result = hlLinePascal(raw, inPascalBlockComment);
             el.innerHTML = result.html;
-            inCBlockComment = result.inBlockComment;
-            inCPreprocContinuation = result.inPreprocContinuation;
-            return;
-        }
+            inPascalBlockComment = result.inBlockComment;
 
-        if (lang === "asm") {
-            el.classList.add("code-lang-asm");
-            el.innerHTML = spanWrap("code-asm", hlLineAsm(esc(raw)));
-            return;
-        }
-
-        if (inPascalAsm && !/\bend\b/i.test(raw)) {
-            el.classList.add("code-lang-asm");
-            el.innerHTML = spanWrap("code-asm", hlLineAsm(esc(raw)));
-            return;
-        }
-
-        el.classList.add("code-lang-pascal");
-        const result = hlLinePascal(raw, inPascalBlockComment);
-        el.innerHTML = result.html;
-        inPascalBlockComment = result.inBlockComment;
-
-        if (/\basm\b/i.test(raw) && !/\bend\b/i.test(raw)) {
-            inPascalAsm = true;
-            return;
-        }
-        if (inPascalAsm && /\bend\b/i.test(raw)) {
-            inPascalAsm = false;
-        }
+            if (/\basm\b/i.test(raw) && !/\bend\b/i.test(raw)) {
+                inPascalAsm = true;
+                return;
+            }
+            if (inPascalAsm && /\bend\b/i.test(raw)) {
+                inPascalAsm = false;
+            }
+        });
     });
 }
 

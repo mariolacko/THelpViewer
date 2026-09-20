@@ -22,6 +22,7 @@ from thelpviewer.help_database import (
     lookup_help_database_entry,
 )
 from .html import (
+    GENERATOR_AUTHORS,
     GENERATOR_VERSION,
     PACKAGE_ASSET_DIR,
     SITE_ASSET_DIR_NAME,
@@ -700,19 +701,20 @@ def _render_bundle_index_html() -> str:
 <meta name="twitter:image" content="{SITE_ASSET_DIR_NAME}/Thelp.png">
 <meta name="theme-color" content="#000080">
 <meta name="GENERATOR" content="THelp Viewer Converter {GENERATOR_VERSION}">
-<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260919b">
+<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260919c">
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20260621m"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js?v=20260621n"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20260621m"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20260919a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20260506a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20260919b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20260621m"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260919a"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260919b"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"
   data-tv-generator="THelp Viewer Converter"
   data-tv-generator-version="{GENERATOR_VERSION}"
+  data-tv-authors="{GENERATOR_AUTHORS}"
   data-tv-page-kind="bundle-index">
 <div class="tv-app">
 <header class="tv-menu-bar" data-tv-menu-bar></header>

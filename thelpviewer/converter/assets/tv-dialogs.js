@@ -35,14 +35,15 @@ class TVAboutDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const body = document.body;
         const siteName = body.dataset.tvSiteName || "THelpViewer";
-        const generatorVersion = body.dataset.tvGeneratorVersion || "0.1.0";
+        const generatorVersion = body.dataset.tvGeneratorVersion || "unknown";
+        const generatorAuthors = body.dataset.tvAuthors || "Mario Lacko + Copilot + Codex";
         const aboutMain = new TVGroup({
             w: 28, h: 14,
             children: [
                 new TVStaticText({ x: 0, y: 1, w: 28, align: "center", title: true, text: siteName }),
                 new TVStaticText({ x: 0, y: 3, w: 28, align: "center", text: `Version ${generatorVersion}` }),
                 new TVStaticText({ x: 0, y: 5, w: 28, align: "center", text: "Copyright (c) 2026" }),
-                new TVStaticText({ x: 0, y: 7, w: 28, align: "center", text: "Mario Lacko + Copilot" }),
+                new TVStaticText({ x: 0, y: 7, w: 28, align: "center", text: generatorAuthors }),
                 new TVButton({ x: 9, y: 9, w: 10, className: "is-default", attrs: { "data-tv-about-ok": true }, label: '~O~K' }),
             ],
         }).renderMarkup();
@@ -265,6 +266,7 @@ class TVCalculatorDialog extends TVDialog {
             height: "min(15em, calc(100% - 2em))",
             left: "5ch",
             top: "3em",
+            escapeCloses: false,
         });
         this.buttonValueMap = buttonValueMap;
         this.status = "first";
@@ -2143,7 +2145,6 @@ class TVSearchDialog extends TVDialog {
         this.resultsBox.bind({
             onSelect: (_entry, index) => {
                 this.selectIndex(index);
-                this.openSelected();
             },
             onActivate: (_entry, index) => {
                 this.selectIndex(index);

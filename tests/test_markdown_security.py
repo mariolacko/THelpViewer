@@ -58,3 +58,41 @@ process.stdout.write(JSON.stringify({ injected, scripted }));
     assert ' onmouseover="' not in rendered["injected"]
     assert "&quot;" in rendered["injected"]
     assert "javascript:" not in rendered["scripted"]
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for the browser asset regression test")
+def test_markdown_tables_keep_escaped_and_inline_code_pipes_in_one_cell():
+    asset_paths = (
+        Path("www/assets/tv-bundle-app.js"),
+        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+    )
+    assert asset_paths[0].read_bytes() == asset_paths[1].read_bytes()
+
+    script = r"""
+const fs = require("node:fs");
+const source = fs.readFileSync(process.argv[1], "utf8");
+const start = source.indexOf("function renderMarkdown(md)");
+const marker = "\n// ── Menu bar for bundle page";
+const end = source.indexOf(marker, start);
+if (start < 0 || end < 0) { throw new Error("renderMarkdown source not found"); }
+eval(source.slice(start, end));
+const escaped = renderMarkdown(String.raw`| A | B |
+| --- | --- |
+| x \| y | z |`);
+const inlineCode = renderMarkdown(`| A | B |
+| --- | --- |
+| \`x | y\` | z |`);
+process.stdout.write(JSON.stringify({ escaped, inlineCode }));
+"""
+    result = subprocess.run(
+        [NODE, "-e", script, str(asset_paths[0])],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = json.loads(result.stdout)
+
+    assert rendered["escaped"].count("<td>") == 2
+    assert "<td>x | y</td>" in rendered["escaped"]
+    assert rendered["inlineCode"].count("<td>") == 2
+    assert "<td><code>x | y</code></td>" in rendered["inlineCode"]

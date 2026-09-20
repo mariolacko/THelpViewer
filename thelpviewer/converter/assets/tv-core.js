@@ -396,6 +396,17 @@ let activeThemePreset = "default";
 let activeColorPalette = null;
 let measuredCell = null;
 const HOST_WINDOW_TOKEN = "__host__";
+const TV_COMMANDS = Object.freeze({
+    MENU: "menu",
+    CLOSE: "close",
+    ZOOM: "zoom",
+    RESIZE: "resize",
+    NEXT: "next",
+    PREVIOUS: "previous",
+    OK: "ok",
+    CANCEL: "cancel",
+    DEFAULT: "default",
+});
 
 function colorItemKey(groupName, itemName) {
     return `${groupName}/${itemName}`;
@@ -615,7 +626,7 @@ function applyThemeAndSyncPalette(name, persist = false) {
 }
 
 function isLeapYear(year) {
-    return year % 4 === 0;
+    return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 }
 
 function dayOfWeek(day, month, year) {
@@ -708,6 +719,22 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
     const closeGlyph = windowElement.querySelector("[data-tv-close-glyph]");
     const resizeHandle = !dialog ? windowElement.querySelector("[data-tv-resize-handle]") : null;
 
+    const scrollbarWidgets = new Set();
+    windowElement.querySelectorAll(".tv-scrollbar").forEach((scrollbar) => {
+        if (scrollbar._tvScrollbar) {
+            scrollbarWidgets.add(scrollbar._tvScrollbar);
+        } else {
+            scrollbar.classList.toggle("is-inactive", !active);
+            scrollbar.setAttribute("aria-disabled", active ? "false" : "true");
+        }
+    });
+    scrollbarWidgets.forEach((scrollbar) => scrollbar.setActive(active));
+    windowElement.querySelectorAll("[data-tv-list-viewer]").forEach((listRoot) => {
+        if (listRoot._tvListViewer) {
+            listRoot._tvListViewer.setActive(active);
+        }
+    });
+
     const horiz = singleFrame ? "─" : (active ? "═" : "─");
     const vert = singleFrame ? "│" : (active ? "║" : "│");
     const tl = singleFrame ? "┌" : (active ? "╔" : "┌");
@@ -758,7 +785,7 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
         applyCloseGlyphState(closeButton, closeButton && closeButton.dataset.tvClosePressed === "1");
     }
 
-    fillBorders();
+    fillBorders(windowElement);
 }
 
 function fillDesktopPatterns() {
@@ -1029,7 +1056,7 @@ class TVLabel extends TVStaticText {
             labelAttrs.for = forId;
         }
         super({
-            tag: "span",
+            tag: forId ? "label" : "span",
             className: ["tv-label", className].filter(Boolean).join(" "),
             style,
             attrs: labelAttrs,
@@ -1345,7 +1372,7 @@ class TVListBox extends TVWidget {
             index === this.selectedIndex ? this.selectedClassName : "",
         ].filter(Boolean).join(" ");
         return `
-            <div role="button" tabindex="0" class="${className}" ${this.itemAttrName}="${index}">
+            <div role="option" tabindex="-1" class="${className}" ${this.itemAttrName}="${index}">
                 <span class="tv-colors-list-text">${this.defaultContent(item, index)}</span>
             </div>
         `;
@@ -1389,9 +1416,14 @@ class TVListBox extends TVWidget {
         if (!this.root) {
             return;
         }
-        this.queryAll(this.itemSelector()).forEach((element) => {
+        const elements = this.queryAll(this.itemSelector());
+        elements.forEach((element, index) => {
             const value = Number.parseInt(element.getAttribute(this.itemAttrName), 10);
-            element.classList.toggle(this.selectedClassName, value === this.selectedIndex);
+            const selected = value === this.selectedIndex;
+            element.setAttribute("role", "option");
+            element.classList.toggle(this.selectedClassName, selected);
+            element.setAttribute("aria-selected", selected ? "true" : "false");
+            element.tabIndex = selected || (this.selectedIndex < 0 && index === 0) ? 0 : -1;
         });
         if (scroll) {
             this.ensureSelectionVisible();
@@ -1422,6 +1454,7 @@ class TVListBox extends TVWidget {
             return;
         }
         this.root.dataset.tvListBoxBound = "1";
+        this.root.setAttribute("role", "listbox");
         this.root.addEventListener("click", (event) => {
             const index = this.resolveIndex(event.target);
             if (index < 0) {
@@ -1442,6 +1475,52 @@ class TVListBox extends TVWidget {
                 this.activateHandler(this.items[index], index, event);
             }
         });
+        this.root.addEventListener("keydown", (event) => this.onKeyDown(event));
+    }
+
+    onKeyDown(event) {
+        const current = this.resolveIndex(event.target);
+        if (current < 0 || !this.items.length) {
+            return;
+        }
+        let next = current;
+        if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+            next = Math.min(this.items.length - 1, current + 1);
+        } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+            next = Math.max(0, current - 1);
+        } else if (event.key === "Home") {
+            next = 0;
+        } else if (event.key === "End") {
+            next = this.items.length - 1;
+        } else if (event.key === "Enter") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.select(current);
+            if (this.activateHandler) {
+                this.activateHandler(this.items[current], current, event);
+            } else if (this.selectHandler) {
+                this.selectHandler(this.items[current], current, event);
+            }
+            return;
+        } else if (event.key === " ") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.select(current);
+            if (this.selectHandler) {
+                this.selectHandler(this.items[current], current, event);
+            }
+            return;
+        } else {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        this.select(next);
+        const element = this.selectedElement();
+        if (element) { element.focus(); }
+        if (this.selectHandler && next !== current) {
+            this.selectHandler(this.items[next], next, event);
+        }
     }
 }
 
@@ -1497,6 +1576,12 @@ class TVVerticalListViewer extends TVWidget {
         this.thumb = this.query("[data-tv-list-thumb]");
         this.backward = this.query("[data-tv-list-backward]");
         this.forward = this.query("[data-tv-list-forward]");
+        this.scrollbar = this.query(".tv-vlist-scrollbar");
+        this.active = true;
+        if (this.root) {
+            this.root.dataset.tvListViewer = "1";
+            this.root._tvListViewer = this;
+        }
     }
 
     itemSelector() {
@@ -1528,7 +1613,7 @@ class TVVerticalListViewer extends TVWidget {
             index === this.selectedIndex ? this.selectedClassName : "",
         ].filter(Boolean).join(" ");
         return `
-            <div role="button" tabindex="0" class="${className}" ${this.itemAttrName}="${index}">
+            <div role="option" tabindex="-1" class="${className}" ${this.itemAttrName}="${index}">
                 <span class="tv-colors-list-text">${this.defaultContent(item, index)}</span>
             </div>
         `;
@@ -1574,9 +1659,14 @@ class TVVerticalListViewer extends TVWidget {
         if (!this.viewport) {
             return;
         }
-        this.viewport.querySelectorAll(this.itemSelector()).forEach((element) => {
+        const elements = Array.from(this.viewport.querySelectorAll(this.itemSelector()));
+        elements.forEach((element, index) => {
             const value = Number.parseInt(element.getAttribute(this.itemAttrName), 10);
-            element.classList.toggle(this.selectedClassName, value === this.selectedIndex);
+            const selected = value === this.selectedIndex;
+            element.setAttribute("role", "option");
+            element.classList.toggle(this.selectedClassName, selected);
+            element.setAttribute("aria-selected", selected ? "true" : "false");
+            element.tabIndex = selected || (this.selectedIndex < 0 && index === 0) ? 0 : -1;
         });
         if (scroll) {
             this.ensureSelectionVisible();
@@ -1671,6 +1761,9 @@ class TVVerticalListViewer extends TVWidget {
     }
 
     onTrackMouseDown(event) {
+        if (!this.active) {
+            return;
+        }
         if (event.target.closest("[data-tv-list-thumb]")) {
             return;
         }
@@ -1689,6 +1782,9 @@ class TVVerticalListViewer extends TVWidget {
     }
 
     startRepeat(event, delta) {
+        if (!this.active) {
+            return;
+        }
         event.preventDefault();
         this.stopRepeat();
         this.scrollBy(delta);
@@ -1702,6 +1798,25 @@ class TVVerticalListViewer extends TVWidget {
         }
     }
 
+    setActive(active) {
+        this.active = Boolean(active);
+        if (this.root) {
+            this.root.classList.toggle("is-inactive", !this.active);
+        }
+        if (this.scrollbar) {
+            this.scrollbar.classList.toggle("is-inactive", !this.active);
+            this.scrollbar.setAttribute("aria-disabled", this.active ? "false" : "true");
+        }
+        for (const arrow of [this.backward, this.forward]) {
+            if (arrow) {
+                arrow.tabIndex = -1;
+            }
+        }
+        if (!this.active) {
+            this.stopRepeat();
+        }
+    }
+
     bind({ onSelect = null, onActivate = null } = {}) {
         this.selectHandler = onSelect;
         this.activateHandler = onActivate;
@@ -1710,6 +1825,7 @@ class TVVerticalListViewer extends TVWidget {
         }
         this.root.dataset.tvListViewerBound = "1";
         if (this.viewport) {
+            this.viewport.setAttribute("role", "listbox");
             this.viewport.addEventListener("click", (event) => {
                 const index = this.resolveIndex(event.target);
                 if (index < 0) {
@@ -1732,17 +1848,50 @@ class TVVerticalListViewer extends TVWidget {
             });
             this.viewport.addEventListener("keydown", (event) => {
                 const index = this.resolveIndex(event.target);
-                if (index < 0) {
+                if (index < 0 || !this.items.length) {
                     return;
                 }
-                if (event.key === "Enter" || event.key === " ") {
+                let next = index;
+                if (event.key === "Enter") {
                     event.preventDefault();
+                    event.stopPropagation();
                     this.select(index);
                     if (this.activateHandler) {
                         this.activateHandler(this.items[index], index, event);
                     } else if (this.selectHandler) {
                         this.selectHandler(this.items[index], index, event);
                     }
+                    return;
+                } else if (event.key === " ") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.select(index);
+                    if (this.selectHandler) {
+                        this.selectHandler(this.items[index], index, event);
+                    }
+                    return;
+                } else if (event.key === "ArrowDown") {
+                    next = Math.min(this.items.length - 1, index + 1);
+                } else if (event.key === "ArrowUp") {
+                    next = Math.max(0, index - 1);
+                } else if (event.key === "Home") {
+                    next = 0;
+                } else if (event.key === "End") {
+                    next = this.items.length - 1;
+                } else if (event.key === "PageDown") {
+                    next = Math.min(this.items.length - 1, index + this.visibleRows());
+                } else if (event.key === "PageUp") {
+                    next = Math.max(0, index - this.visibleRows());
+                } else {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                this.select(next);
+                const element = this.selectedElement();
+                if (element) { element.focus(); }
+                if (this.selectHandler && next !== index) {
+                    this.selectHandler(this.items[next], next, event);
                 }
             });
             this.viewport.addEventListener("scroll", () => this.updateScrollbar(), { passive: true });
@@ -2306,6 +2455,417 @@ function fitMenuPopupToViewport(root, popup) {
     });
 }
 
+class TVMenuController {
+    constructor({ root = document, onUnhandledKeyDown = null } = {}) {
+        this.root = root;
+        this.onUnhandledKeyDown = onUnhandledKeyDown;
+        this.menuRoots = [];
+        this.topLevelActions = [];
+        this.activeRoot = null;
+        this.activePopup = null;
+        this.previousFocus = null;
+        this.lastSelection = new WeakMap();
+        this.onDocumentClick = (event) => {
+            if (!event.target.closest("[data-tv-menu-root]")) {
+                this.closeMenus();
+            }
+        };
+        this.onDocumentKeyDown = (event) => this.onKeyDown(event);
+        document.addEventListener("click", this.onDocumentClick);
+        document.addEventListener("keydown", this.onDocumentKeyDown);
+        this.refresh();
+    }
+
+    refresh() {
+        this.menuRoots = Array.from(this.root.querySelectorAll("[data-tv-menu-root]"));
+        this.topLevelActions = Array.from(this.root.querySelectorAll(".tv-menu-items > .tv-menu-item"));
+        if (this.activeRoot && !this.activeRoot.isConnected) {
+            this.activeRoot = null;
+            this.activePopup = null;
+            this.previousFocus = null;
+        }
+        this.menuRoots.forEach((menuRoot) => this.bindMenuRoot(menuRoot));
+        this.root.querySelectorAll(".tv-menu-popup").forEach((popup) => {
+            popup.setAttribute("role", "menu");
+            this.menuItems(popup).forEach((item) => {
+                item.setAttribute("role", "menuitem");
+                item.tabIndex = -1;
+                if (item.dataset.tvKeyboardMenuItemBound !== "1") {
+                    item.dataset.tvKeyboardMenuItemBound = "1";
+                    item.addEventListener("mouseenter", () => this.markSelected(item, false));
+                }
+            });
+        });
+        this.root.querySelectorAll("[data-tv-submenu-toggle]").forEach((toggle) => this.bindSubmenu(toggle));
+    }
+
+    bindMenuRoot(menuRoot) {
+        const toggle = menuRoot.querySelector("[data-tv-menu-toggle]");
+        if (!toggle || toggle.dataset.tvKeyboardMenuBound === "1") {
+            return;
+        }
+        toggle.dataset.tvKeyboardMenuBound = "1";
+        toggle.addEventListener("click", (event) => {
+            event.preventDefault();
+            if (this.activeRoot === menuRoot) {
+                this.closeMenus({ restoreFocus: false });
+                toggle.focus();
+            } else {
+                this.openMenu(menuRoot, { focusFirst: false });
+            }
+        });
+        menuRoot.addEventListener("mouseenter", () => {
+            if (this.activeRoot && this.activeRoot !== menuRoot) {
+                this.openMenu(menuRoot, { focusFirst: false });
+            }
+        });
+    }
+
+    bindSubmenu(toggle) {
+        if (toggle.dataset.tvKeyboardSubmenuBound === "1") {
+            return;
+        }
+        const submenuRoot = toggle.closest("[data-tv-submenu-root]");
+        const popup = this.directChild(submenuRoot, "[data-tv-submenu-popup]");
+        if (!submenuRoot || !popup) {
+            return;
+        }
+        toggle.dataset.tvKeyboardSubmenuBound = "1";
+        toggle.setAttribute("aria-haspopup", "true");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (popup.hidden) {
+                this.openSubmenu(toggle, { focusFirst: false });
+            } else {
+                this.closeSubmenu(popup, { focusToggle: false });
+            }
+        });
+        submenuRoot.addEventListener("mouseenter", () => {
+            this.openSubmenu(toggle, { focusFirst: false });
+        });
+        submenuRoot.addEventListener("mouseleave", (event) => {
+            const related = event.relatedTarget;
+            if (related && (popup.contains(related) || submenuRoot.contains(related))) {
+                return;
+            }
+            this.closeSubmenu(popup, { focusToggle: false });
+        });
+    }
+
+    directChild(root, selector) {
+        return root
+            ? Array.from(root.children).find((child) => child.matches?.(selector)) || null
+            : null;
+    }
+
+    menuItems(popup) {
+        if (!popup) {
+            return [];
+        }
+        return Array.from(popup.querySelectorAll(".tv-menu-popup-item")).filter((item) => (
+            item.closest(".tv-menu-popup") === popup
+            && !item.disabled
+            && item.getAttribute("aria-disabled") !== "true"
+            && !item.classList.contains("is-disabled")
+        ));
+    }
+
+    menuMnemonic(element) {
+        const hotkey = element ? element.querySelector(".tv-hotkey") : null;
+        return hotkey ? hotkey.textContent.trim().toLowerCase() : "";
+    }
+
+    markSelected(item, focus = true) {
+        if (!item) {
+            return;
+        }
+        this.root.querySelectorAll(".tv-menu-popup-item.is-menu-selected").forEach((current) => {
+            current.classList.remove("is-menu-selected");
+            current.tabIndex = -1;
+        });
+        item.classList.add("is-menu-selected");
+        item.tabIndex = 0;
+        this.activePopup = item.closest(".tv-menu-popup") || this.activePopup;
+        if (this.activePopup) {
+            this.lastSelection.set(this.activePopup, item);
+        }
+        if (focus) {
+            item.focus({ preventScroll: true });
+            item.scrollIntoView({ block: "nearest" });
+        }
+    }
+
+    selectByIndex(popup, index) {
+        const items = this.menuItems(popup);
+        if (!items.length) {
+            return null;
+        }
+        const normalized = (index + items.length) % items.length;
+        this.markSelected(items[normalized]);
+        return items[normalized];
+    }
+
+    moveSelection(delta) {
+        const popup = this.activePopup || this.activeRoot?.querySelector("[data-tv-menu-popup]");
+        const items = this.menuItems(popup);
+        if (!items.length) {
+            return;
+        }
+        const current = items.indexOf(document.activeElement);
+        this.selectByIndex(popup, current < 0 ? (delta > 0 ? 0 : items.length - 1) : current + delta);
+    }
+
+    openMenu(menuRoot, { focusFirst = true } = {}) {
+        const popup = menuRoot?.querySelector("[data-tv-menu-popup]");
+        const toggle = menuRoot?.querySelector("[data-tv-menu-toggle]");
+        if (!popup || !toggle) {
+            return;
+        }
+        const savedFocus = this.previousFocus
+            || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        this.closeMenus({ restoreFocus: false, preservePreviousFocus: true });
+        this.previousFocus = savedFocus;
+        popup.hidden = false;
+        toggle.setAttribute("aria-expanded", "true");
+        toggle.classList.add("is-current");
+        this.activeRoot = menuRoot;
+        this.activePopup = popup;
+        requestAnimationFrame(() => {
+            fitMenuPopupToViewport(menuRoot, popup);
+            fillBorders(popup);
+            if (focusFirst) {
+                const remembered = this.lastSelection.get(popup);
+                if (remembered && this.menuItems(popup).includes(remembered)) {
+                    this.markSelected(remembered);
+                } else {
+                    this.selectByIndex(popup, 0);
+                }
+            }
+        });
+    }
+
+    openSubmenu(toggle, { focusFirst = true } = {}) {
+        const submenuRoot = toggle?.closest("[data-tv-submenu-root]");
+        const popup = this.directChild(submenuRoot, "[data-tv-submenu-popup]");
+        if (!submenuRoot || !popup) {
+            return false;
+        }
+        this.closeSubmenusOutsidePath(submenuRoot, popup);
+        popup.hidden = false;
+        toggle.classList.add("is-submenu-open");
+        toggle.setAttribute("aria-expanded", "true");
+        this.activePopup = popup;
+        requestAnimationFrame(() => {
+            fitMenuPopupToViewport(submenuRoot, popup);
+            fillBorders(popup);
+            if (focusFirst) {
+                const remembered = this.lastSelection.get(popup);
+                if (remembered && this.menuItems(popup).includes(remembered)) {
+                    this.markSelected(remembered);
+                } else {
+                    this.selectByIndex(popup, 0);
+                }
+            }
+        });
+        return true;
+    }
+
+    closeSubmenu(popup, { focusToggle = true } = {}) {
+        if (!popup) {
+            return;
+        }
+        const submenuRoot = popup.closest("[data-tv-submenu-root]");
+        const toggle = this.directChild(submenuRoot, "[data-tv-submenu-toggle]");
+        popup.querySelectorAll("[data-tv-submenu-popup]").forEach((child) => {
+            if (child !== popup) { this.closeSubmenu(child, { focusToggle: false }); }
+        });
+        popup.hidden = true;
+        resetMenuPopupLayout(popup);
+        if (toggle) {
+            toggle.classList.remove("is-submenu-open");
+            toggle.setAttribute("aria-expanded", "false");
+        }
+        this.activePopup = toggle?.closest(".tv-menu-popup") || null;
+        if (focusToggle && toggle) {
+            this.markSelected(toggle);
+        }
+    }
+
+    closeSubmenusOutsidePath(submenuRoot, activePopup) {
+        this.root.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
+            if (popup === activePopup || popup.contains(submenuRoot)) {
+                return;
+            }
+            this.closeSubmenu(popup, { focusToggle: false });
+        });
+    }
+
+    closeSubmenus() {
+        this.root.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
+            this.closeSubmenu(popup, { focusToggle: false });
+        });
+    }
+
+    closeMenus({ restoreFocus = true, preservePreviousFocus = false } = {}) {
+        const focusTarget = this.previousFocus;
+        this.closeSubmenus();
+        this.menuRoots.forEach((menuRoot) => {
+            const popup = menuRoot.querySelector("[data-tv-menu-popup]");
+            const toggle = menuRoot.querySelector("[data-tv-menu-toggle]");
+            if (popup) {
+                popup.hidden = true;
+                resetMenuPopupLayout(popup);
+            }
+            if (toggle) {
+                toggle.setAttribute("aria-expanded", "false");
+                toggle.classList.remove("is-current");
+            }
+        });
+        this.root.querySelectorAll(".tv-menu-popup-item.is-menu-selected").forEach((item) => {
+            item.classList.remove("is-menu-selected");
+            item.tabIndex = -1;
+        });
+        this.activeRoot = null;
+        this.activePopup = null;
+        if (!preservePreviousFocus) {
+            this.previousFocus = null;
+        }
+        if (restoreFocus && focusTarget?.isConnected && typeof focusTarget.focus === "function") {
+            focusTarget.focus({ preventScroll: true });
+        }
+    }
+
+    switchRoot(delta) {
+        if (!this.menuRoots.length) {
+            return;
+        }
+        const current = this.menuRoots.indexOf(this.activeRoot);
+        const index = current < 0 ? 0 : (current + delta + this.menuRoots.length) % this.menuRoots.length;
+        this.openMenu(this.menuRoots[index]);
+    }
+
+    activateMnemonic(key) {
+        const mnemonic = String(key || "").toLowerCase();
+        const item = this.menuItems(this.activePopup).find((candidate) => this.menuMnemonic(candidate) === mnemonic);
+        if (!item) {
+            return false;
+        }
+        this.markSelected(item);
+        if (item.matches("[data-tv-submenu-toggle]")) {
+            this.openSubmenu(item);
+        } else {
+            item.click();
+        }
+        return true;
+    }
+
+    onKeyDown(event) {
+        if (event.defaultPrevented) {
+            return;
+        }
+        const plainF10 = event.key === "F10" && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+        if (plainF10) {
+            event.preventDefault();
+            if (this.activeRoot) {
+                this.closeMenus();
+            } else if (this.menuRoots.length) {
+                this.openMenu(this.menuRoots[0]);
+            }
+            return;
+        }
+        if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.length === 1) {
+            const root = this.menuRoots.find((candidate) => {
+                const toggle = candidate.querySelector("[data-tv-menu-toggle]");
+                return this.menuMnemonic(toggle) === event.key.toLowerCase();
+            });
+            if (root) {
+                event.preventDefault();
+                this.openMenu(root);
+                return;
+            }
+            const action = this.topLevelActions.find((candidate) => (
+                this.menuMnemonic(candidate) === event.key.toLowerCase()
+            ));
+            if (action) {
+                event.preventDefault();
+                this.closeMenus({ restoreFocus: false });
+                action.click();
+                return;
+            }
+        }
+        if (!this.activeRoot) {
+            if (this.onUnhandledKeyDown) { this.onUnhandledKeyDown(event); }
+            return;
+        }
+        if (event.key === "Escape") {
+            event.preventDefault();
+            if (this.activePopup?.matches("[data-tv-submenu-popup]")) {
+                this.closeSubmenu(this.activePopup);
+            } else {
+                this.closeMenus();
+            }
+            return;
+        }
+        if (event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey)) {
+            event.preventDefault();
+            this.moveSelection(1);
+            return;
+        }
+        if (event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey)) {
+            event.preventDefault();
+            this.moveSelection(-1);
+            return;
+        }
+        if (event.key === "Home" || event.key === "End") {
+            event.preventDefault();
+            const items = this.menuItems(this.activePopup);
+            this.selectByIndex(this.activePopup, event.key === "Home" ? 0 : items.length - 1);
+            return;
+        }
+        if (event.key === "ArrowRight") {
+            event.preventDefault();
+            const current = document.activeElement;
+            if (current?.matches?.("[data-tv-submenu-toggle]") && this.openSubmenu(current)) {
+                return;
+            }
+            this.switchRoot(1);
+            return;
+        }
+        if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            if (this.activePopup?.matches("[data-tv-submenu-popup]")) {
+                this.closeSubmenu(this.activePopup);
+            } else {
+                this.switchRoot(-1);
+            }
+            return;
+        }
+        if (event.key === "Enter" || event.key === " ") {
+            const current = document.activeElement;
+            if (this.menuItems(this.activePopup).includes(current)) {
+                event.preventDefault();
+                if (current.matches("[data-tv-submenu-toggle]")) {
+                    this.openSubmenu(current);
+                } else {
+                    current.click();
+                }
+            }
+            return;
+        }
+        if (!event.altKey && !event.ctrlKey && !event.metaKey && event.key.length === 1 && this.activateMnemonic(event.key)) {
+            event.preventDefault();
+        }
+    }
+
+    destroy() {
+        this.closeMenus({ restoreFocus: false });
+        document.removeEventListener("click", this.onDocumentClick);
+        document.removeEventListener("keydown", this.onDocumentKeyDown);
+    }
+}
+
 class TVButtonStrip extends TVWidget {
     constructor({
         className = "",
@@ -2330,6 +2890,8 @@ class TVButtonStrip extends TVWidget {
     }
 }
 
+let tvChoiceGroupId = 0;
+
 class TVCheckBoxes extends TVWidget {
     constructor({
         className = "",
@@ -2344,15 +2906,15 @@ class TVCheckBoxes extends TVWidget {
 
     renderMarkup() {
         const items = this.options.map((option, index) => {
-            const checked = option.checked ? "X" : " ";
-            return `
-                <button
-                    type="button"
-                    class="tv-checkbox-item"
-                    data-tv-checkbox-index="${index}"
-                    ${attrsToString(option.attrs || {})}
-                >[${checked}] ${escapeHtml(option.label || "")}</button>
-            `;
+            const inputAttrs = attrsToString({
+                type: "checkbox",
+                class: "tv-choice-input",
+                value: option.value !== undefined ? option.value : index,
+                checked: Boolean(option.checked),
+                disabled: Boolean(option.disabled),
+                ...(option.attrs || {}),
+            });
+            return `<label class="tv-checkbox-item" data-tv-checkbox-index="${index}"><input ${inputAttrs}><span class="tv-checkbox-mark" aria-hidden="true"></span> <span class="tv-choice-label">${escapeHtml(option.label || "")}</span></label>`;
         }).join("");
         return new TVListViewer({
             className: this.className,
@@ -2367,24 +2929,27 @@ class TVRadioButtons extends TVWidget {
         className = "",
         attrs = {},
         options = [],
+        name = "",
     } = {}) {
         super();
         this.className = className;
         this.attrs = attrs;
         this.options = options;
+        this.name = name || `tv-radio-${++tvChoiceGroupId}`;
     }
 
     renderMarkup() {
         const items = this.options.map((option, index) => {
-            const checked = option.checked ? "\u00B7" : " ";
-            return `
-                <button
-                    type="button"
-                    class="tv-radio-item"
-                    data-tv-radio-index="${index}"
-                    ${attrsToString(option.attrs || {})}
-                >(${checked}) ${escapeHtml(option.label || "")}</button>
-            `;
+            const inputAttrs = attrsToString({
+                type: "radio",
+                class: "tv-choice-input",
+                name: this.name,
+                value: option.value !== undefined ? option.value : index,
+                checked: Boolean(option.checked),
+                disabled: Boolean(option.disabled),
+                ...(option.attrs || {}),
+            });
+            return `<label class="tv-radio-item" data-tv-radio-index="${index}"><input ${inputAttrs}><span class="tv-radio-mark" aria-hidden="true"></span> <span class="tv-choice-label">${escapeHtml(option.label || "")}</span></label>`;
         }).join("");
         return new TVListViewer({
             className: this.className,
@@ -2467,8 +3032,9 @@ class TVFrame extends TVWidget {
         bodyMarkup,
         footerMarkup,
         bodyBorders = true,
+        modal = false,
     }) {
-        const overlayClasses = ["tv-dialog-overlay", overlayClass].filter(Boolean).join(" ");
+        const overlayClasses = ["tv-dialog-overlay", modal ? "is-modal" : "", overlayClass].filter(Boolean).join(" ");
         const windowClasses = ["tv-dialog-window", windowClass].filter(Boolean).join(" ");
         const titlebarClasses = ["tv-dialog-titlebar", titlebarClass].filter(Boolean).join(" ");
         const footerClasses = ["tv-dialog-footer", footerClass].filter(Boolean).join(" ");
@@ -2491,7 +3057,7 @@ class TVFrame extends TVWidget {
         }
         return `
             <div class="${overlayClasses}" hidden>
-                <div class="${windowClasses}" role="dialog" aria-modal="true" aria-label="${escapeHtml(ariaLabel)}">
+                <div class="${windowClasses}" role="dialog" aria-modal="${modal ? "true" : "false"}" aria-label="${escapeHtml(ariaLabel)}">
                     <div class="${titlebarClasses}">
                         <span class="tv-border-corner" aria-hidden="true">╔</span>
                         <span class="tv-border-fill tv-dialog-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>
@@ -2537,6 +3103,10 @@ class TVDialog extends TVWidget {
         height,
         left,
         top,
+        modal = false,
+        keyboard = true,
+        escapeCloses = true,
+        defaultButtonSelector = ".tv-dialog-button.is-default",
     }) {
         const root = TVWidget.fromHTML(
             TVFrame.dialogMarkup({
@@ -2553,6 +3123,7 @@ class TVDialog extends TVWidget {
                 bodyMarkup,
                 footerMarkup,
                 bodyBorders,
+                modal,
             })
         );
         super(root);
@@ -2569,9 +3140,17 @@ class TVDialog extends TVWidget {
         this.dragState = null;
         this.manager = null;
         this.managerName = "";
+        this.modal = modal;
+        this.keyboard = keyboard;
+        this.escapeCloses = escapeCloses;
+        this.defaultButtonSelector = defaultButtonSelector;
+        this.previousFocus = null;
+        this.destroyed = false;
+        this.closeAction = () => this.close();
         this.dialog.tabIndex = -1;
         this.mount(desktop);
         bindCloseButtons(this.overlay);
+        this.dialog.addEventListener("keydown", (event) => this.onDialogKeyDown(event));
     }
 
     setManager(manager, name) {
@@ -2591,6 +3170,15 @@ class TVDialog extends TVWidget {
     }
 
     open() {
+        if (this.destroyed) {
+            return;
+        }
+        const wasOpen = this.isOpen();
+        if (!wasOpen) {
+            this.previousFocus = document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null;
+        }
         this.overlay.hidden = false;
         if (!this.hasPosition) {
             this.center();
@@ -2607,9 +3195,98 @@ class TVDialog extends TVWidget {
     }
 
     close() {
+        const restoreFocus = this.previousFocus;
+        this.previousFocus = null;
         this.overlay.hidden = true;
         if (this.manager && this.managerName) {
             this.manager.onDialogClosed(this.managerName);
+        }
+        if (restoreFocus && restoreFocus.isConnected && typeof restoreFocus.focus === "function") {
+            try {
+                restoreFocus.focus({ preventScroll: true });
+            } catch {
+                restoreFocus.focus();
+            }
+        }
+    }
+
+    destroy() {
+        if (this.destroyed) {
+            return;
+        }
+        if (this.isOpen()) {
+            this.close();
+        }
+        document.removeEventListener("mousemove", this.onDragMove);
+        document.removeEventListener("mouseup", this.onDragEnd);
+        this.dragState = null;
+        if (this.manager && this.managerName) {
+            this.manager.unregister(this.managerName, this);
+        }
+        this.manager = null;
+        this.managerName = "";
+        this.previousFocus = null;
+        this.destroyed = true;
+        this.overlay.remove();
+    }
+
+    focusableElements() {
+        const selector = [
+            "a[href]",
+            "button:not([disabled])",
+            "input:not([disabled])",
+            "select:not([disabled])",
+            "textarea:not([disabled])",
+            '[tabindex]:not([tabindex="-1"])',
+        ].join(",");
+        return Array.from(this.dialog.querySelectorAll(selector)).filter((element) => (
+            !element.hidden
+            && !element.closest("[hidden]")
+            && element.getAttribute("aria-hidden") !== "true"
+        ));
+    }
+
+    onDialogKeyDown(event) {
+        if (!this.keyboard || !this.isActive() || event.defaultPrevented) {
+            return;
+        }
+        if (event.key === "Escape" && this.escapeCloses) {
+            event.preventDefault();
+            event.stopPropagation();
+            this.closeAction();
+            return;
+        }
+        if (
+            event.key === "Enter"
+            && !event.altKey
+            && !event.ctrlKey
+            && !event.metaKey
+            && !event.shiftKey
+            && !(event.target && event.target.closest("button, a, textarea, [contenteditable='true']"))
+        ) {
+            const defaultButton = this.dialog.querySelector(this.defaultButtonSelector);
+            if (defaultButton && !defaultButton.disabled) {
+                event.preventDefault();
+                event.stopPropagation();
+                defaultButton.click();
+                return;
+            }
+        }
+        if (event.key === "Tab") {
+            const focusable = this.focusableElements();
+            if (focusable.length) {
+                event.preventDefault();
+                event.stopPropagation();
+                const current = focusable.indexOf(document.activeElement);
+                const next = event.shiftKey
+                    ? (current <= 0 ? focusable.length - 1 : current - 1)
+                    : (current < 0 || current === focusable.length - 1 ? 0 : current + 1);
+                focusable[next].focus();
+                return;
+            }
+        }
+        if (this.modal) {
+            event.stopPropagation();
         }
     }
 
@@ -2623,6 +3300,7 @@ class TVDialog extends TVWidget {
     }
 
     bindCommonClose(onClose = () => this.close()) {
+        this.closeAction = onClose;
         this.overlay.addEventListener("click", (event) => {
             if (event.target === this.overlay) {
                 onClose();
@@ -2631,9 +3309,7 @@ class TVDialog extends TVWidget {
         if (this.closeButton) {
             this.closeButton.addEventListener("mousedown", (event) => event.stopPropagation());
             this.closeButton.addEventListener("mouseup", (event) => {
-                event.preventDefault();
                 event.stopPropagation();
-                onClose();
             });
             this.closeButton.addEventListener("click", (event) => {
                 event.preventDefault();
@@ -2696,6 +3372,7 @@ class TVDialogManager {
         this.desktop = desktop;
         this.dialogs = new Map();
         this.windows = new Map();
+        this.windowCommands = new Map();
         this.stackOrder = [];
         this.baseZIndex = 10;
         this.hostWindow = document.querySelector("[data-tv-window]");
@@ -2703,8 +3380,9 @@ class TVDialogManager {
         this.onChange = null;
     }
 
-    setHostWindow(element) {
+    setHostWindow(element, commands = {}) {
         this.hostWindow = element || null;
+        this.windowCommands.set(HOST_WINDOW_TOKEN, { ...commands });
         this.applyActiveStates();
     }
 
@@ -2715,8 +3393,9 @@ class TVDialogManager {
         if (this.onChange) { this.onChange(); }
     }
 
-    registerWindow(name, element) {
+    registerWindow(name, element, commands = {}) {
         this.windows.set(name, element);
+        this.windowCommands.set(name, { ...commands });
         if (!element.dataset.tvWindowManaged) {
             element.dataset.tvWindowManaged = "1";
             element.addEventListener("mousedown", () => {
@@ -2728,6 +3407,7 @@ class TVDialogManager {
 
     unregisterWindow(name) {
         this.windows.delete(name);
+        this.windowCommands.delete(name);
         this.stackOrder = this.stackOrder.filter(n => n !== name);
         if (this.activeTarget === name) {
             this.activeTarget = this.stackOrder.length
@@ -2755,6 +3435,28 @@ class TVDialogManager {
         }
         this.installDialogHooks(name, dialog);
         return dialog;
+    }
+
+    unregister(name, dialog = null) {
+        const registered = this.dialogs.get(name);
+        if (!registered || (dialog && registered !== dialog)) {
+            return false;
+        }
+        this.dialogs.delete(name);
+        const wasStacked = this.stackOrder.includes(name);
+        this.stackOrder = this.stackOrder.filter(n => n !== name);
+        const wasActive = this.activeTarget === name;
+        if (wasActive) {
+            this.activeTarget = this.stackOrder.length
+                ? this.stackOrder[this.stackOrder.length - 1]
+                : HOST_WINDOW_TOKEN;
+        }
+        if (wasStacked || wasActive) {
+            this.applyAllZIndices();
+            this.applyActiveStates();
+            if (this.onChange) { this.onChange(); }
+        }
+        return true;
     }
 
     onDialogOpened(name) {
@@ -2890,6 +3592,56 @@ class TVDialogManager {
         });
     }
 
+    cycleTarget(delta = 1) {
+        const targets = this.stackOrder.filter((name) => {
+            const dialog = this.dialogs.get(name);
+            if (dialog) { return dialog.isOpen(); }
+            const windowElement = this.windows.get(name);
+            return Boolean(windowElement && windowElement.isConnected);
+        });
+        if (!targets.length) {
+            return false;
+        }
+        const current = targets.indexOf(this.activeTarget);
+        const start = current < 0 ? (delta > 0 ? -1 : 0) : current;
+        const index = (start + delta + targets.length) % targets.length;
+        const target = targets[index];
+        const dialog = this.dialogs.get(target);
+        if (dialog) {
+            this.bringToFront(target);
+        } else {
+            this.activateWindow(target);
+        }
+        return true;
+    }
+
+    dispatchCommand(command) {
+        if (command === TV_COMMANDS.NEXT) {
+            return this.cycleTarget(1);
+        }
+        if (command === TV_COMMANDS.PREVIOUS) {
+            return this.cycleTarget(-1);
+        }
+        const target = this.activeTarget;
+        const dialog = this.dialogs.get(target);
+        if (dialog && dialog.isOpen()) {
+            if (command === TV_COMMANDS.CLOSE || command === TV_COMMANDS.CANCEL) {
+                dialog.closeAction();
+                return true;
+            }
+            if (typeof dialog.handleCommand === "function" && dialog.handleCommand(command)) {
+                return true;
+            }
+            return false;
+        }
+        const handler = this.windowCommands.get(target)?.[command];
+        if (typeof handler === "function") {
+            handler();
+            return true;
+        }
+        return false;
+    }
+
     firstOpen(names = []) {
         return names.find((name) => this.isOpen(name)) || "";
     }
@@ -2939,10 +3691,10 @@ class TVMessageBox extends TVDialog {
     static MF_YES_NO_CANCEL = 0x0100 | 0x0200 | 0x0800;
 
     static BUTTON_DEFS = [
-        { flag: 0x0100, cmd: "yes",    label: "~Y~es" },
-        { flag: 0x0200, cmd: "no",     label: "~N~o" },
-        { flag: 0x0400, cmd: "ok",     label: "O~K~" },
-        { flag: 0x0800, cmd: "cancel", label: "Cancel" },
+        { flag: 0x0100, cmd: "yes",    label: "~Y~es", mnemonic: "y" },
+        { flag: 0x0200, cmd: "no",     label: "~N~o", mnemonic: "n" },
+        { flag: 0x0400, cmd: "ok",     label: "O~K~", mnemonic: "k" },
+        { flag: 0x0800, cmd: "cancel", label: "~C~ancel", mnemonic: "c" },
     ];
 
     constructor(parentEl) {
@@ -2958,6 +3710,8 @@ class TVMessageBox extends TVDialog {
                 + '</div>',
             footerMarkup: TVDialog.footerMarkup(),
             width: "auto",
+            modal: true,
+            keyboard: false,
         });
         // Remove close button — msgbox has no [■]
         if (this.closeButton) { this.closeButton.remove(); }
@@ -2970,9 +3724,18 @@ class TVMessageBox extends TVDialog {
         // Block clicks from reaching parent dialog
         this.overlay.addEventListener("click", (e) => e.stopPropagation());
         this.overlay.addEventListener("mousedown", (e) => e.stopPropagation());
+        if (this.buttonsEl) {
+            this.buttonsEl.addEventListener("click", (e) => {
+                const btn = e.target.closest("[data-tv-msgbox-cmd]");
+                if (btn) { this._dismiss(btn.getAttribute("data-tv-msgbox-cmd")); }
+            });
+        }
     }
 
     show({ type = 0, title, lines = [], buttons = TVMessageBox.MF_OK_BUTTON } = {}) {
+        if (this._resolve) {
+            this._dismiss(this._cancelCmd || this._defaultCmd);
+        }
         const boxTitle = title !== undefined ? title : TVMessageBox.TITLES[type];
         if (this.titleEl) { this.titleEl.textContent = boxTitle; }
         // Content
@@ -2984,36 +3747,37 @@ class TVMessageBox extends TVDialog {
             this.contentEl.innerHTML = parts.join("");
         }
         // Buttons
-        const btnDefs = TVMessageBox.BUTTON_DEFS.filter(b => (buttons & b.flag) !== 0);
+        const requestedButtons = TVMessageBox.BUTTON_DEFS.filter(b => (buttons & b.flag) !== 0);
+        const btnDefs = requestedButtons.length
+            ? requestedButtons
+            : TVMessageBox.BUTTON_DEFS.filter(b => b.cmd === "ok");
         if (this.buttonsEl) {
-            const btnHtml = btnDefs.map(b =>
-                new TVButton({ label: b.label, attrs: { "data-tv-msgbox-cmd": b.cmd } }).renderMarkup()
+            const btnHtml = btnDefs.map((b, index) =>
+                new TVButton({
+                    label: b.label,
+                    className: index === 0 ? "is-default" : "",
+                    attrs: { "data-tv-msgbox-cmd": b.cmd },
+                }).renderMarkup()
             ).join("");
             this.buttonsEl.innerHTML = btnHtml;
         }
+        this._buttonDefs = btnDefs;
         // Determine default and cancel commands
         this._defaultCmd = btnDefs.length > 0 ? btnDefs[0].cmd : null;
         this._cancelCmd = (buttons & TVMessageBox.MF_CANCEL_BUTTON) ? "cancel" : null;
         // Show
-        this.overlay.hidden = false;
-        fillBorders();
+        super.open();
         // Focus first button
         const firstBtn = this.buttonsEl && this.buttonsEl.querySelector("button");
         if (firstBtn) { firstBtn.focus(); }
         // Bind events
         this.overlay.addEventListener("keydown", this._onKey);
-        if (this.buttonsEl) {
-            this.buttonsEl.addEventListener("click", (e) => {
-                const btn = e.target.closest("[data-tv-msgbox-cmd]");
-                if (btn) { this._dismiss(btn.getAttribute("data-tv-msgbox-cmd")); }
-            }, { once: true });
-        }
         return new Promise((resolve) => { this._resolve = resolve; });
     }
 
     hide() {
-        this.overlay.hidden = true;
         this.overlay.removeEventListener("keydown", this._onKey);
+        super.close();
         this._resolve = null;
     }
 
@@ -3021,6 +3785,15 @@ class TVMessageBox extends TVDialog {
         const resolve = this._resolve;
         this.hide();
         if (resolve) { resolve(cmd); }
+    }
+
+    destroy() {
+        const resolve = this._resolve;
+        const command = this._cancelCmd || this._defaultCmd;
+        this.overlay.removeEventListener("keydown", this._onKey);
+        this._resolve = null;
+        super.destroy();
+        if (resolve) { resolve(command); }
     }
 
     _handleKey(e) {
@@ -3048,12 +3821,14 @@ class TVMessageBox extends TVDialog {
                 btns[next].focus();
             }
         } else {
-            // Hotkey matching: Y/N/K/C for Yes/No/OK/Cancel
             const key = e.key.toLowerCase();
-            const hotkeyMap = { y: "yes", n: "no", k: "ok" };
-            if (hotkeyMap[key]) {
-                const btn = this.buttonsEl && this.buttonsEl.querySelector(`[data-tv-msgbox-cmd="${hotkeyMap[key]}"]`);
-                if (btn) { e.preventDefault(); e.stopPropagation(); this._dismiss(hotkeyMap[key]); }
+            const definition = (this._buttonDefs || []).find((button) => button.mnemonic === key);
+            if (definition) {
+                const btn = this.buttonsEl && this.buttonsEl.querySelector(`[data-tv-msgbox-cmd="${definition.cmd}"]`);
+                if (btn) { e.preventDefault(); e.stopPropagation(); this._dismiss(definition.cmd); }
+            }
+            if (!e.defaultPrevented) {
+                e.stopPropagation();
             }
         }
     }
@@ -3076,10 +3851,19 @@ class TurboVisionScrollbar {
             x: this.buildAxis("x"),
             y: this.buildAxis("y"),
         };
+        for (const axis of Object.values(this.axes)) {
+            axis.root._tvScrollbar = this;
+        }
         this.resizeObserver = null;
         this.dragState = null;
         this.repeatTimer = null;
+        this.destroyed = false;
+        this.active = !frame.closest(".tv-window")?.classList.contains("is-window-inactive");
+        this.onViewportScroll = () => this.update();
+        this.onWindowResize = () => this.update();
+        this.onDocumentMouseUp = () => this.stopRepeat();
         this.bind();
+        this.setActive(this.active);
         this.update();
     }
 
@@ -3097,28 +3881,45 @@ class TurboVisionScrollbar {
     }
 
     bind() {
-        this.viewport.addEventListener("scroll", () => this.update(), { passive: true });
-        window.addEventListener("resize", () => this.update(), { passive: true });
+        this.viewport.addEventListener("scroll", this.onViewportScroll, { passive: true });
+        window.addEventListener("resize", this.onWindowResize, { passive: true });
 
         for (const axis of Object.values(this.axes)) {
-            axis.backward.addEventListener("mousedown", (event) => this.startRepeat(event, axis.axis, -1));
-            axis.forward.addEventListener("mousedown", (event) => this.startRepeat(event, axis.axis, 1));
-            axis.track.addEventListener("mousedown", (event) => this.onTrackMouseDown(event, axis.axis));
-            axis.thumb.addEventListener("mousedown", (event) => this.onThumbMouseDown(event, axis.axis));
+            axis.onBackwardMouseDown = (event) => this.startRepeat(event, axis.axis, -1);
+            axis.onForwardMouseDown = (event) => this.startRepeat(event, axis.axis, 1);
+            axis.onTrackMouseDown = (event) => this.onTrackMouseDown(event, axis.axis);
+            axis.onThumbMouseDown = (event) => this.onThumbMouseDown(event, axis.axis);
+            axis.backward.addEventListener("mousedown", axis.onBackwardMouseDown);
+            axis.forward.addEventListener("mousedown", axis.onForwardMouseDown);
+            axis.track.addEventListener("mousedown", axis.onTrackMouseDown);
+            axis.thumb.addEventListener("mousedown", axis.onThumbMouseDown);
         }
 
-        document.addEventListener("mouseup", () => this.stopRepeat(), { passive: true });
+        document.addEventListener("mouseup", this.onDocumentMouseUp, { passive: true });
 
         if ("ResizeObserver" in window) {
             this.resizeObserver = new ResizeObserver(() => this.update());
-            this.resizeObserver.observe(this.viewport);
-            if (this.viewport.firstElementChild) {
-                this.resizeObserver.observe(this.viewport.firstElementChild);
-            }
+            this.observeContent();
         }
     }
 
+    observeContent() {
+        if (!this.resizeObserver) { return; }
+        this.resizeObserver.disconnect();
+        this.resizeObserver.observe(this.viewport);
+        if (this.viewport.firstElementChild) {
+            this.resizeObserver.observe(this.viewport.firstElementChild);
+        }
+    }
+
+    refresh() {
+        if (this.destroyed) { return; }
+        this.observeContent();
+        this.update();
+    }
+
     startRepeat(event, axis, direction) {
+        if (!this.active) { return; }
         event.preventDefault();
         this.scrollStep(axis, direction);
         this.stopRepeat();
@@ -3151,6 +3952,7 @@ class TurboVisionScrollbar {
     }
 
     onTrackMouseDown(event, axis) {
+        if (!this.active) { return; }
         if (event.target.closest("[data-role='thumb']")) {
             return;
         }
@@ -3168,6 +3970,7 @@ class TurboVisionScrollbar {
     }
 
     onThumbMouseDown(event, axis) {
+        if (!this.active) { return; }
         event.preventDefault();
         const metrics = this.axisMetrics(axis);
         this.dragState = {
@@ -3278,6 +4081,10 @@ class TurboVisionScrollbar {
         }
 
         axis.root.classList.toggle("is-disabled", maxScroll <= 0);
+        const unavailable = !this.active || maxScroll <= 0;
+        axis.root.setAttribute("aria-disabled", unavailable ? "true" : "false");
+        axis.backward.tabIndex = unavailable ? -1 : 0;
+        axis.forward.tabIndex = unavailable ? -1 : 0;
         if (thumbCells > 0) {
             axis.thumb.style.display = "grid";
         } else {
@@ -3290,12 +4097,50 @@ class TurboVisionScrollbar {
     }
 
     update() {
+        if (this.destroyed) { return; }
         this.updateAxis("x");
         this.updateAxis("y");
     }
 
+    setActive(active) {
+        this.active = Boolean(active);
+        for (const axis of Object.values(this.axes)) {
+            axis.root.classList.toggle("is-inactive", !this.active);
+            const unavailable = !this.active || axis.root.classList.contains("is-disabled");
+            axis.root.setAttribute("aria-disabled", unavailable ? "true" : "false");
+            axis.backward.tabIndex = unavailable ? -1 : 0;
+            axis.forward.tabIndex = unavailable ? -1 : 0;
+        }
+        if (!this.active) {
+            this.stopRepeat();
+            this.onDragEnd();
+        }
+    }
+
     clamp(value, min, max) {
         return Math.min(Math.max(value, min), max);
+    }
+
+    destroy() {
+        if (this.destroyed) { return; }
+        this.destroyed = true;
+        this.stopRepeat();
+        this.dragState = null;
+        document.removeEventListener("mousemove", this.onDragMove);
+        document.removeEventListener("mouseup", this.onDragEnd);
+        document.removeEventListener("mouseup", this.onDocumentMouseUp);
+        this.viewport.removeEventListener("scroll", this.onViewportScroll);
+        window.removeEventListener("resize", this.onWindowResize);
+        for (const axis of Object.values(this.axes)) {
+            axis.backward.removeEventListener("mousedown", axis.onBackwardMouseDown);
+            axis.forward.removeEventListener("mousedown", axis.onForwardMouseDown);
+            axis.track.removeEventListener("mousedown", axis.onTrackMouseDown);
+            axis.thumb.removeEventListener("mousedown", axis.onThumbMouseDown);
+        }
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
     }
 }
 
@@ -3311,6 +4156,7 @@ Object.assign(TV, {
     DOS_COLORS,
     THEME_PRESETS,
     DEFAULT_UI_CONFIG,
+    TV_COMMANDS,
     COLOR_GROUPS,
     buildDefaultColorPalette,
     buildPaletteFromCurrentStyle,
@@ -3348,6 +4194,7 @@ Object.assign(TV, {
     TVVerticalListViewer,
     TVVerticalScrollArea,
     TVMenuBox,
+    TVMenuController,
     TVButtonStrip,
     TVCheckBoxes,
     TVRadioButtons,
