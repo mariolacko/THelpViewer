@@ -134,6 +134,17 @@ compatibility with old Turbo Vision applications.
     remeasures and reinitializes the active mode on resize, detaches its resize
     listener on stop, and provides one shared idempotent idle-start mechanism
     used by both applications.
+18. The first File Open implementation used separate framed Files and
+    Directories controls, although Turbo Vision 2.0 `TFileDialog` uses one
+    unframed, two-column `TFileList`. The shared dialog title frame also laid
+    out its close control as a grid column, shifting the title away from the
+    true window center, and drew that control while the dialog was inactive.
+    **Resolved in Phase 5.3:** File Open now follows the original 49×19 cell
+    geometry with one list, directory entries ending in `\`, a horizontal
+    scrollbar and a two-line information pane. `TVFrame` now draws one
+    continuous title line, overlays the close control at its DOS coordinates,
+    centers the title over the whole frame and hides the control on passive
+    frames.
 
 ## Component assessment
 
@@ -143,7 +154,7 @@ compatibility with old Turbo Vision applications.
 | Active/passive window drawing | Good |
 | Mouse move, resize and scrollbars | Good, including explicit cleanup lifecycle |
 | Menus and status line | Shared keyboard model and dynamic window-command state complete |
-| Dialogs and buttons | Shared keyboard, modal and focus model complete |
+| Dialogs and buttons | Shared keyboard, modal and focus model complete; `TFrame` title geometry matches TV 2.0 |
 | InputLine | Usable native input, limited Turbo Vision semantics |
 | ListBox/ListViewer | Selection, activation, keyboard and roving focus complete |
 | CheckBoxes/RadioButtons | Native behaviour with DOS-style rendering |
@@ -190,8 +201,8 @@ compatibility with old Turbo Vision applications.
 13. Add browser-level keyboard/focus tests and visual snapshots for every
     shared widget and menu state.
 14. Add a Turbo Vision Widget Gallery/Test dialog.
-15. Add an authentic File Open dialog with file list, directory list and input
-    history, followed by History Viewer and a source/text viewer.
+15. Add an authentic File Open dialog with one two-column file/directory list
+    and input history, followed by History Viewer and a source/text viewer.
 16. Candidate games, in order: Mastermind, Tron Light Cycles, Tower of Hanoi.
 
 ## Progress
@@ -215,5 +226,6 @@ compatibility with old Turbo Vision applications.
 - [x] Phase 5.1: dependency-free real-Chrome menu/focus smoke-test foundation.
 - [x] Phase 5.2: interactive Turbo Vision Widget Gallery/Test dialog.
 - [x] Phase 5.3: catalog-backed File Open dialog with HELP/DOCS directories,
-  keyboard navigation, persistent input history and shared CP437-framed list
-  viewers verified in Safari.
+  a single two-column list, horizontal scrolling, persistent input history and
+  Turbo Vision 2.0 cell geometry. Shared `TVFrame` title drawing was corrected
+  and is covered by unit and real-Chrome geometry tests.

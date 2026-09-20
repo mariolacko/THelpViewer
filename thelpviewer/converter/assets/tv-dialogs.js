@@ -20,6 +20,7 @@ const {
     TVInputLine,
     TVGroup,
     TVListViewer,
+    TVListBox,
     TVVerticalListViewer,
     TVInfoBox,
     TVButtonStrip,
@@ -227,34 +228,114 @@ class TVWidgetGalleryDialog extends TVDialog {
     }
 }
 
+class TVFileListBox extends TVListBox {
+    constructor(root = null, options = {}) {
+        super(root, options);
+        this.rows = 8;
+        this.onViewportChange = null;
+    }
+
+    select(index, options = {}) {
+        super.select(index, options);
+        if (this.onViewportChange) { this.onViewportChange(); }
+    }
+
+    firstColumn() {
+        if (!this.root || !this.root.clientWidth) { return 0; }
+        const columnWidth = this.root.clientWidth / 2;
+        return Math.max(0, Math.round(this.root.scrollLeft / columnWidth));
+    }
+
+    scrollColumns(delta) {
+        if (!this.root || !this.items.length) { return; }
+        const columns = Math.ceil(this.items.length / this.rows);
+        const maxColumn = Math.max(0, columns - 2);
+        const nextColumn = Math.min(maxColumn, Math.max(0, this.firstColumn() + delta));
+        this.root.scrollLeft = nextColumn * (this.root.clientWidth / 2);
+        if (this.onViewportChange) { this.onViewportChange(); }
+    }
+
+    ensureSelectionVisible() {
+        if (!this.root || this.selectedIndex < 0) { return; }
+        const column = Math.floor(this.selectedIndex / this.rows);
+        const firstColumn = this.firstColumn();
+        if (column < firstColumn) {
+            this.scrollColumns(column - firstColumn);
+        } else if (column > firstColumn + 1) {
+            this.scrollColumns(column - firstColumn - 1);
+        }
+    }
+
+    onKeyDown(event) {
+        const current = this.resolveIndex(event.target);
+        if (current < 0 || !this.items.length) { return; }
+        let next = current;
+        if (event.key === "ArrowDown") {
+            next = Math.min(this.items.length - 1, current + 1);
+        } else if (event.key === "ArrowUp") {
+            next = Math.max(0, current - 1);
+        } else if (event.key === "ArrowRight") {
+            next = Math.min(this.items.length - 1, current + this.rows);
+        } else if (event.key === "ArrowLeft") {
+            next = Math.max(0, current - this.rows);
+        } else if (event.key === "PageDown") {
+            next = Math.min(this.items.length - 1, current + this.rows * 2);
+        } else if (event.key === "PageUp") {
+            next = Math.max(0, current - this.rows * 2);
+        } else if (event.key === "Home") {
+            next = 0;
+        } else if (event.key === "End") {
+            next = this.items.length - 1;
+        } else if (event.key === "Enter") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.select(current);
+            this.activateHandler?.(this.items[current], current, event);
+            return;
+        } else if (event.key === " ") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.select(current);
+            this.selectHandler?.(this.items[current], current, event);
+            return;
+        } else {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        this.select(next);
+        this.selectedElement()?.focus();
+        if (next !== current) {
+            this.selectHandler?.(this.items[next], next, event);
+        }
+    }
+}
+
 class TVFileOpenDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const nameLabel = new TVLabel({
-            text: "~N~ame:",
+            text: "~N~ame",
             hotkey: true,
             forId: "tv-file-open-name",
         });
         const nameInput = new TVInputLine({
             attrs: {
                 id: "tv-file-open-name",
+                value: "*.*",
                 autocomplete: "off",
                 spellcheck: "false",
                 "data-tv-file-open-name": true,
             },
         });
-        const buttons = new TVButtonStrip({
-            className: "tv-file-open-buttons",
-            buttons: [
-                new TVButton({
-                    className: "is-default",
-                    attrs: { "data-tv-file-open-confirm": true },
-                    label: "~O~pen",
-                }),
-                new TVButton({
-                    attrs: { "data-tv-file-open-cancel": true },
-                    label: "Cancel",
-                }),
-            ],
+        const filesLabel = new TVLabel({ text: "~F~iles", hotkey: true });
+        const openButton = new TVButton({
+            className: "is-default",
+            attrs: { "data-tv-file-open-confirm": true },
+            label: "~O~pen",
+        });
+        const cancelButton = new TVButton({
+            attrs: { "data-tv-file-open-cancel": true },
+            label: "Cancel",
         });
 
         super({
@@ -268,84 +349,64 @@ class TVFileOpenDialog extends TVDialog {
             },
             bodyMarkup: `
                 <div class="tv-file-open-main">
-                    <div class="tv-file-open-path" data-tv-file-open-path></div>
-                    <div class="tv-file-open-lists">
-                        <section class="tv-file-open-panel">
-                            ${TVVerticalListViewer.renderMarkup({
-                                rootClass: "tv-file-open-listviewer",
-                                rootAttrs: { "data-tv-file-open-files": true },
-                                viewportClass: "tv-file-open-list",
-                                frameTitle: "Files",
-                            })}
-                        </section>
-                        <section class="tv-file-open-panel">
-                            ${TVVerticalListViewer.renderMarkup({
-                                rootClass: "tv-file-open-listviewer",
-                                rootAttrs: { "data-tv-file-open-directories": true },
-                                viewportClass: "tv-file-open-list",
-                                frameTitle: "Directories",
-                            })}
-                        </section>
+                    <div class="tv-file-open-name-label">${nameLabel.renderMarkup()}</div>
+                    <div class="tv-file-open-name-input">${nameInput.renderMarkup()}</div>
+                    <button type="button" class="tv-file-open-history-button" data-tv-file-open-history
+                            aria-label="History" disabled>▐<span class="tv-hotkey">↓</span>▌</button>
+                    <div class="tv-file-open-files-label">${filesLabel.renderMarkup()}</div>
+                    <div class="tv-file-open-file-list" data-tv-file-open-files></div>
+                    <div class="tv-file-open-hscroll" data-tv-file-open-hscroll aria-hidden="true">
+                        <button type="button" data-tv-file-open-scroll-left tabindex="-1">${escapeHtml(displayCp437Char(17))}</button>
+                        <span data-tv-file-open-scroll-track></span>
+                        <button type="button" data-tv-file-open-scroll-right tabindex="-1">${escapeHtml(displayCp437Char(16))}</button>
                     </div>
-                    <div class="tv-file-open-name-row">
-                        ${nameLabel.renderMarkup()}
-                        ${nameInput.renderMarkup()}
-                        ${new TVButton({
-                            attrs: { "data-tv-file-open-history": true, disabled: true },
-                            label: "~H~istory",
-                        }).renderMarkup()}
+                    <div class="tv-file-open-open-button">${openButton.renderMarkup()}</div>
+                    <div class="tv-file-open-cancel-button">${cancelButton.renderMarkup()}</div>
+                    <div class="tv-file-open-info">
+                        <div data-tv-file-open-path></div>
+                        <div data-tv-file-open-detail></div>
                     </div>
                     <div class="tv-file-open-history-popup" data-tv-file-open-history-popup hidden>
                         ${TVVerticalListViewer.renderMarkup({
-                            rootClass: "tv-file-open-listviewer tv-file-open-history-listviewer",
+                            rootClass: "tv-file-open-history-listviewer",
                             rootAttrs: { "data-tv-file-open-history-list": true },
-                            viewportClass: "tv-file-open-list",
-                            frameTitle: "History",
+                            viewportClass: "tv-file-open-history-list",
                         })}
                     </div>
-                    ${buttons.renderMarkup()}
                 </div>
             `,
             footerMarkup: TVDialog.footerMarkup(),
-            width: "68ch",
-            height: "min(25em, calc(100% - 2em))",
-            left: "4ch",
-            top: "2em",
+            width: "49ch",
+            height: "19em",
             modal: true,
         });
         this.entries = [];
-        this.directories = [];
         this.currentDirectory = "";
+        this.currentItems = [];
         this.onOpen = null;
         this.storageKey = "thelp:file-open-history";
         this.nameInput = this.query("[data-tv-file-open-name]");
         this.pathLabel = this.query("[data-tv-file-open-path]");
+        this.detailLabel = this.query("[data-tv-file-open-detail]");
         this.openButton = this.query("[data-tv-file-open-confirm]");
         this.cancelButton = this.query("[data-tv-file-open-cancel]");
         this.historyButton = this.query("[data-tv-file-open-history]");
         this.historyPopup = this.query("[data-tv-file-open-history-popup]");
-        this.fileList = new TVVerticalListViewer(this.query("[data-tv-file-open-files]"), {
+        this.scrollTrack = this.query("[data-tv-file-open-scroll-track]");
+        this.fileList = new TVFileListBox(this.query("[data-tv-file-open-files]"), {
             itemClassName: "tv-file-open-list-item",
             itemAttrName: "data-tv-file-open-file-index",
-            renderItemContent: (entry) => escapeHtml(entry.fileName),
+            renderItemContent: (item) => escapeHtml(item.label),
         });
-        this.directoryList = new TVVerticalListViewer(this.query("[data-tv-file-open-directories]"), {
-            itemClassName: "tv-file-open-list-item",
-            itemAttrName: "data-tv-file-open-directory-index",
-            renderItemContent: (entry) => escapeHtml(entry.label),
-        });
+        this.fileList.onViewportChange = () => this.updateHorizontalScrollbar();
         this.historyList = new TVVerticalListViewer(this.query("[data-tv-file-open-history-list]"), {
-            itemClassName: "tv-file-open-list-item",
+            itemClassName: "tv-file-open-history-item",
             itemAttrName: "data-tv-file-open-history-index",
             renderItemContent: (entry) => escapeHtml(entry.virtualPath),
         });
         this.fileList.bind({
-            onSelect: (entry) => this.selectFile(entry),
-            onActivate: (entry) => this.openEntry(entry),
-        });
-        this.directoryList.bind({
-            onSelect: (directory) => this.selectDirectory(directory.key),
-            onActivate: (directory) => this.selectDirectory(directory.key, true),
+            onSelect: (item) => this.selectItem(item),
+            onActivate: (item) => this.activateItem(item),
         });
         this.historyList.bind({
             onSelect: (entry) => this.selectHistory(entry),
@@ -373,28 +434,8 @@ class TVFileOpenDialog extends TVDialog {
             };
         }).filter((entry) => entry.file && entry.fileName);
         this.onOpen = typeof onOpen === "function" ? onOpen : null;
-        const roots = [
-            { key: "HELP", label: "HELP", kind: "help" },
-            { key: "DOCS", label: "DOCS", kind: "doc" },
-        ].filter((directory) => this.entries.some((entry) => entry.kind === directory.kind));
-        const children = [];
-        for (const entry of this.entries) {
-            if (entry.directory === (entry.kind === "doc" ? "DOCS" : "HELP")) { continue; }
-            if (!children.some((directory) => directory.key === entry.directory)) {
-                children.push({
-                    key: entry.directory,
-                    label: `  ${entry.directory.replace(/^.*?\\/, "")}`,
-                    kind: entry.kind,
-                });
-            }
-        }
-        children.sort((left, right) => left.key.localeCompare(right.key));
-        this.directories = roots.flatMap((root) => [
-            root,
-            ...children.filter((directory) => directory.kind === root.kind),
-        ]);
-        if (!this.directories.some((directory) => directory.key === this.currentDirectory)) {
-            this.currentDirectory = this.directories[0]?.key || "";
+        if (!this.directoryExists(this.currentDirectory)) {
+            this.currentDirectory = "";
         }
         this.refresh();
     }
@@ -403,6 +444,14 @@ class TVFileOpenDialog extends TVDialog {
         this.openButton?.addEventListener("click", () => this.openSelected());
         this.cancelButton?.addEventListener("click", () => this.close());
         this.historyButton?.addEventListener("click", () => this.toggleHistory());
+        this.query("[data-tv-file-open-scroll-left]")?.addEventListener("mousedown", (event) => {
+            event.preventDefault();
+            this.fileList.scrollColumns(-1);
+        });
+        this.query("[data-tv-file-open-scroll-right]")?.addEventListener("mousedown", (event) => {
+            event.preventDefault();
+            this.fileList.scrollColumns(1);
+        });
         this.nameInput?.addEventListener("input", () => this.selectNameMatch());
         this.dialog.addEventListener("keydown", (event) => {
             if (!event.altKey || event.ctrlKey || event.metaKey) { return; }
@@ -411,9 +460,9 @@ class TVFileOpenDialog extends TVDialog {
                 event.preventDefault();
                 this.nameInput.focus();
                 this.nameInput.select();
-            } else if (key === "h") {
+            } else if (key === "f") {
                 event.preventDefault();
-                this.toggleHistory();
+                this.fileList.selectedElement()?.focus();
             } else if (key === "o") {
                 event.preventDefault();
                 this.openSelected();
@@ -425,12 +474,9 @@ class TVFileOpenDialog extends TVDialog {
         this.refresh();
         super.open();
         window.requestAnimationFrame(() => {
-            this.fileList.updateScrollbar();
-            this.directoryList.updateScrollbar();
-            if (this.nameInput) {
-                this.nameInput.focus();
-                this.nameInput.select();
-            }
+            this.updateHorizontalScrollbar();
+            this.nameInput?.focus();
+            this.nameInput?.select();
         });
     }
 
@@ -450,82 +496,119 @@ class TVFileOpenDialog extends TVDialog {
         super.onDialogKeyDown(event);
     }
 
-    visibleEntries() {
-        const isRoot = this.currentDirectory === "HELP" || this.currentDirectory === "DOCS";
-        return this.entries.filter((entry) => isRoot
-            ? entry.directory.startsWith(`${this.currentDirectory}\\`) || entry.directory === this.currentDirectory
-            : entry.directory === this.currentDirectory);
+    directoryExists(path) {
+        if (!path) { return true; }
+        return this.entries.some((entry) => (
+            entry.directory === path || entry.directory.startsWith(`${path}\\`)
+        ));
+    }
+
+    parentDirectory(path) {
+        const parts = String(path || "").split("\\").filter(Boolean);
+        parts.pop();
+        return parts.join("\\");
+    }
+
+    buildItems() {
+        const prefix = this.currentDirectory ? `${this.currentDirectory}\\` : "";
+        const directories = new Map();
+        const files = [];
+        for (const entry of this.entries) {
+            if (entry.directory === this.currentDirectory) {
+                files.push({ type: "file", label: entry.fileName, entry });
+                continue;
+            }
+            if (!entry.directory.startsWith(prefix)) { continue; }
+            const rest = entry.directory.slice(prefix.length);
+            const child = rest.split("\\")[0];
+            if (!child) { continue; }
+            const path = prefix + child;
+            directories.set(path, {
+                type: "directory",
+                label: `${child}\\`,
+                path,
+            });
+        }
+        const result = [];
+        if (this.currentDirectory) {
+            result.push({
+                type: "parent",
+                label: "..\\",
+                path: this.parentDirectory(this.currentDirectory),
+            });
+        }
+        result.push(...Array.from(directories.values()).sort((left, right) => left.label.localeCompare(right.label)));
+        result.push(...files.sort((left, right) => left.label.localeCompare(right.label)));
+        return result;
     }
 
     refresh() {
-        const directoryIndex = this.directories.findIndex((directory) => directory.key === this.currentDirectory);
-        this.directoryList.setItems(this.directories, directoryIndex);
-        const files = this.visibleEntries();
-        const selectedName = this.nameInput?.value || "";
-        const selectedIndex = Math.max(0, files.findIndex((entry) => entry.fileName === selectedName));
-        this.fileList.setItems(files, files.length ? selectedIndex : -1);
-        if (!selectedName && files.length) {
-            this.selectFile(files[selectedIndex]);
-        }
+        this.currentItems = this.buildItems();
+        this.fileList.setItems(this.currentItems, this.currentItems.length ? 0 : -1);
+        if (this.nameInput) { this.nameInput.value = "*.*"; }
+        this.updateInfo(this.currentItems[0] || null);
+        this.updateHistoryState();
+        this.updateHorizontalScrollbar();
+    }
+
+    currentMaskPath() {
+        const directory = this.currentDirectory ? `${this.currentDirectory}\\` : "";
+        return `THelpViewer:\\${directory}*.*`;
+    }
+
+    selectItem(item) {
+        if (!item || !this.nameInput) { return; }
+        this.nameInput.value = item.type === "file" ? item.entry.fileName : `${item.label}*.*`;
+        this.updateInfo(item);
+    }
+
+    updateInfo(item) {
         if (this.pathLabel) {
-            this.pathLabel.textContent = `THelpViewer:\\${this.currentDirectory}`;
+            this.pathLabel.textContent = ` ${this.currentMaskPath()}`;
         }
-        const history = this.historyEntries();
-        this.historyList.setItems(history, history.length ? 0 : -1);
-        if (this.historyButton) {
-            this.historyButton.disabled = history.length === 0;
+        if (!this.detailLabel) { return; }
+        if (!item) {
+            this.detailLabel.textContent = "";
+        } else if (item.type === "file") {
+            const format = String(item.entry.format || (item.entry.kind === "doc" ? "Markdown" : "Help")).toUpperCase();
+            const topics = Number.isInteger(item.entry.topics) ? `  ${item.entry.topics} topics` : "";
+            this.detailLabel.textContent = ` ${item.entry.fileName}  ${format}${topics}`;
+        } else {
+            this.detailLabel.textContent = ` ${item.label}  Directory`;
         }
     }
 
-    selectDirectory(key, focusFiles = false) {
-        if (!this.directories.some((directory) => directory.key === key)) { return; }
-        this.currentDirectory = key;
-        const files = this.visibleEntries();
-        this.fileList.setItems(files, files.length ? 0 : -1);
-        if (this.pathLabel) {
-            this.pathLabel.textContent = `THelpViewer:\\${key}`;
-        }
-        if (files.length) {
-            this.selectFile(files[0]);
-            if (focusFiles) { this.fileList.selectedElement()?.focus(); }
-        } else if (this.nameInput) {
-            this.nameInput.value = "";
-        }
-    }
-
-    selectFile(entry) {
-        if (entry && this.nameInput) {
-            this.nameInput.value = entry.fileName;
+    activateItem(item) {
+        if (!item) { return; }
+        if (item.type === "file") {
+            this.openEntry(item.entry);
+        } else {
+            this.currentDirectory = item.path;
+            this.refresh();
+            this.fileList.selectedElement()?.focus();
         }
     }
 
     selectNameMatch() {
         const query = String(this.nameInput?.value || "").trim().toLocaleLowerCase();
-        if (!query) { return; }
-        const index = this.fileList.items.findIndex((entry) => (
-            entry.fileName.toLocaleLowerCase().startsWith(query)
-            || String(entry.name || "").toLocaleLowerCase().startsWith(query)
-        ));
+        if (!query || query.includes("*")) { return; }
+        const index = this.currentItems.findIndex((item) => item.label.toLocaleLowerCase().startsWith(query));
         if (index >= 0) {
             this.fileList.select(index);
+            this.updateInfo(this.currentItems[index]);
         }
-    }
-
-    selectedEntry() {
-        const query = String(this.nameInput?.value || "").trim().toLocaleLowerCase();
-        const files = this.fileList.items;
-        if (query) {
-            const exact = files.find((entry) => (
-                entry.fileName.toLocaleLowerCase() === query
-                || String(entry.name || "").toLocaleLowerCase() === query
-            ));
-            if (exact) { return exact; }
-        }
-        return this.fileList.selectedItem();
     }
 
     openSelected() {
-        this.openEntry(this.selectedEntry());
+        const query = String(this.nameInput?.value || "").trim().toLocaleLowerCase();
+        const exact = this.currentItems.find((item) => (
+            item.type === "file" && item.entry.fileName.toLocaleLowerCase() === query
+        ));
+        if (exact) {
+            this.openEntry(exact.entry);
+            return;
+        }
+        this.activateItem(this.fileList.selectedItem());
     }
 
     openEntry(entry) {
@@ -533,6 +616,19 @@ class TVFileOpenDialog extends TVDialog {
         this.remember(entry);
         this.close();
         this.onOpen(entry);
+    }
+
+    updateHorizontalScrollbar() {
+        if (!this.scrollTrack) { return; }
+        const trackLength = 29;
+        const columns = Math.max(1, Math.ceil(this.currentItems.length / this.fileList.rows));
+        const maxColumn = Math.max(0, columns - 2);
+        const position = maxColumn
+            ? Math.round((this.fileList.firstColumn() / maxColumn) * (trackLength - 1))
+            : -1;
+        const cells = Array.from({ length: trackLength }, () => displayCp437Char(177));
+        if (position >= 0) { cells[position] = displayCp437Char(254); }
+        this.scrollTrack.textContent = cells.join("");
     }
 
     storedHistoryKeys() {
@@ -558,11 +654,18 @@ class TVFileOpenDialog extends TVDialog {
         }
     }
 
+    updateHistoryState() {
+        const history = this.historyEntries();
+        this.historyList.setItems(history, history.length ? 0 : -1);
+        if (this.historyButton) {
+            this.historyButton.disabled = history.length === 0;
+        }
+    }
+
     toggleHistory() {
         if (!this.historyPopup || this.historyButton?.disabled) { return; }
         if (this.historyPopup.hidden) {
-            const history = this.historyEntries();
-            this.historyList.setItems(history, history.length ? 0 : -1);
+            this.updateHistoryState();
             this.historyPopup.hidden = false;
             window.requestAnimationFrame(() => {
                 this.historyList.updateScrollbar();
@@ -581,9 +684,11 @@ class TVFileOpenDialog extends TVDialog {
         if (!entry) { return; }
         this.currentDirectory = entry.directory;
         this.refresh();
-        const index = this.fileList.items.findIndex((candidate) => candidate.historyKey === entry.historyKey);
+        const index = this.currentItems.findIndex((item) => (
+            item.type === "file" && item.entry.historyKey === entry.historyKey
+        ));
         this.fileList.select(index);
-        this.selectFile(entry);
+        this.selectItem(this.currentItems[index]);
         if (activate) {
             this.openEntry(entry);
         } else {

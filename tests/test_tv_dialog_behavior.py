@@ -93,8 +93,11 @@ function buildDialog(options = {}) {
     const first = new FakeElement("first");
     const second = new FakeElement("second");
     const defaultButton = new FakeElement("default");
+    const closeButton = new FakeElement("close");
     dialogElement.querySelector = (selector) => (
-        selector === ".tv-dialog-button.is-default" ? defaultButton : null
+        selector === ".tv-dialog-button.is-default" ? defaultButton
+            : selector === "[data-tv-close-button]" ? closeButton
+            : null
     );
     dialogElement.querySelectorAll = () => [first, second];
     overlay.querySelector = (selector) => {
@@ -112,7 +115,7 @@ function buildDialog(options = {}) {
         footerMarkup: "",
         ...options,
     });
-    return { instance, overlay, dialogElement, first, second, defaultButton };
+    return { instance, overlay, dialogElement, first, second, defaultButton, closeButton };
 }
 
 function keyEvent(key, target, extra = {}) {
@@ -189,6 +192,13 @@ if (!modalMarkup.includes('aria-modal="true"') || !modalMarkup.includes("is-moda
 if (!nonModalMarkup.includes('aria-modal="false"')) {
     throw new Error("non-modal markup is incorrectly announced as modal");
 }
+const titlebarMarkup = modalMarkup.slice(
+    modalMarkup.indexOf('class="tv-dialog-titlebar"'),
+    modalMarkup.indexOf('class="tv-dialog-body"')
+);
+if ((titlebarMarkup.match(/data-tv-border-fill=/g) || []).length !== 1) {
+    throw new Error("dialog title frame is not a single continuous line");
+}
 
 const manager = new TV.TVDialogManager(document.body);
 const managedWindow = new FakeElement("managed-window");
@@ -213,6 +223,14 @@ managedDialog.instance.bindCommonClose(() => {
 });
 manager.register("managed-dialog", managedDialog.instance);
 managedDialog.instance.open();
+if (managedDialog.closeButton.hidden) {
+    throw new Error("active dialog close control is hidden");
+}
+TV.updateWindowFrameState(managedDialog.dialogElement, false, { dialog: true });
+if (!managedDialog.closeButton.hidden) {
+    throw new Error("inactive dialog close control is still drawn");
+}
+TV.updateWindowFrameState(managedDialog.dialogElement, true, { dialog: true });
 if (!manager.dispatchCommand(TV.TV_COMMANDS.CLOSE) || dialogCloseCalls !== 1) {
     throw new Error("active dialog did not receive Close");
 }

@@ -67,6 +67,10 @@ Static methods:
 ### TVFrame & TVDialog
 
 - **TVFrame** — Generates dialog window markup (titlebar, body, footer, borders).
+  Its active frame uses the Turbo Vision 2.0 double-line glyphs; the passive
+  frame uses single-line glyphs and omits the close control. The close control
+  is overlaid at columns 2–4 and the title is centered over one continuous
+  frame line, matching `TFrame` rather than participating in the layout.
 - **TVDialog** — Managed dialog/window with overlay; it may be modal or non-modal.
   - `open()`, `close()`, `destroy()`, `center()`, `isOpen()`, `isActive()`
   - `close()` hides a reusable dialog; `destroy()` permanently removes a
@@ -187,11 +191,14 @@ Standard application dialogs.
 ### TVFileOpenDialog
 
 - `configure(entries, onOpen)` — Populate the browser-safe virtual filesystem and install its open callback
-- HELP and DOCS roots expose catalog groups as directories; selecting a root lists all of its files recursively
-- File and directory lists use the shared list-viewer keyboard model
-- `TVVerticalListViewer.renderMarkup({ frameTitle })` supplies reusable
-  CP437 top, side and bottom frames with the scrollbar embedded at the right
-- `Alt+N`, `Alt+H` and `Alt+O` focus Name, show History and open the selected file
+- The layout follows Turbo Vision 2.0 `TFileDialog`: one unframed, two-column
+  `TFileList`, a horizontal scrollbar, Name input with a three-cell History
+  control, Open/Cancel buttons and the two-line `TFileInfoPane` at the bottom.
+- HELP and DOCS roots and their catalog groups appear in the same list as
+  directory entries ending in `\`; `..\` navigates to the parent directory.
+- Arrow keys move within a column, Left/Right move by one eight-row column,
+  Page Up/Down move by two columns, and double-click/Enter activates an entry.
+- `Alt+N`, `Alt+F` and `Alt+O` focus Name, the file list and Open respectively.
 - The ten most recently opened catalog entries are stored in local storage; missing catalog entries are ignored
 
 ## tv-screensaver.js

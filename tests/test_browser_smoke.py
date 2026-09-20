@@ -134,7 +134,8 @@ async function run() {
             returnByValue: true,
         });
         if (result.exceptionDetails) {
-            throw new Error(result.exceptionDetails.text || "browser evaluation failed");
+            const description = result.exceptionDetails.exception?.description;
+            throw new Error(description || result.exceptionDetails.text || "browser evaluation failed");
         }
         return result.result.value;
     };
@@ -290,34 +291,51 @@ async function run() {
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
         );
         if (!dialog) { return { open: false }; }
-        const docsDirectory = Array.from(dialog.querySelectorAll('[data-tv-file-open-directory-index]'))
-            .find((element) => element.textContent.trim() === 'DOCS');
+        const slash = String.fromCharCode(92);
+        const rootItems = Array.from(dialog.querySelectorAll('[data-tv-file-open-file-index]'));
+        const rootDirectories = rootItems.filter((element) => element.textContent.trim().endsWith(slash));
+        const docsDirectory = rootDirectories.find((element) => element.textContent.trim() === "DOCS" + slash);
         if (!docsDirectory) { return { open: true, docsDirectory: false }; }
-        docsDirectory.click();
-        const firstFile = dialog.querySelector('[data-tv-file-open-file-index]');
+        docsDirectory.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        const docItems = Array.from(dialog.querySelectorAll('[data-tv-file-open-file-index]'));
+        const firstFile = docItems.find((element) => !element.textContent.trim().endsWith(slash));
         if (!firstFile) { return { open: true, docsDirectory: true, files: 0 }; }
         firstFile.click();
         const input = dialog.querySelector('[data-tv-file-open-name]');
+        const fileList = dialog.querySelector('[data-tv-file-open-files]');
+        const titlebar = dialog.querySelector('.tv-dialog-titlebar');
+        const title = dialog.querySelector('.tv-dialog-title-text');
+        const dialogRect = dialog.getBoundingClientRect();
+        const titleRect = title.getBoundingClientRect();
         input.focus();
         return {
             open: !dialog.closest('.tv-dialog-overlay').hidden,
             modal: dialog.getAttribute('aria-modal'),
             docsDirectory: true,
-            files: dialog.querySelectorAll('[data-tv-file-open-file-index]').length,
-            directories: dialog.querySelectorAll('[data-tv-file-open-directory-index]').length,
-            framedLists: dialog.querySelectorAll('.tv-file-open-listviewer.tv-vlist-framed').length,
-            fileFrameBars: dialog.querySelectorAll('[data-tv-file-open-files] .tv-vlist-frame-bar').length,
-            fileFrameSide: dialog.querySelector('[data-tv-file-open-files] .tv-vlist-frame-side')?.textContent || '',
-            path: dialog.querySelector('[data-tv-file-open-path]')?.textContent || '',
+            files: docItems.length,
+            rootDirectories: rootDirectories.length,
+            internalFrames: dialog.querySelectorAll('.tv-vlist-framed').length,
+            outerTitleCorners: dialog.querySelectorAll('.tv-dialog-titlebar > .tv-border-corner').length,
+            outerFooterCorners: dialog.querySelectorAll('.tv-dialog-footer > .tv-border-corner').length,
+            outerTitleFills: titlebar.querySelectorAll(':scope > .tv-border-fill').length,
+            titleCenterOffset: Math.abs(
+                (titleRect.left + titleRect.width / 2) - (dialogRect.left + dialogRect.width / 2)
+            ),
+            twoColumnFlow: getComputedStyle(fileList).gridAutoFlow,
+            horizontalScrollbar: Boolean(dialog.querySelector('[data-tv-file-open-hscroll]')),
+            path: (dialog.querySelector('[data-tv-file-open-path]')?.textContent || '').trim(),
             name: input.value,
             focused: document.activeElement === input,
         };
     })()`);
     if (
         !fileOpen.open || fileOpen.modal !== "true" || !fileOpen.docsDirectory
-        || fileOpen.files < 1 || fileOpen.directories < 2
-        || fileOpen.framedLists !== 3 || fileOpen.fileFrameBars !== 2 || !fileOpen.fileFrameSide
-        || fileOpen.path !== "THelpViewer:\\DOCS" || !fileOpen.name || !fileOpen.focused
+            || fileOpen.files < 2 || fileOpen.rootDirectories !== 2 || fileOpen.internalFrames !== 0
+            || fileOpen.outerTitleCorners !== 2 || fileOpen.outerFooterCorners !== 2
+            || fileOpen.outerTitleFills !== 1 || fileOpen.titleCenterOffset > 1
+        || fileOpen.twoColumnFlow !== "column" || !fileOpen.horizontalScrollbar
+        || fileOpen.path !== ["THelpViewer:", "DOCS", "*.*"].join(String.fromCharCode(92))
+        || !fileOpen.name || !fileOpen.focused
     ) {
         throw new Error(`File Open dialog is incomplete: ${JSON.stringify(fileOpen)}`);
     }
