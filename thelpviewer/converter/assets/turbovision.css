@@ -2679,7 +2679,7 @@ button.tv-status-item {
 .tv-find-confirm { top: 1em; }
 .tv-find-cancel { top: 4em; }
 .tv-find-status { left: 2ch; top: 5em; width: 31ch; height: 2em; overflow: hidden; }
-.tv-find-history-popup { left: 1ch; top: 1em; width: 34ch; height: 7em; }
+.tv-find-history-popup { left: 1ch; top: 1em; --tv-history-window-width: 32ch; }
 
 .tv-search-main {
     grid-template-rows: auto 1em minmax(0, 1fr);
@@ -3295,13 +3295,13 @@ button.tv-status-item {
 }
 
 .tv-file-open-history-arrow {
-    background: var(--tv-palette-dialog-history-button-bg);
-    color: var(--tv-palette-dialog-history-button-fg);
+    background: var(--tv-palette-dialog-history-sides-bg);
+    color: var(--tv-palette-dialog-history-sides-fg);
 }
 
 .tv-file-open-history-side {
-    background: var(--tv-palette-dialog-history-sides-bg);
-    color: var(--tv-palette-dialog-history-sides-fg);
+    background: var(--tv-palette-dialog-history-button-bg);
+    color: var(--tv-palette-dialog-history-button-fg);
 }
 
 .tv-file-open-files-label {
@@ -3435,23 +3435,64 @@ button.tv-status-item {
     z-index: 2;
     left: 1ch;
     top: 1em;
-    width: 31ch;
+    display: grid;
+    grid-template-rows: 1em 6em 1em;
+    width: var(--tv-history-window-width, 30ch);
     height: 8em;
-    padding: 1em 1ch;
     box-sizing: border-box;
     overflow: hidden;
-    background: var(--tv-dialog-bg);
+    background: var(--tv-palette-dialog-input-normal-bg);
+    color: var(--tv-palette-dialog-input-normal-fg);
     box-shadow: 1ch 0.5em 0 var(--tv-shadow-soft);
+}
+
+.tv-history-frame-row {
+    display: grid;
+    grid-template-columns: 1ch minmax(0, 1fr) 1ch;
+    width: 100%;
+    height: 1em;
+    overflow: hidden;
+    background: var(--tv-palette-dialog-input-normal-bg);
+    color: var(--tv-palette-dialog-input-normal-fg);
+    line-height: 1;
+}
+
+.tv-history-frame-fill {
+    overflow: hidden;
+    white-space: pre;
+}
+
+.tv-history-client {
+    display: grid;
+    grid-template-columns: 1ch minmax(0, 1fr);
+    width: 100%;
+    height: 6em;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.tv-history-frame-side {
+    width: 1ch;
+    height: 6em;
+    overflow: hidden;
+    white-space: pre;
+    color: var(--tv-palette-dialog-input-normal-fg);
+    background: var(--tv-palette-dialog-input-normal-bg);
+    line-height: 1;
 }
 
 .tv-file-open-history-listviewer {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 1ch;
-    width: 29ch;
+    width: 100%;
     height: 6em;
     overflow: hidden;
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
+    background: var(--tv-palette-dialog-input-normal-bg);
+    color: var(--tv-palette-dialog-input-normal-fg);
+    --tv-owner-scroll-page-bg: var(--tv-palette-dialog-history-page-bg);
+    --tv-owner-scroll-page-fg: var(--tv-palette-dialog-history-page-fg);
+    --tv-owner-scroll-controls-bg: var(--tv-palette-dialog-history-sides-bg);
+    --tv-owner-scroll-controls-fg: var(--tv-palette-dialog-history-sides-fg);
 }
 
 .tv-file-open-history-list {
@@ -3460,10 +3501,20 @@ button.tv-status-item {
     align-content: start;
     height: 6em;
     overflow: hidden;
+    background: var(--tv-palette-dialog-input-normal-bg);
+    color: var(--tv-palette-dialog-input-normal-fg);
 }
 
 .tv-file-open-history-item {
     padding-right: 0;
+    background: var(--tv-palette-dialog-input-normal-bg);
+    color: var(--tv-palette-dialog-input-normal-fg);
+}
+
+.tv-file-open-history-item.is-selected,
+.tv-file-open-history-list:focus-within .tv-file-open-history-item.is-selected {
+    background: var(--tv-palette-dialog-input-selected-bg);
+    color: var(--tv-palette-dialog-input-selected-fg);
 }
 
 .tv-change-dir-body {
@@ -3560,8 +3611,7 @@ button.tv-status-item {
 .tv-change-dir-history-popup {
     left: 1ch;
     top: 1em;
-    width: 34ch;
-    height: 10em;
+    --tv-history-window-width: 31ch;
 }
 
 .tv-multicheck-item.is-disabled .tv-multicheck-button {
@@ -4316,6 +4366,7 @@ button.tv-mastermind-peg {
 .tv-mastermind-color-5 { color: #55ffff; }
 
 .tv-mastermind-color.tv-dialog-button {
+    min-width: 5ch;
     color: inherit;
 }
 

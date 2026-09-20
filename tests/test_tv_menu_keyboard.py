@@ -313,7 +313,9 @@ function item(command) {
     };
 }
 const items = ["tile", "cascade", "list", "zoom", "next", "previous", "close"].map(item);
-global.document = { querySelectorAll: () => items };
+global.document = {
+    querySelectorAll: (selector) => selector === "[data-tv-window-cmd]" ? items : [],
+};
 const app = Object.create(TestBundleApp.prototype);
 let windowCount = 0;
 let targetCount = 0;

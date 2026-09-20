@@ -3160,6 +3160,14 @@ class TVBundleApp {
         if (!this.dialogManager) { return; }
         const windowCount = this.dialogManager.openWindowCount();
         const targetCount = this.dialogManager.openTargets().length;
+        const activeTarget = this.dialogManager.activeTarget || "";
+        const activeWindow = this.dialogManager.windows?.get?.(activeTarget) || null;
+        const canFind = Boolean(
+            activeWindow?.isConnected
+            && (activeTarget.startsWith("help:") || activeTarget.startsWith("doc:"))
+        );
+        const activeEditor = activeWindow?._tvEditor || activeWindow?._tvFindEditor || null;
+        const canFindAgain = canFind && Boolean(activeEditor?.lastQuery);
         const states = {
             tile: windowCount > 0,
             cascade: windowCount > 0,
@@ -3179,6 +3187,19 @@ class TVBundleApp {
                 item.tabIndex = -1;
             }
         });
+        const setSearchCommandState = (selector, enabled) => {
+            document.querySelectorAll(selector).forEach((item) => {
+                item.disabled = !enabled;
+                item.setAttribute("aria-disabled", enabled ? "false" : "true");
+                item.classList.toggle("is-disabled", !enabled);
+                if (!enabled) {
+                    item.classList.remove("is-menu-selected");
+                    item.tabIndex = -1;
+                }
+            });
+        };
+        setSearchCommandState("[data-tv-find]", canFind);
+        setSearchCommandState("[data-tv-find-again]", canFindAgain);
     }
 
     _bindStatusButtons() {
@@ -3919,11 +3940,9 @@ class TVBundleApp {
 
     _findAgain() {
         const target = this._activeFindTarget() || this.lastFindTarget;
-        if (!target?.windowEl?.isConnected || !target.editor) {
-            return this._openFind();
-        }
+        if (!target?.windowEl?.isConnected || !target.editor) { return false; }
         this.lastFindTarget = target;
-        if (!target.editor.lastQuery) { return this._openFind(); }
+        if (!target.editor.lastQuery) { return false; }
         this.dialogManager.activateWindow(target.managerName);
         return target.editor.findNext();
     }

@@ -3446,22 +3446,22 @@ class TVLudoDialog extends TVDialog {
 class TVMastermindDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const paletteButtons = Array.from({ length: 6 }, (_, color) => new TVButton({
-            x: 27 + (color % 3) * 6,
-            y: 1 + Math.floor(color / 3) * 2,
+            x: 31 + (color % 3) * 6,
+            y: 2 + Math.floor(color / 3) * 2,
             w: 5,
             attrs: { type: "button", "data-tv-mastermind-color": color },
             className: `tv-mastermind-color tv-mastermind-color-${color}`,
             label: String(color + 1),
         }));
         const body = new TVGroup({
-            w: 44, h: 13,
+            w: 52, h: 16,
             children: [
-                new TVStaticText({ x: 0, y: 0, w: 24, h: 10, attrs: { "data-tv-mastermind-board": true } }),
-                new TVStaticText({ x: 27, y: 0, w: 17, text: "Colors" }),
+                new TVStaticText({ x: 2, y: 1, w: 25, h: 10, attrs: { "data-tv-mastermind-board": true } }),
+                new TVStaticText({ x: 31, y: 1, w: 17, text: "Colors" }),
                 ...paletteButtons,
-                new TVButton({ x: 27, y: 6, w: 11, className: "is-default", attrs: { type: "button", "data-tv-mastermind-guess": true }, label: "~G~uess" }),
-                new TVButton({ x: 27, y: 8, w: 11, attrs: { type: "button", "data-tv-mastermind-new": true }, label: "~N~ew" }),
-                new TVStaticText({ x: 0, y: 11, w: 44, attrs: { "data-tv-mastermind-status": true } }),
+                new TVButton({ x: 31, y: 8, w: 11, className: "is-default", attrs: { type: "button", "data-tv-mastermind-guess": true }, label: "~G~uess" }),
+                new TVButton({ x: 31, y: 10, w: 11, attrs: { type: "button", "data-tv-mastermind-new": true }, label: "~N~ew" }),
+                new TVStaticText({ x: 2, y: 13, w: 48, attrs: { "data-tv-mastermind-status": true } }),
             ],
         }).renderMarkup();
         super({
@@ -3472,10 +3472,8 @@ class TVMastermindDialog extends TVDialog {
             closeAttrs: { "data-tv-mastermind-close": true, "aria-label": "Close Mastermind" },
             bodyMarkup: body,
             footerMarkup: TVDialog.footerMarkup(),
-            width: "48ch",
-            height: "min(17em, calc(100% - 2em))",
-            left: "7ch",
-            top: "2em",
+            width: "56ch",
+            height: "min(20em, calc(100% - 2em))",
         });
         installHallOfFame(this, "mastermind");
         this.game = new MastermindGame();

@@ -46,6 +46,9 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVHistoryWindow extends TVWindow" in dialogs
     assert "class TVChangeDirectoryDialog extends TVDialog" in dialogs
     assert "new TVOutline(this.query" in dialogs
+    assert "class TVHistoryWindow extends TVWindow" in dialogs
+    assert "static renderMarkup({ popupClass" in dialogs
+    assert dialogs.count("TVHistoryWindow.renderMarkup({") == 3
     assert "new TVFileList(this.query" in dialogs
     assert "new TVHistoryWindow({" in dialogs
 

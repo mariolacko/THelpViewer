@@ -258,6 +258,13 @@ async function run() {
     })`, true);
 
     await key("Escape", "Escape", 0, true);
+    const initialFindState = await evaluate(`(() => ({
+        findDisabled: document.querySelector('[data-tv-find]')?.disabled,
+        againDisabled: document.querySelector('[data-tv-find-again]')?.disabled,
+    }))()`);
+    if (!initialFindState.findDisabled || !initialFindState.againDisabled) {
+        throw new Error(`Find commands should be disabled without an active content window: ${JSON.stringify(initialFindState)}`);
+    }
     await evaluate(`(() => {
         const doc = document.querySelector('[data-tv-doc-open]');
         if (!doc) { throw new Error('documentation menu is empty'); }
@@ -272,6 +279,14 @@ async function run() {
         };
         check();
     })`, true);
+
+    const documentFindState = await evaluate(`(() => ({
+        findDisabled: document.querySelector('[data-tv-find]')?.disabled,
+        againDisabled: document.querySelector('[data-tv-find-again]')?.disabled,
+    }))()`);
+    if (documentFindState.findDisabled || !documentFindState.againDisabled) {
+        throw new Error(`Find command state is wrong before the first search: ${JSON.stringify(documentFindState)}`);
+    }
 
     const docColors = await evaluate(`(() => {
         const doc = document.querySelector('.tv-doc-window');
@@ -352,6 +367,13 @@ async function run() {
     if (!findResult.closed || findResult.selection.toLocaleLowerCase() !== findNeedle.toLocaleLowerCase()
         || !findResult.history.includes(findNeedle)) {
         throw new Error(`Find did not search the active editor: ${JSON.stringify(findResult)}`);
+    }
+    const searchedFindState = await evaluate(`(() => ({
+        findDisabled: document.querySelector('[data-tv-find]')?.disabled,
+        againDisabled: document.querySelector('[data-tv-find-again]')?.disabled,
+    }))()`);
+    if (searchedFindState.findDisabled || searchedFindState.againDisabled) {
+        throw new Error(`Find Again was not enabled after a successful search: ${JSON.stringify(searchedFindState)}`);
     }
     await key("l", "KeyL", 2);
     await pause();
@@ -930,8 +952,8 @@ async function run() {
         || fileOpen.normalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || fileOpen.normalTextColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || !fileOpen.visibleText
-        || fileOpen.historyArrowColors.join() !== ['rgb(0, 170, 0)', 'rgb(0, 0, 0)'].join()
-        || fileOpen.historySideColors.join() !== ['rgb(170, 170, 170)', 'rgb(0, 170, 0)'].join()
+        || fileOpen.historyArrowColors.join() !== ['rgb(170, 170, 170)', 'rgb(0, 170, 0)'].join()
+        || fileOpen.historySideColors.join() !== ['rgb(0, 170, 0)', 'rgb(0, 0, 0)'].join()
     ) {
         throw new Error(`File Open dialog is incomplete: ${JSON.stringify(fileOpen)}`);
     }
@@ -957,10 +979,27 @@ async function run() {
         const button = document.querySelector('[data-tv-file-open-history]');
         button.click();
         const popup = document.querySelector('[data-tv-file-open-history-popup]');
-        return !button.disabled && Boolean(popup && !popup.hidden)
-            && popup.querySelectorAll('[data-tv-file-open-history-index]').length === 1;
+        const input = document.querySelector('[data-tv-file-open-name]');
+        const popupStyle = getComputedStyle(popup);
+        const selected = popup?.querySelector('[data-tv-file-open-history-index].is-selected');
+        const selectedStyle = getComputedStyle(selected);
+        const cellWidth = input.getBoundingClientRect().width / 28;
+        return {
+            enabled: !button.disabled,
+            open: Boolean(popup && !popup.hidden),
+            entries: popup?.querySelectorAll('[data-tv-file-open-history-index]').length || 0,
+            columns: Math.round(popup.getBoundingClientRect().width / cellWidth),
+            frame: [popupStyle.backgroundColor, popupStyle.color],
+            selected: [selectedStyle.backgroundColor, selectedStyle.color],
+            corners: popup?.querySelectorAll('.tv-history-frame-corner').length || 0,
+        };
     })()`);
-    if (!historyOpen) { throw new Error("File Open history did not reopen"); }
+    if (!historyOpen.enabled || !historyOpen.open || historyOpen.entries !== 1
+        || historyOpen.columns !== 30 || historyOpen.corners !== 4
+        || historyOpen.frame.join() !== ['rgb(0, 0, 170)', 'rgb(255, 255, 255)'].join()
+        || historyOpen.selected.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()) {
+        throw new Error(`File Open history does not match THistoryWindow: ${JSON.stringify(historyOpen)}`);
+    }
     await key("Escape", "Escape", 0, true);
     const escapeClosedHistoryOnly = await evaluate(`(() => {
         const popup = document.querySelector('[data-tv-file-open-history-popup]');
@@ -1278,14 +1317,30 @@ async function run() {
         const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Mastermind'
         );
+        const body = dialog?.querySelector('.tv-dialog-body');
+        const group = dialog?.querySelector('.tv-group');
+        const board = dialog?.querySelector('[data-tv-mastermind-board]');
+        const bodyRect = body?.getBoundingClientRect();
+        const groupRect = group?.getBoundingClientRect();
+        const boardRect = board?.getBoundingClientRect();
+        const controls = Array.from(group?.children || []);
         return {
             open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
             rows: dialog?.querySelectorAll('.tv-mastermind-row').length || 0,
             colors: dialog?.querySelectorAll('[data-tv-mastermind-color]').length || 0,
             hall: dialog?.querySelector('.tv-game-hall-control')?.textContent || '',
+            boardInset: boardRect && groupRect ? boardRect.left - groupRect.left : 0,
+            clipped: !bodyRect || !groupRect || group.scrollWidth > group.clientWidth
+                || group.scrollHeight > group.clientHeight
+                || controls.some((element) => {
+                    const rect = element.getBoundingClientRect();
+                    return rect.left < groupRect.left - 0.5 || rect.top < groupRect.top - 0.5
+                        || rect.right > groupRect.right + 0.5 || rect.bottom > groupRect.bottom + 0.5;
+                }),
         };
     })()`);
-    if (!mastermind.open || mastermind.rows !== 10 || mastermind.colors !== 6 || mastermind.hall !== '[H]') {
+    if (!mastermind.open || mastermind.rows !== 10 || mastermind.colors !== 6
+        || mastermind.hall !== '[H]' || mastermind.boardInset <= 0 || mastermind.clipped) {
         throw new Error(`Mastermind dialog is incomplete: ${JSON.stringify(mastermind)}`);
     }
     await key("Escape", "Escape", 0, true);

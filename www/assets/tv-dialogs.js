@@ -357,6 +357,34 @@ class TVHistory {
 class TVHistoryViewer extends TVVerticalListViewer {}
 
 class TVHistoryWindow extends TVWindow {
+    static renderMarkup({ popupClass = "", popupAttrs = {}, listAttrs = {} } = {}) {
+        const viewerMarkup = TVVerticalListViewer.renderMarkup({
+            rootClass: "tv-file-open-history-listviewer",
+            rootAttrs: listAttrs,
+            viewportClass: "tv-file-open-history-list",
+        });
+        return new TVGroup({
+            className: ["tv-file-open-history-popup", "tv-history-window", popupClass].filter(Boolean).join(" "),
+            attrs: { ...popupAttrs, hidden: true },
+            html: [
+                '<div class="tv-history-frame-row tv-history-frame-top" aria-hidden="true">',
+                '<span class="tv-history-frame-corner">╔</span>',
+                '<span class="tv-history-frame-fill" data-tv-border-fill="═"></span>',
+                '<span class="tv-history-frame-corner">╗</span>',
+                '</div>',
+                '<div class="tv-history-client">',
+                '<span class="tv-history-frame-side" data-tv-border-side="║" aria-hidden="true"></span>',
+                viewerMarkup,
+                '</div>',
+                '<div class="tv-history-frame-row tv-history-frame-bottom" aria-hidden="true">',
+                '<span class="tv-history-frame-corner">╚</span>',
+                '<span class="tv-history-frame-fill" data-tv-border-fill="═"></span>',
+                '<span class="tv-history-frame-corner">╝</span>',
+                '</div>',
+            ].join(""),
+        }).renderMarkup();
+    }
+
     constructor({ button, popup, viewer, items = () => [], onSelect = null } = {}) {
         super(popup);
         this.button = button;
@@ -387,6 +415,7 @@ class TVHistoryWindow extends TVWindow {
         if (this.popup.hidden) {
             this.refresh();
             this.popup.hidden = false;
+            fillBorders(this.popup);
             window.requestAnimationFrame(() => {
                 this.viewer?.updateScrollbar();
                 this.viewer?.selectedElement()?.focus();
@@ -541,13 +570,10 @@ class TVFileOpenDialog extends TVDialog {
                         <div data-tv-file-open-path></div>
                         <div data-tv-file-open-detail></div>
                     </div>
-                    <div class="tv-file-open-history-popup" data-tv-file-open-history-popup hidden>
-                        ${TVVerticalListViewer.renderMarkup({
-                            rootClass: "tv-file-open-history-listviewer",
-                            rootAttrs: { "data-tv-file-open-history-list": true },
-                            viewportClass: "tv-file-open-history-list",
-                        })}
-                    </div>
+                    ${TVHistoryWindow.renderMarkup({
+                        popupAttrs: { "data-tv-file-open-history-popup": true },
+                        listAttrs: { "data-tv-file-open-history-list": true },
+                    })}
                 </div>
             `,
             footerMarkup: TVDialog.footerMarkup(),
@@ -909,14 +935,11 @@ class TVChangeDirectoryDialog extends TVDialog {
                     <div class="tv-change-dir-revert-button">${revertButton.renderMarkup()}</div>
                     <div class="tv-change-dir-cancel-button">${cancelButton.renderMarkup()}</div>
                     <div class="tv-change-dir-detail" data-tv-change-dir-detail></div>
-                    <div class="tv-file-open-history-popup tv-change-dir-history-popup"
-                         data-tv-change-dir-history-popup hidden>
-                        ${TVVerticalListViewer.renderMarkup({
-                            rootClass: "tv-file-open-history-listviewer",
-                            rootAttrs: { "data-tv-change-dir-history-list": true },
-                            viewportClass: "tv-file-open-history-list",
-                        })}
-                    </div>
+                    ${TVHistoryWindow.renderMarkup({
+                        popupClass: "tv-change-dir-history-popup",
+                        popupAttrs: { "data-tv-change-dir-history-popup": true },
+                        listAttrs: { "data-tv-change-dir-history-list": true },
+                    })}
                 </div>
             `,
             footerMarkup: TVDialog.footerMarkup(),
@@ -3231,13 +3254,11 @@ class TVFindDialog extends TVDialog {
                     <div class="tv-find-confirm">${findButton.renderMarkup()}</div>
                     <div class="tv-find-cancel">${cancelButton.renderMarkup()}</div>
                     <div class="tv-find-status" data-tv-find-status></div>
-                    <div class="tv-file-open-history-popup tv-find-history-popup" data-tv-find-history-popup hidden>
-                        ${TVVerticalListViewer.renderMarkup({
-                            rootClass: "tv-file-open-history-listviewer",
-                            rootAttrs: { "data-tv-find-history-list": true },
-                            viewportClass: "tv-file-open-history-list",
-                        })}
-                    </div>
+                    ${TVHistoryWindow.renderMarkup({
+                        popupClass: "tv-find-history-popup",
+                        popupAttrs: { "data-tv-find-history-popup": true },
+                        listAttrs: { "data-tv-find-history-list": true },
+                    })}
                 </div>
             `,
             footerMarkup: TVDialog.footerMarkup(),
