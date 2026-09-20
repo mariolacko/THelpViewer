@@ -800,7 +800,16 @@ async function run() {
             name: input.value,
             focused: document.activeElement === input,
             selectedColors: stylePair(selectedItem),
+            selectedTextColors: stylePair(selectedItem.querySelector('.tv-vlist-text')),
             normalColors: stylePair(normalItem),
+            normalTextColors: stylePair(normalItem.querySelector('.tv-vlist-text')),
+            visibleText: docItems.every((element) => {
+                const text = element.querySelector('.tv-vlist-text');
+                const style = getComputedStyle(text);
+                return Boolean(text.textContent.trim()) && style.visibility === 'visible'
+                    && style.opacity === '1' && style.color !== style.backgroundColor;
+            }),
+            historyArrowColor: getComputedStyle(dialog.querySelector('.tv-file-open-history-button .tv-hotkey')).color,
         };
     })()`);
     if (
@@ -812,7 +821,10 @@ async function run() {
         || fileOpen.path !== ["THelpViewer:", "DOCS", "*.*"].join(String.fromCharCode(92))
         || !fileOpen.name || !fileOpen.focused
         || fileOpen.selectedColors.join() !== ['rgb(0, 170, 170)', 'rgb(255, 255, 85)'].join()
+        || fileOpen.selectedTextColors.join() !== ['rgb(0, 170, 170)', 'rgb(255, 255, 85)'].join()
         || fileOpen.normalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
+        || fileOpen.normalTextColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
+        || !fileOpen.visibleText || fileOpen.historyArrowColor !== 'rgb(85, 255, 85)'
     ) {
         throw new Error(`File Open dialog is incomplete: ${JSON.stringify(fileOpen)}`);
     }
@@ -968,6 +980,122 @@ async function run() {
         || nortonColors.thumbFg !== '#ffffff'
     ) {
         throw new Error(`Norton Guides frame palette is broken: ${JSON.stringify(nortonColors)}`);
+    }
+    const nortonMovingColors = await evaluate(`(() => {
+        const windowElement = Array.from(document.querySelectorAll('[data-tv-bundle-window]')).find((element) =>
+            element.querySelector('.tv-window-caption')?.textContent.includes('db_VISTA III')
+        );
+        const titlebar = windowElement.querySelector('[data-tv-move-handle]');
+        const rect = titlebar.getBoundingClientRect();
+        titlebar.dispatchEvent(new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2,
+        }));
+        const pair = (selector) => {
+            const style = getComputedStyle(windowElement.querySelector(selector));
+            return [style.backgroundColor, style.color];
+        };
+        const result = {
+            moving: windowElement.classList.contains('is-moving'),
+            title: pair('.tv-window-caption'),
+            close: pair('.tv-close-control'),
+            closeGlyph: getComputedStyle(windowElement.querySelector('.tv-close-glyph')).color,
+        };
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        return result;
+    })()`);
+    if (
+        !nortonMovingColors.moving
+        || nortonMovingColors.title.join() !== ['rgb(0, 0, 170)', 'rgb(255, 255, 255)'].join()
+        || nortonMovingColors.close.join() !== ['rgb(0, 0, 170)', 'rgb(255, 255, 255)'].join()
+        || nortonMovingColors.closeGlyph !== 'rgb(255, 255, 85)'
+    ) {
+        throw new Error(`Norton Guides moving palette is broken: ${JSON.stringify(nortonMovingColors)}`);
+    }
+
+    const reportedState = "#tv=1.eyJ2IjoxLCJhIjoyLCJ6IjpbMSwwLDMsMl0sInciOlt7InQiOiJoIiwiZiI6Ik5vcnRvbiBHdWlkZXMvdmlzdGEuanNvbi5neiIsInZpZXciOiJ0b3BpYyIsImciOls2LDE4OSw4MiwyNCwwXSwidG9waWMiOiIzNzgiLCJsaW5lIjoxLCJzIjpbMCwwXX0seyJ0IjoiaCIsImYiOiJOb3J0b24gR3VpZGVzL2RlYnVnLmpzb24uZ3oiLCJ2aWV3IjoidG9waWMiLCJnIjpbMTA1LDEwMiw4MiwyNCwwXSwidG9waWMiOiIzNzgiLCJsaW5lIjoxLCJzIjpbMCwwXX0seyJ0IjoiaCIsImYiOiJCb3JsYW5kIEMrKyAzLngvdHZjaGVscC5qc29uLmd6IiwidmlldyI6InRvcGljIiwiZyI6Wzk3LDcwLDg0LDI4LDBdLCJ0b3BpYyI6IjEyMCIsImxpbmUiOjEsInMiOlswLDBdfSx7InQiOiJkb2MiLCJmIjoiUkVBRE1FLm1kIiwiZyI6WzQ3LDE3LDk3LDMyLDBdLCJzIjpbMCwzMzMzXX1dfQ";
+    await send("Page.navigate", { url: appUrl + "?reported=1" + reportedState });
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const readme = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
+                element.querySelector('.tv-window-caption')?.textContent === 'README'
+            );
+            if (readme?.querySelectorAll('table').length >= 2) { resolve(true); return; }
+            if (Date.now() >= deadline) { reject(new Error('reported README table state did not restore')); return; }
+            setTimeout(check, 50);
+        };
+        check();
+    })`, true);
+    const readmeTable = await evaluate(`(() => {
+        const readme = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
+            element.querySelector('.tv-window-caption')?.textContent === 'README'
+        );
+        const table = Array.from(readme.querySelectorAll('table')).find((candidate) =>
+            candidate.querySelectorAll('thead th').length === 6
+        );
+        const style = getComputedStyle(table);
+        const cells = Array.from(table.querySelectorAll('th, td'));
+        return {
+            found: Boolean(table),
+            layout: style.tableLayout,
+            widthMode: style.width,
+            overflowWraps: [...new Set(cells.map((cell) => getComputedStyle(cell).overflowWrap))],
+            wordBreaks: [...new Set(cells.map((cell) => getComputedStyle(cell).wordBreak))],
+            horizontalOverflow: table.scrollWidth > readme.querySelector('[data-tv-viewport]')?.clientWidth,
+            minCellWidth: Math.min(...cells.map((cell) => cell.getBoundingClientRect().width)),
+        };
+    })()`);
+    if (
+        !readmeTable.found || readmeTable.layout !== 'auto'
+        || readmeTable.overflowWraps.join() !== 'normal'
+        || readmeTable.wordBreaks.join() !== 'normal'
+        || readmeTable.minCellWidth < 30
+    ) {
+        throw new Error(`README table layout is broken: ${JSON.stringify(readmeTable)}`);
+    }
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="midi"]').click()`);
+    await pause();
+    const midiCompact = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'CD/MIDI Player'
+        );
+        const advanced = dialog?.querySelector('[data-tv-midi-advanced]');
+        const list = dialog?.querySelector('[data-tv-midi-track-list]');
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
+            advancedHidden: Boolean(advanced?.hidden),
+            moreCollapsed: dialog?.querySelector('[data-tv-midi-more]')?.getAttribute('aria-expanded') === 'false',
+            sharedScrollbar: Boolean(list?.querySelector('.tv-scrollbar-y [data-role="thumb"]')),
+        };
+    })()`);
+    if (!midiCompact.open || !midiCompact.advancedHidden || !midiCompact.moreCollapsed || !midiCompact.sharedScrollbar) {
+        throw new Error(`MIDI compact mode is incomplete: ${JSON.stringify(midiCompact)}`);
+    }
+    await key("Escape", "Escape", 0, true);
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="puzzle"]').click()`);
+    await pause();
+    const hallOpen = await evaluate(`(() => {
+        const puzzle = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Puzzle'
+        );
+        const button = puzzle?.querySelector('.tv-game-hall-control');
+        button?.click();
+        const hall = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Puzzle Hall of Fame'
+        );
+        return {
+            button: button?.textContent,
+            open: Boolean(hall && !hall.closest('.tv-dialog-overlay').hidden),
+            empty: hall?.querySelector('.tv-hall-empty')?.textContent.trim(),
+        };
+    })()`);
+    if (hallOpen.button !== '[H]' || !hallOpen.open || hallOpen.empty !== 'No scores yet.') {
+        throw new Error(`Hall of Fame control is incomplete: ${JSON.stringify(hallOpen)}`);
     }
     socket.close();
 }

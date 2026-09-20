@@ -13,7 +13,7 @@ GAME_PATHS = (
 NODE = shutil.which("node")
 
 
-def test_high_score_prompt_is_a_managed_modal_dialog():
+def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
     assert GAME_PATHS[0].read_bytes() == GAME_PATHS[1].read_bytes()
     source = GAME_PATHS[0].read_text(encoding="utf-8")
     helper = source[
@@ -25,8 +25,14 @@ def test_high_score_prompt_is_a_managed_modal_dialog():
     assert "manager.register(`highscore:${++bestNamePromptSequence}`, dlg)" in helper
     assert "if (finished) { return; }" in helper
     assert "dlg.destroy();" in helper
-    assert source.count("showBestNamePrompt(this, this.score") == 4
-    assert "showBestNamePrompt(desktop, this.score" not in source
+    assert "const HALL_OF_FAME_LIMIT = 10" in helper
+    assert "function showHallOfFame(ownerDialog, game)" in helper
+    assert "manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg)" in helper
+    assert source.count("installHallOfFame(this,") == 9
+    for game in ("puzzle", "tetris", "mines", "breakout", "sokoban", "lines", "reversi", "ludo", "snake"):
+        assert f'installHallOfFame(this, "{game}")' in source
+        assert f'"{game}": {{ title:' in helper or f'{game}: {{ title:' in helper
+    assert source.count('submitHallOfFameScore(this, "') >= 9
 
 
 def test_games_pause_background_work_and_clear_transient_input():

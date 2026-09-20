@@ -105,9 +105,9 @@ global.ResizeObserver = FakeResizeObserver;
 window.ResizeObserver = FakeResizeObserver;
 
 const core = fs.readFileSync(process.argv[1], "utf8");
-const scrollbarStart = core.indexOf("class TurboVisionScrollbar");
-const scrollbarEnd = core.indexOf("\nObject.assign(TV", scrollbarStart);
-eval(core.slice(scrollbarStart, scrollbarEnd) + "\nglobalThis.TestScrollbar = TurboVisionScrollbar;");
+const scrollbarStart = core.indexOf("class TVScrollBar");
+const scrollbarEnd = core.indexOf("\nconst TurboVisionScrollbar", scrollbarStart);
+eval(core.slice(scrollbarStart, scrollbarEnd) + "\nglobalThis.TestScrollbar = TVScrollBar;");
 TestScrollbar.prototype.update = function () { this.updateCalls = (this.updateCalls || 0) + 1; };
 
 const viewport = new FakeTarget();
@@ -117,9 +117,9 @@ const y = buildAxis();
 const host = new FakeTarget();
 host.querySelector = (selector) => selector === ".tv-scrollbar-x" ? x.root : y.root;
 const frame = new FakeTarget();
-frame.closest = () => host;
+frame.closest = (selector) => selector === ".tv-client-row" ? host : null;
 frame.parentElement = host;
-frame.querySelector = () => viewport;
+frame.querySelector = (selector) => selector === "[data-tv-viewport]" ? viewport : null;
 
 const scrollbar = new TestScrollbar(frame);
 if (!viewport.listeners.has("scroll") || !window.listeners.has("resize") || !document.listeners.has("mouseup")) {

@@ -16,6 +16,23 @@ DIALOG_PATHS = (
 )
 
 
+def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
+    assert CORE_PATHS[0].read_bytes() == CORE_PATHS[1].read_bytes()
+    source = CORE_PATHS[0].read_text(encoding="utf-8")
+
+    assert "class TVWindow extends TVGroup" in source
+    assert "class TVDialog extends TVWindow" in source
+    assert "class TVListViewer extends TVWidget" in source
+    assert "class TVListBox extends TVListViewer" in source
+    assert "class TVCluster extends TVWidget" in source
+    assert "class TVCheckBoxes extends TVCluster" in source
+    assert "class TVRadioButtons extends TVCluster" in source
+    assert source.count("class TVScrollBar") == 1
+    assert source.count("startRepeat(event, axis, direction)") == 1
+    assert 'this.scrollbarWidget = this.root ? new TVScrollBar(this.root) : null' in source
+    assert 'popup._tvMenuPopupScrollbar = main ? new TVScrollBar(main) : null' in source
+
+
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the list control test")
 def test_vertical_list_keyboard_roving_focus_and_activation():
     assert CORE_PATHS[0].read_bytes() == CORE_PATHS[1].read_bytes()
@@ -80,6 +97,19 @@ global.window = {
     setInterval() { return 1; },
     clearInterval() {},
 };
+global.TVScrollBar = class {
+    constructor() {
+        this.active = true;
+        this.refreshCalls = 0;
+        this.axes = { y: { root: scrollbar } };
+    }
+    refresh() { this.refreshCalls += 1; }
+    setActive(active) {
+        this.active = Boolean(active);
+        scrollbar.setAttribute("aria-disabled", this.active ? "false" : "true");
+    }
+    destroy() {}
+};
 
 const items = Array.from({ length: 5 }, (_, index) => {
     const element = new FakeElement();
@@ -112,7 +142,7 @@ root.querySelector = (selector) => ({
 }[selector] || null);
 
 const source = fs.readFileSync(process.argv[1], "utf8");
-const start = source.indexOf("class TVListBox");
+const start = source.indexOf("class TVListViewer");
 const end = source.indexOf("\nclass TVVerticalScrollArea", start);
 eval(source.slice(start, end) + "\nglobalThis.TestList = TVVerticalListViewer;");
 
@@ -150,11 +180,9 @@ if (items[3].getAttribute("aria-selected") !== "true" || items[3].getAttribute("
     throw new Error("selected list item semantics are incomplete");
 }
 
-let inactivePrevented = false;
 list.setActive(false);
-list.startRepeat({ preventDefault() { inactivePrevented = true; } }, 1);
-if (inactivePrevented || list.repeatTimer !== null || scrollbar.getAttribute("aria-disabled") !== "true") {
-    throw new Error("inactive list scrollbar accepted input");
+if (list.scrollbarWidget.active || scrollbar.getAttribute("aria-disabled") !== "true") {
+    throw new Error("inactive list state was not forwarded to the shared scrollbar");
 }
 list.setActive(true);
 
@@ -208,7 +236,7 @@ global.attrsToString = (attrs = {}) => Object.entries(attrs)
     .map(([key, value]) => value === true ? key : `${key}="${escapeHtml(value)}"`)
     .join(" ");
 global.TVWidget = class { constructor(root = null) { this.root = root; } };
-global.TVListViewer = class {
+global.TVMarkupList = class {
     constructor({ className = "", attrs = {}, items = [] } = {}) {
         this.className = className;
         this.attrs = attrs;

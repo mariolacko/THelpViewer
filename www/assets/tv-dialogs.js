@@ -18,6 +18,7 @@ const {
     TVLabel,
     TVInputLine,
     TVGroup,
+    TVMarkupList,
     TVListViewer,
     TVListBox,
     TVVerticalListViewer,
@@ -748,7 +749,7 @@ class TVFileOpenDialog extends TVDialog {
 
 class TVAsciiTableDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
-        const chart = new TVListViewer({
+        const chart = new TVMarkupList({
             className: "tv-ascii-chart",
             attrs: { "data-tv-ascii-chart": true },
         });
@@ -2391,6 +2392,12 @@ class TVMidiPlayerDialog extends TVDialog {
             attrs: { "data-tv-midi-next": true, title: "Next track" },
             label: "►►",
         });
+        const moreButton = new TVButton({
+            dialog: false,
+            className: "tv-midi-more-action",
+            attrs: { "data-tv-midi-more": true, "aria-expanded": "false" },
+            label: "More",
+        });
         const closeButton = new TVButton({
             dialog: false,
             className: "tv-midi-close-action",
@@ -2399,7 +2406,7 @@ class TVMidiPlayerDialog extends TVDialog {
         });
         const buttons = new TVButtonStrip({
             className: "tv-midi-buttons",
-            buttons: [previousButton, playButton, pauseButton, stopButton, nextButton, closeButton],
+            buttons: [previousButton, playButton, pauseButton, stopButton, nextButton, moreButton, closeButton],
         }).renderMarkup();
         const sourceButtons = TV_MIDI_EXTERNAL_SOURCES.map((source, index) => new TVButton({
             dialog: false,
@@ -2433,6 +2440,7 @@ class TVMidiPlayerDialog extends TVDialog {
         });
         const externalSource = new TVGroup({
             className: "tv-midi-external",
+            attrs: { "data-tv-midi-advanced": true, hidden: true },
             children: [
                 new TVGroup({
                     className: "tv-midi-url-row",
@@ -2473,7 +2481,8 @@ class TVMidiPlayerDialog extends TVDialog {
         });
         const main = new TVGroup({
             className: "tv-midi-main",
-            children: [display, meter, buttons, externalSource, trackList],
+            attrs: { "data-tv-midi-main": true },
+            children: [display, meter, buttons, trackList, externalSource],
         }).renderMarkup();
         super({
             desktop,
@@ -2486,8 +2495,8 @@ class TVMidiPlayerDialog extends TVDialog {
             },
             bodyMarkup: main,
             footerMarkup: TVDialog.footerMarkup(),
-            width: "64ch",
-            height: "min(28em, calc(100% - 2em))",
+            width: "58ch",
+            height: "min(23em, calc(100% - 2em))",
             left: "4ch",
             top: "3em",
         });
@@ -2506,7 +2515,10 @@ class TVMidiPlayerDialog extends TVDialog {
         this.pauseButton = this.query("[data-tv-midi-pause]");
         this.stopButton = this.query("[data-tv-midi-stop]");
         this.nextButton = this.query("[data-tv-midi-next]");
+        this.moreButton = this.query("[data-tv-midi-more]");
         this.closeActionButton = this.query("[data-tv-midi-close-button]");
+        this.main = this.query("[data-tv-midi-main]");
+        this.advanced = this.query("[data-tv-midi-advanced]");
         this.urlInput = this.query("[data-tv-midi-url]");
         this.loadUrlButton = this.query("[data-tv-midi-load-url]");
         this.sourceButtons = this.queryAll("[data-tv-midi-source]");
@@ -2551,6 +2563,9 @@ class TVMidiPlayerDialog extends TVDialog {
         if (this.nextButton) {
             this.nextButton.addEventListener("click", () => this.nextTrack());
         }
+        if (this.moreButton) {
+            this.moreButton.addEventListener("click", () => this.toggleAdvanced());
+        }
         if (this.closeActionButton) {
             this.closeActionButton.addEventListener("click", () => this.close());
         }
@@ -2576,6 +2591,24 @@ class TVMidiPlayerDialog extends TVDialog {
     close() {
         this.stopPlayback();
         super.close();
+    }
+
+    toggleAdvanced() {
+        if (!this.advanced) {
+            return;
+        }
+        const expanded = this.advanced.hidden;
+        this.advanced.hidden = !expanded;
+        this.main?.classList.toggle("is-advanced", expanded);
+        this.moreButton?.setAttribute("aria-expanded", expanded ? "true" : "false");
+        if (this.moreButton) {
+            this.moreButton.textContent = expanded ? "Less" : "More";
+        }
+        this.dialog.style.setProperty(
+            "--tv-dialog-height",
+            expanded ? "min(27em, calc(100% - 2em))" : "min(23em, calc(100% - 2em))",
+        );
+        this.trackListBox.updateScrollbar();
     }
 
     selectTrack(index) {

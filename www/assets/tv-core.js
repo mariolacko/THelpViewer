@@ -1174,7 +1174,7 @@ class TVInputLine extends TVWidget {
     }
 }
 
-class TVListViewer extends TVWidget {
+class TVMarkupList extends TVWidget {
     constructor({
         tag = "div",
         className = "",
@@ -1402,7 +1402,7 @@ class TVInfoBox extends TVWidget {
     }
 }
 
-class TVListBox extends TVWidget {
+class TVListViewer extends TVWidget {
     constructor(root = null, {
         itemClassName = "",
         itemAttrName = "data-tv-list-index",
@@ -1613,6 +1613,8 @@ class TVListBox extends TVWidget {
     }
 }
 
+class TVListBox extends TVListViewer {}
+
 class TVVerticalListViewer extends TVListBox {
     static renderMarkup({
         rootClass = "",
@@ -1629,16 +1631,15 @@ class TVVerticalListViewer extends TVListBox {
         const rootClasses = ["tv-vlist-viewer", rootClass].filter(Boolean).join(" ");
         const viewportClasses = ["tv-vlist-viewport", viewportClass].filter(Boolean).join(" ");
         return `
-            <div class="${escapeHtml(rootClasses)}"${rootAttrsText}>
-                <div class="${escapeHtml(viewportClasses)}" data-tv-list-viewport></div>
-                <div class="${escapeHtml(scrollbarClass)}" aria-hidden="true">
-                    <button type="button" class="${escapeHtml(arrowClass)}" data-tv-list-backward tabindex="-1">${escapeHtml(displayCp437Char(30))}</button>
-                    <div class="${escapeHtml(trackClass)}" data-tv-list-track>
-                        <div class="${escapeHtml(cellsClass)}" data-tv-list-cells></div>
-                        <div class="${escapeHtml(thumbClass)}" data-tv-list-thumb></div>
-                    </div>
-                    <button type="button" class="${escapeHtml(arrowClass)}" data-tv-list-forward tabindex="-1">${escapeHtml(displayCp437Char(31))}</button>
-                </div>
+            <div class="${escapeHtml(rootClasses)}" data-tv-scroll-frame${rootAttrsText}>
+                <div class="${escapeHtml(viewportClasses)}" data-tv-list-viewport data-tv-viewport></div>
+                ${TVScrollBar.renderMarkup("y", {
+                    rootClass: scrollbarClass,
+                    arrowClass,
+                    trackClass,
+                    cellsClass,
+                    thumbClass,
+                })}
             </div>
         `;
     }
@@ -1657,14 +1658,9 @@ class TVVerticalListViewer extends TVListBox {
             renderItemContent,
             renderItemMarkup,
         });
-        this.repeatTimer = null;
         this.viewport = this.query("[data-tv-list-viewport]");
-        this.track = this.query("[data-tv-list-track]");
-        this.cells = this.query("[data-tv-list-cells]");
-        this.thumb = this.query("[data-tv-list-thumb]");
-        this.backward = this.query("[data-tv-list-backward]");
-        this.forward = this.query("[data-tv-list-forward]");
-        this.scrollbar = this.query(".tv-vlist-scrollbar");
+        this.scrollbarWidget = this.root ? new TVScrollBar(this.root) : null;
+        this.scrollbar = this.scrollbarWidget?.axes.y?.root || null;
         this.active = true;
         if (this.root) {
             this.root.dataset.tvListViewer = "1";
@@ -1724,104 +1720,8 @@ class TVVerticalListViewer extends TVListBox {
         return Math.max(1, Math.floor(this.viewport.clientHeight / measureCells().height));
     }
 
-    maxScrollRows() {
-        return Math.max(this.items.length - this.visibleRows(), 0);
-    }
-
-    scrollRow() {
-        if (!this.viewport) {
-            return 0;
-        }
-        return Math.round(this.viewport.scrollTop / measureCells().height);
-    }
-
-    setScrollRow(row) {
-        if (!this.viewport) {
-            return;
-        }
-        const clamped = Math.min(Math.max(row, 0), this.maxScrollRows());
-        this.viewport.scrollTop = clamped * measureCells().height;
-        this.updateScrollbar();
-    }
-
     updateScrollbar() {
-        if (!this.track || !this.cells || !this.thumb) {
-            return;
-        }
-        const cellHeight = measureCells().height;
-        const trackRows = Math.max(1, Math.floor(this.track.clientHeight / cellHeight));
-        const maxScroll = this.maxScrollRows();
-        const scrollRow = this.scrollRow();
-        const thumbRows = maxScroll > 0 ? 1 : 0;
-        const freeRows = Math.max(trackRows - thumbRows, 0);
-        const thumbStart = maxScroll > 0 ? Math.round((scrollRow / maxScroll) * freeRows) : 0;
-        const trackChar = maxScroll > 0 ? TRACK_CHAR : DISABLED_TRACK_CHAR;
-
-        this.cells.innerHTML = "";
-        this.thumb.innerHTML = "";
-        this.cells.style.gridTemplateRows = `repeat(${trackRows}, 1em)`;
-        this.thumb.style.gridTemplateRows = `repeat(${thumbRows}, 1em)`;
-        this.thumb.style.transform = `translateY(${thumbStart * cellHeight}px)`;
-
-        for (let index = 0; index < trackRows; index += 1) {
-            const cell = document.createElement("span");
-            cell.className = "tv-colors-scroll-cell";
-            cell.textContent = trackChar;
-            this.cells.appendChild(cell);
-        }
-        for (let index = 0; index < thumbRows; index += 1) {
-            const cell = document.createElement("span");
-            cell.className = "tv-colors-thumb-cell";
-            cell.textContent = THUMB_CHAR;
-            this.thumb.appendChild(cell);
-        }
-
-        if (this.root) {
-            this.root.classList.toggle("is-disabled", maxScroll <= 0);
-        }
-        this.thumb.style.display = thumbRows > 0 ? "grid" : "none";
-    }
-
-    scrollBy(delta) {
-        this.setScrollRow(this.scrollRow() + delta);
-    }
-
-    onTrackMouseDown(event) {
-        if (!this.active) {
-            return;
-        }
-        if (event.target.closest("[data-tv-list-thumb]")) {
-            return;
-        }
-        event.preventDefault();
-        const maxScroll = this.maxScrollRows();
-        if (maxScroll <= 0 || !this.track) {
-            return;
-        }
-        const rect = this.track.getBoundingClientRect();
-        const cellHeight = measureCells().height;
-        const trackRows = Math.max(1, Math.floor(this.track.clientHeight / cellHeight));
-        const clickRow = Math.max(0, Math.floor((event.clientY - rect.top) / cellHeight));
-        const freeRows = Math.max(trackRows - 1, 0);
-        const targetRow = freeRows > 0 ? Math.round((clickRow / freeRows) * maxScroll) : 0;
-        this.setScrollRow(targetRow);
-    }
-
-    startRepeat(event, delta) {
-        if (!this.active) {
-            return;
-        }
-        event.preventDefault();
-        this.stopRepeat();
-        this.scrollBy(delta);
-        this.repeatTimer = window.setInterval(() => this.scrollBy(delta), SCROLL_REPEAT_MS);
-    }
-
-    stopRepeat() {
-        if (this.repeatTimer !== null) {
-            window.clearInterval(this.repeatTimer);
-            this.repeatTimer = null;
-        }
+        this.scrollbarWidget?.refresh();
     }
 
     setActive(active) {
@@ -1829,18 +1729,7 @@ class TVVerticalListViewer extends TVListBox {
         if (this.root) {
             this.root.classList.toggle("is-inactive", !this.active);
         }
-        if (this.scrollbar) {
-            this.scrollbar.classList.toggle("is-inactive", !this.active);
-            this.scrollbar.setAttribute("aria-disabled", this.active ? "false" : "true");
-        }
-        for (const arrow of [this.backward, this.forward]) {
-            if (arrow) {
-                arrow.tabIndex = -1;
-            }
-        }
-        if (!this.active) {
-            this.stopRepeat();
-        }
+        this.scrollbarWidget?.setActive(this.active);
     }
 
     bind({ onSelect = null, onActivate = null } = {}) {
@@ -1922,20 +1811,12 @@ class TVVerticalListViewer extends TVListBox {
                 }
                 this.selectedElement()?.focus({ preventScroll: true });
             });
-            this.viewport.addEventListener("scroll", () => this.updateScrollbar(), { passive: true });
-            this.viewport.addEventListener("wheel", () => this.updateScrollbar(), { passive: true });
         }
-        if (this.backward) {
-            this.backward.addEventListener("mousedown", (event) => this.startRepeat(event, -1));
-        }
-        if (this.forward) {
-            this.forward.addEventListener("mousedown", (event) => this.startRepeat(event, 1));
-        }
-        if (this.track) {
-            this.track.addEventListener("mousedown", (event) => this.onTrackMouseDown(event));
-        }
-        document.addEventListener("mouseup", () => this.stopRepeat(), { passive: true });
-        window.addEventListener("resize", () => this.updateScrollbar(), { passive: true });
+    }
+
+    destroy() {
+        this.scrollbarWidget?.destroy();
+        this.scrollbarWidget = null;
     }
 }
 
@@ -1953,16 +1834,15 @@ class TVVerticalScrollArea extends TVWidget {
         const rootAttrString = attrsToString(rootAttrs);
         const rootAttrsText = rootAttrString ? ` ${rootAttrString}` : "";
         return `
-            <div class="${escapeHtml(rootClass)}"${rootAttrsText}>
-                <div class="${escapeHtml(viewportClass)}" data-tv-scroll-viewport></div>
-                <div class="${escapeHtml(scrollbarClass)}" aria-hidden="true">
-                    <button type="button" class="${escapeHtml(arrowClass)}" data-tv-scroll-backward tabindex="-1">${escapeHtml(displayCp437Char(30))}</button>
-                    <div class="${escapeHtml(trackClass)}" data-tv-scroll-track>
-                        <div class="${escapeHtml(cellsClass)}" data-tv-scroll-cells></div>
-                        <div class="${escapeHtml(thumbClass)}" data-tv-scroll-thumb></div>
-                    </div>
-                    <button type="button" class="${escapeHtml(arrowClass)}" data-tv-scroll-forward tabindex="-1">${escapeHtml(displayCp437Char(31))}</button>
-                </div>
+            <div class="${escapeHtml(rootClass)}" data-tv-scroll-frame${rootAttrsText}>
+                <div class="${escapeHtml(viewportClass)}" data-tv-scroll-viewport data-tv-viewport></div>
+                ${TVScrollBar.renderMarkup("y", {
+                    rootClass: scrollbarClass,
+                    arrowClass,
+                    trackClass,
+                    cellsClass,
+                    thumbClass,
+                })}
             </div>
         `;
     }
@@ -1970,128 +1850,20 @@ class TVVerticalScrollArea extends TVWidget {
     constructor(root = null) {
         super(root);
         this.viewport = this.query("[data-tv-scroll-viewport]");
-        this.track = this.query("[data-tv-scroll-track]");
-        this.cells = this.query("[data-tv-scroll-cells]");
-        this.thumb = this.query("[data-tv-scroll-thumb]");
-        this.backward = this.query("[data-tv-scroll-backward]");
-        this.forward = this.query("[data-tv-scroll-forward]");
-        this.repeatTimer = null;
-    }
-
-    maxScroll() {
-        if (!this.viewport) {
-            return 0;
-        }
-        return Math.max(this.viewport.scrollHeight - this.viewport.clientHeight, 0);
-    }
-
-    lineHeight() {
-        return measureCells().height;
-    }
-
-    setScrollPosition(value) {
-        if (!this.viewport) {
-            return;
-        }
-        const clamped = Math.min(Math.max(value, 0), this.maxScroll());
-        this.viewport.scrollTop = clamped;
-        this.update();
-    }
-
-    scrollStep(direction) {
-        this.setScrollPosition((this.viewport ? this.viewport.scrollTop : 0) + (direction * this.lineHeight()));
-    }
-
-    startRepeat(event, direction) {
-        event.preventDefault();
-        this.stopRepeat();
-        this.scrollStep(direction);
-        this.repeatTimer = window.setInterval(() => this.scrollStep(direction), SCROLL_REPEAT_MS);
-    }
-
-    stopRepeat() {
-        if (this.repeatTimer !== null) {
-            window.clearInterval(this.repeatTimer);
-            this.repeatTimer = null;
-        }
-    }
-
-    onTrackMouseDown(event) {
-        if (event.target.closest("[data-tv-scroll-thumb]")) {
-            return;
-        }
-        event.preventDefault();
-        if (!this.track) {
-            return;
-        }
-        const maxScroll = this.maxScroll();
-        const cellHeight = this.lineHeight();
-        const trackRows = Math.max(1, Math.floor(this.track.clientHeight / cellHeight));
-        const freeRows = Math.max(trackRows - 1, 0);
-        const rect = this.track.getBoundingClientRect();
-        const clickRow = Math.max(0, Math.floor((event.clientY - rect.top) / cellHeight));
-        const ratio = freeRows > 0 ? clickRow / freeRows : 0;
-        this.setScrollPosition(ratio * maxScroll);
+        this.scrollbarWidget = this.root ? new TVScrollBar(this.root) : null;
     }
 
     update() {
-        if (!this.track || !this.cells || !this.thumb || !this.viewport) {
-            return;
-        }
-        const cellHeight = this.lineHeight();
-        const trackRows = Math.max(1, Math.floor(this.track.clientHeight / cellHeight));
-        const maxScroll = this.maxScroll();
-        const thumbRows = maxScroll > 0 ? 1 : 0;
-        const freeRows = Math.max(trackRows - thumbRows, 0);
-        const ratio = maxScroll > 0 ? this.viewport.scrollTop / maxScroll : 0;
-        const thumbStart = Math.round(freeRows * ratio);
-        const trackChar = maxScroll > 0 ? TRACK_CHAR : DISABLED_TRACK_CHAR;
-
-        this.cells.innerHTML = "";
-        this.thumb.innerHTML = "";
-        this.cells.style.gridTemplateRows = `repeat(${trackRows}, 1em)`;
-        this.thumb.style.gridTemplateRows = `repeat(${thumbRows}, 1em)`;
-        this.thumb.style.transform = `translateY(${thumbStart * cellHeight}px)`;
-
-        for (let index = 0; index < trackRows; index += 1) {
-            const cell = document.createElement("span");
-            cell.className = "tv-search-scroll-cell";
-            cell.textContent = trackChar;
-            this.cells.appendChild(cell);
-        }
-        for (let index = 0; index < thumbRows; index += 1) {
-            const cell = document.createElement("span");
-            cell.className = "tv-search-thumb-cell";
-            cell.textContent = THUMB_CHAR;
-            this.thumb.appendChild(cell);
-        }
-
-        if (this.root) {
-            this.root.classList.toggle("is-disabled", maxScroll <= 0);
-        }
-        this.thumb.style.display = thumbRows > 0 ? "grid" : "none";
+        this.scrollbarWidget?.refresh();
     }
 
     bind() {
-        if (!this.root || this.root.dataset.tvScrollAreaBound === "1") {
-            return;
-        }
-        this.root.dataset.tvScrollAreaBound = "1";
-        if (this.viewport) {
-            this.viewport.addEventListener("scroll", () => this.update(), { passive: true });
-            this.viewport.addEventListener("wheel", () => this.update(), { passive: true });
-        }
-        if (this.backward) {
-            this.backward.addEventListener("mousedown", (event) => this.startRepeat(event, -1));
-        }
-        if (this.forward) {
-            this.forward.addEventListener("mousedown", (event) => this.startRepeat(event, 1));
-        }
-        if (this.track) {
-            this.track.addEventListener("mousedown", (event) => this.onTrackMouseDown(event));
-        }
-        document.addEventListener("mouseup", () => this.stopRepeat(), { passive: true });
-        window.addEventListener("resize", () => this.update(), { passive: true });
+        this.update();
+    }
+
+    destroy() {
+        this.scrollbarWidget?.destroy();
+        this.scrollbarWidget = null;
     }
 }
 
@@ -2111,14 +1883,9 @@ class TVMenuBox extends TVWidget {
         const popupAttrs = attrsToString(this.attrs);
         const attrs = popupAttrs ? ` ${popupAttrs}` : "";
         const borderFill = '<span class="tv-border-fill" data-tv-border-fill="\u2500" aria-hidden="true"></span>';
-        const scrollbarMarkup = '<div class="tv-scrollbar tv-scrollbar-y tv-menu-popup-scrollbar" data-tv-menu-scrollbar hidden aria-hidden="true">'
-            + `<button type="button" class="tv-scroll-arrow" data-tv-menu-scroll-backward tabindex="-1">${escapeHtml(displayCp437Char(30))}</button>`
-            + '<div class="tv-scroll-track" data-tv-menu-scroll-track>'
-            + '<div class="tv-scroll-cells" data-tv-menu-scroll-cells></div>'
-            + '<div class="tv-scroll-thumb" data-tv-menu-scroll-thumb></div>'
-            + '</div>'
-            + `<button type="button" class="tv-scroll-arrow" data-tv-menu-scroll-forward tabindex="-1">${escapeHtml(displayCp437Char(31))}</button>`
-            + '</div>';
+        const scrollbarMarkup = TVScrollBar.renderMarkup("y", {
+            rootClass: "tv-menu-popup-scrollbar",
+        });
         // Split items into segments at separator strings to render them as body-level rows.
         const segments = [[]];
         for (const item of this.items) {
@@ -2154,8 +1921,8 @@ class TVMenuBox extends TVWidget {
             + borderFill
             + '<span class="tv-border-corner" aria-hidden="true">\u2510</span>'
             + '</div>'
-            + '<div class="tv-menu-popup-main">'
-            + '<div class="tv-menu-popup-body">'
+            + '<div class="tv-menu-popup-main" data-tv-scroll-frame>'
+            + '<div class="tv-menu-popup-body" data-tv-viewport>'
             + bodyRows.join("")
             + '</div>'
             + scrollbarMarkup
@@ -2178,61 +1945,15 @@ function getMenuPopupScrollbarParts(popup) {
     const body = main
         ? Array.from(main.children).find((node) => node.classList?.contains("tv-menu-popup-body")) || null
         : null;
-    const scrollbar = main
-        ? Array.from(main.children).find((node) => node.hasAttribute?.("data-tv-menu-scrollbar")) || null
-        : null;
-    const track = scrollbar
-        ? Array.from(scrollbar.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-track")) || null
-        : null;
-    const cells = track
-        ? Array.from(track.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-cells")) || null
-        : null;
-    const thumb = track
-        ? Array.from(track.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-thumb")) || null
-        : null;
-    const backward = scrollbar
-        ? Array.from(scrollbar.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-backward")) || null
-        : null;
-    const forward = scrollbar
-        ? Array.from(scrollbar.children).find((node) => node.hasAttribute?.("data-tv-menu-scroll-forward")) || null
-        : null;
+    const scrollbar = main?.querySelector(":scope > .tv-menu-popup-scrollbar") || null;
+    const track = scrollbar?.querySelector("[data-role='track']") || null;
+    const cells = scrollbar?.querySelector("[data-role='cells']") || null;
+    const thumb = scrollbar?.querySelector("[data-role='thumb']") || null;
+    const backward = scrollbar?.querySelector("[data-role='backward']") || null;
+    const forward = scrollbar?.querySelector("[data-role='forward']") || null;
     return body && scrollbar && track && cells && thumb && backward && forward
         ? { body, scrollbar, track, cells, thumb, backward, forward }
         : null;
-}
-
-function stopMenuPopupScrollRepeat(popup) {
-    const state = popup && popup._tvMenuPopupScrollbarState;
-    if (!state || state.repeatTimer === null) {
-        return;
-    }
-    window.clearInterval(state.repeatTimer);
-    state.repeatTimer = null;
-}
-
-function setMenuPopupScrollTop(popup, scrollTop) {
-    const parts = getMenuPopupScrollbarParts(popup);
-    if (!parts) {
-        return;
-    }
-    const maxScroll = Math.max(parts.body.scrollHeight - parts.body.clientHeight, 0);
-    parts.body.scrollTop = Math.min(Math.max(scrollTop, 0), maxScroll);
-    syncMenuPopupScrollbar(popup);
-}
-
-function scrollMenuPopupByRows(popup, deltaRows) {
-    const parts = getMenuPopupScrollbarParts(popup);
-    if (!parts) {
-        return;
-    }
-    const cellHeight = measureCells().height || 16;
-    setMenuPopupScrollTop(popup, parts.body.scrollTop + (deltaRows * cellHeight));
-}
-
-function getMenuPopupScrollbarMetrics(parts, cellHeight) {
-    const scrollbarRows = Math.max(1, Math.floor(parts.scrollbar.clientHeight / cellHeight));
-    const trackRows = Math.max(1, scrollbarRows - 2);
-    return { scrollbarRows, trackRows };
 }
 
 function syncMenuPopupScrollbar(popup) {
@@ -2240,48 +1961,12 @@ function syncMenuPopupScrollbar(popup) {
     if (!parts) {
         return;
     }
-    const { body, scrollbar, track, cells, thumb } = parts;
-    const cellHeight = measureCells().height || 16;
+    const { body, scrollbar } = parts;
     const needsScrollbar = body.scrollHeight > body.clientHeight + 1;
     popup.classList.toggle("is-scrollable", needsScrollbar);
     body.classList.toggle("is-scrollable", needsScrollbar);
     scrollbar.hidden = !needsScrollbar;
-    cells.innerHTML = "";
-    thumb.innerHTML = "";
-
-    if (!needsScrollbar) {
-        track.style.height = "";
-        thumb.style.display = "none";
-        return;
-    }
-
-    const { trackRows } = getMenuPopupScrollbarMetrics(parts, cellHeight);
-    const maxScroll = Math.max(body.scrollHeight - body.clientHeight, 0);
-    const thumbRows = maxScroll > 0 ? 1 : 0;
-    const freeRows = Math.max(trackRows - thumbRows, 0);
-    const thumbStart = maxScroll > 0 ? Math.round((body.scrollTop / maxScroll) * freeRows) : 0;
-    const trackChar = maxScroll > 0 ? TRACK_CHAR : DISABLED_TRACK_CHAR;
-
-    track.style.height = `${trackRows * cellHeight}px`;
-    cells.style.gridTemplateRows = `repeat(${trackRows}, 1em)`;
-    thumb.style.gridTemplateRows = `repeat(${thumbRows}, 1em)`;
-    thumb.style.transform = `translateY(${thumbStart * cellHeight}px)`;
-
-    for (let index = 0; index < trackRows; index += 1) {
-        const cell = document.createElement("span");
-        cell.className = "tv-scroll-cell";
-        cell.textContent = trackChar;
-        cells.appendChild(cell);
-    }
-
-    for (let index = 0; index < thumbRows; index += 1) {
-        const cell = document.createElement("span");
-        cell.className = "tv-scroll-thumb-cell";
-        cell.textContent = THUMB_CHAR;
-        thumb.appendChild(cell);
-    }
-
-    thumb.style.display = thumbRows > 0 ? "grid" : "none";
+    popup._tvMenuPopupScrollbar?.refresh();
 }
 
 function bindMenuPopupScrollbar(popup) {
@@ -2292,77 +1977,9 @@ function bindMenuPopupScrollbar(popup) {
     if (!parts) {
         return;
     }
-    const state = {
-        repeatTimer: null,
-        dragState: null,
-    };
     popup.dataset.tvMenuScrollbarBound = "1";
-    popup._tvMenuPopupScrollbarState = state;
-
-    const startRepeat = (event, direction) => {
-        event.preventDefault();
-        stopMenuPopupScrollRepeat(popup);
-        scrollMenuPopupByRows(popup, direction);
-        state.repeatTimer = window.setInterval(() => scrollMenuPopupByRows(popup, direction), SCROLL_REPEAT_MS);
-    };
-
-    const onTrackMouseDown = (event) => {
-        if (event.target.closest("[data-tv-menu-scroll-thumb]")) {
-            return;
-        }
-        event.preventDefault();
-        const cellHeight = measureCells().height || 16;
-        const { trackRows } = getMenuPopupScrollbarMetrics(parts, cellHeight);
-        const maxScroll = Math.max(parts.body.scrollHeight - parts.body.clientHeight, 0);
-        if (maxScroll <= 0) {
-            return;
-        }
-        const rect = parts.track.getBoundingClientRect();
-        const clickRow = Math.max(0, Math.floor((event.clientY - rect.top) / cellHeight));
-        const thumbRows = 1;
-        const freeRows = Math.max(trackRows - thumbRows, 0);
-        const targetRow = freeRows > 0 ? Math.round((clickRow / freeRows) * maxScroll / cellHeight) : 0;
-        setMenuPopupScrollTop(popup, targetRow * cellHeight);
-    };
-
-    const onDragMove = (event) => {
-        if (!state.dragState) {
-            return;
-        }
-        const delta = event.clientY - state.dragState.startClientY;
-        const scrollDelta = state.dragState.freeTrackPx > 0
-            ? (delta / state.dragState.freeTrackPx) * state.dragState.maxScroll
-            : 0;
-        setMenuPopupScrollTop(popup, state.dragState.startScrollTop + scrollDelta);
-    };
-
-    const onDragEnd = () => {
-        state.dragState = null;
-        document.removeEventListener("mousemove", onDragMove);
-        document.removeEventListener("mouseup", onDragEnd);
-    };
-
-    const onThumbMouseDown = (event) => {
-        event.preventDefault();
-        const thumbRect = parts.thumb.getBoundingClientRect();
-        const maxScroll = Math.max(parts.body.scrollHeight - parts.body.clientHeight, 0);
-        state.dragState = {
-            startClientY: event.clientY,
-            startScrollTop: parts.body.scrollTop,
-            maxScroll,
-            freeTrackPx: Math.max(parts.track.clientHeight - thumbRect.height, 0),
-        };
-        document.addEventListener("mousemove", onDragMove);
-        document.addEventListener("mouseup", onDragEnd);
-    };
-
-    parts.body.addEventListener("scroll", () => syncMenuPopupScrollbar(popup), { passive: true });
-    parts.backward.addEventListener("mousedown", (event) => startRepeat(event, -1));
-    parts.forward.addEventListener("mousedown", (event) => startRepeat(event, 1));
-    parts.track.addEventListener("mousedown", onTrackMouseDown);
-    parts.thumb.addEventListener("mousedown", onThumbMouseDown);
-    document.addEventListener("mouseup", () => stopMenuPopupScrollRepeat(popup), { passive: true });
-    window.addEventListener("resize", () => syncMenuPopupScrollbar(popup), { passive: true });
+    const main = popup.querySelector(".tv-menu-popup-main");
+    popup._tvMenuPopupScrollbar = main ? new TVScrollBar(main) : null;
 }
 
 function resetMenuPopupLayout(popup) {
@@ -2920,32 +2537,43 @@ class TVButtonStrip extends TVWidget {
 
 let tvChoiceGroupId = 0;
 
-class TVCheckBoxes extends TVWidget {
+class TVCluster extends TVWidget {
     constructor({
         className = "",
         attrs = {},
         options = [],
+        type,
+        name = "",
+        itemClass,
+        itemAttr,
+        markClass,
     } = {}) {
         super();
         this.className = className;
         this.attrs = attrs;
         this.options = options;
+        this.type = type;
+        this.name = name;
+        this.itemClass = itemClass;
+        this.itemAttr = itemAttr;
+        this.markClass = markClass;
     }
 
     renderMarkup() {
         const items = this.options.map((option, index) => {
             const inputAttrs = attrsToString({
-                type: "checkbox",
+                type: this.type,
                 class: "tv-choice-input",
+                name: this.name || null,
                 value: option.value !== undefined ? option.value : index,
                 checked: Boolean(option.checked),
                 disabled: Boolean(option.disabled),
                 ...(option.attrs || {}),
             });
-            const className = `tv-checkbox-item${option.disabled ? " is-disabled" : ""}`;
-            return `<label class="${className}" data-tv-checkbox-index="${index}"><input ${inputAttrs}><span class="tv-checkbox-mark" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
+            const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
+            return `<label class="${className}" ${this.itemAttr}="${index}"><input ${inputAttrs}><span class="${this.markClass}" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
         }).join("");
-        return new TVListViewer({
+        return new TVMarkupList({
             className: this.className,
             attrs: this.attrs,
             items: [items],
@@ -2953,39 +2581,28 @@ class TVCheckBoxes extends TVWidget {
     }
 }
 
-class TVRadioButtons extends TVWidget {
-    constructor({
-        className = "",
-        attrs = {},
-        options = [],
-        name = "",
-    } = {}) {
-        super();
-        this.className = className;
-        this.attrs = attrs;
-        this.options = options;
-        this.name = name || `tv-radio-${++tvChoiceGroupId}`;
+class TVCheckBoxes extends TVCluster {
+    constructor(options = {}) {
+        super({
+            ...options,
+            type: "checkbox",
+            itemClass: "tv-checkbox-item",
+            itemAttr: "data-tv-checkbox-index",
+            markClass: "tv-checkbox-mark",
+        });
     }
+}
 
-    renderMarkup() {
-        const items = this.options.map((option, index) => {
-            const inputAttrs = attrsToString({
-                type: "radio",
-                class: "tv-choice-input",
-                name: this.name,
-                value: option.value !== undefined ? option.value : index,
-                checked: Boolean(option.checked),
-                disabled: Boolean(option.disabled),
-                ...(option.attrs || {}),
-            });
-            const className = `tv-radio-item${option.disabled ? " is-disabled" : ""}`;
-            return `<label class="${className}" data-tv-radio-index="${index}"><input ${inputAttrs}><span class="tv-radio-mark" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
-        }).join("");
-        return new TVListViewer({
-            className: this.className,
-            attrs: this.attrs,
-            items: [items],
-        }).renderMarkup();
+class TVRadioButtons extends TVCluster {
+    constructor(options = {}) {
+        super({
+            ...options,
+            type: "radio",
+            name: options.name || `tv-radio-${++tvChoiceGroupId}`,
+            itemClass: "tv-radio-item",
+            itemAttr: "data-tv-radio-index",
+            markClass: "tv-radio-mark",
+        });
     }
 }
 
@@ -3104,7 +2721,73 @@ class TVFrame extends TVWidget {
     }
 }
 
-class TVDialog extends TVWidget {
+class TVWindow extends TVGroup {
+    constructor(root = null) {
+        super();
+        this.root = root;
+    }
+
+    static renderMarkup({
+        className = "",
+        attrs = {},
+        style = "",
+        caption = "",
+        contentMarkup = "",
+        closeAttrs = {},
+        zoomAttrs = {},
+    } = {}) {
+        const windowClasses = ["tv-window", className].filter(Boolean).join(" ");
+        const windowAttrs = attrsToString({ "data-tv-window": true, ...attrs });
+        const styleAttr = style ? ` style="${escapeHtml(style)}"` : "";
+        const closeAttrString = attrsToString({
+            href: "#",
+            "data-tv-close-button": true,
+            "aria-label": "Close window",
+            ...closeAttrs,
+        });
+        const zoomAttrString = attrsToString({
+            href: "#",
+            "aria-label": "Zoom window",
+            ...zoomAttrs,
+        });
+        return [
+            `<main class="${escapeHtml(windowClasses)}" ${windowAttrs}${styleAttr}>`,
+            `<div class="tv-shell">`,
+            `<div class="tv-border-row tv-border-top" data-tv-move-handle>`,
+            `<span class="tv-border-corner tv-border-corner-tl" data-tv-frame-corner="tl" aria-hidden="true">╔</span>`,
+            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
+            `<a class="tv-close-control" ${closeAttrString}>[<span class="tv-close-glyph" data-tv-close-glyph>■</span>]</a>`,
+            `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
+            `<div class="tv-window-caption">${escapeHtml(caption)}</div>`,
+            `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
+            `<a class="tv-zoom-control" ${zoomAttrString}>[<span class="tv-zoom-glyph" data-tv-zoom-glyph>↑</span>]</a>`,
+            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
+            `<span class="tv-border-corner tv-border-corner-tr" data-tv-frame-corner="tr" aria-hidden="true">╗</span>`,
+            `</div>`,
+            `<div class="tv-client-row">`,
+            `<span class="tv-border-side tv-border-side-left" data-tv-border-side="║" aria-hidden="true"></span>`,
+            `<div class="tv-frame"><div class="tv-scroll-shell" data-tv-scroll-frame>`,
+            `<div class="tv-viewport" data-tv-viewport>${contentMarkup}</div>`,
+            `</div></div>`,
+            TVScrollBar.renderMarkup("y"),
+            `<div class="tv-bottom-bar">`,
+            `<span class="tv-scroll-corner tv-scroll-corner-left" data-tv-frame-corner="bl" aria-hidden="true">╚</span>`,
+            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
+            TVScrollBar.renderMarkup("x"),
+            `<button type="button" class="tv-grow-handle" data-tv-resize-handle aria-label="Resize window">─┘</button>`,
+            `</div>`,
+            `</div>`,
+            `</div>`,
+            `</main>`,
+        ].join("");
+    }
+
+    static create(options = {}) {
+        return TVWidget.fromHTML(TVWindow.renderMarkup(options));
+    }
+}
+
+class TVDialog extends TVWindow {
     static footerMarkup() {
         return `
             <span class="tv-border-corner" aria-hidden="true">╚</span>
@@ -3899,15 +3582,35 @@ function normalizeSearchText(text) {
     return value.toLowerCase();
 }
 
-class TurboVisionScrollbar {
+class TVScrollBar {
+    static renderMarkup(axis, {
+        rootClass = "",
+        arrowClass = "",
+        trackClass = "",
+        cellsClass = "",
+        thumbClass = "",
+    } = {}) {
+        const glyphs = axis === "y" ? ["▲", "▼"] : ["◄", "►"];
+        return [
+            `<div class="tv-scrollbar tv-scrollbar-${axis} ${escapeHtml(rootClass)}" data-axis="${axis}">`,
+            `<button type="button" class="tv-scroll-arrow tv-scroll-arrow-backward ${escapeHtml(arrowClass)}" data-role="backward" aria-label="Scroll ${axis} backward">${glyphs[0]}</button>`,
+            `<div class="tv-scroll-track ${escapeHtml(trackClass)}" data-role="track"><div class="tv-scroll-cells ${escapeHtml(cellsClass)}" data-role="cells"></div><div class="tv-scroll-thumb ${escapeHtml(thumbClass)}" data-role="thumb"></div></div>`,
+            `<button type="button" class="tv-scroll-arrow tv-scroll-arrow-forward ${escapeHtml(arrowClass)}" data-role="forward" aria-label="Scroll ${axis} forward">${glyphs[1]}</button>`,
+            `</div>`,
+        ].join("");
+    }
+
     constructor(frame) {
         this.frame = frame;
-        this.host = frame.closest(".tv-client-row") || frame.parentElement;
+        this.host = frame.querySelector(":scope > .tv-scrollbar")
+            ? frame
+            : (frame.closest(".tv-client-row") || frame.parentElement);
         this.viewport = frame.querySelector("[data-tv-viewport]");
-        this.axes = {
-            x: this.buildAxis("x"),
-            y: this.buildAxis("y"),
-        };
+        this.axes = {};
+        for (const axisName of ["x", "y"]) {
+            const axis = this.buildAxis(axisName);
+            if (axis) { this.axes[axisName] = axis; }
+        }
         for (const axis of Object.values(this.axes)) {
             axis.root._tvScrollbar = this;
         }
@@ -3926,6 +3629,7 @@ class TurboVisionScrollbar {
 
     buildAxis(axis) {
         const root = this.host.querySelector(`.tv-scrollbar-${axis}`);
+        if (!root) { return null; }
         return {
             axis,
             root,
@@ -4150,13 +3854,14 @@ class TurboVisionScrollbar {
     }
 
     updateAxis(axisName) {
-        this.updateTrackGlyphs(this.axisMetrics(axisName));
+        if (this.axes[axisName]) {
+            this.updateTrackGlyphs(this.axisMetrics(axisName));
+        }
     }
 
     update() {
         if (this.destroyed) { return; }
-        this.updateAxis("x");
-        this.updateAxis("y");
+        Object.keys(this.axes).forEach((axisName) => this.updateAxis(axisName));
     }
 
     setActive(active) {
@@ -4200,6 +3905,8 @@ class TurboVisionScrollbar {
         }
     }
 }
+
+const TurboVisionScrollbar = TVScrollBar;
 
 Object.assign(TV, {
     SCROLL_REPEAT_MS,
@@ -4249,6 +3956,7 @@ Object.assign(TV, {
     TVStaticText,
     TVLabel,
     TVInputLine,
+    TVMarkupList,
     TVListViewer,
     TVGroup,
     TVInfoBox,
@@ -4258,13 +3966,16 @@ Object.assign(TV, {
     TVMenuBox,
     TVMenuController,
     TVButtonStrip,
+    TVCluster,
     TVCheckBoxes,
     TVRadioButtons,
     TVButton,
     TVFrame,
+    TVWindow,
     TVDialog,
     TVMessageBox,
     TVDialogManager,
+    TVScrollBar,
     TurboVisionScrollbar,
 });
 TV.getActiveThemePreset = () => activeThemePreset;

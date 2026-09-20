@@ -384,13 +384,16 @@ function saveBest(key, score, name) {
 
 let bestNamePromptSequence = 0;
 
-function showBestNamePrompt(ownerDialog, score, callback) {
+function showBestNamePrompt(ownerDialog, score, callback, {
+    heading = "New High Score!",
+    scoreLabel = "Score",
+} = {}) {
     const desktop = ownerDialog?.desktop || document.querySelector(".tv-desktop") || document.body;
     const body = new TVGroup({
         w: 28, h: 10,
         children: [
-            new TVStaticText({ x: 0, y: 1, w: 28, align: "center", title: true, text: "New High Score!" }),
-            new TVStaticText({ x: 0, y: 3, w: 28, align: "center", text: `Score: ${score}` }),
+            new TVStaticText({ x: 0, y: 1, w: 28, align: "center", title: true, text: heading }),
+            new TVStaticText({ x: 0, y: 3, w: 28, align: "center", text: `${scoreLabel}: ${score}` }),
             new TVLabel({ x: 1, y: 5, w: 26, text: "Your name:" }),
             new TVInputLine({
                 x: 1, y: 6, w: 26,
@@ -441,6 +444,149 @@ function showBestNamePrompt(ownerDialog, score, callback) {
     if (input) { input.focus(); }
 }
 
+const HALL_OF_FAME_LIMIT = 10;
+const HALL_OF_FAME_PREFIX = "tv-hall-of-fame:";
+const HALL_OF_FAME_GAMES = Object.freeze({
+    puzzle: { title: "Puzzle", unit: "moves", lowerIsBetter: true },
+    tetris: { title: "Tetris", unit: "points", legacyKey: "tv-tetris-best" },
+    mines: { title: "Mines", unit: "seconds", lowerIsBetter: true },
+    breakout: { title: "Breakout", unit: "points", legacyKey: "tv-breakout-best" },
+    sokoban: { title: "Sokoban", unit: "moves", lowerIsBetter: true },
+    lines: { title: "Lines", unit: "points", legacyKey: "tv-lines-best" },
+    reversi: { title: "Reversi", unit: "margin" },
+    ludo: { title: "Ludo", unit: "moves", lowerIsBetter: true },
+    snake: { title: "Snake", unit: "points", legacyKey: "tv-snake-best" },
+});
+
+function hallOfFameConfig(game) {
+    return HALL_OF_FAME_GAMES[game] || { title: game, unit: "points" };
+}
+
+function sortHallOfFame(game, entries) {
+    const config = hallOfFameConfig(game);
+    return entries.sort((left, right) => config.lowerIsBetter
+        ? left.score - right.score
+        : right.score - left.score);
+}
+
+function loadHallOfFame(game) {
+    let entries = [];
+    try {
+        const parsed = JSON.parse(localStorage.getItem(HALL_OF_FAME_PREFIX + game) || "[]");
+        if (Array.isArray(parsed)) {
+            entries = parsed.filter((entry) => Number.isFinite(Number(entry?.score)) && Number(entry.score) > 0)
+                .map((entry) => ({
+                    name: String(entry.name || "Player").slice(0, 15),
+                    score: Number(entry.score),
+                    note: String(entry.note || "").slice(0, 12),
+                }));
+        }
+    } catch { /* ignore invalid saved data */ }
+    const config = hallOfFameConfig(game);
+    if (!entries.length && config.legacyKey) {
+        const best = loadBest(config.legacyKey);
+        if (best.score > 0) {
+            entries.push({ name: best.name || "Player", score: best.score, note: "" });
+        }
+    }
+    return sortHallOfFame(game, entries).slice(0, HALL_OF_FAME_LIMIT);
+}
+
+function hallOfFameQualifies(game, score) {
+    if (!Number.isFinite(score) || score <= 0) { return false; }
+    const entries = loadHallOfFame(game);
+    if (entries.length < HALL_OF_FAME_LIMIT) { return true; }
+    const last = entries[entries.length - 1];
+    return hallOfFameConfig(game).lowerIsBetter ? score < last.score : score > last.score;
+}
+
+function saveHallOfFameScore(game, score, name, note = "") {
+    if (!Number.isFinite(score) || score <= 0) { return false; }
+    const entries = loadHallOfFame(game);
+    entries.push({ name: String(name || "Player").slice(0, 15), score, note: String(note || "").slice(0, 12) });
+    const sorted = sortHallOfFame(game, entries).slice(0, HALL_OF_FAME_LIMIT);
+    try {
+        localStorage.setItem(HALL_OF_FAME_PREFIX + game, JSON.stringify(sorted));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function submitHallOfFameScore(ownerDialog, game, score, {
+    name = "",
+    note = "",
+    onSaved = null,
+} = {}) {
+    if (!hallOfFameQualifies(game, score)) {
+        return false;
+    }
+    const save = (playerName) => {
+        saveHallOfFameScore(game, score, playerName, note);
+        if (onSaved) { onSaved(playerName); }
+    };
+    if (name) {
+        save(name);
+    } else {
+        const config = hallOfFameConfig(game);
+        showBestNamePrompt(ownerDialog, score, save, {
+            heading: "Hall of Fame!",
+            scoreLabel: config.unit[0].toUpperCase() + config.unit.slice(1),
+        });
+    }
+    return true;
+}
+
+function formatHallOfFameScore(game, entry) {
+    const config = hallOfFameConfig(game);
+    const note = entry.note ? ` ${entry.note}` : "";
+    return `${entry.score} ${config.unit}${note}`;
+}
+
+function showHallOfFame(ownerDialog, game) {
+    const config = hallOfFameConfig(game);
+    const entries = loadHallOfFame(game);
+    const rows = entries.length
+        ? entries.map((entry, index) => `
+            <div class="tv-hall-row">
+                <span>${String(index + 1).padStart(2, " ")}.</span>
+                <span>${escapeHtml(entry.name)}</span>
+                <span>${escapeHtml(formatHallOfFameScore(game, entry))}</span>
+            </div>`).join("")
+        : '<div class="tv-hall-empty">No scores yet.</div>';
+    const body = `<div class="tv-hall-main"><div class="tv-hall-header"><span>#</span><span>Player</span><span>Score</span></div>${rows}</div>`;
+    const dlg = new TVDialog({
+        desktop: ownerDialog?.desktop || document.querySelector(".tv-desktop") || document.body,
+        ariaLabel: `${config.title} Hall of Fame`,
+        title: `${config.title} Hall of Fame`,
+        closeAttrs: { "data-tv-hall-close": true, "aria-label": "Close Hall of Fame" },
+        bodyMarkup: body,
+        footerMarkup: TVDialog.footerMarkup(),
+        width: "45ch",
+        height: "min(15em, calc(100% - 2em))",
+        modal: true,
+    });
+    const manager = ownerDialog?.manager || null;
+    if (manager) {
+        manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg);
+    }
+    dlg.bindCommonClose(() => dlg.destroy());
+    dlg.bindDrag();
+    dlg.open();
+}
+
+function installHallOfFame(ownerDialog, game) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tv-game-hall-control";
+    button.textContent = "[H]";
+    button.title = "Hall of Fame";
+    button.setAttribute("aria-label", `${hallOfFameConfig(game).title} Hall of Fame`);
+    button.addEventListener("mousedown", (event) => event.stopPropagation());
+    button.addEventListener("click", () => showHallOfFame(ownerDialog, game));
+    ownerDialog.titlebar?.appendChild(button);
+}
+
 // ── Puzzle (15-game) ────────────────────────────────────────────────
 
 class TVPuzzleDialog extends TVDialog {
@@ -479,6 +625,7 @@ class TVPuzzleDialog extends TVDialog {
             left: "4ch",
             top: "3em",
         });
+        installHallOfFame(this, "puzzle");
         this.grid = this.query("[data-tv-puzzle-grid]");
         this.movesNode = this.query("[data-tv-puzzle-moves]");
         this.board = [...PUZZLE_START];
@@ -576,7 +723,11 @@ class TVPuzzleDialog extends TVDialog {
     }
 
     checkSolved() {
+        const wasSolved = this.solved;
         this.solved = this.board.every((value, index) => value === PUZZLE_START[index]);
+        if (!wasSolved && this.solved) {
+            submitHallOfFameScore(this, "puzzle", this.moves);
+        }
     }
 
     scramble() {
@@ -741,6 +892,7 @@ class TVTetrisDialog extends TVDialog {
             top: "2em",
         });
 
+        installHallOfFame(this, "tetris");
         this.gridEl = this.query("[data-tv-tetris-grid]");
         this.previewEl = this.query("[data-tv-tetris-preview]");
         this.infoBox = infoBox.resolve(this.root);
@@ -986,14 +1138,16 @@ class TVTetrisDialog extends TVDialog {
     }
 
     _checkBest() {
-        if (this.score > this.bestScore) {
-            this.bestScore = this.score;
-            showBestNamePrompt(this, this.score, (name) => {
+        const isBest = this.score > this.bestScore;
+        submitHallOfFameScore(this, "tetris", this.score, {
+            onSaved: (name) => {
+                if (!isBest) { return; }
+                this.bestScore = this.score;
                 this.bestName = name;
                 this._saveBest();
                 this.renderInfo();
-            });
-        }
+            },
+        });
     }
 
     startTimer() {
@@ -1177,6 +1331,7 @@ class TVMinesDialog extends TVDialog {
             height: "min(13em, calc(100% - 2em))",
         });
 
+        installHallOfFame(this, "mines");
         this.gridEl = this.query("[data-tv-mines-grid]");
         this.remainingEl = this.query("[data-tv-mines-remaining]");
         this.timerEl = this.query("[data-tv-mines-timer]");
@@ -1401,6 +1556,7 @@ class TVMinesDialog extends TVDialog {
         if (unrevealed === MINES_COUNT) {
             this.won = true;
             this.stopTimer();
+            submitHallOfFameScore(this, "mines", Math.max(1, this.seconds));
         }
     }
 
@@ -1510,6 +1666,7 @@ class TVBreakOutDialog extends TVDialog {
             top: "2em",
         });
 
+        installHallOfFame(this, "breakout");
         this.fieldEl = this.query("[data-tv-break-field]");
         this.infoBox = infoBox.resolve(this.root);
         this.bestBox = bestBox.resolve(this.root);
@@ -1721,14 +1878,16 @@ class TVBreakOutDialog extends TVDialog {
     }
 
     _checkBest() {
-        if (this.score > this.bestScore) {
-            this.bestScore = this.score;
-            showBestNamePrompt(this, this.score, (name) => {
+        const isBest = this.score > this.bestScore;
+        submitHallOfFameScore(this, "breakout", this.score, {
+            onSaved: (name) => {
+                if (!isBest) { return; }
+                this.bestScore = this.score;
                 this.bestName = name;
                 this._saveBest();
                 this.renderInfo();
-            });
-        }
+            },
+        });
     }
 
     render() {
@@ -1871,6 +2030,7 @@ class TVSokobanDialog extends TVDialog {
             top: "2em",
         });
 
+        installHallOfFame(this, "sokoban");
         this.fieldEl = this.query("[data-tv-sokoban-field]");
         this.infoBox = infoBox.resolve(this.root);
 
@@ -2027,6 +2187,9 @@ class TVSokobanDialog extends TVDialog {
             }
         }
         this.solved = true;
+        submitHallOfFameScore(this, "sokoban", this.moves, {
+            note: `L${this.levelIndex + 1}`,
+        });
     }
 
     render() {
@@ -2127,6 +2290,7 @@ class TVLinesDialog extends TVDialog {
             top: "2em",
         });
 
+        installHallOfFame(this, "lines");
         this.gridEl = this.query("[data-tv-lines-grid]");
         this.infoBox = infoBox.resolve(this.root);
         this.nextBox = nextBox.resolve(this.root);
@@ -2223,14 +2387,16 @@ class TVLinesDialog extends TVDialog {
     }
 
     _checkBest() {
-        if (this.score > this.bestScore) {
-            this.bestScore = this.score;
-            showBestNamePrompt(this, this.score, (name) => {
+        const isBest = this.score > this.bestScore;
+        submitHallOfFameScore(this, "lines", this.score, {
+            onSaved: (name) => {
+                if (!isBest) { return; }
+                this.bestScore = this.score;
                 this.bestName = name;
                 this._saveBest();
                 this.renderInfo();
-            });
-        }
+            },
+        });
     }
 
     onCellClick(event) {
@@ -2403,6 +2569,7 @@ class TVReversiDialog extends TVDialog {
             top: "2em",
         });
 
+        installHallOfFame(this, "reversi");
         this.gridEl = this.query("[data-tv-reversi-grid]");
         this.infoBox = infoBox.resolve(this.root);
 
@@ -2526,6 +2693,10 @@ class TVReversiDialog extends TVDialog {
             // Opponent passes, current player goes again
         } else {
             this.gameOver = true;
+            const { black, white } = this._countPieces();
+            if (black > white) {
+                submitHallOfFameScore(this, "reversi", black - white);
+            }
         }
         this.render();
         // If it's computer's turn, play after a short delay
@@ -2720,6 +2891,7 @@ class TVLudoDialog extends TVDialog {
             top: "2em",
         });
 
+        installHallOfFame(this, "ludo");
         this.game = new LudoGame();
         this.infoBox = infoBox.resolve(this.root);
         this.boardEl = this.query("[data-tv-ludo-board]");
@@ -2734,6 +2906,8 @@ class TVLudoDialog extends TVDialog {
         this.animating = false;
         this.animation = null;
         this.captureFlash = null;
+        this.moveCount = 0;
+        this.hallRecorded = false;
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
@@ -2789,6 +2963,8 @@ class TVLudoDialog extends TVDialog {
         this.started = true;
         this.selectedPiece = null;
         this.notice = "";
+        this.moveCount = 0;
+        this.hallRecorded = false;
         this.render();
         this.notifyStateChange();
         this.scheduleCpu();
@@ -2911,6 +3087,7 @@ class TVLudoDialog extends TVDialog {
         const beforePieces = this.game.pieces.map((pieces) => pieces.slice());
         const result = this.game.move(piece);
         if (!result) { return null; }
+        this.moveCount += 1;
         this.selectedPiece = null;
         this.notice = result.captured.length ? "Piece captured" : "";
         this.animateMove(result, beforePieces);
@@ -2999,6 +3176,13 @@ class TVLudoDialog extends TVDialog {
         window.clearTimeout(this.captureFlashTimer);
         this.captureFlashTimer = null;
         this.captureFlash = null;
+        if (this.game.winner !== null && !this.hallRecorded) {
+            this.hallRecorded = true;
+            const winner = this.game.winner;
+            submitHallOfFameScore(this, "ludo", Math.max(1, this.moveCount), {
+                name: this.game.modes[winner] === "cpu" ? `CPU ${LUDO_PLAYER_NAMES[winner]}` : "",
+            });
+        }
         this.render();
         this.notifyStateChange();
         this.scheduleCpu();
@@ -3015,6 +3199,8 @@ class TVLudoDialog extends TVDialog {
         this.started = true;
         this.selectedPiece = null;
         this.notice = "";
+        this.moveCount = 0;
+        this.hallRecorded = this.game.winner !== null;
         this.render();
         this.scheduleCpu();
         return true;
@@ -3236,6 +3422,7 @@ class TVSnakeDialog extends TVDialog {
             top: "2em",
         });
 
+        installHallOfFame(this, "snake");
         this.fieldEl = this.query("[data-tv-snake-field]");
         this.infoBox = infoBox.resolve(this.root);
         this.bestBox = bestBox.resolve(this.root);
@@ -3396,14 +3583,16 @@ class TVSnakeDialog extends TVDialog {
     }
 
     _checkBest() {
-        if (this.score > this.bestScore) {
-            this.bestScore = this.score;
-            showBestNamePrompt(this, this.score, (name) => {
+        const isBest = this.score > this.bestScore;
+        submitHallOfFameScore(this, "snake", this.score, {
+            onSaved: (name) => {
+                if (!isBest) { return; }
+                this.bestScore = this.score;
                 this.bestName = name;
                 this._saveBest();
                 this.renderInfo();
-            });
-        }
+            },
+        });
     }
 
     render() {

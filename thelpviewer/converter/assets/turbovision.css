@@ -1090,8 +1090,8 @@ button.tv-status-item {
 .tv-window.is-resizing,
 .tv-window.is-moving {
     --tv-current-frame: var(--tv-owner-icon-active-fg);
-    --tv-current-title-bg: var(--tv-owner-icon-active-bg);
-    --tv-current-title-fg: var(--tv-owner-icon-active-fg);
+    --tv-current-title-bg: var(--tv-owner-title-active-bg);
+    --tv-current-title-fg: var(--tv-owner-title-active-fg);
     --tv-current-icon: var(--tv-owner-icon-active-fg);
 }
 
@@ -1243,12 +1243,12 @@ button.tv-status-item {
 .tv-doc-document table {
     border-collapse: collapse;
     margin: 0;
-    width: 100%;
-    max-width: 100%;
-    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
     white-space: normal;
     word-break: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
     line-height: 1em;
 }
 .tv-doc-document th,
@@ -1257,7 +1257,7 @@ button.tv-status-item {
     text-align: left;
     white-space: normal;
     word-break: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
     hyphens: manual;
     line-height: 1em;
 }
@@ -2219,13 +2219,17 @@ button.tv-status-item {
 
 .tv-midi-main {
     display: grid;
-    grid-template-rows: 3em 1em 1em 3em minmax(0, 11em);
+    grid-template-rows: 3em 1em 1em minmax(0, 11em);
     gap: 1em;
     min-width: 0;
     min-height: 0;
     padding: 1em 1ch 0;
     background: var(--tv-dialog-bg);
     color: var(--tv-dialog-fg);
+}
+
+.tv-midi-main.is-advanced {
+    grid-template-rows: 3em 1em 1em minmax(0, 11em) 3em;
 }
 
 .tv-midi-display {
@@ -2327,6 +2331,7 @@ button.tv-status-item {
     outline: none;
 }
 
+.tv-midi-more-action,
 .tv-midi-close-action {
     display: inline-flex;
     align-items: center;
@@ -2344,6 +2349,12 @@ button.tv-status-item {
     color: var(--tv-dialog-button-fg);
 }
 
+.tv-midi-more-action {
+    min-width: 7ch;
+}
+
+.tv-midi-more-action:hover,
+.tv-midi-more-action:focus-visible,
 .tv-midi-close-action:hover,
 .tv-midi-close-action:focus-visible {
     background: var(--tv-hover-bg);
@@ -2356,6 +2367,73 @@ button.tv-status-item {
     grid-template-rows: 1em 1em;
     gap: 1em;
     min-width: 0;
+}
+
+.tv-midi-external[hidden] {
+    display: none;
+}
+
+.tv-game-hall-control {
+    position: absolute;
+    top: 0;
+    right: 2ch;
+    z-index: 2;
+    width: 3ch;
+    height: 1em;
+    padding: 0;
+    border: 0;
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+    background: var(--tv-owner-icon-active-bg);
+    color: var(--tv-owner-icon-active-fg);
+}
+
+.tv-game-hall-control:hover,
+.tv-game-hall-control:focus-visible {
+    background: var(--tv-hover-bg);
+    color: var(--tv-hover-fg);
+    outline: none;
+}
+
+.tv-hall-main {
+    display: grid;
+    grid-auto-rows: 1em;
+    align-content: start;
+    min-width: 0;
+    padding: 1em 1ch;
+    background: var(--tv-dialog-list-normal-bg);
+    color: var(--tv-dialog-list-normal-fg);
+}
+
+.tv-hall-header,
+.tv-hall-row {
+    display: grid;
+    grid-template-columns: 4ch minmax(0, 1fr) 18ch;
+    gap: 1ch;
+    min-width: 0;
+}
+
+.tv-hall-header {
+    background: var(--tv-dialog-list-focus-bg);
+    color: var(--tv-dialog-list-focus-fg);
+}
+
+.tv-hall-row > span,
+.tv-hall-header > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: pre;
+}
+
+.tv-hall-row > span:last-child,
+.tv-hall-header > span:last-child {
+    text-align: right;
+}
+
+.tv-hall-empty {
+    padding-top: 2em;
+    text-align: center;
 }
 
 .tv-midi-url-row {
@@ -2838,6 +2916,11 @@ button.tv-status-item {
     color: var(--tv-dialog-list-normal-fg);
 }
 
+.tv-vlist-viewer > .tv-scrollbar-y {
+    grid-column: 2;
+    grid-row: 1;
+}
+
 .tv-vlist-viewport {
     display: grid;
     grid-auto-rows: 1em;
@@ -3117,6 +3200,10 @@ button.tv-status-item {
     cursor: default;
 }
 
+.tv-file-open-history-button .tv-hotkey {
+    color: var(--tv-palette-dialog-input-arrow-fg);
+}
+
 .tv-file-open-files-label {
     position: absolute;
     left: 1ch;
@@ -3151,6 +3238,27 @@ button.tv-status-item {
     line-height: 1;
     text-align: left;
     white-space: pre;
+    background: var(--tv-dialog-list-normal-bg);
+    color: var(--tv-dialog-list-normal-fg);
+    opacity: 1;
+    visibility: visible;
+}
+
+.tv-file-open-list-item.is-selected {
+    background: var(--tv-dialog-list-selected-bg);
+    color: var(--tv-dialog-list-selected-fg);
+}
+
+.tv-file-open-file-list:focus-within .tv-file-open-list-item.is-selected {
+    background: var(--tv-dialog-list-focused-bg);
+    color: var(--tv-dialog-list-focused-fg);
+}
+
+.tv-file-open-list-item .tv-vlist-text {
+    background: inherit;
+    color: inherit;
+    opacity: 1;
+    visibility: visible;
 }
 
 .tv-file-open-hscroll {

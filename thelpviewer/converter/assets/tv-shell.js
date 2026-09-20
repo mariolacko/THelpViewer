@@ -29,7 +29,7 @@ const {
     TVMidiPlayerDialog,
     TVSearchDialog,
     TVScreenSaver,
-    TurboVisionScrollbar,
+    TVScrollBar,
     measureCells,
     SCROLL_REPEAT_MS,
     TRACK_CHAR,
@@ -686,7 +686,7 @@ class TVApplication {
         const desktop = document.querySelector(".tv-desktop") || document.body;
         const hostWindow = document.querySelector("[data-tv-window]");
         this.dialogManager = new TVDialogManager(desktop);
-        this.scrollbars = Array.from(document.querySelectorAll("[data-tv-scroll-frame]"), (frame) => new TurboVisionScrollbar(frame));
+        this.scrollbars = Array.from(document.querySelectorAll("[data-tv-scroll-frame]"), (frame) => new TVScrollBar(frame));
         this.resizers = Array.from(document.querySelectorAll("[data-tv-window]"), (windowElement) => new TurboVisionWindowResizer(windowElement));
         const hostResizer = this.resizers.find((resizer) => resizer.windowElement === hostWindow);
         this.dialogManager.setHostWindow(hostWindow, hostWindow ? {
@@ -767,7 +767,7 @@ class TVApplication {
 Object.assign(TV, {
     TVMenuBar,
     TVStatusLine,
-    TurboVisionScrollbar,
+    TVScrollBar,
     TurboVisionWindowResizer,
     TurboVisionMenus,
     TVApplication,

@@ -32,11 +32,12 @@ const {
     TVLudoDialog,
     TVSnakeDialog,
     TVScreenSaver,
+    TVWindow,
     TVWidget,
     TVButton,
     TVMenuBox,
     measureCells,
-    TurboVisionScrollbar,
+    TVScrollBar,
     TurboVisionWindowResizer,
     bindCloseButtons,
     SCROLL_REPEAT_MS,
@@ -1671,55 +1672,18 @@ class TVLoadingDialog {
 
 // ── Window rendering ────────────────────────────────────────────────
 
-function renderScrollbar(axis) {
-    const glyphs = axis === "y" ? ["▲", "▼"] : ["◄", "►"];
-    return [
-        `<div class="tv-scrollbar tv-scrollbar-${axis}" data-axis="${axis}">`,
-        `<button type="button" class="tv-scroll-arrow tv-scroll-arrow-backward" data-role="backward" aria-label="Scroll ${axis} backward">${glyphs[0]}</button>`,
-        `<div class="tv-scroll-track" data-role="track"><div class="tv-scroll-cells" data-role="cells"></div><div class="tv-scroll-thumb" data-role="thumb"></div></div>`,
-        `<button type="button" class="tv-scroll-arrow tv-scroll-arrow-forward" data-role="forward" aria-label="Scroll ${axis} forward">${glyphs[1]}</button>`,
-        `</div>`,
-    ].join("");
-}
-
 function buildWindowHTML(bundle, contentHTML, caption) {
     const w = bundleWindowSpec(bundle);
     const themeStyle = bundleUiThemeStyle(bundle);
     const style = `--tv-window-cols:${w.cols}; --tv-window-rows:${w.rows}; --tv-window-min-cols:${w.min_cols}; --tv-window-min-rows:${w.min_rows};${themeStyle ? ` ${themeStyle};` : ""}`;
-    return [
-        `<main class="tv-window" data-tv-window data-tv-bundle-window="${escapeHtml(bundleWindowKey(bundle))}" style="${style}">`,
-        `<div class="tv-shell">`,
-        `<div class="tv-border-row tv-border-top" data-tv-move-handle>`,
-        `<span class="tv-border-corner tv-border-corner-tl" data-tv-frame-corner="tl" aria-hidden="true">╔</span>`,
-        `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
-        `<a class="tv-close-control" data-tv-close-button data-tv-bundle-close href="#" aria-label="Close window">[<span class="tv-close-glyph" data-tv-close-glyph>■</span>]</a>`,
-        `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
-        `<div class="tv-window-caption">${escapeHtml(caption)}</div>`,
-        `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
-        `<a class="tv-zoom-control" data-tv-bundle-zoom href="#" aria-label="Zoom window">[<span class="tv-zoom-glyph" data-tv-zoom-glyph>↑</span>]</a>`,
-        `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
-        `<span class="tv-border-corner tv-border-corner-tr" data-tv-frame-corner="tr" aria-hidden="true">╗</span>`,
-        `</div>`,
-        `<div class="tv-client-row">`,
-        `<span class="tv-border-side tv-border-side-left" data-tv-border-side="║" aria-hidden="true"></span>`,
-        `<div class="tv-frame">`,
-        `<div class="tv-scroll-shell" data-tv-scroll-frame>`,
-        `<div class="tv-viewport" data-tv-viewport>`,
-        contentHTML,
-        `</div>`,
-        `</div>`,
-        `</div>`,
-        renderScrollbar("y"),
-        `<div class="tv-bottom-bar">`,
-        `<span class="tv-scroll-corner tv-scroll-corner-left" data-tv-frame-corner="bl" aria-hidden="true">╚</span>`,
-        `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
-        renderScrollbar("x"),
-        `<button type="button" class="tv-grow-handle" data-tv-resize-handle aria-label="Resize window">─┘</button>`,
-        `</div>`,
-        `</div>`,
-        `</div>`,
-        `</main>`,
-    ].join("\n");
+    return TVWindow.renderMarkup({
+        attrs: { "data-tv-bundle-window": bundleWindowKey(bundle) },
+        style,
+        caption,
+        contentMarkup: contentHTML,
+        closeAttrs: { "data-tv-bundle-close": true },
+        zoomAttrs: { "data-tv-bundle-zoom": true },
+    });
 }
 
 // ── Index page rendering ────────────────────────────────────────────
@@ -2209,7 +2173,7 @@ class BundleWindowManager {
 
     _initWindowWidgets(windowEl) {
         const frames = windowEl.querySelectorAll("[data-tv-scroll-frame]");
-        windowEl._tvScrollbars = Array.from(frames, (frame) => new TurboVisionScrollbar(frame));
+        windowEl._tvScrollbars = Array.from(frames, (frame) => new TVScrollBar(frame));
         this.scrollbars.push(...windowEl._tvScrollbars);
         const resizer = new TurboVisionWindowResizer(windowEl);
         windowEl._tvResizer = resizer;
@@ -3676,40 +3640,12 @@ class TVBundleApp {
         const contentHTML = `<div class="tv-document tv-doc-document">${htmlContent}</div>`;
         const w = { cols: 78, rows: 24, min_cols: 40, min_rows: 8 };
         const style = `--tv-window-cols:${w.cols}; --tv-window-rows:${w.rows}; --tv-window-min-cols:${w.min_cols}; --tv-window-min-rows:${w.min_rows};`;
-        const windowHTML = [
-            `<main class="tv-window tv-doc-window" data-tv-window style="${style}">`,
-            `<div class="tv-shell">`,
-            `<div class="tv-border-row tv-border-top" data-tv-move-handle>`,
-            `<span class="tv-border-corner tv-border-corner-tl" data-tv-frame-corner="tl" aria-hidden="true">╔</span>`,
-            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            `<a class="tv-close-control" data-tv-close-button href="#" aria-label="Close window">[<span class="tv-close-glyph" data-tv-close-glyph>■</span>]</a>`,
-            `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            `<div class="tv-window-caption">${escapeHtml(title)}</div>`,
-            `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            `<a class="tv-zoom-control" href="#" aria-label="Zoom window">[<span class="tv-zoom-glyph" data-tv-zoom-glyph>↑</span>]</a>`,
-            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            `<span class="tv-border-corner tv-border-corner-tr" data-tv-frame-corner="tr" aria-hidden="true">╗</span>`,
-            `</div>`,
-            `<div class="tv-client-row">`,
-            `<span class="tv-border-side tv-border-side-left" data-tv-border-side="║" aria-hidden="true"></span>`,
-            `<div class="tv-frame">`,
-            `<div class="tv-scroll-shell" data-tv-scroll-frame>`,
-            `<div class="tv-viewport" data-tv-viewport>`,
-            contentHTML,
-            `</div>`,
-            `</div>`,
-            `</div>`,
-            renderScrollbar("y"),
-            `<div class="tv-bottom-bar">`,
-            `<span class="tv-scroll-corner tv-scroll-corner-left" data-tv-frame-corner="bl" aria-hidden="true">╚</span>`,
-            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            renderScrollbar("x"),
-            `<button type="button" class="tv-grow-handle" data-tv-resize-handle aria-label="Resize window">─┘</button>`,
-            `</div>`,
-            `</div>`,
-            `</div>`,
-            `</main>`,
-        ].join("\n");
+        const windowHTML = TVWindow.renderMarkup({
+            className: "tv-doc-window",
+            style,
+            caption: title,
+            contentMarkup: contentHTML,
+        });
 
         const template = document.createElement("template");
         template.innerHTML = windowHTML.trim();
@@ -3724,7 +3660,7 @@ class TVBundleApp {
 
         // Init widgets
         const frames = windowEl.querySelectorAll("[data-tv-scroll-frame]");
-        windowEl._tvScrollbars = Array.from(frames, (frame) => new TurboVisionScrollbar(frame));
+        windowEl._tvScrollbars = Array.from(frames, (frame) => new TVScrollBar(frame));
         windowEl._tvResizer = new TurboVisionWindowResizer(windowEl);
 
         const closeWindow = () => {
