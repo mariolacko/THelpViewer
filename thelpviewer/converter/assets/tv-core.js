@@ -281,6 +281,7 @@ const TV2_PALETTE_TOKENS = Object.freeze({
     53: "dialog-history-button", 54: "dialog-history-sides", 55: "dialog-history-page",
     56: "dialog-history-controls", 57: "dialog-list-normal", 58: "dialog-list-focused",
     59: "dialog-list-selected", 60: "dialog-list-divider", 61: "dialog-info",
+    62: "dialog-cluster-disabled",
     128: "help-frame-passive", 129: "help-frame-active", 130: "help-frame-icons",
     131: "help-scroll-page", 132: "help-scroll-controls", 133: "help-text",
     134: "help-keyword", 135: "help-keyword-selected",
@@ -308,7 +309,7 @@ const COLOR_GROUP_DEFINITIONS = Object.freeze([
         ["Cluster shortcut", 49], ["Input normal", 50], ["Input selected", 51], ["Input arrow", 52],
         ["History button", 53], ["History sides", 54], ["History bar page", 55], ["History bar icons", 56],
         ["List normal", 57], ["List focused", 58], ["List selected", 59], ["List divider", 60],
-        ["Information pane", 61],
+        ["Information pane", 61], ["Cluster disabled", 62],
     ] },
     { name: "Viewer", items: [
         ["Frame passive", 8], ["Frame active", 9], ["Frame icons", 10],

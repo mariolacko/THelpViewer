@@ -61,6 +61,7 @@
     --tv-palette-dialog-cluster-normal-bg: #00aaaa; --tv-palette-dialog-cluster-normal-fg: #000000;
     --tv-palette-dialog-cluster-selected-bg: #00aaaa; --tv-palette-dialog-cluster-selected-fg: #ffffff;
     --tv-palette-dialog-cluster-shortcut-bg: #00aaaa; --tv-palette-dialog-cluster-shortcut-fg: #ffff55;
+    --tv-palette-dialog-cluster-disabled-bg: #00aaaa; --tv-palette-dialog-cluster-disabled-fg: #555555;
     --tv-palette-dialog-input-normal-bg: #0000aa; --tv-palette-dialog-input-normal-fg: #ffffff;
     --tv-palette-dialog-input-selected-bg: #00aa00; --tv-palette-dialog-input-selected-fg: #ffffff;
     --tv-palette-dialog-input-arrow-bg: #0000aa; --tv-palette-dialog-input-arrow-fg: #55ff55;
@@ -701,21 +702,31 @@ button.tv-status-item {
     --tv-owner-frame-active-fg: var(--tv-palette-help-frame-active-fg);
     --tv-owner-frame-icons-bg: var(--tv-palette-help-frame-icons-bg);
     --tv-owner-frame-icons-fg: var(--tv-palette-help-frame-icons-fg);
+    --tv-owner-title-active-bg: var(--tv-owner-frame-active-bg);
+    --tv-owner-title-active-fg: var(--tv-owner-frame-active-fg);
+    --tv-owner-title-passive-bg: var(--tv-owner-frame-passive-bg);
+    --tv-owner-title-passive-fg: var(--tv-owner-frame-passive-fg);
+    --tv-owner-icon-active-bg: var(--tv-owner-frame-icons-bg);
+    --tv-owner-icon-active-fg: var(--tv-owner-frame-icons-fg);
+    --tv-owner-icon-passive-fg: var(--tv-owner-frame-passive-fg);
     --tv-owner-scroll-page-bg: var(--tv-palette-help-scroll-page-bg);
     --tv-owner-scroll-page-fg: var(--tv-palette-help-scroll-page-fg);
     --tv-owner-scroll-controls-bg: var(--tv-palette-help-scroll-controls-bg);
     --tv-owner-scroll-controls-fg: var(--tv-palette-help-scroll-controls-fg);
+    --tv-owner-scroll-thumb-bg: var(--tv-thumb-bg);
+    --tv-owner-scroll-thumb-fg: var(--tv-owner-scroll-controls-fg);
     --tv-owner-content-bg: var(--tv-palette-help-text-bg);
     --tv-owner-content-fg: var(--tv-palette-help-text-fg);
     --tv-current-frame: var(--tv-owner-frame-active-fg);
-    --tv-current-title-bg: var(--tv-owner-frame-active-bg);
-    --tv-current-title-fg: var(--tv-owner-frame-active-fg);
-    --tv-current-icon: var(--tv-owner-frame-icons-fg);
+    --tv-current-title-bg: var(--tv-owner-title-active-bg);
+    --tv-current-title-fg: var(--tv-owner-title-active-fg);
+    --tv-current-icon: var(--tv-owner-icon-active-fg);
     --tv-scrollbar-bg: var(--tv-owner-scroll-page-bg);
     --tv-scrollbar-glyph: var(--tv-owner-scroll-page-fg);
     --tv-scrollbar-arrow-bg: var(--tv-owner-scroll-controls-bg);
     --tv-scrollbar-arrow-fg: var(--tv-owner-scroll-controls-fg);
-    --tv-scrollbar-thumb-fg: var(--tv-owner-scroll-controls-fg);
+    --tv-scrollbar-thumb-bg: var(--tv-owner-scroll-thumb-bg);
+    --tv-scrollbar-thumb-fg: var(--tv-owner-scroll-thumb-fg);
     background: var(--tv-owner-content-bg);
     color: var(--tv-owner-content-fg);
     box-shadow:
@@ -725,9 +736,9 @@ button.tv-status-item {
 
 .tv-window.is-window-inactive {
     --tv-current-frame: var(--tv-owner-frame-passive-fg);
-    --tv-current-title-bg: var(--tv-owner-frame-passive-bg);
-    --tv-current-title-fg: var(--tv-owner-frame-passive-fg);
-    --tv-current-icon: var(--tv-owner-frame-passive-fg);
+    --tv-current-title-bg: var(--tv-owner-title-passive-bg);
+    --tv-current-title-fg: var(--tv-owner-title-passive-fg);
+    --tv-current-icon: var(--tv-owner-icon-passive-fg);
 }
 
 .tv-window.is-maximized {
@@ -1022,7 +1033,7 @@ button.tv-status-item {
 }
 
 .tv-thumb-cell {
-    background: var(--tv-thumb-bg);
+    background: var(--tv-scrollbar-thumb-bg, var(--tv-thumb-bg));
     color: var(--tv-scrollbar-thumb-fg, var(--tv-thumb-fg));
     pointer-events: auto;
 }
@@ -1058,7 +1069,7 @@ button.tv-status-item {
     padding: 0;
     border: 0;
     background: var(--tv-owner-content-bg);
-    color: var(--tv-owner-frame-icons-fg);
+    color: var(--tv-owner-icon-active-fg);
     font: inherit;
     white-space: pre;
     display: grid;
@@ -1069,19 +1080,19 @@ button.tv-status-item {
 .tv-grow-handle:hover,
 .tv-grow-handle:focus-visible {
     background: var(--tv-owner-content-bg);
-    color: var(--tv-owner-frame-icons-fg);
+    color: var(--tv-owner-icon-active-fg);
 }
 
 .tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-grow-handle {
-    color: var(--tv-owner-frame-icons-fg);
+    color: var(--tv-owner-icon-active-fg);
 }
 
 .tv-window.is-resizing,
 .tv-window.is-moving {
-    --tv-current-frame: var(--tv-owner-frame-icons-fg);
-    --tv-current-title-bg: var(--tv-owner-frame-icons-bg);
-    --tv-current-title-fg: var(--tv-owner-frame-icons-fg);
-    --tv-current-icon: var(--tv-owner-frame-icons-fg);
+    --tv-current-frame: var(--tv-owner-icon-active-fg);
+    --tv-current-title-bg: var(--tv-owner-icon-active-bg);
+    --tv-current-title-fg: var(--tv-owner-icon-active-fg);
+    --tv-current-icon: var(--tv-owner-icon-active-fg);
 }
 
 .tv-window.is-resizing .tv-border-top,
@@ -1096,7 +1107,7 @@ button.tv-status-item {
 .tv-window.is-moving .tv-border-side,
 .tv-window.is-moving .tv-scroll-corner-left,
 .tv-window.is-moving .tv-grow-handle {
-    color: var(--tv-owner-frame-icons-fg);
+    color: var(--tv-owner-icon-active-fg);
 }
 
 .tv-document,
@@ -1182,7 +1193,7 @@ button.tv-status-item {
     --tv-current-icon: var(--tv-owner-frame-passive-fg);
 }
 .tv-doc-window .tv-grow-handle {
-    color: var(--tv-owner-frame-icons-fg);
+    color: var(--tv-owner-icon-active-fg);
 }
 .tv-doc-document {
     font-family: inherit;
@@ -1553,21 +1564,31 @@ button.tv-status-item {
     --tv-owner-frame-active-fg: var(--tv-palette-dialog-frame-active-fg);
     --tv-owner-frame-icons-bg: var(--tv-palette-dialog-frame-icons-bg);
     --tv-owner-frame-icons-fg: var(--tv-palette-dialog-frame-icons-fg);
+    --tv-owner-title-active-bg: var(--tv-owner-frame-active-bg);
+    --tv-owner-title-active-fg: var(--tv-owner-frame-active-fg);
+    --tv-owner-title-passive-bg: var(--tv-owner-frame-passive-bg);
+    --tv-owner-title-passive-fg: var(--tv-owner-frame-passive-fg);
+    --tv-owner-icon-active-bg: var(--tv-owner-frame-icons-bg);
+    --tv-owner-icon-active-fg: var(--tv-owner-frame-icons-fg);
+    --tv-owner-icon-passive-fg: var(--tv-owner-frame-passive-fg);
     --tv-owner-scroll-page-bg: var(--tv-palette-dialog-scroll-page-bg);
     --tv-owner-scroll-page-fg: var(--tv-palette-dialog-scroll-page-fg);
     --tv-owner-scroll-controls-bg: var(--tv-palette-dialog-scroll-controls-bg);
     --tv-owner-scroll-controls-fg: var(--tv-palette-dialog-scroll-controls-fg);
+    --tv-owner-scroll-thumb-bg: var(--tv-thumb-bg);
+    --tv-owner-scroll-thumb-fg: var(--tv-owner-scroll-controls-fg);
     --tv-owner-content-bg: var(--tv-palette-dialog-frame-active-bg);
     --tv-owner-content-fg: var(--tv-palette-dialog-static-fg);
     --tv-current-frame: var(--tv-owner-frame-active-fg);
-    --tv-current-title-bg: var(--tv-owner-frame-active-bg);
-    --tv-current-title-fg: var(--tv-owner-frame-active-fg);
-    --tv-current-icon: var(--tv-owner-frame-icons-fg);
+    --tv-current-title-bg: var(--tv-owner-title-active-bg);
+    --tv-current-title-fg: var(--tv-owner-title-active-fg);
+    --tv-current-icon: var(--tv-owner-icon-active-fg);
     --tv-scrollbar-bg: var(--tv-owner-scroll-page-bg);
     --tv-scrollbar-glyph: var(--tv-owner-scroll-page-fg);
     --tv-scrollbar-arrow-bg: var(--tv-owner-scroll-controls-bg);
     --tv-scrollbar-arrow-fg: var(--tv-owner-scroll-controls-fg);
-    --tv-scrollbar-thumb-fg: var(--tv-owner-scroll-controls-fg);
+    --tv-scrollbar-thumb-bg: var(--tv-owner-scroll-thumb-bg);
+    --tv-scrollbar-thumb-fg: var(--tv-owner-scroll-thumb-fg);
     --tv-control-static-bg: var(--tv-palette-dialog-static-bg);
     --tv-control-static-fg: var(--tv-palette-dialog-static-fg);
     --tv-control-label-bg: var(--tv-palette-dialog-label-normal-bg);
@@ -1582,9 +1603,9 @@ button.tv-status-item {
 
 .tv-dialog-window.is-window-inactive {
     --tv-current-frame: var(--tv-owner-frame-passive-fg);
-    --tv-current-title-bg: var(--tv-owner-frame-passive-bg);
-    --tv-current-title-fg: var(--tv-owner-frame-passive-fg);
-    --tv-current-icon: var(--tv-owner-frame-passive-fg);
+    --tv-current-title-bg: var(--tv-owner-title-passive-bg);
+    --tv-current-title-fg: var(--tv-owner-title-passive-fg);
+    --tv-current-icon: var(--tv-owner-icon-passive-fg);
 }
 
 
@@ -1677,10 +1698,10 @@ button.tv-status-item {
 .tv-ascii-window { background: var(--tv-ascii-pane); color: var(--tv-ascii-text); }
 
 .tv-dialog-window.is-dragging {
-    --tv-current-frame: var(--tv-owner-frame-icons-fg);
-    --tv-current-title-bg: var(--tv-owner-frame-icons-bg);
-    --tv-current-title-fg: var(--tv-owner-frame-icons-fg);
-    --tv-current-icon: var(--tv-owner-frame-icons-fg);
+    --tv-current-frame: var(--tv-owner-icon-active-fg);
+    --tv-current-title-bg: var(--tv-owner-icon-active-bg);
+    --tv-current-title-fg: var(--tv-owner-icon-active-fg);
+    --tv-current-icon: var(--tv-owner-icon-active-fg);
 }
 
 .tv-dialog-titlebar,
@@ -3288,8 +3309,8 @@ button.tv-status-item {
 .tv-checkbox-item.is-disabled .tv-hotkey,
 .tv-radio-item.is-disabled .tv-hotkey {
     cursor: default;
-    background: var(--tv-palette-dialog-button-disabled-bg);
-    color: var(--tv-palette-dialog-button-disabled-fg);
+    background: var(--tv-palette-dialog-cluster-disabled-bg);
+    color: var(--tv-palette-dialog-cluster-disabled-fg);
 }
 
 .tv-game-border {

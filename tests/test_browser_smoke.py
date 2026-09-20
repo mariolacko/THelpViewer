@@ -54,26 +54,32 @@ def _wait_for_file(path: Path, timeout: float = 10.0) -> str:
 
 @pytest.mark.skipif(NODE is None or CHROME is None, reason="Node.js and Chrome are required")
 def test_real_browser_menu_focus_and_dynamic_command_state():
-    app_port = _free_port()
-    server = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "thelpviewer.server.app:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(app_port),
-            "--log-level",
-            "warning",
-        ],
-        cwd=Path.cwd(),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    external_url = os.environ.get("THELP_BROWSER_BASE_URL", "").rstrip("/")
+    server = None
+    if external_url:
+        app_url = external_url + "/"
+    else:
+        app_port = _free_port()
+        app_url = f"http://127.0.0.1:{app_port}/"
+        server = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "thelpviewer.server.app:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(app_port),
+                "--log-level",
+                "warning",
+            ],
+            cwd=Path.cwd(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     try:
-        _wait_for_url(f"http://127.0.0.1:{app_port}/healthz")
+        _wait_for_url(app_url + "healthz")
         with tempfile.TemporaryDirectory(prefix="thelpviewer-chrome-") as profile_dir:
             chrome = subprocess.Popen(
                 [
@@ -445,7 +451,7 @@ async function run() {
         0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E,
         0x20, 0x2B, 0x2F, 0x78, 0x2E, 0x70, 0x30, 0x3F, 0x3E,
         0x1F, 0x2F, 0x1A, 0x20, 0x72, 0x31, 0x31, 0x30, 0x2F,
-        0x3E, 0x31, 0x13,
+        0x3E, 0x31, 0x13, 0x38,
     ];
     if (
         !colors.open || colors.buttonCount !== 4 || colors.resetAllCount !== 1 || colors.defaultCount !== 1
@@ -711,7 +717,7 @@ async function run() {
         || gallery.listFocusedColors.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()
         || gallery.checkColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || gallery.radioColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
-        || gallery.disabledCheckColors.join() !== ['rgb(170, 170, 170)', 'rgb(85, 85, 85)'].join()
+        || gallery.disabledCheckColors.join() !== ['rgb(0, 170, 170)', 'rgb(85, 85, 85)'].join()
         || gallery.checkHotkeyColor !== 'rgb(255, 255, 85)'
         || !gallery.infoRightBorder || !gallery.infoRowFits
         || gallery.infoSideColors.some((color) => color !== 'rgb(255, 255, 255)')
@@ -915,6 +921,54 @@ async function run() {
         };
         check();
     })`, true);
+    await evaluate(`(() => {
+        const entry = Array.from(document.querySelectorAll('[data-tv-bundle-open]')).find((element) =>
+            element.dataset.tvBundleOpen === 'Norton Guides/vista.json.gz'
+        );
+        if (!entry) { throw new Error('Norton Guides browser fixture is missing'); }
+        entry.click();
+    })()`);
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const windowElement = Array.from(document.querySelectorAll('[data-tv-bundle-window]')).find((element) =>
+                element.querySelector('.tv-window-caption')?.textContent.includes('db_VISTA III')
+            );
+            if (windowElement) { resolve(true); return; }
+            if (Date.now() >= deadline) { reject(new Error('Norton Guides window did not open')); return; }
+            setTimeout(check, 50);
+        };
+        check();
+    })`, true);
+    const nortonColors = await evaluate(`(() => {
+        const windowElement = Array.from(document.querySelectorAll('[data-tv-bundle-window]')).find((element) =>
+            element.querySelector('.tv-window-caption')?.textContent.includes('db_VISTA III')
+        );
+        const color = (selector, property = 'color') =>
+            getComputedStyle(windowElement.querySelector(selector))[property];
+        return {
+            frame: color('.tv-border-corner-tl'),
+            titleBg: color('.tv-window-caption', 'backgroundColor'),
+            titleFg: color('.tv-window-caption'),
+            closeFg: color('.tv-close-control'),
+            closeGlyph: color('.tv-close-glyph'),
+            zoomGlyph: color('.tv-zoom-glyph'),
+            arrowFg: color('.tv-scroll-arrow'),
+            thumbFg: getComputedStyle(windowElement).getPropertyValue('--tv-owner-scroll-thumb-fg').trim(),
+        };
+    })()`);
+    if (
+        nortonColors.frame !== 'rgb(170, 170, 170)'
+        || nortonColors.titleBg !== 'rgb(0, 0, 170)'
+        || nortonColors.titleFg !== 'rgb(255, 255, 255)'
+        || nortonColors.closeFg !== 'rgb(255, 255, 255)'
+        || nortonColors.closeGlyph !== 'rgb(255, 255, 85)'
+        || nortonColors.zoomGlyph !== 'rgb(255, 255, 85)'
+        || nortonColors.arrowFg !== 'rgb(85, 255, 255)'
+        || nortonColors.thumbFg !== '#ffffff'
+    ) {
+        throw new Error(`Norton Guides frame palette is broken: ${JSON.stringify(nortonColors)}`);
+    }
     socket.close();
 }
 
@@ -932,7 +986,7 @@ run().then(() => {
 });
 '''
                 result = subprocess.run(
-                    [NODE, "-e", script, str(debugging_port), f"http://127.0.0.1:{app_port}/"],
+                    [NODE, "-e", script, str(debugging_port), app_url],
                     capture_output=True,
                     text=True,
                     timeout=30,
@@ -946,9 +1000,10 @@ run().then(() => {
                     chrome.kill()
                     chrome.wait(timeout=5)
     finally:
-        server.terminate()
-        try:
-            server.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            server.kill()
-            server.wait(timeout=5)
+        if server is not None:
+            server.terminate()
+            try:
+                server.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.wait(timeout=5)

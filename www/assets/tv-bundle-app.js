@@ -892,25 +892,25 @@ function resolveUhfColor(bundle, rawValue, seen = new Set()) {
 }
 
 const UHF_UI_THEME_VARS = {
-    window: "--tv-window",
-    text: "--tv-text",
+    window: ["--tv-window", "--tv-owner-content-bg"],
+    text: ["--tv-text", "--tv-owner-content-fg"],
     link: "--tv-link",
-    title: "--tv-title",
-    title_passive: "--tv-title-passive",
-    title_text: "--tv-title-text",
-    title_text_passive: "--tv-title-text-passive",
-    frame: "--tv-frame-line",
-    frame_passive: "--tv-frame-passive",
-    icon: "--tv-icon",
-    icon_passive: "--tv-icon-passive",
-    page_area: "--tv-page-area",
+    title: ["--tv-title", "--tv-owner-title-active-bg", "--tv-owner-icon-active-bg", "--tv-owner-frame-icons-bg"],
+    title_passive: ["--tv-title-passive", "--tv-owner-title-passive-bg"],
+    title_text: ["--tv-title-text", "--tv-owner-title-active-fg"],
+    title_text_passive: ["--tv-title-text-passive", "--tv-owner-title-passive-fg"],
+    frame: ["--tv-frame-line", "--tv-owner-frame-active-fg"],
+    frame_passive: ["--tv-frame-passive", "--tv-owner-frame-passive-fg"],
+    icon: ["--tv-icon", "--tv-owner-icon-active-fg", "--tv-owner-frame-icons-fg"],
+    icon_passive: ["--tv-icon-passive", "--tv-owner-icon-passive-fg"],
+    page_area: ["--tv-page-area", "--tv-owner-scroll-page-bg"],
     hover_bg: "--tv-hover-bg",
     hover_fg: "--tv-hover-fg",
-    arrow_bg: "--tv-arrow-bg",
-    arrow_fg: "--tv-arrow-fg",
-    scroll_glyph: "--tv-scroll-glyph",
-    thumb_bg: "--tv-thumb-bg",
-    thumb_fg: "--tv-thumb-fg",
+    arrow_bg: ["--tv-arrow-bg", "--tv-owner-scroll-controls-bg"],
+    arrow_fg: ["--tv-arrow-fg", "--tv-owner-scroll-controls-fg"],
+    scroll_glyph: ["--tv-scroll-glyph", "--tv-owner-scroll-page-fg"],
+    thumb_bg: ["--tv-thumb-bg", "--tv-owner-scroll-thumb-bg"],
+    thumb_fg: ["--tv-thumb-fg", "--tv-owner-scroll-thumb-fg"],
     code_bg: "--tv-code-bg",
     code_text: "--tv-code-text",
 };
@@ -1069,14 +1069,15 @@ function bundleUiThemeStyle(bundle) {
     const explicitTheme = metadata.ui && typeof metadata.ui === "object" ? metadata.ui : {};
     const theme = { ...defaultTheme, ...explicitTheme };
     const declarations = [];
-    Object.entries(UHF_UI_THEME_VARS).forEach(([key, cssVar]) => {
+    Object.entries(UHF_UI_THEME_VARS).forEach(([key, cssVars]) => {
         const raw = theme[key];
         if (typeof raw !== "string" || !raw.trim()) {
             return;
         }
         const color = resolveUhfColor(bundle, raw);
         if (color) {
-            declarations.push(`${cssVar}:${color}`);
+            const variables = Array.isArray(cssVars) ? cssVars : [cssVars];
+            variables.forEach((cssVar) => declarations.push(`${cssVar}:${color}`));
         }
     });
     return declarations.join("; ");
