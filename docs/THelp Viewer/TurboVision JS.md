@@ -170,6 +170,7 @@ Standard application dialogs.
 |-------|---------|
 | `TVAboutDialog` | About / splash screen |
 | `TVWidgetGalleryDialog` | Interactive gallery for shared labels, inputs, choices, lists, frames and buttons |
+| `TVFileOpenDialog` | Keyboard-accessible virtual file picker for generated HELP bundles and Markdown documentation, with persistent history |
 | `TVSearchDialog` | Full-text search across topics |
 | `TVAsciiTableDialog` | CP437 character table (0–255) |
 | `TVCalculatorDialog` | DOS-style calculator |
@@ -182,6 +183,14 @@ Standard application dialogs.
 - `renderResults(query)` — Update result list UI
 - `moveSelection(delta)` — Navigate result list
 - `openSelected()` — Open the highlighted result (override for custom navigation)
+
+### TVFileOpenDialog
+
+- `configure(entries, onOpen)` — Populate the browser-safe virtual filesystem and install its open callback
+- HELP and DOCS roots expose catalog groups as directories; selecting a root lists all of its files recursively
+- File and directory lists use the shared list-viewer keyboard model
+- `Alt+N`, `Alt+H` and `Alt+O` focus Name, show History and open the selected file
+- The ten most recently opened catalog entries are stored in local storage; missing catalog entries are ignored
 
 ## tv-screensaver.js
 

@@ -227,6 +227,368 @@ class TVWidgetGalleryDialog extends TVDialog {
     }
 }
 
+class TVFileOpenDialog extends TVDialog {
+    constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const nameLabel = new TVLabel({
+            text: "~N~ame:",
+            hotkey: true,
+            forId: "tv-file-open-name",
+        });
+        const nameInput = new TVInputLine({
+            attrs: {
+                id: "tv-file-open-name",
+                autocomplete: "off",
+                spellcheck: "false",
+                "data-tv-file-open-name": true,
+            },
+        });
+        const buttons = new TVButtonStrip({
+            className: "tv-file-open-buttons",
+            buttons: [
+                new TVButton({
+                    className: "is-default",
+                    attrs: { "data-tv-file-open-confirm": true },
+                    label: "~O~pen",
+                }),
+                new TVButton({
+                    attrs: { "data-tv-file-open-cancel": true },
+                    label: "Cancel",
+                }),
+            ],
+        });
+
+        super({
+            desktop,
+            ariaLabel: "Open a File",
+            title: "Open a File",
+            bodyClass: "tv-file-open-body",
+            closeAttrs: {
+                "data-tv-file-open-close": true,
+                "aria-label": "Close file open dialog",
+            },
+            bodyMarkup: `
+                <div class="tv-file-open-main">
+                    <div class="tv-file-open-path" data-tv-file-open-path></div>
+                    <div class="tv-file-open-lists">
+                        <section class="tv-file-open-panel">
+                            <div class="tv-file-open-heading">Files</div>
+                            ${TVVerticalListViewer.renderMarkup({
+                                rootClass: "tv-file-open-listviewer",
+                                rootAttrs: { "data-tv-file-open-files": true },
+                                viewportClass: "tv-file-open-list",
+                            })}
+                        </section>
+                        <section class="tv-file-open-panel">
+                            <div class="tv-file-open-heading">Directories</div>
+                            ${TVVerticalListViewer.renderMarkup({
+                                rootClass: "tv-file-open-listviewer",
+                                rootAttrs: { "data-tv-file-open-directories": true },
+                                viewportClass: "tv-file-open-list",
+                            })}
+                        </section>
+                    </div>
+                    <div class="tv-file-open-name-row">
+                        ${nameLabel.renderMarkup()}
+                        ${nameInput.renderMarkup()}
+                        ${new TVButton({
+                            attrs: { "data-tv-file-open-history": true, disabled: true },
+                            label: "~H~istory",
+                        }).renderMarkup()}
+                    </div>
+                    <div class="tv-file-open-history-popup" data-tv-file-open-history-popup hidden>
+                        ${TVVerticalListViewer.renderMarkup({
+                            rootClass: "tv-file-open-listviewer tv-file-open-history-listviewer",
+                            rootAttrs: { "data-tv-file-open-history-list": true },
+                            viewportClass: "tv-file-open-list",
+                        })}
+                    </div>
+                    ${buttons.renderMarkup()}
+                </div>
+            `,
+            footerMarkup: TVDialog.footerMarkup(),
+            width: "68ch",
+            height: "min(25em, calc(100% - 2em))",
+            left: "4ch",
+            top: "2em",
+            modal: true,
+        });
+        this.entries = [];
+        this.directories = [];
+        this.currentDirectory = "";
+        this.onOpen = null;
+        this.storageKey = "thelp:file-open-history";
+        this.nameInput = this.query("[data-tv-file-open-name]");
+        this.pathLabel = this.query("[data-tv-file-open-path]");
+        this.openButton = this.query("[data-tv-file-open-confirm]");
+        this.cancelButton = this.query("[data-tv-file-open-cancel]");
+        this.historyButton = this.query("[data-tv-file-open-history]");
+        this.historyPopup = this.query("[data-tv-file-open-history-popup]");
+        this.fileList = new TVVerticalListViewer(this.query("[data-tv-file-open-files]"), {
+            itemClassName: "tv-file-open-list-item",
+            itemAttrName: "data-tv-file-open-file-index",
+            renderItemContent: (entry) => escapeHtml(entry.fileName),
+        });
+        this.directoryList = new TVVerticalListViewer(this.query("[data-tv-file-open-directories]"), {
+            itemClassName: "tv-file-open-list-item",
+            itemAttrName: "data-tv-file-open-directory-index",
+            renderItemContent: (entry) => escapeHtml(entry.label),
+        });
+        this.historyList = new TVVerticalListViewer(this.query("[data-tv-file-open-history-list]"), {
+            itemClassName: "tv-file-open-list-item",
+            itemAttrName: "data-tv-file-open-history-index",
+            renderItemContent: (entry) => escapeHtml(entry.virtualPath),
+        });
+        this.fileList.bind({
+            onSelect: (entry) => this.selectFile(entry),
+            onActivate: (entry) => this.openEntry(entry),
+        });
+        this.directoryList.bind({
+            onSelect: (directory) => this.selectDirectory(directory.key),
+            onActivate: (directory) => this.selectDirectory(directory.key, true),
+        });
+        this.historyList.bind({
+            onSelect: (entry) => this.selectHistory(entry),
+            onActivate: (entry) => this.selectHistory(entry, true),
+        });
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+        this.bindFileOpen();
+    }
+
+    configure(entries = [], onOpen = null) {
+        this.entries = entries.map((entry) => {
+            const kind = entry.kind === "doc" ? "doc" : "help";
+            const root = kind === "doc" ? "DOCS" : "HELP";
+            const group = String(entry.group || "").replace(/[\\/]+/g, "\\");
+            const directory = group ? `${root}\\${group}` : root;
+            const fileName = String(entry.fileName || entry.name || entry.file || "").split(/[\\/]/).pop();
+            return {
+                ...entry,
+                kind,
+                directory,
+                fileName,
+                virtualPath: `${directory}\\${fileName}`,
+                historyKey: `${kind}:${entry.file}`,
+            };
+        }).filter((entry) => entry.file && entry.fileName);
+        this.onOpen = typeof onOpen === "function" ? onOpen : null;
+        const roots = [
+            { key: "HELP", label: "HELP", kind: "help" },
+            { key: "DOCS", label: "DOCS", kind: "doc" },
+        ].filter((directory) => this.entries.some((entry) => entry.kind === directory.kind));
+        const children = [];
+        for (const entry of this.entries) {
+            if (entry.directory === (entry.kind === "doc" ? "DOCS" : "HELP")) { continue; }
+            if (!children.some((directory) => directory.key === entry.directory)) {
+                children.push({
+                    key: entry.directory,
+                    label: `  ${entry.directory.replace(/^.*?\\/, "")}`,
+                    kind: entry.kind,
+                });
+            }
+        }
+        children.sort((left, right) => left.key.localeCompare(right.key));
+        this.directories = roots.flatMap((root) => [
+            root,
+            ...children.filter((directory) => directory.kind === root.kind),
+        ]);
+        if (!this.directories.some((directory) => directory.key === this.currentDirectory)) {
+            this.currentDirectory = this.directories[0]?.key || "";
+        }
+        this.refresh();
+    }
+
+    bindFileOpen() {
+        this.openButton?.addEventListener("click", () => this.openSelected());
+        this.cancelButton?.addEventListener("click", () => this.close());
+        this.historyButton?.addEventListener("click", () => this.toggleHistory());
+        this.nameInput?.addEventListener("input", () => this.selectNameMatch());
+        this.dialog.addEventListener("keydown", (event) => {
+            if (!event.altKey || event.ctrlKey || event.metaKey) { return; }
+            const key = event.key.toLowerCase();
+            if (key === "n" && this.nameInput) {
+                event.preventDefault();
+                this.nameInput.focus();
+                this.nameInput.select();
+            } else if (key === "h") {
+                event.preventDefault();
+                this.toggleHistory();
+            } else if (key === "o") {
+                event.preventDefault();
+                this.openSelected();
+            }
+        });
+    }
+
+    open() {
+        this.refresh();
+        super.open();
+        window.requestAnimationFrame(() => {
+            this.fileList.updateScrollbar();
+            this.directoryList.updateScrollbar();
+            if (this.nameInput) {
+                this.nameInput.focus();
+                this.nameInput.select();
+            }
+        });
+    }
+
+    close() {
+        this.hideHistory();
+        super.close();
+    }
+
+    onDialogKeyDown(event) {
+        if (event.key === "Escape" && this.historyPopup && !this.historyPopup.hidden) {
+            event.preventDefault();
+            event.stopPropagation();
+            this.hideHistory();
+            this.historyButton?.focus();
+            return;
+        }
+        super.onDialogKeyDown(event);
+    }
+
+    visibleEntries() {
+        const isRoot = this.currentDirectory === "HELP" || this.currentDirectory === "DOCS";
+        return this.entries.filter((entry) => isRoot
+            ? entry.directory.startsWith(`${this.currentDirectory}\\`) || entry.directory === this.currentDirectory
+            : entry.directory === this.currentDirectory);
+    }
+
+    refresh() {
+        const directoryIndex = this.directories.findIndex((directory) => directory.key === this.currentDirectory);
+        this.directoryList.setItems(this.directories, directoryIndex);
+        const files = this.visibleEntries();
+        const selectedName = this.nameInput?.value || "";
+        const selectedIndex = Math.max(0, files.findIndex((entry) => entry.fileName === selectedName));
+        this.fileList.setItems(files, files.length ? selectedIndex : -1);
+        if (this.pathLabel) {
+            this.pathLabel.textContent = `THelpViewer:\\${this.currentDirectory}`;
+        }
+        const history = this.historyEntries();
+        this.historyList.setItems(history, history.length ? 0 : -1);
+        if (this.historyButton) {
+            this.historyButton.disabled = history.length === 0;
+        }
+    }
+
+    selectDirectory(key, focusFiles = false) {
+        if (!this.directories.some((directory) => directory.key === key)) { return; }
+        this.currentDirectory = key;
+        const files = this.visibleEntries();
+        this.fileList.setItems(files, files.length ? 0 : -1);
+        if (this.pathLabel) {
+            this.pathLabel.textContent = `THelpViewer:\\${key}`;
+        }
+        if (files.length) {
+            this.selectFile(files[0]);
+            if (focusFiles) { this.fileList.selectedElement()?.focus(); }
+        } else if (this.nameInput) {
+            this.nameInput.value = "";
+        }
+    }
+
+    selectFile(entry) {
+        if (entry && this.nameInput) {
+            this.nameInput.value = entry.fileName;
+        }
+    }
+
+    selectNameMatch() {
+        const query = String(this.nameInput?.value || "").trim().toLocaleLowerCase();
+        if (!query) { return; }
+        const index = this.fileList.items.findIndex((entry) => (
+            entry.fileName.toLocaleLowerCase().startsWith(query)
+            || String(entry.name || "").toLocaleLowerCase().startsWith(query)
+        ));
+        if (index >= 0) {
+            this.fileList.select(index);
+        }
+    }
+
+    selectedEntry() {
+        const query = String(this.nameInput?.value || "").trim().toLocaleLowerCase();
+        const files = this.fileList.items;
+        if (query) {
+            const exact = files.find((entry) => (
+                entry.fileName.toLocaleLowerCase() === query
+                || String(entry.name || "").toLocaleLowerCase() === query
+            ));
+            if (exact) { return exact; }
+        }
+        return this.fileList.selectedItem();
+    }
+
+    openSelected() {
+        this.openEntry(this.selectedEntry());
+    }
+
+    openEntry(entry) {
+        if (!entry || !this.onOpen) { return; }
+        this.remember(entry);
+        this.close();
+        this.onOpen(entry);
+    }
+
+    storedHistoryKeys() {
+        try {
+            const stored = JSON.parse(window.localStorage.getItem(this.storageKey) || "[]");
+            return Array.isArray(stored) ? stored.filter((key) => typeof key === "string").slice(0, 10) : [];
+        } catch {
+            return [];
+        }
+    }
+
+    historyEntries() {
+        const byKey = new Map(this.entries.map((entry) => [entry.historyKey, entry]));
+        return this.storedHistoryKeys().map((key) => byKey.get(key)).filter(Boolean);
+    }
+
+    remember(entry) {
+        const keys = [entry.historyKey, ...this.storedHistoryKeys().filter((key) => key !== entry.historyKey)].slice(0, 10);
+        try {
+            window.localStorage.setItem(this.storageKey, JSON.stringify(keys));
+        } catch {
+            // Storage may be unavailable under restrictive file:// environments.
+        }
+    }
+
+    toggleHistory() {
+        if (!this.historyPopup || this.historyButton?.disabled) { return; }
+        if (this.historyPopup.hidden) {
+            const history = this.historyEntries();
+            this.historyList.setItems(history, history.length ? 0 : -1);
+            this.historyPopup.hidden = false;
+            window.requestAnimationFrame(() => {
+                this.historyList.updateScrollbar();
+                this.historyList.selectedElement()?.focus();
+            });
+        } else {
+            this.hideHistory();
+        }
+    }
+
+    hideHistory() {
+        if (this.historyPopup) { this.historyPopup.hidden = true; }
+    }
+
+    selectHistory(entry, activate = false) {
+        if (!entry) { return; }
+        this.currentDirectory = entry.directory;
+        this.refresh();
+        const index = this.fileList.items.findIndex((candidate) => candidate.historyKey === entry.historyKey);
+        this.fileList.select(index);
+        this.selectFile(entry);
+        if (activate) {
+            this.openEntry(entry);
+        } else {
+            this.hideHistory();
+            this.nameInput?.focus();
+        }
+    }
+}
+
 class TVAsciiTableDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const chart = new TVListViewer({
@@ -2472,6 +2834,7 @@ class TVSearchDialog extends TVDialog {
 Object.assign(TV, {
     TVAboutDialog,
     TVWidgetGalleryDialog,
+    TVFileOpenDialog,
     TVAsciiTableDialog,
     TVCalculatorDialog,
     TVCalendarDialog,

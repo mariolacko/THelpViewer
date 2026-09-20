@@ -1,6 +1,6 @@
 # TurboVision JS Audit
 
-Audit date: 2026-09-19
+Audit date: 2026-09-20
 
 ## Goal
 
@@ -214,3 +214,5 @@ compatibility with old Turbo Vision applications.
 - [x] Phase 4.5: shared screen-saver idle start, resize and focus lifecycle.
 - [x] Phase 5.1: dependency-free real-Chrome menu/focus smoke-test foundation.
 - [x] Phase 5.2: interactive Turbo Vision Widget Gallery/Test dialog.
+- [x] Phase 5.3: catalog-backed File Open dialog with HELP/DOCS directories,
+  keyboard navigation and persistent input history.

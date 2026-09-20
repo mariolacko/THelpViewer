@@ -24,6 +24,7 @@ const {
     TVCalculatorDialog,
     TVColorsDialog,
     TVWidgetGalleryDialog,
+    TVFileOpenDialog,
     TVMidiPlayerDialog,
     TVSearchDialog,
     TVTetrisDialog,
@@ -2527,7 +2528,13 @@ function catalogTreeNode(map, ordered, key) {
 }
 
 function buildCatalogMenuItems(catalog) {
-    if (!catalog.length) { return []; }
+    const openItem = new TVButton({
+        dialog: false,
+        className: "tv-menu-popup-item",
+        attrs: { type: "button", "data-tv-file-open": true },
+        labelMarkup: renderHotkeyMarkup("~O~pen..."),
+    });
+    if (!catalog.length) { return [openItem]; }
 
     const directItems = [];
     const productMap = new Map();
@@ -2551,8 +2558,8 @@ function buildCatalogMenuItems(catalog) {
         versionNode.direct.push(catalogMenuEntryButton(entry));
     });
 
-    const items = [...directItems];
-    if (items.length && products.length) {
+    const items = [openItem, renderMenuPopupSeparator(), ...directItems];
+    if (directItems.length && products.length) {
         items.push(renderMenuPopupSeparator());
     }
     products.forEach((productNode) => {
@@ -2991,6 +2998,7 @@ class TVBundleApp {
         this._registerDialog("midi", () => new TVMidiPlayerDialog(this.desktop));
         this._registerDialog("colors", () => new TVColorsDialog(this.desktop));
         this._registerDialog("widgets", () => new TVWidgetGalleryDialog(this.desktop));
+        this.fileOpenDialog = this._registerDialog("fileopen", () => new TVFileOpenDialog(this.desktop));
         this._registerDialog("tetris", () => new TVTetrisDialog(this.desktop));
         this._registerDialog("mines", () => new TVMinesDialog(this.desktop));
         this._registerDialog("breakout", () => new TVBreakOutDialog(this.desktop));
@@ -3585,6 +3593,27 @@ class TVBundleApp {
         } else {
             docsCatalogData = [];
         }
+        if (this.fileOpenDialog) {
+            const entries = [
+                ...catalogData.map((entry) => ({
+                    ...entry,
+                    kind: "help",
+                    fileName: entry.source_file || entry.name,
+                })),
+                ...docsCatalogData.map((entry) => ({
+                    ...entry,
+                    kind: "doc",
+                    fileName: String(entry.file || "").split("/").pop() || entry.name,
+                })),
+            ];
+            this.fileOpenDialog.configure(entries, (entry) => {
+                if (entry.kind === "doc") {
+                    this._openDocFile(entry.file);
+                } else {
+                    this._openBundleFile(entry.file, entry.name);
+                }
+            });
+        }
         buildBundleMenuBar(catalogData, null);
         fillBorders();
         this._bindMenus();
@@ -3756,6 +3785,41 @@ class TVBundleApp {
         return windowEl;
     }
 
+    async _openBundleFile(filename, label = "") {
+        const cached = bundleCache.has(filename);
+        let loadingDialog = null;
+        if (!cached) {
+            loadingDialog = new TVLoadingDialog(this.desktop);
+            loadingDialog.show(bundleLoadingLabel(label, filename));
+        }
+        try {
+            const bundle = await loadBundle(filename, {
+                onProgress: (received, total) => {
+                    if (loadingDialog) { loadingDialog.update(received, total); }
+                },
+                signal: loadingDialog ? loadingDialog.signal : undefined,
+            });
+            if (loadingDialog) { loadingDialog.destroy(); }
+            this._updateSearchData(bundle);
+            this.windowManager.showDefault(bundle);
+        } catch (error) {
+            if (loadingDialog) { loadingDialog.destroy(); }
+            if (error.name === "AbortError") { return; }
+            console.error(`Failed to load bundle ${filename}:`, error);
+        }
+    }
+
+    async _openDocFile(docFile) {
+        try {
+            const resp = await fetch(DOCS_DIR + docFile);
+            if (!resp.ok) { throw new Error(`HTTP ${resp.status}`); }
+            const md = await resp.text();
+            this._openDocWindow(docFile, md);
+        } catch (error) {
+            console.error(`Failed to load doc ${docFile}:`, error);
+        }
+    }
+
     _showWelcome() {
         const {
             TVDialog,
@@ -3833,6 +3897,16 @@ class TVBundleApp {
         }
         const closeMenus = () => this.menuController.closeMenus();
 
+        document.querySelectorAll("[data-tv-file-open]").forEach((element) => {
+            if (element.dataset.tvMenuBound === "1") { return; }
+            element.dataset.tvMenuBound = "1";
+            element.addEventListener("click", (event) => {
+                event.preventDefault();
+                closeMenus();
+                this.dialogManager.open("fileopen");
+            });
+        });
+
         document.querySelectorAll("[data-tv-dialog-open]").forEach((element) => {
             if (element.dataset.tvMenuBound === "1") { return; }
             element.dataset.tvMenuBound = "1";
@@ -3858,32 +3932,12 @@ class TVBundleApp {
         document.querySelectorAll("[data-tv-bundle-open]").forEach((element) => {
             if (element.dataset.tvMenuBound === "1") { return; }
             element.dataset.tvMenuBound = "1";
-            element.addEventListener("click", async (event) => {
+            element.addEventListener("click", (event) => {
                 event.preventDefault();
                 closeMenus();
                 const filename = element.dataset.tvBundleOpen;
                 const bundleLabel = element.dataset.tvBundleLabel || "";
-                const cached = bundleCache.has(filename);
-                let loadingDialog = null;
-                if (!cached) {
-                    loadingDialog = new TVLoadingDialog(this.desktop);
-                    loadingDialog.show(bundleLoadingLabel(bundleLabel, filename));
-                }
-                try {
-                    const bundle = await loadBundle(filename, {
-                        onProgress: (received, total) => {
-                            if (loadingDialog) { loadingDialog.update(received, total); }
-                        },
-                        signal: loadingDialog ? loadingDialog.signal : undefined,
-                    });
-                    if (loadingDialog) { loadingDialog.destroy(); }
-                    this._updateSearchData(bundle);
-                    this.windowManager.showDefault(bundle);
-                } catch (error) {
-                    if (loadingDialog) { loadingDialog.destroy(); }
-                    if (error.name === "AbortError") { return; }
-                    console.error(`Failed to load bundle ${filename}:`, error);
-                }
+                this._openBundleFile(filename, bundleLabel);
             });
         });
 
@@ -3918,18 +3972,10 @@ class TVBundleApp {
         document.querySelectorAll("[data-tv-doc-open]").forEach((element) => {
             if (element.dataset.tvMenuBound === "1") { return; }
             element.dataset.tvMenuBound = "1";
-            element.addEventListener("click", async (event) => {
+            element.addEventListener("click", (event) => {
                 event.preventDefault();
                 closeMenus();
-                const docFile = element.dataset.tvDocOpen;
-                try {
-                    const resp = await fetch(DOCS_DIR + docFile);
-                    if (!resp.ok) { throw new Error(`HTTP ${resp.status}`); }
-                    const md = await resp.text();
-                    this._openDocWindow(docFile, md);
-                } catch (error) {
-                    console.error(`Failed to load doc ${docFile}:`, error);
-                }
+                this._openDocFile(element.dataset.tvDocOpen);
             });
         });
 

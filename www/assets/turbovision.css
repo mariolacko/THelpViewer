@@ -2775,6 +2775,114 @@ button.tv-status-item {
     gap: 2ch;
 }
 
+.tv-file-open-body {
+    padding: 1em 2ch;
+    overflow: visible;
+}
+
+.tv-file-open-main {
+    position: relative;
+    display: grid;
+    gap: 0.75em;
+    min-width: 60ch;
+}
+
+.tv-file-open-path {
+    height: 1em;
+    padding: 0 1ch;
+    overflow: hidden;
+    background: var(--tv-dialog-input-bg);
+    color: var(--tv-dialog-input-fg);
+    white-space: pre;
+}
+
+.tv-file-open-lists {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(20ch, 2fr);
+    gap: 2ch;
+}
+
+.tv-file-open-panel {
+    min-width: 0;
+}
+
+.tv-file-open-heading {
+    margin-bottom: 0.25em;
+    color: var(--tv-dialog-fg);
+}
+
+.tv-file-open-listviewer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1ch;
+    height: 10em;
+    overflow: hidden;
+    background: var(--tv-dialog-input-bg);
+    color: var(--tv-dialog-input-fg);
+}
+
+.tv-file-open-list {
+    height: 10em;
+    overflow: hidden;
+}
+
+.tv-file-open-list-item {
+    height: 1em;
+    padding: 0 1ch;
+    overflow: hidden;
+    white-space: pre;
+}
+
+.tv-file-open-list-item.is-selected,
+.tv-file-open-list-item:focus-visible {
+    outline: none;
+    background: var(--tv-hover-bg);
+    color: var(--tv-hover-fg);
+}
+
+.tv-file-open-name-row {
+    display: grid;
+    grid-template-columns: 7ch minmax(0, 1fr) 12ch;
+    gap: 1ch;
+    align-items: start;
+}
+
+.tv-file-open-history-popup {
+    position: absolute;
+    z-index: 2;
+    right: 13ch;
+    bottom: 4em;
+    width: min(46ch, calc(100% - 8ch));
+    padding: 0.25em 1ch;
+    background: var(--tv-dialog-bg);
+    box-shadow: 1ch 0.5em 0 var(--tv-shadow-soft);
+}
+
+.tv-file-open-history-popup .tv-file-open-listviewer,
+.tv-file-open-history-popup .tv-file-open-list {
+    height: 6em;
+}
+
+.tv-file-open-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 2ch;
+}
+
+@media (max-width: 720px) {
+    .tv-file-open-main {
+        min-width: 48ch;
+    }
+
+    .tv-file-open-lists {
+        grid-template-columns: 1fr;
+    }
+
+    .tv-file-open-listviewer,
+    .tv-file-open-list {
+        height: 6em;
+    }
+}
+
 .tv-checkbox-item,
 .tv-radio-item {
     all: unset;

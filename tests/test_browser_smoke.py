@@ -282,6 +282,75 @@ async function run() {
             .every((element) => element.closest('.tv-dialog-overlay').hidden)`
     );
     if (!galleryClosed) { throw new Error("Escape did not close Widget Gallery"); }
+
+    await evaluate(`document.querySelector('[data-tv-file-open]').click()`);
+    await pause();
+    const fileOpen = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
+        );
+        if (!dialog) { return { open: false }; }
+        const docsDirectory = Array.from(dialog.querySelectorAll('[data-tv-file-open-directory-index]'))
+            .find((element) => element.textContent.trim() === 'DOCS');
+        if (!docsDirectory) { return { open: true, docsDirectory: false }; }
+        docsDirectory.click();
+        const firstFile = dialog.querySelector('[data-tv-file-open-file-index]');
+        if (!firstFile) { return { open: true, docsDirectory: true, files: 0 }; }
+        firstFile.click();
+        const input = dialog.querySelector('[data-tv-file-open-name]');
+        input.focus();
+        return {
+            open: !dialog.closest('.tv-dialog-overlay').hidden,
+            modal: dialog.getAttribute('aria-modal'),
+            docsDirectory: true,
+            files: dialog.querySelectorAll('[data-tv-file-open-file-index]').length,
+            directories: dialog.querySelectorAll('[data-tv-file-open-directory-index]').length,
+            path: dialog.querySelector('[data-tv-file-open-path]')?.textContent || '',
+            name: input.value,
+            focused: document.activeElement === input,
+        };
+    })()`);
+    if (
+        !fileOpen.open || fileOpen.modal !== "true" || !fileOpen.docsDirectory
+        || fileOpen.files < 1 || fileOpen.directories < 2
+        || fileOpen.path !== "THelpViewer:\\DOCS" || !fileOpen.name || !fileOpen.focused
+    ) {
+        throw new Error(`File Open dialog is incomplete: ${JSON.stringify(fileOpen)}`);
+    }
+    await key("Enter", "Enter", 0, true);
+    await pause();
+    const fileOpened = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
+        );
+        const history = JSON.parse(localStorage.getItem('thelp:file-open-history') || '[]');
+        return {
+            closed: Boolean(dialog && dialog.closest('.tv-dialog-overlay').hidden),
+            remembered: history.some((entry) => entry.startsWith('doc:')),
+        };
+    })()`);
+    if (!fileOpened.closed || !fileOpened.remembered) {
+        throw new Error(`File Open did not open and remember the document: ${JSON.stringify(fileOpened)}`);
+    }
+
+    await evaluate(`document.querySelector('[data-tv-file-open]').click()`);
+    await pause();
+    const historyOpen = await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-file-open-history]');
+        button.click();
+        const popup = document.querySelector('[data-tv-file-open-history-popup]');
+        return !button.disabled && Boolean(popup && !popup.hidden)
+            && popup.querySelectorAll('[data-tv-file-open-history-index]').length === 1;
+    })()`);
+    if (!historyOpen) { throw new Error("File Open history did not reopen"); }
+    await key("Escape", "Escape", 0, true);
+    const escapeClosedHistoryOnly = await evaluate(`(() => {
+        const popup = document.querySelector('[data-tv-file-open-history-popup]');
+        const dialog = popup.closest('.tv-dialog-overlay');
+        return popup.hidden && !dialog.hidden;
+    })()`);
+    if (!escapeClosedHistoryOnly) { throw new Error("Escape did not close File Open history first"); }
+    await key("Escape", "Escape", 0, true);
     socket.close();
 }
 
