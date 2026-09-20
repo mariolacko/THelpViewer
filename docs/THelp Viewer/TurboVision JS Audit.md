@@ -89,9 +89,10 @@ compatibility with old Turbo Vision applications.
 10. `updateWindowFrameState()` calls a full-document `fillBorders()` for every
     managed window/dialog during an active-state update, causing repeated work.
     **Resolved in Phase 3.3:** frame updates refill only the affected window.
-    The same active-state pass now disables and passively colors its standard
-    and list scrollbars; an inactive scrollbar's first click activates the
-    window without also scrolling it.
+    The same active-state pass now disables its standard and list scrollbars;
+    an inactive scrollbar's first click activates the window without also
+    scrolling it. A later source comparison corrected their colors: Turbo
+    Vision 2.0 keeps the scrollbar's own palette when its window is inactive.
 
 ### Component-specific defects
 
@@ -217,7 +218,8 @@ compatibility with old Turbo Vision applications.
 - [x] Phase 2.4: dynamic Windows-menu command state.
 - [x] Phase 3.1: native Label association and list keyboard/activation model.
 - [x] Phase 3.2: functional CheckBoxes, RadioButtons and MessageBox hardening.
-- [x] Phase 3.3: inactive scrollbar state and window-scoped frame redraw.
+- [x] Phase 3.3: non-interactive inactive scrollbar with its original palette,
+  and window-scoped frame redraw.
 - [x] Phase 4.1: managed game modals, timers and inactive-state policy.
 - [x] Phase 4.2: safe first Mines reveal and keyboard board navigation.
 - [x] Phase 4.3: independent language detection for contiguous code blocks.
@@ -233,3 +235,6 @@ compatibility with old Turbo Vision applications.
   modal-first URL-state restoration, and functional THELP `<more>` continuation
   links. The reported Sidekick 2 topic 128/File Open URL is a browser regression
   fixture.
+- [x] Phase 5.5: kept inactive scrollbars on their original Turbo Vision palette
+  while disabling their input, and restored continuous Widget Gallery dialog
+  sides by moving content padding inside the shared frame.

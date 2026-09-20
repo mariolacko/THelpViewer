@@ -256,6 +256,10 @@ async function run() {
         const input = dialog.querySelector('#tv-widget-gallery-name');
         label.click();
         dialog.querySelector('[data-tv-gallery-apply]').click();
+        const body = dialog.querySelector('.tv-widget-gallery-body');
+        const bodyRect = body.getBoundingClientRect();
+        const sideRects = Array.from(body.querySelectorAll(':scope > .tv-border-side'))
+            .map((element) => element.getBoundingClientRect());
         return {
             open: true,
             labelFocus: document.activeElement === input,
@@ -266,12 +270,16 @@ async function run() {
             selectedItems: dialog.querySelectorAll('[data-tv-gallery-list-index].is-selected').length,
             disabledButtons: dialog.querySelectorAll('.tv-dialog-button:disabled').length,
             status: dialog.querySelector('[data-tv-row="status"]')?.textContent || '',
+            frameSidesAligned: sideRects.length === 2 && sideRects.every((rect) =>
+                Math.abs(rect.top - bodyRect.top) < 1 && Math.abs(rect.height - bodyRect.height) < 1
+            ),
         };
     })()`);
     if (
         !gallery.open || !gallery.labelFocus || gallery.checks !== 3 || gallery.radios !== 3
         || gallery.disabledChoices !== 2 || gallery.listItems !== 5 || gallery.selectedItems !== 1
         || gallery.disabledButtons !== 1 || !gallery.status.includes('Apply command')
+        || !gallery.frameSidesAligned
     ) {
         throw new Error(`Widget Gallery controls are incomplete: ${JSON.stringify(gallery)}`);
     }
@@ -396,6 +404,7 @@ async function run() {
         );
         const overlay = dialog.closest('.tv-dialog-overlay');
         const helpWindow = document.querySelector('[data-tv-bundle-window]');
+        const helpScrollbar = helpWindow.querySelector('.tv-scrollbar-y');
         const titlebar = dialog.querySelector('.tv-dialog-titlebar');
         titlebar.dispatchEvent(new MouseEvent('mousedown', {
             bubbles: true,
@@ -411,6 +420,11 @@ async function run() {
             active: dialog.classList.contains('is-window-active'),
             dialogZ: Number(getComputedStyle(overlay).zIndex),
             helpZ: Number(getComputedStyle(helpWindow).zIndex),
+            helpScrollbarInactive: helpScrollbar.classList.contains('is-inactive'),
+            helpScrollbarColors: [
+                getComputedStyle(helpScrollbar).color,
+                getComputedStyle(helpScrollbar.querySelector('.tv-scroll-arrow')).color,
+            ],
             moreTarget: document.querySelector('[data-tv-line="17"] [data-tv-bundle-topic="327"]')?.textContent,
             moving,
             movingCorner,
@@ -419,6 +433,8 @@ async function run() {
     })()`);
     if (
         restored.entries < 2 || !restored.active || restored.dialogZ <= restored.helpZ
+        || !restored.helpScrollbarInactive
+        || restored.helpScrollbarColors.some((color) => color !== 'rgb(0, 170, 170)')
         || restored.moreTarget !== "<more>" || !restored.moving
         || restored.movingCorner !== "┌" || restored.restingCorner !== "╔"
     ) {

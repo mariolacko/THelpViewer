@@ -818,12 +818,6 @@ button.tv-status-item {
     display: none;
 }
 
-.tv-scrollbar.is-inactive {
-    --tv-scrollbar-glyph: var(--tv-frame-passive);
-    --tv-scrollbar-arrow-fg: var(--tv-frame-passive);
-    --tv-scrollbar-thumb-fg: var(--tv-frame-passive);
-}
-
 .tv-scrollbar.is-inactive .tv-scroll-arrow,
 .tv-scrollbar.is-inactive .tv-thumb-cell,
 .tv-scrollbar.is-disabled .tv-scroll-arrow {
@@ -2618,14 +2612,12 @@ button.tv-status-item {
 }
 
 .tv-vlist-scrollbar.is-inactive {
-    color: var(--tv-frame-passive);
     pointer-events: none;
 }
 
 .tv-vlist-scrollbar.is-inactive .tv-vlist-arrow,
 .tv-vlist-scrollbar.is-inactive .tv-vlist-scroll-cell,
 .tv-vlist-scrollbar.is-inactive .tv-vlist-thumb-cell {
-    color: var(--tv-frame-passive);
     cursor: default;
 }
 
@@ -2717,14 +2709,15 @@ button.tv-status-item {
 }
 
 .tv-widget-gallery-body {
-    padding: 1em 2ch;
-    overflow: auto;
+    overflow: hidden;
 }
 
 .tv-widget-gallery-main {
     display: grid;
     gap: 1em;
     min-width: 58ch;
+    padding: 1em 2ch;
+    overflow: auto;
 }
 
 .tv-widget-gallery-field {

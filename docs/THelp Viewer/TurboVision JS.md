@@ -39,8 +39,8 @@ Core widget hierarchy and infrastructure.
   `select(index)`, `bind({onSelect, onActivate})`; click selects and
   double-click/Enter activates.
 - **TVVerticalListViewer** — List with scrollbar integration, roving tab focus,
-  Arrow, Home/End and Page Up/Down keyboard navigation, and a passive
-  scrollbar while its dialog is inactive.
+  Arrow, Home/End and Page Up/Down keyboard navigation. While its dialog is
+  inactive, the scrollbar keeps its Turbo Vision palette but ignores input.
 - **TVVerticalScrollArea** — Generic scroll container.
 - **TVMenuBox** — Menu popup with items.
 - **TVCheckBoxes** — Native checkbox group rendered with DOS `[ ]` / `[X]`
@@ -138,8 +138,8 @@ geometry keys, so moving or maximizing one does not overwrite another.
 Custom scrollbar for `[data-tv-scroll-frame]` containers. Handles thumb drag, track clicks, arrow buttons, wheel events.
 
 - `refresh()` — Re-observe replaced viewport content and redraw both axes.
-- `setActive(active)` — Enable input for the active window or switch both axes
-  to passive, non-interactive rendering.
+- `setActive(active)` — Enable input for the active window or make both axes
+  non-interactive without changing their Turbo Vision scrollbar palette.
 - `destroy()` — Stop repeat/drag state and detach element/global listeners and
   the `ResizeObserver`.
 

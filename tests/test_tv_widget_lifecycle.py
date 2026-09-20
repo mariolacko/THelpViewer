@@ -238,3 +238,16 @@ def test_active_window_state_controls_scrollbars_and_scopes_frame_redraw():
     assert '.tv-scrollbar, .tv-menu-bar' not in shell
     assert ".tv-scrollbar.is-inactive" in css
     assert ".tv-vlist-scrollbar.is-inactive" in css
+    inactive_scrollbar_css = css[
+        css.index(".tv-scrollbar.is-inactive"):
+        css.index(".tv-js .tv-scrollbar")
+    ]
+    inactive_list_start = css.index(".tv-vlist-scrollbar.is-inactive")
+    inactive_list_css = css[
+        inactive_list_start:
+        css.index(".tv-vlist-track", inactive_list_start)
+    ]
+    assert "--tv-frame-passive" not in inactive_scrollbar_css
+    assert "--tv-frame-passive" not in inactive_list_css
+    assert "pointer-events: none" in inactive_scrollbar_css
+    assert "pointer-events: none" in inactive_list_css
