@@ -319,6 +319,13 @@ compatibility with old Turbo Vision applications.
     `hc...` topic to the existing `BundleWindowManager`; THelpViewer Help now
     uses the same `TVWindow`, UHF renderer, edge scrollbars, status commands,
     close lifecycle and URL-state restoration as every other HELP bundle.
+43. **Safari did not reliably rasterize the `▐`/`▌` History side glyphs as
+    exact CP437 half-cells.** The blue InputLine could therefore remain visible
+    immediately beside the green down-arrow cell even though the palette
+    indices were correct. **Resolved in Phase 7.18:** the one shared History
+    trigger paints the source-defined outer gray and inner green halves with
+    palette-driven CSS gradients. Open, Change Directory and Find all receive
+    the same correction without a dialog-specific control.
 
 ## Component assessment
 
@@ -628,3 +635,6 @@ No previously recommended game remains unimplemented.
   presentation path. F1 now opens `THELPVIEWER.HLP` through the ordinary
   `BundleWindowManager`, with the standard `TVWindow` frame, right-edge
   scrollbars and global status-line navigation.
+- [x] Phase 7.18: made the shared `THistory` trigger draw its CP437 side
+  half-cells explicitly from the History palette, eliminating Safari's blue
+  InputLine leak beside the green arrow in all three consumers.

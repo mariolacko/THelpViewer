@@ -322,6 +322,10 @@ The selectors support arrow-key navigation.
   outside-click dismissal and focus return to the History button. Pointer
   activation happens on mouse-down like the original `THistory::handleEvent`;
   keyboard activation remains a native button click.
+- The source `THistory::icon` value `\xDE~\x19~\xDD` is rendered as two
+  explicit half-cell CSS fills around the arrow. This preserves the original
+  History sides/button palette mapping without relying on browser rendering of
+  Unicode `▐`/`▌` glyphs, which can expose the blue InputLine in Safari.
 - The layout follows Turbo Vision 2.0 `TFileDialog`: one unframed, two-column
   `TFileList`, a horizontal scrollbar, Name input with a three-cell History
   control, Open/Cancel buttons and the two-line `TFileInfoPane` at the bottom.

@@ -1099,7 +1099,7 @@ async function run() {
         || fileOpen.normalTextColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || !fileOpen.visibleText
         || fileOpen.historyArrowColors.join() !== ['rgb(0, 170, 0)', 'rgb(0, 0, 0)'].join()
-        || fileOpen.historySideColors.join() !== ['rgb(170, 170, 170)', 'rgb(0, 170, 0)'].join()
+        || fileOpen.historySideColors.join() !== ['rgb(170, 170, 170)', 'rgba(0, 0, 0, 0)'].join()
     ) {
         throw new Error(`File Open dialog is incomplete: ${JSON.stringify(fileOpen)}`);
     }
@@ -1131,7 +1131,10 @@ async function run() {
         const selected = popup?.querySelector('[data-tv-file-open-history-index].is-selected');
         const selectedStyle = getComputedStyle(selected);
         const arrowStyle = getComputedStyle(button.querySelector('.tv-file-open-history-arrow'));
-        const sideStyle = getComputedStyle(button.querySelector('.tv-file-open-history-side'));
+        const sideStyles = Array.from(
+            button.querySelectorAll('.tv-file-open-history-side'),
+            (element) => getComputedStyle(element),
+        );
         const cellWidth = input.getBoundingClientRect().width / 28;
         return {
             enabled: !button.disabled,
@@ -1142,7 +1145,11 @@ async function run() {
             frame: [popupStyle.backgroundColor, popupStyle.color],
             selected: [selectedStyle.backgroundColor, selectedStyle.color],
             arrow: [arrowStyle.backgroundColor, arrowStyle.color],
-            side: [sideStyle.backgroundColor, sideStyle.color],
+            sides: sideStyles.map((style) => ({
+                background: style.backgroundColor,
+                color: style.color,
+                image: style.backgroundImage,
+            })),
             popupAboveButton: Number(popupStyle.zIndex) > Number(getComputedStyle(button).zIndex),
             corners: popup?.querySelectorAll('.tv-history-frame-corner').length || 0,
             closeButtons: popup?.querySelectorAll('[data-tv-history-close]').length || 0,
@@ -1153,7 +1160,10 @@ async function run() {
         || historyOpen.frame.join() !== ['rgb(0, 0, 170)', 'rgb(255, 255, 255)'].join()
         || historyOpen.selected.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()
         || historyOpen.arrow.join() !== ['rgb(0, 170, 0)', 'rgb(0, 0, 0)'].join()
-        || historyOpen.side.join() !== ['rgb(170, 170, 170)', 'rgb(0, 170, 0)'].join()
+        || historyOpen.sides.some((side) => side.background !== 'rgb(170, 170, 170)'
+            || side.color !== 'rgba(0, 0, 0, 0)'
+            || !side.image.includes('linear-gradient')
+            || !side.image.includes('rgb(0, 170, 0)'))
         || !historyOpen.popupAboveButton) {
         throw new Error(`File Open history does not match THistoryWindow: ${JSON.stringify(historyOpen)}`);
     }

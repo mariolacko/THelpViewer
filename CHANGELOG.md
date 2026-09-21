@@ -34,6 +34,10 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Made the shared History trigger reproduce Turbo Vision's CP437 half-cell
+  icon with palette-driven CSS halves, preventing Safari from exposing the
+  blue InputLine behind the green sides next to the down arrow in Open,
+  Change Directory and Find
 - Routed THelpViewer's UHF context help through the same `BundleWindowManager`,
   `TVWindow`, topic renderer, edge scrollbars and global status line as every
   converted HELP file; the bundle application no longer opens a parallel

@@ -3459,8 +3459,24 @@ button.tv-status-item {
 }
 
 .tv-file-open-history-side {
-    background: var(--tv-palette-dialog-history-sides-bg);
-    color: var(--tv-palette-dialog-history-sides-fg);
+    background-color: var(--tv-palette-dialog-history-sides-bg);
+    color: transparent;
+}
+
+.tv-file-open-history-side:first-child {
+    background-image: linear-gradient(
+        to right,
+        var(--tv-palette-dialog-history-sides-bg) 0 50%,
+        var(--tv-palette-dialog-history-sides-fg) 50% 100%
+    );
+}
+
+.tv-file-open-history-side:last-child {
+    background-image: linear-gradient(
+        to right,
+        var(--tv-palette-dialog-history-sides-fg) 0 50%,
+        var(--tv-palette-dialog-history-sides-bg) 50% 100%
+    );
 }
 
 .tv-file-open-files-label {
