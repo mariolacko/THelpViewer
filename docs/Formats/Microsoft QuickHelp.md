@@ -217,9 +217,10 @@ directly.
 
 Links whose context strings are built-in commands are handled as navigation
 actions (§9). Cross-file references are resolved against sibling QuickHelp
-`.HLP` files in the same source directory. An explicit `FILE.HLP!context`
-reference is preserved as an external link even if that file or context is not
-currently available.
+`.HLP` files in the same source directory. Explicit `FILE.HLP!context` links
+and the Microsoft Advisor variant `DATABASE.context` (for example
+`OS2.h.overview`) are preserved as external links even if that optional file
+or context is not currently available.
 
 ---
 

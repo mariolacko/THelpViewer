@@ -263,6 +263,15 @@ def _resolve_external_quickhelp_target(
         explicit_file, target_context = target_context.split("!", 1)
         explicit_file = explicit_file.strip() or None
         target_context = target_context.strip()
+    elif target_context.count(".") >= 2:
+        # Microsoft Advisor also emits qualified references as
+        # `database.context` (for example `OS2.h.overview`) instead of the
+        # documented `database!context` form. Keep these as real cross-file
+        # links even when the optional database is not installed.
+        database, qualified_context = target_context.split(".", 1)
+        if database and qualified_context:
+            explicit_file = f"{database}.HLP"
+            target_context = qualified_context
     if not target_context:
         return None
 

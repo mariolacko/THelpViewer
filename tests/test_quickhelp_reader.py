@@ -90,3 +90,14 @@ def test_missing_external_quickhelp_target_remains_a_real_link():
         for topic in doc.topics
         for line in topic.uhf_content
     )
+
+
+def test_qualified_missing_quickhelp_targets_remain_real_links():
+    path = Path("sources") / "Microsoft QuickC, C, and C++ 6.0" / "PWB.HLP"
+    doc = load_document(path)
+    content = "\n".join(line for topic in doc.topics for line in topic.uhf_content)
+
+    assert "[link:file=OS2.HLP,alias=h.overview]OS/2 Overview[/link]" in content
+    assert "[link:file=OS2.HLP,alias=h.contents]OS/2 API[/link]" in content
+    assert "[link:file=WIN.HLP,alias=h.contents]Windows API[/link]" in content
+    assert "[link:file=LAN.HLP,alias=h.contents]Network API[/link]" in content
