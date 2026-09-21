@@ -163,6 +163,14 @@ async function run() {
         return down.defaultPrevented;
     })()`);
     const pause = () => evaluate("new Promise(resolve => setTimeout(resolve, 200))", true);
+    const clickPoint = async (point) => {
+        await send('Input.dispatchMouseEvent', {
+            type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1,
+        });
+        await send('Input.dispatchMouseEvent', {
+            type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1,
+        });
+    };
 
     await send("Page.enable");
     await send("Runtime.enable");
@@ -903,21 +911,39 @@ async function run() {
     }
     await evaluate(`document.querySelector('[data-tv-dialog-open="chdir"]').click()`);
     await pause();
-    const changeDirectoryHistoryToggle = await evaluate(`(() => {
+    const changeDirectoryHistoryInitial = await evaluate(`(() => {
         const button = document.querySelector('[data-tv-change-dir-history]');
         const popup = document.querySelector('[data-tv-change-dir-history-popup]');
         const initiallyHidden = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none');
-        button?.click();
-        const opened = Boolean(!popup?.hidden && getComputedStyle(popup).display !== 'none'
-            && button?.getAttribute('aria-expanded') === 'true');
-        button?.click();
-        const closed = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none'
-            && button?.getAttribute('aria-expanded') === 'false');
-        return { enabled: !button?.disabled, initiallyHidden, opened, closed };
+        const rect = button?.querySelector('.tv-file-open-history-arrow')?.getBoundingClientRect();
+        return {
+            enabled: !button?.disabled,
+            initiallyHidden,
+            point: rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null,
+        };
     })()`);
-    if (!changeDirectoryHistoryToggle.enabled || !changeDirectoryHistoryToggle.initiallyHidden
-        || !changeDirectoryHistoryToggle.opened || !changeDirectoryHistoryToggle.closed) {
-        throw new Error(`Change Directory history toggle is broken: ${JSON.stringify(changeDirectoryHistoryToggle)}`);
+    if (!changeDirectoryHistoryInitial.enabled || !changeDirectoryHistoryInitial.initiallyHidden
+        || !changeDirectoryHistoryInitial.point) {
+        throw new Error(`Change Directory history is unavailable: ${JSON.stringify(changeDirectoryHistoryInitial)}`);
+    }
+    await clickPoint(changeDirectoryHistoryInitial.point);
+    const changeDirectoryHistoryOpened = await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-change-dir-history]');
+        const popup = document.querySelector('[data-tv-change-dir-history-popup]');
+        return !popup?.hidden && getComputedStyle(popup).display !== 'none'
+            && button?.getAttribute('aria-expanded') === 'true';
+    })()`);
+    await clickPoint(changeDirectoryHistoryInitial.point);
+    const changeDirectoryHistoryClosed = await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-change-dir-history]');
+        const popup = document.querySelector('[data-tv-change-dir-history-popup]');
+        return popup?.hidden && getComputedStyle(popup).display === 'none'
+            && button?.getAttribute('aria-expanded') === 'false';
+    })()`);
+    if (!changeDirectoryHistoryOpened || !changeDirectoryHistoryClosed) {
+        throw new Error(`Change Directory physical history toggle is broken: ${JSON.stringify({
+            changeDirectoryHistoryOpened, changeDirectoryHistoryClosed,
+        })}`);
     }
     await key("Escape", "Escape", 0, true);
 
@@ -1001,8 +1027,8 @@ async function run() {
         || fileOpen.normalColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || fileOpen.normalTextColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || !fileOpen.visibleText
-        || fileOpen.historyArrowColors.join() !== ['rgb(170, 170, 170)', 'rgb(0, 170, 0)'].join()
-        || fileOpen.historySideColors.join() !== ['rgb(0, 170, 0)', 'rgb(0, 0, 0)'].join()
+        || fileOpen.historyArrowColors.join() !== ['rgb(0, 170, 0)', 'rgb(0, 0, 0)'].join()
+        || fileOpen.historySideColors.join() !== ['rgb(170, 170, 170)', 'rgb(0, 170, 0)'].join()
     ) {
         throw new Error(`File Open dialog is incomplete: ${JSON.stringify(fileOpen)}`);
     }
@@ -1033,6 +1059,8 @@ async function run() {
         const popupStyle = getComputedStyle(popup);
         const selected = popup?.querySelector('[data-tv-file-open-history-index].is-selected');
         const selectedStyle = getComputedStyle(selected);
+        const arrowStyle = getComputedStyle(button.querySelector('.tv-file-open-history-arrow'));
+        const sideStyle = getComputedStyle(button.querySelector('.tv-file-open-history-side'));
         const cellWidth = input.getBoundingClientRect().width / 28;
         return {
             enabled: !button.disabled,
@@ -1042,24 +1070,47 @@ async function run() {
             columns: Math.round(popup.getBoundingClientRect().width / cellWidth),
             frame: [popupStyle.backgroundColor, popupStyle.color],
             selected: [selectedStyle.backgroundColor, selectedStyle.color],
+            arrow: [arrowStyle.backgroundColor, arrowStyle.color],
+            side: [sideStyle.backgroundColor, sideStyle.color],
+            buttonAbovePopup: Number(getComputedStyle(button).zIndex) > Number(popupStyle.zIndex),
             corners: popup?.querySelectorAll('.tv-history-frame-corner').length || 0,
         };
     })()`);
     if (!historyOpen.enabled || !historyOpen.initiallyHidden || !historyOpen.open || historyOpen.entries !== 1
         || historyOpen.columns !== 30 || historyOpen.corners !== 4
         || historyOpen.frame.join() !== ['rgb(0, 0, 170)', 'rgb(255, 255, 255)'].join()
-        || historyOpen.selected.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()) {
+        || historyOpen.selected.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()
+        || historyOpen.arrow.join() !== ['rgb(0, 170, 0)', 'rgb(0, 0, 0)'].join()
+        || historyOpen.side.join() !== ['rgb(170, 170, 170)', 'rgb(0, 170, 0)'].join()
+        || !historyOpen.buttonAbovePopup) {
         throw new Error(`File Open history does not match THistoryWindow: ${JSON.stringify(historyOpen)}`);
     }
-    const historyButtonClosed = await evaluate(`(() => {
+    const fileHistoryArrowPoint = await evaluate(`(() => {
+        const rect = document.querySelector(
+            '[data-tv-file-open-history] .tv-file-open-history-arrow'
+        )?.getBoundingClientRect();
+        return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+    })()`);
+    if (!fileHistoryArrowPoint) { throw new Error("File Open History arrow is missing"); }
+    await clickPoint(fileHistoryArrowPoint);
+    const fileHistoryClosed = await evaluate(`(() => {
         const button = document.querySelector('[data-tv-file-open-history]');
         const popup = document.querySelector('[data-tv-file-open-history-popup]');
-        button.click();
-        const closed = Boolean(popup.hidden && getComputedStyle(popup).display === 'none');
-        button.click();
-        return closed && !popup.hidden && getComputedStyle(popup).display !== 'none';
+        return popup.hidden && getComputedStyle(popup).display === 'none'
+            && button.getAttribute('aria-expanded') === 'false';
     })()`);
-    if (!historyButtonClosed) { throw new Error("History button did not close and reopen File Open history"); }
+    await clickPoint(fileHistoryArrowPoint);
+    const fileHistoryReopened = await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-file-open-history]');
+        const popup = document.querySelector('[data-tv-file-open-history-popup]');
+        return !popup.hidden && getComputedStyle(popup).display !== 'none'
+            && button.getAttribute('aria-expanded') === 'true';
+    })()`);
+    if (!fileHistoryClosed || !fileHistoryReopened) {
+        throw new Error(`File Open physical history toggle is broken: ${JSON.stringify({
+            fileHistoryClosed, fileHistoryReopened,
+        })}`);
+    }
     await pause();
     await key("Escape", "Escape", 0, true);
     const escapeClosedHistoryOnly = await evaluate(`(() => {

@@ -252,9 +252,8 @@ compatibility with old Turbo Vision applications.
 33. **The History control still differed from Turbo Vision at the glyph and
     popup levels, Search commands were always enabled, and Mastermind inherited
     an incompatible button minimum width.** **Resolved in Phase 7.9:** the
-    source-defined `THistory::icon` sequence (`\xDE~\x19~\xDD`) now paints its
-    side glyphs with the Arrow attribute and its highlighted down-arrow with
-    the Sides attribute; all History consumers use one compact framed
+    source-defined `THistory::icon` sequence (`\xDE~\x19~\xDD`) is shared by
+    all History consumers in one compact framed
     `TVHistoryWindow` without gray padding. Find is enabled only for an active
     HELP/Docs target and Find Again only after that target has a query.
     Mastermind has centered, inset content and its five-column color controls
@@ -282,6 +281,12 @@ compatibility with old Turbo Vision applications.
     non-interactive and paint single-line frame segments; dialog controls keep
     their overlay-specific hidden behaviour. The exact reported README/TCHELP
     URL is exercised in both active-window orders in real Chrome.
+37. **The History icon palette pair was decoded in reverse and its popup could
+    overlap the trigger.** Turbo Vision's `getColor(0x0102)` uses the low byte
+    first, so `\xDE`/`\xDD` use History sides and the toggled `\x19` arrow uses
+    History button. **Resolved in Phase 7.13:** the CSS roles now match that
+    order and the complete three-cell trigger stays above the popup. Physical
+    Chrome clicks open and close File Open and Change Directory history.
 
 ## Component assessment
 
@@ -568,3 +573,6 @@ No previously recommended game remains unimplemented.
 - [x] Phase 7.12: preserved passive `TVWindow` title-grid geometry while
   replacing inactive close/zoom controls with non-interactive frame segments.
   The reported README/TCHELP state is a real-Chrome regression fixture.
+- [x] Phase 7.13: corrected the source-defined `THistory` arrow/sides palette
+  order and kept the complete trigger above its popup. Real pointer clicks
+  verify open/close in File Open and Change Directory.

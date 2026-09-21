@@ -3293,6 +3293,7 @@ button.tv-status-item {
 .tv-file-open-history-button {
     all: unset;
     position: absolute;
+    z-index: 3;
     left: 30ch;
     top: 2em;
     width: 3ch;
@@ -3323,13 +3324,13 @@ button.tv-status-item {
 }
 
 .tv-file-open-history-arrow {
-    background: var(--tv-palette-dialog-history-sides-bg);
-    color: var(--tv-palette-dialog-history-sides-fg);
+    background: var(--tv-palette-dialog-history-button-bg);
+    color: var(--tv-palette-dialog-history-button-fg);
 }
 
 .tv-file-open-history-side {
-    background: var(--tv-palette-dialog-history-button-bg);
-    color: var(--tv-palette-dialog-history-button-fg);
+    background: var(--tv-palette-dialog-history-sides-bg);
+    color: var(--tv-palette-dialog-history-sides-fg);
 }
 
 .tv-file-open-files-label {
