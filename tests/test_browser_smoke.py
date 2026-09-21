@@ -247,6 +247,19 @@ async function run() {
         };
         check();
     })`, true);
+    const emptyFileHistory = await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-file-open-history]');
+        const popup = document.querySelector('[data-tv-file-open-history-popup]');
+        button?.click();
+        const opened = Boolean(button && !button.disabled && popup && !popup.hidden
+            && button.getAttribute('aria-expanded') === 'true');
+        button?.click();
+        const closed = Boolean(popup?.hidden && button?.getAttribute('aria-expanded') === 'false');
+        return { opened, closed, entries: popup?.querySelectorAll('[data-tv-file-open-history-index]').length || 0 };
+    })()`);
+    if (!emptyFileHistory.opened || !emptyFileHistory.closed || emptyFileHistory.entries !== 0) {
+        throw new Error(`Empty File Open history did not toggle: ${JSON.stringify(emptyFileHistory)}`);
+    }
     await key("F1", "F1");
     await evaluate(`new Promise((resolve, reject) => {
             const deadline = Date.now() + 5000;
@@ -1710,6 +1723,45 @@ async function run() {
         || hanoiOpen.draggable !== 1 || hanoiOpen.focused !== '0' || !hanoiOpen.emptyHistory
         || hanoiOpen.hall !== '[H]' || !hanoiOpen.tronPaused || hanoiOpen.clipped) {
         throw new Error(`Tower of Hanoi dialog is incomplete: ${JSON.stringify(hanoiOpen)}`);
+    }
+    await key("F1", "F1");
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 5000;
+        const check = () => {
+            const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
+            if (help?.querySelector('.tv-topic-heading')?.textContent.trim() === 'Tower of Hanoi') {
+                resolve(true);
+                return;
+            }
+            if (Date.now() >= deadline) { reject(new Error('Tower of Hanoi context help did not open')); return; }
+            setTimeout(check, 25);
+        };
+        check();
+    })`, true);
+    const hanoiHelpClosePoint = await evaluate(`(() => {
+        const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
+        const close = help?.querySelector('[data-tv-bundle-close]');
+        const rect = close?.getBoundingClientRect();
+        return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+    })()`);
+    if (!hanoiHelpClosePoint) { throw new Error('Tower of Hanoi Help close control is missing'); }
+    await send('Input.dispatchMouseEvent', {
+        type: 'mousePressed', x: hanoiHelpClosePoint.x, y: hanoiHelpClosePoint.y,
+        button: 'left', clickCount: 1,
+    });
+    const hanoiHelpClosedOnPress = await evaluate(`(() => ({
+        helpClosed: !document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]'),
+        gameActive: Array.from(document.querySelectorAll('.tv-dialog-window')).some((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Tower of Hanoi'
+            && element.classList.contains('is-window-active')
+        ),
+    }))()`);
+    await send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased', x: hanoiHelpClosePoint.x, y: hanoiHelpClosePoint.y,
+        button: 'left', clickCount: 1,
+    });
+    if (!hanoiHelpClosedOnPress.helpClosed || !hanoiHelpClosedOnPress.gameActive) {
+        throw new Error(`Safari-style mouse press did not close Help: ${JSON.stringify(hanoiHelpClosedOnPress)}`);
     }
     await key("Enter", "Enter");
     await key("ArrowRight", "ArrowRight");

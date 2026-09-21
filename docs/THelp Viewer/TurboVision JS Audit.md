@@ -326,6 +326,16 @@ compatibility with old Turbo Vision applications.
     trigger paints the source-defined outer gray and inner green halves with
     palette-driven CSS gradients. Open, Change Directory and Find all receive
     the same correction without a dialog-specific control.
+44. **Game dialogs all resolved F1 to the generic Games topic, empty History
+    controls were disabled, and Safari could lose a close-button click.**
+    **Resolved in Phase 7.19:** all twelve games now own distinct help contexts
+    backed by individual UHF topics. `TVHistoryWindow` remains operable with no
+    stored items, matching the original always-active `THistory` control. The
+    shared dialog and standard-window close paths also act on mouse-down and
+    stop propagation before the window manager can reinterpret the press;
+    native click remains available for keyboard activation. Browser coverage
+    opens game-specific F1 Help, closes it on mouse-down and toggles an empty
+    File Open history.
 
 ## Component assessment
 
@@ -638,3 +648,7 @@ No previously recommended game remains unimplemented.
 - [x] Phase 7.18: made the shared `THistory` trigger draw its CP437 side
   half-cells explicitly from the History palette, eliminating Safari's blue
   InputLine leak beside the green arrow in all three consumers.
+- [x] Phase 7.19: assigned an individual `hc...`/UHF topic to every game,
+  restored always-active empty History windows, and hardened shared close
+  controls for Safari by handling the Turbo Vision mouse-down phase. Browser
+  regressions cover all three reported failure modes.

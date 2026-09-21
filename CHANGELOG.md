@@ -34,6 +34,16 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Added a distinct `hc...` context and UHF topic for every game, so F1 from
+  Puzzle, Tetris, Mines, BreakOut, Sokoban, Lines, Reversi, Ludo, Mastermind,
+  Snake, Tower of Hanoi or Tron opens that game's own help instead of the
+  generic Games page
+- Made shared dialog, HELP and Docs close controls act on the original Turbo
+  Vision mouse-down event while retaining native button clicks for keyboard
+  input, avoiding Safari's intermittently lost click activation
+- Kept the shared History trigger active when its list is empty; Open a File,
+  Change Directory and Find can now open and close an empty History window in
+  Safari instead of presenting a disabled arrow
 - Made the shared History trigger reproduce Turbo Vision's CP437 half-cell
   icon with palette-driven CSS halves, preventing Safari from exposing the
   blue InputLine behind the green sides next to the down arrow in Open,

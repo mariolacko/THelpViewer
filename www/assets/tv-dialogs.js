@@ -68,6 +68,18 @@ const {
     hcAsciiTable,
     hcCalculator,
     hcScreenSaver,
+    hcPuzzle,
+    hcTetris,
+    hcMines,
+    hcBreakOut,
+    hcSokoban,
+    hcLines,
+    hcReversi,
+    hcLudo,
+    hcMastermind,
+    hcSnake,
+    hcHanoi,
+    hcTron,
 } = TV_HELP_CONTEXTS;
 
 const TV_CONTEXT_HELP_TOPICS = Object.freeze({
@@ -93,9 +105,21 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcAsciiTable]: { title: "ASCII Table", text: "Shows character codes and glyphs using the configured DOS code page presentation." },
     [hcCalculator]: { title: "Calculator", text: "Use number and operation buttons or the keyboard. Escape is reserved by the calculator and does not close it." },
     [hcScreenSaver]: { title: "Screen saver", text: "Choose a mode from the system menu. Input stops the saver and restores the previously focused control." },
+    [hcPuzzle]: { title: "Puzzle", text: "Move a tile next to the blank square with the mouse or arrow keys. Solve the shuffled 4 x 4 board in as few moves as possible." },
+    [hcTetris]: { title: "Tetris", text: "New starts a game. Use Left/Right to move, Up to rotate, Down to drop faster and P to pause. Pentix toggles the extended pieces." },
+    [hcMines]: { title: "Mines", text: "Reveal safe squares and mark suspected mines. The game pauses while its window is inactive." },
+    [hcBreakOut]: { title: "BreakOut", text: "Move the paddle, keep the ball in play and clear the bricks. The game timer pauses while another window is active." },
+    [hcSokoban]: { title: "Sokoban", text: "Push every crate onto a goal. Arrow keys move the player; crates can be pushed but not pulled." },
+    [hcLines]: { title: "Lines", text: "Move coloured balls to form scoring lines. Selecting and moving a ball consumes a turn unless a line is completed." },
+    [hcReversi]: { title: "Reversi", text: "Place a disc that brackets one or more opposing discs. The player with the most discs when no move remains wins." },
+    [hcLudo]: { title: "Ludo", text: "Roll the die and move a legal piece around the board. Bring all of your pieces home before the other players." },
+    [hcMastermind]: { title: "Mastermind", text: "Build a colour guess and submit it. Feedback reports correct colours in the correct and incorrect positions." },
+    [hcSnake]: { title: "Snake", text: "Use the arrow keys to steer. Eat food to grow without hitting the wall or your own body." },
+    [hcHanoi]: { title: "Tower of Hanoi", text: "Move the stack to another peg without placing a larger disc on a smaller one. Use mouse, keyboard and the move history." },
+    [hcTron]: { title: "Tron Light Cycles", text: "Steer both cycles simultaneously and avoid every trail. The timer pauses while the game window is inactive." },
 });
 
-const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20260921a";
+const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20260921b";
 let contextHelpBundlePromise = null;
 
 function loadContextHelpBundle() {
@@ -720,8 +744,7 @@ class TVHistoryWindow extends TVWindow {
     refresh() {
         const items = this.items();
         this.viewer?.setItems(items, items.length ? 0 : -1);
-        if (this.button) { this.button.disabled = items.length === 0; }
-        if (!items.length && this.isOpen()) { this._setOpen(false); }
+        if (this.button) { this.button.disabled = false; }
         return items;
     }
 
@@ -738,20 +761,20 @@ class TVHistoryWindow extends TVWindow {
     }
 
     show() {
-        if (!this.popup || this.button?.disabled) { return false; }
+        if (!this.popup) { return false; }
         const items = this.refresh();
-        if (!items.length) { return false; }
         this._setOpen(true);
         fillBorders(this.popup);
         window.requestAnimationFrame(() => {
             this.viewer?.updateScrollbar();
-            this.viewer?.selectedElement()?.focus();
+            const focusTarget = this.viewer?.selectedElement() || this.closeButton;
+            focusTarget?.focus();
         });
         return true;
     }
 
     toggle() {
-        if (!this.popup || this.button?.disabled) { return; }
+        if (!this.popup) { return; }
         if (this.isOpen()) { this.hide(); }
         else { this.show(); }
     }

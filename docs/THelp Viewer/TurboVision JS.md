@@ -102,9 +102,11 @@ Header, footer and both row-side glyphs inherit the same current frame color.
   zoom cells remain in the title-row grid but become non-interactive
   single-line frame segments. This preserves the centered caption and both
   frame corners while matching the inactive `TFrame` drawing.
-  Standard close/zoom controls are semantic buttons for consistent Safari and
-  Chromium activation. The grow control always draws Turbo Vision 2.0's
-  source-defined single-line `─┘` icon.
+  Standard close/zoom controls are semantic buttons. Close additionally acts
+  on the original Turbo Vision mouse-down event, with propagation stopped
+  before window activation can consume it; native click activation remains for
+  keyboard input. The grow control always draws Turbo Vision 2.0's source-
+  defined single-line `─┘` icon.
 - **TVDialog** — `TVWindow` subclass with a managed overlay; it may be modal or
   non-modal.
   - `open()`, `close()`, `destroy()`, `center()`, `isOpen()`, `isActive()`
@@ -157,9 +159,9 @@ an invalid background position for it.
 ### Context Help
 
 `TV_HELP_CONTEXTS` exports the application's `hc...` constants, including
-`hcApplication`, menu contexts, HELP/Docs viewer contexts and individual
-standard-dialog contexts. The constants are also exposed directly on
-`THelpViewerTV` for Turbo Vision-style use.
+`hcApplication`, menu contexts, HELP/Docs viewer contexts, individual
+standard-dialog contexts and one context for each game. The constants are also
+exposed directly on `THelpViewerTV` for Turbo Vision-style use.
 
 - `elementHelpContext(element)` resolves `data-tv-help-ctx` through DOM owners.
 - `TVMenuController.getHelpCtx()` returns the selected menu/root context.
@@ -321,7 +323,9 @@ The selectors support arrow-key navigation.
   owns popup visibility, `aria-expanded` state, Escape handling,
   outside-click dismissal and focus return to the History button. Pointer
   activation happens on mouse-down like the original `THistory::handleEvent`;
-  keyboard activation remains a native button click.
+  keyboard activation remains a native button click. An empty history remains
+  an active control and opens the same closable empty window; it is not
+  disabled based on its current item count.
 - The source `THistory::icon` value `\xDE~\x19~\xDD` is rendered as two
   explicit half-cell CSS fills around the arrow. This preserves the original
   History sides/button palette mapping without relying on browser rendering of
@@ -405,6 +409,9 @@ also suspends the owning game until the prompt is destroyed.
 | `TVSnakeDialog` | Snake | 28×18 | ←→↑↓ move, Enter restart |
 
 All twelve games use the same persistent, sorted ten-entry Hall of Fame. The
+dialog root of every game owns a distinct `hcPuzzle` … `hcTron` context, and
+`THELPVIEWER.HLP` contains the corresponding UHF topics, so F1 always describes
+the active game rather than falling back to the generic Games topic. The
 pure `MastermindGame` rule class correctly handles repeated colors when
 calculating exact and misplaced pegs. Its 64-column dialog reserves an inset around the
 board and keeps all color, action and status controls inside the client area.

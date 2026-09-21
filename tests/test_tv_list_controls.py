@@ -56,6 +56,8 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "handleEscape(event)" in dialogs
     assert "event.detail" not in dialogs
     assert "this.ignoreNextClick = true" in dialogs
+    assert "this.button.disabled = false" in dialogs
+    assert "if (!items.length) { return false; }" not in dialogs
     assert dialogs.count("TVHistoryWindow.renderMarkup({") == 3
     assert "new TVFileList(this.query" in dialogs
     assert "new TVHistoryWindow({" in dialogs

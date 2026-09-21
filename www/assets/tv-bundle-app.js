@@ -79,6 +79,18 @@ const {
     hcCalendar,
     hcAsciiTable,
     hcCalculator,
+    hcPuzzle,
+    hcTetris,
+    hcMines,
+    hcBreakOut,
+    hcSokoban,
+    hcLines,
+    hcReversi,
+    hcLudo,
+    hcMastermind,
+    hcSnake,
+    hcHanoi,
+    hcTron,
 } = TV_HELP_CONTEXTS;
 
 const DIALOG_HELP_CONTEXTS = Object.freeze({
@@ -93,18 +105,18 @@ const DIALOG_HELP_CONTEXTS = Object.freeze({
     chdir: hcChangeDirectory,
     find: hcFind,
     search: hcSearch,
-    puzzle: hcGames,
-    tetris: hcGames,
-    mines: hcGames,
-    breakout: hcGames,
-    sokoban: hcGames,
-    lines: hcGames,
-    reversi: hcGames,
-    ludo: hcGames,
-    mastermind: hcGames,
-    snake: hcGames,
-    hanoi: hcGames,
-    tron: hcGames,
+    puzzle: hcPuzzle,
+    tetris: hcTetris,
+    mines: hcMines,
+    breakout: hcBreakOut,
+    sokoban: hcSokoban,
+    lines: hcLines,
+    reversi: hcReversi,
+    ludo: hcLudo,
+    mastermind: hcMastermind,
+    snake: hcSnake,
+    hanoi: hcHanoi,
+    tron: hcTron,
 });
 
 // ── Catalog & data cache ────────────────────────────────────────────
@@ -2375,6 +2387,12 @@ class BundleWindowManager {
     _bindCloseButton(windowEl, key) {
         const closeBtn = windowEl.querySelector("[data-tv-bundle-close]");
         if (!closeBtn) { return; }
+        closeBtn.addEventListener("mousedown", (event) => {
+            if (event.button !== 0) { return; }
+            event.preventDefault();
+            event.stopPropagation();
+            this.close(key);
+        });
         closeBtn.addEventListener("click", (event) => {
             event.preventDefault();
             this.close(key);
@@ -3923,6 +3941,12 @@ class TVBundleApp {
         // Close button
         const closeBtn = windowEl.querySelector("[data-tv-close-button]");
         if (closeBtn) {
+            closeBtn.addEventListener("mousedown", (e) => {
+                if (e.button !== 0) { return; }
+                e.preventDefault();
+                e.stopPropagation();
+                closeWindow();
+            });
             closeBtn.addEventListener("click", (e) => {
                 e.preventDefault();
                 closeWindow();

@@ -57,6 +57,9 @@ const {
     hcCalendar,
     hcAsciiTable,
     hcCalculator,
+    hcPuzzle,
+    hcHanoi,
+    hcTron,
 } = TV_HELP_CONTEXTS;
 
 const DIALOG_HELP_CONTEXTS = Object.freeze({
@@ -69,9 +72,9 @@ const DIALOG_HELP_CONTEXTS = Object.freeze({
     calendar: hcCalendar,
     ascii: hcAsciiTable,
     calc: hcCalculator,
-    puzzle: hcGames,
-    hanoi: hcGames,
-    tron: hcGames,
+    puzzle: hcPuzzle,
+    hanoi: hcHanoi,
+    tron: hcTron,
 });
 
 class TVMenuBar extends TVMenuView {

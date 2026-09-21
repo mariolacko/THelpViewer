@@ -48,7 +48,20 @@
     {
       "label": "Games",
       "topic_id": 1500,
-      "children": []
+      "children": [
+        {"label": "Puzzle", "topic_id": 2140},
+        {"label": "Tetris", "topic_id": 2150},
+        {"label": "Mines", "topic_id": 2160},
+        {"label": "BreakOut", "topic_id": 2170},
+        {"label": "Sokoban", "topic_id": 2180},
+        {"label": "Lines", "topic_id": 2190},
+        {"label": "Reversi", "topic_id": 2200},
+        {"label": "Ludo", "topic_id": 2210},
+        {"label": "Mastermind", "topic_id": 2220},
+        {"label": "Snake", "topic_id": 2230},
+        {"label": "Tower of Hanoi", "topic_id": 2240},
+        {"label": "Tron Light Cycles", "topic_id": 2250}
+      ]
     }
   ],
   "index": [],
@@ -68,10 +81,10 @@
         "│ Key              │ Action                                     │",
         "├──────────────────┼────────────────────────────────────────────┤",
         "│ F1               │ Context help                               │",
-        "│ F10              │ Activate the menu bar                     │",
-        "│ F5               │ Zoom or restore the active window         │",
-        "│ F6 / Shift-F6    │ Select next or previous window            │",
-        "│ Alt-F3           │ Close the active window                   │",
+        "│ F10              │ Activate the menu bar                      │",
+        "│ F5               │ Zoom or restore the active window          │",
+        "│ F6 / Shift-F6    │ Select next or previous window             │",
+        "│ Alt-F3           │ Close the active window                    │",
         "└──────────────────┴────────────────────────────────────────────┘",
         "",
         "Topics:",
@@ -294,7 +307,112 @@
         "Choose a mode from the system menu. Input stops the saver and restores",
         "the previously focused control."
       ]
+    },
+    "2140": {
+      "id": 2140,
+      "title": "Puzzle",
+      "content": [
+        "Move a tile next to the blank square with the mouse or arrow keys.",
+        "Solve the shuffled 4 x 4 board in as few moves as possible.",
+        "",
+        "The [H] title control opens the Puzzle Hall of Fame."
+      ]
+    },
+    "2150": {
+      "id": 2150,
+      "title": "Tetris",
+      "content": [
+        "New starts a game. Left and Right move the piece, Up rotates it and",
+        "Down drops it faster. P pauses the timer. Pentix toggles the extended",
+        "piece set.",
+        "",
+        "The game pauses whenever its window is inactive."
+      ]
+    },
+    "2160": {
+      "id": 2160,
+      "title": "Mines",
+      "content": [
+        "Reveal safe squares and mark suspected mines. A revealed number tells",
+        "how many mines touch that square.",
+        "",
+        "The timer pauses whenever the Mines window is inactive."
+      ]
+    },
+    "2170": {
+      "id": 2170,
+      "title": "BreakOut",
+      "content": [
+        "Move the paddle, keep the ball in play and clear all bricks.",
+        "Keyboard and pointer controls share the same game state.",
+        "",
+        "The animation pauses whenever the window is inactive."
+      ]
+    },
+    "2180": {
+      "id": 2180,
+      "title": "Sokoban",
+      "content": [
+        "Push every crate onto a goal. Arrow keys move the player.",
+        "Crates can be pushed but cannot be pulled, so plan each move."
+      ]
+    },
+    "2190": {
+      "id": 2190,
+      "title": "Lines",
+      "content": [
+        "Select a coloured ball and move it along a free path. Build lines to",
+        "score and remove balls before the board fills."
+      ]
+    },
+    "2200": {
+      "id": 2200,
+      "title": "Reversi",
+      "content": [
+        "Place a disc that brackets one or more opposing discs. Bracketed discs",
+        "change colour. The player with the most discs at the end wins."
+      ]
+    },
+    "2210": {
+      "id": 2210,
+      "title": "Ludo",
+      "content": [
+        "Roll the die and choose a legal piece. Move every piece around the",
+        "board and into home before the other players."
+      ]
+    },
+    "2220": {
+      "id": 2220,
+      "title": "Mastermind",
+      "content": [
+        "Build a colour guess and submit it. Feedback reports colours in the",
+        "correct position separately from correct colours in other positions."
+      ]
+    },
+    "2230": {
+      "id": 2230,
+      "title": "Snake",
+      "content": [
+        "Use the arrow keys to steer. Eat food to grow without hitting the wall",
+        "or your own body. The game pauses while its window is inactive."
+      ]
+    },
+    "2240": {
+      "id": 2240,
+      "title": "Tower of Hanoi",
+      "content": [
+        "Move the complete stack to another peg without placing a larger disc",
+        "on a smaller one. Use pointer or keyboard controls; the move history",
+        "records every completed move."
+      ]
+    },
+    "2250": {
+      "id": 2250,
+      "title": "Tron Light Cycles",
+      "content": [
+        "Steer both cycles simultaneously and avoid walls and every light trail.",
+        "The timer and movement pause whenever the game window is inactive."
+      ]
     }
   }
 }
-

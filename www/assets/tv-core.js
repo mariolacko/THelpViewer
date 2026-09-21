@@ -448,6 +448,18 @@ const TV_HELP_CONTEXTS = Object.freeze({
     hcAsciiTable: 2110,
     hcCalculator: 2120,
     hcScreenSaver: 2130,
+    hcPuzzle: 2140,
+    hcTetris: 2150,
+    hcMines: 2160,
+    hcBreakOut: 2170,
+    hcSokoban: 2180,
+    hcLines: 2190,
+    hcReversi: 2200,
+    hcLudo: 2210,
+    hcMastermind: 2220,
+    hcSnake: 2230,
+    hcHanoi: 2240,
+    hcTron: 2250,
 });
 const {
     hcNoContext,
@@ -3554,7 +3566,12 @@ class TVDialog extends TVWindow {
             }
         });
         if (this.closeButton) {
-            this.closeButton.addEventListener("mousedown", (event) => event.stopPropagation());
+            this.closeButton.addEventListener("mousedown", (event) => {
+                if (event.button !== 0) { return; }
+                event.preventDefault();
+                event.stopPropagation();
+                onClose();
+            });
             this.closeButton.addEventListener("mouseup", (event) => {
                 event.stopPropagation();
             });
