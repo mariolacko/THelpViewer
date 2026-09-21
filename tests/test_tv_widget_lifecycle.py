@@ -94,6 +94,11 @@ global.SCROLL_REPEAT_MS = 100;
 global.TRACK_CHAR = "░";
 global.DISABLED_TRACK_CHAR = "─";
 global.THUMB_CHAR = "█";
+global.TVRect = class {};
+global.TVView = class {
+    constructor() { this.root = null; }
+    bindRoot(root) { this.root = root; return this; }
+};
 
 let observer;
 class FakeResizeObserver {
@@ -121,7 +126,7 @@ frame.closest = (selector) => selector === ".tv-client-row" ? host : null;
 frame.parentElement = host;
 frame.querySelector = (selector) => selector === "[data-tv-viewport]" ? viewport : null;
 
-const scrollbar = new TestScrollbar(frame);
+const scrollbar = new TestScrollbar(new TVRect()).bindRoot(frame);
 if (!viewport.listeners.has("scroll") || !window.listeners.has("resize") || !document.listeners.has("mouseup")) {
     throw new Error("scrollbar did not bind its global resources");
 }

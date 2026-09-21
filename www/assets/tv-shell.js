@@ -4,7 +4,9 @@
 const TV = window.THelpViewerTV = window.THelpViewerTV || {};
 const {
     TVAppContext,
-    TVWidget,
+    TVRect,
+    TVRenderer,
+    TVView,
     TVStaticText,
     TVMenuView,
     TVMenuItem,
@@ -30,7 +32,7 @@ const {
     TVAsciiTableDialog,
     TVCalculatorDialog,
     TVColorsDialog,
-    TVWidgetGalleryDialog,
+    TVViewGalleryDialog,
     TVMidiPlayerDialog,
     TVSearchDialog,
     TVScreenSaver,
@@ -50,8 +52,8 @@ const {
 } = TV_HELP_CONTEXTS;
 
 class TVMenuBar extends TVMenuView {
-    constructor(container, context) {
-        super(container);
+    constructor(bounds, context) {
+        super(bounds);
         this.context = context;
     }
 
@@ -86,9 +88,7 @@ class TVMenuBar extends TVMenuView {
     }
 
     renderPopup() {
-        return new TVMenuBox({
-            attrs: { "data-tv-menu-popup": true, hidden: true },
-            items: this.menuActions().map((entry) => {
+        return TVRenderer.configure(new TVMenuBox(new TVRect(), this.menuActions().map((entry) => {
                 if (entry.type === "separator") {
                     return '<div class="tv-menu-popup-separator" aria-hidden="true">'
                         + '<span class="tv-border-corner">├</span>'
@@ -102,10 +102,9 @@ class TVMenuBar extends TVMenuView {
                         sub.type === "saver" ? "saver-start" : "dialog-open",
                         sub.type === "saver" ? sub.mode : sub.dialog,
                     ));
-                    const subPopup = new TVMenuBox({
+                    const subPopup = TVRenderer.configure(new TVMenuBox(new TVRect(), subItems), {
                         className: "tv-menu-popup tv-submenu-popup",
-                        attrs: { "data-tv-submenu-popup": true, hidden: true },
-                        items: subItems,
+                        attributes: { "data-tv-submenu-popup": true, hidden: true },
                     }).renderMarkup();
                     return `<div class="tv-submenu-root" data-tv-submenu-root>`
                         + `<button type="button" class="tv-menu-popup-item tv-submenu-toggle" data-tv-submenu-toggle>`
@@ -126,7 +125,8 @@ class TVMenuBar extends TVMenuView {
                     action.command,
                     action.value,
                 );
-            }),
+            })), {
+            attributes: { "data-tv-menu-popup": true, hidden: true },
         }).renderMarkup();
     }
 
@@ -141,9 +141,9 @@ class TVMenuBar extends TVMenuView {
     }
 }
 
-class TVStatusLine extends TVWidget {
-    constructor(container, context) {
-        super(container);
+class TVStatusLine extends TVView {
+    constructor(bounds, context) {
+        super(bounds);
         this.context = context;
     }
 
@@ -196,11 +196,11 @@ function buildAppChrome() {
     const context = new TVAppContext();
 
     if (menuBar) {
-        new TVMenuBar(menuBar, context).render();
+        new TVMenuBar(new TVRect(), context).bindRoot(menuBar).render();
     }
 
     if (statusLine) {
-        new TVStatusLine(statusLine, context).render();
+        new TVStatusLine(new TVRect(), context).bindRoot(statusLine).render();
     }
 }
 
@@ -707,10 +707,13 @@ class TVApplication {
     initShellWidgets() {
         const desktop = document.querySelector(".tv-desktop") || document.body;
         const hostWindow = document.querySelector("[data-tv-window]");
-        this.desktopView = new TVDesktop(desktop);
+        this.desktopView = new TVDesktop(new TVRect()).bindRoot(desktop);
         this.dialogManager = this.desktopView.dialogManager;
         setElementHelpContext(hostWindow, hcHelpViewer);
-        this.scrollbars = Array.from(document.querySelectorAll("[data-tv-scroll-frame]"), (frame) => new TVScrollBar(frame));
+        this.scrollbars = Array.from(
+            document.querySelectorAll("[data-tv-scroll-frame]"),
+            (frame) => new TVScrollBar(new TVRect()).bindRoot(frame),
+        );
         this.resizers = Array.from(document.querySelectorAll("[data-tv-window]"), (windowElement) => new TurboVisionWindowResizer(windowElement));
         const hostResizer = this.resizers.find((resizer) => resizer.windowElement === hostWindow);
         this.dialogManager.setHostWindow(hostWindow, hostWindow ? {
@@ -743,7 +746,7 @@ class TVApplication {
         this.registerDialog("calc", () => new TVCalculatorDialog(desktop));
         this.registerDialog("midi", () => new TVMidiPlayerDialog(desktop));
         this.registerDialog("colors", () => new TVColorsDialog(desktop));
-        this.registerDialog("widgets", () => new TVWidgetGalleryDialog(desktop));
+        this.registerDialog("widgets", () => new TVViewGalleryDialog(desktop));
         this.searchDialog = this.registerDialog("search", () => new TVSearchDialog(desktop));
         this.contextHelpDialog = this.registerDialog(
             "contexthelp",

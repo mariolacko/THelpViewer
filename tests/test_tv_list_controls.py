@@ -32,20 +32,21 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "bodyClass" not in dialog_signature
     assert "closeAttrs" not in dialog_signature
     assert "bodyMarkup" not in dialog_signature
-    assert "class TVListViewer extends TVWidget" in source
+    assert "class TVListViewer extends TVView" in source
     assert "class TVListBox extends TVListViewer" in source
-    assert "class TVCluster extends TVWidget" in source
+    assert "class TVCluster extends TVView" in source
     assert "class TVCheckBoxes extends TVCluster" in source
     assert "class TVRadioButtons extends TVCluster" in source
     assert "class TVMultiCheckBoxes extends TVCluster" in source
-    assert "class TVTerminal extends TVWidget" in source
-    assert "class TVEditor extends TVWidget" in source
+    assert "class TVTerminal extends TVView" in source
+    assert "class TVEditor extends TVView" in source
     assert "class TVOutline extends TVVerticalListViewer" in source
-    assert "class TVMenuView extends TVWidget" in source
-    assert "class TVMenuItem extends TVWidget" in source
+    assert "class TVMenuView extends TVView" in source
+    assert "class TVMenuItem extends TVView" in source
     assert "class TVMenuBox extends TVMenuView" in source
-    assert "class TVStatusItem extends TVWidget" in source
+    assert "class TVStatusItem extends TVView" in source
     assert "class TVDesktop extends TVGroup" in source
+    assert "class TVScrollBar extends TVView" in source
     assert "static titleControlMarkup({" in source
     assert "static createTitleControl(options = {})" in source
     assert '<button class="tv-close-control"' in source
@@ -55,26 +56,17 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert source.count("startRepeat(event, axis, direction)") == 1
     assert 'this.root?.querySelector(".tv-scrollbar-y")' in source
     assert "setScrollViewport(viewport = null, scrollbarWidget = null)" in source
-    assert 'popup._tvMenuPopupScrollbar = main ? new TVScrollBar(main) : null' in source
-    group_signature = source[
-        source.index("class TVGroup extends TVWidget"):
-        source.index("} = {}) {", source.index("class TVGroup extends TVWidget"))
-    ]
-    button_signature = source[
-        source.index("class TVButton extends TVWidget"):
-        source.index("} = {}) {", source.index("class TVButton extends TVWidget"))
-    ]
-    static_text_signature = source[
-        source.index("class TVStaticText extends TVWidget"):
-        source.index("} = {}) {", source.index("class TVStaticText extends TVWidget"))
-    ]
+    assert 'popup._tvMenuPopupScrollbar = main ? new TVScrollBar(new TVRect()).bindRoot(main) : null' in source
+    group_signature = source[source.index("class TVGroup extends TVView"):source.index("this.children = []", source.index("class TVGroup extends TVView"))]
+    button_signature = source[source.index("class TVButton extends TVView"):source.index("this.commandData = {}", source.index("class TVButton extends TVView"))]
+    static_text_signature = source[source.index("class TVStaticText extends TVView"):source.index("this.text =", source.index("class TVStaticText extends TVView"))]
     assert "className" not in group_signature
     assert "attrs" not in group_signature
     assert "className" not in button_signature
     assert "attrs" not in button_signature
     assert "role" not in button_signature
     assert "name" not in button_signature
-    assert "command = \"\"" in button_signature
+    assert "constructor(bounds, title, command, flags = bfNormal)" in button_signature
     assert "flags = bfNormal" in button_signature
     assert "defaultButton" not in button_signature
     assert "className" not in static_text_signature
@@ -83,7 +75,14 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "tag" not in static_text_signature
     assert "buttonKind" not in source
     assert 'static roleClassNames(role = "")' in source
-    assert "commandData = {}" in button_signature
+    assert "constructor(bounds = new TVRect())" in group_signature
+    assert "constructor(bounds, text)" in static_text_signature
+    assert "constructor(bounds, numCols = 1)" in source[source.index("class TVListViewer"):source.index("class TVListBox")]
+    assert "constructor(bounds, hScrollBar = null, vScrollBar = null, indicator = null, bufSize = 65535)" in source
+    assert 'constructor(bounds, title = "", number = 0)' in source
+    assert "constructor(bounds, options = 0)" in source[source.index("class TVScrollBar"):source.index("const TurboVisionScrollbar")]
+    assert "class TVButtonStrip" not in source
+    assert "class TVMarkupList" not in source
 
     dialogs = DIALOG_PATHS[0].read_text(encoding="utf-8")
     assert DIALOG_PATHS[0].read_bytes() == DIALOG_PATHS[1].read_bytes()
@@ -91,27 +90,27 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVHistoryViewer extends TVVerticalListViewer" in dialogs
     assert "class TVHistoryWindow extends TVWindow" in dialogs
     assert "class TVChangeDirectoryDialog extends TVDialog" in dialogs
-    assert "new TVOutline(this.query" in dialogs
+    assert "new TVOutline(new TVRect())" in dialogs
     assert "class TVHistoryWindow extends TVWindow" in dialogs
-    assert "static renderMarkup({ popupRole" in dialogs
+    assert "static view({ popupRole" in dialogs
     assert "handleEscape(event)" in dialogs
     assert "event.detail" not in dialogs
     assert "this.ignoreNextClick = true" in dialogs
     assert "this.button.disabled = false" in dialogs
     assert "if (!items.length) { return false; }" not in dialogs
-    assert dialogs.count("TVHistoryWindow.renderMarkup({") == 3
-    assert dialogs.count("TVHistoryWindow.triggerMarkup({") == 3
+    assert dialogs.count("TVHistoryWindow.view({") == 3
+    assert dialogs.count("TVHistoryWindow.triggerView({") == 3
     assert "content: fileOpenMain" in dialogs
     assert "content: changeDirectoryMain" in dialogs
     assert "content: findMain" in dialogs
     assert "content: galleryMain" in dialogs
     assert "content: colorsMain" in dialogs
     assert "content: main" in dialogs
-    assert 'role: "midi-source-presets",\n                    children: sourceButtons' in dialogs
-    assert "new TVMarkupList({" in dialogs
+    assert 'presentation: "midi-source-presets"' in dialogs
+    assert "TVRenderer.markup(" in dialogs
     assert '<button type="button" class="tv-file-open-history-button' not in dialogs
     assert "bodyMarkup: `" not in dialogs
-    assert "new TVFileList(this.query" in dialogs
+    assert "new TVFileList(new TVRect(), 2)" in dialogs
     assert "new TVHistoryWindow({" in dialogs
     assert 'TVFrame.titleControlMarkup({' in dialogs
     assert '"data-tv-history-close": true' in dialogs
@@ -167,15 +166,28 @@ class FakeElement {
     getBoundingClientRect() { return { top: 0 }; }
 }
 
-class TVWidget {
-    constructor(root = null) { this.root = root; }
+class TVView {
+    constructor() { this.root = null; }
+    bindRoot(root) { this.root = root; return this; }
     query(selector) { return this.root ? this.root.querySelector(selector) : null; }
+}
+
+class TVRect {}
+class TVRenderer {
+    static states = new WeakMap();
+    static configure(view, options = {}) {
+        this.states.set(view, { ...this.state(view), ...options });
+        return view;
+    }
+    static state(view) { return this.states.get(view) || {}; }
 }
 
 global.escapeHtml = (value) => String(value);
 global.attrsToString = () => "";
 global.displayCp437Char = (value) => String(value);
 global.measureCells = () => ({ width: 8, height: 16 });
+global.TVRect = TVRect;
+global.TVRenderer = TVRenderer;
 global.TRACK_CHAR = "░";
 global.DISABLED_TRACK_CHAR = "─";
 global.THUMB_CHAR = "█";
@@ -196,6 +208,7 @@ global.TVScrollBar = class {
         this.refreshCalls = 0;
         this.axes = { y: { root: scrollbar } };
     }
+    bindRoot() { return this; }
     refresh() { this.refreshCalls += 1; }
     setActive(active) {
         this.active = Boolean(active);
@@ -242,7 +255,9 @@ eval(source.slice(start, end) + "\nglobalThis.TestList = TVVerticalListViewer;")
 
 const selected = [];
 const activated = [];
-const list = new TestList(root, { itemAttrName: "data-test-index" });
+const list = TVRenderer.configure(new TestList(new TVRect()), {
+    itemAttrName: "data-test-index",
+}).bindRoot(root);
 list.items = ["zero", "one", "two", "three", "four"];
 list.select(1, { scroll: false });
 list.bind({
@@ -307,7 +322,8 @@ def test_label_and_search_use_native_association_and_separate_activation():
     search = dialogs[dialogs.index("class TVSearchDialog"):]
     search_binding = search[search.index("this.resultsBox.bind({"):search.index("this.okButton.addEventListener")]
 
-    assert 'const tag = this.forId ? "label" : "span"' in label
+    assert 'const tag = this.link ? "label" : "span"' in label
+    assert 'for="${escapeHtml(this.link.viewId)}"' in label
     assert "openSelected()" not in search_binding.split("onActivate:", 1)[0]
     assert "openSelected()" in search_binding.split("onActivate:", 1)[1]
 
@@ -329,14 +345,17 @@ global.attrsToString = (attrs = {}) => Object.entries(attrs)
     .filter(([, value]) => value !== false && value !== null && value !== undefined)
     .map(([key, value]) => value === true ? key : `${key}="${escapeHtml(value)}"`)
     .join(" ");
-global.TVWidget = class { constructor(root = null) { this.root = root; } };
-global.TVMarkupList = class {
-    constructor({ className = "", attrs = {}, items = [] } = {}) {
-        this.className = className;
-        this.attrs = attrs;
-        this.items = items;
+global.TVRect = class {};
+global.TVView = class {
+    constructor() { this.viewId = "test-view"; }
+    static roleClassNames(value = "") { return value; }
+};
+global.TVRenderer = class {
+    static state() { return {}; }
+    static viewAttrs(_view, attrs = {}) { return attrs; }
+    static markup(items, options = {}) {
+        return { renderMarkup: () => `<div class="${options.className || ""}" ${attrsToString(options.attributes || {})}>${items.join("")}</div>` };
     }
-    renderMarkup() { return `<div class="${this.className}" ${attrsToString(this.attrs)}>${this.items.join("")}</div>`; }
 };
 
 const choiceStart = source.indexOf("let tvChoiceGroupId");
@@ -344,12 +363,10 @@ const choiceEnd = source.indexOf("\nclass TVButton extends", choiceStart);
 eval(source.slice(choiceStart, choiceEnd)
     + "\nglobalThis.TestChecks = TVCheckBoxes; globalThis.TestRadios = TVRadioButtons;");
 
-const checks = new TestChecks({
-    options: [
+const checks = new TestChecks(new TVRect(), [
         { label: "One < two", checked: true, value: "one" },
         { label: "Disabled", disabled: true },
-    ],
-}).renderMarkup();
+    ]).renderMarkup();
 if (!checks.includes('type="checkbox"') || !checks.includes("checked") || !checks.includes("disabled")) {
     throw new Error("checkbox group does not expose native state");
 }
@@ -360,11 +377,10 @@ if (!checks.includes('class="tv-checkbox-item is-disabled"')) {
     throw new Error("disabled checkbox does not expose its palette state");
 }
 
-const radios = new TestRadios({
-    name: "mode",
-    options: [{ label: "A", checked: true }, { label: "B" }],
-}).renderMarkup();
-if ((radios.match(/type="radio"/g) || []).length !== 2 || (radios.match(/name="mode"/g) || []).length !== 2) {
+const radios = new TestRadios(new TVRect(), [{ label: "A", checked: true }, { label: "B" }]).renderMarkup();
+const radioNames = Array.from(radios.matchAll(/name="([^"]+)"/g), (match) => match[1]);
+if ((radios.match(/type="radio"/g) || []).length !== 2
+    || radioNames.length !== 2 || radioNames[0] !== radioNames[1]) {
     throw new Error("radio options are not one native group");
 }
 

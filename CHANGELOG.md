@@ -34,6 +34,23 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Replaced the browser-shaped TVision object API with positional,
+  Turbo Vision-style construction for the shared base view, groups, static
+  text, labels, input lines, buttons, clusters, info boxes, terminals and menu
+  boxes, as well as lists, outlines, editors, scroll areas, scrollbars, windows
+  and the desktop. `TVGroup` now accepts only `TVRect` and inserted `TVView` children;
+  `TVInputLine` no longer accepts caller-provided DOM ids or attributes, and
+  `TVLabel` links directly to its input object. Constructors no longer accept
+  browser roots; explicit `bindRoot()` is the renderer boundary. DOM classes,
+  generated ids, ARIA and data hooks are isolated in `TVRenderer`.
+- Renamed the common `TVWidget` base to `TVView`, removed the redundant
+  `TVButtonStrip` and public `TVMarkupList`, and made raw shared markup an
+  explicit renderer concern. Invalid non-view children now fail loudly rather
+  than disappearing from a group.
+- Changed the lower status-line text from the active window/dialog caption to
+  the first concise sentence of its `helpCtx` topic, restoring an actual
+  context-sensitive mini-help hint. HELP navigation can no longer override it
+  by passing the current topic title through a second status-text channel.
 - Replaced the overloaded `TVButton.buttonKind` path with real
   `TVMenuItem`/`TVStatusItem` objects; `TVButton` is again reserved for command
   buttons, uses Turbo Vision `bf...` flags and derives its browser presentation
@@ -67,7 +84,7 @@
   Calendar, Colors, MIDI Player, Find and Search now assemble their client
   controls from the existing TVision JS groups, labels, inputs, lists,
   clusters, buttons and static text instead of dialog-specific HTML templates
-- Let the shared `TVFrame` render a `TVWidget` or an array of widget sections
+- Let the shared `TVFrame` render a `TVView` or an array of view sections
   directly, so concrete dialogs no longer need to flatten their object tree
   before passing it to `TVDialog`
 - Rebuilt dynamic ASCII cells, calendar cells, Colors selectors/sample and

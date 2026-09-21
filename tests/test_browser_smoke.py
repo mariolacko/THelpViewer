@@ -226,9 +226,11 @@ async function run() {
             open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
             status: dialog?.querySelector('[data-tv-file-open-detail]')?.textContent.trim() || '',
             historyHidden: Boolean(history?.hidden && getComputedStyle(history).display === 'none'),
+            statusHint: document.querySelector('[data-tv-status-hint]')?.textContent.trim() || '',
         };
     })()`);
-    if (!loadingOpen.open || loadingOpen.status !== 'Loading HELP/DOCS...' || !loadingOpen.historyHidden) {
+    if (!loadingOpen.open || loadingOpen.status !== 'Loading HELP/DOCS...' || !loadingOpen.historyHidden
+        || loadingOpen.statusHint !== 'Choose a HELP or Docs file from the two-column list.') {
         throw new Error(`Open did not show its loading state immediately: ${JSON.stringify(loadingOpen)}`);
     }
     await evaluate(`new Promise((resolve, reject) => {
@@ -294,11 +296,13 @@ async function run() {
             inlineNavigation: Boolean(help?.querySelector('.tv-context-help-nav')),
             statusBack: Boolean(document.querySelector('[data-tv-status-line] [data-tv-bundle-back]')),
             statusContents: Boolean(document.querySelector('[data-tv-status-line] [data-tv-bundle-help-contents]')),
+            statusHint: document.querySelector('[data-tv-status-hint]')?.textContent.trim() || '',
         };
     })()`);
     if (!fileOpenHelp.helpOpen || fileOpenHelp.topic !== 'Open a File' || fileOpenHelp.context !== '2010'
         || !fileOpenHelp.standardWindow || fileOpenHelp.links < 2 || !fileOpenHelp.standardScrollbar
-        || fileOpenHelp.inlineNavigation || !fileOpenHelp.statusBack || !fileOpenHelp.statusContents) {
+        || fileOpenHelp.inlineNavigation || !fileOpenHelp.statusBack || !fileOpenHelp.statusContents
+        || fileOpenHelp.statusHint !== 'Links open topics or external companion HELP files.') {
         throw new Error(`File Open context help is broken: ${JSON.stringify(fileOpenHelp)}`);
     }
     const topContentsMenu = await evaluate(`(() => {
@@ -389,7 +393,7 @@ async function run() {
         };
     })()`);
     if (!calculatorView.open || calculatorView.foreground !== 'rgb(255, 255, 255)'
-        || calculatorView.hint !== 'Calculator') {
+        || calculatorView.hint !== 'Use number and operation buttons or the keyboard.') {
         throw new Error(`Calculator display/status palette is broken: ${JSON.stringify(calculatorView)}`);
     }
     await evaluate(`document.querySelector('[data-tv-calc-close]')?.click()`);
@@ -442,8 +446,9 @@ async function run() {
     if (docColors.viewport.join() !== editorColors.join() || docColors.content.join() !== editorColors.join()) {
         throw new Error(`Documentation does not use the Editor palette: ${JSON.stringify(docColors)}`);
     }
-    if (!docColors.caption || docColors.statusHint !== docColors.caption) {
-        throw new Error(`Status line did not show the active document hint: ${JSON.stringify(docColors)}`);
+    if (!docColors.caption
+        || docColors.statusHint !== 'Markdown is displayed with the read-only Editor palette.') {
+        throw new Error(`Status line did not show contextual mini help: ${JSON.stringify(docColors)}`);
     }
     const docPaletteIsolation = await evaluate(`(() => {
         const TV = window.THelpViewerTV;
@@ -860,10 +865,10 @@ async function run() {
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Widget Gallery'
         );
         if (!dialog) { return { open: false }; }
-        const label = dialog.querySelector('label[for="tv-widget-gallery-name"]');
-        const input = dialog.querySelector('#tv-widget-gallery-name');
+        const label = dialog.querySelector('label[for]');
+        const input = dialog.querySelector('[data-tv-gallery-name]');
         label.click();
-        const labelFocus = document.activeElement === input;
+        const labelFocus = label.htmlFor === input.id && document.activeElement === input;
         dialog.querySelector('[data-tv-gallery-apply]').click();
         return {
             open: true,

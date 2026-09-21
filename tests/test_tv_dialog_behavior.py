@@ -107,7 +107,7 @@ function buildDialog(options = {}) {
         return null;
     };
     overlay.querySelectorAll = () => [];
-    TV.TVWidget.fromHTML = () => overlay;
+    TV.TVView.fromHTML = () => overlay;
     const instance = new TV.TVDialog(new TV.TVRect(0, 0, 40, 12), "Test", {
         desktop: document.body,
         ...options,
@@ -206,18 +206,20 @@ const nonModalMarkup = TV.TVFrame.dialogMarkup({
 const objectBodyMarkup = TV.TVFrame.dialogMarkup({
     ariaLabel: "Object body",
     title: "Object body",
-    bodyMarkup: new TV.TVGroup({
-        role: "object-body",
-        children: [new TV.TVStaticText({ text: "TV object" })],
-    }),
+    bodyMarkup: TV.TVRenderer.configure(
+        new TV.TVGroup(new TV.TVRect()).insertAll([
+            new TV.TVStaticText(new TV.TVRect(), "TV object"),
+        ]),
+        { presentation: "object-body" },
+    ),
     footerMarkup: "",
 });
 const objectSectionsMarkup = TV.TVFrame.dialogMarkup({
     ariaLabel: "Object sections",
     title: "Object sections",
     bodyMarkup: [
-        new TV.TVStaticText({ text: "First" }),
-        new TV.TVStaticText({ text: "Second" }),
+        new TV.TVStaticText(new TV.TVRect(), "First"),
+        new TV.TVStaticText(new TV.TVRect(), "Second"),
     ],
     footerMarkup: "",
 });

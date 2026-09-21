@@ -129,8 +129,8 @@ if (H.hcNoContext !== 0 || H.hcFileOpen !== 2010 || TV.hcDocumentViewer !== 2080
 }
 
 const childRoot = new FakeElement();
-const child = new TV.TVWidget(childRoot).setHelpCtx(H.hcFind);
-const group = new TV.TVGroup({ children: [child], helpCtx: H.hcDialog });
+const child = new TV.TVView(new TV.TVRect()).bindRoot(childRoot).setHelpCtx(H.hcFind);
+const group = new TV.TVGroup(new TV.TVRect()).insertAll([child]).setHelpCtx(H.hcDialog);
 if (child.owner !== group || group.getHelpCtx() !== H.hcDialog) {
     throw new Error("TVGroup owner or fallback help context is broken");
 }

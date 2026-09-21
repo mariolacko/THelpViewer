@@ -28,25 +28,28 @@ Core widget hierarchy and infrastructure.
 
 ### Widget Base Classes
 
-- **TVWidget** — Base for all UI components. `constructor(root=null)`.
+- **TVView** — Base for all UI components. `constructor(bounds=TVRect())`,
+  following `TView(const TRect&)`. `bindRoot()` is the private browser binding
+  step and is not part of view construction.
   `setHelpCtx()` and `getHelpCtx()` attach or resolve a Turbo Vision-style
   context identifier.
 - **TVRect** — Character-cell bounds used by windows and dialogs. It mirrors
   Turbo Vision's `(x1, y1, x2, y2)` rectangle convention.
-- **TVStaticText** — Renders static text with character-cell bounds. It accepts
-  text, semantic formatting and bounds, but no HTML tag or arbitrary DOM
-  attributes. `getText()`, `setText()` and `draw()` mirror the basic
-  `TStaticText` contract.
-- **TVLabel** — Text label with hotkey markup. With `forId` it emits a native
-  `<label for="…">`; otherwise it emits a presentational `<span>`.
-- **TVInputLine** — `<input>` element. `constructor({className, attrs})`.
-- **TVGroup** — Container with children.
-  `constructor({tag, role, name, children, html, x, y, w, h, helpCtx})`.
-  Concrete views supply a semantic renderer role/name rather than raw DOM
-  classes or attributes.
-  `setCurrent(child)` makes `getHelpCtx()` inherit from the current child,
+- **TVStaticText** — `constructor(bounds, text)`. `getText()`, `setText()` and
+  `draw()` mirror the basic `TStaticText` contract.
+- **TVLabel** — `constructor(bounds, text, link)`. The third argument is the
+  target `TVInputLine` object; the browser renderer creates any native id/for
+  pair internally.
+- **TVInputLine** — `constructor(bounds, maxLen)`, plus `getData()`,
+  `setData()` and disabled-state handling. It accepts no DOM id, attributes,
+  class or style.
+- **TVGroup** — `constructor(bounds)`. Children are added with `insert()` or
+  `insertAll()`; only `TVView` instances are accepted. `setCurrent(child)`
+  makes `getHelpCtx()` inherit from the current child,
   matching the relevant part of `TGroup::getHelpCtx()`.
-- **TVListViewer** — Static list. `constructor({tag, className, attrs, items})`.
+- **TVListViewer** — `constructor(bounds, numCols)`. Items and selection are
+  supplied through `setItems()`/`select()`; browser row renderers and the DOM
+  root are attached separately through `TVRenderer` and `bindRoot()`.
 - **TVListBox** — Interactive selectable list. `setItems(items, index)`,
   `select(index)`, `bind({onSelect, onActivate})`; click selects and
   double-click/Enter activates.
@@ -60,7 +63,8 @@ Core widget hierarchy and infrastructure.
 - **TVOutline** — Tree-oriented `TVVerticalListViewer` with shared selection,
   scrolling and activation plus expand/collapse state and Left/Right keyboard
   navigation. HELP Contents and Change Directory both use it.
-- **TVVerticalScrollArea** — Generic scroll container.
+- **TVVerticalScrollArea** — Bounds-first generic scroll container with a
+  separately bound renderer root.
 - **TVMenuView** — Shared menu rendering base.
 - **TVMenuBox** — `TVMenuView` popup subclass.
 - **TVCheckBoxes** — Native checkbox group rendered with DOS `[ ]` / `[X]`
@@ -71,16 +75,25 @@ Core widget hierarchy and infrastructure.
   DOS marks, keyboard-focusable buttons, disabled state and `aria-checked`.
 - **TVTerminal** — Bounded append-only line buffer. `append(text)`, `clear()`
   and `bind(root)` update a fixed set of framed terminal rows.
-- **TVEditor** and **TVIndicator** — Read-only document control with selection,
+- **TVEditor** and **TVIndicator** — `TVEditor(bounds, hScrollBar, vScrollBar,
+  indicator, bufSize)` is a read-only document control with selection,
   `find()`, `findNext()`, cursor position reporting and explicit lifecycle.
   Markdown Docs windows instantiate this pair instead of using a styled
   viewport alone.
-- **TVButtonStrip** — Row of buttons.
+- **TVScrollBar** — `TVScrollBar(bounds, options)` is the sole scrollbar view.
+  Windows, menus and list viewers bind it to their rendered frame; no second
+  scrolling implementation exists.
+- **TVWindow** / **TVDesktop** — Bounds-first groups. `TVWindow` receives title
+  and number; browser roots are attached with `bindRoot()` after construction.
 - **TVButton** — Dialog command button. Like Turbo Vision's `TButton`, it is
-  identified by its title, command and `bfNormal`/`bfDefault`/`bfLeftJust`/
+  constructed as `TVButton(bounds, title, command, flags)` and identified by
+  its title, command and `bfNormal`/`bfDefault`/`bfLeftJust`/
   `bfBroadcast` flags; `draw()`, `press()`,
   `makeDefault()` and `setState()` provide the basic control operations. It no
   longer represents menus or status-line items and has no `buttonKind`.
+- **TVRenderer** — The one browser adapter for presentation classes, generated
+  element ids, data hooks, ARIA and the few shared raw-markup fragments. These
+  details are not accepted by public TVision constructors.
 - **TVMenuItem** / **TVStatusItem** — Command descriptors drawn by
   `TVMenuView`/`TVMenuBox` and the status line, matching Turbo Vision's
   separation between `TButton`, `TMenuItem` and `TStatusItem`.
@@ -301,7 +314,7 @@ and palette presentation, not control identity or behaviour.
 | Class | Purpose |
 |-------|---------|
 | `TVAboutDialog` | About / splash screen |
-| `TVWidgetGalleryDialog` | Interactive gallery for shared labels, inputs, choices, list focus/activation and scrolling, static/framed information, buttons and message boxes |
+| `TVViewGalleryDialog` | Interactive gallery for shared labels, inputs, choices, list focus/activation and scrolling, static/framed information, buttons and message boxes |
 | `TVFileOpenDialog` | Keyboard-accessible virtual file picker for generated HELP bundles and Markdown documentation, with persistent history |
 | `TVChangeDirectoryDialog` | Turbo Vision-style virtual directory tree with Chdir, Revert and shared persistent History |
 | `TVFindDialog` | Active-window Find dialog with persistent shared History |

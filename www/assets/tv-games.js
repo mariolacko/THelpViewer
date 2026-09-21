@@ -571,11 +571,12 @@ const {
     renderHotkeyMarkup,
     TVDialog,
     TVRect,
+    TVRenderer,
     TVStaticText,
     TVGroup,
     TVButton,
+    bfNormal,
     bfDefault,
-    TVButtonStrip,
     TVLabel,
     TVInputLine,
     TVInfoBox,
@@ -630,24 +631,18 @@ function showBestNamePrompt(ownerDialog, score, callback, {
     scoreLabel = "Score",
 } = {}) {
     const desktop = ownerDialog?.desktop || document.querySelector(".tv-desktop") || document.body;
-    const body = new TVGroup({
-        w: 28, h: 10,
-        children: [
-            new TVStaticText({ x: 0, y: 1, w: 28, align: "center", title: true, text: heading }),
-            new TVStaticText({ x: 0, y: 3, w: 28, align: "center", text: `${scoreLabel}: ${score}` }),
-            new TVLabel({ x: 1, y: 5, w: 26, text: "Your name:" }),
-            new TVInputLine({
-                x: 1, y: 6, w: 26,
-                attrs: {
-                    "data-tv-best-name-input": true,
-                    maxlength: "15",
-                    value: "",
-                    placeholder: "Player",
-                },
-            }),
-            new TVButton({ x: 9, y: 8, w: 10, flags: bfDefault, command: "best-ok", label: '~O~K' }),
-        ],
-    });
+    const nameInput = TVRenderer.configure(
+        new TVInputLine(new TVRect(1, 6, 27, 6), 15),
+        { placeholder: "Player", viewName: "best-name-input" },
+    );
+    const nameLabel = new TVLabel(new TVRect(1, 5, 27, 5), "Your name:", nameInput);
+    const body = new TVGroup(new TVRect(0, 0, (0) + (28), (0) + (10))).insertAll([
+            TVRenderer.configure(new TVStaticText(new TVRect(0, 1, (0) + (28), 1), heading), { align: "center", title: true }),
+            TVRenderer.configure(new TVStaticText(new TVRect(0, 3, (0) + (28), 3), `${scoreLabel}: ${score}`), { align: "center" }),
+            nameLabel,
+            nameInput,
+            new TVButton(new TVRect(9, 8, (9) + (10), 8), '~O~K', "best-ok", bfDefault),
+        ]);
     const dlg = new TVDialog(new TVRect(0, 0, 32, 13), "High Score", {
         desktop,
         viewName: "best",
@@ -786,14 +781,11 @@ function formatHallOfFameScore(game, entry) {
 function showHallOfFame(ownerDialog, game) {
     const config = hallOfFameConfig(game);
     const entries = loadHallOfFame(game);
-    const row = (kind, rank, player, score) => new TVGroup({
-        role: kind,
-        children: [
-            new TVStaticText({ text: rank }),
-            new TVStaticText({ text: player }),
-            new TVStaticText({ text: score }),
-        ],
-    });
+    const row = (kind, rank, player, score) => TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
+            new TVStaticText(new TVRect(), rank),
+            new TVStaticText(new TVRect(), player),
+            new TVStaticText(new TVRect(), score),
+        ]), { presentation: kind });
     const rows = entries.length
         ? entries.map((entry, index) => row(
             "hall-row",
@@ -801,11 +793,8 @@ function showHallOfFame(ownerDialog, game) {
             entry.name,
             formatHallOfFameScore(game, entry),
         ))
-        : [new TVStaticText({ textKind: "hall-empty", text: "No scores yet." })];
-    const body = new TVGroup({
-        role: "hall-main",
-        children: [row("hall-header", "#", "Player", "Score"), ...rows],
-    });
+        : [TVRenderer.configure(new TVStaticText(new TVRect(), "No scores yet."), { presentation: "hall-empty" })];
+    const body = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([row("hall-header", "#", "Player", "Score"), ...rows]), { presentation: "hall-main" });
     const dlg = new TVDialog(new TVRect(0, 0, 45, 15), `${config.title} Hall of Fame`, {
         desktop: ownerDialog?.desktop || document.querySelector(".tv-desktop") || document.body,
         viewName: "hall",
@@ -843,21 +832,11 @@ class TVPuzzleDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const GRID_W = 12;  // 4 cols × 3ch
         const INFO_X = GRID_W + 1;
-        const puzzleMain = new TVGroup({
-            w: INFO_X + 6, h: 4,
-            children: [
-                new TVStaticText({
-                    x: 0, y: 0, w: GRID_W, h: 4,
-                    name: "puzzle-grid",
-                }),
-                new TVStaticText({ x: INFO_X, y: 0, w: 6, text: "Move" }),
-                new TVStaticText({
-                    x: INFO_X, y: 1, w: 6,
-                    name: "puzzle-moves",
-                    text: "0",
-                }),
-            ],
-        });
+        const puzzleMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + 6), (0) + (4))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 0, (0) + (GRID_W), (0) + (4)), ""), { viewName: "puzzle-grid" }),
+                new TVStaticText(new TVRect(INFO_X, 0, (INFO_X) + (6), 0), "Move"),
+                TVRenderer.configure(new TVStaticText(new TVRect(INFO_X, 1, (INFO_X) + (6), 1), "0"), { viewName: "puzzle-moves" }),
+            ]);
         super(new TVRect(0, 0, 20, 6), "Puzzle", {
             desktop,
             viewName: "puzzle",
@@ -1083,40 +1062,28 @@ class TVTetrisDialog extends TVDialog {
         const INFO_X = GRID_W + 1;       // 25ch
         const INFO_W = 22;               // 22ch
 
-        const infoBox = new TVInfoBox({
-            x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "score" }),
-                new TVStaticText({ name: "lines" }),
-                new TVStaticText({ name: "level" }),
-                new TVStaticText({ textKind: "info-frame", text: TVInfoBox.separator(INFO_W - 2, "Next") }),
-                new TVStaticText({ name: "tetris-preview", h: TETRIS_PREVIEW_ROWS }),
-            ],
-        });
-        const bestBox = new TVInfoBox({
-            x: INFO_X, y: 13, w: INFO_W, name: "best", title: "Best", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "best" }),
-            ],
-        });
+        const infoBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "score" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "lines" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "level" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), TVInfoBox.separator(INFO_W - 2, "Next")), { presentation: "info-frame" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 0, 0, (0) + (TETRIS_PREVIEW_ROWS)), ""), { viewName: "tetris-preview" }),
+            ]), { viewName: "info", borderPresentation: "game-border" });
+        const bestBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 13, (INFO_X) + (INFO_W), 13), "Best", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "best" }),
+            ]), { viewName: "best", borderPresentation: "game-border" });
 
-        const tetrisMain = new TVGroup({
-            w: INFO_X + INFO_W, h: 20,
-            children: [
+        const tetrisMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (20))).insertAll([
                 // Grid (left side)
-                new TVStaticText({
-                    x: 0, y: 0, w: GRID_W, h: 18,
-                    name: "tetris-grid",
-                }),
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 0, (0) + (GRID_W), (0) + (18)), ""), { viewName: "tetris-grid" }),
                 // Info panel (right side) — TVInfoBox containers
                 infoBox,
                 bestBox,
                 // Buttons
-                new TVButton({ x: INFO_X, y: 17, w: 10, command: "tetris-new", label: '~N~ew' }),
-                new TVButton({ x: INFO_X + 11, y: 17, w: 10, command: "tetris-pause", label: '~P~ause' }),
-                new TVButton({ x: INFO_X, y: 19, w: INFO_W, command: "tetris-pentix", label: 'Penti~x~' }),
-            ],
-        });
+                new TVButton(new TVRect(INFO_X, 17, (INFO_X) + (10), 17), '~N~ew', "tetris-new", bfNormal),
+                new TVButton(new TVRect(INFO_X + 11, 17, (INFO_X + 11) + (10), 17), '~P~ause', "tetris-pause", bfNormal),
+                new TVButton(new TVRect(INFO_X, 19, (INFO_X) + (INFO_W), 19), 'Penti~x~', "tetris-pentix", bfNormal),
+            ]);
 
         super(new TVRect(0, 0, 50, 24), "Tetris", {
             desktop,
@@ -1526,32 +1493,12 @@ const MINES_COUNT = 10;
 class TVMinesDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const GRID_W = MINES_COLS * 2;  // 18ch
-        const minesMain = new TVGroup({
-            w: GRID_W + 2, h: MINES_ROWS + 1,
-            children: [
-                new TVStaticText({
-                    x: 1, y: 0, w: 4,
-                    name: "mines-remaining",
-                    textKind: "mines-info-value",
-                    text: String(MINES_COUNT),
-                }),
-                new TVButton({
-                    x: 9, y: 0, w: 2,
-                    command: "mines-face",
-                    label: "☺",
-                }),
-                new TVStaticText({
-                    x: 15, y: 0, w: 4,
-                    name: "mines-timer",
-                    textKind: "mines-info-value",
-                    text: "0",
-                }),
-                new TVStaticText({
-                    x: 1, y: 1, w: GRID_W, h: MINES_ROWS,
-                    name: "mines-grid",
-                }),
-            ],
-        });
+        const minesMain = new TVGroup(new TVRect(0, 0, (0) + (GRID_W + 2), (0) + (MINES_ROWS + 1))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(1, 0, (1) + (4), 0), String(MINES_COUNT)), { viewName: "mines-remaining", presentation: "mines-info-value" }),
+                new TVButton(new TVRect(9, 0, (9) + (2), 0), "☺", "mines-face", bfNormal),
+                TVRenderer.configure(new TVStaticText(new TVRect(15, 0, (15) + (4), 0), "0"), { viewName: "mines-timer", presentation: "mines-info-value" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(1, 1, (1) + (GRID_W), (1) + (MINES_ROWS)), ""), { viewName: "mines-grid" }),
+            ]);
 
         super(new TVRect(0, 0, 22, 13), "Mines", {
             desktop,
@@ -1855,32 +1802,20 @@ class TVBreakOutDialog extends TVDialog {
         const FIELD_W = BREAK_COLS * 2;  // 28ch
         const INFO_X = FIELD_X + FIELD_W + 1;  // 30ch
         const INFO_W = 19;
-        const infoBox = new TVInfoBox({
-            x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "score" }),
-                new TVStaticText({ name: "lives" }),
-                new TVStaticText({ name: "level" }),
-            ],
-        });
-        const bestBox = new TVInfoBox({
-            x: INFO_X, y: 5, w: INFO_W, name: "best", title: "Best", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "best" }),
-            ],
-        });
-        const breakMain = new TVGroup({
-            w: INFO_X + INFO_W, h: 20,
-            children: [
-                new TVStaticText({
-                    x: FIELD_X, y: 0, w: FIELD_W, h: 20,
-                    name: "break-field",
-                }),
+        const infoBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "score" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "lives" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "level" }),
+            ]), { viewName: "info", borderPresentation: "game-border" });
+        const bestBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 5, (INFO_X) + (INFO_W), 5), "Best", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "best" }),
+            ]), { viewName: "best", borderPresentation: "game-border" });
+        const breakMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (20))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(FIELD_X, 0, (FIELD_X) + (FIELD_W), (0) + (20)), ""), { viewName: "break-field" }),
                 infoBox,
                 bestBox,
-                new TVButton({ x: INFO_X, y: 17, w: INFO_W, command: "break-new", label: '~N~ew' }),
-            ],
-        });
+                new TVButton(new TVRect(INFO_X, 17, (INFO_X) + (INFO_W), 17), '~N~ew', "break-new", bfNormal),
+            ]);
 
         super(new TVRect(0, 0, 53, 22), "BreakOut", {
             desktop,
@@ -2218,28 +2153,19 @@ class TVSokobanDialog extends TVDialog {
         const FIELD_W = 18;  // max 9 cols × 2ch
         const INFO_X = FIELD_W + 1;
         const INFO_W = 20;
-        const infoBox = new TVInfoBox({
-            x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "level" }),
-                new TVStaticText({ name: "moves" }),
-                new TVStaticText({ name: "pushes" }),
-            ],
-        });
-        const sokobanMain = new TVGroup({
-            w: INFO_X + INFO_W, h: 11,
-            children: [
-                new TVStaticText({
-                    x: 0, y: 0, w: FIELD_W, h: 10,
-                    name: "sokoban-field",
-                }),
+        const infoBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "level" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "moves" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "pushes" }),
+            ]), { viewName: "info", borderPresentation: "game-border" });
+        const sokobanMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (11))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 0, (0) + (FIELD_W), (0) + (10)), ""), { viewName: "sokoban-field" }),
                 infoBox,
-                new TVButton({ x: INFO_X, y: 6, w: 8, command: "sokoban-restart", label: '~R~estart' }),
-                new TVButton({ x: INFO_X + 11, y: 6, w: 8, command: "sokoban-undo", label: '~U~ndo' }),
-                new TVButton({ x: INFO_X, y: 9, w: 8, command: "sokoban-prev", label: '< Prev' }),
-                new TVButton({ x: INFO_X + 11, y: 9, w: 8, command: "sokoban-next", label: 'Next >' }),
-            ],
-        });
+                new TVButton(new TVRect(INFO_X, 6, (INFO_X) + (8), 6), '~R~estart', "sokoban-restart", bfNormal),
+                new TVButton(new TVRect(INFO_X + 11, 6, (INFO_X + 11) + (8), 6), '~U~ndo', "sokoban-undo", bfNormal),
+                new TVButton(new TVRect(INFO_X, 9, (INFO_X) + (8), 9), '< Prev', "sokoban-prev", bfNormal),
+                new TVButton(new TVRect(INFO_X + 11, 9, (INFO_X + 11) + (8), 9), 'Next >', "sokoban-next", bfNormal),
+            ]);
 
         super(new TVRect(0, 0, 44, 18), "Sokoban", {
             desktop,
@@ -2469,31 +2395,19 @@ class TVLinesDialog extends TVDialog {
         const GRID_W = LINES_SIZE * 2;  // 18ch
         const INFO_X = GRID_W + 1;
         const INFO_W = 18;
-        const infoBox = new TVInfoBox({
-            x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "score" }),
-                new TVStaticText({ name: "best" }),
-            ],
-        });
-        const nextBox = new TVInfoBox({
-            x: INFO_X, y: 5, w: INFO_W, name: "next", title: "Next", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "next" }),
-            ],
-        });
-        const linesMain = new TVGroup({
-            w: INFO_X + INFO_W, h: LINES_SIZE + 1,
-            children: [
-                new TVStaticText({
-                    x: 0, y: 0, w: GRID_W, h: LINES_SIZE,
-                    name: "lines-grid",
-                }),
+        const infoBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "score" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "best" }),
+            ]), { viewName: "info", borderPresentation: "game-border" });
+        const nextBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 5, (INFO_X) + (INFO_W), 5), "Next", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "next" }),
+            ]), { viewName: "next", borderPresentation: "game-border" });
+        const linesMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (LINES_SIZE + 1))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 0, (0) + (GRID_W), (0) + (LINES_SIZE)), ""), { viewName: "lines-grid" }),
                 infoBox,
                 nextBox,
-                new TVButton({ x: INFO_X, y: 9, w: INFO_W, command: "lines-new", label: '~N~ew' }),
-            ],
-        });
+                new TVButton(new TVRect(INFO_X, 9, (INFO_X) + (INFO_W), 9), '~N~ew', "lines-new", bfNormal),
+            ]);
 
         super(new TVRect(0, 0, 41, 13), "Lines", {
             desktop,
@@ -2748,25 +2662,16 @@ class TVReversiDialog extends TVDialog {
         const GRID_W = REVERSI_SIZE * 2;  // 16ch
         const INFO_X = GRID_W + 1;
         const INFO_W = 17;
-        const infoBox = new TVInfoBox({
-            x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "black" }),
-                new TVStaticText({ name: "white" }),
-                new TVStaticText({ name: "turn" }),
-            ],
-        });
-        const reversiMain = new TVGroup({
-            w: INFO_X + INFO_W, h: REVERSI_SIZE,
-            children: [
-                new TVStaticText({
-                    x: 0, y: 0, w: GRID_W, h: REVERSI_SIZE,
-                    name: "reversi-grid",
-                }),
+        const infoBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "black" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "white" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "turn" }),
+            ]), { viewName: "info", borderPresentation: "game-border" });
+        const reversiMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (REVERSI_SIZE))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 0, (0) + (GRID_W), (0) + (REVERSI_SIZE)), ""), { viewName: "reversi-grid" }),
                 infoBox,
-                new TVButton({ x: INFO_X, y: 6, w: INFO_W, command: "reversi-new", label: '~N~ew' }),
-            ],
-        });
+                new TVButton(new TVRect(INFO_X, 6, (INFO_X) + (INFO_W), 6), '~N~ew', "reversi-new", bfNormal),
+            ]);
 
         super(new TVRect(0, 0, 38, 10), "Reversi", {
             desktop,
@@ -3037,52 +2942,22 @@ LUDO_START_OFFSETS.forEach((offset, player) => {
 
 class TVLudoDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
-        const infoBox = new TVInfoBox({
-            w: 22,
-            name: "info",
-            title: "Game",
-            borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "turn" }),
-                new TVStaticText({ name: "dice" }),
-                new TVStaticText({ name: "status" }),
-            ],
-        });
-        const playerButtons = LUDO_PLAYER_NAMES.map((name, player) => new TVButton({
-            command: "ludo-player-mode",
-            value: player,
-            commandData: { color: LUDO_PLAYER_COLORS[player] },
-            ariaLabel: `${name} player mode`,
-            label: name,
-        }));
-        const playersBox = new TVInfoBox({
-            w: 22,
-            title: "Players",
-            borderClass: "tv-game-border",
-            className: "tv-ludo-players",
-            children: playerButtons,
-        });
-        const controls = new TVButtonStrip({
-            className: "tv-ludo-controls",
-            buttons: [
-                new TVButton({ command: "ludo-roll", label: "~R~oll" }),
-                new TVButton({ command: "ludo-new", label: "~N~ew" }),
-            ],
-        });
-        const side = new TVGroup({
-            role: "ludo-side",
-            children: [infoBox, playersBox, controls],
-        });
-        const main = new TVGroup({
-            role: "ludo-main",
-            children: [
-                new TVStaticText({
-                    name: "ludo-board",
-                    textKind: "ludo-board",
-                }),
+        const infoBox = TVRenderer.configure(new TVInfoBox(new TVRect(0, 0, (0) + (22), 0), "Game", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "turn" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "dice" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "status" }),
+            ]), { viewName: "info", borderPresentation: "game-border" });
+        const playerButtons = LUDO_PLAYER_NAMES.map((name, player) => TVRenderer.configure(new TVButton(new TVRect(), name, "ludo-player-mode", bfNormal).setValue(player).setCommandData({ color: LUDO_PLAYER_COLORS[player] }), { ariaLabel: `${name} player mode` }));
+        const playersBox = TVRenderer.configure(new TVInfoBox(new TVRect(0, 0, (0) + (22), 0), "Players", playerButtons), { borderPresentation: "game-border", presentation: "ludo-players" });
+        const controls = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
+                new TVButton(new TVRect(), "~R~oll", "ludo-roll", bfNormal),
+                new TVButton(new TVRect(), "~N~ew", "ludo-new", bfNormal),
+            ]), { presentation: "ludo-controls" });
+        const side = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([infoBox, playersBox, controls]), { presentation: "ludo-side" });
+        const main = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "ludo-board", presentation: "ludo-board" }),
                 side,
-            ],
-        });
+            ]), { presentation: "ludo-main" });
 
         super(new TVRect(0, 0, 71, 26), "Ludo", {
             desktop,
@@ -3487,18 +3362,9 @@ class TVLudoDialog extends TVDialog {
         const connected = (fromRow, fromCol, toRow, toCol) => LUDO_ROUTE_EDGES.has(
             `${LUDO_CELL_KEY(fromRow, fromCol)}>${LUDO_CELL_KEY(toRow, toCol)}`
         );
-        const line = (html, textKind = "") => new TVGroup({
-            role: `ludo-ascii-line ${textKind.replace(/tv-/g, "")}`.trim(),
-            html,
-        }).renderMarkup();
-        const textCell = (text, classes = []) => new TVStaticText({
-            textKind: ["ludo-ascii-cell", ...classes.map((name) => name.replace(/tv-/g, ""))].join(" "),
-            text,
-        }).renderMarkup();
-        const pathSegment = (text) => new TVStaticText({
-            textKind: "ludo-ascii-path",
-            text,
-        }).renderMarkup();
+        const line = (html, textKind = "") => TVRenderer.configure(new TVGroup(new TVRect()).insertAll([TVRenderer.markup([html])]), { presentation: `ludo-ascii-line ${textKind.replace(/tv-/g, "")}`.trim() }).renderMarkup();
+        const textCell = (text, classes = []) => TVRenderer.configure(new TVStaticText(new TVRect(), text), { presentation: ["ludo-ascii-cell", ...classes.map((name) => name.replace(/tv-/g, ""))].join(" ") }).renderMarkup();
+        const pathSegment = (text) => TVRenderer.configure(new TVStaticText(new TVRect(), text), { presentation: "ludo-ascii-path" }).renderMarkup();
         const cellContent = (row, col) => {
             const key = LUDO_CELL_KEY(row, col);
             if (!activeCells.has(key)) { return textCell(" "); }
@@ -3530,14 +3396,7 @@ class TVLudoDialog extends TVDialog {
                 animation && player === animation.player && piece === animation.piece ? "is-moving" : "",
                 isCapturedFlash ? "is-captured" : "",
             ].filter(Boolean).join(" ");
-            return new TVButton({
-                command: "ludo-piece",
-                value: piece,
-                commandData: { classes: pieceClasses },
-                ariaLabel: `${LUDO_PLAYER_NAMES[player]} piece ${piece + 1}`,
-                disabled: !isLegal,
-                labelMarkup: '<span class="tv-ludo-piece-glyph">♟</span>',
-            }).renderMarkup();
+            return TVRenderer.configure(new TVButton(new TVRect(), "", "ludo-piece", bfNormal).setValue(piece).setCommandData({ classes: pieceClasses }).setState("disabled", !isLegal), { labelMarkup: '<span class="tv-ludo-piece-glyph">♟</span>', ariaLabel: `${LUDO_PLAYER_NAMES[player]} piece ${piece + 1}` }).renderMarkup();
         };
 
         const lines = [line(" ".repeat(45))];
@@ -3570,26 +3429,15 @@ class TVLudoDialog extends TVDialog {
 
 class TVMastermindDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
-        const paletteButtons = Array.from({ length: 6 }, (_, color) => new TVButton({
-            x: 38 + (color % 3) * 6,
-            y: 2 + Math.floor(color / 3) * 2,
-            w: 5,
-            command: "mastermind-color",
-            value: color,
-            commandData: { color },
-            label: String(color + 1),
-        }));
-        const body = new TVGroup({
-            w: 60, h: 16,
-            children: [
-                new TVStaticText({ x: 3, y: 1, w: 28, h: 10, name: "mastermind-board" }),
-                new TVStaticText({ x: 38, y: 1, w: 17, text: "Colors" }),
+        const paletteButtons = Array.from({ length: 6 }, (_, color) => new TVButton(new TVRect(38 + (color % 3) * 6, 2 + Math.floor(color / 3) * 2, (38 + (color % 3) * 6) + (5), 2 + Math.floor(color / 3) * 2), String(color + 1), "mastermind-color", bfNormal).setValue(color).setCommandData({ color }));
+        const body = new TVGroup(new TVRect(0, 0, (0) + (60), (0) + (16))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(3, 1, (3) + (28), (1) + (10)), ""), { viewName: "mastermind-board" }),
+                new TVStaticText(new TVRect(38, 1, (38) + (17), 1), "Colors"),
                 ...paletteButtons,
-                new TVButton({ x: 38, y: 8, w: 11, flags: bfDefault, command: "mastermind-guess", label: "~G~uess" }),
-                new TVButton({ x: 38, y: 10, w: 11, command: "mastermind-new", label: "~N~ew" }),
-                new TVStaticText({ x: 3, y: 13, w: 54, name: "mastermind-status" }),
-            ],
-        });
+                new TVButton(new TVRect(38, 8, (38) + (11), 8), "~G~uess", "mastermind-guess", bfDefault),
+                new TVButton(new TVRect(38, 10, (38) + (11), 10), "~N~ew", "mastermind-new", bfNormal),
+                TVRenderer.configure(new TVStaticText(new TVRect(3, 13, (3) + (54), 13), ""), { viewName: "mastermind-status" }),
+            ]);
         super(new TVRect(0, 0, 64, 20), "Mastermind", {
             desktop,
             viewName: "mastermind",
@@ -3713,21 +3561,15 @@ class TVTronDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const fieldWidth = TRON_COLS * 2;
         const infoX = fieldWidth + 2;
-        const tronMain = new TVGroup({
-            w: infoX + 22, h: TRON_ROWS,
-            children: [
-                new TVStaticText({
-                    x: 0, y: 0, w: fieldWidth, h: TRON_ROWS,
-                    name: "tron-field",
-                }),
-                new TVStaticText({ x: infoX, y: 0, w: 22, text: "P1: W A S D" }),
-                new TVStaticText({ x: infoX, y: 2, w: 22, text: "P2: Arrow keys" }),
-                new TVStaticText({ x: infoX, y: 5, w: 22, h: 4, name: "tron-status" }),
-                new TVButton({ x: infoX, y: 10, w: 15, flags: bfDefault, command: "tron-new", label: "~N~ew round" }),
-                new TVButton({ x: infoX, y: 12, w: 15, command: "tron-pause", label: "~P~ause" }),
-                new TVStaticText({ x: infoX, y: 15, w: 22, h: 2, text: "Avoid every trail.\nBoth move together." }),
-            ],
-        });
+        const tronMain = new TVGroup(new TVRect(0, 0, (0) + (infoX + 22), (0) + (TRON_ROWS))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 0, (0) + (fieldWidth), (0) + (TRON_ROWS)), ""), { viewName: "tron-field" }),
+                new TVStaticText(new TVRect(infoX, 0, (infoX) + (22), 0), "P1: W A S D"),
+                new TVStaticText(new TVRect(infoX, 2, (infoX) + (22), 2), "P2: Arrow keys"),
+                TVRenderer.configure(new TVStaticText(new TVRect(infoX, 5, (infoX) + (22), (5) + (4)), ""), { viewName: "tron-status" }),
+                new TVButton(new TVRect(infoX, 10, (infoX) + (15), 10), "~N~ew round", "tron-new", bfDefault),
+                new TVButton(new TVRect(infoX, 12, (infoX) + (15), 12), "~P~ause", "tron-pause", bfNormal),
+                new TVStaticText(new TVRect(infoX, 15, (infoX) + (22), (15) + (2)), "Avoid every trail.\nBoth move together."),
+            ]);
         super(new TVRect(0, 0, 88, 22), "Tron Light Cycles", {
             desktop,
             viewName: "tron",
@@ -3897,16 +3739,13 @@ class TVTronDialog extends TVDialog {
 
 class TVHanoiDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
-        const hanoiMain = new TVGroup({
-            w: 79, h: 15,
-            children: [
-                new TVStaticText({ x: 1, y: 1, w: 54, h: 10, name: "hanoi-board" }),
-                new TVStaticText({ x: 57, y: 1, w: 20, h: 8, name: "hanoi-history" }),
-                new TVButton({ x: 57, y: 9, w: 12, command: "hanoi-undo", label: "~U~ndo" }),
-                new TVButton({ x: 57, y: 11, w: 12, flags: bfDefault, command: "hanoi-new", label: "~N~ew" }),
-                new TVStaticText({ x: 1, y: 12, w: 54, h: 2, name: "hanoi-status" }),
-            ],
-        });
+        const hanoiMain = new TVGroup(new TVRect(0, 0, (0) + (79), (0) + (15))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(1, 1, (1) + (54), (1) + (10)), ""), { viewName: "hanoi-board" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(57, 1, (57) + (20), (1) + (8)), ""), { viewName: "hanoi-history" }),
+                new TVButton(new TVRect(57, 9, (57) + (12), 9), "~U~ndo", "hanoi-undo", bfNormal),
+                new TVButton(new TVRect(57, 11, (57) + (12), 11), "~N~ew", "hanoi-new", bfDefault),
+                TVRenderer.configure(new TVStaticText(new TVRect(1, 12, (1) + (54), (12) + (2)), ""), { viewName: "hanoi-status" }),
+            ]);
         super(new TVRect(0, 0, 83, 19), "Tower of Hanoi", {
             desktop,
             viewName: "hanoi",
@@ -4113,32 +3952,20 @@ class TVSnakeDialog extends TVDialog {
         const FIELD_W = SNAKE_COLS * 2;  // 40ch
         const INFO_X = FIELD_W + 1;
         const INFO_W = 18;
-        const infoBox = new TVInfoBox({
-            x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "score" }),
-                new TVStaticText({ name: "level" }),
-                new TVStaticText({ name: "length" }),
-            ],
-        });
-        const bestBox = new TVInfoBox({
-            x: INFO_X, y: 5, w: INFO_W, name: "best", title: "Best", borderClass: "tv-game-border",
-            children: [
-                new TVStaticText({ name: "best" }),
-            ],
-        });
-        const snakeMain = new TVGroup({
-            w: INFO_X + INFO_W, h: SNAKE_ROWS,
-            children: [
-                new TVStaticText({
-                    x: 0, y: 0, w: FIELD_W, h: SNAKE_ROWS,
-                    name: "snake-field",
-                }),
+        const infoBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "score" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "level" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "length" }),
+            ]), { viewName: "info", borderPresentation: "game-border" });
+        const bestBox = TVRenderer.configure(new TVInfoBox(new TVRect(INFO_X, 5, (INFO_X) + (INFO_W), 5), "Best", [
+                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "best" }),
+            ]), { viewName: "best", borderPresentation: "game-border" });
+        const snakeMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (SNAKE_ROWS))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 0, (0) + (FIELD_W), (0) + (SNAKE_ROWS)), ""), { viewName: "snake-field" }),
                 infoBox,
                 bestBox,
-                new TVButton({ x: INFO_X, y: 13, w: INFO_W, command: "snake-new", label: '~N~ew' }),
-            ],
-        });
+                new TVButton(new TVRect(INFO_X, 13, (INFO_X) + (INFO_W), 13), '~N~ew', "snake-new", bfNormal),
+            ]);
 
         super(new TVRect(0, 0, 64, 19), "Snake", {
             desktop,

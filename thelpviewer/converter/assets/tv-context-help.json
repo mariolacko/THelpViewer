@@ -92,7 +92,7 @@
         "  [link:topic=1500]Games[/link]        [link:topic=1600]Windows[/link]     [link:topic=2090]Dialogs[/link]",
         "",
         "The status line and Help menu invoke this same help file. Each",
-        "TVWidget or managed window supplies a Turbo Vision-style helpCtx.",
+        "TVView or managed window supplies a Turbo Vision-style helpCtx.",
         "",
         "This intentionally contains enough text to exercise the shared",
         "vertical scrollbar. Future application documentation can be added as",

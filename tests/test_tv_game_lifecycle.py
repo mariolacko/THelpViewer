@@ -31,8 +31,8 @@ def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
         helper.index("function showHallOfFame(ownerDialog, game)"):
         helper.index("function installHallOfFame", helper.index("function showHallOfFame(ownerDialog, game)"))
     ]
-    assert 'new TVGroup({' in hall
-    assert 'new TVStaticText({' in hall
+    assert 'new TVGroup(new TVRect())' in hall
+    assert 'new TVStaticText(new TVRect(),' in hall
     assert '<div class="tv-hall-' not in hall
     assert "manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg)" in helper
     assert "TVFrame.createTitleControl({" in helper

@@ -11,6 +11,7 @@ const {
     initializeTVTheme,
     TV_COMMANDS,
     TV_HELP_CONTEXTS,
+    TV_CONTEXT_HELP_TOPICS,
     TVMenuController,
     TVHelpController,
     TVDesktop,
@@ -20,7 +21,7 @@ const {
     TVAsciiTableDialog,
     TVCalculatorDialog,
     TVColorsDialog,
-    TVWidgetGalleryDialog,
+    TVViewGalleryDialog,
     TVFileOpenDialog,
     TVChangeDirectoryDialog,
     TVMidiPlayerDialog,
@@ -39,9 +40,10 @@ const {
     TVTronDialog,
     TVScreenSaver,
     TVWindow,
-    TVWidget,
+    TVView,
     TVGroup,
     TVRect,
+    TVRenderer,
     TVIndicator,
     TVEditor,
     TVOutline,
@@ -1543,7 +1545,6 @@ class TVLoadingDialog {
             TVRect,
             TVStaticText,
             TVGroup,
-            TVButtonStrip,
             TVButton: TVBtn,
         } = TV;
         this.desktop = desktop;
@@ -1557,22 +1558,19 @@ class TVLoadingDialog {
         this.destroyed = false;
 
 
-        const cancelButton = new TVBtn({
-            x: 15, y: 5, w: 10,
-            flags: bfDefault,
-            command: "loading-cancel",
-            labelMarkup: renderHotkeyMarkup("~C~ancel"),
-        });
+        const cancelButton = new TVBtn(
+            new TVRect(15, 5, 25, 5),
+            "~C~ancel",
+            "loading-cancel",
+            bfDefault,
+        );
 
-        const bodyGroup = new TVGroup({
-            w: 38, h: 6,
-            children: [
-                new TVStaticText({ x: 0, y: 1, w: 38, align: "center", textKind: "loading-filename", text: "" }),
-                new TVStaticText({ x: 0, y: 2, w: 38, align: "center", textKind: "loading-bar-line", text: "" }),
-                new TVStaticText({ x: 0, y: 3, w: 38, align: "center", textKind: "loading-percent", text: "0%" }),
+        const bodyGroup = new TVGroup(new TVRect(0, 0, (0) + (38), (0) + (6))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 1, (0) + (38), 1), ""), { presentation: "loading-filename", align: "center" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 2, (0) + (38), 2), ""), { presentation: "loading-bar-line", align: "center" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 3, (0) + (38), 3), "0%"), { presentation: "loading-percent", align: "center" }),
                 cancelButton,
-            ],
-        });
+            ]);
 
         this.dialog = new TVDialog(new TVRect(0, 0, 40, 9), "Loading", {
             desktop,
@@ -1748,7 +1746,7 @@ function renderIndexSection(anchor, label, entries) {
             if (!Object.keys(targetData).length) {
                 return `<div class="tv-index-entry"><span>${escapeHtml(entry && entry.label ? entry.label : "")}</span></div>`;
             }
-            return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...TVWidget.controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label || "")}</a></div>`;
+            return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...TVView.controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label || "")}</a></div>`;
         }
         const targetData = buildBundleTargetData({
             topic_id: entry.topic_id,
@@ -1756,7 +1754,7 @@ function renderIndexSection(anchor, label, entries) {
             alias: entry.alias,
             line: entry.line,
         });
-        return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...TVWidget.controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label)}</a></div>`;
+        return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...TVView.controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label)}</a></div>`;
     });
     return [
         `<section class="tv-index-section" id="idx-${escapeHtml(anchor)}">`,
@@ -1836,7 +1834,7 @@ function renderContentsNodes(nodes) {
         const label = escapeHtml(String(node.label || ""));
         const targetData = buildBundleTargetData(node);
         const labelHTML = Object.keys(targetData).length
-            ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...TVWidget.controlAttrs({ commandData: targetData }) })}>${label}</a>`
+            ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...TVView.controlAttrs({ commandData: targetData }) })}>${label}</a>`
             : label;
         const children = Array.isArray(node.children) && node.children.length
             ? `<div class="tv-contents-children">${renderContentsNodes(node.children)}</div>`
@@ -2224,7 +2222,10 @@ class BundleWindowManager {
     _initWindowWidgets(windowEl) {
         const frames = Array.from(windowEl.querySelectorAll("[data-tv-scroll-frame]"))
             .filter((frame) => !frame.hasAttribute("data-tv-outline"));
-        windowEl._tvScrollbars = Array.from(frames, (frame) => new TVScrollBar(frame));
+        windowEl._tvScrollbars = Array.from(
+            frames,
+            (frame) => new TVScrollBar(new TVRect()).bindRoot(frame),
+        );
         this.scrollbars.push(...windowEl._tvScrollbars);
         const resizer = new TurboVisionWindowResizer(windowEl);
         windowEl._tvResizer = resizer;
@@ -2239,7 +2240,7 @@ class BundleWindowManager {
             _outlineKey: `${prefix}${index}`,
             children: withKeys(Array.isArray(node.children) ? node.children : [], `${prefix}${index}/`),
         }));
-        const outline = new TVOutline(root, {
+        const outline = TVRenderer.configure(new TVOutline(new TVRect()), {
             itemClassName: "tv-contents-outline-item",
             itemAttrName: "data-tv-contents-outline-index",
             getKey: (node) => node._outlineKey,
@@ -2248,10 +2249,10 @@ class BundleWindowManager {
                 const label = escapeHtml(String(node.label || ""));
                 const targetData = buildBundleTargetData(node);
                 return Object.keys(targetData).length
-                    ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...TVWidget.controlAttrs({ commandData: targetData }) })}>${label}</a>`
+                    ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...TVView.controlAttrs({ commandData: targetData }) })}>${label}</a>`
                     : label;
             },
-        });
+        }).bindRoot(root);
         outline.setScrollViewport(
             windowEl.querySelector(".tv-frame > .tv-scroll-shell > .tv-viewport"),
             (windowEl._tvScrollbars || [])[0] || null,
@@ -2484,7 +2485,7 @@ function renderMenuPopupSeparator() {
 }
 
 function renderMenuPopup(items, attrs = {}, className = "tv-menu-popup") {
-    return new TVMenuBox({ className, attrs, items }).renderMarkup();
+    return TVRenderer.configure(new TVMenuBox(new TVRect(), items), { className: className, attributes: attrs }).renderMarkup();
 }
 
 function renderMenuSubmenu(labelMarkup, items) {
@@ -2888,8 +2889,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { type: "theme", theme: "dark", label: "~D~ark Theme" },
         { type: "theme", theme: "auto", label: "A~u~to Theme" },
     ];
-    const sysPopupHTML = new TVMenuBox({
-        items: sysPopupItems.map((entry) => {
+    const sysPopupHTML = new TVMenuBox(new TVRect(), sysPopupItems.map((entry) => {
             if (entry.type === "separator") {
                 return renderMenuPopupSeparator();
             }
@@ -2911,8 +2911,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                 action.command,
                 action.value,
             );
-        }),
-    });
+        }));
     const sysRootHTML = renderMenuRoot(renderHotkeyMarkup("~≡~"), sysPopupHTML.items, {
         "data-tv-help-ctx": hcSystemMenu,
     });
@@ -3050,7 +3049,7 @@ class TVBundleApp {
 
         const desktopRoot = document.querySelector("[data-tv-bundle-desktop]");
         if (!desktopRoot) { return; }
-        this.desktopView = new TVDesktop(desktopRoot);
+        this.desktopView = new TVDesktop(new TVRect()).bindRoot(desktopRoot);
         this.desktop = this.desktopView.root;
 
         this.dialogManager = this.desktopView.dialogManager;
@@ -3063,13 +3062,13 @@ class TVBundleApp {
                 this._syncBundleMenu();
             }
             this._updateWindowMenuState();
-            this._updateStatusLine("");
+            this._updateStatusLine();
             this._scheduleUrlStateSync();
         };
-        this._updateStatusLine("");
+        this._updateStatusLine();
 
-        this.windowManager = new BundleWindowManager(this.desktop, (hint) => {
-            this._updateStatusLine(hint);
+        this.windowManager = new BundleWindowManager(this.desktop, () => {
+            this._updateStatusLine();
             this._syncBundleMenu();
             this._scheduleUrlStateSync();
         });
@@ -3084,7 +3083,7 @@ class TVBundleApp {
         this._registerDialog("calc", () => new TVCalculatorDialog(this.desktop));
         this._registerDialog("midi", () => new TVMidiPlayerDialog(this.desktop));
         this._registerDialog("colors", () => new TVColorsDialog(this.desktop));
-        this._registerDialog("widgets", () => new TVWidgetGalleryDialog(this.desktop));
+        this._registerDialog("widgets", () => new TVViewGalleryDialog(this.desktop));
         this.fileOpenDialog = this._registerDialog("fileopen", () => new TVFileOpenDialog(this.desktop));
         this.changeDirectoryDialog = this._registerDialog("chdir", () => new TVChangeDirectoryDialog(this.desktop));
         this.findDialog = this._registerDialog("find", () => new TVFindDialog(this.desktop));
@@ -3128,10 +3127,10 @@ class TVBundleApp {
 
     }
 
-    _updateStatusLine(hint) {
+    _updateStatusLine() {
         const hasHelpWindow = this.windowManager && this.windowManager.openWindows.size > 0;
         const currentBundle = this.windowManager ? this.windowManager.currentBundle : null;
-        const statusHint = String(hint || this._activeStatusHint() || "THelpViewer");
+        const statusHint = String(this._activeStatusHint() || "THelpViewer");
         const statusLine = document.querySelector("[data-tv-status-line]");
         if (!statusLine) { return; }
         const items = [];
@@ -3172,12 +3171,16 @@ class TVBundleApp {
 
     _activeStatusHint() {
         if (!this.dialogManager) { return ""; }
+        const helpCtx = this.dialogManager.getHelpCtx();
+        const helpTopic = TV_CONTEXT_HELP_TOPICS?.[helpCtx];
+        if (helpTopic?.text) {
+            const firstSentence = String(helpTopic.text).match(/^.*?[.!?](?:\s|$)/)?.[0];
+            return (firstSentence || helpTopic.text).trim();
+        }
         const target = String(this.dialogManager.activeTarget || "");
         const dialog = this.dialogManager.get(target);
         if (dialog?.isOpen()) {
-            return dialog.dialog?.querySelector(".tv-dialog-title-text")?.textContent?.trim()
-                || dialog.dialog?.getAttribute("aria-label")
-                || "";
+            return "Tab selects a control; Enter activates it; Esc closes the dialog.";
         }
         const windowEl = this.dialogManager.windows.get(target);
         if (!windowEl?.isConnected) { return ""; }
@@ -3532,7 +3535,7 @@ class TVBundleApp {
         this.dialogManager.applyActiveStates();
         const bundle = this.windowManager.syncActiveTarget(this.dialogManager.activeTarget);
         if (bundle) { this._updateSearchData(bundle); }
-        this._updateStatusLine("");
+        this._updateStatusLine();
     }
 
     _registerDialog(name, factory) {
@@ -3626,7 +3629,7 @@ class TVBundleApp {
         const dialog = new TVDialog(new TVRect(0, 0, 40, 14), "Window List", {
             desktop: this.desktop,
             viewName: "winlist",
-            content: new TVGroup({ role: "winlist-items" }),
+            content: TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "winlist-items" }),
             modal: true,
         });
 
@@ -3810,12 +3813,16 @@ class TVBundleApp {
 
         // Init widgets
         const indicator = new TVIndicator();
-        indicator.root = TVWidget.fromHTML(indicator.renderMarkup());
+        indicator.root = TVView.fromHTML(indicator.renderMarkup());
         const horizontalScrollbar = windowEl.querySelector(".tv-bottom-bar > .tv-scrollbar-x");
         horizontalScrollbar?.before(indicator.root);
-        windowEl._tvEditor = new TVEditor(windowEl.querySelector("[data-tv-doc-editor]"), { indicator });
+        windowEl._tvEditor = new TVEditor(new TVRect(), null, null, indicator)
+            .bindRoot(windowEl.querySelector("[data-tv-doc-editor]"));
         const frames = windowEl.querySelectorAll("[data-tv-scroll-frame]");
-        windowEl._tvScrollbars = Array.from(frames, (frame) => new TVScrollBar(frame));
+        windowEl._tvScrollbars = Array.from(
+            frames,
+            (frame) => new TVScrollBar(new TVRect()).bindRoot(frame),
+        );
         windowEl._tvResizer = new TurboVisionWindowResizer(windowEl);
 
         const closeWindow = () => {
@@ -3957,7 +3964,7 @@ class TVBundleApp {
         if (!editor) {
             const viewport = windowEl.querySelector("[data-tv-viewport]");
             if (!viewport) { return null; }
-            editor = new TVEditor(viewport, { readOnly: true });
+            editor = new TVEditor(new TVRect()).setReadOnly(true).bindRoot(viewport);
             windowEl._tvFindEditor = editor;
         }
         const caption = windowEl.querySelector(".tv-window-caption")?.textContent?.trim();
@@ -3994,16 +4001,13 @@ class TVBundleApp {
             TVGroup,
             TVButton: TVBtn,
         } = TV;
-        const welcomeBody = new TVGroup({
-            w: 30, h: 9,
-            children: [
-                new TVStaticText({ x: 0, y: 1, w: 30, align: "center", title: true, text: "THelpViewer" }),
-                new TVStaticText({ x: 0, y: 3, w: 30, align: "center", text: "Select a help file from the" }),
-                new TVStaticText({ x: 0, y: 4, w: 30, align: "center", text: "File menu to get started." }),
-                new TVStaticText({ x: 0, y: 6, w: 30, align: "center", text: `${Array.isArray(catalogData) ? catalogData.length : 0} help file(s) available.` }),
-                new TVButton({ x: 10, y: 8, w: 10, flags: bfDefault, command: "welcome-ok", label: '~O~K' }),
-            ],
-        });
+        const welcomeBody = new TVGroup(new TVRect(0, 0, (0) + (30), (0) + (9))).insertAll([
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 1, (0) + (30), 1), "THelpViewer"), { align: "center", title: true }),
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 3, (0) + (30), 3), "Select a help file from the"), { align: "center" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 4, (0) + (30), 4), "File menu to get started."), { align: "center" }),
+                TVRenderer.configure(new TVStaticText(new TVRect(0, 6, (0) + (30), 6), `${Array.isArray(catalogData) ? catalogData.length : 0} help file(s) available.`), { align: "center" }),
+                new TVButton(new TVRect(10, 8, (10) + (10), 8), '~O~K', "welcome-ok", bfDefault),
+            ]);
         const dialog = new TVDialog(new TVRect(0, 0, 34, 12), "Welcome", {
             desktop: this.desktop,
             viewName: "welcome",

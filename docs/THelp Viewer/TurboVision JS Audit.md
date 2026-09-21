@@ -390,6 +390,17 @@ compatibility with old Turbo Vision applications.
     or arbitrary attributes; Hall of Fame is a TV object tree; and `TVDialog`
     starts with `TVRect` bounds plus title while the shared renderer derives
     DOM classes, close metadata and its footer.
+50. **Phase 7.23 still claimed a semantic object model while `TVGroup`
+    accepted `role`, `name`, layout CSS and raw HTML; `TVInputLine` accepted a
+    caller-selected `id`/attribute bag; and the common base remained named
+    `TVWidget`. The lower status hint also displayed the active dialog title
+    instead of help.** **Resolved in Phase 7.24:** the hierarchy now starts at
+    `TVView(bounds)`; the core controls, lists, editors, scrollbars, windows and
+    desktop use positional `TRect`-first constructors; groups accept only
+    inserted views; labels hold input-object references; browser roots are
+    attached separately; browser metadata is isolated in `TVRenderer`;
+    redundant `TVButtonStrip` and public `TVMarkupList` objects were removed;
+    and the status line shows concise text from the active `helpCtx` topic.
 
 ## Component assessment
 
@@ -421,20 +432,20 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 
 | Turbo Vision 2.0 | Current JavaScript | Result and required change |
 |---|---|---|
-| `TView` | `TVWidget` | Present as the basic DOM helper. Add a no-op `destroy()` contract before more dynamic widgets are introduced. |
-| `TGroup : TView` | `TVGroup : TVWidget` | Owns child references, a current child and `helpCtx` inheritance; full child lifecycle, focus order and event propagation remain incomplete. |
-| `TWindow : TGroup` | `TVWindow : TVGroup` | Implemented; HELP and Docs use its common frame, title controls, client and scrollbar composition. |
+| `TView` | `TVView` | Bounds-first base with separate browser-root binding and shared `helpCtx`. |
+| `TGroup : TView` | `TVGroup : TVView` | Bounds-only constructor, inserted view children, current child and `helpCtx` inheritance; full event propagation remains incomplete. |
+| `TWindow : TGroup` | `TVWindow : TVGroup` | Bounds/title/number constructor with separate renderer binding; HELP and Docs use its common frame, title controls, client and scrollbar composition. |
 | `TDialog : TWindow` | `TVDialog : TVWindow` | Correct hierarchy while preserving modal, keyboard, focus, move and destroy behaviour. |
-| `TFrame : TView` | `TVFrame : TVWidget` | Present and shared by dialogs; `TVWindow` owns the separate standard-window composition. |
-| `TScrollBar : TView` | `TVScrollBar` | One axis-aware renderer and interaction engine for windows, lists and menus. `TurboVisionScrollbar` remains an API alias. |
+| `TFrame : TView` | `TVFrame : TVView` | Present and shared by dialogs; `TVWindow` owns the separate standard-window composition. |
+| `TScrollBar : TView` | `TVScrollBar : TVView` | Bounds/options constructor and one axis-aware renderer and interaction engine for windows, lists and menus. `TurboVisionScrollbar` remains an API alias. |
 | `TScroller : TView` | `TVVerticalScrollArea` compatibility facade and window composition | Partial class parity, but both delegate to `TVScrollBar`; no second scroll algorithm remains. |
-| `TListViewer : TView` | `TVListViewer : TVWidget` | Functional selection, activation, keyboard and roving-focus base. |
+| `TListViewer : TView` | `TVListViewer : TVView` | Bounds/column constructor with DOM binding separated; functional selection, activation, keyboard and roving-focus base. |
 | `TListBox : TListViewer` | `TVListBox : TVListViewer` | Correct hierarchy; specialised vertical lists add shared scroll composition. |
-| `TStaticText : TView` | `TVStaticText : TVWidget` | Present. |
+| `TStaticText : TView` | `TVStaticText : TVView` | Positional `(bounds, text)` construction. |
 | `TLabel : TStaticText` | `TVLabel : TVStaticText` | Correct hierarchy and native label association. |
-| `TInputLine : TView` | `TVInputLine : TVWidget` | Present through native input; selection, validation and horizontal indicator semantics are incomplete. |
-| `TButton : TView` | `TVButton : TVWidget` | Present with default, selected, disabled and mnemonic states. |
-| `TCluster : TView` | `TVCluster : TVWidget` | Implemented with common native-input, option and DOS-mark rendering. |
+| `TInputLine : TView` | `TVInputLine : TVView` | Positional bounds/max-length construction and object-linked labels; validation and horizontal indicator semantics remain incomplete. |
+| `TButton : TView` | `TVButton : TVView` | Positional bounds/title/command/flags construction with default, selected, disabled and mnemonic states. |
+| `TCluster : TView` | `TVCluster : TVView` | Bounds/items construction with common native-input, option and DOS-mark rendering. |
 | `TRadioButtons`, `TCheckBoxes : TCluster` | Both extend `TVCluster` | Correct shared hierarchy and cluster palette. |
 | `TMultiCheckBoxes : TCluster` | `TVMultiCheckBoxes : TVCluster` | Implemented with configurable states, disabled/focus rendering and Widget Gallery coverage. |
 
@@ -449,14 +460,14 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 | `TFileInputLine`, `TSortedListBox`, `TFileList`, `TFileInfoPane` | Native input, `TVFileList`, and inline info markup | File list behaviour is reusable and the old name is an alias; specialised InputLine and InfoPane classes remain optional. |
 | `TFileDialog : TDialog` | `TVFileOpenDialog : TVDialog` | Present and catalog-backed. The browser verifies both startup loading and populated states. |
 | `TDirListBox`, `TChDirDialog` | `TVOutline` and `TVChangeDirectoryDialog` | Present as a browser-safe HELP/DOCS directory tree with Chdir, Revert and History. |
-| `TColorSelector`, `TColorDisplay`, `TColorGroupList`, `TColorItemList` | Logic embedded in `TVColorsDialog` | Visually and behaviourally covered, but the selectors and lists should become reusable widgets after the list-base refactor. |
+| `TColorSelector`, `TColorDisplay`, `TColorGroupList`, `TColorItemList` | Logic embedded in `TVColorsDialog` | Visually and behaviourally covered by the shared bounds-first list base; dedicated reusable color-control classes remain optional. |
 
 ### Viewer, editor and specialised controls
 
 | Turbo Vision 2.0 | Current JavaScript | Result and required change |
 |---|---|---|
 | `THelpViewer : TScroller`, `THelpWindow : TWindow` | Bundle rendering and `BundleWindowManager` | Feature-rich, but not represented by reusable classes. Migrate after `TVWindow`/`TVScroller`; do not rewrite the parser or UHF renderer. |
-| `TEditor`, `TMemo`, `TFileEditor`, `TEditWindow`, `TIndicator` | `TVEditor` and `TVIndicator` used by Docs | Read-only subset supports selection, Find/Find Again and position reporting; mutation, clipboard commands and file saving remain out of scope. |
+| `TEditor`, `TMemo`, `TFileEditor`, `TEditWindow`, `TIndicator` | `TVEditor` and `TVIndicator` used by Docs | Bounds/scrollbar/indicator constructor; the read-only subset supports selection, Find/Find Again and position reporting. Mutation, clipboard commands and file saving remain out of scope. |
 | `TOutlineViewer`, `TOutline` | `TVOutline : TVVerticalListViewer` | Implemented for HELP Contents and Change Directory with shared scrolling, selection, activation and expand/collapse keys. |
 | `TTextDevice`, `TTerminal` | `TVTerminal` | Bounded append/clear control now drives Widget Gallery's framed Event Log. |
 | `TParamText` | Missing | Low-cost addition once `TVStaticText` is stable. |
@@ -487,9 +498,8 @@ not be copied merely for name parity.
 1. Replace menu HTML/config records with reusable `TVMenu`, `TVMenuItem` and
    `TVSubMenu` objects that own command, disabled state, mnemonic and `helpCtx`;
    keep `TVMenuController` as the single interaction engine.
-2. Add context-dependent `TVStatusDef`/`TVStatusItem`-style hints so the status
-   line changes with the resolved help context instead of only the active
-   window type.
+2. Add full `TVStatusDef` ranges and key labels around the now-working
+   `helpCtx`-derived status hint.
 3. Extract HELP viewing into explicit `TVHelpViewer`/`TVHelpWindow` classes
    without changing converter or UHF rendering semantics.
 4. Add Find options (case sensitivity and whole words) through shared cluster
@@ -724,3 +734,10 @@ No previously recommended game remains unimplemented.
   removed `buttonKind`, `TVStaticText.tag` and `TVStaticText.attrs`, rebuilt
   Hall of Fame from TV objects, and moved dialogs to `TVRect` + title +
   semantic content construction with frame DOM owned by `TVFrame`.
+- [x] Phase 7.24: replaced `TVWidget` with bounds-first `TVView`; converted
+  groups, text, labels, input lines, buttons, clusters, info boxes, terminals,
+  menu boxes, lists, outlines, scroll areas, editors, scrollbars, windows and
+  desktop to positional semantic constructors; moved browser binding,
+  generated DOM ids and presentation hooks behind `bindRoot()`/`TVRenderer`;
+  removed `TVButtonStrip` and public `TVMarkupList`; and restored context-topic
+  mini help in the status line.

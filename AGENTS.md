@@ -233,3 +233,18 @@ Prevents:
 - CSS/HTML details leaking into the object model
 - one control being overloaded for unrelated Turbo Vision roles
 - dialog-specific markup bypassing the shared renderer
+
+Concrete constructor rules:
+- `TVView(bounds)`, `TVGroup(bounds)`, `TVStaticText(bounds, text)`,
+  `TVLabel(bounds, text, link)`, `TVInputLine(bounds, maxLen)` and
+  `TVButton(bounds, title, command, flags)` are positional.
+- `TVListViewer(bounds, numCols)`, `TVEditor(bounds, hScrollBar, vScrollBar,
+  indicator, bufSize)`, `TVScrollBar(bounds, options)`,
+  `TVWindow(bounds, title, number)` and `TVDesktop(bounds)` follow the same
+  rule; attach browser elements later through `bindRoot()`.
+- Compose groups through `insert()` / `insertAll()` and link labels to the
+  target object, never through caller-selected DOM ids.
+- Browser classes, generated ids, data hooks and accessibility attributes are
+  configured only through the shared `TVRenderer` boundary.
+- Do not restore `TVWidget`, `TVButtonStrip`, `TVMarkupList` or object-literal
+  compatibility constructors.

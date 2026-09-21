@@ -1143,11 +1143,51 @@ class TVRect {
     get height() { return Math.max(0, this.y2 - this.y1); }
 }
 
-class TVWidget {
-    constructor(root = null, { helpCtx = hcNoContext } = {}) {
-        this.root = root;
+let tvViewSequence = 0;
+const tvRenderState = new WeakMap();
+
+/**
+ * Browser adapter for TVision views.  DOM presentation belongs here, never in
+ * a public view constructor.  Application code may select a semantic
+ * presentation, while element names, classes and attributes stay private to
+ * the renderer.
+ */
+class TVRenderer {
+    static configure(view, options = {}) {
+        if (!(view instanceof TVView)) {
+            throw new TypeError("TVRenderer expects a TVView");
+        }
+        tvRenderState.set(view, { ...this.state(view), ...options });
+        return view;
+    }
+
+    static state(view) {
+        return tvRenderState.get(view) || {};
+    }
+
+    static viewAttrs(view, attrs = {}) {
+        return {
+            "data-tv-view-id": view.viewId,
+            ...(view.helpCtx !== hcNoContext ? { "data-tv-help-ctx": view.helpCtx } : {}),
+            ...attrs,
+        };
+    }
+
+    static markup(items = [], options = {}) {
+        return this.configure(new TVMarkupView(items), options);
+    }
+}
+
+class TVView {
+    constructor(bounds = new TVRect()) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVView expects TVRect bounds");
+        }
+        this.root = null;
         this.owner = null;
-        this.helpCtx = normalizeHelpContext(helpCtx);
+        this.helpCtx = hcNoContext;
+        this.bounds = bounds;
+        this.viewId = `tv-view-${++tvViewSequence}`;
     }
 
     /** Build inline CSS for character-cell bounds (x, y, w, h). */
@@ -1159,6 +1199,20 @@ class TVWidget {
         if (w !== undefined) { parts.push(`width:${w}ch`); }
         if (h !== undefined) { parts.push(`height:${h}em`); }
         return parts.join(";");
+    }
+
+    static viewBoundsStyle(view) {
+        const bounds = view?.bounds;
+        if (!(bounds instanceof TVRect)) { return ""; }
+        if (bounds.x1 === 0 && bounds.y1 === 0 && bounds.x2 === 0 && bounds.y2 === 0) {
+            return "";
+        }
+        return this.boundsStyle(
+            bounds.x1,
+            bounds.y1,
+            bounds.width || undefined,
+            bounds.height || undefined,
+        );
     }
 
     static roleClassNames(role = "") {
@@ -1216,6 +1270,12 @@ class TVWidget {
         return this.root;
     }
 
+    bindRoot(root) {
+        this.root = root || null;
+        setElementHelpContext(this.root, this.helpCtx);
+        return this;
+    }
+
     query(selector) {
         return this.root ? this.root.querySelector(selector) : null;
     }
@@ -1231,6 +1291,24 @@ class TVWidget {
         return this.root;
     }
 
+    setBounds(bounds) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVView.setBounds expects TVRect");
+        }
+        this.bounds = bounds;
+        return this;
+    }
+
+    resolve(root) {
+        if (!root) { return this; }
+        if (root.getAttribute?.("data-tv-view-id") === this.viewId) {
+            this.root = root;
+        } else {
+            this.root = root.querySelector?.(`[data-tv-view-id="${this.viewId}"]`) || null;
+        }
+        return this;
+    }
+
     setHelpCtx(helpCtx) {
         this.helpCtx = normalizeHelpContext(helpCtx);
         setElementHelpContext(this.root, this.helpCtx);
@@ -1242,49 +1320,42 @@ class TVWidget {
     }
 }
 
-class TVStaticText extends TVWidget {
-    constructor({
-        name = "",
-        text = "",
-        textKind = "",
-        align = "",
-        title = false,
-        x, y, w, h,
-    } = {}) {
+class TVStaticText extends TVView {
+    constructor(bounds, text) {
         super();
-        this.name = name;
-        this.text = text;
-        this.textKind = textKind;
-        this.align = align;
-        this.title = title;
-        this.x = x; this.y = y; this.w = w; this.h = h;
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVStaticText expects TVRect bounds");
+        }
+        this.bounds = bounds;
+        this.text = String(text ?? "");
     }
 
     renderMarkup() {
+        const rendering = TVRenderer.state(this);
         const cls = [
             "tv-static-text",
-            this.title ? "tv-title" : "",
-            TVWidget.roleClassNames(this.textKind),
+            rendering.title ? "tv-title" : "",
+            TVView.roleClassNames(rendering.presentation),
         ].filter(Boolean).join(" ");
         const classAttr = ` class="${escapeHtml(cls)}"`;
-        const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
-        const alignStyle = this.align ? `text-align:${this.align}` : "";
+        const bounds = TVView.viewBoundsStyle(this);
+        const alignStyle = rendering.align ? `text-align:${rendering.align}` : "";
         const inlineStyle = [bounds, alignStyle].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
         const liveKinds = new Set(["calc-display", "midi-status", "find-status"]);
         const liveNames = new Set(["tron-status", "hanoi-history", "hanoi-status"]);
-        const semanticName = this.name
-            ? String(this.name).replace(/[^a-zA-Z0-9_-]/g, "-")
+        const semanticName = rendering.viewName
+            ? String(rendering.viewName).replace(/[^a-zA-Z0-9_-]/g, "-")
             : "";
-        const attrString = attrsToString({
+        const attrString = attrsToString(TVRenderer.viewAttrs(this, {
             ...(semanticName ? {
                 [`data-tv-${semanticName}`]: true,
                 "data-tv-row": semanticName,
             } : {}),
-            ...(liveKinds.has(this.textKind) || liveNames.has(semanticName) ? { "aria-live": "polite" } : {}),
+            ...(liveKinds.has(rendering.presentation) || liveNames.has(semanticName) ? { "aria-live": "polite" } : {}),
             ...(semanticName === "ludo-board" ? { role: "grid", "aria-label": "Ludo board" } : {}),
             ...(semanticName === "tron-field" ? { role: "img", "aria-label": "Tron arena" } : {}),
-        });
+        }));
         const attrs = attrString ? ` ${attrString}` : "";
         return `<div${classAttr}${styleAttr}${attrs}>${escapeHtml(this.text)}</div>`;
     }
@@ -1305,142 +1376,122 @@ class TVStaticText extends TVWidget {
 }
 
 class TVLabel extends TVStaticText {
-    constructor({
-        text = "",
-        labelKind = "",
-        forId = "",
-        hotkey = false,
-        x, y, w, h,
-    } = {}) {
-        super({
-            textKind: ["label", labelKind].filter(Boolean).join(" "),
-            text,
-            x, y, w, h,
-        });
-        this.forId = forId;
-        this.hotkey = hotkey;
+    constructor(bounds, text, link = null) {
+        super(bounds, text);
+        this.link = link instanceof TVView ? link : null;
     }
 
     renderMarkup() {
-        const tag = this.forId ? "label" : "span";
-        const cls = ["tv-static-text", TVWidget.roleClassNames(this.textKind)].filter(Boolean).join(" ");
-        const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
+        const rendering = TVRenderer.state(this);
+        const tag = this.link ? "label" : "span";
+        const cls = ["tv-static-text", "tv-label", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
+        const bounds = TVView.viewBoundsStyle(this);
         const styleAttr = bounds ? ` style="${escapeHtml(bounds)}"` : "";
-        const forAttr = this.forId ? ` for="${escapeHtml(this.forId)}"` : "";
-        const content = this.hotkey ? renderHotkeyMarkup(this.text) : escapeHtml(this.text);
-        return `<${tag} class="${escapeHtml(cls)}"${styleAttr}${forAttr}>${content}</${tag}>`;
+        const forAttr = this.link ? ` for="${escapeHtml(this.link.viewId)}"` : "";
+        const attrs = attrsToString(TVRenderer.viewAttrs(this));
+        const content = rendering.hotkey ? renderHotkeyMarkup(this.text) : escapeHtml(this.text);
+        return `<${tag} class="${escapeHtml(cls)}"${styleAttr}${forAttr} ${attrs}>${content}</${tag}>`;
     }
 }
 
-class TVInputLine extends TVWidget {
-    constructor({
-        className = "",
-        style = "",
-        width = "",
-        attrs = {},
-        x, y, w, h,
-    } = {}) {
+class TVInputLine extends TVView {
+    constructor(bounds, maxLen = 255) {
         super();
-        this.className = className;
-        this.style = style;
-        this.width = width;
-        this.attrs = attrs;
-        this.x = x; this.y = y; this.w = w; this.h = h;
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVInputLine expects TVRect bounds");
+        }
+        this.bounds = bounds;
+        this.maxLen = Math.max(1, Number(maxLen) || 255);
+        this.data = "";
+        this.disabled = false;
+    }
+
+    setData(value) {
+        this.data = String(value ?? "").slice(0, this.maxLen);
+        if (this.root) { this.root.value = this.data; }
+        return this;
+    }
+
+    getData() {
+        return this.root ? this.root.value : this.data;
+    }
+
+    setState(state, enable) {
+        if (state === "disabled") {
+            this.disabled = Boolean(enable);
+            if (this.root) { this.root.disabled = this.disabled; }
+        }
+        return this;
     }
 
     renderMarkup() {
-        const attrString = attrsToString({ type: "text", ...this.attrs });
-        const cls = ["tv-input-line", this.className].filter(Boolean).join(" ");
-        const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
-        const inlineStyle = [bounds, this.width ? `width:${this.width}` : "", this.style].filter(Boolean).join(";");
+        const rendering = TVRenderer.state(this);
+        const viewName = rendering.viewName
+            ? String(rendering.viewName).replace(/[^a-zA-Z0-9_-]/g, "-")
+            : "";
+        const attrString = attrsToString(TVRenderer.viewAttrs(this, {
+            type: "text",
+            id: this.viewId,
+            maxlength: this.maxLen,
+            value: this.data,
+            disabled: this.disabled,
+            placeholder: rendering.placeholder || null,
+            autocomplete: rendering.autocomplete || null,
+            spellcheck: rendering.spellcheck ?? null,
+            ...(viewName ? { [`data-tv-${viewName}`]: true } : {}),
+        }));
+        const cls = ["tv-input-line", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
+        const bounds = TVView.viewBoundsStyle(this);
+        const inlineStyle = [bounds, rendering.width ? `width:${rendering.width}` : ""].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
         return `<input class="${escapeHtml(cls)}"${styleAttr} ${attrString}>`;
     }
+
+    resolve(root) {
+        super.resolve(root);
+        if (this.root) {
+            this.root.value = this.data;
+            this.root.disabled = this.disabled;
+        }
+        return this;
+    }
 }
 
-class TVMarkupList extends TVWidget {
-    constructor({
-        tag = "div",
-        className = "",
-        attrs = {},
-        items = [],
-    } = {}) {
+class TVMarkupView extends TVView {
+    constructor(items = []) {
         super();
-        this.tag = tag;
-        this.className = className;
-        this.attrs = attrs;
-        this.items = items;
+        this.items = Array.isArray(items) ? items : [items];
     }
 
     renderMarkup() {
-        const classAttr = this.className ? ` class="${escapeHtml(this.className)}"` : "";
-        const attrString = attrsToString(this.attrs);
+        const rendering = TVRenderer.state(this);
+        const element = rendering.element || "div";
+        const classAttr = rendering.className ? ` class="${escapeHtml(rendering.className)}"` : "";
+        const attrString = attrsToString(TVRenderer.viewAttrs(this, rendering.attributes || {}));
         const attrs = attrString ? ` ${attrString}` : "";
-        return `<${this.tag}${classAttr}${attrs}>${this.items.join("")}</${this.tag}>`;
+        return `<${element}${classAttr}${attrs}>${this.items.join("")}</${element}>`;
     }
 }
 
-class TVGroup extends TVWidget {
-    constructor({
-        tag = "div",
-        role = "",
-        name = "",
-        value = true,
-        columns = "",
-        rows = "",
-        gap = "",
-        align = "",
-        padding = "",
-        width = "",
-        height = "",
-        hidden = false,
-        ariaLabel = "",
-        ariaHidden = null,
-        children = [],
-        html = "",
-        helpCtx = hcNoContext,
-        x, y, w, h,
-    } = {}) {
-        super(null, { helpCtx });
-        this.tag = tag;
-        this.className = TVWidget.roleClassNames(role);
-        this.columns = columns;
-        this.rows = rows;
-        this.gap = gap;
-        this.align = align;
-        this.padding = padding;
-        this.width = width;
-        this.height = height;
-        this.attrs = {
-            ...TVWidget.controlAttrs({ name, value, hidden, ariaLabel, ariaHidden }),
-        };
-        if (this.helpCtx !== hcNoContext) {
-            this.attrs["data-tv-help-ctx"] = this.helpCtx;
+class TVGroup extends TVView {
+    constructor(bounds = new TVRect()) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVGroup expects TVRect bounds");
         }
-        this.children = children;
+        super(bounds);
+        this.children = [];
         this.current = null;
-        this.children.forEach((child) => {
-            if (child instanceof TVWidget) { child.owner = this; }
-        });
-        this.html = html;
-        this.x = x; this.y = y; this.w = w; this.h = h;
     }
 
     /** True if any child has absolute positioning (x or y). */
     _hasPositionedChildren() {
         return this.children.some((child) =>
-            child && typeof child === "object" && (child.x !== undefined || child.y !== undefined)
+            child instanceof TVView && (child.bounds.x1 !== 0 || child.bounds.y1 !== 0)
         );
     }
 
     renderChildren() {
-        if (this.html) {
-            return this.html;
-        }
         return this.children.map((child) => {
-            if (typeof child === "string") {
-                return child;
-            }
             if (child && typeof child.renderMarkup === "function") {
                 return child.renderMarkup();
             }
@@ -1449,24 +1500,33 @@ class TVGroup extends TVWidget {
     }
 
     renderMarkup() {
-        const cls = ["tv-group", this.className].filter(Boolean).join(" ");
-        const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
+        const rendering = TVRenderer.state(this);
+        const cls = ["tv-group", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
+        const bounds = TVView.viewBoundsStyle(this);
         const positioned = this._hasPositionedChildren() ? "position:relative" : "";
         const parts = [
             bounds,
             positioned,
-            this.columns ? `grid-template-columns:${this.columns}` : "",
-            this.rows ? `grid-template-rows:${this.rows}` : "",
-            this.gap ? `gap:${this.gap}` : "",
-            this.align ? `align-items:${this.align}` : "",
-            this.padding ? `padding:${this.padding}` : "",
-            this.width ? `width:${this.width}` : "",
-            this.height ? `height:${this.height}` : "",
+            rendering.columns ? `grid-template-columns:${rendering.columns}` : "",
+            rendering.rows ? `grid-template-rows:${rendering.rows}` : "",
+            rendering.gap ? `gap:${rendering.gap}` : "",
+            rendering.align ? `align-items:${rendering.align}` : "",
+            rendering.padding ? `padding:${rendering.padding}` : "",
+            rendering.width ? `width:${rendering.width}` : "",
+            rendering.height ? `height:${rendering.height}` : "",
         ].filter(Boolean).join(";");
         const styleAttr = parts ? ` style="${escapeHtml(parts)}"` : "";
-        const attrString = attrsToString(this.attrs);
+        const viewName = rendering.viewName
+            ? String(rendering.viewName).replace(/[^a-zA-Z0-9_-]/g, "-")
+            : "";
+        const attrString = attrsToString(TVRenderer.viewAttrs(this, {
+            ...(viewName ? { [`data-tv-${viewName}`]: rendering.value ?? true } : {}),
+            hidden: rendering.hidden || false,
+            "aria-label": rendering.ariaLabel || null,
+            "aria-hidden": rendering.ariaHidden ?? null,
+        }));
         const attrs = attrString ? ` ${attrString}` : "";
-        return `<${this.tag} class="${escapeHtml(cls)}"${styleAttr}${attrs}>${this.renderChildren()}</${this.tag}>`;
+        return `<div class="${escapeHtml(cls)}"${styleAttr}${attrs}>${this.renderChildren()}</div>`;
     }
 
     setCurrent(child) {
@@ -1475,10 +1535,17 @@ class TVGroup extends TVWidget {
     }
 
     insert(child) {
-        if (!(child instanceof TVWidget)) { return null; }
+        if (!(child instanceof TVView)) {
+            throw new TypeError("TVGroup.insert expects TVView");
+        }
         child.owner = this;
         this.children.push(child);
         return child;
+    }
+
+    insertAll(children = []) {
+        children.forEach((child) => this.insert(child));
+        return this;
     }
 
     remove(child) {
@@ -1495,47 +1562,54 @@ class TVGroup extends TVWidget {
             : hcNoContext;
         return currentContext || super.getHelpCtx();
     }
+
+    resolve(root) {
+        super.resolve(root);
+        this.children.forEach((child) => child.resolve?.(this.root || root));
+        return this;
+    }
 }
 
 // ── TVInfoBox — framed info-box container with title ────────────────
 
-class TVInfoBox extends TVWidget {
+class TVInfoBox extends TVView {
     /**
      * @param {Object} opts
      * @param {string} opts.title   — frame title shown in header
      * @param {number} opts.w       — total width in ch (including border chars)
-     * @param {Array}  opts.children — array of TVWidget instances rendered inside the frame
+     * @param {Array}  opts.children — array of TVView instances rendered inside the frame
      * @param {number} [opts.x] — absolute left position in ch
      * @param {number} [opts.y] — absolute top position in em
      * @param {number} [opts.h] — explicit height in em
      */
-    constructor({ title = "", name = "", borderClass = "", w = 20, children = [], x, y, h, attrs = {}, className = "" } = {}) {
+    constructor(bounds, title, children = []) {
         super();
-        this.title = title;
-        this.name = name;
-        this.borderClass = borderClass;
-        this.w = w;
-        this.children = children;
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVInfoBox expects TVRect bounds");
+        }
+        this.bounds = bounds;
+        this.title = String(title ?? "");
+        this.children = Array.isArray(children) ? children : [];
         this.children.forEach((child) => {
-            if (child instanceof TVStaticText && child.name) {
-                child.textKind = [child.textKind, "info-row"].filter(Boolean).join(" ");
+            if (child instanceof TVStaticText && TVRenderer.state(child).viewName) {
+                const rendering = TVRenderer.state(child);
+                TVRenderer.configure(child, {
+                    presentation: [rendering.presentation, "info-row"].filter(Boolean).join(" "),
+                });
             }
         });
-        this.x = x; this.y = y; this.h = h;
-        this.attrs = attrs;
-        this.className = className;
         this._el = null;
         this._rows = {};
     }
 
-    get innerW() { return this.w - 2; }
+    get innerW() { return this.bounds.width - 2; }
 
     renderMarkup() {
         const innerW = this.innerW;
         const parts = [];
         // Header
         parts.push(`<span data-tv-info-frame>${escapeHtml(TVInfoBox.header(innerW, this.title))}</span>`);
-        // Children — all TVWidget instances
+        // Children — all TVView instances
         for (const child of this.children) {
             if (child && typeof child.renderMarkup === "function") {
                 parts.push(child.renderMarkup());
@@ -1544,27 +1618,28 @@ class TVInfoBox extends TVWidget {
         // Footer
         parts.push(`<span data-tv-info-frame>${escapeHtml(TVInfoBox.footer(innerW))}</span>`);
 
-        const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
-        const cls = ["tv-info-box", this.className].filter(Boolean).join(" ");
-        const attrString = attrsToString(this.attrs);
+        const rendering = TVRenderer.state(this);
+        const bounds = TVView.viewBoundsStyle(this);
+        const cls = ["tv-info-box", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
+        const attrString = attrsToString(TVRenderer.viewAttrs(this));
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const extra = attrString ? ` ${attrString}` : "";
-        const nameAttr = this.name ? ` data-tv-box="${escapeHtml(this.name)}"` : "";
-        return `<div class="${escapeHtml(cls)}" data-tv-info-w="${innerW}"${nameAttr}${style}${extra}>${parts.join("")}</div>`;
+        return `<div class="${escapeHtml(cls)}" data-tv-info-w="${innerW}"${style}${extra}>${parts.join("")}</div>`;
     }
 
     resolve(rootEl) {
         this._el = null;
         this._rows = {};
         if (!rootEl) { return this; }
-        this._el = this.name
-            ? rootEl.querySelector(`[data-tv-box="${this.name}"]`)
-            : rootEl.querySelector(".tv-info-box");
+        this._el = rootEl.getAttribute?.("data-tv-view-id") === this.viewId
+            ? rootEl
+            : rootEl.querySelector(`[data-tv-view-id="${this.viewId}"]`);
         if (!this._el) { return this; }
         for (const child of this.children) {
-            if (child && child.name) {
-                const el = this._el.querySelector(`[data-tv-row="${child.name}"]`);
-                if (el) { this._rows[child.name] = el; }
+            const viewName = child ? TVRenderer.state(child).viewName : "";
+            if (viewName) {
+                const el = this._el.querySelector(`[data-tv-row="${viewName}"]`);
+                if (el) { this._rows[viewName] = el; }
             }
         }
         return this;
@@ -1573,14 +1648,19 @@ class TVInfoBox extends TVWidget {
     updateRow(name, text) {
         const el = this._rows[name];
         if (!el) { return; }
-        el.innerHTML = TVInfoBox.rowHtml(this.innerW, text, this.borderClass);
+        el.innerHTML = TVInfoBox.rowHtml(
+            this.innerW,
+            text,
+            TVView.roleClassNames(TVRenderer.state(this).borderPresentation),
+        );
     }
 
     updateRowHTML(name, html, contentLen) {
         const el = this._rows[name];
         if (!el) { return; }
         const w = this.innerW;
-        const classAttr = this.borderClass ? ` class="${escapeHtml(this.borderClass)}"` : "";
+        const borderClass = TVView.roleClassNames(TVRenderer.state(this).borderPresentation);
+        const classAttr = borderClass ? ` class="${escapeHtml(borderClass)}"` : "";
         const B = `<span data-tv-info-side${classAttr}>\u2502</span>`;
         const padding = " ".repeat(Math.max(0, w - 1 - contentLen));
         el.innerHTML = B + " " + html + padding + B;
@@ -1632,27 +1712,27 @@ class TVInfoBox extends TVWidget {
     }
 }
 
-class TVTerminal extends TVWidget {
-    constructor({
-        className = "",
-        attrs = {},
-        width = 28,
-        rows = 3,
-        maxLines = 100,
-        lines = [],
-    } = {}) {
+class TVTerminal extends TVView {
+    constructor(bounds, maxLines = 100) {
         super();
-        this.className = className;
-        this.attrs = attrs;
-        this.width = width;
-        this.rows = rows;
-        this.maxLines = maxLines;
-        this.lines = Array.isArray(lines) ? lines.map(String).slice(-maxLines) : [];
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVTerminal expects TVRect bounds");
+        }
+        this.bounds = bounds;
+        this.width = bounds.width;
+        this.rows = bounds.height;
+        this.maxLines = Math.max(1, Number(maxLines) || 100);
+        this.lines = [];
     }
 
     renderMarkup() {
-        const className = ["tv-terminal", this.className].filter(Boolean).join(" ");
-        const attrString = attrsToString({ role: "log", "aria-live": "polite", ...this.attrs });
+        const rendering = TVRenderer.state(this);
+        const className = ["tv-terminal", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
+        const attrString = attrsToString(TVRenderer.viewAttrs(this, {
+            role: "log",
+            "aria-live": "polite",
+            ...(rendering.viewName ? { [`data-tv-${rendering.viewName}`]: true } : {}),
+        }));
         const rows = Array.from({ length: this.rows }, (_unused, index) => (
             `<span data-tv-terminal-line="${index}"></span>`
         )).join("");
@@ -1691,16 +1771,10 @@ class TVTerminal extends TVWidget {
     }
 }
 
-class TVIndicator extends TVWidget {
-    constructor({ className = "", attrs = {} } = {}) {
-        super();
-        this.className = className;
-        this.attrs = attrs;
-    }
-
+class TVIndicator extends TVView {
     renderMarkup() {
-        const className = ["tv-editor-indicator", this.className].filter(Boolean).join(" ");
-        const attrString = attrsToString({ "aria-live": "polite", ...this.attrs });
+        const className = "tv-editor-indicator";
+        const attrString = attrsToString(TVRenderer.viewAttrs(this, { "aria-live": "polite" }));
         return `<span class="${escapeHtml(className)}" ${attrString}>RO  1:1</span>`;
     }
 
@@ -1709,24 +1783,46 @@ class TVIndicator extends TVWidget {
     }
 }
 
-class TVEditor extends TVWidget {
-    constructor(root, { indicator = null, readOnly = true } = {}) {
-        super(root);
+class TVEditor extends TVView {
+    constructor(bounds, hScrollBar = null, vScrollBar = null, indicator = null, bufSize = 65535) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVEditor expects TVRect bounds");
+        }
+        super(bounds);
+        this.hScrollBar = hScrollBar;
+        this.vScrollBar = vScrollBar;
         this.indicator = indicator;
-        this.readOnly = readOnly;
+        this.bufSize = Math.max(1, Number(bufSize) || 65535);
+        this.readOnly = true;
         this.lastQuery = "";
         this.lastMatchEnd = 0;
         this.onSelectionChange = () => this.updateIndicator();
+    }
+
+    bindRoot(root) {
+        if (this.root) {
+            this.root.removeEventListener("keyup", this.onSelectionChange);
+            this.root.removeEventListener("mouseup", this.onSelectionChange);
+            document.removeEventListener("selectionchange", this.onSelectionChange);
+        }
+        super.bindRoot(root);
         if (this.root) {
             this.root.dataset.tvEditor = "1";
             this.root.setAttribute("role", "document");
-            this.root.setAttribute("aria-readonly", readOnly ? "true" : "false");
+            this.root.setAttribute("aria-readonly", this.readOnly ? "true" : "false");
             if (!this.root.hasAttribute("tabindex")) { this.root.tabIndex = 0; }
             this.root.addEventListener("keyup", this.onSelectionChange);
             this.root.addEventListener("mouseup", this.onSelectionChange);
             document.addEventListener("selectionchange", this.onSelectionChange);
         }
         this.updateIndicator();
+        return this;
+    }
+
+    setReadOnly(readOnly = true) {
+        this.readOnly = Boolean(readOnly);
+        this.root?.setAttribute("aria-readonly", this.readOnly ? "true" : "false");
+        return this;
     }
 
     selectionOffset() {
@@ -1800,27 +1896,41 @@ class TVEditor extends TVWidget {
     }
 }
 
-class TVListViewer extends TVWidget {
-    constructor(root = null, {
-        itemClassName = "",
-        itemAttrName = "data-tv-list-index",
-        selectedClassName = "is-selected",
-        renderItemContent = null,
-        renderItemMarkup = null,
-    } = {}) {
-        super(root);
-        this.itemClassName = itemClassName;
-        this.itemAttrName = itemAttrName;
-        this.selectedClassName = selectedClassName;
-        this.renderItemContent = renderItemContent;
-        this.renderItemMarkup = renderItemMarkup;
+class TVListViewer extends TVView {
+    constructor(bounds, numCols = 1) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVListViewer expects TVRect bounds");
+        }
+        super(bounds);
+        this.numCols = Math.max(1, Number(numCols) || 1);
+        this.itemClassName = "";
+        this.itemAttrName = "data-tv-list-index";
+        this.selectedClassName = "is-selected";
+        this.renderItemContent = null;
+        this.renderItemMarkup = null;
         this.items = [];
         this.selectedIndex = -1;
         this.selectHandler = null;
         this.activateHandler = null;
+    }
+
+    applyRenderer() {
+        const rendering = TVRenderer.state(this);
+        this.itemClassName = rendering.itemClassName || "";
+        this.itemAttrName = rendering.itemAttrName || "data-tv-list-index";
+        this.selectedClassName = rendering.selectedClassName || "is-selected";
+        this.renderItemContent = rendering.renderItemContent || null;
+        this.renderItemMarkup = rendering.renderItemMarkup || null;
+        return this;
+    }
+
+    bindRoot(root) {
+        super.bindRoot(root);
+        this.applyRenderer();
         if (this.root) {
             this.root.dataset.tvListBox = "1";
         }
+        return this;
     }
 
     itemsRoot() {
@@ -1867,6 +1977,7 @@ class TVListViewer extends TVWidget {
     }
 
     setItems(items = [], selectedIndex = -1) {
+        this.applyRenderer();
         this.items = Array.isArray(items) ? [...items] : [];
         const itemsRoot = this.itemsRoot();
         if (itemsRoot) {
@@ -2043,32 +2154,30 @@ class TVVerticalListViewer extends TVListBox {
         `;
     }
 
-    constructor(root = null, {
-        itemClassName = "",
-        itemAttrName = "data-tv-list-index",
-        selectedClassName = "is-selected",
-        renderItemContent = null,
-        renderItemMarkup = null,
-    } = {}) {
-        super(root, {
-            itemClassName,
-            itemAttrName,
-            selectedClassName,
-            renderItemContent,
-            renderItemMarkup,
-        });
+    constructor(bounds, numCols = 1) {
+        super(bounds, numCols);
+        this.viewport = null;
+        this.scrollViewport = null;
+        this.externalScrollbarWidget = null;
+        this.scrollbarWidget = null;
+        this.scrollbar = null;
+        this.active = true;
+    }
+
+    bindRoot(root) {
+        this.scrollbarWidget?.destroy();
+        super.bindRoot(root);
         this.viewport = this.query("[data-tv-list-viewport]");
         this.scrollViewport = this.viewport;
-        this.externalScrollbarWidget = null;
         this.scrollbarWidget = this.root?.querySelector(".tv-scrollbar-y")
-            ? new TVScrollBar(this.root)
+            ? new TVScrollBar(new TVRect()).bindRoot(this.root)
             : null;
         this.scrollbar = this.scrollbarWidget?.axes.y?.root || null;
-        this.active = true;
         if (this.root) {
             this.root.dataset.tvListViewer = "1";
             this.root._tvListViewer = this;
         }
+        return this;
     }
 
     itemsRoot() {
@@ -2233,23 +2342,28 @@ class TVVerticalListViewer extends TVListBox {
 }
 
 class TVOutline extends TVVerticalListViewer {
-    constructor(root = null, {
-        getChildren = (node) => node?.children || [],
-        getKey = (node) => node?.key ?? node?.path ?? node?.id ?? node?.label,
-        getLabel = (node) => node?.label ?? "",
-        renderNodeContent = null,
-        ...options
-    } = {}) {
-        super(root, options);
-        this.getChildren = getChildren;
-        this.getKey = getKey;
-        this.getLabel = getLabel;
-        this.renderNodeContent = renderNodeContent;
+    constructor(bounds, numCols = 1) {
+        super(bounds, numCols);
+        this.getChildren = (node) => node?.children || [];
+        this.getKey = (node) => node?.key ?? node?.path ?? node?.id ?? node?.label;
+        this.getLabel = (node) => node?.label ?? "";
+        this.renderNodeContent = null;
         this.renderItemContent = (entry) => this.renderEntry(entry);
         this.tree = [];
         this.expanded = new Set();
         this.nodeSelectHandler = null;
         this.nodeActivateHandler = null;
+    }
+
+    applyRenderer() {
+        super.applyRenderer();
+        const rendering = TVRenderer.state(this);
+        this.getChildren = rendering.getChildren || ((node) => node?.children || []);
+        this.getKey = rendering.getKey || ((node) => node?.key ?? node?.path ?? node?.id ?? node?.label);
+        this.getLabel = rendering.getLabel || ((node) => node?.label ?? "");
+        this.renderNodeContent = rendering.renderNodeContent || null;
+        this.renderItemContent = (entry) => this.renderEntry(entry);
+        return this;
     }
 
     nodeKey(node, fallback = "") {
@@ -2379,7 +2493,7 @@ class TVOutline extends TVVerticalListViewer {
     }
 }
 
-class TVVerticalScrollArea extends TVWidget {
+class TVVerticalScrollArea extends TVView {
     static renderMarkup({
         rootClass = "",
         rootAttrs = {},
@@ -2406,10 +2520,21 @@ class TVVerticalScrollArea extends TVWidget {
         `;
     }
 
-    constructor(root = null) {
-        super(root);
+    constructor(bounds) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVVerticalScrollArea expects TVRect bounds");
+        }
+        super(bounds);
+        this.viewport = null;
+        this.scrollbarWidget = null;
+    }
+
+    bindRoot(root) {
+        this.scrollbarWidget?.destroy();
+        super.bindRoot(root);
         this.viewport = this.query("[data-tv-scroll-viewport]");
-        this.scrollbarWidget = this.root ? new TVScrollBar(this.root) : null;
+        this.scrollbarWidget = this.root ? new TVScrollBar(new TVRect()).bindRoot(this.root) : null;
+        return this;
     }
 
     update() {
@@ -2426,7 +2551,7 @@ class TVVerticalScrollArea extends TVWidget {
     }
 }
 
-class TVMenuView extends TVWidget {
+class TVMenuView extends TVView {
     renderItems(items = [], view = "popup") {
         return items.map((item) => (
             typeof item === "string" ? item : item?.renderMarkup?.(view) || ""
@@ -2438,7 +2563,7 @@ class TVMenuView extends TVWidget {
  * Turbo Vision menu command descriptor. TMenuItem is not a TButton: the
  * owning TMenuView decides whether it is drawn in a menu bar or menu box.
  */
-class TVMenuItem extends TVWidget {
+class TVMenuItem extends TVView {
     constructor(label, command = "", value = true, commandData = {}) {
         super();
         this.label = String(label || "");
@@ -2457,7 +2582,7 @@ class TVMenuItem extends TVWidget {
         const isMenuBar = view === "bar";
         const attrs = attrsToString({
             type: "button",
-            ...TVWidget.controlAttrs({
+            ...TVView.controlAttrs({
                 name: this.command,
                 command: this.command,
                 value: this.value,
@@ -2473,7 +2598,7 @@ class TVMenuItem extends TVWidget {
 }
 
 /** Turbo Vision status-line command descriptor (TStatusItem). */
-class TVStatusItem extends TVWidget {
+class TVStatusItem extends TVView {
     constructor(text, command = "", value = true, commandData = {}) {
         super();
         this.text = String(text || "");
@@ -2491,7 +2616,7 @@ class TVStatusItem extends TVWidget {
     renderMarkup() {
         const attrs = attrsToString({
             type: "button",
-            ...TVWidget.controlAttrs({
+            ...TVView.controlAttrs({
                 name: this.command,
                 command: this.command,
                 value: this.value,
@@ -2504,20 +2629,19 @@ class TVStatusItem extends TVWidget {
 }
 
 class TVMenuBox extends TVMenuView {
-    constructor({
-        className = "tv-menu-popup",
-        attrs = {},
-        items = [],
-    } = {}) {
-        super();
-        this.className = className;
-        this.attrs = attrs;
-        this.items = items;
+    constructor(bounds, items = []) {
+        super(bounds);
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVMenuBox expects TVRect bounds");
+        }
+        this.items = Array.isArray(items) ? items : [];
     }
 
     renderMarkup() {
-        const popupAttrs = attrsToString(this.attrs);
+        const rendering = TVRenderer.state(this);
+        const popupAttrs = attrsToString(TVRenderer.viewAttrs(this, rendering.attributes || {}));
         const attrs = popupAttrs ? ` ${popupAttrs}` : "";
+        const className = rendering.className || "tv-menu-popup";
         const borderFill = '<span class="tv-border-fill" data-tv-border-fill="\u2500" aria-hidden="true"></span>';
         const scrollbarMarkup = TVScrollBar.renderMarkup("y", {
             rootClass: "tv-menu-popup-scrollbar",
@@ -2550,7 +2674,7 @@ class TVMenuBox extends TVMenuView {
                 );
             }
         }
-        return '<div class="' + this.className + '"' + attrs + '>'
+        return '<div class="' + className + '"' + attrs + '>'
             + '<div class="tv-menu-popup-row">'
             + '<span class="tv-border-corner" aria-hidden="true">\u250C</span>'
             + borderFill
@@ -2614,7 +2738,7 @@ function bindMenuPopupScrollbar(popup) {
     }
     popup.dataset.tvMenuScrollbarBound = "1";
     const main = popup.querySelector(".tv-menu-popup-main");
-    popup._tvMenuPopupScrollbar = main ? new TVScrollBar(main) : null;
+    popup._tvMenuPopupScrollbar = main ? new TVScrollBar(new TVRect()).bindRoot(main) : null;
 }
 
 function resetMenuPopupLayout(popup) {
@@ -3152,55 +3276,20 @@ class TVMenuController {
     }
 }
 
-class TVButtonStrip extends TVWidget {
-    constructor({
-        className = "",
-        attrs = {},
-        buttons = [],
-        x, y, w, h,
-    } = {}) {
-        super();
-        this.className = className;
-        this.attrs = attrs;
-        this.buttons = buttons;
-        this.x = x; this.y = y; this.w = w; this.h = h;
-    }
-
-    renderMarkup() {
-        const classAttr = this.className ? ` class="${escapeHtml(this.className)}"` : "";
-        const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
-        const styleAttr = bounds ? ` style="${escapeHtml(bounds)}"` : "";
-        const attrString = attrsToString(this.attrs);
-        const attrs = attrString ? ` ${attrString}` : "";
-        const content = this.buttons
-            .map((button) => typeof button === "string" ? button : button.renderMarkup())
-            .join("");
-        return `<div${classAttr}${styleAttr}${attrs}>${content}</div>`;
-    }
-}
-
 let tvChoiceGroupId = 0;
 
-class TVCluster extends TVWidget {
-    constructor({
-        className = "",
-        attrs = {},
-        options = [],
-        type,
-        name = "",
-        itemClass,
-        itemAttr,
-        markClass,
-    } = {}) {
+class TVCluster extends TVView {
+    constructor(bounds, options = []) {
         super();
-        this.className = className;
-        this.attrs = attrs;
-        this.options = options;
-        this.type = type;
-        this.name = name;
-        this.itemClass = itemClass;
-        this.itemAttr = itemAttr;
-        this.markClass = markClass;
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVCluster expects TVRect bounds");
+        }
+        this.bounds = bounds;
+        this.options = Array.isArray(options) ? options : [];
+        this.type = "checkbox";
+        this.itemClass = "tv-checkbox-item";
+        this.itemAttr = "data-tv-checkbox-index";
+        this.markClass = "tv-checkbox-mark";
     }
 
     renderMarkup() {
@@ -3208,7 +3297,7 @@ class TVCluster extends TVWidget {
             const inputAttrs = attrsToString({
                 type: this.type,
                 class: "tv-choice-input",
-                name: this.name || null,
+                name: this.type === "radio" ? this.viewId : null,
                 value: option.value !== undefined ? option.value : index,
                 checked: Boolean(option.checked),
                 disabled: Boolean(option.disabled),
@@ -3217,50 +3306,40 @@ class TVCluster extends TVWidget {
             const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
             return `<label class="${className}" ${this.itemAttr}="${index}"><input ${inputAttrs}><span class="${this.markClass}" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
         }).join("");
-        return new TVMarkupList({
-            className: this.className,
-            attrs: this.attrs,
-            items: [items],
+        const rendering = TVRenderer.state(this);
+        return TVRenderer.markup([items], {
+            className: TVView.roleClassNames(rendering.presentation),
+            attributes: TVRenderer.viewAttrs(this, rendering.viewName ? { [`data-tv-${rendering.viewName}`]: true } : {}),
         }).renderMarkup();
     }
 }
 
 class TVCheckBoxes extends TVCluster {
-    constructor(options = {}) {
-        super({
-            ...options,
-            type: "checkbox",
-            itemClass: "tv-checkbox-item",
-            itemAttr: "data-tv-checkbox-index",
-            markClass: "tv-checkbox-mark",
-        });
+    constructor(bounds, options = []) {
+        super(bounds, options);
     }
 }
 
 class TVRadioButtons extends TVCluster {
-    constructor(options = {}) {
-        super({
-            ...options,
-            type: "radio",
-            name: options.name || `tv-radio-${++tvChoiceGroupId}`,
-            itemClass: "tv-radio-item",
-            itemAttr: "data-tv-radio-index",
-            markClass: "tv-radio-mark",
-        });
+    constructor(bounds, options = []) {
+        super(bounds, options);
+        this.type = "radio";
+        this.viewId = `tv-radio-${++tvChoiceGroupId}`;
+        this.itemClass = "tv-radio-item";
+        this.itemAttr = "data-tv-radio-index";
+        this.markClass = "tv-radio-mark";
     }
 }
 
 class TVMultiCheckBoxes extends TVCluster {
-    constructor(options = {}) {
-        super({
-            ...options,
-            type: "button",
-            itemClass: "tv-multicheck-item",
-            itemAttr: "data-tv-multicheck-index",
-            markClass: "tv-multicheck-mark",
-        });
-        this.states = Array.isArray(options.states) && options.states.length > 1
-            ? options.states.map(String)
+    constructor(bounds, options = [], states = [" ", "X", "?"]) {
+        super(bounds, options);
+        this.type = "button";
+        this.itemClass = "tv-multicheck-item";
+        this.itemAttr = "data-tv-multicheck-index";
+        this.markClass = "tv-multicheck-mark";
+        this.states = Array.isArray(states) && states.length > 1
+            ? states.map(String)
             : [" ", "X", "?"];
         this.changeHandler = null;
     }
@@ -3283,7 +3362,11 @@ class TVMultiCheckBoxes extends TVCluster {
             const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
             return `<label class="${className}" ${this.itemAttr}="${index}"><button ${attrs}><span class="${this.markClass}" aria-hidden="true">[${escapeHtml(this.states[state])}]</span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></button></label>`;
         }).join("");
-        return new TVMarkupList({ className: this.className, attrs: this.attrs, items: [items] }).renderMarkup();
+        const rendering = TVRenderer.state(this);
+        return TVRenderer.markup([items], {
+            className: TVView.roleClassNames(rendering.presentation),
+            attributes: TVRenderer.viewAttrs(this, rendering.viewName ? { [`data-tv-${rendering.viewName}`]: true } : {}),
+        }).renderMarkup();
     }
 
     bind(root, onChange = null) {
@@ -3320,50 +3403,29 @@ const bfDefault = 0x01;
 const bfLeftJust = 0x02;
 const bfBroadcast = 0x04;
 
-class TVButton extends TVWidget {
-    constructor({
-        label = "",
-        labelMarkup = "",
-        command = "",
-        value = true,
-        commandData = {},
-        flags = bfNormal,
-        disabled = false,
-        hidden = false,
-        ariaLabel = "",
-        ariaExpanded = null,
-        ariaPressed = null,
-        ariaHasPopup = null,
-        tabIndex = null,
-        tooltip = "",
-        draggable = null,
-        width = "",
-        x, y, w, h,
-    } = {}) {
+class TVButton extends TVView {
+    constructor(bounds, title, command, flags = bfNormal) {
         super();
-        this.labelMarkup = label ? renderHotkeyMarkup(label) : labelMarkup;
-        this.command = command;
-        this.commandData = commandData;
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVButton expects TVRect bounds");
+        }
+        this.bounds = bounds;
+        this.title = String(title ?? "");
+        this.command = String(command || "");
+        this.commandData = {};
+        this.value = true;
         this.flags = flags;
-        this.className = (flags & bfDefault) !== 0 ? "is-default" : "";
-        this.attrs = {
-            ...TVWidget.controlAttrs({
-                name: command,
-                value,
-                commandData,
-                disabled,
-                hidden,
-                ariaLabel,
-                ariaExpanded,
-                ariaPressed,
-                ariaHasPopup,
-                tabIndex,
-                tooltip,
-                draggable,
-            }),
-        };
-        this.width = width;
-        this.x = x; this.y = y; this.w = w; this.h = h;
+        this.disabled = false;
+    }
+
+    setCommandData(commandData = {}) {
+        this.commandData = { ...commandData };
+        return this;
+    }
+
+    setValue(value) {
+        this.value = value;
+        return this;
     }
 
     presentation() {
@@ -3423,20 +3485,39 @@ class TVButton extends TVWidget {
     }
 
     renderMarkup() {
+        const rendering = TVRenderer.state(this);
         const presentation = this.presentation();
-        const attrString = attrsToString({ type: "button", ...this.attrs });
-        const classNames = [presentation.className, this.className].filter(Boolean).join(" ");
-        const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
-        const widthStyle = this.width ? `min-width:${this.width}` : "";
+        const attrString = attrsToString(TVRenderer.viewAttrs(this, {
+            type: "button",
+            ...TVView.controlAttrs({
+                name: this.command,
+                value: this.value,
+                command: this.command,
+                commandData: this.commandData,
+                disabled: this.disabled,
+                hidden: rendering.hidden || false,
+                ariaLabel: rendering.ariaLabel || "",
+                ariaExpanded: rendering.ariaExpanded ?? null,
+                ariaPressed: rendering.ariaPressed ?? null,
+                ariaHasPopup: rendering.ariaHasPopup ?? null,
+                tabIndex: rendering.tabIndex ?? null,
+                tooltip: rendering.tooltip || "",
+                draggable: rendering.draggable ?? null,
+            }),
+        }));
+        const classNames = [presentation.className, (this.flags & bfDefault) !== 0 ? "is-default" : ""].filter(Boolean).join(" ");
+        const bounds = TVView.viewBoundsStyle(this);
+        const widthStyle = rendering.width ? `min-width:${rendering.width}` : "";
         const inlineStyle = [bounds, widthStyle, presentation.style].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
+        const labelMarkup = rendering.labelMarkup || renderHotkeyMarkup(this.title);
         if (presentation.dialog) {
             const buttonClass = [presentation.baseClass, classNames].filter(Boolean).join(" ");
             const shadow = " " + "\u2580".repeat(20);
             return `
                 <button class="${buttonClass}"${styleAttr} ${attrString}>
                     <span class="tv-dialog-button-face">
-                        <span class="tv-dialog-button-label">${this.labelMarkup}</span>
+                        <span class="tv-dialog-button-label">${labelMarkup}</span>
                         <span class="tv-dialog-button-edge" aria-hidden="true">▄</span>
                     </span>
                     <span class="tv-dialog-button-shadow" aria-hidden="true">${shadow}</span>
@@ -3445,7 +3526,7 @@ class TVButton extends TVWidget {
         }
         const classAttr = classNames ? ` class="${classNames}"` : "";
         const attrs = attrString ? ` ${attrString}` : "";
-        return `<button${classAttr}${styleAttr}${attrs}>${this.labelMarkup}</button>`;
+        return `<button${classAttr}${styleAttr}${attrs}>${labelMarkup}</button>`;
     }
 
     draw() {
@@ -3454,7 +3535,6 @@ class TVButton extends TVWidget {
 
     makeDefault(enable = true) {
         this.flags = enable ? (this.flags | bfDefault) : (this.flags & ~bfDefault);
-        this.className = enable ? "is-default" : "";
         this.root?.classList.toggle("is-default", Boolean(enable));
         return this;
     }
@@ -3465,14 +3545,14 @@ class TVButton extends TVWidget {
 
     setState(state, enable) {
         if (state === "disabled") {
-            this.attrs.disabled = Boolean(enable);
+            this.disabled = Boolean(enable);
             if (this.root) { this.root.disabled = Boolean(enable); }
         }
         return this;
     }
 }
 
-class TVFrame extends TVWidget {
+class TVFrame extends TVView {
     static titleControlMarkup({
         className = "", glyph = "", glyphClass = "", glyphAttrs = {}, attrs = {},
     } = {}) {
@@ -3484,7 +3564,7 @@ class TVFrame extends TVWidget {
     }
 
     static createTitleControl(options = {}) {
-        return TVWidget.fromHTML(TVFrame.titleControlMarkup(options));
+        return TVView.fromHTML(TVFrame.titleControlMarkup(options));
     }
 
     static closeMarkup(className, attrs = {}) {
@@ -3562,10 +3642,13 @@ class TVFrame extends TVWidget {
 }
 
 class TVWindow extends TVGroup {
-    constructor(root = null, { helpCtx = hcNoContext } = {}) {
-        super({ helpCtx });
-        this.root = root;
-        setElementHelpContext(this.root, helpCtx);
+    constructor(bounds, title = "", number = 0) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVWindow expects TVRect bounds");
+        }
+        super(bounds);
+        this.title = String(title ?? "");
+        this.number = Number(number) || 0;
     }
 
     static renderMarkup({
@@ -3624,7 +3707,7 @@ class TVWindow extends TVGroup {
     }
 
     static create(options = {}) {
-        return TVWidget.fromHTML(TVWindow.renderMarkup(options));
+        return TVView.fromHTML(TVWindow.renderMarkup(options));
     }
 }
 
@@ -3653,7 +3736,7 @@ class TVDialog extends TVWindow {
         }
         const viewClass = String(viewName || "dialog").replace(/[^a-zA-Z0-9_-]/g, "-");
         const classPrefix = `tv-${viewClass}`;
-        const root = TVWidget.fromHTML(
+        const root = TVView.fromHTML(
             TVFrame.dialogMarkup({
                 overlayClass: `${classPrefix}-overlay`,
                 windowClass: `${classPrefix}-window`,
@@ -3674,10 +3757,14 @@ class TVDialog extends TVWindow {
                 palette,
             })
         );
-        super(root, { helpCtx });
+        super(bounds, title);
+        this.bindRoot(root);
+        this.setHelpCtx(helpCtx);
         this.desktop = desktop;
+        this.content = content instanceof TVView ? content : null;
         this.overlay = root;
         this.dialog = this.query(".tv-dialog-window");
+        this.content?.resolve(this.dialog);
         setElementHelpContext(this.dialog, helpCtx);
         this.titlebar = this.query(".tv-dialog-titlebar");
         this.closeButton = this.query(".tv-dialog-close-control");
@@ -4357,14 +4444,10 @@ class TVMessageBox extends TVDialog {
         super(new TVRect(0, 0, 42, 12), "", {
             desktop: parentEl,
             viewName: "msgbox",
-            content: new TVGroup({
-                role: "msgbox-body",
-                name: "msgbox-body",
-                children: [
-                    new TVGroup({ role: "msgbox-content", name: "msgbox-content" }),
-                    new TVGroup({ role: "msgbox-buttons", name: "msgbox-buttons" }),
-                ],
-            }),
+            content: TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
+                    TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "msgbox-content", viewName: "msgbox-content" }),
+                    TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "msgbox-buttons", viewName: "msgbox-buttons" }),
+                ]), { presentation: "msgbox-body", viewName: "msgbox-body" }),
             modal: true,
             keyboard: false,
         });
@@ -4408,12 +4491,7 @@ class TVMessageBox extends TVDialog {
             : TVMessageBox.BUTTON_DEFS.filter(b => b.cmd === "ok");
         if (this.buttonsEl) {
             const btnHtml = btnDefs.map((b, index) =>
-                new TVButton({
-                    label: b.label,
-                    flags: index === 0 ? bfDefault : bfNormal,
-                    command: "msgbox-cmd",
-                    value: b.cmd,
-                }).renderMarkup()
+                new TVButton(new TVRect(), b.label, "msgbox-cmd", index === 0 ? bfDefault : bfNormal).setValue(b.cmd).renderMarkup()
             ).join("");
             this.buttonsEl.innerHTML = btnHtml;
         }
@@ -4498,7 +4576,7 @@ function normalizeSearchText(text) {
     return value.toLowerCase();
 }
 
-class TVScrollBar {
+class TVScrollBar extends TVView {
     static renderMarkup(axis, {
         rootClass = "",
         arrowClass = "",
@@ -4516,7 +4594,28 @@ class TVScrollBar {
         ].join("");
     }
 
-    constructor(frame) {
+    constructor(bounds, options = 0) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVScrollBar expects TVRect bounds");
+        }
+        super(bounds);
+        this.options = options;
+        this.frame = null;
+        this.host = null;
+        this.viewport = null;
+        this.axes = {};
+        this.resizeObserver = null;
+        this.dragState = null;
+        this.repeatTimer = null;
+        this.destroyed = false;
+        this.active = true;
+        this.onViewportScroll = () => this.update();
+        this.onWindowResize = () => this.update();
+        this.onDocumentMouseUp = () => this.stopRepeat();
+    }
+
+    bindRoot(frame) {
+        super.bindRoot(frame);
         this.frame = frame;
         this.host = frame.querySelector(":scope > .tv-scrollbar")
             ? frame
@@ -4530,17 +4629,12 @@ class TVScrollBar {
         for (const axis of Object.values(this.axes)) {
             axis.root._tvScrollbar = this;
         }
-        this.resizeObserver = null;
-        this.dragState = null;
-        this.repeatTimer = null;
         this.destroyed = false;
         this.active = !frame.closest(".tv-window")?.classList.contains("is-window-inactive");
-        this.onViewportScroll = () => this.update();
-        this.onWindowResize = () => this.update();
-        this.onDocumentMouseUp = () => this.stopRepeat();
         this.bind();
         this.setActive(this.active);
         this.update();
+        return this;
     }
 
     buildAxis(axis) {
@@ -4825,10 +4919,9 @@ class TVScrollBar {
 const TurboVisionScrollbar = TVScrollBar;
 
 class TVDesktop extends TVGroup {
-    constructor(root = document.querySelector(".tv-desktop") || document.body) {
-        super({});
-        this.root = root;
-        this.dialogManager = new TVDialogManager(root);
+    constructor(bounds = new TVRect()) {
+        super(bounds);
+        this.dialogManager = null;
         this.layoutStarted = false;
         this.clockTimer = null;
         this.onResize = () => {
@@ -4839,6 +4932,12 @@ class TVDesktop extends TVGroup {
             this.onResize();
             updateClocks();
         };
+    }
+
+    bindRoot(root) {
+        super.bindRoot(root);
+        this.dialogManager = new TVDialogManager(this.root);
+        return this;
     }
 
     startLayout() {
@@ -4912,11 +5011,11 @@ Object.assign(TV, {
     fitMenuPopupToViewport,
     TVAppContext,
     TVRect,
-    TVWidget,
+    TVRenderer,
+    TVView,
     TVStaticText,
     TVLabel,
     TVInputLine,
-    TVMarkupList,
     TVListViewer,
     TVGroup,
     TVInfoBox,
@@ -4933,7 +5032,6 @@ Object.assign(TV, {
     TVStatusItem,
     TVMenuController,
     TVHelpController,
-    TVButtonStrip,
     TVCluster,
     TVCheckBoxes,
     TVRadioButtons,
