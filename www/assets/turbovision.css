@@ -141,7 +141,7 @@
     --tv-dialog-list-divider-bg: var(--tv-palette-dialog-list-divider-bg);
     --tv-dialog-list-divider-fg: var(--tv-palette-dialog-list-divider-fg);
     --tv-calc-display-bg: #0000aa;
-    --tv-calc-display-fg: #aaaaaa;
+    --tv-calc-display-fg: #ffffff;
     --tv-window-dark: #0000aa;
     --tv-title: var(--tv-palette-help-frame-active-bg);
     --tv-title-text: var(--tv-palette-help-frame-active-fg);
@@ -1987,6 +1987,7 @@ button.tv-status-item {
 }
 
 .tv-calc-display {
+    --tv-control-static-fg: var(--tv-calc-display-fg);
     display: block;
     width: 18ch;
     justify-self: center;

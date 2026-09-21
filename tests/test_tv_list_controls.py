@@ -52,10 +52,19 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
         source.index("class TVButton extends TVWidget"):
         source.index("} = {}) {", source.index("class TVButton extends TVWidget"))
     ]
+    static_text_signature = source[
+        source.index("class TVStaticText extends TVWidget"):
+        source.index("} = {}) {", source.index("class TVStaticText extends TVWidget"))
+    ]
     assert "className" not in group_signature
     assert "attrs" not in group_signature
     assert "className" not in button_signature
     assert "attrs" not in button_signature
+    assert "role" not in button_signature
+    assert "name" not in button_signature
+    assert "command = \"\"" in button_signature
+    assert "className" not in static_text_signature
+    assert "style" not in static_text_signature
     assert 'static roleClassNames(role = "")' in source
     assert "commandData = {}" in button_signature
 

@@ -379,6 +379,20 @@ async function run() {
     })`, true);
 
     await key("Escape", "Escape", 0, true);
+    const calculatorView = await evaluate(`(() => {
+        document.querySelector('[data-tv-dialog-open="calc"]')?.click();
+        const display = document.querySelector('[data-tv-calc-display]');
+        return {
+            open: Boolean(display && !display.closest('.tv-dialog-overlay')?.hidden),
+            foreground: display ? getComputedStyle(display).color : '',
+            hint: document.querySelector('[data-tv-status-hint]')?.textContent.trim() || '',
+        };
+    })()`);
+    if (!calculatorView.open || calculatorView.foreground !== 'rgb(255, 255, 255)'
+        || calculatorView.hint !== 'Calculator') {
+        throw new Error(`Calculator display/status palette is broken: ${JSON.stringify(calculatorView)}`);
+    }
+    await evaluate(`document.querySelector('[data-tv-calc-close]')?.click()`);
     const initialFindState = await evaluate(`(() => ({
         findDisabled: document.querySelector('[data-tv-find]')?.disabled,
         againDisabled: document.querySelector('[data-tv-find-again]')?.disabled,
@@ -417,11 +431,19 @@ async function run() {
             const style = getComputedStyle(element);
             return [style.backgroundColor, style.color];
         };
-        return { viewport: pair(viewport), content: pair(content) };
+        return {
+            viewport: pair(viewport),
+            content: pair(content),
+            statusHint: document.querySelector('[data-tv-status-hint]')?.textContent.trim() || '',
+            caption: doc.querySelector('.tv-window-caption')?.textContent.trim() || '',
+        };
     })()`);
     const editorColors = ['rgb(0, 0, 170)', 'rgb(255, 255, 85)'];
     if (docColors.viewport.join() !== editorColors.join() || docColors.content.join() !== editorColors.join()) {
         throw new Error(`Documentation does not use the Editor palette: ${JSON.stringify(docColors)}`);
+    }
+    if (!docColors.caption || docColors.statusHint !== docColors.caption) {
+        throw new Error(`Status line did not show the active document hint: ${JSON.stringify(docColors)}`);
     }
     const docPaletteIsolation = await evaluate(`(() => {
         const TV = window.THelpViewerTV;

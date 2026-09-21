@@ -85,7 +85,7 @@ const THEME_PRESETS = {
             "--tv-ascii-pane": "#555555",
             "--tv-ascii-text": "#ffffff",
             "--tv-calc-display-bg": "#000000",
-            "--tv-calc-display-fg": "#55ffff",
+            "--tv-calc-display-fg": "#ffffff",
             "--tv-code-bg": "#0000aa",
             "--tv-code-text": "#aaaaaa",
             "--tv-code-keyword": "#ffff55",
@@ -128,7 +128,7 @@ const THEME_PRESETS = {
             "--tv-ascii-pane": "#aaaaaa",
             "--tv-ascii-text": "#000000",
             "--tv-calc-display-bg": "#0000aa",
-            "--tv-calc-display-fg": "#aaaaaa",
+            "--tv-calc-display-fg": "#ffffff",
         },
     },
     amber: {
@@ -167,7 +167,7 @@ const THEME_PRESETS = {
             "--tv-ascii-pane": "#552200",
             "--tv-ascii-text": "#ffff55",
             "--tv-calc-display-bg": "#552200",
-            "--tv-calc-display-fg": "#ffff55",
+            "--tv-calc-display-fg": "#ffffff",
         },
     },
     gray: {
@@ -1236,8 +1236,9 @@ class TVStaticText extends TVWidget {
         name = "",
         text = "",
         html = "",
-        className = "",
-        style = "",
+        textKind = "",
+        foreground = "",
+        background = "",
         align = "",
         title = false,
         attrs = {},
@@ -1248,8 +1249,9 @@ class TVStaticText extends TVWidget {
         this.name = name;
         this.text = text;
         this.html = html;
-        this.className = className;
-        this.style = style;
+        this.textKind = textKind;
+        this.foreground = foreground;
+        this.background = background;
         this.align = align;
         this.title = title;
         this.attrs = attrs;
@@ -1257,11 +1259,17 @@ class TVStaticText extends TVWidget {
     }
 
     renderMarkup() {
-        const cls = ["tv-static-text", this.title ? "tv-title" : "", this.className].filter(Boolean).join(" ");
+        const cls = [
+            "tv-static-text",
+            this.title ? "tv-title" : "",
+            TVWidget.roleClassNames(this.textKind),
+        ].filter(Boolean).join(" ");
         const classAttr = ` class="${escapeHtml(cls)}"`;
         const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
         const alignStyle = this.align ? `text-align:${this.align}` : "";
-        const inlineStyle = [bounds, alignStyle, this.style].filter(Boolean).join(";");
+        const colorStyle = this.foreground ? `color:${this.foreground}` : "";
+        const backgroundStyle = this.background ? `background:${this.background}` : "";
+        const inlineStyle = [bounds, alignStyle, colorStyle, backgroundStyle].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
         const attrString = attrsToString(this.attrs);
         const attrs = attrString ? ` ${attrString}` : "";
@@ -1274,8 +1282,7 @@ class TVStaticText extends TVWidget {
 class TVLabel extends TVStaticText {
     constructor({
         text = "",
-        className = "",
-        style = "",
+        labelKind = "",
         attrs = {},
         html = "",
         forId = "",
@@ -1288,8 +1295,7 @@ class TVLabel extends TVStaticText {
         }
         super({
             tag: forId ? "label" : "span",
-            className: ["tv-label", className].filter(Boolean).join(" "),
-            style,
+            textKind: ["label", labelKind].filter(Boolean).join(" "),
             attrs: labelAttrs,
             text,
             html: html || (hotkey ? renderHotkeyMarkup(text) : ""),
@@ -3044,12 +3050,15 @@ class TVButtonStrip extends TVWidget {
     }
 
     renderMarkup() {
-        return new TVStaticText({
-            className: this.className,
-            attrs: this.attrs,
-            html: this.buttons.map((button) => typeof button === "string" ? button : button.renderMarkup()).join(""),
-            x: this.x, y: this.y, w: this.w, h: this.h,
-        }).renderMarkup();
+        const classAttr = this.className ? ` class="${escapeHtml(this.className)}"` : "";
+        const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
+        const styleAttr = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        const attrString = attrsToString(this.attrs);
+        const attrs = attrString ? ` ${attrString}` : "";
+        const content = this.buttons
+            .map((button) => typeof button === "string" ? button : button.renderMarkup())
+            .join("");
+        return `<div${classAttr}${styleAttr}${attrs}>${content}</div>`;
     }
 }
 
@@ -3193,10 +3202,8 @@ class TVButton extends TVWidget {
     constructor({
         label = "",
         labelMarkup = "",
-        role = "",
-        name = "",
-        value = true,
         command = "",
+        value = true,
         commandData = {},
         defaultButton = false,
         disabled = false,
@@ -3218,14 +3225,13 @@ class TVButton extends TVWidget {
         super();
         this.labelMarkup = label ? renderHotkeyMarkup(label) : labelMarkup;
         this.className = [
-            TVWidget.roleClassNames(role),
+            ["dialog", "calculator"].includes(buttonKind) ? "" : TVWidget.roleClassNames(buttonKind),
             defaultButton ? "is-default" : "",
         ].filter(Boolean).join(" ");
         this.attrs = {
             ...TVWidget.controlAttrs({
-                name,
+                name: command,
                 value,
-                command,
                 commandData,
                 disabled,
                 hidden,
@@ -4223,7 +4229,7 @@ class TVMessageBox extends TVDialog {
                 new TVButton({
                     label: b.label,
                     defaultButton: index === 0,
-                    name: "msgbox-cmd",
+                    command: "msgbox-cmd",
                     value: b.cmd,
                 }).renderMarkup()
             ).join("");

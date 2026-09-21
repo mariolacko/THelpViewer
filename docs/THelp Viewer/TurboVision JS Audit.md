@@ -367,9 +367,19 @@ compatibility with old Turbo Vision applications.
     markup into objects did not yet produce a Turbo Vision-style object API.
     **Resolved in Phase 7.21:** both constructor options were removed without
     a compatibility branch. Dialogs, games, menu/status composition and
-    application overlays now provide semantic role, name/value, command data,
-    state, accessibility and bounds; only `tv-core.js` translates those values
-    into browser classes and attributes.
+    application overlays initially provided semantic roles and names; Phase
+    7.22 subsequently removed those two browser-oriented options from
+    `TVButton` in favour of Turbo Vision commands.
+48. **The first semantic constructor pass still left browser terminology in
+    two core controls.** `TVButton` exposed `role`/`name`, `TVStaticText`
+    exposed raw `className`/`style`, and focus changes replaced the useful
+    status hint with the application name. **Resolved in Phase 7.22:** every
+    button caller now supplies a Turbo Vision-style `command`, button rendering
+    kind is translated centrally, static text accepts semantic text/palette
+    properties, and the status line derives its hint from the active dialog,
+    HELP view or Docs window. Calculator's display foreground is also locked
+    to white through the shared palette variable instead of being overwritten
+    by the generic static-text rule.
 
 ## Component assessment
 
@@ -697,3 +707,6 @@ No previously recommended game remains unimplemented.
   `className`/`attrs` construction API from `TVButton` and `TVGroup` and
   migrated every application, dialog, menu and game caller to semantic view
   properties with no compatibility path.
+- [x] Phase 7.22: replaced `TVButton` role/name routing with commands, removed
+  raw CSS construction from `TVStaticText`/`TVLabel`, restored active-view
+  status hints and fixed Calculator display contrast.

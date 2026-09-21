@@ -226,10 +226,9 @@ const objectSectionsMarkup = TV.TVFrame.dialogMarkup({
     footerMarkup: "",
 });
 const semanticButtonMarkup = new TV.TVButton({
-    role: "menu-item",
-    name: "dialog-open",
+    buttonKind: "menu-item",
+    command: "dialog-open",
     value: "about",
-    command: "open-dialog",
     commandData: { sourceFile: "README.md" },
     defaultButton: true,
     ariaExpanded: false,
@@ -248,11 +247,10 @@ if (!objectSectionsMarkup.includes("First") || !objectSectionsMarkup.includes("S
     || !objectSectionsMarkup.includes("tv-border-separator")) {
     throw new Error("TVFrame did not render TV object sections");
 }
-if (!semanticButtonMarkup.includes("tv-menu-item")
-    || !semanticButtonMarkup.includes("is-default")
-    || !semanticButtonMarkup.includes('data-tv-dialog-open="about"')
-    || !semanticButtonMarkup.includes('data-tv-command="open-dialog"')
-    || !semanticButtonMarkup.includes('data-tv-source-file="README.md"')
+    if (!semanticButtonMarkup.includes("tv-menu-item")
+        || !semanticButtonMarkup.includes("is-default")
+        || !semanticButtonMarkup.includes('data-tv-dialog-open="about"')
+        || !semanticButtonMarkup.includes('data-tv-source-file="README.md"')
     || !semanticButtonMarkup.includes('aria-expanded="false"')) {
     throw new Error("TVButton semantic properties did not reach the renderer");
 }

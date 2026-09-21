@@ -227,7 +227,7 @@ class TVContextHelpDialog extends TVDialog {
             role: "context-help-main",
             children: [
                 new TVStaticText({
-                    className: "tv-context-help-topic",
+                    textKind: "context-help-topic",
                     attrs: { "data-tv-context-help-heading": true },
                 }),
                 TVVerticalScrollArea.renderMarkup({
@@ -241,13 +241,13 @@ class TVContextHelpDialog extends TVDialog {
                     children: [
                         new TVButton({
                             dialog: false,
-                            name: "context-help-back",
+                            command: "context-help-back",
                             disabled: true,
                             labelMarkup: "◄ Back",
                         }),
                         new TVButton({
                             dialog: false,
-                            name: "context-help-contents",
+                            command: "context-help-contents",
                             labelMarkup: "Contents",
                         }),
                         new TVStaticText({ tag: "span", text: "F1 Help" }),
@@ -371,7 +371,7 @@ class TVAboutDialog extends TVDialog {
                 new TVStaticText({ x: 0, y: 3, w: 28, align: "center", text: `Version ${generatorVersion}` }),
                 new TVStaticText({ x: 0, y: 5, w: 28, align: "center", text: "Copyright (c) 2026" }),
                 new TVStaticText({ x: 0, y: 7, w: 28, align: "center", text: generatorAuthors }),
-                new TVButton({ x: 9, y: 9, w: 10, defaultButton: true, name: "about-ok", label: '~O~K' }),
+                new TVButton({ x: 9, y: 9, w: 10, defaultButton: true, command: "about-ok", label: '~O~K' }),
             ],
         });
 
@@ -459,19 +459,19 @@ class TVWidgetGalleryDialog extends TVDialog {
             buttons: [
                 new TVButton({
                     defaultButton: true,
-                    name: "gallery-ok",
+                    command: "gallery-ok",
                     label: "~O~K",
                 }),
                 new TVButton({
-                    name: "gallery-apply",
+                    command: "gallery-apply",
                     label: "~A~pply",
                 }),
                 new TVButton({
-                    name: "gallery-message",
+                    command: "gallery-message",
                     label: "~M~essage",
                 }),
                 new TVButton({
-                    name: "gallery-clear-log",
+                    command: "gallery-clear-log",
                     label: "C~l~ear log",
                 }),
                 new TVButton({
@@ -485,7 +485,7 @@ class TVWidgetGalleryDialog extends TVDialog {
             role: ["widget-gallery-panel", role].filter(Boolean).join(" "),
             children: [
                 new TVStaticText({
-                    className: "tv-widget-gallery-heading",
+                    textKind: "widget-gallery-heading",
                     text: heading,
                 }),
                 child,
@@ -681,8 +681,8 @@ class TVHistoryWindow extends TVWindow {
     static triggerMarkup({ role = "", name = "", ariaLabel = "History" } = {}) {
         return new TVButton({
             dialog: false,
-            role: ["file-open-history-button", role].filter(Boolean).join(" "),
-            name,
+            buttonKind: ["file-open-history-button", role].filter(Boolean).join(" "),
+            command: name,
             ariaLabel,
             ariaExpanded: false,
             disabled: true,
@@ -933,11 +933,11 @@ class TVFileOpenDialog extends TVDialog {
         const filesLabel = new TVLabel({ text: "~F~iles", hotkey: true });
         const openButton = new TVButton({
             defaultButton: true,
-            name: "file-open-confirm",
+            command: "file-open-confirm",
             label: "~O~pen",
         });
         const cancelButton = new TVButton({
-            name: "file-open-cancel",
+            command: "file-open-cancel",
             label: "Cancel",
         });
         const fileOpenMain = new TVGroup({
@@ -958,14 +958,14 @@ class TVFileOpenDialog extends TVDialog {
                     children: [
                         new TVButton({
                             dialog: false,
-                            name: "file-open-scroll-left",
+                            command: "file-open-scroll-left",
                             tabIndex: -1,
                             labelMarkup: escapeHtml(displayCp437Char(17)),
                         }),
                         new TVStaticText({ tag: "span", attrs: { "data-tv-file-open-scroll-track": true } }),
                         new TVButton({
                             dialog: false,
-                            name: "file-open-scroll-right",
+                            command: "file-open-scroll-right",
                             tabIndex: -1,
                             labelMarkup: escapeHtml(displayCp437Char(16)),
                         }),
@@ -1315,15 +1315,15 @@ class TVChangeDirectoryDialog extends TVDialog {
         const treeLabel = new TVLabel({ text: "Directory ~t~ree", hotkey: true });
         const changeButton = new TVButton({
             defaultButton: true,
-            name: "change-dir-confirm",
+            command: "change-dir-confirm",
             label: "~C~hdir",
         });
         const revertButton = new TVButton({
-            name: "change-dir-revert",
+            command: "change-dir-revert",
             label: "~R~evert",
         });
         const cancelButton = new TVButton({
-            name: "change-dir-cancel",
+            command: "change-dir-cancel",
             label: "Cancel",
         });
         const changeDirectoryMain = new TVGroup({
@@ -1346,7 +1346,7 @@ class TVChangeDirectoryDialog extends TVDialog {
                 new TVGroup({ role: "change-dir-revert-button", children: [revertButton] }),
                 new TVGroup({ role: "change-dir-cancel-button", children: [cancelButton] }),
                 new TVStaticText({
-                    className: "tv-change-dir-detail",
+                    textKind: "change-dir-detail",
                     attrs: { "data-tv-change-dir-detail": true },
                 }),
                 TVHistoryWindow.renderMarkup({
@@ -1584,7 +1584,7 @@ class TVAsciiTableDialog extends TVDialog {
             attrs: { "data-tv-ascii-chart": true },
         });
         const report = new TVStaticText({
-            className: "tv-ascii-report",
+            textKind: "ascii-report",
             attrs: { "data-tv-ascii-report": true },
         });
         super({
@@ -1638,8 +1638,8 @@ class TVAsciiTableDialog extends TVDialog {
             const selected = code === this.selectedCode ? " is-selected" : "";
             items.push(new TVButton({
                 dialog: false,
-                role: `ascii-cell${selected}`,
-                name: "ascii-code",
+                buttonKind: `ascii-cell${selected}`,
+                command: "ascii-code",
                 value: code,
                 ariaLabel: `ASCII ${code}`,
                 labelMarkup: escapeHtml(displayCp437Char(code)),
@@ -1746,7 +1746,7 @@ class TVCalculatorDialog extends TVDialog {
         const buttons = buttonKeys.map(([key, label, aria]) =>
             new TVButton({
                 buttonKind: "calculator",
-                name: "calc-key",
+                command: "calc-key",
                 value: key,
                 ariaLabel: `Calculator key ${aria}`,
                 labelMarkup: escapeHtml(label),
@@ -1756,7 +1756,7 @@ class TVCalculatorDialog extends TVDialog {
             role: "calc-main",
             children: [
                 new TVStaticText({
-                    className: "tv-calc-display",
+                    textKind: "calc-display",
                     attrs: { "data-tv-calc-display": true, "aria-live": "polite" },
                 }),
                 new TVGroup({
@@ -2020,8 +2020,8 @@ class TVCalendarDialog extends TVDialog {
                         }),
                         new TVButton({
                             dialog: false,
-                            role: "calendar-arrow",
-                            name: "calendar-prev",
+                            buttonKind: "calendar-arrow",
+                            command: "calendar-prev",
                             ariaLabel: "Previous month",
                             labelMarkup: escapeHtml(displayCp437Char(30)),
                         }),
@@ -2031,8 +2031,8 @@ class TVCalendarDialog extends TVDialog {
                         }),
                         new TVButton({
                             dialog: false,
-                            role: "calendar-arrow",
-                            name: "calendar-next",
+                            buttonKind: "calendar-arrow",
+                            command: "calendar-next",
                             ariaLabel: "Next month",
                             labelMarkup: escapeHtml(displayCp437Char(31)),
                         }),
@@ -2042,7 +2042,7 @@ class TVCalendarDialog extends TVDialog {
                     text: "Su Mo Tu We Th Fr Sa",
                 }),
                 new TVStaticText({
-                    className: "tv-calendar-grid",
+                    textKind: "calendar-grid",
                     attrs: { "data-tv-calendar-grid": true },
                 }),
             ],
@@ -2141,7 +2141,7 @@ class TVCalendarDialog extends TVDialog {
                     && current === this.curDay;
                 cells.push(new TVStaticText({
                     tag: "span",
-                    className: `tv-calendar-cell${isToday ? " is-current" : ""}${!inMonth ? " is-empty" : ""}`,
+                    textKind: `calendar-cell${isToday ? " is-current" : ""}${!inMonth ? " is-empty" : ""}`,
                     text: inMonth ? String(current).padStart(2, " ") : "  ",
                 }).renderMarkup());
                 current += 1;
@@ -2155,19 +2155,19 @@ class TVColorsDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const okButton = new TVButton({
             defaultButton: true,
-            name: "colors-ok",
+            command: "colors-ok",
             label: 'O~K~',
         });
         const cancelButton = new TVButton({
-            name: "colors-cancel",
+            command: "colors-cancel",
             label: '~C~ancel',
         });
         const resetAllButton = new TVButton({
-            name: "colors-reset-all",
+            command: "colors-reset-all",
             label: '~R~eset All',
         });
         const defaultButton = new TVButton({
-            name: "colors-default",
+            command: "colors-default",
             label: '~D~efault',
         });
         const buttonStrip = new TVButtonStrip({
@@ -2177,22 +2177,22 @@ class TVColorsDialog extends TVDialog {
         const groupTitle = new TVLabel({
             text: "~G~roup",
             hotkey: true,
-            className: "tv-colors-group-label",
+            labelKind: "colors-group-label",
         });
         const itemTitle = new TVLabel({
             text: "~I~tem",
             hotkey: true,
-            className: "tv-colors-item-label",
+            labelKind: "colors-item-label",
         });
         const fgTitle = new TVLabel({
             text: "~F~oreground",
             hotkey: true,
-            className: "tv-colors-foreground-label",
+            labelKind: "colors-foreground-label",
         });
         const bgTitle = new TVLabel({
             text: "~B~ackground",
             hotkey: true,
-            className: "tv-colors-background-label",
+            labelKind: "colors-background-label",
         });
         const colorsMain = new TVGroup({
             role: "colors-main",
@@ -2491,8 +2491,8 @@ class TVColorsDialog extends TVDialog {
                 : escapeHtml(icon);
             cells.push(new TVButton({
                 dialog: false,
-                role: `color-cell${isSelected ? " is-selected" : ""}`,
-                name: "color-index",
+                buttonKind: `color-cell${isSelected ? " is-selected" : ""}`,
+                command: "color-index",
                 value: index,
                 color: DOS_COLORS[index],
                 ariaLabel: `Color ${index}`,
@@ -2516,8 +2516,9 @@ class TVColorsDialog extends TVDialog {
         const bg = dosColor(item.attr, 4);
         this.display.innerHTML = new TVStaticText({
             tag: "span",
-            className: "tv-colors-display-sample",
-            style: `color:${fg};background:${bg};`,
+            textKind: "colors-display-sample",
+            foreground: fg,
+            background: bg,
             text: "Text Text Text \nText Text Text ",
         }).renderMarkup();
     }
@@ -3211,49 +3212,49 @@ class TVMidiPlayerDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const previousButton = new TVButton({
             dialog: false,
-            role: "midi-control",
-            name: "midi-previous",
+            buttonKind: "midi-control",
+            command: "midi-previous",
             tooltip: "Previous track",
             label: "◄◄",
         });
         const playButton = new TVButton({
             dialog: false,
-            role: "midi-control",
-            name: "midi-play",
+            buttonKind: "midi-control",
+            command: "midi-play",
             defaultButton: true,
             label: "►",
         });
         const pauseButton = new TVButton({
             dialog: false,
-            role: "midi-control",
-            name: "midi-pause",
+            buttonKind: "midi-control",
+            command: "midi-pause",
             tooltip: "Pause",
             label: "▌▌",
         });
         const stopButton = new TVButton({
             dialog: false,
-            role: "midi-control",
-            name: "midi-stop",
+            buttonKind: "midi-control",
+            command: "midi-stop",
             label: "■",
         });
         const nextButton = new TVButton({
             dialog: false,
-            role: "midi-control",
-            name: "midi-next",
+            buttonKind: "midi-control",
+            command: "midi-next",
             tooltip: "Next track",
             label: "►►",
         });
         const moreButton = new TVButton({
             dialog: false,
-            role: "midi-more-action",
-            name: "midi-more",
+            buttonKind: "midi-more-action",
+            command: "midi-more",
             ariaExpanded: false,
             label: "More",
         });
         const closeButton = new TVButton({
             dialog: false,
-            role: "midi-close-action",
-            name: "midi-close-button",
+            buttonKind: "midi-close-action",
+            command: "midi-close-button",
             label: "Close",
         });
         const buttons = new TVButtonStrip({
@@ -3262,8 +3263,8 @@ class TVMidiPlayerDialog extends TVDialog {
         });
         const sourceButtons = TV_MIDI_EXTERNAL_SOURCES.map((source, index) => new TVButton({
             dialog: false,
-            role: "midi-source-preset",
-            name: "midi-source",
+            buttonKind: "midi-source-preset",
+            command: "midi-source",
             value: index,
             tooltip: `${source.title} (${source.credit})`,
             labelMarkup: escapeHtml(source.label),
@@ -3274,19 +3275,19 @@ class TVMidiPlayerDialog extends TVDialog {
                 new TVGroup({
                     role: "midi-display-line",
                     children: [
-                        new TVStaticText({ tag: "span", className: "tv-midi-display-label", text: "Track" }),
-                        new TVStaticText({ tag: "span", className: "tv-midi-track-number", attrs: { "data-tv-midi-track-number": true }, text: "01" }),
-                        new TVStaticText({ tag: "span", className: "tv-midi-display-time", attrs: { "data-tv-midi-time": true }, text: "0:00 / 0:00" }),
+                        new TVStaticText({ tag: "span", textKind: "midi-display-label", text: "Track" }),
+                        new TVStaticText({ tag: "span", textKind: "midi-track-number", attrs: { "data-tv-midi-track-number": true }, text: "01" }),
+                        new TVStaticText({ tag: "span", textKind: "midi-display-time", attrs: { "data-tv-midi-time": true }, text: "0:00 / 0:00" }),
                     ],
                 }),
-                new TVStaticText({ className: "tv-midi-display-title", attrs: { "data-tv-midi-display-title": true } }),
-                new TVStaticText({ className: "tv-midi-status", attrs: { "data-tv-midi-status": true }, text: "Ready." }),
+                new TVStaticText({ textKind: "midi-display-title", attrs: { "data-tv-midi-display-title": true } }),
+                new TVStaticText({ textKind: "midi-status", attrs: { "data-tv-midi-status": true }, text: "Ready." }),
             ],
         });
         const meter = new TVGroup({
             role: "midi-meter",
             children: [
-                new TVStaticText({ tag: "span", className: "tv-midi-meter-fill", attrs: { "data-tv-midi-meter": true } }),
+                new TVStaticText({ tag: "span", textKind: "midi-meter-fill", attrs: { "data-tv-midi-meter": true } }),
             ],
         });
         const externalSource = new TVGroup({
@@ -3297,7 +3298,7 @@ class TVMidiPlayerDialog extends TVDialog {
                 new TVGroup({
                     role: "midi-url-row",
                     children: [
-                        new TVStaticText({ tag: "label", className: "tv-midi-url-label", attrs: { for: "tv-midi-url-input" }, text: "URL" }),
+                        new TVStaticText({ tag: "label", textKind: "midi-url-label", attrs: { for: "tv-midi-url-input" }, text: "URL" }),
                         new TVInputLine({
                             className: "tv-midi-url-input",
                             attrs: {
@@ -3309,8 +3310,8 @@ class TVMidiPlayerDialog extends TVDialog {
                         }),
                         new TVButton({
                             dialog: false,
-                            role: "midi-url-load",
-                            name: "midi-load-url",
+                            buttonKind: "midi-url-load",
+                            command: "midi-load-url",
                             label: "Load",
                         }),
                     ],
@@ -3380,8 +3381,8 @@ class TVMidiPlayerDialog extends TVDialog {
             itemAttrName: "data-tv-midi-track",
             renderItemMarkup: (track, index, selected) => new TVButton({
                 dialog: false,
-                role: `midi-track${selected ? " is-selected" : ""}`,
-                name: "midi-track",
+                buttonKind: `midi-track${selected ? " is-selected" : ""}`,
+                command: "midi-track",
                 value: index,
                 labelMarkup: [
                     new TVMarkupList({
@@ -3700,11 +3701,11 @@ class TVFindDialog extends TVDialog {
         });
         const findButton = new TVButton({
             defaultButton: true,
-            name: "find-confirm",
+            command: "find-confirm",
             label: "~F~ind",
         });
         const cancelButton = new TVButton({
-            name: "find-cancel",
+            command: "find-cancel",
             label: "Cancel",
         });
         const findMain = new TVGroup({
@@ -3720,7 +3721,7 @@ class TVFindDialog extends TVDialog {
                 new TVGroup({ role: "find-confirm", children: [findButton] }),
                 new TVGroup({ role: "find-cancel", children: [cancelButton] }),
                 new TVStaticText({
-                    className: "tv-find-status",
+                    textKind: "find-status",
                     attrs: { "data-tv-find-status": true },
                 }),
                 TVHistoryWindow.renderMarkup({
@@ -3834,11 +3835,11 @@ class TVSearchDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const okButton = new TVButton({
             defaultButton: true,
-            name: "search-ok",
+            command: "search-ok",
             label: '~O~K',
         });
         const cancelButton = new TVButton({
-            name: "search-cancel",
+            command: "search-cancel",
             label: '~C~ancel',
         });
         const buttonStrip = new TVButtonStrip({
@@ -3923,8 +3924,8 @@ class TVSearchDialog extends TVDialog {
                 }).renderMarkup()).join("");
                 return new TVButton({
                     dialog: false,
-                    role: `search-result${selected ? " is-selected" : ""}`,
-                    name: "search-index",
+                    buttonKind: `search-result${selected ? " is-selected" : ""}`,
+                    command: "search-index",
                     value: index,
                     labelMarkup: parts,
                 }).renderMarkup();
@@ -4045,7 +4046,7 @@ class TVSearchDialog extends TVDialog {
         this.okButton.classList.remove("is-active");
         if (!this.searchData.topics.length) {
             this.results.innerHTML = new TVStaticText({
-                className: "tv-search-empty",
+                textKind: "search-empty",
                 text: "Search index is not available for this help file.",
             }).renderMarkup();
             this.resultsBox.updateScrollbar();
@@ -4056,7 +4057,7 @@ class TVSearchDialog extends TVDialog {
         const trimmed = query.trim();
         if (!trimmed) {
             this.results.innerHTML = new TVStaticText({
-                className: "tv-search-empty",
+                textKind: "search-empty",
                 text: "Type text to search across all generated topics.",
             }).renderMarkup();
             this.resultsBox.updateScrollbar();
@@ -4067,7 +4068,7 @@ class TVSearchDialog extends TVDialog {
         const matches = this.search(trimmed);
         if (!matches.length) {
             this.results.innerHTML = new TVStaticText({
-                className: "tv-search-empty",
+                textKind: "search-empty",
                 text: `No matches for "${trimmed}".`,
             }).renderMarkup();
             this.resultsBox.updateScrollbar();

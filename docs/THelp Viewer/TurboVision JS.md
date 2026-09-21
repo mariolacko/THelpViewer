@@ -31,7 +31,10 @@ Core widget hierarchy and infrastructure.
 - **TVWidget** — Base for all UI components. `constructor(root=null)`.
   `setHelpCtx()` and `getHelpCtx()` attach or resolve a Turbo Vision-style
   context identifier.
-- **TVStaticText** — Renders text or HTML. `constructor({tag, text, html, className, attrs})`.
+- **TVStaticText** — Renders static text with character-cell bounds.
+  `constructor({text, textKind, foreground, background, align, title, x, y,
+  w, h, ...})`. It accepts no raw CSS class or style; the renderer translates
+  text kinds and palette colors centrally.
 - **TVLabel** — Text label with hotkey markup. With `forId` it emits a native
   `<label for="…">`; otherwise it emits a presentational `<span>`.
 - **TVInputLine** — `<input>` element. `constructor({className, attrs})`.
@@ -72,10 +75,11 @@ Core widget hierarchy and infrastructure.
   viewport alone.
 - **TVButtonStrip** — Row of buttons.
 - **TVButton** — Button with optional dialog shadow.
-  `constructor({label, labelMarkup, role, name, value, command, commandData,
-  defaultButton, disabled, dialog, x, y, w, h, ...})`. Its public API has no
-  `className`/`attrs` escape hatch; the core renderer maps the semantic view
-  definition to DOM, CSS and accessibility attributes.
+  `constructor({label, labelMarkup, command, value, commandData,
+  defaultButton, disabled, buttonKind, x, y, w, h, ...})`. Like Turbo
+  Vision's `TButton`, the public control is identified by a command rather
+  than a DOM role/name. The core renderer privately maps that command and the
+  enclosing view kind to DOM, CSS and accessibility attributes.
 - **TVMessageBox** — Modal Promise-based message box with OK/Cancel and
   Yes/No/Cancel flag combinations, mnemonics and default-button keyboard
   handling.

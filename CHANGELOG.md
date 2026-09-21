@@ -34,11 +34,21 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Fixed Calculator's display palette so its digits are white in every theme;
+  the shared static-text color no longer overrides the display foreground.
+- Restored the status-line hint for the active dialog, HELP topic/index,
+  contents/tag view or Docs editor instead of resetting it to the generic
+  application name whenever window focus changes.
+- Removed `role` and `name` from the public `TVButton` constructor without a
+  compatibility branch. Callers now provide the Turbo Vision-style `command`,
+  while the shared renderer privately maps commands and button kinds to the
+  browser DOM. Removed raw `className` and `style` from `TVStaticText` and
+  `TVLabel`; palette colors and text kinds are rendered centrally.
 - Removed raw `className` and `attrs` constructor options from `TVButton` and
   `TVGroup` without a compatibility path; dialogs, games, menus, status bars
-  and application overlays now declare semantic roles, names, commands,
-  values, states, accessibility and bounds, while the shared renderer owns
-  their DOM/CSS translation
+  and application overlays now declare semantic commands, values, states,
+  accessibility and bounds, while the shared renderer owns their DOM/CSS
+  translation
 - Completed the standard-dialog object-composition pass: About, Context Help,
   Widget Gallery, Open a File, Change Directory, ASCII Table, Calculator,
   Calendar, Colors, MIDI Player, Find and Search now assemble their client

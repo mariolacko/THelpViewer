@@ -65,8 +65,8 @@ class TVMenuBar extends TVMenuView {
                     `<div class="tv-menu-root" data-tv-menu-root data-tv-help-ctx="${hcSystemMenu}">`,
                     new TVButton({
                         dialog: false,
-                        role: "menu-item menu-button",
-                        name: "menu-toggle",
+                        buttonKind: "menu-item menu-button",
+                        command: "menu-toggle",
                         ariaHasPopup: true,
                         ariaExpanded: false,
                         labelMarkup: renderHotkeyMarkup(entry.label || "~X~"),
@@ -102,8 +102,8 @@ class TVMenuBar extends TVMenuView {
                 if (entry.type === "submenu") {
                     const subItems = (entry.items || []).map((sub) => new TVButton({
                         dialog: false,
-                        role: "menu-popup-item",
-                        name: sub.type === "saver" ? "saver-start" : "dialog-open",
+                        buttonKind: "menu-popup-item",
+                        command: sub.type === "saver" ? "saver-start" : "dialog-open",
                         value: sub.type === "saver" ? sub.mode : sub.dialog,
                         labelMarkup: renderHotkeyMarkup(sub.label),
                     }));
@@ -120,15 +120,15 @@ class TVMenuBar extends TVMenuView {
                         + `</div>`;
                 }
                 const action = entry.type === "theme"
-                    ? { name: "theme-set", value: entry.theme }
+                    ? { command: "theme-set", value: entry.theme }
                     : entry.type === "saver"
-                        ? { name: "saver-start", value: entry.mode }
+                        ? { command: "saver-start", value: entry.mode }
                         : entry.type === "context-help"
-                            ? { name: "context-help" }
-                        : { name: "dialog-open", value: entry.dialog };
+                            ? { command: "context-help" }
+                        : { command: "dialog-open", value: entry.dialog };
                 return new TVButton({
                     dialog: false,
-                    role: "menu-popup-item",
+                    buttonKind: "menu-popup-item",
                     ...action,
                     labelMarkup: renderHotkeyMarkup(entry.label),
                 });
@@ -158,8 +158,8 @@ class TVStatusLine extends TVWidget {
             case "back":
                 return new TVButton({
                     dialog: false,
-                    role: "status-item",
-                    name: "back",
+                    buttonKind: "status-item",
+                    command: "back",
                     commandData: { fallback: this.context.indexHref },
                     labelMarkup: renderHotkeyMarkup(entry.label || "~B~ack"),
                 }).renderMarkup();
@@ -168,15 +168,15 @@ class TVStatusLine extends TVWidget {
             case "context-help":
                 return new TVButton({
                     dialog: false,
-                    role: "status-item",
-                    name: "context-help",
+                    buttonKind: "status-item",
+                    command: "context-help",
                     labelMarkup: renderHotkeyMarkup(entry.label || "~F1~ Help"),
                 }).renderMarkup();
             case "dialog":
                 return new TVButton({
                     dialog: false,
-                    role: "status-item",
-                    name: "dialog-open",
+                    buttonKind: "status-item",
+                    command: "dialog-open",
                     value: entry.dialog,
                     labelMarkup: renderHotkeyMarkup(entry.label || ""),
                 }).renderMarkup();
