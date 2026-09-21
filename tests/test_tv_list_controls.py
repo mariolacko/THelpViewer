@@ -44,6 +44,20 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert 'this.root?.querySelector(".tv-scrollbar-y")' in source
     assert "setScrollViewport(viewport = null, scrollbarWidget = null)" in source
     assert 'popup._tvMenuPopupScrollbar = main ? new TVScrollBar(main) : null' in source
+    group_signature = source[
+        source.index("class TVGroup extends TVWidget"):
+        source.index("} = {}) {", source.index("class TVGroup extends TVWidget"))
+    ]
+    button_signature = source[
+        source.index("class TVButton extends TVWidget"):
+        source.index("} = {}) {", source.index("class TVButton extends TVWidget"))
+    ]
+    assert "className" not in group_signature
+    assert "attrs" not in group_signature
+    assert "className" not in button_signature
+    assert "attrs" not in button_signature
+    assert 'static roleClassNames(role = "")' in source
+    assert "commandData = {}" in button_signature
 
     dialogs = DIALOG_PATHS[0].read_text(encoding="utf-8")
     assert DIALOG_PATHS[0].read_bytes() == DIALOG_PATHS[1].read_bytes()
@@ -53,7 +67,7 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVChangeDirectoryDialog extends TVDialog" in dialogs
     assert "new TVOutline(this.query" in dialogs
     assert "class TVHistoryWindow extends TVWindow" in dialogs
-    assert "static renderMarkup({ popupClass" in dialogs
+    assert "static renderMarkup({ popupRole" in dialogs
     assert "handleEscape(event)" in dialogs
     assert "event.detail" not in dialogs
     assert "this.ignoreNextClick = true" in dialogs
@@ -64,7 +78,13 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "bodyMarkup: fileOpenMain" in dialogs
     assert "bodyMarkup: changeDirectoryMain" in dialogs
     assert "bodyMarkup: findMain" in dialogs
+    assert "bodyMarkup: galleryMain" in dialogs
+    assert "bodyMarkup: colorsMain" in dialogs
+    assert "bodyMarkup: main" in dialogs
+    assert 'role: "midi-source-presets",\n                    children: sourceButtons' in dialogs
+    assert "new TVMarkupList({" in dialogs
     assert '<button type="button" class="tv-file-open-history-button' not in dialogs
+    assert "bodyMarkup: `" not in dialogs
     assert "new TVFileList(this.query" in dialogs
     assert "new TVHistoryWindow({" in dialogs
     assert 'TVFrame.titleControlMarkup({' in dialogs

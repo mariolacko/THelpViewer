@@ -35,7 +35,10 @@ Core widget hierarchy and infrastructure.
 - **TVLabel** — Text label with hotkey markup. With `forId` it emits a native
   `<label for="…">`; otherwise it emits a presentational `<span>`.
 - **TVInputLine** — `<input>` element. `constructor({className, attrs})`.
-- **TVGroup** — Container with children. `constructor({tag, className, attrs, children, html})`.
+- **TVGroup** — Container with children.
+  `constructor({tag, role, name, children, html, x, y, w, h, helpCtx})`.
+  Concrete views supply a semantic renderer role/name rather than raw DOM
+  classes or attributes.
   `setCurrent(child)` makes `getHelpCtx()` inherit from the current child,
   matching the relevant part of `TGroup::getHelpCtx()`.
 - **TVListViewer** — Static list. `constructor({tag, className, attrs, items})`.
@@ -68,7 +71,11 @@ Core widget hierarchy and infrastructure.
   Markdown Docs windows instantiate this pair instead of using a styled
   viewport alone.
 - **TVButtonStrip** — Row of buttons.
-- **TVButton** — Button with optional dialog shadow. `constructor({labelMarkup, dialog, className, ...})`.
+- **TVButton** — Button with optional dialog shadow.
+  `constructor({label, labelMarkup, role, name, value, command, commandData,
+  defaultButton, disabled, dialog, x, y, w, h, ...})`. Its public API has no
+  `className`/`attrs` escape hatch; the core renderer maps the semantic view
+  definition to DOM, CSS and accessibility attributes.
 - **TVMessageBox** — Modal Promise-based message box with OK/Cancel and
   Yes/No/Cancel flag combinations, mnemonics and default-button keyboard
   handling.
@@ -269,12 +276,16 @@ frame state. Common list and scrollbar controls inherit from that owner.
 
 Standard application dialogs.
 
-Dialog client areas are composed from shared TVision JS widgets. Context Help,
-Open a File, Change Directory and Find are the first completed migration set:
-their labels, inputs, buttons, status text, lists/outlines and History controls
-are `TVGroup` child objects or shared widget renderers rather than handwritten
-dialog-specific HTML. CSS remains responsible for character-cell geometry and
-palette presentation, not control identity or behaviour.
+Dialog client areas are composed from shared TVision JS widgets. About,
+Context Help, Widget Gallery, Open a File, Change Directory, ASCII Table,
+Calculator, Calendar, Colors, MIDI Player, Find and Search assemble labels,
+inputs, buttons, status text, lists/outlines, clusters and History controls as
+`TVGroup` children or shared widget renderers rather than handwritten
+dialog-specific HTML. Their dynamic cells and result rows use the same
+`TVButton`, `TVStaticText` and list objects. `TVFrame.dialogMarkup()` accepts a
+single widget or an array of widget sections and renders that tree at the
+shared dialog boundary. CSS remains responsible for character-cell geometry
+and palette presentation, not control identity or behaviour.
 
 ### Dialogs
 

@@ -34,6 +34,22 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Removed raw `className` and `attrs` constructor options from `TVButton` and
+  `TVGroup` without a compatibility path; dialogs, games, menus, status bars
+  and application overlays now declare semantic roles, names, commands,
+  values, states, accessibility and bounds, while the shared renderer owns
+  their DOM/CSS translation
+- Completed the standard-dialog object-composition pass: About, Context Help,
+  Widget Gallery, Open a File, Change Directory, ASCII Table, Calculator,
+  Calendar, Colors, MIDI Player, Find and Search now assemble their client
+  controls from the existing TVision JS groups, labels, inputs, lists,
+  clusters, buttons and static text instead of dialog-specific HTML templates
+- Let the shared `TVFrame` render a `TVWidget` or an array of widget sections
+  directly, so concrete dialogs no longer need to flatten their object tree
+  before passing it to `TVDialog`
+- Rebuilt dynamic ASCII cells, calendar cells, Colors selectors/sample and
+  Search result/empty rows with the same shared TV objects used for their
+  initial dialog content
 - Fixed the dynamic top `Contents` menu: nested submenu separators are no
   longer mistaken for separators of the parent `TVMenuBox`, which previously
   removed complete context-Help menu branches and left the popup empty

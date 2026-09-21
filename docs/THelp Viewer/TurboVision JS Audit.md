@@ -351,6 +351,25 @@ compatibility with old Turbo Vision applications.
     TVision JS widgets plus the single History trigger renderer. Real-Chrome
     coverage opens F1 Help, verifies the populated top Contents tree and
     asserts that structural Contents has exactly one vertical scrollbar.
+46. **The remaining standard dialogs still flattened their client controls
+    into dialog-specific HTML or string lists.** Widget Gallery, Colors and
+    MIDI mixed shared controls with handwritten wrappers; ASCII Table,
+    Calendar, Colors and Search rebuilt dynamic rows with raw tag strings; and
+    `TVFrame` itself accepted only already-rendered text. **Resolved in Phase
+    7.21:** `TVFrame.dialogMarkup()` renders one `TVWidget` or multiple widget
+    sections directly; every standard dialog client is assembled from the
+    existing TVision JS objects/shared renderers; and dynamic cells, selector
+    buttons, samples and search rows use `TVButton`, `TVStaticText` or the
+    existing list controls. No dialog-specific widget class was added. Browser
+    coverage preserves the original geometry, palette and interaction paths.
+47. **`TVButton` and `TVGroup` still exposed HTML as their construction
+    model.** Callers supplied `className` and arbitrary `attrs`, so moving
+    markup into objects did not yet produce a Turbo Vision-style object API.
+    **Resolved in Phase 7.21:** both constructor options were removed without
+    a compatibility branch. Dialogs, games, menu/status composition and
+    application overlays now provide semantic role, name/value, command data,
+    state, accessibility and bounds; only `tv-core.js` translates those values
+    into browser classes and attributes.
 
 ## Component assessment
 
@@ -445,22 +464,17 @@ not be copied merely for name parity.
 
 ### Next implementation order
 
-1. Finish converting dialog client areas to shared TVision JS composition.
-   Context Help, File Open, Change Directory and Find are complete; migrate
-   Widget Gallery, Colors and MIDI next, then the small utility dialogs. Keep
-   CSS for geometry/palette and keep control behaviour in the existing shared
-   objects instead of introducing dialog-specific widget classes.
-2. Replace menu HTML/config records with reusable `TVMenu`, `TVMenuItem` and
+1. Replace menu HTML/config records with reusable `TVMenu`, `TVMenuItem` and
    `TVSubMenu` objects that own command, disabled state, mnemonic and `helpCtx`;
    keep `TVMenuController` as the single interaction engine.
-3. Add context-dependent `TVStatusDef`/`TVStatusItem`-style hints so the status
+2. Add context-dependent `TVStatusDef`/`TVStatusItem`-style hints so the status
    line changes with the resolved help context instead of only the active
    window type.
-4. Extract HELP viewing into explicit `TVHelpViewer`/`TVHelpWindow` classes
+3. Extract HELP viewing into explicit `TVHelpViewer`/`TVHelpWindow` classes
    without changing converter or UHF rendering semantics.
-5. Add Find options (case sensitivity and whole words) through shared cluster
+4. Add Find options (case sensitivity and whole words) through shared cluster
    controls, then add Replace only when editable documents exist.
-6. Add reusable `TVParamText` and validators when a real editable dialog needs
+5. Add reusable `TVParamText` and validators when a real editable dialog needs
    them; avoid unused name-parity infrastructure.
 
 ### Proposed new dialogs and games
@@ -676,3 +690,10 @@ No previously recommended game remains unimplemented.
   Contents scrollbar through shared viewport delegation, moved `helpCtx`
   ownership into concrete dialogs, and migrated Context Help, File Open,
   Change Directory and Find client composition to shared TVision JS widgets.
+- [x] Phase 7.21: taught `TVFrame` to render widget bodies directly and
+  completed shared-object composition for Widget Gallery, Colors, MIDI,
+  Search and the small utility dialogs, including their dynamic rows and
+  cells, without adding one-off dialog widget classes. Removed the
+  `className`/`attrs` construction API from `TVButton` and `TVGroup` and
+  migrated every application, dialog, menu and game caller to semantic view
+  properties with no compatibility path.

@@ -643,7 +643,7 @@ function showBestNamePrompt(ownerDialog, score, callback, {
                     placeholder: "Player",
                 },
             }),
-            new TVButton({ x: 9, y: 8, w: 10, className: "is-default", attrs: { "data-tv-best-ok": true }, label: '~O~K' }),
+            new TVButton({ x: 9, y: 8, w: 10, defaultButton: true, name: "best-ok", label: '~O~K' }),
         ],
     }).renderMarkup();
     const dlg = new TVDialog({
@@ -1120,9 +1120,9 @@ class TVTetrisDialog extends TVDialog {
                 infoBox,
                 bestBox,
                 // Buttons
-                new TVButton({ x: INFO_X, y: 17, w: 10, attrs: { type: "button", "data-tv-tetris-new": true }, label: '~N~ew' }),
-                new TVButton({ x: INFO_X + 11, y: 17, w: 10, attrs: { type: "button", "data-tv-tetris-pause": true }, label: '~P~ause' }),
-                new TVButton({ x: INFO_X, y: 19, w: INFO_W, attrs: { type: "button", "data-tv-tetris-pentix": true }, label: 'Penti~x~' }),
+                new TVButton({ x: INFO_X, y: 17, w: 10, name: "tetris-new", label: '~N~ew' }),
+                new TVButton({ x: INFO_X + 11, y: 17, w: 10, name: "tetris-pause", label: '~P~ause' }),
+                new TVButton({ x: INFO_X, y: 19, w: INFO_W, name: "tetris-pentix", label: 'Penti~x~' }),
             ],
         }).renderMarkup();
 
@@ -1553,8 +1553,8 @@ class TVMinesDialog extends TVDialog {
                 new TVButton({
                     x: 9, y: 0, w: 2,
                     dialog: false,
-                    className: "tv-mines-face",
-                    attrs: { type: "button", "data-tv-mines-face": true },
+                    role: "mines-face",
+                    name: "mines-face",
                     label: "☺",
                 }),
                 new TVStaticText({
@@ -1899,7 +1899,7 @@ class TVBreakOutDialog extends TVDialog {
                 }),
                 infoBox,
                 bestBox,
-                new TVButton({ x: INFO_X, y: 17, w: INFO_W, attrs: { type: "button", "data-tv-break-new": true }, label: '~N~ew' }),
+                new TVButton({ x: INFO_X, y: 17, w: INFO_W, name: "break-new", label: '~N~ew' }),
             ],
         }).renderMarkup();
 
@@ -2262,10 +2262,10 @@ class TVSokobanDialog extends TVDialog {
                     attrs: { "data-tv-sokoban-field": true },
                 }),
                 infoBox,
-                new TVButton({ x: INFO_X, y: 6, w: 8, attrs: { type: "button", "data-tv-sokoban-restart": true }, label: '~R~estart' }),
-                new TVButton({ x: INFO_X + 11, y: 6, w: 8, attrs: { type: "button", "data-tv-sokoban-undo": true }, label: '~U~ndo' }),
-                new TVButton({ x: INFO_X, y: 9, w: 8, attrs: { type: "button", "data-tv-sokoban-prev": true }, label: '< Prev' }),
-                new TVButton({ x: INFO_X + 11, y: 9, w: 8, attrs: { type: "button", "data-tv-sokoban-next": true }, label: 'Next >' }),
+                new TVButton({ x: INFO_X, y: 6, w: 8, name: "sokoban-restart", label: '~R~estart' }),
+                new TVButton({ x: INFO_X + 11, y: 6, w: 8, name: "sokoban-undo", label: '~U~ndo' }),
+                new TVButton({ x: INFO_X, y: 9, w: 8, name: "sokoban-prev", label: '< Prev' }),
+                new TVButton({ x: INFO_X + 11, y: 9, w: 8, name: "sokoban-next", label: 'Next >' }),
             ],
         }).renderMarkup();
 
@@ -2525,7 +2525,7 @@ class TVLinesDialog extends TVDialog {
                 }),
                 infoBox,
                 nextBox,
-                new TVButton({ x: INFO_X, y: 9, w: INFO_W, attrs: { type: "button", "data-tv-lines-new": true }, label: '~N~ew' }),
+                new TVButton({ x: INFO_X, y: 9, w: INFO_W, name: "lines-new", label: '~N~ew' }),
             ],
         }).renderMarkup();
 
@@ -2805,7 +2805,7 @@ class TVReversiDialog extends TVDialog {
                     attrs: { "data-tv-reversi-grid": true },
                 }),
                 infoBox,
-                new TVButton({ x: INFO_X, y: 6, w: INFO_W, attrs: { type: "button", "data-tv-reversi-new": true }, label: '~N~ew' }),
+                new TVButton({ x: INFO_X, y: 6, w: INFO_W, name: "reversi-new", label: '~N~ew' }),
             ],
         }).renderMarkup();
 
@@ -3098,8 +3098,10 @@ class TVLudoDialog extends TVDialog {
         });
         const playerButtons = LUDO_PLAYER_NAMES.map((name, player) => new TVButton({
             dialog: false,
-            className: `tv-ludo-player-toggle tv-ludo-${LUDO_PLAYER_COLORS[player]}`,
-            attrs: { "data-tv-ludo-player-mode": player, "aria-label": `${name} player mode` },
+            role: `ludo-player-toggle ludo-${LUDO_PLAYER_COLORS[player]}`,
+            name: "ludo-player-mode",
+            value: player,
+            ariaLabel: `${name} player mode`,
             label: name,
         }));
         const playersBox = new TVInfoBox({
@@ -3112,16 +3114,16 @@ class TVLudoDialog extends TVDialog {
         const controls = new TVButtonStrip({
             className: "tv-ludo-controls",
             buttons: [
-                new TVButton({ attrs: { "data-tv-ludo-roll": true }, label: "~R~oll" }),
-                new TVButton({ attrs: { "data-tv-ludo-new": true }, label: "~N~ew" }),
+                new TVButton({ name: "ludo-roll", label: "~R~oll" }),
+                new TVButton({ name: "ludo-new", label: "~N~ew" }),
             ],
         });
         const side = new TVGroup({
-            className: "tv-ludo-side",
+            role: "ludo-side",
             children: [infoBox, playersBox, controls],
         });
         const main = new TVGroup({
-            className: "tv-ludo-main",
+            role: "ludo-main",
             children: [
                 new TVStaticText({
                     className: "tv-ludo-board",
@@ -3589,12 +3591,11 @@ class TVLudoDialog extends TVDialog {
             ].filter(Boolean).join(" ");
             return new TVButton({
                 dialog: false,
-                className: pieceClasses,
-                attrs: {
-                    "data-tv-ludo-piece": piece,
-                    "aria-label": `${LUDO_PLAYER_NAMES[player]} piece ${piece + 1}`,
-                    disabled: !isLegal,
-                },
+                role: pieceClasses.replace(/tv-/g, ""),
+                name: "ludo-piece",
+                value: piece,
+                ariaLabel: `${LUDO_PLAYER_NAMES[player]} piece ${piece + 1}`,
+                disabled: !isLegal,
                 labelMarkup: '<span class="tv-ludo-piece-glyph">♟</span>',
             }).renderMarkup();
         };
@@ -3633,8 +3634,9 @@ class TVMastermindDialog extends TVDialog {
             x: 38 + (color % 3) * 6,
             y: 2 + Math.floor(color / 3) * 2,
             w: 5,
-            attrs: { type: "button", "data-tv-mastermind-color": color },
-            className: `tv-mastermind-color tv-mastermind-color-${color}`,
+            name: "mastermind-color",
+            value: color,
+            role: `mastermind-color mastermind-color-${color}`,
             label: String(color + 1),
         }));
         const body = new TVGroup({
@@ -3643,8 +3645,8 @@ class TVMastermindDialog extends TVDialog {
                 new TVStaticText({ x: 3, y: 1, w: 28, h: 10, attrs: { "data-tv-mastermind-board": true } }),
                 new TVStaticText({ x: 38, y: 1, w: 17, text: "Colors" }),
                 ...paletteButtons,
-                new TVButton({ x: 38, y: 8, w: 11, className: "is-default", attrs: { type: "button", "data-tv-mastermind-guess": true }, label: "~G~uess" }),
-                new TVButton({ x: 38, y: 10, w: 11, attrs: { type: "button", "data-tv-mastermind-new": true }, label: "~N~ew" }),
+                new TVButton({ x: 38, y: 8, w: 11, defaultButton: true, name: "mastermind-guess", label: "~G~uess" }),
+                new TVButton({ x: 38, y: 10, w: 11, name: "mastermind-new", label: "~N~ew" }),
                 new TVStaticText({ x: 3, y: 13, w: 54, attrs: { "data-tv-mastermind-status": true } }),
             ],
         }).renderMarkup();
@@ -3787,8 +3789,8 @@ class TVTronDialog extends TVDialog {
                 new TVStaticText({ x: infoX, y: 0, w: 22, text: "P1: W A S D" }),
                 new TVStaticText({ x: infoX, y: 2, w: 22, text: "P2: Arrow keys" }),
                 new TVStaticText({ x: infoX, y: 5, w: 22, h: 4, attrs: { "data-tv-tron-status": true, "aria-live": "polite" } }),
-                new TVButton({ x: infoX, y: 10, w: 15, className: "is-default", attrs: { type: "button", "data-tv-tron-new": true }, label: "~N~ew round" }),
-                new TVButton({ x: infoX, y: 12, w: 15, attrs: { type: "button", "data-tv-tron-pause": true }, label: "~P~ause" }),
+                new TVButton({ x: infoX, y: 10, w: 15, defaultButton: true, name: "tron-new", label: "~N~ew round" }),
+                new TVButton({ x: infoX, y: 12, w: 15, name: "tron-pause", label: "~P~ause" }),
                 new TVStaticText({ x: infoX, y: 15, w: 22, h: 2, text: "Avoid every trail.\nBoth move together." }),
             ],
         }).renderMarkup();
@@ -3972,8 +3974,8 @@ class TVHanoiDialog extends TVDialog {
             children: [
                 new TVStaticText({ x: 1, y: 1, w: 54, h: 10, attrs: { "data-tv-hanoi-board": true } }),
                 new TVStaticText({ x: 57, y: 1, w: 20, h: 8, attrs: { "data-tv-hanoi-history": true, "aria-live": "polite" } }),
-                new TVButton({ x: 57, y: 9, w: 12, attrs: { type: "button", "data-tv-hanoi-undo": true }, label: "~U~ndo" }),
-                new TVButton({ x: 57, y: 11, w: 12, className: "is-default", attrs: { type: "button", "data-tv-hanoi-new": true }, label: "~N~ew" }),
+                new TVButton({ x: 57, y: 9, w: 12, name: "hanoi-undo", label: "~U~ndo" }),
+                new TVButton({ x: 57, y: 11, w: 12, defaultButton: true, name: "hanoi-new", label: "~N~ew" }),
                 new TVStaticText({ x: 1, y: 12, w: 54, h: 2, attrs: { "data-tv-hanoi-status": true, "aria-live": "polite" } }),
             ],
         }).renderMarkup();
@@ -4212,7 +4214,7 @@ class TVSnakeDialog extends TVDialog {
                 }),
                 infoBox,
                 bestBox,
-                new TVButton({ x: INFO_X, y: 13, w: INFO_W, attrs: { type: "button", "data-tv-snake-new": true }, label: '~N~ew' }),
+                new TVButton({ x: INFO_X, y: 13, w: INFO_W, name: "snake-new", label: '~N~ew' }),
             ],
         }).renderMarkup();
 

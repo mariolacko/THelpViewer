@@ -647,7 +647,8 @@ async function run() {
             defaultCount: dialog.querySelectorAll('[data-tv-colors-default]').length,
             foregroundColors: dialog.querySelectorAll('[data-tv-colors-foreground] .tv-color-cell').length,
             backgroundColors: dialog.querySelectorAll('[data-tv-colors-background] .tv-color-cell').length,
-            sampleRows: dialog.querySelectorAll('.tv-colors-display-sample br').length + 1,
+            sampleRows: (dialog.querySelector('.tv-colors-display-sample')?.textContent || '')
+                .split(String.fromCharCode(10)).length,
             groupNormalColors: stylePair(groupItems[1]),
             groupFocusedColors: stylePair(groupSelected),
             itemSelectedColors: stylePair(itemSelected),

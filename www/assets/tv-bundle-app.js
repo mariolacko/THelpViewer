@@ -1553,8 +1553,8 @@ class TVLoadingDialog {
 
         const cancelButton = new TVBtn({
             x: 15, y: 5, w: 10,
-            className: "is-default",
-            attrs: { "data-tv-loading-cancel": true },
+            defaultButton: true,
+            name: "loading-cancel",
             labelMarkup: renderHotkeyMarkup("~C~ancel"),
         });
 
@@ -1745,19 +1745,19 @@ function renderBundleIndex(bundle) {
 function renderIndexSection(anchor, label, entries) {
     const items = entries.map((entry) => {
         if (entry == null || entry.topic_id == null) {
-            const targetAttrs = buildBundleTargetDataset(entry || {});
-            if (!Object.keys(targetAttrs).length) {
+            const targetData = buildBundleTargetData(entry || {});
+            if (!Object.keys(targetData).length) {
                 return `<div class="tv-index-entry"><span>${escapeHtml(entry && entry.label ? entry.label : "")}</span></div>`;
             }
-            return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...targetAttrs })}>${escapeHtml(entry.label || "")}</a></div>`;
+            return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...TVWidget.controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label || "")}</a></div>`;
         }
-        const targetAttrs = buildBundleTargetDataset({
+        const targetData = buildBundleTargetData({
             topic_id: entry.topic_id,
             file: entry.file,
             alias: entry.alias,
             line: entry.line,
         });
-        return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...targetAttrs })}>${escapeHtml(entry.label)}</a></div>`;
+        return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...TVWidget.controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label)}</a></div>`;
     });
     return [
         `<section class="tv-index-section" id="idx-${escapeHtml(anchor)}">`,
@@ -1809,21 +1809,21 @@ function renderBundleTagTopics(bundle, key, value, label) {
     ].join("\n");
 }
 
-function buildBundleTargetDataset(target) {
-    const attrs = {};
+function buildBundleTargetData(target) {
+    const data = {};
     if (target && target.topic_id != null) {
-        attrs["data-tv-bundle-topic"] = String(target.topic_id);
+        data.bundleTopic = String(target.topic_id);
     }
     if (target && target.file) {
-        attrs["data-tv-source-file"] = String(target.file);
+        data.sourceFile = String(target.file);
     }
     if (target && target.alias) {
-        attrs["data-tv-topic-alias"] = String(target.alias);
+        data.topicAlias = String(target.alias);
     }
     if (target && target.line != null) {
-        attrs["data-tv-topic-line"] = String(target.line);
+        data.topicLine = String(target.line);
     }
-    return attrs;
+    return data;
 }
 
 function renderHtmlAttributes(attrs) {
@@ -1835,9 +1835,9 @@ function renderHtmlAttributes(attrs) {
 function renderContentsNodes(nodes) {
     return nodes.map((node) => {
         const label = escapeHtml(String(node.label || ""));
-        const targetAttrs = buildBundleTargetDataset(node);
-        const labelHTML = Object.keys(targetAttrs).length
-            ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...targetAttrs })}>${label}</a>`
+        const targetData = buildBundleTargetData(node);
+        const labelHTML = Object.keys(targetData).length
+            ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...TVWidget.controlAttrs({ commandData: targetData }) })}>${label}</a>`
             : label;
         const children = Array.isArray(node.children) && node.children.length
             ? `<div class="tv-contents-children">${renderContentsNodes(node.children)}</div>`
@@ -2247,9 +2247,9 @@ class BundleWindowManager {
             getLabel: (node) => node.label || "",
             renderNodeContent: (node) => {
                 const label = escapeHtml(String(node.label || ""));
-                const targetAttrs = buildBundleTargetDataset(node);
-                return Object.keys(targetAttrs).length
-                    ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...targetAttrs })}>${label}</a>`
+                const targetData = buildBundleTargetData(node);
+                return Object.keys(targetData).length
+                    ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...TVWidget.controlAttrs({ commandData: targetData }) })}>${label}</a>`
                     : label;
             },
         });
@@ -2507,8 +2507,10 @@ function renderMenuRoot(labelMarkup, items, rootAttrs = {}) {
     });
     const toggle = new TVButton({
         dialog: false,
-        className: "tv-menu-item tv-menu-button",
-        attrs: { type: "button", "data-tv-menu-toggle": true, "aria-haspopup": "true", "aria-expanded": "false" },
+        role: "menu-item menu-button",
+        name: "menu-toggle",
+        ariaHasPopup: true,
+        ariaExpanded: false,
         labelMarkup,
     }).renderMarkup();
     return [
@@ -2567,8 +2569,10 @@ function buildGroupedMenuItems(entries, renderItem) {
 function catalogMenuEntryButton(entry) {
     return new TVButton({
         dialog: false,
-        className: "tv-menu-popup-item",
-        attrs: { type: "button", "data-tv-bundle-open": entry.file, "data-tv-bundle-label": bundleLoadingLabel(entry) },
+        role: "menu-popup-item",
+        name: "bundle-open",
+        value: entry.file,
+        commandData: { bundleLabel: bundleLoadingLabel(entry) },
         labelMarkup: escapeHtml(entry.menu_name || entry.name),
     });
 }
@@ -2593,14 +2597,15 @@ function catalogTreeNode(map, ordered, key) {
 function buildCatalogMenuItems(catalog) {
     const openItem = new TVButton({
         dialog: false,
-        className: "tv-menu-popup-item",
-        attrs: { type: "button", "data-tv-file-open": true },
+        role: "menu-popup-item",
+        name: "file-open",
         labelMarkup: renderHotkeyMarkup("~O~pen..."),
     });
     const changeDirectoryItem = new TVButton({
         dialog: false,
-        className: "tv-menu-popup-item",
-        attrs: { type: "button", "data-tv-dialog-open": "chdir" },
+        role: "menu-popup-item",
+        name: "dialog-open",
+        value: "chdir",
         labelMarkup: renderHotkeyMarkup("~C~hange dir..."),
     });
     if (!catalog.length) { return [openItem, changeDirectoryItem]; }
@@ -2648,8 +2653,9 @@ function buildDocsMenuItems(docs) {
     return buildGroupedMenuItems(docs, (entry) =>
         new TVButton({
             dialog: false,
-            className: "tv-menu-popup-item",
-            attrs: { type: "button", "data-tv-doc-open": entry.file },
+            role: "menu-popup-item",
+            name: "doc-open",
+            value: entry.file,
             labelMarkup: escapeHtml(entry.name),
         })
     );
@@ -2664,8 +2670,8 @@ function buildBundleContentsMenuItems(nodes) {
         if (!label) { return; }
 
         const childItems = buildBundleContentsMenuItems(node.children || []);
-        const targetAttrs = buildBundleTargetDataset(node);
-        const hasTarget = Object.keys(targetAttrs).length > 0;
+        const targetData = buildBundleTargetData(node);
+        const hasTarget = Object.keys(targetData).length > 0;
         const labelMarkup = renderBundleMenuLabel(label, node && node.hotkey);
 
         if (childItems.length) {
@@ -2673,8 +2679,9 @@ function buildBundleContentsMenuItems(nodes) {
             if (hasTarget) {
                 subItems.push(new TVButton({
                     dialog: false,
-                    className: "tv-menu-popup-item",
-                    attrs: { type: "button", "data-tv-menu-link": "1", ...targetAttrs },
+                    role: "menu-popup-item",
+                    name: "menu-link",
+                    commandData: targetData,
                     labelMarkup,
                 }));
                 subItems.push(renderMenuPopupSeparator());
@@ -2687,8 +2694,9 @@ function buildBundleContentsMenuItems(nodes) {
         if (hasTarget) {
             items.push(new TVButton({
                 dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-menu-link": "1", ...targetAttrs },
+                role: "menu-popup-item",
+                name: "menu-link",
+                commandData: targetData,
                 labelMarkup,
             }));
             return;
@@ -2923,21 +2931,22 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
             if (entry.type === "submenu") {
                 const subItems = entry.items.map((sub) => new TVButton({
                     dialog: false,
-                    className: "tv-menu-popup-item",
-                    attrs: { type: "button", "data-tv-saver-start": sub.mode },
+                    role: "menu-popup-item",
+                    name: "saver-start",
+                    value: sub.mode,
                     labelMarkup: renderHotkeyMarkup(sub.label),
                 }));
                 return renderMenuSubmenu(renderHotkeyMarkup(entry.label), subItems);
             }
-            const attrs = entry.type === "theme"
-                ? { type: "button", "data-tv-theme-set": entry.theme }
+            const action = entry.type === "theme"
+                ? { name: "theme-set", value: entry.theme }
                 : entry.type === "saver"
-                    ? { type: "button", "data-tv-saver-start": entry.mode }
-                    : { type: "button", "data-tv-dialog-open": entry.dialog };
+                    ? { name: "saver-start", value: entry.mode }
+                    : { name: "dialog-open", value: entry.dialog };
             return new TVButton({
                 dialog: false,
-                className: "tv-menu-popup-item",
-                attrs,
+                role: "menu-popup-item",
+                ...action,
                 labelMarkup: renderHotkeyMarkup(entry.label),
             });
         }),
@@ -2962,20 +2971,21 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         [
             new TVButton({
                 dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-find": true },
+                role: "menu-popup-item",
+                name: "find",
                 labelMarkup: renderHotkeyMarkup("~F~ind") + '<span class="tv-menu-hotkey">Ctrl-F</span>',
             }),
             new TVButton({
                 dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-find-again": true },
+                role: "menu-popup-item",
+                name: "find-again",
                 labelMarkup: renderHotkeyMarkup("Find ~A~gain") + '<span class="tv-menu-hotkey">Ctrl-L</span>',
             }),
             new TVButton({
                 dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-dialog-open": "search" },
+                role: "menu-popup-item",
+                name: "dialog-open",
+                value: "search",
                 labelMarkup: renderHotkeyMarkup("Search ~T~opics") + '<span class="tv-menu-hotkey">F3</span>',
             }),
         ],
@@ -2997,8 +3007,9 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         winPopupItems.map((entry) =>
             new TVButton({
                 dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-window-cmd": entry.cmd },
+                role: "menu-popup-item",
+                name: "window-cmd",
+                value: entry.cmd,
                 labelMarkup: renderHotkeyMarkup(entry.label) +
                     `<span class="tv-menu-hotkey">${escapeHtml(entry.hotkey)}</span>`,
             })
@@ -3026,8 +3037,9 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         gamesPopupItems.map((entry) =>
             new TVButton({
                 dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-dialog-open": entry.dialog },
+                role: "menu-popup-item",
+                name: "dialog-open",
+                value: entry.dialog,
                 labelMarkup: renderHotkeyMarkup(entry.label),
             })
         ),
@@ -3039,16 +3051,17 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         [
             new TVButton({
                 dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-context-help": true },
+                role: "menu-popup-item",
+                name: "context-help",
                 labelMarkup: renderHotkeyMarkup("~C~ontext Help")
                     + '<span class="tv-menu-hotkey">F1</span>',
             }),
             renderMenuPopupSeparator(),
             new TVButton({
                 dialog: false,
-                className: "tv-menu-popup-item",
-                attrs: { type: "button", "data-tv-dialog-open": "about" },
+                role: "menu-popup-item",
+                name: "dialog-open",
+                value: "about",
                 labelMarkup: renderHotkeyMarkup("~A~bout"),
             }),
         ],
@@ -3185,51 +3198,52 @@ class TVBundleApp {
         if (hasHelpWindow) {
             items.push(new TVButton({
                 dialog: false,
-                className: "tv-status-item",
-                attrs: { type: "button", "data-tv-bundle-back": true },
+                role: "status-item",
+                name: "bundle-back",
                 labelMarkup: renderHotkeyMarkup("~B~ack"),
             }).renderMarkup());
             if (currentBundle && bundleCanShowIndex(currentBundle)) {
                 items.push(new TVButton({
                     dialog: false,
-                    className: "tv-status-item",
-                    attrs: { type: "button", "data-tv-bundle-index": true },
+                    role: "status-item",
+                    name: "bundle-index",
                     labelMarkup: renderHotkeyMarkup("~I~ndex"),
                 }).renderMarkup());
             }
             if (currentBundle && bundleCanShowHelpContentsTopic(currentBundle)) {
                 items.push(new TVButton({
                     dialog: false,
-                    className: "tv-status-item",
-                    attrs: { type: "button", "data-tv-bundle-help-contents": true },
+                    role: "status-item",
+                    name: "bundle-help-contents",
                     labelMarkup: renderHotkeyMarkup("~H~elp Contents"),
                 }).renderMarkup());
             }
             if (currentBundle && bundleCanShowContents(currentBundle)) {
                 items.push(new TVButton({
                     dialog: false,
-                    className: "tv-status-item",
-                    attrs: { type: "button", "data-tv-bundle-contents": true },
+                    role: "status-item",
+                    name: "bundle-contents",
                     labelMarkup: renderHotkeyMarkup("C~o~ntent"),
                 }).renderMarkup());
             }
             items.push(new TVButton({
                 dialog: false,
-                className: "tv-status-item",
-                attrs: { type: "button", "data-tv-dialog-open": "search" },
+                role: "status-item",
+                name: "dialog-open",
+                value: "search",
                 labelMarkup: renderHotkeyMarkup("~F3~ Search"),
             }).renderMarkup());
             items.push(new TVButton({
                 dialog: false,
-                className: "tv-status-item",
-                attrs: { type: "button", "data-tv-bundle-close-all": true },
+                role: "status-item",
+                name: "bundle-close-all",
                 labelMarkup: renderHotkeyMarkup("~Alt-F3~ Close"),
             }).renderMarkup());
         }
         items.push(new TVButton({
             dialog: false,
-            className: "tv-status-item",
-            attrs: { type: "button", "data-tv-context-help": true },
+            role: "status-item",
+            name: "context-help",
             labelMarkup: renderHotkeyMarkup("~F1~ Help"),
         }).renderMarkup());
         items.push(`<span class="tv-status-separator" aria-hidden="true">│</span>`);
@@ -4051,7 +4065,7 @@ class TVBundleApp {
                 new TVStaticText({ x: 0, y: 3, w: 30, align: "center", text: "Select a help file from the" }),
                 new TVStaticText({ x: 0, y: 4, w: 30, align: "center", text: "File menu to get started." }),
                 new TVStaticText({ x: 0, y: 6, w: 30, align: "center", text: `${Array.isArray(catalogData) ? catalogData.length : 0} help file(s) available.` }),
-                new TVButton({ x: 10, y: 8, w: 10, className: "is-default", attrs: { "data-tv-welcome-ok": true }, label: '~O~K' }),
+                new TVButton({ x: 10, y: 8, w: 10, defaultButton: true, name: "welcome-ok", label: '~O~K' }),
             ],
         }).renderMarkup();
         const dialog = new TVDialog({

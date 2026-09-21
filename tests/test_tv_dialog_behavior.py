@@ -207,11 +207,54 @@ const nonModalMarkup = TV.TVFrame.dialogMarkup({
     bodyMarkup: "",
     footerMarkup: "",
 });
+const objectBodyMarkup = TV.TVFrame.dialogMarkup({
+    ariaLabel: "Object body",
+    title: "Object body",
+    bodyMarkup: new TV.TVGroup({
+        role: "object-body",
+        children: [new TV.TVStaticText({ text: "TV object" })],
+    }),
+    footerMarkup: "",
+});
+const objectSectionsMarkup = TV.TVFrame.dialogMarkup({
+    ariaLabel: "Object sections",
+    title: "Object sections",
+    bodyMarkup: [
+        new TV.TVStaticText({ text: "First" }),
+        new TV.TVStaticText({ text: "Second" }),
+    ],
+    footerMarkup: "",
+});
+const semanticButtonMarkup = new TV.TVButton({
+    role: "menu-item",
+    name: "dialog-open",
+    value: "about",
+    command: "open-dialog",
+    commandData: { sourceFile: "README.md" },
+    defaultButton: true,
+    ariaExpanded: false,
+    label: "~A~bout",
+}).renderMarkup();
 if (!modalMarkup.includes('aria-modal="true"') || !modalMarkup.includes("is-modal")) {
     throw new Error("modal markup is incomplete");
 }
 if (!nonModalMarkup.includes('aria-modal="false"')) {
     throw new Error("non-modal markup is incorrectly announced as modal");
+}
+if (!objectBodyMarkup.includes('class="tv-group tv-object-body"') || !objectBodyMarkup.includes("TV object")) {
+    throw new Error("TVFrame did not render a TV object body");
+}
+if (!objectSectionsMarkup.includes("First") || !objectSectionsMarkup.includes("Second")
+    || !objectSectionsMarkup.includes("tv-border-separator")) {
+    throw new Error("TVFrame did not render TV object sections");
+}
+if (!semanticButtonMarkup.includes("tv-menu-item")
+    || !semanticButtonMarkup.includes("is-default")
+    || !semanticButtonMarkup.includes('data-tv-dialog-open="about"')
+    || !semanticButtonMarkup.includes('data-tv-command="open-dialog"')
+    || !semanticButtonMarkup.includes('data-tv-source-file="README.md"')
+    || !semanticButtonMarkup.includes('aria-expanded="false"')) {
+    throw new Error("TVButton semantic properties did not reach the renderer");
 }
 const titlebarMarkup = modalMarkup.slice(
     modalMarkup.indexOf('class="tv-dialog-titlebar"'),
