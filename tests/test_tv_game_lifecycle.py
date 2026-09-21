@@ -27,6 +27,13 @@ def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
     assert "dlg.destroy();" in helper
     assert "const HALL_OF_FAME_LIMIT = 10" in helper
     assert "function showHallOfFame(ownerDialog, game)" in helper
+    hall = helper[
+        helper.index("function showHallOfFame(ownerDialog, game)"):
+        helper.index("function installHallOfFame", helper.index("function showHallOfFame(ownerDialog, game)"))
+    ]
+    assert 'new TVGroup({' in hall
+    assert 'new TVStaticText({' in hall
+    assert '<div class="tv-hall-' not in hall
     assert "manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg)" in helper
     assert "TVFrame.createTitleControl({" in helper
     assert 'glyphClass: "tv-game-hall-glyph"' in helper

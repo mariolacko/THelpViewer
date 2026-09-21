@@ -570,9 +570,11 @@ const {
     escapeHtml,
     renderHotkeyMarkup,
     TVDialog,
+    TVRect,
     TVStaticText,
     TVGroup,
     TVButton,
+    bfDefault,
     TVButtonStrip,
     TVLabel,
     TVInputLine,
@@ -643,19 +645,14 @@ function showBestNamePrompt(ownerDialog, score, callback, {
                     placeholder: "Player",
                 },
             }),
-            new TVButton({ x: 9, y: 8, w: 10, defaultButton: true, command: "best-ok", label: '~O~K' }),
+            new TVButton({ x: 9, y: 8, w: 10, flags: bfDefault, command: "best-ok", label: '~O~K' }),
         ],
-    }).renderMarkup();
-    const dlg = new TVDialog({
+    });
+    const dlg = new TVDialog(new TVRect(0, 0, 32, 13), "High Score", {
         desktop,
+        viewName: "best",
         helpCtx: ownerDialog?.getHelpCtx?.() || hcGames,
-        ariaLabel: "High Score",
-        title: "High Score",
-        closeAttrs: { "data-tv-best-close": true, "aria-label": "Close" },
-        bodyMarkup: body,
-        footerMarkup: TVDialog.footerMarkup(),
-        width: "32ch",
-        height: "min(13em, calc(100% - 2em))",
+        content: body,
         modal: true,
     });
     const input = dlg.query("[data-tv-best-name-input]");
@@ -789,25 +786,31 @@ function formatHallOfFameScore(game, entry) {
 function showHallOfFame(ownerDialog, game) {
     const config = hallOfFameConfig(game);
     const entries = loadHallOfFame(game);
+    const row = (kind, rank, player, score) => new TVGroup({
+        role: kind,
+        children: [
+            new TVStaticText({ text: rank }),
+            new TVStaticText({ text: player }),
+            new TVStaticText({ text: score }),
+        ],
+    });
     const rows = entries.length
-        ? entries.map((entry, index) => `
-            <div class="tv-hall-row">
-                <span>${String(index + 1).padStart(2, " ")}.</span>
-                <span>${escapeHtml(entry.name)}</span>
-                <span>${escapeHtml(formatHallOfFameScore(game, entry))}</span>
-            </div>`).join("")
-        : '<div class="tv-hall-empty">No scores yet.</div>';
-    const body = `<div class="tv-hall-main"><div class="tv-hall-header"><span>#</span><span>Player</span><span>Score</span></div>${rows}</div>`;
-    const dlg = new TVDialog({
+        ? entries.map((entry, index) => row(
+            "hall-row",
+            `${String(index + 1).padStart(2, " ")}.`,
+            entry.name,
+            formatHallOfFameScore(game, entry),
+        ))
+        : [new TVStaticText({ textKind: "hall-empty", text: "No scores yet." })];
+    const body = new TVGroup({
+        role: "hall-main",
+        children: [row("hall-header", "#", "Player", "Score"), ...rows],
+    });
+    const dlg = new TVDialog(new TVRect(0, 0, 45, 15), `${config.title} Hall of Fame`, {
         desktop: ownerDialog?.desktop || document.querySelector(".tv-desktop") || document.body,
+        viewName: "hall",
         helpCtx: ownerDialog?.getHelpCtx?.() || hcGames,
-        ariaLabel: `${config.title} Hall of Fame`,
-        title: `${config.title} Hall of Fame`,
-        closeAttrs: { "data-tv-hall-close": true, "aria-label": "Close Hall of Fame" },
-        bodyMarkup: body,
-        footerMarkup: TVDialog.footerMarkup(),
-        width: "45ch",
-        height: "min(15em, calc(100% - 2em))",
+        content: body,
         modal: true,
     });
     const manager = ownerDialog?.manager || null;
@@ -845,33 +848,22 @@ class TVPuzzleDialog extends TVDialog {
             children: [
                 new TVStaticText({
                     x: 0, y: 0, w: GRID_W, h: 4,
-                    attrs: { "data-tv-puzzle-grid": true },
+                    name: "puzzle-grid",
                 }),
                 new TVStaticText({ x: INFO_X, y: 0, w: 6, text: "Move" }),
                 new TVStaticText({
                     x: INFO_X, y: 1, w: 6,
-                    attrs: { "data-tv-puzzle-moves": true },
+                    name: "puzzle-moves",
                     text: "0",
                 }),
             ],
-        }).renderMarkup();
-        super({
+        });
+        super(new TVRect(0, 0, 20, 6), "Puzzle", {
             desktop,
+            viewName: "puzzle",
             helpCtx: hcPuzzle,
-            windowClass: "tv-puzzle-window",
             palette: "viewer",
-            ariaLabel: "Puzzle",
-            title: "Puzzle",
-            closeAttrs: {
-                "data-tv-puzzle-close": true,
-                "aria-label": "Close puzzle",
-            },
-            bodyMarkup: puzzleMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "20ch",
-            height: "min(6em, calc(100% - 2em))",
-            left: "4ch",
-            top: "3em",
+            content: puzzleMain,
         });
         installHallOfFame(this, "puzzle");
         this.grid = this.query("[data-tv-puzzle-grid]");
@@ -1094,17 +1086,17 @@ class TVTetrisDialog extends TVDialog {
         const infoBox = new TVInfoBox({
             x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "score", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "lines", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "level", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", text: TVInfoBox.separator(INFO_W - 2, "Next"), attrs: { "data-tv-info-frame": true } }),
-                new TVStaticText({ tag: "div", h: TETRIS_PREVIEW_ROWS, attrs: { "data-tv-tetris-preview": true } }),
+                new TVStaticText({ name: "score" }),
+                new TVStaticText({ name: "lines" }),
+                new TVStaticText({ name: "level" }),
+                new TVStaticText({ textKind: "info-frame", text: TVInfoBox.separator(INFO_W - 2, "Next") }),
+                new TVStaticText({ name: "tetris-preview", h: TETRIS_PREVIEW_ROWS }),
             ],
         });
         const bestBox = new TVInfoBox({
             x: INFO_X, y: 13, w: INFO_W, name: "best", title: "Best", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "best", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "best" }),
             ],
         });
 
@@ -1114,7 +1106,7 @@ class TVTetrisDialog extends TVDialog {
                 // Grid (left side)
                 new TVStaticText({
                     x: 0, y: 0, w: GRID_W, h: 18,
-                    attrs: { "data-tv-tetris-grid": true },
+                    name: "tetris-grid",
                 }),
                 // Info panel (right side) — TVInfoBox containers
                 infoBox,
@@ -1124,21 +1116,13 @@ class TVTetrisDialog extends TVDialog {
                 new TVButton({ x: INFO_X + 11, y: 17, w: 10, command: "tetris-pause", label: '~P~ause' }),
                 new TVButton({ x: INFO_X, y: 19, w: INFO_W, command: "tetris-pentix", label: 'Penti~x~' }),
             ],
-        }).renderMarkup();
+        });
 
-        super({
+        super(new TVRect(0, 0, 50, 24), "Tetris", {
             desktop,
+            viewName: "tetris",
             helpCtx: hcTetris,
-            ariaLabel: "Tetris",
-            title: "Tetris",
-            windowClass: "tv-tetris-window",
-            closeAttrs: { "data-tv-tetris-close": true, "aria-label": "Close tetris" },
-            bodyMarkup: tetrisMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "50ch",
-            height: "min(24em, calc(100% - 2em))",
-            left: "4ch",
-            top: "2em",
+            content: tetrisMain,
         });
 
         installHallOfFame(this, "tetris");
@@ -1547,38 +1531,33 @@ class TVMinesDialog extends TVDialog {
             children: [
                 new TVStaticText({
                     x: 1, y: 0, w: 4,
-                    attrs: { "data-tv-mines-info-value": true, "data-tv-mines-remaining": true },
+                    name: "mines-remaining",
+                    textKind: "mines-info-value",
                     text: String(MINES_COUNT),
                 }),
                 new TVButton({
                     x: 9, y: 0, w: 2,
-                    dialog: false,
-                    buttonKind: "mines-face",
                     command: "mines-face",
                     label: "☺",
                 }),
                 new TVStaticText({
                     x: 15, y: 0, w: 4,
-                    attrs: { "data-tv-mines-info-value": true, "data-tv-mines-timer": true },
+                    name: "mines-timer",
+                    textKind: "mines-info-value",
                     text: "0",
                 }),
                 new TVStaticText({
                     x: 1, y: 1, w: GRID_W, h: MINES_ROWS,
-                    attrs: { "data-tv-mines-grid": true },
+                    name: "mines-grid",
                 }),
             ],
-        }).renderMarkup();
+        });
 
-        super({
+        super(new TVRect(0, 0, 22, 13), "Mines", {
             desktop,
+            viewName: "mines",
             helpCtx: hcMines,
-            ariaLabel: "Minesweeper",
-            title: "Mines",
-            closeAttrs: { "data-tv-mines-close": true, "aria-label": "Close mines" },
-            bodyMarkup: minesMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "22ch",
-            height: "min(13em, calc(100% - 2em))",
+            content: minesMain,
         });
 
         installHallOfFame(this, "mines");
@@ -1879,15 +1858,15 @@ class TVBreakOutDialog extends TVDialog {
         const infoBox = new TVInfoBox({
             x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "score", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "lives", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "level", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "score" }),
+                new TVStaticText({ name: "lives" }),
+                new TVStaticText({ name: "level" }),
             ],
         });
         const bestBox = new TVInfoBox({
             x: INFO_X, y: 5, w: INFO_W, name: "best", title: "Best", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "best", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "best" }),
             ],
         });
         const breakMain = new TVGroup({
@@ -1895,26 +1874,19 @@ class TVBreakOutDialog extends TVDialog {
             children: [
                 new TVStaticText({
                     x: FIELD_X, y: 0, w: FIELD_W, h: 20,
-                    attrs: { "data-tv-break-field": true },
+                    name: "break-field",
                 }),
                 infoBox,
                 bestBox,
                 new TVButton({ x: INFO_X, y: 17, w: INFO_W, command: "break-new", label: '~N~ew' }),
             ],
-        }).renderMarkup();
+        });
 
-        super({
+        super(new TVRect(0, 0, 53, 22), "BreakOut", {
             desktop,
+            viewName: "break",
             helpCtx: hcBreakOut,
-            ariaLabel: "BreakOut",
-            title: "BreakOut",
-            closeAttrs: { "data-tv-break-close": true, "aria-label": "Close breakout" },
-            bodyMarkup: breakMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "53ch",
-            height: "min(22em, calc(100% - 2em))",
-            left: "4ch",
-            top: "2em",
+            content: breakMain,
         });
 
         installHallOfFame(this, "breakout");
@@ -2249,9 +2221,9 @@ class TVSokobanDialog extends TVDialog {
         const infoBox = new TVInfoBox({
             x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "level", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "moves", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "pushes", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "level" }),
+                new TVStaticText({ name: "moves" }),
+                new TVStaticText({ name: "pushes" }),
             ],
         });
         const sokobanMain = new TVGroup({
@@ -2259,7 +2231,7 @@ class TVSokobanDialog extends TVDialog {
             children: [
                 new TVStaticText({
                     x: 0, y: 0, w: FIELD_W, h: 10,
-                    attrs: { "data-tv-sokoban-field": true },
+                    name: "sokoban-field",
                 }),
                 infoBox,
                 new TVButton({ x: INFO_X, y: 6, w: 8, command: "sokoban-restart", label: '~R~estart' }),
@@ -2267,19 +2239,13 @@ class TVSokobanDialog extends TVDialog {
                 new TVButton({ x: INFO_X, y: 9, w: 8, command: "sokoban-prev", label: '< Prev' }),
                 new TVButton({ x: INFO_X + 11, y: 9, w: 8, command: "sokoban-next", label: 'Next >' }),
             ],
-        }).renderMarkup();
+        });
 
-        super({
+        super(new TVRect(0, 0, 44, 18), "Sokoban", {
             desktop,
+            viewName: "sokoban",
             helpCtx: hcSokoban,
-            ariaLabel: "Sokoban",
-            title: "Sokoban",
-            closeAttrs: { "data-tv-sokoban-close": true, "aria-label": "Close sokoban" },
-            bodyMarkup: sokobanMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "44ch",
-            left: "4ch",
-            top: "2em",
+            content: sokobanMain,
         });
 
         installHallOfFame(this, "sokoban");
@@ -2506,14 +2472,14 @@ class TVLinesDialog extends TVDialog {
         const infoBox = new TVInfoBox({
             x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "score", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "best", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "score" }),
+                new TVStaticText({ name: "best" }),
             ],
         });
         const nextBox = new TVInfoBox({
             x: INFO_X, y: 5, w: INFO_W, name: "next", title: "Next", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "next", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "next" }),
             ],
         });
         const linesMain = new TVGroup({
@@ -2521,26 +2487,19 @@ class TVLinesDialog extends TVDialog {
             children: [
                 new TVStaticText({
                     x: 0, y: 0, w: GRID_W, h: LINES_SIZE,
-                    attrs: { "data-tv-lines-grid": true },
+                    name: "lines-grid",
                 }),
                 infoBox,
                 nextBox,
                 new TVButton({ x: INFO_X, y: 9, w: INFO_W, command: "lines-new", label: '~N~ew' }),
             ],
-        }).renderMarkup();
+        });
 
-        super({
+        super(new TVRect(0, 0, 41, 13), "Lines", {
             desktop,
+            viewName: "lines",
             helpCtx: hcLines,
-            ariaLabel: "Lines",
-            title: "Lines",
-            closeAttrs: { "data-tv-lines-close": true, "aria-label": "Close lines" },
-            bodyMarkup: linesMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "41ch",
-            height: "min(13em, calc(100% - 2em))",
-            left: "4ch",
-            top: "2em",
+            content: linesMain,
         });
 
         installHallOfFame(this, "lines");
@@ -2792,9 +2751,9 @@ class TVReversiDialog extends TVDialog {
         const infoBox = new TVInfoBox({
             x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "black", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "white", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "turn", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "black" }),
+                new TVStaticText({ name: "white" }),
+                new TVStaticText({ name: "turn" }),
             ],
         });
         const reversiMain = new TVGroup({
@@ -2802,25 +2761,18 @@ class TVReversiDialog extends TVDialog {
             children: [
                 new TVStaticText({
                     x: 0, y: 0, w: GRID_W, h: REVERSI_SIZE,
-                    attrs: { "data-tv-reversi-grid": true },
+                    name: "reversi-grid",
                 }),
                 infoBox,
                 new TVButton({ x: INFO_X, y: 6, w: INFO_W, command: "reversi-new", label: '~N~ew' }),
             ],
-        }).renderMarkup();
+        });
 
-        super({
+        super(new TVRect(0, 0, 38, 10), "Reversi", {
             desktop,
+            viewName: "reversi",
             helpCtx: hcReversi,
-            ariaLabel: "Reversi",
-            title: "Reversi",
-            closeAttrs: { "data-tv-reversi-close": true, "aria-label": "Close reversi" },
-            bodyMarkup: reversiMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "38ch",
-            height: "min(10em, calc(100% - 2em))",
-            left: "4ch",
-            top: "2em",
+            content: reversiMain,
         });
 
         installHallOfFame(this, "reversi");
@@ -3091,16 +3043,15 @@ class TVLudoDialog extends TVDialog {
             title: "Game",
             borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "turn", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "dice", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "status", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "turn" }),
+                new TVStaticText({ name: "dice" }),
+                new TVStaticText({ name: "status" }),
             ],
         });
         const playerButtons = LUDO_PLAYER_NAMES.map((name, player) => new TVButton({
-            dialog: false,
-            buttonKind: `ludo-player-toggle ludo-${LUDO_PLAYER_COLORS[player]}`,
             command: "ludo-player-mode",
             value: player,
+            commandData: { color: LUDO_PLAYER_COLORS[player] },
             ariaLabel: `${name} player mode`,
             label: name,
         }));
@@ -3126,26 +3077,18 @@ class TVLudoDialog extends TVDialog {
             role: "ludo-main",
             children: [
                 new TVStaticText({
+                    name: "ludo-board",
                     textKind: "ludo-board",
-                    attrs: { "data-tv-ludo-board": true, role: "grid", "aria-label": "Ludo board" },
                 }),
                 side,
             ],
-        }).renderMarkup();
+        });
 
-        super({
+        super(new TVRect(0, 0, 71, 26), "Ludo", {
             desktop,
+            viewName: "ludo",
             helpCtx: hcLudo,
-            windowClass: "tv-ludo-window",
-            ariaLabel: "Ludo",
-            title: "Ludo",
-            closeAttrs: { "data-tv-ludo-close": true, "aria-label": "Close Ludo" },
-            bodyMarkup: main,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "71ch",
-            height: "min(26em, calc(100% - 2em))",
-            left: "3ch",
-            top: "2em",
+            content: main,
         });
 
         installHallOfFame(this, "ludo");
@@ -3544,17 +3487,15 @@ class TVLudoDialog extends TVDialog {
         const connected = (fromRow, fromCol, toRow, toCol) => LUDO_ROUTE_EDGES.has(
             `${LUDO_CELL_KEY(fromRow, fromCol)}>${LUDO_CELL_KEY(toRow, toCol)}`
         );
-        const line = (html, textKind = "") => new TVStaticText({
-            textKind: `ludo-ascii-line ${textKind.replace(/tv-/g, "")}`.trim(),
+        const line = (html, textKind = "") => new TVGroup({
+            role: `ludo-ascii-line ${textKind.replace(/tv-/g, "")}`.trim(),
             html,
         }).renderMarkup();
         const textCell = (text, classes = []) => new TVStaticText({
-            tag: "span",
             textKind: ["ludo-ascii-cell", ...classes.map((name) => name.replace(/tv-/g, ""))].join(" "),
             text,
         }).renderMarkup();
         const pathSegment = (text) => new TVStaticText({
-            tag: "span",
             textKind: "ludo-ascii-path",
             text,
         }).renderMarkup();
@@ -3590,10 +3531,9 @@ class TVLudoDialog extends TVDialog {
                 isCapturedFlash ? "is-captured" : "",
             ].filter(Boolean).join(" ");
             return new TVButton({
-                dialog: false,
-                buttonKind: pieceClasses.replace(/tv-/g, ""),
                 command: "ludo-piece",
                 value: piece,
+                commandData: { classes: pieceClasses },
                 ariaLabel: `${LUDO_PLAYER_NAMES[player]} piece ${piece + 1}`,
                 disabled: !isLegal,
                 labelMarkup: '<span class="tv-ludo-piece-glyph">♟</span>',
@@ -3636,31 +3576,25 @@ class TVMastermindDialog extends TVDialog {
             w: 5,
             command: "mastermind-color",
             value: color,
-            buttonKind: `mastermind-color mastermind-color-${color}`,
+            commandData: { color },
             label: String(color + 1),
         }));
         const body = new TVGroup({
             w: 60, h: 16,
             children: [
-                new TVStaticText({ x: 3, y: 1, w: 28, h: 10, attrs: { "data-tv-mastermind-board": true } }),
+                new TVStaticText({ x: 3, y: 1, w: 28, h: 10, name: "mastermind-board" }),
                 new TVStaticText({ x: 38, y: 1, w: 17, text: "Colors" }),
                 ...paletteButtons,
-                new TVButton({ x: 38, y: 8, w: 11, defaultButton: true, command: "mastermind-guess", label: "~G~uess" }),
+                new TVButton({ x: 38, y: 8, w: 11, flags: bfDefault, command: "mastermind-guess", label: "~G~uess" }),
                 new TVButton({ x: 38, y: 10, w: 11, command: "mastermind-new", label: "~N~ew" }),
-                new TVStaticText({ x: 3, y: 13, w: 54, attrs: { "data-tv-mastermind-status": true } }),
+                new TVStaticText({ x: 3, y: 13, w: 54, name: "mastermind-status" }),
             ],
-        }).renderMarkup();
-        super({
+        });
+        super(new TVRect(0, 0, 64, 20), "Mastermind", {
             desktop,
+            viewName: "mastermind",
             helpCtx: hcMastermind,
-            windowClass: "tv-mastermind-window",
-            ariaLabel: "Mastermind",
-            title: "Mastermind",
-            closeAttrs: { "data-tv-mastermind-close": true, "aria-label": "Close Mastermind" },
-            bodyMarkup: body,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "64ch",
-            height: "min(20em, calc(100% - 2em))",
+            content: body,
         });
         installHallOfFame(this, "mastermind");
         this.game = new MastermindGame();
@@ -3784,27 +3718,21 @@ class TVTronDialog extends TVDialog {
             children: [
                 new TVStaticText({
                     x: 0, y: 0, w: fieldWidth, h: TRON_ROWS,
-                    attrs: { "data-tv-tron-field": true, role: "img", "aria-label": "Tron arena" },
+                    name: "tron-field",
                 }),
                 new TVStaticText({ x: infoX, y: 0, w: 22, text: "P1: W A S D" }),
                 new TVStaticText({ x: infoX, y: 2, w: 22, text: "P2: Arrow keys" }),
-                new TVStaticText({ x: infoX, y: 5, w: 22, h: 4, attrs: { "data-tv-tron-status": true, "aria-live": "polite" } }),
-                new TVButton({ x: infoX, y: 10, w: 15, defaultButton: true, command: "tron-new", label: "~N~ew round" }),
+                new TVStaticText({ x: infoX, y: 5, w: 22, h: 4, name: "tron-status" }),
+                new TVButton({ x: infoX, y: 10, w: 15, flags: bfDefault, command: "tron-new", label: "~N~ew round" }),
                 new TVButton({ x: infoX, y: 12, w: 15, command: "tron-pause", label: "~P~ause" }),
                 new TVStaticText({ x: infoX, y: 15, w: 22, h: 2, text: "Avoid every trail.\nBoth move together." }),
             ],
-        }).renderMarkup();
-        super({
+        });
+        super(new TVRect(0, 0, 88, 22), "Tron Light Cycles", {
             desktop,
+            viewName: "tron",
             helpCtx: hcTron,
-            windowClass: "tv-tron-window",
-            ariaLabel: "Tron Light Cycles",
-            title: "Tron Light Cycles",
-            closeAttrs: { "data-tv-tron-close": true, "aria-label": "Close Tron Light Cycles" },
-            bodyMarkup: tronMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "88ch",
-            height: "min(22em, calc(100% - 2em))",
+            content: tronMain,
         });
         installHallOfFame(this, "tron");
         this.game = new TronGame({ width: TRON_COLS, height: TRON_ROWS });
@@ -3972,24 +3900,18 @@ class TVHanoiDialog extends TVDialog {
         const hanoiMain = new TVGroup({
             w: 79, h: 15,
             children: [
-                new TVStaticText({ x: 1, y: 1, w: 54, h: 10, attrs: { "data-tv-hanoi-board": true } }),
-                new TVStaticText({ x: 57, y: 1, w: 20, h: 8, attrs: { "data-tv-hanoi-history": true, "aria-live": "polite" } }),
+                new TVStaticText({ x: 1, y: 1, w: 54, h: 10, name: "hanoi-board" }),
+                new TVStaticText({ x: 57, y: 1, w: 20, h: 8, name: "hanoi-history" }),
                 new TVButton({ x: 57, y: 9, w: 12, command: "hanoi-undo", label: "~U~ndo" }),
-                new TVButton({ x: 57, y: 11, w: 12, defaultButton: true, command: "hanoi-new", label: "~N~ew" }),
-                new TVStaticText({ x: 1, y: 12, w: 54, h: 2, attrs: { "data-tv-hanoi-status": true, "aria-live": "polite" } }),
+                new TVButton({ x: 57, y: 11, w: 12, flags: bfDefault, command: "hanoi-new", label: "~N~ew" }),
+                new TVStaticText({ x: 1, y: 12, w: 54, h: 2, name: "hanoi-status" }),
             ],
-        }).renderMarkup();
-        super({
+        });
+        super(new TVRect(0, 0, 83, 19), "Tower of Hanoi", {
             desktop,
+            viewName: "hanoi",
             helpCtx: hcHanoi,
-            windowClass: "tv-hanoi-window",
-            ariaLabel: "Tower of Hanoi",
-            title: "Tower of Hanoi",
-            closeAttrs: { "data-tv-hanoi-close": true, "aria-label": "Close Tower of Hanoi" },
-            bodyMarkup: hanoiMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "83ch",
-            height: "min(19em, calc(100% - 2em))",
+            content: hanoiMain,
         });
         installHallOfFame(this, "hanoi");
         this.game = new HanoiGame(5);
@@ -4194,15 +4116,15 @@ class TVSnakeDialog extends TVDialog {
         const infoBox = new TVInfoBox({
             x: INFO_X, y: 0, w: INFO_W, name: "info", title: "Info", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "score", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "level", attrs: { "data-tv-info-row": true } }),
-                new TVStaticText({ tag: "span", name: "length", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "score" }),
+                new TVStaticText({ name: "level" }),
+                new TVStaticText({ name: "length" }),
             ],
         });
         const bestBox = new TVInfoBox({
             x: INFO_X, y: 5, w: INFO_W, name: "best", title: "Best", borderClass: "tv-game-border",
             children: [
-                new TVStaticText({ tag: "span", name: "best", attrs: { "data-tv-info-row": true } }),
+                new TVStaticText({ name: "best" }),
             ],
         });
         const snakeMain = new TVGroup({
@@ -4210,26 +4132,19 @@ class TVSnakeDialog extends TVDialog {
             children: [
                 new TVStaticText({
                     x: 0, y: 0, w: FIELD_W, h: SNAKE_ROWS,
-                    attrs: { "data-tv-snake-field": true },
+                    name: "snake-field",
                 }),
                 infoBox,
                 bestBox,
                 new TVButton({ x: INFO_X, y: 13, w: INFO_W, command: "snake-new", label: '~N~ew' }),
             ],
-        }).renderMarkup();
+        });
 
-        super({
+        super(new TVRect(0, 0, 64, 19), "Snake", {
             desktop,
+            viewName: "snake",
             helpCtx: hcSnake,
-            ariaLabel: "Snake",
-            title: "Snake",
-            closeAttrs: { "data-tv-snake-close": true, "aria-label": "Close snake" },
-            bodyMarkup: snakeMain,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "64ch",
-            height: "min(19em, calc(100% - 2em))",
-            left: "4ch",
-            top: "2em",
+            content: snakeMain,
         });
 
         installHallOfFame(this, "snake");

@@ -2301,6 +2301,8 @@ button.tv-status-item {
     width: 14ch;
     height: 2em;
     overflow: hidden;
+    color: var(--tv-colors-sample-fg);
+    background: var(--tv-colors-sample-bg);
 }
 
 .tv-colors-dialog-buttons {
@@ -2513,15 +2515,15 @@ button.tv-status-item {
     color: var(--tv-dialog-list-focus-fg);
 }
 
-.tv-hall-row > span,
-.tv-hall-header > span {
+.tv-hall-row > .tv-static-text,
+.tv-hall-header > .tv-static-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: pre;
 }
 
-.tv-hall-row > span:last-child,
-.tv-hall-header > span:last-child {
+.tv-hall-row > .tv-static-text:last-child,
+.tv-hall-header > .tv-static-text:last-child {
     text-align: right;
 }
 
@@ -3299,6 +3301,7 @@ button.tv-status-item {
     overflow: hidden;
 }
 
+.tv-info-frame,
 [data-tv-info-frame],
 [data-tv-info-side] {
     color: var(--tv-current-frame);
@@ -3306,7 +3309,7 @@ button.tv-status-item {
     line-height: 1em;
 }
 
-[data-tv-info-row] {
+.tv-info-row {
     color: var(--tv-dialog-fg);
     white-space: pre;
     line-height: 1em;
@@ -3958,7 +3961,7 @@ button.tv-status-item {
 
 /* Minesweeper: uses position:absolute via x,y,w,h bounds */
 
-[data-tv-mines-info-value] {
+.tv-mines-info-value {
     color: #aa0000;
     font-weight: bold;
     white-space: pre;

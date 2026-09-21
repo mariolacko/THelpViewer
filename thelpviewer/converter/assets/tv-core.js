@@ -1131,6 +1131,18 @@ function attrsToString(attrs = {}) {
         .join(" ");
 }
 
+class TVRect {
+    constructor(x1 = 0, y1 = 0, x2 = x1, y2 = y1) {
+        this.x1 = Number(x1) || 0;
+        this.y1 = Number(y1) || 0;
+        this.x2 = Number(x2) || this.x1;
+        this.y2 = Number(y2) || this.y1;
+    }
+
+    get width() { return Math.max(0, this.x2 - this.x1); }
+    get height() { return Math.max(0, this.y2 - this.y1); }
+}
+
 class TVWidget {
     constructor(root = null, { helpCtx = hcNoContext } = {}) {
         this.root = root;
@@ -1232,29 +1244,19 @@ class TVWidget {
 
 class TVStaticText extends TVWidget {
     constructor({
-        tag = "div",
         name = "",
         text = "",
-        html = "",
         textKind = "",
-        foreground = "",
-        background = "",
         align = "",
         title = false,
-        attrs = {},
         x, y, w, h,
     } = {}) {
         super();
-        this.tag = tag;
         this.name = name;
         this.text = text;
-        this.html = html;
         this.textKind = textKind;
-        this.foreground = foreground;
-        this.background = background;
         this.align = align;
         this.title = title;
-        this.attrs = attrs;
         this.x = x; this.y = y; this.w = w; this.h = h;
     }
 
@@ -1267,15 +1269,38 @@ class TVStaticText extends TVWidget {
         const classAttr = ` class="${escapeHtml(cls)}"`;
         const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
         const alignStyle = this.align ? `text-align:${this.align}` : "";
-        const colorStyle = this.foreground ? `color:${this.foreground}` : "";
-        const backgroundStyle = this.background ? `background:${this.background}` : "";
-        const inlineStyle = [bounds, alignStyle, colorStyle, backgroundStyle].filter(Boolean).join(";");
+        const inlineStyle = [bounds, alignStyle].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
-        const attrString = attrsToString(this.attrs);
+        const liveKinds = new Set(["calc-display", "midi-status", "find-status"]);
+        const liveNames = new Set(["tron-status", "hanoi-history", "hanoi-status"]);
+        const semanticName = this.name
+            ? String(this.name).replace(/[^a-zA-Z0-9_-]/g, "-")
+            : "";
+        const attrString = attrsToString({
+            ...(semanticName ? {
+                [`data-tv-${semanticName}`]: true,
+                "data-tv-row": semanticName,
+            } : {}),
+            ...(liveKinds.has(this.textKind) || liveNames.has(semanticName) ? { "aria-live": "polite" } : {}),
+            ...(semanticName === "ludo-board" ? { role: "grid", "aria-label": "Ludo board" } : {}),
+            ...(semanticName === "tron-field" ? { role: "img", "aria-label": "Tron arena" } : {}),
+        });
         const attrs = attrString ? ` ${attrString}` : "";
-        const nameAttr = this.name ? ` data-tv-row="${escapeHtml(this.name)}"` : "";
-        const content = this.html || escapeHtml(this.text);
-        return `<${this.tag}${classAttr}${styleAttr}${attrs}${nameAttr}>${content}</${this.tag}>`;
+        return `<div${classAttr}${styleAttr}${attrs}>${escapeHtml(this.text)}</div>`;
+    }
+
+    getText() {
+        return this.text;
+    }
+
+    setText(text) {
+        this.text = String(text ?? "");
+        if (this.root) { this.root.textContent = this.text; }
+        return this;
+    }
+
+    draw() {
+        return this.renderMarkup();
     }
 }
 
@@ -1283,24 +1308,27 @@ class TVLabel extends TVStaticText {
     constructor({
         text = "",
         labelKind = "",
-        attrs = {},
-        html = "",
         forId = "",
         hotkey = false,
         x, y, w, h,
     } = {}) {
-        const labelAttrs = { ...attrs };
-        if (forId) {
-            labelAttrs.for = forId;
-        }
         super({
-            tag: forId ? "label" : "span",
             textKind: ["label", labelKind].filter(Boolean).join(" "),
-            attrs: labelAttrs,
             text,
-            html: html || (hotkey ? renderHotkeyMarkup(text) : ""),
             x, y, w, h,
         });
+        this.forId = forId;
+        this.hotkey = hotkey;
+    }
+
+    renderMarkup() {
+        const tag = this.forId ? "label" : "span";
+        const cls = ["tv-static-text", TVWidget.roleClassNames(this.textKind)].filter(Boolean).join(" ");
+        const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
+        const styleAttr = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        const forAttr = this.forId ? ` for="${escapeHtml(this.forId)}"` : "";
+        const content = this.hotkey ? renderHotkeyMarkup(this.text) : escapeHtml(this.text);
+        return `<${tag} class="${escapeHtml(cls)}"${styleAttr}${forAttr}>${content}</${tag}>`;
     }
 }
 
@@ -1446,6 +1474,21 @@ class TVGroup extends TVWidget {
         return this.current;
     }
 
+    insert(child) {
+        if (!(child instanceof TVWidget)) { return null; }
+        child.owner = this;
+        this.children.push(child);
+        return child;
+    }
+
+    remove(child) {
+        const index = this.children.indexOf(child);
+        if (index < 0) { return null; }
+        this.children.splice(index, 1);
+        child.owner = null;
+        return child;
+    }
+
     getHelpCtx() {
         const currentContext = this.current && typeof this.current.getHelpCtx === "function"
             ? this.current.getHelpCtx()
@@ -1473,6 +1516,11 @@ class TVInfoBox extends TVWidget {
         this.borderClass = borderClass;
         this.w = w;
         this.children = children;
+        this.children.forEach((child) => {
+            if (child instanceof TVStaticText && child.name) {
+                child.textKind = [child.textKind, "info-row"].filter(Boolean).join(" ");
+            }
+        });
         this.x = x; this.y = y; this.h = h;
         this.attrs = attrs;
         this.className = className;
@@ -2379,10 +2427,79 @@ class TVVerticalScrollArea extends TVWidget {
 }
 
 class TVMenuView extends TVWidget {
-    renderItems(items = []) {
+    renderItems(items = [], view = "popup") {
         return items.map((item) => (
-            typeof item === "string" ? item : item?.renderMarkup?.() || ""
+            typeof item === "string" ? item : item?.renderMarkup?.(view) || ""
         ));
+    }
+}
+
+/**
+ * Turbo Vision menu command descriptor. TMenuItem is not a TButton: the
+ * owning TMenuView decides whether it is drawn in a menu bar or menu box.
+ */
+class TVMenuItem extends TVWidget {
+    constructor(label, command = "", value = true, commandData = {}) {
+        super();
+        this.label = String(label || "");
+        this.command = command;
+        this.value = value;
+        this.commandData = commandData;
+        this.disabled = false;
+    }
+
+    setDisabled(disabled = true) {
+        this.disabled = Boolean(disabled);
+        return this;
+    }
+
+    renderMarkup(view = "popup") {
+        const isMenuBar = view === "bar";
+        const attrs = attrsToString({
+            type: "button",
+            ...TVWidget.controlAttrs({
+                name: this.command,
+                command: this.command,
+                value: this.value,
+                commandData: this.commandData,
+                disabled: this.disabled,
+                ariaHasPopup: isMenuBar ? true : null,
+                ariaExpanded: isMenuBar ? false : null,
+            }),
+        });
+        const className = isMenuBar ? "tv-menu-item tv-menu-button" : "tv-menu-popup-item";
+        return `<button class="${className}" ${attrs}>${this.label}</button>`;
+    }
+}
+
+/** Turbo Vision status-line command descriptor (TStatusItem). */
+class TVStatusItem extends TVWidget {
+    constructor(text, command = "", value = true, commandData = {}) {
+        super();
+        this.text = String(text || "");
+        this.command = command;
+        this.value = value;
+        this.commandData = commandData;
+        this.disabled = false;
+    }
+
+    setDisabled(disabled = true) {
+        this.disabled = Boolean(disabled);
+        return this;
+    }
+
+    renderMarkup() {
+        const attrs = attrsToString({
+            type: "button",
+            ...TVWidget.controlAttrs({
+                name: this.command,
+                command: this.command,
+                value: this.value,
+                commandData: this.commandData,
+                disabled: this.disabled,
+            }),
+        });
+        return `<button class="tv-status-item" ${attrs}>${this.text}</button>`;
     }
 }
 
@@ -2407,7 +2524,7 @@ class TVMenuBox extends TVMenuView {
         });
         // Split items into segments at separator strings to render them as body-level rows.
         const segments = [[]];
-        for (const html of this.renderItems(this.items)) {
+        for (const html of this.renderItems(this.items, "popup")) {
             if (/^<div class="tv-menu-popup-separator(?:\s|\")/.test(html.trim())) {
                 segments.push("separator");
                 segments.push([]);
@@ -3198,6 +3315,11 @@ class TVMultiCheckBoxes extends TVCluster {
     }
 }
 
+const bfNormal = 0x00;
+const bfDefault = 0x01;
+const bfLeftJust = 0x02;
+const bfBroadcast = 0x04;
+
 class TVButton extends TVWidget {
     constructor({
         label = "",
@@ -3205,7 +3327,7 @@ class TVButton extends TVWidget {
         command = "",
         value = true,
         commandData = {},
-        defaultButton = false,
+        flags = bfNormal,
         disabled = false,
         hidden = false,
         ariaLabel = "",
@@ -3215,19 +3337,15 @@ class TVButton extends TVWidget {
         tabIndex = null,
         tooltip = "",
         draggable = null,
-        dialog = true,
-        tag = "button",
-        buttonKind = "dialog",
         width = "",
-        color = "",
         x, y, w, h,
     } = {}) {
         super();
         this.labelMarkup = label ? renderHotkeyMarkup(label) : labelMarkup;
-        this.className = [
-            ["dialog", "calculator"].includes(buttonKind) ? "" : TVWidget.roleClassNames(buttonKind),
-            defaultButton ? "is-default" : "",
-        ].filter(Boolean).join(" ");
+        this.command = command;
+        this.commandData = commandData;
+        this.flags = flags;
+        this.className = (flags & bfDefault) !== 0 ? "is-default" : "";
         this.attrs = {
             ...TVWidget.controlAttrs({
                 name: command,
@@ -3244,24 +3362,76 @@ class TVButton extends TVWidget {
                 draggable,
             }),
         };
-        this.dialog = dialog;
-        this.tag = tag;
-        this.baseClass = buttonKind === "calculator" ? "tv-calc-button" : "tv-dialog-button";
         this.width = width;
-        this.style = color ? `--tv-color-cell:${color}` : "";
         this.x = x; this.y = y; this.w = w; this.h = h;
     }
 
+    presentation() {
+        const data = this.commandData || {};
+        const plain = new Set([
+            "file-open-history", "change-dir-history", "find-history",
+            "context-help-back", "context-help-contents",
+            "file-open-scroll-left", "file-open-scroll-right",
+            "ascii-code", "calendar-prev", "calendar-next", "color-index",
+            "midi-previous", "midi-play", "midi-pause", "midi-stop", "midi-next",
+            "midi-more", "midi-close-button", "midi-source", "midi-load-url",
+            "midi-track", "search-index", "mines-face", "ludo-player-mode", "ludo-piece",
+        ]);
+        const classes = [];
+        if (["file-open-history", "change-dir-history", "find-history"].includes(this.command)) {
+            classes.push("tv-file-open-history-button");
+            if (this.command === "change-dir-history") { classes.push("tv-change-dir-history-button"); }
+            if (this.command === "find-history") { classes.push("tv-find-history-button"); }
+        } else if (this.command === "ascii-code") {
+            classes.push("tv-ascii-cell");
+        } else if (["calendar-prev", "calendar-next"].includes(this.command)) {
+            classes.push("tv-calendar-arrow");
+        } else if (this.command === "color-index") {
+            classes.push("tv-color-cell");
+        } else if (["midi-previous", "midi-play", "midi-pause", "midi-stop", "midi-next"].includes(this.command)) {
+            classes.push("tv-midi-control");
+        } else if (this.command === "midi-more") {
+            classes.push("tv-midi-more-action");
+        } else if (this.command === "midi-close-button") {
+            classes.push("tv-midi-close-action");
+        } else if (this.command === "midi-source") {
+            classes.push("tv-midi-source-preset");
+        } else if (this.command === "midi-load-url") {
+            classes.push("tv-midi-url-load");
+        } else if (this.command === "midi-track") {
+            classes.push("tv-midi-track");
+        } else if (this.command === "search-index") {
+            classes.push("tv-search-result");
+        } else if (this.command === "mines-face") {
+            classes.push("tv-mines-face");
+        } else if (this.command === "ludo-player-mode") {
+            classes.push("tv-ludo-player-toggle", `tv-ludo-${data.color || "red"}`);
+        } else if (this.command === "ludo-piece") {
+            classes.push(...String(data.classes || "").split(/\s+/).filter(Boolean));
+        } else if (this.command === "mastermind-color") {
+            classes.push("tv-mastermind-color", `tv-mastermind-color-${data.color ?? 0}`);
+        }
+        if (data.selected) { classes.push("is-selected"); }
+        return {
+            dialog: !plain.has(this.command),
+            baseClass: this.command === "calc-key" ? "tv-calc-button" : "tv-dialog-button",
+            className: classes.join(" "),
+            style: this.command === "color-index" && data.color
+                ? `--tv-color-cell:${data.color}`
+                : "",
+        };
+    }
+
     renderMarkup() {
-        const baseAttrs = this.tag === "button" ? { type: "button" } : {};
-        const attrString = attrsToString({ ...baseAttrs, ...this.attrs });
-        const classNames = [this.className].filter(Boolean).join(" ");
+        const presentation = this.presentation();
+        const attrString = attrsToString({ type: "button", ...this.attrs });
+        const classNames = [presentation.className, this.className].filter(Boolean).join(" ");
         const bounds = TVWidget.boundsStyle(this.x, this.y, this.w, this.h);
         const widthStyle = this.width ? `min-width:${this.width}` : "";
-        const inlineStyle = [bounds, widthStyle, this.style].filter(Boolean).join(";");
+        const inlineStyle = [bounds, widthStyle, presentation.style].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
-        if (this.dialog) {
-            const buttonClass = [this.baseClass, classNames].filter(Boolean).join(" ");
+        if (presentation.dialog) {
+            const buttonClass = [presentation.baseClass, classNames].filter(Boolean).join(" ");
             const shadow = " " + "\u2580".repeat(20);
             return `
                 <button class="${buttonClass}"${styleAttr} ${attrString}>
@@ -3275,7 +3445,30 @@ class TVButton extends TVWidget {
         }
         const classAttr = classNames ? ` class="${classNames}"` : "";
         const attrs = attrString ? ` ${attrString}` : "";
-        return `<${this.tag}${classAttr}${styleAttr}${attrs}>${this.labelMarkup}</${this.tag}>`;
+        return `<button${classAttr}${styleAttr}${attrs}>${this.labelMarkup}</button>`;
+    }
+
+    draw() {
+        return this.renderMarkup();
+    }
+
+    makeDefault(enable = true) {
+        this.flags = enable ? (this.flags | bfDefault) : (this.flags & ~bfDefault);
+        this.className = enable ? "is-default" : "";
+        this.root?.classList.toggle("is-default", Boolean(enable));
+        return this;
+    }
+
+    press() {
+        if (this.root && !this.root.disabled) { this.root.click(); }
+    }
+
+    setState(state, enable) {
+        if (state === "disabled") {
+            this.attrs.disabled = Boolean(enable);
+            if (this.root) { this.root.disabled = Boolean(enable); }
+        }
+        return this;
     }
 }
 
@@ -3444,47 +3637,39 @@ class TVDialog extends TVWindow {
         `;
     }
 
-    constructor({
+    constructor(bounds, title, {
         desktop,
-        overlayClass,
-        windowClass,
-        ariaLabel,
-        title,
-        titlebarClass,
-        bodyClass,
-        footerClass,
-        titleClass,
-        closeClass,
-        closeAttrs = {},
-        bodyMarkup,
-        footerMarkup,
-        bodyBorders,
-        width,
-        height,
-        left,
-        top,
+        viewName = "dialog",
+        content = "",
         modal = false,
         palette = "dialog",
         helpCtx = hcDialog,
         keyboard = true,
         escapeCloses = true,
         defaultButtonSelector = ".tv-dialog-button.is-default",
-    }) {
+    } = {}) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVDialog expects TVRect bounds");
+        }
+        const viewClass = String(viewName || "dialog").replace(/[^a-zA-Z0-9_-]/g, "-");
+        const classPrefix = `tv-${viewClass}`;
         const root = TVWidget.fromHTML(
             TVFrame.dialogMarkup({
-                overlayClass,
-                windowClass,
-                ariaLabel,
-                titlebarClass,
-                bodyClass,
-                footerClass,
-                titleClass,
+                overlayClass: `${classPrefix}-overlay`,
+                windowClass: `${classPrefix}-window`,
+                ariaLabel: title,
+                titlebarClass: `${classPrefix}-titlebar`,
+                bodyClass: `${classPrefix}-body`,
+                footerClass: `${classPrefix}-footer`,
+                titleClass: `${classPrefix}-title`,
                 title,
-                closeClass,
-                closeAttrs,
-                bodyMarkup,
-                footerMarkup,
-                bodyBorders,
+                closeClass: `${classPrefix}-close-control`,
+                closeAttrs: {
+                    [`data-tv-${viewClass}-close`]: true,
+                    "aria-label": `Close ${title || "dialog"}`,
+                },
+                bodyMarkup: content,
+                footerMarkup: TVDialog.footerMarkup(),
                 modal,
                 palette,
             })
@@ -3496,10 +3681,8 @@ class TVDialog extends TVWindow {
         setElementHelpContext(this.dialog, helpCtx);
         this.titlebar = this.query(".tv-dialog-titlebar");
         this.closeButton = this.query(".tv-dialog-close-control");
-        if (width) this.dialog.style.setProperty("--tv-dialog-width", width);
-        if (height) this.dialog.style.setProperty("--tv-dialog-height", height);
-        if (left) this.dialog.style.setProperty("--tv-dialog-left", left);
-        if (top) this.dialog.style.setProperty("--tv-dialog-top", top);
+        if (bounds.width) this.dialog.style.setProperty("--tv-dialog-width", `${bounds.width}ch`);
+        if (bounds.height) this.dialog.style.setProperty("--tv-dialog-height", `${bounds.height}em`);
         this.hasPosition = false;
         this.dragState = null;
         this.manager = null;
@@ -4171,18 +4354,17 @@ class TVMessageBox extends TVDialog {
     ];
 
     constructor(parentEl) {
-        super({
+        super(new TVRect(0, 0, 42, 12), "", {
             desktop: parentEl,
-            overlayClass: "tv-msgbox-overlay",
-            windowClass: "tv-msgbox-window",
-            ariaLabel: "Message",
-            title: "",
-            bodyMarkup: '<div class="tv-msgbox-body" data-tv-msgbox-body>'
-                + '<div class="tv-msgbox-content" data-tv-msgbox-content></div>'
-                + '<div class="tv-msgbox-buttons" data-tv-msgbox-buttons></div>'
-                + '</div>',
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "auto",
+            viewName: "msgbox",
+            content: new TVGroup({
+                role: "msgbox-body",
+                name: "msgbox-body",
+                children: [
+                    new TVGroup({ role: "msgbox-content", name: "msgbox-content" }),
+                    new TVGroup({ role: "msgbox-buttons", name: "msgbox-buttons" }),
+                ],
+            }),
             modal: true,
             keyboard: false,
         });
@@ -4228,7 +4410,7 @@ class TVMessageBox extends TVDialog {
             const btnHtml = btnDefs.map((b, index) =>
                 new TVButton({
                     label: b.label,
-                    defaultButton: index === 0,
+                    flags: index === 0 ? bfDefault : bfNormal,
                     command: "msgbox-cmd",
                     value: b.cmd,
                 }).renderMarkup()
@@ -4729,6 +4911,7 @@ Object.assign(TV, {
     resetMenuPopupLayout,
     fitMenuPopupToViewport,
     TVAppContext,
+    TVRect,
     TVWidget,
     TVStaticText,
     TVLabel,
@@ -4745,7 +4928,9 @@ Object.assign(TV, {
     TVOutline,
     TVVerticalScrollArea,
     TVMenuView,
+    TVMenuItem,
     TVMenuBox,
+    TVStatusItem,
     TVMenuController,
     TVHelpController,
     TVButtonStrip,
@@ -4754,6 +4939,10 @@ Object.assign(TV, {
     TVRadioButtons,
     TVMultiCheckBoxes,
     TVButton,
+    bfNormal,
+    bfDefault,
+    bfLeftJust,
+    bfBroadcast,
     TVFrame,
     TVWindow,
     TVDialog,

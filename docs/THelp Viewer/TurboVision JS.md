@@ -31,10 +31,12 @@ Core widget hierarchy and infrastructure.
 - **TVWidget** — Base for all UI components. `constructor(root=null)`.
   `setHelpCtx()` and `getHelpCtx()` attach or resolve a Turbo Vision-style
   context identifier.
-- **TVStaticText** — Renders static text with character-cell bounds.
-  `constructor({text, textKind, foreground, background, align, title, x, y,
-  w, h, ...})`. It accepts no raw CSS class or style; the renderer translates
-  text kinds and palette colors centrally.
+- **TVRect** — Character-cell bounds used by windows and dialogs. It mirrors
+  Turbo Vision's `(x1, y1, x2, y2)` rectangle convention.
+- **TVStaticText** — Renders static text with character-cell bounds. It accepts
+  text, semantic formatting and bounds, but no HTML tag or arbitrary DOM
+  attributes. `getText()`, `setText()` and `draw()` mirror the basic
+  `TStaticText` contract.
 - **TVLabel** — Text label with hotkey markup. With `forId` it emits a native
   `<label for="…">`; otherwise it emits a presentational `<span>`.
 - **TVInputLine** — `<input>` element. `constructor({className, attrs})`.
@@ -74,12 +76,14 @@ Core widget hierarchy and infrastructure.
   Markdown Docs windows instantiate this pair instead of using a styled
   viewport alone.
 - **TVButtonStrip** — Row of buttons.
-- **TVButton** — Button with optional dialog shadow.
-  `constructor({label, labelMarkup, command, value, commandData,
-  defaultButton, disabled, buttonKind, x, y, w, h, ...})`. Like Turbo
-  Vision's `TButton`, the public control is identified by a command rather
-  than a DOM role/name. The core renderer privately maps that command and the
-  enclosing view kind to DOM, CSS and accessibility attributes.
+- **TVButton** — Dialog command button. Like Turbo Vision's `TButton`, it is
+  identified by its title, command and `bfNormal`/`bfDefault`/`bfLeftJust`/
+  `bfBroadcast` flags; `draw()`, `press()`,
+  `makeDefault()` and `setState()` provide the basic control operations. It no
+  longer represents menus or status-line items and has no `buttonKind`.
+- **TVMenuItem** / **TVStatusItem** — Command descriptors drawn by
+  `TVMenuView`/`TVMenuBox` and the status line, matching Turbo Vision's
+  separation between `TButton`, `TMenuItem` and `TStatusItem`.
 - **TVMessageBox** — Modal Promise-based message box with OK/Cancel and
   Yes/No/Cancel flag combinations, mnemonics and default-button keyboard
   handling.
@@ -118,8 +122,9 @@ Header, footer and both row-side glyphs inherit the same current frame color.
   before window activation can consume it; native click activation remains for
   keyboard input. The grow control always draws Turbo Vision 2.0's source-
   defined single-line `─┘` icon.
-- **TVDialog** — `TVWindow` subclass with a managed overlay; it may be modal or
-  non-modal.
+- **TVDialog** — `TVWindow` subclass constructed from `TVRect` bounds, a title
+  and semantic options/content; it may be modal or non-modal. Callers do not
+  provide CSS class names, close attributes or handwritten frame footers.
   - `open()`, `close()`, `destroy()`, `center()`, `isOpen()`, `isActive()`
   - `setSize({width, height})` — Change CSS dimensions and immediately redraw
     the affected character frame. Dynamic dialogs must use this instead of

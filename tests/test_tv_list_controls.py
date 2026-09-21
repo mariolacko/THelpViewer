@@ -22,6 +22,16 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
 
     assert "class TVWindow extends TVGroup" in source
     assert "class TVDialog extends TVWindow" in source
+    assert "class TVRect" in source
+    dialog_signature = source[
+        source.index("class TVDialog extends TVWindow"):
+        source.index("if (!(bounds instanceof TVRect))", source.index("class TVDialog extends TVWindow"))
+    ]
+    assert "constructor(bounds, title," in dialog_signature
+    assert "windowClass" not in dialog_signature
+    assert "bodyClass" not in dialog_signature
+    assert "closeAttrs" not in dialog_signature
+    assert "bodyMarkup" not in dialog_signature
     assert "class TVListViewer extends TVWidget" in source
     assert "class TVListBox extends TVListViewer" in source
     assert "class TVCluster extends TVWidget" in source
@@ -32,7 +42,9 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVEditor extends TVWidget" in source
     assert "class TVOutline extends TVVerticalListViewer" in source
     assert "class TVMenuView extends TVWidget" in source
+    assert "class TVMenuItem extends TVWidget" in source
     assert "class TVMenuBox extends TVMenuView" in source
+    assert "class TVStatusItem extends TVWidget" in source
     assert "class TVDesktop extends TVGroup" in source
     assert "static titleControlMarkup({" in source
     assert "static createTitleControl(options = {})" in source
@@ -63,8 +75,13 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "role" not in button_signature
     assert "name" not in button_signature
     assert "command = \"\"" in button_signature
+    assert "flags = bfNormal" in button_signature
+    assert "defaultButton" not in button_signature
     assert "className" not in static_text_signature
     assert "style" not in static_text_signature
+    assert "attrs" not in static_text_signature
+    assert "tag" not in static_text_signature
+    assert "buttonKind" not in source
     assert 'static roleClassNames(role = "")' in source
     assert "commandData = {}" in button_signature
 
@@ -84,12 +101,12 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "if (!items.length) { return false; }" not in dialogs
     assert dialogs.count("TVHistoryWindow.renderMarkup({") == 3
     assert dialogs.count("TVHistoryWindow.triggerMarkup({") == 3
-    assert "bodyMarkup: fileOpenMain" in dialogs
-    assert "bodyMarkup: changeDirectoryMain" in dialogs
-    assert "bodyMarkup: findMain" in dialogs
-    assert "bodyMarkup: galleryMain" in dialogs
-    assert "bodyMarkup: colorsMain" in dialogs
-    assert "bodyMarkup: main" in dialogs
+    assert "content: fileOpenMain" in dialogs
+    assert "content: changeDirectoryMain" in dialogs
+    assert "content: findMain" in dialogs
+    assert "content: galleryMain" in dialogs
+    assert "content: colorsMain" in dialogs
+    assert "content: main" in dialogs
     assert 'role: "midi-source-presets",\n                    children: sourceButtons' in dialogs
     assert "new TVMarkupList({" in dialogs
     assert '<button type="button" class="tv-file-open-history-button' not in dialogs
@@ -290,7 +307,7 @@ def test_label_and_search_use_native_association_and_separate_activation():
     search = dialogs[dialogs.index("class TVSearchDialog"):]
     search_binding = search[search.index("this.resultsBox.bind({"):search.index("this.okButton.addEventListener")]
 
-    assert 'tag: forId ? "label" : "span"' in label
+    assert 'const tag = this.forId ? "label" : "span"' in label
     assert "openSelected()" not in search_binding.split("onActivate:", 1)[0]
     assert "openSelected()" in search_binding.split("onActivate:", 1)[1]
 

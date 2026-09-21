@@ -380,6 +380,16 @@ compatibility with old Turbo Vision applications.
     HELP view or Docs window. Calculator's display foreground is also locked
     to white through the shared palette variable instead of being overwritten
     by the generic static-text rule.
+49. **`buttonKind` still overloaded one button object for dialog buttons,
+    menu commands, status items and custom view cells. `TVStaticText` still
+    accepted arbitrary tags/attributes, Hall of Fame used handwritten HTML,
+    and `TVDialog` callers supplied CSS classes and frame fragments.**
+    **Resolved in Phase 7.23:** menu and status composition use dedicated
+    `TVMenuItem` and `TVStatusItem` descriptors owned by their views;
+    `TVButton.buttonKind` was removed; `TVStaticText` no longer accepts a tag
+    or arbitrary attributes; Hall of Fame is a TV object tree; and `TVDialog`
+    starts with `TVRect` bounds plus title while the shared renderer derives
+    DOM classes, close metadata and its footer.
 
 ## Component assessment
 
@@ -710,3 +720,7 @@ No previously recommended game remains unimplemented.
 - [x] Phase 7.22: replaced `TVButton` role/name routing with commands, removed
   raw CSS construction from `TVStaticText`/`TVLabel`, restored active-view
   status hints and fixed Calculator display contrast.
+- [x] Phase 7.23: separated `TVMenuItem`/`TVStatusItem` from dialog buttons,
+  removed `buttonKind`, `TVStaticText.tag` and `TVStaticText.attrs`, rebuilt
+  Hall of Fame from TV objects, and moved dialogs to `TVRect` + title +
+  semantic content construction with frame DOM owned by `TVFrame`.

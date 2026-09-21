@@ -108,12 +108,8 @@ function buildDialog(options = {}) {
     };
     overlay.querySelectorAll = () => [];
     TV.TVWidget.fromHTML = () => overlay;
-    const instance = new TV.TVDialog({
+    const instance = new TV.TVDialog(new TV.TVRect(0, 0, 40, 12), "Test", {
         desktop: document.body,
-        ariaLabel: "Test",
-        title: "Test",
-        bodyMarkup: "",
-        footerMarkup: "",
         ...options,
     });
     return { instance, overlay, dialogElement, first, second, defaultButton, closeButton };
@@ -225,15 +221,12 @@ const objectSectionsMarkup = TV.TVFrame.dialogMarkup({
     ],
     footerMarkup: "",
 });
-const semanticButtonMarkup = new TV.TVButton({
-    buttonKind: "menu-item",
-    command: "dialog-open",
-    value: "about",
-    commandData: { sourceFile: "README.md" },
-    defaultButton: true,
-    ariaExpanded: false,
-    label: "~A~bout",
-}).renderMarkup();
+const semanticButtonMarkup = new TV.TVMenuItem(
+    TV.renderHotkeyMarkup("~A~bout"),
+    "dialog-open",
+    "about",
+    { sourceFile: "README.md" },
+).renderMarkup("bar");
 if (!modalMarkup.includes('aria-modal="true"') || !modalMarkup.includes("is-modal")) {
     throw new Error("modal markup is incomplete");
 }
@@ -248,7 +241,6 @@ if (!objectSectionsMarkup.includes("First") || !objectSectionsMarkup.includes("S
     throw new Error("TVFrame did not render TV object sections");
 }
     if (!semanticButtonMarkup.includes("tv-menu-item")
-        || !semanticButtonMarkup.includes("is-default")
         || !semanticButtonMarkup.includes('data-tv-dialog-open="about"')
         || !semanticButtonMarkup.includes('data-tv-source-file="README.md"')
     || !semanticButtonMarkup.includes('aria-expanded="false"')) {

@@ -40,11 +40,16 @@ const {
     TVScreenSaver,
     TVWindow,
     TVWidget,
+    TVGroup,
+    TVRect,
     TVIndicator,
     TVEditor,
     TVOutline,
     TVButton,
+    bfDefault,
+    TVMenuItem,
     TVMenuBox,
+    TVStatusItem,
     measureCells,
     TVScrollBar,
     TurboVisionWindowResizer,
@@ -1535,6 +1540,7 @@ class TVLoadingDialog {
     constructor(desktop) {
         const {
             TVDialog,
+            TVRect,
             TVStaticText,
             TVGroup,
             TVButtonStrip,
@@ -1553,7 +1559,7 @@ class TVLoadingDialog {
 
         const cancelButton = new TVBtn({
             x: 15, y: 5, w: 10,
-            defaultButton: true,
+            flags: bfDefault,
             command: "loading-cancel",
             labelMarkup: renderHotkeyMarkup("~C~ancel"),
         });
@@ -1566,19 +1572,12 @@ class TVLoadingDialog {
                 new TVStaticText({ x: 0, y: 3, w: 38, align: "center", textKind: "loading-percent", text: "0%" }),
                 cancelButton,
             ],
-        }).renderMarkup();
+        });
 
-        this.dialog = new TVDialog({
+        this.dialog = new TVDialog(new TVRect(0, 0, 40, 9), "Loading", {
             desktop,
-            overlayClass: "tv-loading-overlay",
-            ariaLabel: "Loading",
-            title: "Loading",
-            closeAttrs: { "data-tv-loading-close": true, "aria-label": "Cancel loading" },
-            bodyMarkup: bodyGroup,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "40ch",
-            height: "min(9em, calc(100% - 2em))",
-            top: "5em",
+            viewName: "loading",
+            content: bodyGroup,
             modal: true,
         });
         this.dialog.bindDrag();
@@ -2505,14 +2504,7 @@ function renderMenuRoot(labelMarkup, items, rootAttrs = {}) {
         "data-tv-menu-root": "true",
         ...rootAttrs,
     });
-    const toggle = new TVButton({
-        dialog: false,
-        buttonKind: "menu-item menu-button",
-        command: "menu-toggle",
-        ariaHasPopup: true,
-        ariaExpanded: false,
-        labelMarkup,
-    }).renderMarkup();
+    const toggle = new TVMenuItem(labelMarkup, "menu-toggle").renderMarkup("bar");
     return [
         `<div ${rootMarkup}>`,
         toggle,
@@ -2567,14 +2559,12 @@ function buildGroupedMenuItems(entries, renderItem) {
 }
 
 function catalogMenuEntryButton(entry) {
-    return new TVButton({
-        dialog: false,
-        buttonKind: "menu-popup-item",
-        command: "bundle-open",
-        value: entry.file,
-        commandData: { bundleLabel: bundleLoadingLabel(entry) },
-        labelMarkup: escapeHtml(entry.menu_name || entry.name),
-    });
+    return new TVMenuItem(
+        escapeHtml(entry.menu_name || entry.name),
+        "bundle-open",
+        entry.file,
+        { bundleLabel: bundleLoadingLabel(entry) },
+    );
 }
 
 function catalogProductLabel(entry) {
@@ -2595,19 +2585,12 @@ function catalogTreeNode(map, ordered, key) {
 }
 
 function buildCatalogMenuItems(catalog) {
-    const openItem = new TVButton({
-        dialog: false,
-        buttonKind: "menu-popup-item",
-        command: "file-open",
-        labelMarkup: renderHotkeyMarkup("~O~pen..."),
-    });
-    const changeDirectoryItem = new TVButton({
-        dialog: false,
-        buttonKind: "menu-popup-item",
-        command: "dialog-open",
-        value: "chdir",
-        labelMarkup: renderHotkeyMarkup("~C~hange dir..."),
-    });
+    const openItem = new TVMenuItem(renderHotkeyMarkup("~O~pen..."), "file-open");
+    const changeDirectoryItem = new TVMenuItem(
+        renderHotkeyMarkup("~C~hange dir..."),
+        "dialog-open",
+        "chdir",
+    );
     if (!catalog.length) { return [openItem, changeDirectoryItem]; }
 
     const directItems = [];
@@ -2651,13 +2634,7 @@ function buildCatalogMenuItems(catalog) {
 
 function buildDocsMenuItems(docs) {
     return buildGroupedMenuItems(docs, (entry) =>
-        new TVButton({
-            dialog: false,
-            buttonKind: "menu-popup-item",
-            command: "doc-open",
-            value: entry.file,
-            labelMarkup: escapeHtml(entry.name),
-        })
+        new TVMenuItem(escapeHtml(entry.name), "doc-open", entry.file)
     );
 }
 
@@ -2677,13 +2654,7 @@ function buildBundleContentsMenuItems(nodes) {
         if (childItems.length) {
             const subItems = [];
             if (hasTarget) {
-                subItems.push(new TVButton({
-                    dialog: false,
-                    buttonKind: "menu-popup-item",
-                    command: "menu-link",
-                    commandData: targetData,
-                    labelMarkup,
-                }));
+                subItems.push(new TVMenuItem(labelMarkup, "menu-link", true, targetData));
                 subItems.push(renderMenuPopupSeparator());
             }
             subItems.push(...childItems);
@@ -2692,13 +2663,7 @@ function buildBundleContentsMenuItems(nodes) {
         }
 
         if (hasTarget) {
-            items.push(new TVButton({
-                dialog: false,
-                buttonKind: "menu-popup-item",
-                command: "menu-link",
-                commandData: targetData,
-                labelMarkup,
-            }));
+            items.push(new TVMenuItem(labelMarkup, "menu-link", true, targetData));
             return;
         }
 
@@ -2929,13 +2894,11 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                 return renderMenuPopupSeparator();
             }
             if (entry.type === "submenu") {
-                const subItems = entry.items.map((sub) => new TVButton({
-                    dialog: false,
-                    buttonKind: "menu-popup-item",
-                    command: "saver-start",
-                    value: sub.mode,
-                    labelMarkup: renderHotkeyMarkup(sub.label),
-                }));
+                const subItems = entry.items.map((sub) => new TVMenuItem(
+                    renderHotkeyMarkup(sub.label),
+                    "saver-start",
+                    sub.mode,
+                ));
                 return renderMenuSubmenu(renderHotkeyMarkup(entry.label), subItems);
             }
             const action = entry.type === "theme"
@@ -2943,12 +2906,11 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                 : entry.type === "saver"
                     ? { command: "saver-start", value: entry.mode }
                     : { command: "dialog-open", value: entry.dialog };
-            return new TVButton({
-                dialog: false,
-                buttonKind: "menu-popup-item",
-                ...action,
-                labelMarkup: renderHotkeyMarkup(entry.label),
-            });
+            return new TVMenuItem(
+                renderHotkeyMarkup(entry.label),
+                action.command,
+                action.value,
+            );
         }),
     });
     const sysRootHTML = renderMenuRoot(renderHotkeyMarkup("~≡~"), sysPopupHTML.items, {
@@ -2969,25 +2931,19 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
     const searchRootHTML = renderMenuRoot(
         renderHotkeyMarkup("~S~earch"),
         [
-            new TVButton({
-                dialog: false,
-                buttonKind: "menu-popup-item",
-                command: "find",
-                labelMarkup: renderHotkeyMarkup("~F~ind") + '<span class="tv-menu-hotkey">Ctrl-F</span>',
-            }),
-            new TVButton({
-                dialog: false,
-                buttonKind: "menu-popup-item",
-                command: "find-again",
-                labelMarkup: renderHotkeyMarkup("Find ~A~gain") + '<span class="tv-menu-hotkey">Ctrl-L</span>',
-            }),
-            new TVButton({
-                dialog: false,
-                buttonKind: "menu-popup-item",
-                command: "dialog-open",
-                value: "search",
-                labelMarkup: renderHotkeyMarkup("Search ~T~opics") + '<span class="tv-menu-hotkey">F3</span>',
-            }),
+            new TVMenuItem(
+                renderHotkeyMarkup("~F~ind") + '<span class="tv-menu-hotkey">Ctrl-F</span>',
+                "find",
+            ),
+            new TVMenuItem(
+                renderHotkeyMarkup("Find ~A~gain") + '<span class="tv-menu-hotkey">Ctrl-L</span>',
+                "find-again",
+            ),
+            new TVMenuItem(
+                renderHotkeyMarkup("Search ~T~opics") + '<span class="tv-menu-hotkey">F3</span>',
+                "dialog-open",
+                "search",
+            ),
         ],
         { "data-tv-help-ctx": hcSearch },
     );
@@ -3005,14 +2961,12 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
     const winRootHTML = renderMenuRoot(
         renderHotkeyMarkup("~W~indows"),
         winPopupItems.map((entry) =>
-            new TVButton({
-                dialog: false,
-                buttonKind: "menu-popup-item",
-                command: "window-cmd",
-                value: entry.cmd,
-                labelMarkup: renderHotkeyMarkup(entry.label) +
+            new TVMenuItem(
+                renderHotkeyMarkup(entry.label) +
                     `<span class="tv-menu-hotkey">${escapeHtml(entry.hotkey)}</span>`,
-            })
+                "window-cmd",
+                entry.cmd,
+            )
         ),
         { "data-tv-help-ctx": hcWindows },
     );
@@ -3035,13 +2989,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
     const gamesRootHTML = renderMenuRoot(
         renderHotkeyMarkup("~G~ames"),
         gamesPopupItems.map((entry) =>
-            new TVButton({
-                dialog: false,
-                buttonKind: "menu-popup-item",
-                command: "dialog-open",
-                value: entry.dialog,
-                labelMarkup: renderHotkeyMarkup(entry.label),
-            })
+            new TVMenuItem(renderHotkeyMarkup(entry.label), "dialog-open", entry.dialog)
         ),
         { "data-tv-help-ctx": hcGames },
     );
@@ -3049,21 +2997,12 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
     const helpRootHTML = renderMenuRoot(
         renderHotkeyMarkup("~H~elp"),
         [
-            new TVButton({
-                dialog: false,
-                buttonKind: "menu-popup-item",
-                command: "context-help",
-                labelMarkup: renderHotkeyMarkup("~C~ontext Help")
-                    + '<span class="tv-menu-hotkey">F1</span>',
-            }),
+            new TVMenuItem(
+                renderHotkeyMarkup("~C~ontext Help") + '<span class="tv-menu-hotkey">F1</span>',
+                "context-help",
+            ),
             renderMenuPopupSeparator(),
-            new TVButton({
-                dialog: false,
-                buttonKind: "menu-popup-item",
-                command: "dialog-open",
-                value: "about",
-                labelMarkup: renderHotkeyMarkup("~A~bout"),
-            }),
+            new TVMenuItem(renderHotkeyMarkup("~A~bout"), "dialog-open", "about"),
         ],
         { "data-tv-help-ctx": hcContextHelp },
     );
@@ -3197,56 +3136,33 @@ class TVBundleApp {
         if (!statusLine) { return; }
         const items = [];
         if (hasHelpWindow) {
-            items.push(new TVButton({
-                dialog: false,
-                buttonKind: "status-item",
-                command: "bundle-back",
-                labelMarkup: renderHotkeyMarkup("~B~ack"),
-            }).renderMarkup());
+            items.push(new TVStatusItem(renderHotkeyMarkup("~B~ack"), "bundle-back").renderMarkup());
             if (currentBundle && bundleCanShowIndex(currentBundle)) {
-                items.push(new TVButton({
-                    dialog: false,
-                    buttonKind: "status-item",
-                    command: "bundle-index",
-                    labelMarkup: renderHotkeyMarkup("~I~ndex"),
-                }).renderMarkup());
+                items.push(new TVStatusItem(renderHotkeyMarkup("~I~ndex"), "bundle-index").renderMarkup());
             }
             if (currentBundle && bundleCanShowHelpContentsTopic(currentBundle)) {
-                items.push(new TVButton({
-                    dialog: false,
-                    buttonKind: "status-item",
-                    command: "bundle-help-contents",
-                    labelMarkup: renderHotkeyMarkup("~H~elp Contents"),
-                }).renderMarkup());
+                items.push(new TVStatusItem(
+                    renderHotkeyMarkup("~H~elp Contents"),
+                    "bundle-help-contents",
+                ).renderMarkup());
             }
             if (currentBundle && bundleCanShowContents(currentBundle)) {
-                items.push(new TVButton({
-                    dialog: false,
-                    buttonKind: "status-item",
-                    command: "bundle-contents",
-                    labelMarkup: renderHotkeyMarkup("C~o~ntent"),
-                }).renderMarkup());
+                items.push(new TVStatusItem(
+                    renderHotkeyMarkup("C~o~ntent"),
+                    "bundle-contents",
+                ).renderMarkup());
             }
-            items.push(new TVButton({
-                dialog: false,
-                buttonKind: "status-item",
-                command: "dialog-open",
-                value: "search",
-                labelMarkup: renderHotkeyMarkup("~F3~ Search"),
-            }).renderMarkup());
-            items.push(new TVButton({
-                dialog: false,
-                buttonKind: "status-item",
-                command: "bundle-close-all",
-                labelMarkup: renderHotkeyMarkup("~Alt-F3~ Close"),
-            }).renderMarkup());
+            items.push(new TVStatusItem(
+                renderHotkeyMarkup("~F3~ Search"),
+                "dialog-open",
+                "search",
+            ).renderMarkup());
+            items.push(new TVStatusItem(
+                renderHotkeyMarkup("~Alt-F3~ Close"),
+                "bundle-close-all",
+            ).renderMarkup());
         }
-        items.push(new TVButton({
-            dialog: false,
-            buttonKind: "status-item",
-            command: "context-help",
-            labelMarkup: renderHotkeyMarkup("~F1~ Help"),
-        }).renderMarkup());
+        items.push(new TVStatusItem(renderHotkeyMarkup("~F1~ Help"), "context-help").renderMarkup());
         items.push(`<span class="tv-status-separator" aria-hidden="true">│</span>`);
         items.push(`<span class="tv-status-hint" data-tv-status-hint>${escapeHtml(statusHint)}</span>`);
         items.push(`<a class="tv-status-link" href="https://github.com/mariolacko/THelpViewer" target="_blank" rel="noopener">GitHub</a>`);
@@ -3707,20 +3623,10 @@ class TVBundleApp {
                 `<button class="tv-winlist-item${i === selectedIdx ? ' is-selected' : ''}" data-tv-winlist-idx="${i}" type="button">${escapeHtml(item.label)}</button>`
             ).join("");
 
-        const dialog = new TVDialog({
+        const dialog = new TVDialog(new TVRect(0, 0, 40, 14), "Window List", {
             desktop: this.desktop,
-            windowClass: "tv-winlist-window",
-            bodyClass: "tv-winlist-body",
-            ariaLabel: "Window List",
-            title: "Window List",
-            closeAttrs: {
-                "data-tv-winlist-close": true,
-                "aria-label": "Close window list",
-            },
-            bodyMarkup: '<div class="tv-winlist-items"></div>',
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "40ch",
-            height: "min(14em, calc(100% - 2em))",
+            viewName: "winlist",
+            content: new TVGroup({ role: "winlist-items" }),
             modal: true,
         });
 
@@ -4083,6 +3989,7 @@ class TVBundleApp {
     _showWelcome() {
         const {
             TVDialog,
+            TVRect,
             TVStaticText,
             TVGroup,
             TVButton: TVBtn,
@@ -4094,21 +4001,13 @@ class TVBundleApp {
                 new TVStaticText({ x: 0, y: 3, w: 30, align: "center", text: "Select a help file from the" }),
                 new TVStaticText({ x: 0, y: 4, w: 30, align: "center", text: "File menu to get started." }),
                 new TVStaticText({ x: 0, y: 6, w: 30, align: "center", text: `${Array.isArray(catalogData) ? catalogData.length : 0} help file(s) available.` }),
-                new TVButton({ x: 10, y: 8, w: 10, defaultButton: true, command: "welcome-ok", label: '~O~K' }),
+                new TVButton({ x: 10, y: 8, w: 10, flags: bfDefault, command: "welcome-ok", label: '~O~K' }),
             ],
-        }).renderMarkup();
-        const dialog = new TVDialog({
+        });
+        const dialog = new TVDialog(new TVRect(0, 0, 34, 12), "Welcome", {
             desktop: this.desktop,
-            ariaLabel: "Welcome",
-            title: "Welcome",
-            closeAttrs: {
-                "data-tv-about-close": true,
-                "aria-label": "Close welcome dialog",
-            },
-            bodyMarkup: welcomeBody,
-            footerMarkup: TVDialog.footerMarkup(),
-            width: "34ch",
-            height: "min(12em, calc(100% - 2em))",
+            viewName: "welcome",
+            content: welcomeBody,
             modal: true,
         });
         dialog.bindCommonClose(() => {

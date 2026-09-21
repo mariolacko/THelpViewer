@@ -6,9 +6,10 @@ const {
     TVAppContext,
     TVWidget,
     TVStaticText,
-    TVButton,
     TVMenuView,
+    TVMenuItem,
     TVMenuBox,
+    TVStatusItem,
     TVDesktop,
     escapeHtml,
     renderHotkeyMarkup,
@@ -63,14 +64,10 @@ class TVMenuBar extends TVMenuView {
             case "menu-root":
                 return [
                     `<div class="tv-menu-root" data-tv-menu-root data-tv-help-ctx="${hcSystemMenu}">`,
-                    new TVButton({
-                        dialog: false,
-                        buttonKind: "menu-item menu-button",
-                        command: "menu-toggle",
-                        ariaHasPopup: true,
-                        ariaExpanded: false,
-                        labelMarkup: renderHotkeyMarkup(entry.label || "~X~"),
-                    }).renderMarkup(),
+                    new TVMenuItem(
+                        renderHotkeyMarkup(entry.label || "~X~"),
+                        "menu-toggle",
+                    ).renderMarkup("bar"),
                     this.renderPopup(),
                     "</div>",
                 ].join("");
@@ -100,13 +97,11 @@ class TVMenuBar extends TVMenuView {
                         + '</div>';
                 }
                 if (entry.type === "submenu") {
-                    const subItems = (entry.items || []).map((sub) => new TVButton({
-                        dialog: false,
-                        buttonKind: "menu-popup-item",
-                        command: sub.type === "saver" ? "saver-start" : "dialog-open",
-                        value: sub.type === "saver" ? sub.mode : sub.dialog,
-                        labelMarkup: renderHotkeyMarkup(sub.label),
-                    }));
+                    const subItems = (entry.items || []).map((sub) => new TVMenuItem(
+                        renderHotkeyMarkup(sub.label),
+                        sub.type === "saver" ? "saver-start" : "dialog-open",
+                        sub.type === "saver" ? sub.mode : sub.dialog,
+                    ));
                     const subPopup = new TVMenuBox({
                         className: "tv-menu-popup tv-submenu-popup",
                         attrs: { "data-tv-submenu-popup": true, hidden: true },
@@ -126,12 +121,11 @@ class TVMenuBar extends TVMenuView {
                         : entry.type === "context-help"
                             ? { command: "context-help" }
                         : { command: "dialog-open", value: entry.dialog };
-                return new TVButton({
-                    dialog: false,
-                    buttonKind: "menu-popup-item",
-                    ...action,
-                    labelMarkup: renderHotkeyMarkup(entry.label),
-                });
+                return new TVMenuItem(
+                    renderHotkeyMarkup(entry.label),
+                    action.command,
+                    action.value,
+                );
             }),
         }).renderMarkup();
     }
@@ -156,30 +150,25 @@ class TVStatusLine extends TVWidget {
     renderItem(entry) {
         switch (entry.type) {
             case "back":
-                return new TVButton({
-                    dialog: false,
-                    buttonKind: "status-item",
-                    command: "back",
-                    commandData: { fallback: this.context.indexHref },
-                    labelMarkup: renderHotkeyMarkup(entry.label || "~B~ack"),
-                }).renderMarkup();
+                return new TVStatusItem(
+                    renderHotkeyMarkup(entry.label || "~B~ack"),
+                    "back",
+                    true,
+                    { fallback: this.context.indexHref },
+                ).renderMarkup();
             case "index-link":
                 return `<a class="tv-status-item" href="${escapeHtml(this.context.indexHref)}">${renderHotkeyMarkup(entry.label || "~F1~ Index")}</a>`;
             case "context-help":
-                return new TVButton({
-                    dialog: false,
-                    buttonKind: "status-item",
-                    command: "context-help",
-                    labelMarkup: renderHotkeyMarkup(entry.label || "~F1~ Help"),
-                }).renderMarkup();
+                return new TVStatusItem(
+                    renderHotkeyMarkup(entry.label || "~F1~ Help"),
+                    "context-help",
+                ).renderMarkup();
             case "dialog":
-                return new TVButton({
-                    dialog: false,
-                    buttonKind: "status-item",
-                    command: "dialog-open",
-                    value: entry.dialog,
-                    labelMarkup: renderHotkeyMarkup(entry.label || ""),
-                }).renderMarkup();
+                return new TVStatusItem(
+                    renderHotkeyMarkup(entry.label || ""),
+                    "dialog-open",
+                    entry.dialog,
+                ).renderMarkup();
             case "hint":
                 return `<span class="tv-status-hint">${escapeHtml(this.context.statusHint)}</span>`;
             case "link":

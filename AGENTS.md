@@ -215,3 +215,21 @@ For every user-visible feature, behavior fix, or format-parser correction:
 Prevents:
 - completed fixes existing only in commit history or internal audit notes
 - release notes drifting away from shipped behavior
+
+---
+
+## Rule 14 — Keep TVision Constructors Semantic
+
+Public TVision constructors describe Turbo Vision objects, not browser nodes.
+
+- `TVDialog` starts with `TVRect` bounds and a title.
+- `TVStaticText` must not accept an HTML tag or arbitrary DOM attributes.
+- `TVButton` is a dialog command button; menus and status lines use
+  `TVMenuItem` and `TVStatusItem`.
+- DOM classes, ARIA attributes and data attributes belong to the shared
+  renderer, not individual dialog constructors.
+
+Prevents:
+- CSS/HTML details leaking into the object model
+- one control being overloaded for unrelated Turbo Vision roles
+- dialog-specific markup bypassing the shared renderer

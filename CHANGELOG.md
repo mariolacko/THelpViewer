@@ -34,6 +34,19 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Replaced the overloaded `TVButton.buttonKind` path with real
+  `TVMenuItem`/`TVStatusItem` objects; `TVButton` is again reserved for command
+  buttons, uses Turbo Vision `bf...` flags and derives its browser presentation
+  internally from the command.
+- Added `TVRect` and changed `TVDialog` construction to start with bounds and
+  title. Dialog callers now pass TVision object content and a semantic view
+  name; the shared frame renderer owns DOM classes, close attributes and the
+  footer.
+- Removed `tag` and arbitrary `attrs` from `TVStaticText`. Named dynamic text
+  views now expose renderer hooks internally, while labels own their native
+  label/span rendering.
+- Rebuilt Hall of Fame rows and headings from `TVGroup` and `TVStaticText`
+  objects instead of handwritten HTML.
 - Fixed Calculator's display palette so its digits are white in every theme;
   the shared static-text color no longer overrides the display foreground.
 - Restored the status-line hint for the active dialog, HELP topic/index,
