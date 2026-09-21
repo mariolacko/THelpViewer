@@ -397,12 +397,14 @@ class TVHistoryWindow extends TVWindow {
             onSelect: (item) => this.onSelect?.(item, false),
             onActivate: (item) => this.onSelect?.(item, true),
         });
+        this._setOpen(false);
     }
 
     refresh() {
         const items = this.items();
         this.viewer?.setItems(items, items.length ? 0 : -1);
         if (this.button) { this.button.disabled = items.length === 0; }
+        if (!items.length && this.isOpen()) { this._setOpen(false); }
         return items;
     }
 
@@ -410,23 +412,44 @@ class TVHistoryWindow extends TVWindow {
         return Boolean(this.popup && !this.popup.hidden);
     }
 
-    toggle() {
-        if (!this.popup || this.button?.disabled) { return; }
-        if (this.popup.hidden) {
-            this.refresh();
-            this.popup.hidden = false;
-            fillBorders(this.popup);
-            window.requestAnimationFrame(() => {
-                this.viewer?.updateScrollbar();
-                this.viewer?.selectedElement()?.focus();
-            });
-        } else {
-            this.hide();
+    _setOpen(open) {
+        if (this.popup) {
+            this.popup.hidden = !open;
+            this.popup.setAttribute("aria-hidden", open ? "false" : "true");
         }
+        this.button?.setAttribute("aria-expanded", open ? "true" : "false");
     }
 
-    hide() {
-        if (this.popup) { this.popup.hidden = true; }
+    show() {
+        if (!this.popup || this.button?.disabled) { return false; }
+        const items = this.refresh();
+        if (!items.length) { return false; }
+        this._setOpen(true);
+        fillBorders(this.popup);
+        window.requestAnimationFrame(() => {
+            this.viewer?.updateScrollbar();
+            this.viewer?.selectedElement()?.focus();
+        });
+        return true;
+    }
+
+    toggle() {
+        if (!this.popup || this.button?.disabled) { return; }
+        if (this.isOpen()) { this.hide(); }
+        else { this.show(); }
+    }
+
+    hide({ restoreFocus = false } = {}) {
+        this._setOpen(false);
+        if (restoreFocus) { this.button?.focus(); }
+    }
+
+    handleEscape(event) {
+        if (event.key !== "Escape" || !this.isOpen()) { return false; }
+        event.preventDefault();
+        event.stopPropagation();
+        this.hide({ restoreFocus: true });
+        return true;
     }
 }
 
@@ -662,6 +685,7 @@ class TVFileOpenDialog extends TVDialog {
     }
 
     open() {
+        this.historyWindow.hide();
         this.refresh();
         super.open();
         window.requestAnimationFrame(() => {
@@ -677,13 +701,7 @@ class TVFileOpenDialog extends TVDialog {
     }
 
     onDialogKeyDown(event) {
-        if (event.key === "Escape" && this.historyWindow.isOpen()) {
-            event.preventDefault();
-            event.stopPropagation();
-            this.hideHistory();
-            this.historyButton?.focus();
-            return;
-        }
+        if (this.historyWindow.handleEscape(event)) { return; }
         super.onDialogKeyDown(event);
     }
 
@@ -1129,6 +1147,7 @@ class TVChangeDirectoryDialog extends TVDialog {
     }
 
     open() {
+        this.historyWindow.hide();
         this.initialDirectory = this.currentDirectory;
         this.setDirectory(this.currentDirectory);
         super.open();
@@ -1145,13 +1164,7 @@ class TVChangeDirectoryDialog extends TVDialog {
     }
 
     onDialogKeyDown(event) {
-        if (event.key === "Escape" && this.historyWindow.isOpen()) {
-            event.preventDefault();
-            event.stopPropagation();
-            this.historyWindow.hide();
-            this.historyButton?.focus();
-            return;
-        }
+        if (this.historyWindow.handleEscape(event)) { return; }
         super.onDialogKeyDown(event);
     }
 }
@@ -3313,6 +3326,7 @@ class TVFindDialog extends TVDialog {
     }
 
     open(initialQuery = "") {
+        this.historyWindow.hide();
         if (this.input && initialQuery) { this.input.value = initialQuery; }
         if (this.status) { this.status.textContent = `Find in ${this.targetLabel}`; }
         this.historyWindow.refresh();
@@ -3347,13 +3361,7 @@ class TVFindDialog extends TVDialog {
     }
 
     onDialogKeyDown(event) {
-        if (event.key === "Escape" && this.historyWindow.isOpen()) {
-            event.preventDefault();
-            event.stopPropagation();
-            this.historyWindow.hide();
-            this.historyButton?.focus();
-            return;
-        }
+        if (this.historyWindow.handleEscape(event)) { return; }
         super.onDialogKeyDown(event);
     }
 }

@@ -3446,7 +3446,7 @@ class TVLudoDialog extends TVDialog {
 class TVMastermindDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const paletteButtons = Array.from({ length: 6 }, (_, color) => new TVButton({
-            x: 31 + (color % 3) * 6,
+            x: 38 + (color % 3) * 6,
             y: 2 + Math.floor(color / 3) * 2,
             w: 5,
             attrs: { type: "button", "data-tv-mastermind-color": color },
@@ -3454,14 +3454,14 @@ class TVMastermindDialog extends TVDialog {
             label: String(color + 1),
         }));
         const body = new TVGroup({
-            w: 52, h: 16,
+            w: 60, h: 16,
             children: [
-                new TVStaticText({ x: 2, y: 1, w: 25, h: 10, attrs: { "data-tv-mastermind-board": true } }),
-                new TVStaticText({ x: 31, y: 1, w: 17, text: "Colors" }),
+                new TVStaticText({ x: 3, y: 1, w: 28, h: 10, attrs: { "data-tv-mastermind-board": true } }),
+                new TVStaticText({ x: 38, y: 1, w: 17, text: "Colors" }),
                 ...paletteButtons,
-                new TVButton({ x: 31, y: 8, w: 11, className: "is-default", attrs: { type: "button", "data-tv-mastermind-guess": true }, label: "~G~uess" }),
-                new TVButton({ x: 31, y: 10, w: 11, attrs: { type: "button", "data-tv-mastermind-new": true }, label: "~N~ew" }),
-                new TVStaticText({ x: 2, y: 13, w: 48, attrs: { "data-tv-mastermind-status": true } }),
+                new TVButton({ x: 38, y: 8, w: 11, className: "is-default", attrs: { type: "button", "data-tv-mastermind-guess": true }, label: "~G~uess" }),
+                new TVButton({ x: 38, y: 10, w: 11, attrs: { type: "button", "data-tv-mastermind-new": true }, label: "~N~ew" }),
+                new TVStaticText({ x: 3, y: 13, w: 54, attrs: { "data-tv-mastermind-status": true } }),
             ],
         }).renderMarkup();
         super({
@@ -3472,7 +3472,7 @@ class TVMastermindDialog extends TVDialog {
             closeAttrs: { "data-tv-mastermind-close": true, "aria-label": "Close Mastermind" },
             bodyMarkup: body,
             footerMarkup: TVDialog.footerMarkup(),
-            width: "56ch",
+            width: "64ch",
             height: "min(20em, calc(100% - 2em))",
         });
         installHallOfFame(this, "mastermind");

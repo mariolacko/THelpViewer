@@ -213,12 +213,14 @@ async function run() {
         const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
         );
+        const history = dialog?.querySelector('[data-tv-file-open-history-popup]');
         return {
             open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
             status: dialog?.querySelector('[data-tv-file-open-detail]')?.textContent.trim() || '',
+            historyHidden: Boolean(history?.hidden && getComputedStyle(history).display === 'none'),
         };
     })()`);
-    if (!loadingOpen.open || loadingOpen.status !== 'Loading HELP/DOCS...') {
+    if (!loadingOpen.open || loadingOpen.status !== 'Loading HELP/DOCS...' || !loadingOpen.historyHidden) {
         throw new Error(`Open did not show its loading state immediately: ${JSON.stringify(loadingOpen)}`);
     }
     await evaluate(`new Promise((resolve, reject) => {
@@ -350,13 +352,17 @@ async function run() {
     await pause();
     const findOpen = await evaluate(`(() => {
         const input = document.querySelector('[data-tv-find-input]');
-        if (!input || input.closest('.tv-dialog-overlay')?.hidden) { return false; }
+        const history = document.querySelector('[data-tv-find-history-popup]');
+        if (!input || input.closest('.tv-dialog-overlay')?.hidden) { return { open: false }; }
+        const historyHidden = Boolean(history?.hidden && getComputedStyle(history).display === 'none');
         input.value = window.__tvFindNeedle;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.focus();
-        return true;
+        return { open: true, historyHidden };
     })()`);
-    if (!findOpen) { throw new Error('Ctrl-F did not open Find for the active document'); }
+    if (!findOpen.open || !findOpen.historyHidden) {
+        throw new Error(`Ctrl-F opened Find incorrectly: ${JSON.stringify(findOpen)}`);
+    }
     await key("Enter", "Enter", 0, true);
     await pause();
     const findResult = await evaluate(`(() => ({
@@ -381,6 +387,25 @@ async function run() {
     if (findAgainSelection.toLocaleLowerCase() !== findNeedle.toLocaleLowerCase()) {
         throw new Error(`Find Again lost the active query: ${findAgainSelection}`);
     }
+    await key("f", "KeyF", 2);
+    await pause();
+    const findHistoryToggle = await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-find-history]');
+        const popup = document.querySelector('[data-tv-find-history-popup]');
+        const initiallyHidden = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none');
+        button?.click();
+        const opened = Boolean(!popup?.hidden && getComputedStyle(popup).display !== 'none'
+            && button?.getAttribute('aria-expanded') === 'true');
+        button?.click();
+        const closed = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none'
+            && button?.getAttribute('aria-expanded') === 'false');
+        return { enabled: !button?.disabled, initiallyHidden, opened, closed };
+    })()`);
+    if (!findHistoryToggle.enabled || !findHistoryToggle.initiallyHidden
+        || !findHistoryToggle.opened || !findHistoryToggle.closed) {
+        throw new Error(`Find history toggle is broken: ${JSON.stringify(findHistoryToggle)}`);
+    }
+    await key("Escape", "Escape", 0, true);
 
     await evaluate(`(() => {
         const item = document.querySelector('[data-tv-window-cmd]');
@@ -840,6 +865,10 @@ async function run() {
         const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Change Directory'
         );
+        const historyPopup = dialog?.querySelector('[data-tv-change-dir-history-popup]');
+        const historyHidden = Boolean(
+            historyPopup?.hidden && getComputedStyle(historyPopup).display === 'none'
+        );
         const slash = String.fromCharCode(92);
         const docs = Array.from(dialog?.querySelectorAll('[data-tv-change-dir-index]') || []).find((item) =>
             item.textContent.trim().endsWith('DOCS' + slash)
@@ -860,6 +889,7 @@ async function run() {
             revertedPath,
             closed: Boolean(dialog?.closest('.tv-dialog-overlay').hidden),
             history: JSON.parse(localStorage.getItem('thelp:directory-history') || '[]'),
+            historyHidden,
             slash,
         };
     })()`);
@@ -867,10 +897,29 @@ async function run() {
         !changeDirectory.open || changeDirectory.directories < 3 || !changeDirectory.sharedScrollbar || !changeDirectory.outline
         || !changeDirectory.selectedPath.endsWith('DOCS' + changeDirectory.slash)
         || changeDirectory.revertedPath !== 'THelpViewer:' + changeDirectory.slash
-        || !changeDirectory.closed || changeDirectory.history[0] !== '.'
+        || !changeDirectory.closed || changeDirectory.history[0] !== '.' || !changeDirectory.historyHidden
     ) {
         throw new Error(`Change Directory is incomplete: ${JSON.stringify(changeDirectory)}`);
     }
+    await evaluate(`document.querySelector('[data-tv-dialog-open="chdir"]').click()`);
+    await pause();
+    const changeDirectoryHistoryToggle = await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-change-dir-history]');
+        const popup = document.querySelector('[data-tv-change-dir-history-popup]');
+        const initiallyHidden = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none');
+        button?.click();
+        const opened = Boolean(!popup?.hidden && getComputedStyle(popup).display !== 'none'
+            && button?.getAttribute('aria-expanded') === 'true');
+        button?.click();
+        const closed = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none'
+            && button?.getAttribute('aria-expanded') === 'false');
+        return { enabled: !button?.disabled, initiallyHidden, opened, closed };
+    })()`);
+    if (!changeDirectoryHistoryToggle.enabled || !changeDirectoryHistoryToggle.initiallyHidden
+        || !changeDirectoryHistoryToggle.opened || !changeDirectoryHistoryToggle.closed) {
+        throw new Error(`Change Directory history toggle is broken: ${JSON.stringify(changeDirectoryHistoryToggle)}`);
+    }
+    await key("Escape", "Escape", 0, true);
 
     await evaluate(`document.querySelector('[data-tv-file-open]').click()`);
     await pause();
@@ -977,8 +1026,9 @@ async function run() {
     await pause();
     const historyOpen = await evaluate(`(() => {
         const button = document.querySelector('[data-tv-file-open-history]');
-        button.click();
         const popup = document.querySelector('[data-tv-file-open-history-popup]');
+        const initiallyHidden = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none');
+        button.click();
         const input = document.querySelector('[data-tv-file-open-name]');
         const popupStyle = getComputedStyle(popup);
         const selected = popup?.querySelector('[data-tv-file-open-history-index].is-selected');
@@ -986,6 +1036,7 @@ async function run() {
         const cellWidth = input.getBoundingClientRect().width / 28;
         return {
             enabled: !button.disabled,
+            initiallyHidden,
             open: Boolean(popup && !popup.hidden),
             entries: popup?.querySelectorAll('[data-tv-file-open-history-index]').length || 0,
             columns: Math.round(popup.getBoundingClientRect().width / cellWidth),
@@ -994,17 +1045,27 @@ async function run() {
             corners: popup?.querySelectorAll('.tv-history-frame-corner').length || 0,
         };
     })()`);
-    if (!historyOpen.enabled || !historyOpen.open || historyOpen.entries !== 1
+    if (!historyOpen.enabled || !historyOpen.initiallyHidden || !historyOpen.open || historyOpen.entries !== 1
         || historyOpen.columns !== 30 || historyOpen.corners !== 4
         || historyOpen.frame.join() !== ['rgb(0, 0, 170)', 'rgb(255, 255, 255)'].join()
         || historyOpen.selected.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()) {
         throw new Error(`File Open history does not match THistoryWindow: ${JSON.stringify(historyOpen)}`);
     }
+    const historyButtonClosed = await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-file-open-history]');
+        const popup = document.querySelector('[data-tv-file-open-history-popup]');
+        button.click();
+        const closed = Boolean(popup.hidden && getComputedStyle(popup).display === 'none');
+        button.click();
+        return closed && !popup.hidden && getComputedStyle(popup).display !== 'none';
+    })()`);
+    if (!historyButtonClosed) { throw new Error("History button did not close and reopen File Open history"); }
+    await pause();
     await key("Escape", "Escape", 0, true);
     const escapeClosedHistoryOnly = await evaluate(`(() => {
         const popup = document.querySelector('[data-tv-file-open-history-popup]');
         const dialog = popup.closest('.tv-dialog-overlay');
-        return popup.hidden && !dialog.hidden;
+        return popup.hidden && getComputedStyle(popup).display === 'none' && !dialog.hidden;
     })()`);
     if (!escapeClosedHistoryOnly) { throw new Error("Escape did not close File Open history first"); }
     await key("Escape", "Escape", 0, true);
@@ -1323,12 +1384,21 @@ async function run() {
         const bodyRect = body?.getBoundingClientRect();
         const groupRect = group?.getBoundingClientRect();
         const boardRect = board?.getBoundingClientRect();
+        const dialogRect = dialog?.getBoundingClientRect();
+        const probe = document.createElement('span');
+        probe.className = 'tv-static-text';
+        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+        probe.textContent = '0000000000';
+        dialog?.appendChild(probe);
+        const cellWidth = probe.getBoundingClientRect().width / 10;
+        probe.remove();
         const controls = Array.from(group?.children || []);
         return {
             open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
             rows: dialog?.querySelectorAll('.tv-mastermind-row').length || 0,
             colors: dialog?.querySelectorAll('[data-tv-mastermind-color]').length || 0,
             hall: dialog?.querySelector('.tv-game-hall-control')?.textContent || '',
+            columns: dialogRect && cellWidth ? Math.round(dialogRect.width / cellWidth) : 0,
             boardInset: boardRect && groupRect ? boardRect.left - groupRect.left : 0,
             clipped: !bodyRect || !groupRect || group.scrollWidth > group.clientWidth
                 || group.scrollHeight > group.clientHeight
@@ -1340,7 +1410,8 @@ async function run() {
         };
     })()`);
     if (!mastermind.open || mastermind.rows !== 10 || mastermind.colors !== 6
-        || mastermind.hall !== '[H]' || mastermind.boardInset <= 0 || mastermind.clipped) {
+        || mastermind.hall !== '[H]' || mastermind.columns < 64
+        || mastermind.boardInset <= 0 || mastermind.clipped) {
         throw new Error(`Mastermind dialog is incomplete: ${JSON.stringify(mastermind)}`);
     }
     await key("Escape", "Escape", 0, true);
