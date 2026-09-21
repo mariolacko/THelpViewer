@@ -248,7 +248,22 @@ async function run() {
         check();
     })`, true);
     await key("F1", "F1");
-    await pause();
+    await evaluate(`new Promise((resolve, reject) => {
+            const deadline = Date.now() + 5000;
+            const check = () => {
+                const heading = document.querySelector('[data-tv-context-help-heading]');
+                const links = document.querySelectorAll(
+                    '.tv-context-help-viewport [data-tv-context-help-topic]'
+                );
+                if (heading?.textContent.trim() === 'Open a File' && links.length >= 2) {
+                    resolve(true);
+                    return;
+                }
+            if (Date.now() >= deadline) { reject(new Error('context help bundle did not load')); return; }
+            setTimeout(check, 25);
+        };
+        check();
+    })`, true);
     const fileOpenHelp = await evaluate(`(() => {
         const help = document.querySelector('.tv-context-help-window');
         const fileOpen = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
@@ -256,13 +271,42 @@ async function run() {
         );
         return {
             helpOpen: Boolean(help && !help.closest('.tv-dialog-overlay').hidden),
-            topic: help?.querySelector('[data-tv-context-help-topic]')?.textContent.trim(),
+            topic: help?.querySelector('[data-tv-context-help-heading]')?.textContent.trim(),
             context: fileOpen?.getAttribute('data-tv-help-ctx'),
+            palette: help?.getAttribute('data-tv-palette'),
+            background: getComputedStyle(help?.querySelector('.tv-context-help-viewport')).backgroundColor,
+            links: help?.querySelectorAll('[data-tv-context-help-topic]').length || 0,
+            scrollbar: Boolean(help?.querySelector('.tv-context-help-scrollbar')),
         };
     })()`);
-    if (!fileOpenHelp.helpOpen || fileOpenHelp.topic !== 'Open a File' || fileOpenHelp.context !== '2010') {
+    if (!fileOpenHelp.helpOpen || fileOpenHelp.topic !== 'Open a File' || fileOpenHelp.context !== '2010'
+        || fileOpenHelp.palette !== 'help' || fileOpenHelp.background !== 'rgb(0, 170, 170)'
+        || fileOpenHelp.links < 2 || !fileOpenHelp.scrollbar) {
         throw new Error(`File Open context help is broken: ${JSON.stringify(fileOpenHelp)}`);
     }
+    await evaluate(`document.querySelector('[data-tv-context-help-contents]').click()`);
+    await pause();
+    const helpContents = await evaluate(`(() => {
+        const help = document.querySelector('.tv-context-help-window');
+        const viewport = help?.querySelector('.tv-context-help-viewport');
+        return {
+            topic: help?.querySelector('[data-tv-context-help-heading]')?.textContent.trim(),
+            table: viewport?.textContent.includes('┌──────────────────┬'),
+            links: viewport?.querySelectorAll('[data-tv-context-help-topic]').length || 0,
+            verticalOverflow: viewport?.scrollHeight > viewport?.clientHeight,
+            horizontalOverflow: viewport?.scrollWidth > viewport?.clientWidth + 1,
+            backEnabled: !help?.querySelector('[data-tv-context-help-back]')?.disabled,
+        };
+    })()`);
+    if (helpContents.topic !== 'THelpViewer' || !helpContents.table || helpContents.links < 6
+        || !helpContents.verticalOverflow || helpContents.horizontalOverflow || !helpContents.backEnabled) {
+        throw new Error(`Context Help contents are incomplete: ${JSON.stringify(helpContents)}`);
+    }
+    await evaluate(`document.querySelector('[data-tv-context-help-back]').click()`);
+    const helpReturned = await evaluate(`
+        document.querySelector('[data-tv-context-help-heading]')?.textContent.trim()
+    `);
+    if (helpReturned !== 'Open a File') { throw new Error('Context Help Back did not restore its topic'); }
     await key("Escape", "Escape", 0, true);
     const contextHelpClosed = await evaluate(`(() => {
         const help = document.querySelector('.tv-context-help-window')?.closest('.tv-dialog-overlay');
@@ -1095,19 +1139,32 @@ async function run() {
             selected: [selectedStyle.backgroundColor, selectedStyle.color],
             arrow: [arrowStyle.backgroundColor, arrowStyle.color],
             side: [sideStyle.backgroundColor, sideStyle.color],
-            buttonAbovePopup: Number(getComputedStyle(button).zIndex) > Number(popupStyle.zIndex),
+            popupAboveButton: Number(popupStyle.zIndex) > Number(getComputedStyle(button).zIndex),
             corners: popup?.querySelectorAll('.tv-history-frame-corner').length || 0,
+            closeButtons: popup?.querySelectorAll('[data-tv-history-close]').length || 0,
         };
     })()`);
     if (!historyOpen.enabled || !historyOpen.initiallyHidden || !historyOpen.open || historyOpen.entries !== 1
-        || historyOpen.columns !== 30 || historyOpen.corners !== 4
+        || historyOpen.columns !== 32 || historyOpen.corners !== 4 || historyOpen.closeButtons !== 1
         || historyOpen.frame.join() !== ['rgb(0, 0, 170)', 'rgb(255, 255, 255)'].join()
         || historyOpen.selected.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()
         || historyOpen.arrow.join() !== ['rgb(0, 170, 0)', 'rgb(0, 0, 0)'].join()
         || historyOpen.side.join() !== ['rgb(170, 170, 170)', 'rgb(0, 170, 0)'].join()
-        || !historyOpen.buttonAbovePopup) {
+        || !historyOpen.popupAboveButton) {
         throw new Error(`File Open history does not match THistoryWindow: ${JSON.stringify(historyOpen)}`);
     }
+    const fileHistoryClosePoint = await evaluate(`(() => {
+        const rect = document.querySelector('[data-tv-file-open-history-popup] [data-tv-history-close]')
+            ?.getBoundingClientRect();
+        return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+    })()`);
+    if (!fileHistoryClosePoint) { throw new Error('History window close control is missing'); }
+    await clickPoint(fileHistoryClosePoint);
+    const fileHistoryFrameClosed = await evaluate(`(() => {
+        const popup = document.querySelector('[data-tv-file-open-history-popup]');
+        return popup.hidden && getComputedStyle(popup).display === 'none';
+    })()`);
+    if (!fileHistoryFrameClosed) { throw new Error('History window close control did not close it'); }
     const fileHistoryArrowPoint = await evaluate(`(() => {
         const rect = document.querySelector(
             '[data-tv-file-open-history] .tv-file-open-history-arrow'
@@ -1116,24 +1173,33 @@ async function run() {
     })()`);
     if (!fileHistoryArrowPoint) { throw new Error("File Open History arrow is missing"); }
     await clickPoint(fileHistoryArrowPoint);
+    const fileHistoryReopened = await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-file-open-history]');
+        const popup = document.querySelector('[data-tv-file-open-history-popup]');
+        const arrowRect = button.querySelector('.tv-file-open-history-arrow').getBoundingClientRect();
+        const front = document.elementFromPoint(
+            arrowRect.left + arrowRect.width / 2,
+            arrowRect.top + arrowRect.height / 2
+        );
+        return {
+            open: !popup.hidden && getComputedStyle(popup).display !== 'none'
+                && button.getAttribute('aria-expanded') === 'true',
+            triggerCovered: Boolean(front && popup.contains(front)),
+        };
+    })()`);
+    await clickPoint(fileHistoryClosePoint);
     const fileHistoryClosed = await evaluate(`(() => {
         const button = document.querySelector('[data-tv-file-open-history]');
         const popup = document.querySelector('[data-tv-file-open-history-popup]');
         return popup.hidden && getComputedStyle(popup).display === 'none'
             && button.getAttribute('aria-expanded') === 'false';
     })()`);
-    await clickPoint(fileHistoryArrowPoint);
-    const fileHistoryReopened = await evaluate(`(() => {
-        const button = document.querySelector('[data-tv-file-open-history]');
-        const popup = document.querySelector('[data-tv-file-open-history-popup]');
-        return !popup.hidden && getComputedStyle(popup).display !== 'none'
-            && button.getAttribute('aria-expanded') === 'true';
-    })()`);
-    if (!fileHistoryClosed || !fileHistoryReopened) {
-        throw new Error(`File Open physical history toggle is broken: ${JSON.stringify({
+    if (!fileHistoryClosed || !fileHistoryReopened.open || !fileHistoryReopened.triggerCovered) {
+        throw new Error(`File Open physical history lifecycle is broken: ${JSON.stringify({
             fileHistoryClosed, fileHistoryReopened,
         })}`);
     }
+    await clickPoint(fileHistoryArrowPoint);
     const fileHistoryOutsidePoint = await evaluate(`(() => {
         const rect = document.querySelector('.tv-file-open-info')?.getBoundingClientRect();
         return rect ? { x: rect.left + 2, y: rect.top + 2 } : null;
@@ -1693,17 +1759,23 @@ async function run() {
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Puzzle'
         );
         const button = puzzle?.querySelector('.tv-game-hall-control');
+        const bracketColor = getComputedStyle(button).color;
+        const glyphColor = getComputedStyle(button?.querySelector('.tv-game-hall-glyph')).color;
         button?.click();
         const hall = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Puzzle Hall of Fame'
         );
         return {
             button: button?.textContent,
+            bracketColor,
+            glyphColor,
             open: Boolean(hall && !hall.closest('.tv-dialog-overlay').hidden),
             empty: hall?.querySelector('.tv-hall-empty')?.textContent.trim(),
         };
     })()`);
-    if (hallOpen.button !== '[H]' || !hallOpen.open || hallOpen.empty !== 'No scores yet.') {
+    if (hallOpen.button !== '[H]' || hallOpen.bracketColor !== 'rgb(255, 255, 255)'
+        || hallOpen.glyphColor !== 'rgb(85, 255, 85)'
+        || !hallOpen.open || hallOpen.empty !== 'No scores yet.') {
         throw new Error(`Hall of Fame control is incomplete: ${JSON.stringify(hallOpen)}`);
     }
     socket.close();

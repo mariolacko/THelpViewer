@@ -801,12 +801,15 @@ function showHallOfFame(ownerDialog, game) {
 }
 
 function installHallOfFame(ownerDialog, game) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "tv-game-hall-control";
-    button.textContent = "[H]";
-    button.title = "Hall of Fame";
-    button.setAttribute("aria-label", `${hallOfFameConfig(game).title} Hall of Fame`);
+    const button = TVFrame.createTitleControl({
+        className: "tv-game-hall-control",
+        glyph: "H",
+        glyphClass: "tv-game-hall-glyph",
+        attrs: {
+            title: "Hall of Fame",
+            "aria-label": `${hallOfFameConfig(game).title} Hall of Fame`,
+        },
+    });
     button.addEventListener("mousedown", (event) => event.stopPropagation());
     button.addEventListener("click", () => showHallOfFame(ownerDialog, game));
     ownerDialog.titlebar?.appendChild(button);

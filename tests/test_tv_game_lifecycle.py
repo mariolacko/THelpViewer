@@ -28,6 +28,8 @@ def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
     assert "const HALL_OF_FAME_LIMIT = 10" in helper
     assert "function showHallOfFame(ownerDialog, game)" in helper
     assert "manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg)" in helper
+    assert "TVFrame.createTitleControl({" in helper
+    assert 'glyphClass: "tv-game-hall-glyph"' in helper
     assert source.count("installHallOfFame(this,") == 12
     for game in ("puzzle", "tetris", "mines", "breakout", "sokoban", "lines", "reversi", "ludo", "mastermind", "snake", "tron", "hanoi"):
         assert f'installHallOfFame(this, "{game}")' in source

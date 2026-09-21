@@ -34,6 +34,17 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Unified game Hall of Fame `[H]` with the shared `TVFrame` title-control
+  renderer, so its brackets use the title color and its glyph uses the same
+  green icon color as standard frame controls
+- Restored `THistoryWindow` ownership for File Open, Change Directory and Find:
+  the framed History popup now covers the trigger, has its own close control,
+  and preserves the original separate arrow/side palette roles
+- Rebuilt context-sensitive F1 Help as a 72×24 Turbo Vision-style green Help
+  window backed by a native UHF 2.0 JSON bundle, with internal topic links,
+  fixed-width tables, long-topic scrolling, Back and Contents navigation;
+  URL-state restoration now restores the selected topic instead of an empty
+  Help frame
 - Added Turbo Vision-style `hc...` help-context constants, inheritance through
   widgets/groups, menu/dialog/window resolution, F1 dispatch, and an in-app
   context Help dialog for menus, HELP/Docs windows, standard dialogs, tools,

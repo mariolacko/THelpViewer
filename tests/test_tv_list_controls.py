@@ -34,6 +34,8 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVMenuView extends TVWidget" in source
     assert "class TVMenuBox extends TVMenuView" in source
     assert "class TVDesktop extends TVGroup" in source
+    assert "static titleControlMarkup({" in source
+    assert "static createTitleControl(options = {})" in source
     assert '<button class="tv-close-control"' in source
     assert '<button class="tv-zoom-control"' in source
     assert '<a class="tv-close-control"' not in source
@@ -57,6 +59,9 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert dialogs.count("TVHistoryWindow.renderMarkup({") == 3
     assert "new TVFileList(this.query" in dialogs
     assert "new TVHistoryWindow({" in dialogs
+    assert 'TVFrame.titleControlMarkup({' in dialogs
+    assert '"data-tv-history-close": true' in dialogs
+    assert 'TVFrame.closeMarkup("tv-history-close-control"' not in dialogs
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the list control test")

@@ -13,6 +13,7 @@ const {
     dosColor,
     DOS_COLORS,
     COLOR_GROUPS,
+    TVFrame,
     TVWindow,
     TVDialog,
     TVStaticText,
@@ -23,6 +24,7 @@ const {
     TVListViewer,
     TVListBox,
     TVVerticalListViewer,
+    TVVerticalScrollArea,
     TVOutline,
     TVInfoBox,
     TVTerminal,
@@ -93,51 +95,226 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcScreenSaver]: { title: "Screen saver", text: "Choose a mode from the system menu. Input stops the saver and restores the previously focused control." },
 });
 
+const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20260921a";
+let contextHelpBundlePromise = null;
+
+function loadContextHelpBundle() {
+    if (!contextHelpBundlePromise) {
+        contextHelpBundlePromise = fetch(TV_CONTEXT_HELP_BUNDLE_URL, { cache: "no-cache" })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Context help request failed: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then((bundle) => {
+                if (!bundle || bundle.uhf_version !== "2.0" || !bundle.topics) {
+                    throw new Error("Context help is not a UHF 2.0 bundle");
+                }
+                return bundle;
+            });
+    }
+    return contextHelpBundlePromise;
+}
+
+function contextHelpTopic(bundle, helpCtx) {
+    const direct = bundle?.topics?.[String(helpCtx)];
+    if (direct) { return direct; }
+    return Object.values(bundle?.topics || {}).find((topic) =>
+        Array.isArray(topic?.aliases?.ids) && topic.aliases.ids.includes(helpCtx)
+    ) || bundle?.topics?.[String(hcApplication)] || null;
+}
+
+function contextHelpTag(tagBody) {
+    const lowered = tagBody.toLowerCase();
+    if (lowered === "b") { return { name: "b", open: "<b>", close: "</b>", raw: tagBody }; }
+    if (lowered === "i") { return { name: "i", open: "<i>", close: "</i>", raw: tagBody }; }
+    if (lowered === "u") { return { name: "u", open: "<u>", close: "</u>", raw: tagBody }; }
+    const link = tagBody.match(/^link:topic=(-?\d+)$/i);
+    if (link) {
+        return {
+            name: "link",
+            open: `<a href="#" data-tv-context-help-topic="${escapeHtml(link[1])}">`,
+            close: "</a>",
+            raw: tagBody,
+        };
+    }
+    return null;
+}
+
+function renderContextHelpInline(text) {
+    const root = { name: null, open: "", close: "", raw: "", children: [] };
+    const stack = [root];
+    const append = (fragment) => stack[stack.length - 1].children.push(fragment);
+    let index = 0;
+    while (index < text.length) {
+        const open = text.indexOf("[", index);
+        if (open < 0) {
+            append(escapeHtml(text.slice(index)));
+            break;
+        }
+        if (open > index) { append(escapeHtml(text.slice(index, open))); }
+        if (text[open + 1] === "[") {
+            append("[");
+            index = open + 2;
+            continue;
+        }
+        const close = text.indexOf("]", open + 1);
+        if (close < 0) {
+            append(escapeHtml(text.slice(open)));
+            break;
+        }
+        const tagBody = text.slice(open + 1, close);
+        if (tagBody.startsWith("/")) {
+            const name = tagBody.slice(1).toLowerCase();
+            if (stack.length > 1 && stack[stack.length - 1].name === name) {
+                const node = stack.pop();
+                append(node.open + node.children.join("") + node.close);
+            } else {
+                append(escapeHtml(text.slice(open, close + 1)));
+            }
+        } else {
+            const descriptor = contextHelpTag(tagBody);
+            if (descriptor) { stack.push({ ...descriptor, children: [] }); }
+            else { append(escapeHtml(text.slice(open, close + 1))); }
+        }
+        index = close + 1;
+    }
+    while (stack.length > 1) {
+        const node = stack.pop();
+        stack[stack.length - 1].children.push(escapeHtml(`[${node.raw}]`) + node.children.join(""));
+    }
+    return root.children.join("");
+}
+
+function renderContextHelpTopic(topic) {
+    const content = Array.isArray(topic?.content) ? topic.content : [];
+    return content.map((line) => {
+        const raw = String(line || "");
+        if (raw === "[rule]") {
+            return '<div class="tv-context-help-line tv-context-help-rule" aria-hidden="true"></div>';
+        }
+        return `<div class="tv-context-help-line">${raw ? renderContextHelpInline(raw) : "&nbsp;"}</div>`;
+    }).join("");
+}
+
 class TVContextHelpDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
-        const closeButton = new TVButton({
-            className: "is-default",
-            attrs: { "data-tv-context-help-close": true },
-            label: "~C~lose",
-        });
         super({
             desktop,
-            ariaLabel: "Context Help",
-            title: "Help",
+            ariaLabel: "THelpViewer Help",
+            title: "THelpViewer Help",
             windowClass: "tv-context-help-window",
             bodyClass: "tv-context-help-body",
             closeAttrs: { "data-tv-context-help-frame-close": true, "aria-label": "Close context help" },
             bodyMarkup: `
                 <div class="tv-context-help-main">
-                    <div class="tv-context-help-topic" data-tv-context-help-topic></div>
-                    <div class="tv-context-help-text" data-tv-context-help-text tabindex="0"></div>
-                    <div class="tv-context-help-close">${closeButton.renderMarkup()}</div>
+                    <div class="tv-context-help-topic" data-tv-context-help-heading></div>
+                    ${TVVerticalScrollArea.renderMarkup({
+                        rootClass: "tv-context-help-scroll",
+                        rootAttrs: { "data-tv-context-help-scroll": true },
+                        viewportClass: "tv-context-help-viewport",
+                        scrollbarClass: "tv-context-help-scrollbar",
+                    })}
+                    <div class="tv-context-help-nav">
+                        <button type="button" data-tv-context-help-back disabled>◄ Back</button>
+                        <button type="button" data-tv-context-help-contents>Contents</button>
+                        <span>F1 Help</span>
+                    </div>
                 </div>
             `,
             footerMarkup: TVDialog.footerMarkup(),
-            width: "64ch",
-            height: "18em",
+            width: "72ch",
+            height: "24em",
             modal: true,
+            palette: "help",
+            defaultButtonSelector: "",
         });
-        this.topicElement = this.query("[data-tv-context-help-topic]");
-        this.textElement = this.query("[data-tv-context-help-text]");
+        this.headingElement = this.query("[data-tv-context-help-heading]");
+        this.scrollArea = new TVVerticalScrollArea(this.query("[data-tv-context-help-scroll]"));
+        this.viewport = this.scrollArea.viewport;
+        if (this.viewport) { this.viewport.tabIndex = 0; }
+        this.backButton = this.query("[data-tv-context-help-back]");
+        this.contentsButton = this.query("[data-tv-context-help-contents]");
         this.context = hcApplication;
+        this.bundle = null;
+        this.topicHistory = [];
         setElementHelpContext(this.dialog, hcContextHelp);
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.query("[data-tv-context-help-close]")?.addEventListener("click", () => this.close());
+        this.viewport?.addEventListener("click", (event) => {
+            const link = event.target.closest("[data-tv-context-help-topic]");
+            if (!link || !this.viewport.contains(link)) { return; }
+            event.preventDefault();
+            this.showTopic(link.dataset.tvContextHelpTopic, { remember: true });
+        });
+        this.backButton?.addEventListener("click", () => this.goBack());
+        this.contentsButton?.addEventListener("click", () => this.showTopic(hcApplication, { remember: true }));
+    }
+
+    fallbackTopic(helpCtx) {
+        const fallback = TV_CONTEXT_HELP_TOPICS[helpCtx] || TV_CONTEXT_HELP_TOPICS[hcApplication];
+        return {
+            id: helpCtx,
+            title: fallback.title,
+            content: fallback.text.split("\n"),
+        };
+    }
+
+    showTopic(helpCtx, { remember = false } = {}) {
+        const context = normalizeHelpContext(helpCtx, hcApplication);
+        if (remember && this.context !== context) { this.topicHistory.push(this.context); }
+        this.context = context;
+        const topic = contextHelpTopic(this.bundle, context) || this.fallbackTopic(context);
+        if (this.headingElement) { this.headingElement.textContent = topic.title || "Help"; }
+        if (this.viewport) {
+            this.viewport.innerHTML = renderContextHelpTopic(topic);
+            this.viewport.scrollTop = 0;
+        }
+        if (this.backButton) { this.backButton.disabled = this.topicHistory.length === 0; }
+        window.requestAnimationFrame(() => this.scrollArea?.update());
+    }
+
+    goBack() {
+        const previous = this.topicHistory.pop();
+        if (previous == null) { return; }
+        this.showTopic(previous);
+    }
+
+    open() {
+        this.topicHistory = [];
+        this.showTopic(this.context);
+        super.open();
+        this.viewport?.focus();
+        void loadContextHelpBundle()
+            .then((bundle) => {
+                this.bundle = bundle;
+                this.showTopic(this.context);
+            })
+            .catch((error) => {
+                console.error("Failed to load context help bundle", error);
+            });
     }
 
     openContext(helpCtx = hcApplication) {
         this.context = normalizeHelpContext(helpCtx, hcApplication);
-        const topic = TV_CONTEXT_HELP_TOPICS[this.context] || TV_CONTEXT_HELP_TOPICS[hcApplication];
-        if (this.topicElement) { this.topicElement.textContent = topic.title; }
-        if (this.textElement) {
-            this.textElement.textContent = topic.text;
-            this.textElement.scrollTop = 0;
-        }
-        super.open();
-        this.textElement?.focus();
+        this.open();
+    }
+
+    captureUrlState() {
+        return { topic: this.context };
+    }
+
+    restoreUrlState(state) {
+        this.context = normalizeHelpContext(state?.topic, hcApplication);
+        this.topicHistory = [];
+        this.showTopic(this.context);
+    }
+
+    destroy() {
+        this.scrollArea?.destroy();
+        this.scrollArea = null;
+        super.destroy();
     }
 }
 
@@ -468,10 +645,19 @@ class TVHistoryWindow extends TVWindow {
             className: ["tv-file-open-history-popup", "tv-history-window", popupClass].filter(Boolean).join(" "),
             attrs: { ...popupAttrs, hidden: true },
             html: [
-                '<div class="tv-history-frame-row tv-history-frame-top" aria-hidden="true">',
-                '<span class="tv-history-frame-corner">╔</span>',
-                '<span class="tv-history-frame-fill" data-tv-border-fill="═"></span>',
-                '<span class="tv-history-frame-corner">╗</span>',
+                '<div class="tv-history-frame-row tv-history-frame-top">',
+                '<span class="tv-history-frame-corner" aria-hidden="true">╔</span>',
+                '<span class="tv-history-frame-fill" data-tv-border-fill="═" aria-hidden="true"></span>',
+                '<span class="tv-history-frame-corner" aria-hidden="true">╗</span>',
+                TVFrame.titleControlMarkup({
+                    className: "tv-history-close-control",
+                    glyph: "■",
+                    glyphClass: "tv-close-glyph",
+                    attrs: {
+                        "data-tv-history-close": true,
+                        "aria-label": "Close history",
+                    },
+                }),
                 '</div>',
                 '<div class="tv-history-client">',
                 '<span class="tv-history-frame-side" data-tv-border-side="║" aria-hidden="true"></span>',
@@ -491,6 +677,7 @@ class TVHistoryWindow extends TVWindow {
         this.button = button;
         this.popup = popup;
         this.viewer = viewer;
+        this.closeButton = popup?.querySelector("[data-tv-history-close]") || null;
         this.items = items;
         this.onSelect = onSelect;
         this.ignoreNextClick = false;
@@ -511,6 +698,12 @@ class TVHistoryWindow extends TVWindow {
                 return;
             }
             this.toggle();
+        });
+        this.closeButton?.addEventListener("mousedown", (event) => event.stopPropagation());
+        this.closeButton?.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.hide({ restoreFocus: true });
         });
         document.addEventListener("mousedown", (event) => {
             if (!this.isOpen()) { return; }
@@ -3769,6 +3962,7 @@ class TVSearchDialog extends TVDialog {
 
 Object.assign(TV, {
     TV_CONTEXT_HELP_TOPICS,
+    TV_CONTEXT_HELP_BUNDLE_URL,
     TVContextHelpDialog,
     TVAboutDialog,
     TVWidgetGalleryDialog,

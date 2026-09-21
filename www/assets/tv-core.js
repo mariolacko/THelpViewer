@@ -3161,12 +3161,31 @@ class TVButton extends TVWidget {
 }
 
 class TVFrame extends TVWidget {
+    static titleControlMarkup({
+        className = "", glyph = "", glyphClass = "", glyphAttrs = {}, attrs = {},
+    } = {}) {
+        const attrString = attrsToString(attrs);
+        const glyphAttrString = attrsToString(glyphAttrs);
+        const classes = ["tv-dialog-title-control", className].filter(Boolean).join(" ");
+        const glyphClasses = ["tv-dialog-title-control-glyph", glyphClass].filter(Boolean).join(" ");
+        return `<button type="button" class="${escapeHtml(classes)}" ${attrString}>[<span class="${escapeHtml(glyphClasses)}" ${glyphAttrString}>${escapeHtml(glyph)}</span>]</button>`;
+    }
+
+    static createTitleControl(options = {}) {
+        return TVWidget.fromHTML(TVFrame.titleControlMarkup(options));
+    }
+
     static closeMarkup(className, attrs = {}) {
-        const attrString = attrsToString({
-            ...attrs,
-            "data-tv-close-button": true,
+        return TVFrame.titleControlMarkup({
+            className,
+            glyph: "■",
+            glyphClass: "tv-close-glyph",
+            glyphAttrs: { "data-tv-close-glyph": true },
+            attrs: {
+                ...attrs,
+                "data-tv-close-button": true,
+            },
         });
-        return `<button type="button" class="${className}" ${attrString}>[<span class="tv-close-glyph" data-tv-close-glyph>■</span>]</button>`;
     }
 
     static dialogMarkup({

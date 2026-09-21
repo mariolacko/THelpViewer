@@ -281,15 +281,16 @@ compatibility with old Turbo Vision applications.
     non-interactive and paint single-line frame segments; dialog controls keep
     their overlay-specific hidden behaviour. The exact reported README/TCHELP
     URL is exercised in both active-window orders in real Chrome.
-37. **The History icon palette pair was decoded in reverse and its popup could
-    overlap the trigger.** Turbo Vision's `getColor(0x0102)` uses the low byte
+37. **The History icon palette pair was decoded in reverse and its popup had
+    the wrong ownership relationship with the trigger.** Turbo Vision's `getColor(0x0102)` uses the low byte
     first, so `\xDE`/`\xDD` use History sides and the toggled `\x19` arrow uses
     History button. **Resolved in Phase 7.13:** the CSS roles now match that
-    order and the complete three-cell trigger stays above the popup. The
-    follow-up implementation now mirrors the original `evMouseDown` path,
-    closes on outside mouse-down like `THistoryWindow::handleEvent()`, and
-    renders the three character cells explicitly. Physical Chrome clicks test
-    arrow close/reopen, outside close and Escape.
+    order. The Phase 7.16 follow-up makes the popup cover the complete
+    three-cell trigger and restores the window's own `wfClose`-equivalent
+    control, matching original `THistoryWindow`. It also mirrors the original
+    `evMouseDown` path, closes on outside mouse-down, and renders the three
+    icon cells explicitly. Physical Chrome checks cover the stacking order,
+    own close control, outside close and Escape.
 38. **There was no equivalent of Turbo Vision's `helpCtx` propagation.** Views,
     groups, menu selections and managed windows could not identify the correct
     F1 topic. **Resolved in Phase 7.14:** `TVWidget` owns `helpCtx`, `TVGroup`
@@ -301,6 +302,16 @@ compatibility with old Turbo Vision applications.
     the resulting `═╝` did not match `TFrame::dragIcon`. **Resolved in Phase
     7.14:** close/zoom are real buttons and the resize glyph is the source-
     defined single-line `─┘`, with passive coloring when its window is inactive.
+40. **Games implemented Hall of Fame `[H]` as a separate title-button pattern.**
+    It colored brackets and glyph together, unlike the shared close control.
+    **Resolved in Phase 7.16:** `TVFrame` owns one bracketed title-control
+    renderer; the brackets use the active title color and the inner `H` uses
+    the owner's green frame-icon role.
+41. **The first context Help dialog was only a short plain-text message.** It
+    could not exercise the link, table or long-topic behavior of Turbo Vision
+    Help. **Resolved in Phase 7.16:** F1 opens a 72×24 Help-palette window backed
+    by a native UHF 2.0 `THELPVIEWER.HLP` JSON bundle, with internal links,
+    fixed-width tables, Back/Contents navigation and the shared scrollbar.
 
 ## Component assessment
 
@@ -315,7 +326,7 @@ compatibility with old Turbo Vision applications.
 | ListBox/ListViewer | Correct inheritance; selection, activation, keyboard and roving focus complete |
 | CheckBoxes/RadioButtons/MultiCheckBoxes | Shared `TVCluster` hierarchy with native or multistate behaviour and DOS-style rendering |
 | MessageBox | Hardened and tested; application adoption remains |
-| Editor/Terminal/Outline | Active-window Find, read-only editor with indicator, bounded terminal and reusable hierarchical outline are present |
+| Editor/Terminal/Outline/Context Help | Active-window Find, read-only editor with indicator, bounded terminal, reusable hierarchical outline and UHF-backed F1 Help are present |
 | Games | Twelve playable games with shared top-ten Hall of Fame, focus, timer and keyboard policy |
 | Screen savers | Shared idle start, resize lifecycle and focus restoration complete |
 | Syntax highlighter | Pascal, C and ASM detection is scoped per code block |
@@ -594,11 +605,15 @@ No previously recommended game remains unimplemented.
   replacing inactive close/zoom controls with non-interactive frame segments.
   The reported README/TCHELP state is a real-Chrome regression fixture.
 - [x] Phase 7.13: corrected the source-defined `THistory` arrow/sides palette
-  order and kept the complete trigger above its popup. Real pointer clicks
-  verify open/close in File Open and Change Directory.
+  order and its mouse-down/outside-close lifecycle in File Open and Change
+  Directory.
 - [x] Phase 7.14: added the shared `helpCtx` model, `hc...` constants, F1
   controller and THelpViewer context Help; restored the original `─┘` grow icon
   and semantic close/zoom buttons, and completed History mouse-down/outside-
   close behavior.
 - [x] Phase 7.15: preserved Microsoft Advisor's qualified cross-file QuickHelp
   targets and regenerated both installed PWB bundles.
+- [x] Phase 7.16: unified bracketed title controls in `TVFrame`, gave
+  `TVHistoryWindow` its source-defined own close control and foreground
+  stacking, and replaced the plain F1 message with UHF-backed 72×24 green
+  context Help supporting links, tables, Back/Contents and long-topic scroll.

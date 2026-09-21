@@ -1,0 +1,300 @@
+{
+  "uhf_version": "2.0",
+  "metadata": {
+    "name": "THelpViewer Help",
+    "author": "Mario Lacko + Copilot + Codex",
+    "encoding": "utf-8",
+    "language": "en",
+    "display": {
+      "cols": 72,
+      "rows": 24
+    },
+    "help_contents_topic_id": 1000,
+    "show_topic_titles": true,
+    "source": {
+      "filename": "THELPVIEWER.HLP",
+      "format": "uhf",
+      "encoding": "utf-8"
+    }
+  },
+  "converter": {
+    "name": "THelpViewer",
+    "version": "2.0",
+    "date": "2026-09-21T00:00:00+02:00"
+  },
+  "contents": [
+    {
+      "label": "Using THelpViewer",
+      "topic_id": 1000,
+      "children": [
+        {"label": "HELP files", "topic_id": 1200},
+        {"label": "Documents", "topic_id": 1300},
+        {"label": "Search", "topic_id": 1400},
+        {"label": "Windows", "topic_id": 1600}
+      ]
+    },
+    {
+      "label": "Dialogs and tools",
+      "topic_id": 2090,
+      "children": [
+        {"label": "Open a File", "topic_id": 2010},
+        {"label": "Change Directory", "topic_id": 2020},
+        {"label": "Find", "topic_id": 2030},
+        {"label": "Colors", "topic_id": 2040},
+        {"label": "Widget Gallery", "topic_id": 2050},
+        {"label": "CD/MIDI Player", "topic_id": 2060}
+      ]
+    },
+    {
+      "label": "Games",
+      "topic_id": 1500,
+      "children": []
+    }
+  ],
+  "index": [],
+  "topics": {
+    "1000": {
+      "id": 1000,
+      "title": "THelpViewer",
+      "aliases": {"ids": [], "strings": ["application", "contents"]},
+      "content": [
+        "[b]THelpViewer context-sensitive help[/b]",
+        "",
+        "Press F1 anywhere to open the topic assigned to the active view.",
+        "Links, long topics and fixed-width tables use the same UHF 2.0 data",
+        "model as converted DOS HELP files.",
+        "",
+        "┌──────────────────┬────────────────────────────────────────────┐",
+        "│ Key              │ Action                                     │",
+        "├──────────────────┼────────────────────────────────────────────┤",
+        "│ F1               │ Context help                               │",
+        "│ F10              │ Activate the menu bar                     │",
+        "│ F5               │ Zoom or restore the active window         │",
+        "│ F6 / Shift-F6    │ Select next or previous window            │",
+        "│ Alt-F3           │ Close the active window                   │",
+        "└──────────────────┴────────────────────────────────────────────┘",
+        "",
+        "Topics:",
+        "  [link:topic=1200]HELP files[/link]   [link:topic=1300]Documents[/link]   [link:topic=1400]Search[/link]",
+        "  [link:topic=1500]Games[/link]        [link:topic=1600]Windows[/link]     [link:topic=2090]Dialogs[/link]",
+        "",
+        "The status line and Help menu invoke this same help file. Each",
+        "TVWidget or managed window supplies a Turbo Vision-style helpCtx.",
+        "",
+        "This intentionally contains enough text to exercise the shared",
+        "vertical scrollbar. Future application documentation can be added as",
+        "ordinary UHF topics without changing the JavaScript window.",
+        "",
+        "[link:topic=1700]How context help is resolved[/link]"
+      ]
+    },
+    "1100": {
+      "id": 1100,
+      "title": "System menu",
+      "content": [
+        "The system menu contains About, utilities, palette editing, Widget",
+        "Gallery, screen savers and theme selection.",
+        "",
+        "See also: [link:topic=2040]Colors[/link]  [link:topic=2050]Widget Gallery[/link]  [link:topic=2130]Screen saver[/link]"
+      ]
+    },
+    "1200": {
+      "id": 1200,
+      "title": "HELP files",
+      "content": [
+        "Open installs a HELP or Docs file from the generated catalog.",
+        "Catalog submenus open a source directly.",
+        "",
+        "Cross-file links retain the real source filename and open the target",
+        "when its bundle exists in the catalog.",
+        "",
+        "See also: [link:topic=2010]Open a File[/link]  [link:topic=2070]HELP viewer[/link]"
+      ]
+    },
+    "1300": {
+      "id": 1300,
+      "title": "Documents",
+      "content": [
+        "Markdown documentation opens in a read-only Editor-style window with",
+        "a blue background and yellow base text.",
+        "",
+        "Use Ctrl-F to find text and Ctrl-L to repeat the search.",
+        "",
+        "See also: [link:topic=2030]Find[/link]  [link:topic=2080]Document viewer[/link]"
+      ]
+    },
+    "1400": {
+      "id": 1400,
+      "title": "Search",
+      "content": [
+        "Find searches the active HELP or Docs window. Find Again repeats the",
+        "last query for that window. Search Topics searches the current HELP",
+        "bundle index.",
+        "",
+        "See also: [link:topic=2030]Find dialog[/link]"
+      ]
+    },
+    "1500": {
+      "id": 1500,
+      "title": "Games",
+      "content": [
+        "Games share Turbo Vision dialogs, keyboard focus, inactive-window",
+        "pause policies and a persistent ten-entry Hall of Fame.",
+        "",
+        "The [H] title control opens scores. Its brackets use the title color",
+        "and H uses the common frame-icon color."
+      ]
+    },
+    "1600": {
+      "id": 1600,
+      "title": "Windows",
+      "content": [
+        "Tile, Cascade and Window List arrange managed windows.",
+        "",
+        "F5 zooms, F6 selects the next window and Alt-F3 closes the active",
+        "target. Window controls use the shared TVFrame/TVWindow rendering."
+      ]
+    },
+    "1700": {
+      "id": 1700,
+      "title": "Context Help",
+      "content": [
+        "The active menu item has first priority, followed by the focused view,",
+        "the active managed dialog/window and finally the application context.",
+        "",
+        "The resolved hc... number selects a topic in THELPVIEWER.HLP, stored",
+        "as a UHF 2.0 JSON bundle.",
+        "",
+        "[link:topic=1000]Return to Help Contents[/link]"
+      ]
+    },
+    "2000": {
+      "id": 2000,
+      "title": "About",
+      "content": [
+        "About shows the application version and authors. The version comes",
+        "from the running package metadata rather than a hard-coded string."
+      ]
+    },
+    "2010": {
+      "id": 2010,
+      "title": "Open a File",
+      "content": [
+        "Choose a HELP or Docs file from the two-column list.",
+        "",
+        "The ▐↓▌ control opens recent files. The History window has its own",
+        "close control, and also closes with Escape or a click outside.",
+        "",
+        "Enter opens the selected file. Double-clicking a directory enters it.",
+        "",
+        "See also: [link:topic=2020]Change Directory[/link]  [link:topic=1200]HELP files[/link]"
+      ]
+    },
+    "2020": {
+      "id": 2020,
+      "title": "Change Directory",
+      "content": [
+        "Select a virtual HELP/DOCS directory. Chdir applies it to Open a File;",
+        "Revert restores the initial path. The History control uses the same",
+        "TVHistoryWindow implementation as Open a File and Find."
+      ]
+    },
+    "2030": {
+      "id": 2030,
+      "title": "Find",
+      "content": [
+        "Enter text to search in the active HELP or Docs window. The arrow",
+        "opens previous queries. Find Again repeats the current query."
+      ]
+    },
+    "2040": {
+      "id": 2040,
+      "title": "Colors",
+      "content": [
+        "Choose a Group and Item, then edit its DOS foreground/background",
+        "attribute. Default restores the selected item. Reset All restores the",
+        "complete Turbo Vision palette."
+      ]
+    },
+    "2050": {
+      "id": 2050,
+      "title": "Widget Gallery",
+      "content": [
+        "Widget Gallery exercises shared labels, inputs, list viewers, list",
+        "boxes, clusters, scrollbars, buttons, static text, terminal, outline",
+        "and message-box components."
+      ]
+    },
+    "2060": {
+      "id": 2060,
+      "title": "CD/MIDI Player",
+      "content": [
+        "The compact view contains transport and track selection. More reveals",
+        "advanced sources and resizes the shared dialog frame."
+      ]
+    },
+    "2070": {
+      "id": 2070,
+      "title": "HELP viewer",
+      "content": [
+        "Links open topics or companion HELP files. Use Back, Index, Contents",
+        "and Search from the status line or menus. The viewer renders UHF 2.0",
+        "links, styles, fixed-width text and source-defined colors."
+      ]
+    },
+    "2080": {
+      "id": 2080,
+      "title": "Document viewer",
+      "content": [
+        "Markdown is displayed through the read-only Editor palette. The lower",
+        "left indicator reports RO plus the current line and column."
+      ]
+    },
+    "2090": {
+      "id": 2090,
+      "title": "Dialogs",
+      "content": [
+        "Tab and Shift-Tab move focus. Enter activates the default button and",
+        "Escape closes the dialog unless its active control reserves Escape.",
+        "",
+        "Common dialogs:",
+        "  [link:topic=2010]Open a File[/link]       [link:topic=2020]Change Directory[/link]",
+        "  [link:topic=2030]Find[/link]              [link:topic=2040]Colors[/link]",
+        "  [link:topic=2050]Widget Gallery[/link]    [link:topic=2060]CD/MIDI Player[/link]"
+      ]
+    },
+    "2100": {
+      "id": 2100,
+      "title": "Calendar",
+      "content": [
+        "Browse months and years with the arrow controls. Date calculations use",
+        "Gregorian leap-year rules."
+      ]
+    },
+    "2110": {
+      "id": 2110,
+      "title": "ASCII Table",
+      "content": [
+        "Shows character codes and glyphs using the configured DOS code-page",
+        "presentation."
+      ]
+    },
+    "2120": {
+      "id": 2120,
+      "title": "Calculator",
+      "content": [
+        "Use number and operation buttons or the keyboard. Escape is reserved",
+        "by the calculator and does not close it."
+      ]
+    },
+    "2130": {
+      "id": 2130,
+      "title": "Screen saver",
+      "content": [
+        "Choose a mode from the system menu. Input stops the saver and restores",
+        "the previously focused control."
+      ]
+    }
+  }
+}
+

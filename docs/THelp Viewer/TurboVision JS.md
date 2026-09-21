@@ -93,6 +93,10 @@ Header, footer and both row-side glyphs inherit the same current frame color.
   frame uses single-line glyphs and omits the close control. The close control
   is overlaid at columns 2–4 and the title is centered over one continuous
   frame line, matching `TFrame` rather than participating in the layout.
+  `titleControlMarkup()` / `createTitleControl()` are the single renderer for
+  bracketed title controls: brackets inherit the title color while the inner
+  glyph uses the owner's frame-icon color. Dialog close, History close and the
+  games' Hall of Fame `[H]` use this path.
 - **TVWindow** — Shared `TVGroup` base and standard window-frame composition
   used by HELP, Docs and dialogs. On a passive standard window, the close and
   zoom cells remain in the title-row grid but become non-interactive
@@ -164,7 +168,14 @@ standard-dialog contexts. The constants are also exposed directly on
 - `TVHelpController` captures plain F1 and sends the resolved context to the
   application callback.
 - `TVContextHelpDialog.openContext(hc)` displays THelpViewer's own topic for
-  the active menu, HELP/Docs window, dialog, tool or game.
+  the active menu, HELP/Docs window, dialog, tool or game. It opens the
+  72×24 Help-palette window immediately with a built-in fallback, then loads
+  `assets/tv-context-help.json`, a native UHF 2.0 `THELPVIEWER.HLP` bundle.
+- The context viewer renders UHF bold/italic/underline spans, internal topic
+  links, fixed-width tables and long text through the shared vertical
+  scrollbar. Back and Contents navigate within the same bundle. Its URL state
+  stores the current `hc...` topic, so restoring an open Help dialog restores
+  content as well as the frame.
 
 The bundle and generated-page applications both register this controller.
 Their Help menu and `F1 Help` status command use the same resolution path as
@@ -303,9 +314,11 @@ The selectors support arrow-key navigation.
   reusable file-list, persistent model, list and popup roles. The old
   `TVFileListBox` export remains a compatibility alias.
 - `TVHistoryWindow` renders the source-compatible framed popup shared by File
-  Open, Change Directory and Find. Its default geometry is 30×8 character
-  cells for the 28-cell File Open input, with no padding outside the frame. It
-  also owns the popup visibility, `aria-expanded` state, Escape handling,
+  Open, Change Directory and Find. Its default geometry is 32×8 character
+  cells, covering the 28-cell File Open input and its three-cell History
+  trigger without padding outside the frame. Like original `THistoryWindow`
+  with `wfClose`, it owns a bracketed close control in its top frame. It also
+  owns popup visibility, `aria-expanded` state, Escape handling,
   outside-click dismissal and focus return to the History button. Pointer
   activation happens on mouse-down like the original `THistory::handleEvent`;
   keyboard activation remains a native button click.
