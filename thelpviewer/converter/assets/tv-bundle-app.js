@@ -10,8 +10,11 @@ const {
     applyThemeAndSyncPalette,
     initializeTVTheme,
     TV_COMMANDS,
+    TV_HELP_CONTEXTS,
     TVMenuController,
+    TVHelpController,
     TVDesktop,
+    TVContextHelpDialog,
     TVAboutDialog,
     TVPuzzleDialog,
     TVCalendarDialog,
@@ -53,7 +56,58 @@ const {
     THUMB_CHAR,
     highlightCodeExamples,
     DOS_COLORS,
+    setElementHelpContext,
 } = TV;
+
+const {
+    hcSystemMenu,
+    hcHelpFiles,
+    hcDocuments,
+    hcSearch,
+    hcGames,
+    hcWindows,
+    hcContextHelp,
+    hcAbout,
+    hcFileOpen,
+    hcChangeDirectory,
+    hcFind,
+    hcColors,
+    hcWidgetGallery,
+    hcMidiPlayer,
+    hcHelpViewer,
+    hcDocumentViewer,
+    hcDialog,
+    hcCalendar,
+    hcAsciiTable,
+    hcCalculator,
+} = TV_HELP_CONTEXTS;
+
+const DIALOG_HELP_CONTEXTS = Object.freeze({
+    about: hcAbout,
+    calendar: hcCalendar,
+    ascii: hcAsciiTable,
+    calc: hcCalculator,
+    midi: hcMidiPlayer,
+    colors: hcColors,
+    widgets: hcWidgetGallery,
+    fileopen: hcFileOpen,
+    chdir: hcChangeDirectory,
+    find: hcFind,
+    search: hcSearch,
+    contexthelp: hcContextHelp,
+    puzzle: hcGames,
+    tetris: hcGames,
+    mines: hcGames,
+    breakout: hcGames,
+    sokoban: hcGames,
+    lines: hcGames,
+    reversi: hcGames,
+    ludo: hcGames,
+    mastermind: hcGames,
+    snake: hcGames,
+    hanoi: hcGames,
+    tron: hcGames,
+});
 
 // ── Catalog & data cache ────────────────────────────────────────────
 
@@ -1684,7 +1738,10 @@ function buildWindowHTML(bundle, contentHTML, caption) {
     const themeStyle = bundleUiThemeStyle(bundle);
     const style = `--tv-window-cols:${w.cols}; --tv-window-rows:${w.rows}; --tv-window-min-cols:${w.min_cols}; --tv-window-min-rows:${w.min_rows};${themeStyle ? ` ${themeStyle};` : ""}`;
     return TVWindow.renderMarkup({
-        attrs: { "data-tv-bundle-window": bundleWindowKey(bundle) },
+        attrs: {
+            "data-tv-bundle-window": bundleWindowKey(bundle),
+            "data-tv-help-ctx": hcHelpViewer,
+        },
         style,
         caption,
         contentMarkup: contentHTML,
@@ -2912,14 +2969,20 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
             });
         }),
     });
-    const sysRootHTML = renderMenuRoot(renderHotkeyMarkup("~≡~"), sysPopupHTML.items);
+    const sysRootHTML = renderMenuRoot(renderHotkeyMarkup("~≡~"), sysPopupHTML.items, {
+        "data-tv-help-ctx": hcSystemMenu,
+    });
 
     // File menu with catalog entries
-    const fileRootHTML = renderMenuRoot(renderHotkeyMarkup("~H~elp Files"), buildCatalogMenuItems(catalog));
+    const fileRootHTML = renderMenuRoot(renderHotkeyMarkup("Help ~F~iles"), buildCatalogMenuItems(catalog), {
+        "data-tv-help-ctx": hcHelpFiles,
+    });
 
     // Docs menu with documentation markdown files
     const docsItems = buildDocsMenuItems(docsCatalogData || []);
-    const docsRootHTML = renderMenuRoot(renderHotkeyMarkup("~D~ocs"), docsItems);
+    const docsRootHTML = renderMenuRoot(renderHotkeyMarkup("~D~ocs"), docsItems, {
+        "data-tv-help-ctx": hcDocuments,
+    });
 
     const searchRootHTML = renderMenuRoot(
         renderHotkeyMarkup("~S~earch"),
@@ -2943,6 +3006,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                 labelMarkup: renderHotkeyMarkup("Search ~T~opics") + '<span class="tv-menu-hotkey">F3</span>',
             }),
         ],
+        { "data-tv-help-ctx": hcSearch },
     );
 
     // Windows menu (TV standard)
@@ -2966,6 +3030,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                     `<span class="tv-menu-hotkey">${escapeHtml(entry.hotkey)}</span>`,
             })
         ),
+        { "data-tv-help-ctx": hcWindows },
     );
 
     // Games menu
@@ -2993,6 +3058,28 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
                 labelMarkup: renderHotkeyMarkup(entry.label),
             })
         ),
+        { "data-tv-help-ctx": hcGames },
+    );
+
+    const helpRootHTML = renderMenuRoot(
+        renderHotkeyMarkup("~H~elp"),
+        [
+            new TVButton({
+                dialog: false,
+                className: "tv-menu-popup-item",
+                attrs: { type: "button", "data-tv-context-help": true },
+                labelMarkup: renderHotkeyMarkup("~C~ontext Help")
+                    + '<span class="tv-menu-hotkey">F1</span>',
+            }),
+            renderMenuPopupSeparator(),
+            new TVButton({
+                dialog: false,
+                className: "tv-menu-popup-item",
+                attrs: { type: "button", "data-tv-dialog-open": "about" },
+                labelMarkup: renderHotkeyMarkup("~A~bout"),
+            }),
+        ],
+        { "data-tv-help-ctx": hcContextHelp },
     );
 
     const bundleContentsRootHTML = buildBundleContentsMenuRoot(activeBundle);
@@ -3005,6 +3092,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         searchRootHTML,
         gamesRootHTML,
         winRootHTML,
+        helpRootHTML,
         bundleContentsRootHTML ? `<div class="tv-menu-separator" aria-hidden="true">│</div>` : ``,
         bundleContentsRootHTML,
         `</nav>`,
@@ -3021,6 +3109,8 @@ class TVBundleApp {
         this.windowManager = null;
         this.dialogManager = null;
         this.menuController = null;
+        this.helpController = null;
+        this.contextHelpDialog = null;
         this.docWindows = new Map();
         this._menuBundleKey = "";
         this._stateSyncTimer = null;
@@ -3078,6 +3168,15 @@ class TVBundleApp {
         this._registerDialog("hanoi", () => new TVHanoiDialog(this.desktop));
         this._registerDialog("tron", () => new TVTronDialog(this.desktop));
         this._registerBundleSearch();
+        this.contextHelpDialog = this._registerDialog(
+            "contexthelp",
+            () => new TVContextHelpDialog(this.desktop),
+        );
+        this.helpController = new TVHelpController({
+            getMenuController: () => this.menuController,
+            getDialogManager: () => this.dialogManager,
+            onHelp: (helpCtx) => this.contextHelpDialog?.openContext(helpCtx),
+        });
         this.dialogManager.applyActiveStates();
 
         // Show a usable File/Open command immediately, then replace the menus
@@ -3152,8 +3251,8 @@ class TVBundleApp {
         items.push(new TVButton({
             dialog: false,
             className: "tv-status-item",
-            attrs: { type: "button", "data-tv-dialog-open": "about" },
-            labelMarkup: renderHotkeyMarkup("~F1~ About"),
+            attrs: { type: "button", "data-tv-context-help": true },
+            labelMarkup: renderHotkeyMarkup("~F1~ Help"),
         }).renderMarkup());
         items.push(`<span class="tv-status-separator" aria-hidden="true">│</span>`);
         items.push(`<span class="tv-status-hint" data-tv-status-hint>${escapeHtml(hint || "THelpViewer")}</span>`);
@@ -3503,6 +3602,7 @@ class TVBundleApp {
         try {
             const dialog = factory();
             if (dialog) {
+                setElementHelpContext(dialog.dialog, DIALOG_HELP_CONTEXTS[name] || hcDialog);
                 this.dialogManager.register(name, dialog);
                 return dialog;
             }
@@ -3765,6 +3865,7 @@ class TVBundleApp {
         const style = `--tv-window-cols:${w.cols}; --tv-window-rows:${w.rows}; --tv-window-min-cols:${w.min_cols}; --tv-window-min-rows:${w.min_rows};`;
         const windowHTML = TVWindow.renderMarkup({
             className: "tv-doc-window",
+            attrs: { "data-tv-help-ctx": hcDocumentViewer },
             style,
             caption: title,
             contentMarkup: contentHTML,
@@ -4045,6 +4146,16 @@ class TVBundleApp {
             this.menuController.refresh();
         }
         const closeMenus = () => this.menuController.closeMenus();
+
+        document.querySelectorAll("[data-tv-context-help]").forEach((element) => {
+            if (element.dataset.tvMenuBound === "1") { return; }
+            element.dataset.tvMenuBound = "1";
+            element.addEventListener("click", (event) => {
+                event.preventDefault();
+                closeMenus();
+                this.helpController?.request();
+            });
+        });
 
         document.querySelectorAll("[data-tv-find]").forEach((element) => {
             if (element.dataset.tvMenuBound === "1") { return; }

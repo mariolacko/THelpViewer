@@ -1,6 +1,6 @@
 # TurboVision JS Audit
 
-Audit date: 2026-09-20
+Audit date: 2026-09-21
 
 ## Goal
 
@@ -285,8 +285,22 @@ compatibility with old Turbo Vision applications.
     overlap the trigger.** Turbo Vision's `getColor(0x0102)` uses the low byte
     first, so `\xDE`/`\xDD` use History sides and the toggled `\x19` arrow uses
     History button. **Resolved in Phase 7.13:** the CSS roles now match that
-    order and the complete three-cell trigger stays above the popup. Physical
-    Chrome clicks open and close File Open and Change Directory history.
+    order and the complete three-cell trigger stays above the popup. The
+    follow-up implementation now mirrors the original `evMouseDown` path,
+    closes on outside mouse-down like `THistoryWindow::handleEvent()`, and
+    renders the three character cells explicitly. Physical Chrome clicks test
+    arrow close/reopen, outside close and Escape.
+38. **There was no equivalent of Turbo Vision's `helpCtx` propagation.** Views,
+    groups, menu selections and managed windows could not identify the correct
+    F1 topic. **Resolved in Phase 7.14:** `TVWidget` owns `helpCtx`, `TVGroup`
+    inherits it from its current child, menu/dialog managers expose the active
+    context, `TVHelpController` resolves priority and dispatches F1, and the
+    application supplies its own context Help dialog and `hc...` constants.
+39. **Standard-window frame controls were anchors and the grow icon was derived
+    from the active double-line frame.** The anchors were fragile in Safari and
+    the resulting `═╝` did not match `TFrame::dragIcon`. **Resolved in Phase
+    7.14:** close/zoom are real buttons and the resize glyph is the source-
+    defined single-line `─┘`, with passive coloring when its window is inactive.
 
 ## Component assessment
 
@@ -319,7 +333,7 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 | Turbo Vision 2.0 | Current JavaScript | Result and required change |
 |---|---|---|
 | `TView` | `TVWidget` | Present as the basic DOM helper. Add a no-op `destroy()` contract before more dynamic widgets are introduced. |
-| `TGroup : TView` | `TVGroup : TVWidget` | Present as a markup composer, but it does not own child lifecycles, focus order or event propagation as `TGroup` does. |
+| `TGroup : TView` | `TVGroup : TVWidget` | Owns child references, a current child and `helpCtx` inheritance; full child lifecycle, focus order and event propagation remain incomplete. |
 | `TWindow : TGroup` | `TVWindow : TVGroup` | Implemented; HELP and Docs use its common frame, title controls, client and scrollbar composition. |
 | `TDialog : TWindow` | `TVDialog : TVWindow` | Correct hierarchy while preserving modal, keyboard, focus, move and destroy behaviour. |
 | `TFrame : TView` | `TVFrame : TVWidget` | Present and shared by dialogs; `TVWindow` owns the separate standard-window composition. |
@@ -339,8 +353,8 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 
 | Turbo Vision 2.0 | Current JavaScript | Result and required change |
 |---|---|---|
-| `TMenuView`, `TMenuBar`, `TMenuBox` | `TVMenuBar`, `TVMenuBox : TVMenuView` | Shared rendering hierarchy plus one `TVMenuController` interaction model. |
-| `TStatusLine` | `TVStatusLine` | Present and functional. |
+| `TMenuView`, `TMenuBar`, `TMenuBox` | `TVMenuBar`, `TVMenuBox : TVMenuView` | Shared rendering hierarchy plus one `TVMenuController` interaction model. Unlike the original, menus are still mostly HTML/config records rather than `TVMenu`/`TVMenuItem`/`TVSubMenu` objects with commands and per-item contexts. |
+| `TStatusLine` | `TVStatusLine` | Present and functional; context-specific status definitions and hints remain to be modeled. |
 | `TBackground`, `TDeskTop`, `TProgram`, `TApplication` | CSS background, `TVDesktop : TVGroup`, `TVApplication`/`TVBundleApp` | Shared desktop owns layout, clocks and the dialog manager; product-specific applications retain navigation and content composition. |
 | `THistory`, `THistoryViewer`, `THistoryWindow` | `TVHistory`, `TVHistoryViewer`, `TVHistoryWindow` | Shared by File Open and Change Directory; storage, list interaction and popup lifecycle are separate roles. |
 | `TFileInputLine`, `TSortedListBox`, `TFileList`, `TFileInfoPane` | Native input, `TVFileList`, and inline info markup | File list behaviour is reusable and the old name is an alias; specialised InputLine and InfoPane classes remain optional. |
@@ -381,11 +395,17 @@ not be copied merely for name parity.
 
 ### Next implementation order
 
-1. Add Find options (case sensitivity and whole words) through shared cluster
-   controls, then add Replace only when editable documents exist.
-2. Extract HELP viewing into explicit `TVHelpViewer`/`TVHelpWindow` classes
+1. Replace menu HTML/config records with reusable `TVMenu`, `TVMenuItem` and
+   `TVSubMenu` objects that own command, disabled state, mnemonic and `helpCtx`;
+   keep `TVMenuController` as the single interaction engine.
+2. Add context-dependent `TVStatusDef`/`TVStatusItem`-style hints so the status
+   line changes with the resolved help context instead of only the active
+   window type.
+3. Extract HELP viewing into explicit `TVHelpViewer`/`TVHelpWindow` classes
    without changing converter or UHF rendering semantics.
-3. Add reusable `TVParamText` and validators when a real editable dialog needs
+4. Add Find options (case sensitivity and whole words) through shared cluster
+   controls, then add Replace only when editable documents exist.
+5. Add reusable `TVParamText` and validators when a real editable dialog needs
    them; avoid unused name-parity infrastructure.
 
 ### Proposed new dialogs and games
@@ -576,3 +596,9 @@ No previously recommended game remains unimplemented.
 - [x] Phase 7.13: corrected the source-defined `THistory` arrow/sides palette
   order and kept the complete trigger above its popup. Real pointer clicks
   verify open/close in File Open and Change Directory.
+- [x] Phase 7.14: added the shared `helpCtx` model, `hc...` constants, F1
+  controller and THelpViewer context Help; restored the original `─┘` grow icon
+  and semantic close/zoom buttons, and completed History mouse-down/outside-
+  close behavior.
+- [x] Phase 7.15: preserved Microsoft Advisor's qualified cross-file QuickHelp
+  targets and regenerated both installed PWB bundles.

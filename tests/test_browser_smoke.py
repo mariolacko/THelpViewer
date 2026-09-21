@@ -247,6 +247,29 @@ async function run() {
         };
         check();
     })`, true);
+    await key("F1", "F1");
+    await pause();
+    const fileOpenHelp = await evaluate(`(() => {
+        const help = document.querySelector('.tv-context-help-window');
+        const fileOpen = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
+        );
+        return {
+            helpOpen: Boolean(help && !help.closest('.tv-dialog-overlay').hidden),
+            topic: help?.querySelector('[data-tv-context-help-topic]')?.textContent.trim(),
+            context: fileOpen?.getAttribute('data-tv-help-ctx'),
+        };
+    })()`);
+    if (!fileOpenHelp.helpOpen || fileOpenHelp.topic !== 'Open a File' || fileOpenHelp.context !== '2010') {
+        throw new Error(`File Open context help is broken: ${JSON.stringify(fileOpenHelp)}`);
+    }
+    await key("Escape", "Escape", 0, true);
+    const contextHelpClosed = await evaluate(`(() => {
+        const help = document.querySelector('.tv-context-help-window')?.closest('.tv-dialog-overlay');
+        const fileOpen = document.querySelector('[data-tv-file-open-name]')?.closest('.tv-dialog-overlay');
+        return Boolean(help?.hidden && fileOpen && !fileOpen.hidden);
+    })()`);
+    if (!contextHelpClosed) { throw new Error('Context Help did not return to File Open'); }
     await key("Escape", "Escape", 0, true);
     await send("Network.emulateNetworkConditions", {
         offline: false,
@@ -1111,6 +1134,19 @@ async function run() {
             fileHistoryClosed, fileHistoryReopened,
         })}`);
     }
+    const fileHistoryOutsidePoint = await evaluate(`(() => {
+        const rect = document.querySelector('.tv-file-open-info')?.getBoundingClientRect();
+        return rect ? { x: rect.left + 2, y: rect.top + 2 } : null;
+    })()`);
+    if (!fileHistoryOutsidePoint) { throw new Error('File Open info pane is missing'); }
+    await clickPoint(fileHistoryOutsidePoint);
+    const fileHistoryOutsideClosed = await evaluate(`(() => {
+        const popup = document.querySelector('[data-tv-file-open-history-popup]');
+        const dialog = popup?.closest('.tv-dialog-overlay');
+        return Boolean(popup?.hidden && dialog && !dialog.hidden);
+    })()`);
+    if (!fileHistoryOutsideClosed) { throw new Error('Click outside did not close File Open history'); }
+    await clickPoint(fileHistoryArrowPoint);
     await pause();
     await key("Escape", "Escape", 0, true);
     const escapeClosedHistoryOnly = await evaluate(`(() => {
@@ -1349,6 +1385,7 @@ async function run() {
             captionCenterDelta: Math.abs(
                 (captionRect.left + captionRect.width / 2) - (topRect.left + topRect.width / 2)
             ),
+            growGlyph: windowElement.querySelector('.tv-grow-handle')?.textContent,
             controls: controls.map((control) => ({
                 hidden: control.hidden,
                 passive: control.classList.contains('is-frame-control-passive'),
@@ -1367,6 +1404,7 @@ async function run() {
     })()`);
     const passiveFrameIsIntact = (frame) => (
         frame.inactive && frame.leftCorner === '┌' && frame.rightCorner === '┐'
+        && frame.growGlyph === '─┘'
         && frame.rightEdgeDelta < 1 && frame.maxGap < 1 && frame.captionCenterDelta < 1
         && frame.controls.length === 2
         && frame.controls.every((control) => (

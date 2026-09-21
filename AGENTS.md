@@ -184,3 +184,16 @@ Prevents:
 - integration breakage
 - deployment failures
 - upgrade regressions
+
+---
+
+## Rule 13 — Record User-Visible Changes
+
+For every user-visible feature, behavior fix, or format-parser correction:
+- add a concise entry under `CHANGELOG.md` → `[Unreleased]`
+- update the relevant technical documentation when behavior or format
+  understanding changed
+
+Prevents:
+- completed fixes existing only in commit history or internal audit notes
+- release notes drifting away from shipped behavior

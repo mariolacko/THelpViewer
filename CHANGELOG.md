@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Formats
+- Preserved Microsoft Advisor's qualified QuickHelp links such as
+  `OS2.h.overview`, `WIN.h.contents`, and `LAN.h.contents` as real external
+  HELP links; optional databases that are not installed are no longer rendered
+  as non-interactive bold text
 - Promoted **Borland Turbo Debugger TDH / Turbo Profiler TFH** from a
   diagnostic-only path to a decoded reader path for the known sample families,
   including runtime-aligned topics, hotspots, contents/index export, and UHF
@@ -28,6 +32,20 @@
   `tdhelp.tdh`, reads the header into `0xA248`, buffers `0x258` words at
   `0x9D94`, and computes topic starts as `2 * header + 2 + sum(sign16(deltas))`
   instead of relying only on file-side inference
+
+### Viewer & UI
+- Added Turbo Vision-style `hc...` help-context constants, inheritance through
+  widgets/groups, menu/dialog/window resolution, F1 dispatch, and an in-app
+  context Help dialog for menus, HELP/Docs windows, standard dialogs, tools,
+  and games
+- Matched the original `THistory` interaction more closely: its exact
+  three-cell `0x72 / 0x20 / 0x72` icon reacts on mouse-down, toggles reliably,
+  closes on Escape or an outside click, and uses the original arrow/side
+  palette roles
+- Replaced standard-window close and zoom anchors with semantic buttons so the
+  shared frame controls activate consistently in Safari and Chromium
+- Restored Turbo Vision 2.0's single-line `─┘` grow icon and passive-window
+  coloring instead of deriving a double-line resize corner from the frame
 
 ### Tooling
 - Added built-in ZIP member listing support to `tools/zip_implode.py`, so old

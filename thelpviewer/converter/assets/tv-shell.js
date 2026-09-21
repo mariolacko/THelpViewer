@@ -17,8 +17,11 @@ const {
     applyThemeAndSyncPalette,
     initializeTVTheme,
     TV_COMMANDS,
+    TV_HELP_CONTEXTS,
     TVMenuController,
+    TVHelpController,
     TVAboutDialog,
+    TVContextHelpDialog,
     TVPuzzleDialog,
     TVHanoiDialog,
     TVTronDialog,
@@ -37,7 +40,39 @@ const {
     DISABLED_TRACK_CHAR,
     THUMB_CHAR,
     highlightCodeExamples,
+    setElementHelpContext,
 } = TV;
+
+const {
+    hcSystemMenu,
+    hcContextHelp,
+    hcAbout,
+    hcSearch,
+    hcGames,
+    hcColors,
+    hcWidgetGallery,
+    hcMidiPlayer,
+    hcHelpViewer,
+    hcDialog,
+    hcCalendar,
+    hcAsciiTable,
+    hcCalculator,
+} = TV_HELP_CONTEXTS;
+
+const DIALOG_HELP_CONTEXTS = Object.freeze({
+    contexthelp: hcContextHelp,
+    about: hcAbout,
+    search: hcSearch,
+    colors: hcColors,
+    widgets: hcWidgetGallery,
+    midi: hcMidiPlayer,
+    calendar: hcCalendar,
+    ascii: hcAsciiTable,
+    calc: hcCalculator,
+    puzzle: hcGames,
+    hanoi: hcGames,
+    tron: hcGames,
+});
 
 class TVMenuBar extends TVMenuView {
     constructor(container, context) {
@@ -53,7 +88,7 @@ class TVMenuBar extends TVMenuView {
         switch (entry.type) {
             case "menu-root":
                 return [
-                    "<div class=\"tv-menu-root\" data-tv-menu-root>",
+                    `<div class="tv-menu-root" data-tv-menu-root data-tv-help-ctx="${hcSystemMenu}">`,
                     new TVButton({
                         dialog: false,
                         className: "tv-menu-item tv-menu-button",
@@ -113,6 +148,8 @@ class TVMenuBar extends TVMenuView {
                     ? { type: "button", "data-tv-theme-set": entry.theme }
                     : entry.type === "saver"
                         ? { type: "button", "data-tv-saver-start": entry.mode }
+                        : entry.type === "context-help"
+                            ? { type: "button", "data-tv-context-help": true }
                         : { type: "button", "data-tv-dialog-open": entry.dialog };
                 return new TVButton({
                     dialog: false,
@@ -152,6 +189,13 @@ class TVStatusLine extends TVWidget {
                 }).renderMarkup();
             case "index-link":
                 return `<a class="tv-status-item" href="${escapeHtml(this.context.indexHref)}">${renderHotkeyMarkup(entry.label || "~F1~ Index")}</a>`;
+            case "context-help":
+                return new TVButton({
+                    dialog: false,
+                    className: "tv-status-item",
+                    attrs: { type: "button", "data-tv-context-help": true },
+                    labelMarkup: renderHotkeyMarkup(entry.label || "~F1~ Help"),
+                }).renderMarkup();
             case "dialog":
                 return new TVButton({
                     dialog: false,
@@ -582,6 +626,7 @@ class TurboVisionMenus extends TVMenuController {
         super();
         this.desktop = document.querySelector(".tv-desktop") || document.body;
         this.dialogManager = dialogManager;
+        this.onHelp = null;
         this.onUnhandledKeyDown = (event) => this.onApplicationKeyDown(event);
         this.bindActions();
     }
@@ -592,6 +637,13 @@ class TurboVisionMenus extends TVMenuController {
         });
         document.querySelectorAll("[data-tv-theme-set]").forEach((element) => {
             element.addEventListener("click", (event) => this.onThemeSet(event, element.getAttribute("data-tv-theme-set") || "default"));
+        });
+        document.querySelectorAll("[data-tv-context-help]").forEach((element) => {
+            element.addEventListener("click", (event) => {
+                event.preventDefault();
+                this.closeMenus();
+                this.onHelp?.();
+            });
         });
     }
 
@@ -652,6 +704,8 @@ class TVApplication {
         this.menuBar = null;
         this.searchDialog = null;
         this.menus = null;
+        this.helpController = null;
+        this.contextHelpDialog = null;
         this.dialogManager = null;
         this.desktopView = null;
         this.screenSaver = null;
@@ -666,6 +720,7 @@ class TVApplication {
             if (!dialog) {
                 return null;
             }
+            setElementHelpContext(dialog.dialog, DIALOG_HELP_CONTEXTS[name] || hcDialog);
             return this.dialogManager.register(name, dialog);
         } catch (error) {
             this.errors.push({ name, error });
@@ -689,6 +744,7 @@ class TVApplication {
         const hostWindow = document.querySelector("[data-tv-window]");
         this.desktopView = new TVDesktop(desktop);
         this.dialogManager = this.desktopView.dialogManager;
+        setElementHelpContext(hostWindow, hcHelpViewer);
         this.scrollbars = Array.from(document.querySelectorAll("[data-tv-scroll-frame]"), (frame) => new TVScrollBar(frame));
         this.resizers = Array.from(document.querySelectorAll("[data-tv-window]"), (windowElement) => new TurboVisionWindowResizer(windowElement));
         const hostResizer = this.resizers.find((resizer) => resizer.windowElement === hostWindow);
@@ -724,6 +780,16 @@ class TVApplication {
         this.registerDialog("colors", () => new TVColorsDialog(desktop));
         this.registerDialog("widgets", () => new TVWidgetGalleryDialog(desktop));
         this.searchDialog = this.registerDialog("search", () => new TVSearchDialog(desktop));
+        this.contextHelpDialog = this.registerDialog(
+            "contexthelp",
+            () => new TVContextHelpDialog(desktop),
+        );
+        this.helpController = new TVHelpController({
+            getMenuController: () => this.menus,
+            getDialogManager: () => this.dialogManager,
+            onHelp: (helpCtx) => this.contextHelpDialog?.openContext(helpCtx),
+        });
+        this.menus.onHelp = () => this.helpController.request();
         if (this.searchDialog) {
             this.dialogManager.bindOpeners("[data-tv-search-open]", "search");
         }

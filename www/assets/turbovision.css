@@ -1244,6 +1244,12 @@ button.tv-status-item {
 .tv-doc-window .tv-grow-handle {
     color: var(--tv-owner-icon-active-fg);
 }
+.tv-window.is-window-inactive .tv-grow-handle,
+.tv-doc-window.is-window-inactive .tv-grow-handle {
+    color: var(--tv-current-frame);
+    cursor: default;
+    pointer-events: none;
+}
 .tv-doc-document {
     font-family: inherit;
     line-height: 1.3;
@@ -2709,6 +2715,56 @@ button.tv-status-item {
 .tv-find-status { left: 2ch; top: 5em; width: 31ch; height: 2em; overflow: hidden; }
 .tv-find-history-popup { left: 1ch; top: 1em; --tv-history-window-width: 32ch; }
 
+.tv-context-help-body {
+    overflow: hidden;
+}
+
+.tv-context-help-main {
+    position: relative;
+    width: 62ch;
+    height: 16em;
+    background: var(--tv-dialog-bg);
+    color: var(--tv-dialog-fg);
+}
+
+.tv-context-help-topic,
+.tv-context-help-text,
+.tv-context-help-close {
+    position: absolute;
+}
+
+.tv-context-help-topic {
+    left: 2ch;
+    top: 1em;
+    width: 58ch;
+    color: var(--tv-control-static-fg, var(--tv-dialog-fg));
+    font-weight: bold;
+    text-align: center;
+    white-space: pre;
+}
+
+.tv-context-help-text {
+    left: 2ch;
+    top: 3em;
+    width: 58ch;
+    height: 8em;
+    overflow: auto;
+    outline: none;
+    color: var(--tv-control-static-fg, var(--tv-dialog-fg));
+    white-space: pre-wrap;
+}
+
+.tv-context-help-close {
+    left: 25ch;
+    top: 13em;
+    width: 12ch;
+    height: 2em;
+}
+
+.tv-context-help-close .tv-dialog-button {
+    width: 12ch;
+}
+
 .tv-search-main {
     grid-template-rows: auto 1em minmax(0, 1fr);
     padding: 1ch;
@@ -3291,17 +3347,24 @@ button.tv-status-item {
 }
 
 .tv-file-open-history-button {
-    all: unset;
     position: absolute;
     z-index: 3;
+    display: grid;
+    grid-template-columns: repeat(3, 1ch);
     left: 30ch;
     top: 2em;
     width: 3ch;
     height: 1em;
+    margin: 0;
+    padding: 0;
+    border: 0;
     overflow: hidden;
+    appearance: none;
+    box-sizing: border-box;
     cursor: pointer;
     background: var(--tv-palette-dialog-history-button-bg);
     color: var(--tv-palette-dialog-history-button-fg);
+    font: inherit;
     line-height: 1;
     white-space: pre;
 }
@@ -3318,9 +3381,11 @@ button.tv-status-item {
 }
 
 .tv-file-open-history-button > span {
-    display: inline-block;
+    display: block;
     width: 1ch;
     height: 1em;
+    overflow: hidden;
+    line-height: 1;
 }
 
 .tv-file-open-history-arrow {

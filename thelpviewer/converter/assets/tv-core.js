@@ -213,6 +213,8 @@ const THEME_PRESETS = {
 const DEFAULT_UI_CONFIG = Object.freeze({
     menu: {
         popup: [
+            { type: "context-help", label: "~C~ontext Help" },
+            { type: "separator" },
             { type: "dialog", dialog: "about", label: "~A~bout" },
             { type: "dialog", dialog: "puzzle", label: "~P~uzzle" },
             { type: "dialog", dialog: "hanoi", label: "Tower of ~H~anoi" },
@@ -244,7 +246,7 @@ const DEFAULT_UI_CONFIG = Object.freeze({
     },
     status: [
         { type: "back", label: "~B~ack" },
-        { type: "index-link", label: "~F1~ Index" },
+        { type: "context-help", label: "~F1~ Help" },
         { type: "dialog", dialog: "search", label: "~F3~ Search" },
         { type: "hint" },
         { type: "link", href: "https://github.com/mariolacko/THelpViewer", label: "GitHub" },
@@ -421,6 +423,63 @@ const TV_COMMANDS = Object.freeze({
     CANCEL: "cancel",
     DEFAULT: "default",
 });
+const TV_HELP_CONTEXTS = Object.freeze({
+    hcNoContext: 0,
+    hcDragging: 1,
+    hcApplication: 1000,
+    hcSystemMenu: 1100,
+    hcHelpFiles: 1200,
+    hcDocuments: 1300,
+    hcSearch: 1400,
+    hcGames: 1500,
+    hcWindows: 1600,
+    hcContextHelp: 1700,
+    hcAbout: 2000,
+    hcFileOpen: 2010,
+    hcChangeDirectory: 2020,
+    hcFind: 2030,
+    hcColors: 2040,
+    hcWidgetGallery: 2050,
+    hcMidiPlayer: 2060,
+    hcHelpViewer: 2070,
+    hcDocumentViewer: 2080,
+    hcDialog: 2090,
+    hcCalendar: 2100,
+    hcAsciiTable: 2110,
+    hcCalculator: 2120,
+    hcScreenSaver: 2130,
+});
+const {
+    hcNoContext,
+    hcApplication,
+} = TV_HELP_CONTEXTS;
+
+function normalizeHelpContext(value, fallback = hcNoContext) {
+    const context = Number(value);
+    return Number.isInteger(context) && context >= hcNoContext ? context : fallback;
+}
+
+function elementHelpContext(element) {
+    let current = element && typeof element.hasAttribute === "function" ? element : null;
+    while (current) {
+        if (current.hasAttribute("data-tv-help-ctx")) {
+            const context = normalizeHelpContext(current.getAttribute("data-tv-help-ctx"));
+            if (context !== hcNoContext) { return context; }
+        }
+        current = current.parentElement;
+    }
+    return hcNoContext;
+}
+
+function setElementHelpContext(element, helpCtx) {
+    if (!element) { return; }
+    const context = normalizeHelpContext(helpCtx);
+    if (context === hcNoContext) {
+        element.removeAttribute?.("data-tv-help-ctx");
+    } else if (typeof element.setAttribute === "function") {
+        element.setAttribute("data-tv-help-ctx", String(context));
+    }
+}
 
 function colorItemKey(groupName, itemName) {
     return `${groupName}/${itemName}`;
@@ -880,7 +939,9 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
         }
         bottomFills.forEach((element) => setBorderFill(element, glyphs.horizontal));
         if (resizeHandle) {
-            resizeHandle.textContent = `${glyphs.horizontal}${glyphs.bottomRight}`;
+            // Turbo Vision 2.0 always draws the grow icon as a single-line
+            // horizontal stroke plus the lower-right corner (TFrame::dragIcon).
+            resizeHandle.textContent = "─┘";
         }
     }
 
@@ -1058,8 +1119,10 @@ function attrsToString(attrs = {}) {
 }
 
 class TVWidget {
-    constructor(root = null) {
+    constructor(root = null, { helpCtx = hcNoContext } = {}) {
         this.root = root;
+        this.owner = null;
+        this.helpCtx = normalizeHelpContext(helpCtx);
     }
 
     /** Build inline CSS for character-cell bounds (x, y, w, h). */
@@ -1099,6 +1162,16 @@ class TVWidget {
             this.root.innerHTML = markup;
         }
         return this.root;
+    }
+
+    setHelpCtx(helpCtx) {
+        this.helpCtx = normalizeHelpContext(helpCtx);
+        setElementHelpContext(this.root, this.helpCtx);
+        return this;
+    }
+
+    getHelpCtx() {
+        return elementHelpContext(this.root) || this.helpCtx;
     }
 }
 
@@ -1232,9 +1305,10 @@ class TVGroup extends TVWidget {
         attrs = {},
         children = [],
         html = "",
+        helpCtx = hcNoContext,
         x, y, w, h,
     } = {}) {
-        super();
+        super(null, { helpCtx });
         this.tag = tag;
         this.className = className;
         this.columns = columns;
@@ -1244,8 +1318,15 @@ class TVGroup extends TVWidget {
         this.padding = padding;
         this.width = width;
         this.height = height;
-        this.attrs = attrs;
+        this.attrs = { ...attrs };
+        if (this.helpCtx !== hcNoContext) {
+            this.attrs["data-tv-help-ctx"] = this.helpCtx;
+        }
         this.children = children;
+        this.current = null;
+        this.children.forEach((child) => {
+            if (child instanceof TVWidget) { child.owner = this; }
+        });
         this.html = html;
         this.x = x; this.y = y; this.w = w; this.h = h;
     }
@@ -1291,6 +1372,18 @@ class TVGroup extends TVWidget {
         const attrString = attrsToString(this.attrs);
         const attrs = attrString ? ` ${attrString}` : "";
         return `<${this.tag} class="${escapeHtml(cls)}"${styleAttr}${attrs}>${this.renderChildren()}</${this.tag}>`;
+    }
+
+    setCurrent(child) {
+        this.current = this.children.includes(child) ? child : null;
+        return this.current;
+    }
+
+    getHelpCtx() {
+        const currentContext = this.current && typeof this.current.getHelpCtx === "function"
+            ? this.current.getHelpCtx()
+            : hcNoContext;
+        return currentContext || super.getHelpCtx();
     }
 }
 
@@ -2484,6 +2577,12 @@ class TVMenuController {
         this.root.querySelectorAll("[data-tv-submenu-toggle]").forEach((toggle) => this.bindSubmenu(toggle));
     }
 
+    getHelpCtx() {
+        const selected = this.root.querySelector(".tv-menu-popup-item.is-menu-selected");
+        const currentRoot = this.activeRoot?.querySelector("[data-tv-menu-toggle]") || this.activeRoot;
+        return elementHelpContext(selected) || elementHelpContext(currentRoot) || hcNoContext;
+    }
+
     bindMenuRoot(menuRoot) {
         const toggle = menuRoot.querySelector("[data-tv-menu-toggle]");
         if (!toggle || toggle.dataset.tvKeyboardMenuBound === "1") {
@@ -3145,13 +3244,13 @@ class TVWindow extends TVGroup {
         const windowAttrs = attrsToString({ "data-tv-window": true, ...attrs });
         const styleAttr = style ? ` style="${escapeHtml(style)}"` : "";
         const closeAttrString = attrsToString({
-            href: "#",
+            type: "button",
             "data-tv-close-button": true,
             "aria-label": "Close window",
             ...closeAttrs,
         });
         const zoomAttrString = attrsToString({
-            href: "#",
+            type: "button",
             "aria-label": "Zoom window",
             ...zoomAttrs,
         });
@@ -3161,11 +3260,11 @@ class TVWindow extends TVGroup {
             `<div class="tv-border-row tv-border-top" data-tv-move-handle>`,
             `<span class="tv-border-corner tv-border-corner-tl" data-tv-frame-corner="tl" aria-hidden="true">╔</span>`,
             `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            `<a class="tv-close-control" ${closeAttrString}>[<span class="tv-close-glyph" data-tv-close-glyph>■</span>]</a>`,
+            `<button class="tv-close-control" ${closeAttrString}>[<span class="tv-close-glyph" data-tv-close-glyph>■</span>]</button>`,
             `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
             `<div class="tv-window-caption">${escapeHtml(caption)}</div>`,
             `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            `<a class="tv-zoom-control" ${zoomAttrString}>[<span class="tv-zoom-glyph" data-tv-zoom-glyph>↑</span>]</a>`,
+            `<button class="tv-zoom-control" ${zoomAttrString}>[<span class="tv-zoom-glyph" data-tv-zoom-glyph>↑</span>]</button>`,
             `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
             `<span class="tv-border-corner tv-border-corner-tr" data-tv-frame-corner="tr" aria-hidden="true">╗</span>`,
             `</div>`,
@@ -3667,6 +3766,18 @@ class TVDialogManager {
         });
     }
 
+    getHelpCtx() {
+        const target = this.activeTarget;
+        if (target === HOST_WINDOW_TOKEN) {
+            return elementHelpContext(this.hostWindow);
+        }
+        const dialog = this.dialogs.get(target);
+        if (dialog?.dialog && dialog.isOpen()) {
+            return elementHelpContext(dialog.dialog);
+        }
+        return elementHelpContext(this.windows.get(target));
+    }
+
     bringToFront(name) {
         const dialog = this.get(name);
         if (!dialog || !dialog.isOpen()) {
@@ -3808,6 +3919,62 @@ class TVDialogManager {
                 this.open(name, { exclusive });
             });
         });
+    }
+}
+
+function resolveHelpContext({ root = document, menuController = null, dialogManager = null } = {}) {
+    const menuContext = menuController?.getHelpCtx?.() || hcNoContext;
+    if (menuContext !== hcNoContext) { return menuContext; }
+    const focusContext = elementHelpContext(root.activeElement || document.activeElement);
+    if (focusContext !== hcNoContext) { return focusContext; }
+    const managedContext = dialogManager?.getHelpCtx?.() || hcNoContext;
+    if (managedContext !== hcNoContext) { return managedContext; }
+    const activeContext = elementHelpContext(root.querySelector?.(".is-window-active[data-tv-help-ctx]"));
+    if (activeContext !== hcNoContext) { return activeContext; }
+    return elementHelpContext(document.body) || hcApplication;
+}
+
+class TVHelpController {
+    constructor({
+        root = document,
+        getMenuController = () => null,
+        getDialogManager = () => null,
+        onHelp = null,
+    } = {}) {
+        this.root = root;
+        this.getMenuController = getMenuController;
+        this.getDialogManager = getDialogManager;
+        this.onHelp = onHelp;
+        this.onKeyDown = (event) => {
+            if (
+                event.key !== "F1" || event.altKey || event.ctrlKey
+                || event.metaKey || event.shiftKey || event.defaultPrevented
+            ) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            this.request();
+        };
+        this.root.addEventListener("keydown", this.onKeyDown, true);
+    }
+
+    currentContext() {
+        return resolveHelpContext({
+            root: this.root,
+            menuController: this.getMenuController(),
+            dialogManager: this.getDialogManager(),
+        });
+    }
+
+    request(helpCtx = null) {
+        const context = helpCtx == null ? this.currentContext() : normalizeHelpContext(helpCtx, hcApplication);
+        this.onHelp?.(context);
+        return context;
+    }
+
+    destroy() {
+        this.root.removeEventListener("keydown", this.onKeyDown, true);
     }
 }
 
@@ -4377,6 +4544,7 @@ Object.assign(TV, {
     THEME_PRESETS,
     DEFAULT_UI_CONFIG,
     TV_COMMANDS,
+    TV_HELP_CONTEXTS,
     COLOR_GROUPS,
     buildDefaultColorPalette,
     buildPaletteFromCurrentStyle,
@@ -4402,6 +4570,10 @@ Object.assign(TV, {
     bindCloseButtons,
     normalizeSearchText,
     updateWindowFrameState,
+    normalizeHelpContext,
+    elementHelpContext,
+    setElementHelpContext,
+    resolveHelpContext,
     resetMenuPopupLayout,
     fitMenuPopupToViewport,
     TVAppContext,
@@ -4423,6 +4595,7 @@ Object.assign(TV, {
     TVMenuView,
     TVMenuBox,
     TVMenuController,
+    TVHelpController,
     TVButtonStrip,
     TVCluster,
     TVCheckBoxes,
@@ -4438,6 +4611,7 @@ Object.assign(TV, {
     TVScrollBar,
     TurboVisionScrollbar,
 });
+Object.assign(TV, TV_HELP_CONTEXTS);
 TV.getActiveThemePreset = () => activeThemePreset;
 TV.getActiveColorPalette = () => activeColorPalette;
 TV.setActiveColorPalette = (value) => { activeColorPalette = value; };

@@ -34,6 +34,9 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVMenuView extends TVWidget" in source
     assert "class TVMenuBox extends TVMenuView" in source
     assert "class TVDesktop extends TVGroup" in source
+    assert '<button class="tv-close-control"' in source
+    assert '<button class="tv-zoom-control"' in source
+    assert '<a class="tv-close-control"' not in source
     assert source.count("class TVScrollBar") == 1
     assert source.count("startRepeat(event, axis, direction)") == 1
     assert 'this.scrollbarWidget = this.root ? new TVScrollBar(this.root) : null' in source
@@ -49,6 +52,8 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVHistoryWindow extends TVWindow" in dialogs
     assert "static renderMarkup({ popupClass" in dialogs
     assert "handleEscape(event)" in dialogs
+    assert "event.detail" not in dialogs
+    assert "this.ignoreNextClick = true" in dialogs
     assert dialogs.count("TVHistoryWindow.renderMarkup({") == 3
     assert "new TVFileList(this.query" in dialogs
     assert "new TVHistoryWindow({" in dialogs

@@ -8,8 +8,8 @@ THelpViewer uses a modular JavaScript framework inspired by Borland's TurboVisio
 | File | Purpose |
 |------|---------|
 | `tv-core.js` | Core widget classes, dialog manager, theme engine, utility functions |
-| `tv-dialogs.js` | Standard dialogs (About, Search, Calculator, Calendar, Colors, ASCII Table, MIDI Player) |
-| `tv-games.js` | Game dialogs and rules (Puzzle, Tetris, Minesweeper, BreakOut, Sokoban, Lines, Reversi, Ludo, Mastermind, Snake) |
+| `tv-dialogs.js` | Standard dialogs (Context Help, About, File Open, Change Directory, Find/Search, Calculator, Calendar, Colors, ASCII Table, MIDI Player) |
+| `tv-games.js` | Game dialogs and rules (Puzzle, Tetris, Minesweeper, BreakOut, Sokoban, Lines, Reversi, Ludo, Mastermind, Snake, Tron, Tower of Hanoi) |
 | `tv-screensaver.js` | Screen saver base class and animated modes |
 | `tv-highlight.js` | Pascal, C and ASM syntax highlighting |
 | `tv-shell.js` | Menu bar, status line, window resizer, application bootstrap |
@@ -29,11 +29,15 @@ Core widget hierarchy and infrastructure.
 ### Widget Base Classes
 
 - **TVWidget** — Base for all UI components. `constructor(root=null)`.
+  `setHelpCtx()` and `getHelpCtx()` attach or resolve a Turbo Vision-style
+  context identifier.
 - **TVStaticText** — Renders text or HTML. `constructor({tag, text, html, className, attrs})`.
 - **TVLabel** — Text label with hotkey markup. With `forId` it emits a native
   `<label for="…">`; otherwise it emits a presentational `<span>`.
 - **TVInputLine** — `<input>` element. `constructor({className, attrs})`.
 - **TVGroup** — Container with children. `constructor({tag, className, attrs, children, html})`.
+  `setCurrent(child)` makes `getHelpCtx()` inherit from the current child,
+  matching the relevant part of `TGroup::getHelpCtx()`.
 - **TVListViewer** — Static list. `constructor({tag, className, attrs, items})`.
 - **TVListBox** — Interactive selectable list. `setItems(items, index)`,
   `select(index)`, `bind({onSelect, onActivate})`; click selects and
@@ -94,6 +98,9 @@ Header, footer and both row-side glyphs inherit the same current frame color.
   zoom cells remain in the title-row grid but become non-interactive
   single-line frame segments. This preserves the centered caption and both
   frame corners while matching the inactive `TFrame` drawing.
+  Standard close/zoom controls are semantic buttons for consistent Safari and
+  Chromium activation. The grow control always draws Turbo Vision 2.0's
+  source-defined single-line `─┘` icon.
 - **TVDialog** — `TVWindow` subclass with a managed overlay; it may be modal or
   non-modal.
   - `open()`, `close()`, `destroy()`, `center()`, `isOpen()`, `isActive()`
@@ -137,10 +144,31 @@ Manages dialog lifecycle, z-ordering, and active state.
 - `canDispatchCommand(command)` — Report whether the active target accepts a command
 - `applyAllZIndices()` — Recalculate z-index stack
 - `applyActiveStates()` — Update `is-window-active` / `is-window-inactive` classes
+- `getHelpCtx()` — Return the active dialog/window/host context
 
 URL-state restoration keeps every open modal dialog above ordinary windows
 and makes the top modal active, even when an older serialized stack recorded
 an invalid background position for it.
+
+### Context Help
+
+`TV_HELP_CONTEXTS` exports the application's `hc...` constants, including
+`hcApplication`, menu contexts, HELP/Docs viewer contexts and individual
+standard-dialog contexts. The constants are also exposed directly on
+`THelpViewerTV` for Turbo Vision-style use.
+
+- `elementHelpContext(element)` resolves `data-tv-help-ctx` through DOM owners.
+- `TVMenuController.getHelpCtx()` returns the selected menu/root context.
+- `resolveHelpContext()` prioritizes an open menu, focused view, active managed
+  target and finally `hcApplication`.
+- `TVHelpController` captures plain F1 and sends the resolved context to the
+  application callback.
+- `TVContextHelpDialog.openContext(hc)` displays THelpViewer's own topic for
+  the active menu, HELP/Docs window, dialog, tool or game.
+
+The bundle and generated-page applications both register this controller.
+Their Help menu and `F1 Help` status command use the same resolution path as
+the keyboard.
 
 ### TVDesktop
 
@@ -277,8 +305,10 @@ The selectors support arrow-key navigation.
 - `TVHistoryWindow` renders the source-compatible framed popup shared by File
   Open, Change Directory and Find. Its default geometry is 30×8 character
   cells for the 28-cell File Open input, with no padding outside the frame. It
-  also owns the popup visibility, `aria-expanded` state, Escape handling and
-  focus return to the History button.
+  also owns the popup visibility, `aria-expanded` state, Escape handling,
+  outside-click dismissal and focus return to the History button. Pointer
+  activation happens on mouse-down like the original `THistory::handleEvent`;
+  keyboard activation remains a native button click.
 - The layout follows Turbo Vision 2.0 `TFileDialog`: one unframed, two-column
   `TFileList`, a horizontal scrollbar, Name input with a three-cell History
   control, Open/Cancel buttons and the two-line `TFileInfoPane` at the bottom.

@@ -38,7 +38,108 @@ const {
     DAYS_IN_MONTH,
     isLeapYear,
     dayOfWeek,
+    TV_HELP_CONTEXTS,
+    normalizeHelpContext,
+    setElementHelpContext,
 } = TV;
+
+const {
+    hcApplication,
+    hcSystemMenu,
+    hcHelpFiles,
+    hcDocuments,
+    hcSearch,
+    hcGames,
+    hcWindows,
+    hcContextHelp,
+    hcAbout,
+    hcFileOpen,
+    hcChangeDirectory,
+    hcFind,
+    hcColors,
+    hcWidgetGallery,
+    hcMidiPlayer,
+    hcHelpViewer,
+    hcDocumentViewer,
+    hcDialog,
+    hcCalendar,
+    hcAsciiTable,
+    hcCalculator,
+    hcScreenSaver,
+} = TV_HELP_CONTEXTS;
+
+const TV_CONTEXT_HELP_TOPICS = Object.freeze({
+    [hcApplication]: { title: "THelpViewer", text: "Use the menu bar to open HELP files, documentation, tools and games.\n\nF10 activates the menu bar. F1 opens help for the current view. F6 and Shift-F6 cycle windows." },
+    [hcSystemMenu]: { title: "System menu", text: "The system menu contains About, utilities, Colors, Widget Gallery, screen savers and theme selection." },
+    [hcHelpFiles]: { title: "Help Files", text: "Open installs a HELP or Docs file. Catalog submenus open a source directly. The viewer preserves links between related files when the target exists." },
+    [hcDocuments]: { title: "Documents", text: "Documentation opens in a read-only Editor-style window. Use Ctrl-F to find text and Ctrl-L to find the next occurrence." },
+    [hcSearch]: { title: "Search", text: "Find searches the active HELP or Docs window. Find Again repeats its query. Search Topics searches the current help bundle index." },
+    [hcGames]: { title: "Games", text: "Games share Turbo Vision dialogs, keyboard focus, inactive-window pause policies and a ten-entry Hall of Fame." },
+    [hcWindows]: { title: "Windows", text: "Tile, Cascade and Window List arrange managed windows. F5 zooms, F6 selects the next window and Alt-F3 closes the active target." },
+    [hcContextHelp]: { title: "Context Help", text: "This is THelpViewer's own context-sensitive help. Each view and menu item carries an hc... identifier, following Turbo Vision's helpCtx model." },
+    [hcAbout]: { title: "About", text: "Shows the application version and authors. The version is read from the running package metadata." },
+    [hcFileOpen]: { title: "Open a File", text: "Choose a HELP or Docs file from the two-column list. The down-arrow opens recent files; press it again or Escape to close the history." },
+    [hcChangeDirectory]: { title: "Change Directory", text: "Select a virtual HELP/DOCS directory. Chdir applies it to Open a File, Revert restores the initial path and the arrow opens directory history." },
+    [hcFind]: { title: "Find", text: "Enter text to search in the active HELP or Docs window. The arrow opens previous queries." },
+    [hcColors]: { title: "Colors", text: "Choose a group and item, then edit its DOS foreground/background attribute. Default restores one item; Reset All restores the complete palette." },
+    [hcWidgetGallery]: { title: "Widget Gallery", text: "Exercises shared labels, inputs, lists, clusters, scrollbars, buttons, static text, terminal and message-box components." },
+    [hcMidiPlayer]: { title: "CD/MIDI Player", text: "The compact view contains transport and track selection. More reveals advanced sources and resizes the shared dialog frame." },
+    [hcHelpViewer]: { title: "HELP viewer", text: "Links open topics or external companion HELP files. Use Back, Index, Contents and Search from the status line or menus." },
+    [hcDocumentViewer]: { title: "Document viewer", text: "Markdown is displayed with the read-only Editor palette. The lower-left indicator reports the current line and column." },
+    [hcDialog]: { title: "Dialog", text: "Tab and Shift-Tab move focus. Enter activates the default button and Escape closes the dialog unless the control uses Escape itself." },
+    [hcCalendar]: { title: "Calendar", text: "Browse months and years with the arrow controls. Date calculations use Gregorian leap-year rules." },
+    [hcAsciiTable]: { title: "ASCII Table", text: "Shows character codes and glyphs using the configured DOS code page presentation." },
+    [hcCalculator]: { title: "Calculator", text: "Use number and operation buttons or the keyboard. Escape is reserved by the calculator and does not close it." },
+    [hcScreenSaver]: { title: "Screen saver", text: "Choose a mode from the system menu. Input stops the saver and restores the previously focused control." },
+});
+
+class TVContextHelpDialog extends TVDialog {
+    constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const closeButton = new TVButton({
+            className: "is-default",
+            attrs: { "data-tv-context-help-close": true },
+            label: "~C~lose",
+        });
+        super({
+            desktop,
+            ariaLabel: "Context Help",
+            title: "Help",
+            windowClass: "tv-context-help-window",
+            bodyClass: "tv-context-help-body",
+            closeAttrs: { "data-tv-context-help-frame-close": true, "aria-label": "Close context help" },
+            bodyMarkup: `
+                <div class="tv-context-help-main">
+                    <div class="tv-context-help-topic" data-tv-context-help-topic></div>
+                    <div class="tv-context-help-text" data-tv-context-help-text tabindex="0"></div>
+                    <div class="tv-context-help-close">${closeButton.renderMarkup()}</div>
+                </div>
+            `,
+            footerMarkup: TVDialog.footerMarkup(),
+            width: "64ch",
+            height: "18em",
+            modal: true,
+        });
+        this.topicElement = this.query("[data-tv-context-help-topic]");
+        this.textElement = this.query("[data-tv-context-help-text]");
+        this.context = hcApplication;
+        setElementHelpContext(this.dialog, hcContextHelp);
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+        this.query("[data-tv-context-help-close]")?.addEventListener("click", () => this.close());
+    }
+
+    openContext(helpCtx = hcApplication) {
+        this.context = normalizeHelpContext(helpCtx, hcApplication);
+        const topic = TV_CONTEXT_HELP_TOPICS[this.context] || TV_CONTEXT_HELP_TOPICS[hcApplication];
+        if (this.topicElement) { this.topicElement.textContent = topic.title; }
+        if (this.textElement) {
+            this.textElement.textContent = topic.text;
+            this.textElement.scrollTop = 0;
+        }
+        super.open();
+        this.textElement?.focus();
+    }
+}
 
 class TVAboutDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
@@ -392,7 +493,30 @@ class TVHistoryWindow extends TVWindow {
         this.viewer = viewer;
         this.items = items;
         this.onSelect = onSelect;
-        this.button?.addEventListener("click", () => this.toggle());
+        this.ignoreNextClick = false;
+        this.button?.addEventListener("mousedown", (event) => {
+            if (event.button !== 0) { return; }
+            event.preventDefault();
+            this.ignoreNextClick = true;
+            this.toggle();
+        });
+        this.button?.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") { this.ignoreNextClick = false; }
+        });
+        this.button?.addEventListener("click", () => {
+            // Pointer activation is handled on mousedown, like Turbo Vision's
+            // evMouseDown path. A click without mousedown is keyboard input.
+            if (this.ignoreNextClick) {
+                this.ignoreNextClick = false;
+                return;
+            }
+            this.toggle();
+        });
+        document.addEventListener("mousedown", (event) => {
+            if (!this.isOpen()) { return; }
+            if (this.button?.contains(event.target) || this.popup?.contains(event.target)) { return; }
+            this.hide();
+        });
         this.viewer?.bind({
             onSelect: (item) => this.onSelect?.(item, false),
             onActivate: (item) => this.onSelect?.(item, true),
@@ -3644,6 +3768,8 @@ class TVSearchDialog extends TVDialog {
 
 
 Object.assign(TV, {
+    TV_CONTEXT_HELP_TOPICS,
+    TVContextHelpDialog,
     TVAboutDialog,
     TVWidgetGalleryDialog,
     TVHistory,
