@@ -350,12 +350,19 @@ also suspends the owning game until the prompt is destroyed.
 | `TVReversiDialog` | Reversi vs AI | 8×8 | Click to place, N new game |
 | `TVLudoDialog` | Ludo | 11×11 path map | Roll, click legal piece |
 | `TVMastermindDialog` | Mastermind | 4 pegs, 6 colors, 10 turns | 1–6 choose color, ←→ select peg, Enter/G guess, N new |
+| `TVTronDialog` | Tron Light Cycles | 30×18 | P1 W/A/S/D, P2 arrows, P pause, N new round |
+| `TVHanoiDialog` | Tower of Hanoi | 3 towers, 5 disks | ←→/1–3 focus, Enter/Space select or move, drag, U undo, N new |
 | `TVSnakeDialog` | Snake | 28×18 | ←→↑↓ move, Enter restart |
 
-All ten games use the same persistent, sorted ten-entry Hall of Fame. The
+All twelve games use the same persistent, sorted ten-entry Hall of Fame. The
 pure `MastermindGame` rule class correctly handles repeated colors when
 calculating exact and misplaced pegs. Its 64-column dialog reserves an inset around the
 board and keeps all color, action and status controls inside the client area.
+`TronGame` applies both queued directions before resolving a tick, including
+same-cell collisions, while `TVTronDialog` pauses its timer whenever another
+window is active. `HanoiGame` owns legal moves and reversible move history;
+`TVHanoiDialog` exposes the same actions through focus, keyboard, click and
+drag-and-drop.
 
 ### Tetris Specifics
 
@@ -430,7 +437,7 @@ Single-page application for browsing help file bundles.
 - `_openDocWindow(filename, markdown)` — Opens rendered Markdown in a doc window (z-index 5, above help windows but below menu bar)
 - `_registerDialog(name, factory)` — Creates and registers a dialog with the dialog manager
 - Registered dialogs include About, File Open, Change Directory, Find, topic
-  Search, the utility dialogs and all ten games including Mastermind.
+  Search, the utility dialogs and all twelve games including Tron and Hanoi.
 - Find targets the currently active HELP or Docs window through `TVEditor`;
   HELP viewports receive a lifecycle-managed read-only adapter only when first
   searched.

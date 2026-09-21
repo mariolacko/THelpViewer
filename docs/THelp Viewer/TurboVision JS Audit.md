@@ -267,6 +267,12 @@ compatibility with old Turbo Vision applications.
     Escape handling and focus restoration; File Open, Change Directory and
     Find reset it on every open. Mastermind was widened to 64 columns with a
     60-column inset client layout.
+35. **The two next planned games were absent.** **Resolved in Phase 7.11:**
+    `TronGame` resolves both riders from one tick snapshot and its dialog
+    pauses on inactive windows; `HanoiGame` owns legal moves, completion and
+    undo history while its dialog supports roving focus, keyboard, click and
+    drag-and-drop. Both use the shared managed Hall of Fame and are registered
+    in bundle and standalone applications.
 
 ## Component assessment
 
@@ -282,7 +288,7 @@ compatibility with old Turbo Vision applications.
 | CheckBoxes/RadioButtons/MultiCheckBoxes | Shared `TVCluster` hierarchy with native or multistate behaviour and DOS-style rendering |
 | MessageBox | Hardened and tested; application adoption remains |
 | Editor/Terminal/Outline | Active-window Find, read-only editor with indicator, bounded terminal and reusable hierarchical outline are present |
-| Games | Ten playable games with shared top-ten Hall of Fame, focus, timer and keyboard policy |
+| Games | Twelve playable games with shared top-ten Hall of Fame, focus, timer and keyboard policy |
 | Screen savers | Shared idle start, resize lifecycle and focus restoration complete |
 | Syntax highlighter | Pascal, C and ASM detection is scoped per code block |
 
@@ -367,8 +373,6 @@ not be copied merely for name parity.
    without changing converter or UHF rendering semantics.
 3. Add reusable `TVParamText` and validators when a real editable dialog needs
    them; avoid unused name-parity infrastructure.
-4. Add Tron Light Cycles, followed by Tower of Hanoi, using the established
-   inactive-window and Hall-of-Fame policies.
 
 ### Proposed new dialogs and games
 
@@ -387,6 +391,10 @@ Completed additions:
    Directory.
 7. **Mastermind** — compact keyboard/pointer game with duplicate-color scoring
    and the shared Hall of Fame.
+8. **Tron Light Cycles** — simultaneous two-player tick resolution, explicit
+   and inactive-window pause, keyboard controls and Hall of Fame.
+9. **Tower of Hanoi** — focused towers, click/drag/keyboard moves, visible move
+   history, undo and Hall of Fame.
 
 Recommended dialogs, in order:
 
@@ -394,10 +402,7 @@ Recommended dialogs, in order:
    editable document support exists.
 2. **Go To Line** — a small validator-backed Editor dialog.
 
-Recommended games remain:
-
-1. **Tron Light Cycles** — timer, simultaneous input and inactive-window pause.
-2. **Tower of Hanoi** — focus, drag/keyboard actions and move history.
+No previously recommended game remains unimplemented.
 
 ## Resolution order
 
@@ -546,3 +551,8 @@ Recommended games remain:
   consolidated the complete History popup lifecycle in `TVHistoryWindow`, and
   widened Mastermind. Browser coverage now checks computed visibility and both
   directions of the History toggle for File Open, Change Directory and Find.
+- [x] Phase 7.11: added pure Tron and Hanoi rule models, their Turbo
+  Vision-style dialogs, all input/lifecycle policies and shared Hall of Fame
+  integration. Unit tests cover simultaneous collision and reversible Hanoi
+  rules; Docker Chrome covers rendering, focus, keyboard, drag and inactive
+  pause/resume.
