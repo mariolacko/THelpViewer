@@ -55,7 +55,6 @@ const {
     THUMB_CHAR,
     highlightCodeExamples,
     DOS_COLORS,
-    setElementHelpContext,
 } = TV;
 
 const {
@@ -66,58 +65,9 @@ const {
     hcGames,
     hcWindows,
     hcContextHelp,
-    hcAbout,
-    hcFileOpen,
-    hcChangeDirectory,
-    hcFind,
-    hcColors,
-    hcWidgetGallery,
-    hcMidiPlayer,
     hcHelpViewer,
     hcDocumentViewer,
-    hcDialog,
-    hcCalendar,
-    hcAsciiTable,
-    hcCalculator,
-    hcPuzzle,
-    hcTetris,
-    hcMines,
-    hcBreakOut,
-    hcSokoban,
-    hcLines,
-    hcReversi,
-    hcLudo,
-    hcMastermind,
-    hcSnake,
-    hcHanoi,
-    hcTron,
 } = TV_HELP_CONTEXTS;
-
-const DIALOG_HELP_CONTEXTS = Object.freeze({
-    about: hcAbout,
-    calendar: hcCalendar,
-    ascii: hcAsciiTable,
-    calc: hcCalculator,
-    midi: hcMidiPlayer,
-    colors: hcColors,
-    widgets: hcWidgetGallery,
-    fileopen: hcFileOpen,
-    chdir: hcChangeDirectory,
-    find: hcFind,
-    search: hcSearch,
-    puzzle: hcPuzzle,
-    tetris: hcTetris,
-    mines: hcMines,
-    breakout: hcBreakOut,
-    sokoban: hcSokoban,
-    lines: hcLines,
-    reversi: hcReversi,
-    ludo: hcLudo,
-    mastermind: hcMastermind,
-    snake: hcSnake,
-    hanoi: hcHanoi,
-    tron: hcTron,
-});
 
 // ── Catalog & data cache ────────────────────────────────────────────
 
@@ -1830,6 +1780,7 @@ function renderBundleContents(bundle) {
             rootClass: "tv-contents-outline",
             rootAttrs: { "data-tv-contents-outline": true, "data-tv-outline": true },
             viewportClass: "tv-contents-outline-viewport",
+            scrollbar: false,
         }),
         `</div>`,
         `</div>`,
@@ -2302,11 +2253,16 @@ class BundleWindowManager {
                     : label;
             },
         });
+        outline.setScrollViewport(
+            windowEl.querySelector(".tv-frame > .tv-scroll-shell > .tv-viewport"),
+            (windowEl._tvScrollbars || [])[0] || null,
+        );
         outline.setTree(withKeys(bundle.contents), null, { expandAll: true });
         outline.bind({
             onActivate: () => outline.selectedElement()?.querySelector("a")?.click(),
         });
         windowEl._tvOutline = outline;
+        (windowEl._tvScrollbars || []).forEach((scrollbar) => scrollbar.refresh());
     }
 
     _destroyWindowWidgets(windowEl) {
@@ -3624,7 +3580,6 @@ class TVBundleApp {
         try {
             const dialog = factory();
             if (dialog) {
-                setElementHelpContext(dialog.dialog, DIALOG_HELP_CONTEXTS[name] || hcDialog);
                 this.dialogManager.register(name, dialog);
                 return dialog;
             }

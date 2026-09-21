@@ -128,6 +128,9 @@ Header, footer and both row-side glyphs inherit the same current frame color.
     document-level key handlers. The `palette` option selects the owner palette
     (`dialog`, `viewer`, `calendar` or `ascii`) while the shared frame renderer
     keeps identical active/passive/drag semantics.
+  - The `helpCtx` constructor option belongs to the dialog itself and is
+    written to both its window and overlay roots. Application registration no
+    longer maps dialog names to contexts.
 
 ### TVDialogManager
 
@@ -169,6 +172,8 @@ exposed directly on `THelpViewerTV` for Turbo Vision-style use.
   target and finally `hcApplication`.
 - `TVHelpController` captures plain F1 and sends the resolved context to the
   application callback.
+- Every concrete standard/game dialog passes its own `hc...` value to
+  `TVDialog`; registration is deliberately context-agnostic.
 - The bundle application loads `assets/tv-context-help.json`, a native UHF 2.0
   `THELPVIEWER.HLP` bundle, and passes the resolved `hc...` value directly to
   `BundleWindowManager.showTopic()`.
@@ -264,6 +269,13 @@ frame state. Common list and scrollbar controls inherit from that owner.
 
 Standard application dialogs.
 
+Dialog client areas are composed from shared TVision JS widgets. Context Help,
+Open a File, Change Directory and Find are the first completed migration set:
+their labels, inputs, buttons, status text, lists/outlines and History controls
+are `TVGroup` child objects or shared widget renderers rather than handwritten
+dialog-specific HTML. CSS remains responsible for character-cell geometry and
+palette presentation, not control identity or behaviour.
+
 ### Dialogs
 
 | Class | Purpose |
@@ -326,6 +338,8 @@ The selectors support arrow-key navigation.
   keyboard activation remains a native button click. An empty history remains
   an active control and opens the same closable empty window; it is not
   disabled based on its current item count.
+- `TVHistoryWindow.triggerMarkup()` is the single three-cell History-button
+  composition used by File Open, Change Directory and Find.
 - The source `THistory::icon` value `\xDE~\x19~\xDD` is rendered as two
   explicit half-cell CSS fills around the arrow. This preserves the original
   History sides/button palette mapping without relying on browser rendering of

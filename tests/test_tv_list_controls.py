@@ -41,7 +41,8 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert '<a class="tv-close-control"' not in source
     assert source.count("class TVScrollBar") == 1
     assert source.count("startRepeat(event, axis, direction)") == 1
-    assert 'this.scrollbarWidget = this.root ? new TVScrollBar(this.root) : null' in source
+    assert 'this.root?.querySelector(".tv-scrollbar-y")' in source
+    assert "setScrollViewport(viewport = null, scrollbarWidget = null)" in source
     assert 'popup._tvMenuPopupScrollbar = main ? new TVScrollBar(main) : null' in source
 
     dialogs = DIALOG_PATHS[0].read_text(encoding="utf-8")
@@ -59,11 +60,24 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "this.button.disabled = false" in dialogs
     assert "if (!items.length) { return false; }" not in dialogs
     assert dialogs.count("TVHistoryWindow.renderMarkup({") == 3
+    assert dialogs.count("TVHistoryWindow.triggerMarkup({") == 3
+    assert "bodyMarkup: fileOpenMain" in dialogs
+    assert "bodyMarkup: changeDirectoryMain" in dialogs
+    assert "bodyMarkup: findMain" in dialogs
+    assert '<button type="button" class="tv-file-open-history-button' not in dialogs
     assert "new TVFileList(this.query" in dialogs
     assert "new TVHistoryWindow({" in dialogs
     assert 'TVFrame.titleControlMarkup({' in dialogs
     assert '"data-tv-history-close": true' in dialogs
     assert 'TVFrame.closeMarkup("tv-history-close-control"' not in dialogs
+
+    bundle = Path("www/assets/tv-bundle-app.js").read_text(encoding="utf-8")
+    css = Path("www/assets/turbovision.css").read_text(encoding="utf-8")
+    assert 'rootClass: "tv-contents-outline"' in bundle
+    assert "scrollbar: false" in bundle
+    assert "outline.setScrollViewport(" in bundle
+    assert ".tv-contents-outline-viewport" in css
+    assert "overflow: visible" in css
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the list control test")
@@ -171,8 +185,9 @@ root.querySelector = (selector) => ({
     "[data-tv-list-thumb]": thumb,
     "[data-tv-list-backward]": backward,
     "[data-tv-list-forward]": forward,
-    ".tv-vlist-scrollbar": scrollbar,
-}[selector] || null);
+        ".tv-vlist-scrollbar": scrollbar,
+        ".tv-scrollbar-y": scrollbar,
+    }[selector] || null);
 
 const source = fs.readFileSync(process.argv[1], "utf8");
 const start = source.indexOf("class TVListViewer");

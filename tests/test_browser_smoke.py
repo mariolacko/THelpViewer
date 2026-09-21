@@ -301,6 +301,33 @@ async function run() {
         || fileOpenHelp.inlineNavigation || !fileOpenHelp.statusBack || !fileOpenHelp.statusContents) {
         throw new Error(`File Open context help is broken: ${JSON.stringify(fileOpenHelp)}`);
     }
+    const topContentsMenu = await evaluate(`(() => {
+        const root = document.querySelector('[data-tv-bundle-menu-root]');
+        const popup = root?.querySelector(':scope > [data-tv-menu-popup]');
+        return {
+            roots: popup?.querySelectorAll(':scope .tv-submenu-root').length || 0,
+            text: popup?.textContent || '',
+        };
+    })()`);
+    if (topContentsMenu.roots < 3 || !topContentsMenu.text.includes('Using THelpViewer')) {
+        throw new Error(`Top Contents menu is empty: ${JSON.stringify(topContentsMenu)}`);
+    }
+    await evaluate(`document.querySelector('[data-tv-bundle-contents]').click()`);
+    await pause();
+    const structuralContents = await evaluate(`(() => {
+        const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
+        return {
+            view: help?.dataset.tvStateView,
+            outlines: help?.querySelectorAll('[data-tv-contents-outline]').length || 0,
+            rows: help?.querySelectorAll('[data-tv-contents-outline-index]').length || 0,
+            verticalScrollbars: help?.querySelectorAll('.tv-scrollbar-y').length || 0,
+        };
+    })()`);
+    if (structuralContents.view !== 'contents' || structuralContents.outlines !== 1
+        || structuralContents.rows < 10 || structuralContents.verticalScrollbars !== 1) {
+        throw new Error(`Structural Contents uses the wrong scrollbar: ${JSON.stringify(structuralContents)}`);
+    }
+    await evaluate(`document.querySelector('[data-tv-bundle-back]').click()`);
     await evaluate(`document.querySelector('[data-tv-bundle-help-contents]').click()`);
     await pause();
     const helpContents = await evaluate(`(() => {

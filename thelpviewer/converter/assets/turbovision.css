@@ -1482,13 +1482,20 @@ button.tv-status-item {
 }
 
 .tv-contents-tree {
-    height: calc(100% - 1em);
     min-height: 6em;
 }
 
-.tv-contents-outline,
+.tv-contents-outline {
+    display: block;
+    height: auto;
+    min-height: 6em;
+    overflow: visible;
+}
+
 .tv-contents-outline-viewport {
-    height: 100%;
+    height: auto;
+    min-height: 6em;
+    overflow: visible;
 }
 
 .tv-contents-outline-item {

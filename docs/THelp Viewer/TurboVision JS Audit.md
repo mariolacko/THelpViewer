@@ -17,7 +17,7 @@ compatibility with old Turbo Vision applications.
 
 - All eight JavaScript assets pass `node --check`.
 - The source assets and their checked-in `www/assets` mirrors are identical.
-- The complete automated suite passes: 222 tests.
+- The complete automated suite passes: 228 tests.
 - Real-Chrome coverage exercises focus, modal behaviour, keyboard menus,
   dynamic dialog resizing and exact reported multi-window URLs in addition to
   converter-level regressions.
@@ -336,6 +336,21 @@ compatibility with old Turbo Vision applications.
     native click remains available for keyboard activation. Browser coverage
     opens game-specific F1 Help, closes it on mouse-down and toggles an empty
     File Open history.
+45. **Contents and dialog ownership still leaked through presentation
+    markup.** `TVMenuBox` detected separators by searching the complete nested
+    HTML string, so a separator inside each context-Help submenu caused the
+    parent `Contents` popup to discard that complete branch. The structural
+    Contents view also embedded a self-scrolling `TVOutline` inside an already
+    scrolling `TVWindow`, producing two vertical scrollbars. Finally, both
+    applications assigned dialog help contexts from parallel
+    `DIALOG_HELP_CONTEXTS` maps, and File Open, Change Directory and Find still
+    hand-built their client DOM. **Resolved in Phase 7.20:** menu separators
+    are recognized only at the current menu level; embedded outlines can use
+    the enclosing window viewport and scrollbar; every concrete dialog owns
+    its `helpCtx`; and the first dialog-composition set now uses shared
+    TVision JS widgets plus the single History trigger renderer. Real-Chrome
+    coverage opens F1 Help, verifies the populated top Contents tree and
+    asserts that structural Contents has exactly one vertical scrollbar.
 
 ## Component assessment
 
@@ -350,7 +365,7 @@ compatibility with old Turbo Vision applications.
 | ListBox/ListViewer | Correct inheritance; selection, activation, keyboard and roving focus complete |
 | CheckBoxes/RadioButtons/MultiCheckBoxes | Shared `TVCluster` hierarchy with native or multistate behaviour and DOS-style rendering |
 | MessageBox | Hardened and tested; application adoption remains |
-| Editor/Terminal/Outline/Context Help | Active-window Find, read-only editor with indicator, bounded terminal, reusable hierarchical outline and UHF-backed F1 Help are present |
+| Editor/Terminal/Outline/Context Help | Active-window Find, read-only editor with indicator, bounded terminal, reusable hierarchical outline and UHF-backed F1 Help are present; embedded outlines can delegate scrolling to their `TVWindow` |
 | Games | Twelve playable games with shared top-ten Hall of Fame, focus, timer and keyboard policy |
 | Screen savers | Shared idle start, resize lifecycle and focus restoration complete |
 | Syntax highlighter | Pascal, C and ASM detection is scoped per code block |
@@ -430,17 +445,22 @@ not be copied merely for name parity.
 
 ### Next implementation order
 
-1. Replace menu HTML/config records with reusable `TVMenu`, `TVMenuItem` and
+1. Finish converting dialog client areas to shared TVision JS composition.
+   Context Help, File Open, Change Directory and Find are complete; migrate
+   Widget Gallery, Colors and MIDI next, then the small utility dialogs. Keep
+   CSS for geometry/palette and keep control behaviour in the existing shared
+   objects instead of introducing dialog-specific widget classes.
+2. Replace menu HTML/config records with reusable `TVMenu`, `TVMenuItem` and
    `TVSubMenu` objects that own command, disabled state, mnemonic and `helpCtx`;
    keep `TVMenuController` as the single interaction engine.
-2. Add context-dependent `TVStatusDef`/`TVStatusItem`-style hints so the status
+3. Add context-dependent `TVStatusDef`/`TVStatusItem`-style hints so the status
    line changes with the resolved help context instead of only the active
    window type.
-3. Extract HELP viewing into explicit `TVHelpViewer`/`TVHelpWindow` classes
+4. Extract HELP viewing into explicit `TVHelpViewer`/`TVHelpWindow` classes
    without changing converter or UHF rendering semantics.
-4. Add Find options (case sensitivity and whole words) through shared cluster
+5. Add Find options (case sensitivity and whole words) through shared cluster
    controls, then add Replace only when editable documents exist.
-5. Add reusable `TVParamText` and validators when a real editable dialog needs
+6. Add reusable `TVParamText` and validators when a real editable dialog needs
    them; avoid unused name-parity infrastructure.
 
 ### Proposed new dialogs and games
@@ -652,3 +672,7 @@ No previously recommended game remains unimplemented.
   restored always-active empty History windows, and hardened shared close
   controls for Safari by handling the Turbo Vision mouse-down phase. Browser
   regressions cover all three reported failure modes.
+- [x] Phase 7.20: repaired nested Contents menu rendering, removed the second
+  Contents scrollbar through shared viewport delegation, moved `helpCtx`
+  ownership into concrete dialogs, and migrated Context Help, File Open,
+  Change Directory and Find client composition to shared TVision JS widgets.

@@ -34,6 +34,19 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Fixed the dynamic top `Contents` menu: nested submenu separators are no
+  longer mistaken for separators of the parent `TVMenuBox`, which previously
+  removed complete context-Help menu branches and left the popup empty
+- Made HELP `Contents` reuse its enclosing `TVWindow` viewport and right-edge
+  `TVScrollBar`; the embedded `TVOutline` no longer creates a second scrollbar
+- Moved standard-dialog and per-game `helpCtx` ownership into each
+  `TVDialog` constructor and removed the duplicate name-to-context maps from
+  both application registration paths
+- Began the object-composition migration for dialog clients: Context Help,
+  Open a File, Change Directory and Find now assemble their content from
+  `TVGroup`, `TVStaticText`, `TVLabel`, `TVInputLine`, `TVButton`,
+  `TVVerticalListViewer`/`TVOutline` and the shared `TVHistoryWindow` trigger
+  instead of dialog-specific HTML templates
 - Added a distinct `hc...` context and UHF topic for every game, so F1 from
   Puzzle, Tetris, Mines, BreakOut, Sokoban, Lines, Reversi, Ludo, Mastermind,
   Snake, Tower of Hanoi or Tron opens that game's own help instead of the

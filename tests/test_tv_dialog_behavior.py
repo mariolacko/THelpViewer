@@ -141,6 +141,12 @@ const regular = buildDialog();
 regular.instance.open();
 if (document.activeElement !== regular.dialogElement) { throw new Error("dialog did not receive focus"); }
 
+const contextual = buildDialog({ helpCtx: TV.TV_HELP_CONTEXTS.hcFind });
+if (contextual.overlay.getAttribute("data-tv-help-ctx") !== String(TV.TV_HELP_CONTEXTS.hcFind)
+    || contextual.dialogElement.getAttribute("data-tv-help-ctx") !== String(TV.TV_HELP_CONTEXTS.hcFind)) {
+    throw new Error("TVDialog did not retain its own help context");
+}
+
 regular.instance.startDrag({
     target: regular.dialogElement,
     clientX: 10,

@@ -59,6 +59,12 @@ global.getComputedStyle = () => ({ getPropertyValue() { return ""; } });
 eval(fs.readFileSync(process.argv[1], "utf8"));
 const TV = window.THelpViewerTV;
 
+const nestedSubmenu = '<div class="tv-submenu-root"><div class="tv-menu-popup-separator"></div></div>';
+const nestedMenuMarkup = new TV.TVMenuBox({ items: [nestedSubmenu] }).renderMarkup();
+if (!nestedMenuMarkup.includes(nestedSubmenu)) {
+    throw new Error("a separator inside a submenu erased the complete Contents item");
+}
+
 function keyEvent(key, extra = {}) {
     return {
         key,

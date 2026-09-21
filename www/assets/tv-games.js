@@ -578,10 +578,27 @@ const {
     TVInputLine,
     TVInfoBox,
     TVFrame,
+    TV_HELP_CONTEXTS,
     fillBorders,
     PUZZLE_START,
     PUZZLE_HIGHLIGHT_MAP,
 } = TV;
+
+const {
+    hcGames,
+    hcPuzzle,
+    hcTetris,
+    hcMines,
+    hcBreakOut,
+    hcSokoban,
+    hcLines,
+    hcReversi,
+    hcLudo,
+    hcMastermind,
+    hcSnake,
+    hcHanoi,
+    hcTron,
+} = TV_HELP_CONTEXTS;
 
 // ── Best score helpers ──────────────────────────────────────────────
 
@@ -631,6 +648,7 @@ function showBestNamePrompt(ownerDialog, score, callback, {
     }).renderMarkup();
     const dlg = new TVDialog({
         desktop,
+        helpCtx: ownerDialog?.getHelpCtx?.() || hcGames,
         ariaLabel: "High Score",
         title: "High Score",
         closeAttrs: { "data-tv-best-close": true, "aria-label": "Close" },
@@ -782,6 +800,7 @@ function showHallOfFame(ownerDialog, game) {
     const body = `<div class="tv-hall-main"><div class="tv-hall-header"><span>#</span><span>Player</span><span>Score</span></div>${rows}</div>`;
     const dlg = new TVDialog({
         desktop: ownerDialog?.desktop || document.querySelector(".tv-desktop") || document.body,
+        helpCtx: ownerDialog?.getHelpCtx?.() || hcGames,
         ariaLabel: `${config.title} Hall of Fame`,
         title: `${config.title} Hall of Fame`,
         closeAttrs: { "data-tv-hall-close": true, "aria-label": "Close Hall of Fame" },
@@ -838,6 +857,7 @@ class TVPuzzleDialog extends TVDialog {
         }).renderMarkup();
         super({
             desktop,
+            helpCtx: hcPuzzle,
             windowClass: "tv-puzzle-window",
             palette: "viewer",
             ariaLabel: "Puzzle",
@@ -1108,6 +1128,7 @@ class TVTetrisDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcTetris,
             ariaLabel: "Tetris",
             title: "Tetris",
             windowClass: "tv-tetris-window",
@@ -1550,6 +1571,7 @@ class TVMinesDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcMines,
             ariaLabel: "Minesweeper",
             title: "Mines",
             closeAttrs: { "data-tv-mines-close": true, "aria-label": "Close mines" },
@@ -1883,6 +1905,7 @@ class TVBreakOutDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcBreakOut,
             ariaLabel: "BreakOut",
             title: "BreakOut",
             closeAttrs: { "data-tv-break-close": true, "aria-label": "Close breakout" },
@@ -2248,6 +2271,7 @@ class TVSokobanDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcSokoban,
             ariaLabel: "Sokoban",
             title: "Sokoban",
             closeAttrs: { "data-tv-sokoban-close": true, "aria-label": "Close sokoban" },
@@ -2507,6 +2531,7 @@ class TVLinesDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcLines,
             ariaLabel: "Lines",
             title: "Lines",
             closeAttrs: { "data-tv-lines-close": true, "aria-label": "Close lines" },
@@ -2786,6 +2811,7 @@ class TVReversiDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcReversi,
             ariaLabel: "Reversi",
             title: "Reversi",
             closeAttrs: { "data-tv-reversi-close": true, "aria-label": "Close reversi" },
@@ -3107,6 +3133,7 @@ class TVLudoDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcLudo,
             windowClass: "tv-ludo-window",
             ariaLabel: "Ludo",
             title: "Ludo",
@@ -3623,6 +3650,7 @@ class TVMastermindDialog extends TVDialog {
         }).renderMarkup();
         super({
             desktop,
+            helpCtx: hcMastermind,
             windowClass: "tv-mastermind-window",
             ariaLabel: "Mastermind",
             title: "Mastermind",
@@ -3766,6 +3794,7 @@ class TVTronDialog extends TVDialog {
         }).renderMarkup();
         super({
             desktop,
+            helpCtx: hcTron,
             windowClass: "tv-tron-window",
             ariaLabel: "Tron Light Cycles",
             title: "Tron Light Cycles",
@@ -3950,6 +3979,7 @@ class TVHanoiDialog extends TVDialog {
         }).renderMarkup();
         super({
             desktop,
+            helpCtx: hcHanoi,
             windowClass: "tv-hanoi-window",
             ariaLabel: "Tower of Hanoi",
             title: "Tower of Hanoi",
@@ -4188,6 +4218,7 @@ class TVSnakeDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcSnake,
             ariaLabel: "Snake",
             title: "Snake",
             closeAttrs: { "data-tv-snake-close": true, "aria-label": "Close snake" },

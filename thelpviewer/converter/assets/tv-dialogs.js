@@ -42,7 +42,6 @@ const {
     dayOfWeek,
     TV_HELP_CONTEXTS,
     normalizeHelpContext,
-    setElementHelpContext,
 } = TV;
 
 const {
@@ -224,29 +223,46 @@ function renderContextHelpTopic(topic) {
 
 class TVContextHelpDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const helpMain = new TVGroup({
+            className: "tv-context-help-main",
+            children: [
+                new TVStaticText({
+                    className: "tv-context-help-topic",
+                    attrs: { "data-tv-context-help-heading": true },
+                }),
+                TVVerticalScrollArea.renderMarkup({
+                    rootClass: "tv-context-help-scroll",
+                    rootAttrs: { "data-tv-context-help-scroll": true },
+                    viewportClass: "tv-context-help-viewport",
+                    scrollbarClass: "tv-context-help-scrollbar",
+                }),
+                new TVGroup({
+                    className: "tv-context-help-nav",
+                    children: [
+                        new TVButton({
+                            dialog: false,
+                            attrs: { "data-tv-context-help-back": true, disabled: true },
+                            labelMarkup: "◄ Back",
+                        }),
+                        new TVButton({
+                            dialog: false,
+                            attrs: { "data-tv-context-help-contents": true },
+                            labelMarkup: "Contents",
+                        }),
+                        new TVStaticText({ tag: "span", text: "F1 Help" }),
+                    ],
+                }),
+            ],
+        }).renderMarkup();
         super({
             desktop,
+            helpCtx: hcContextHelp,
             ariaLabel: "THelpViewer Help",
             title: "THelpViewer Help",
             windowClass: "tv-context-help-window",
             bodyClass: "tv-context-help-body",
             closeAttrs: { "data-tv-context-help-frame-close": true, "aria-label": "Close context help" },
-            bodyMarkup: `
-                <div class="tv-context-help-main">
-                    <div class="tv-context-help-topic" data-tv-context-help-heading></div>
-                    ${TVVerticalScrollArea.renderMarkup({
-                        rootClass: "tv-context-help-scroll",
-                        rootAttrs: { "data-tv-context-help-scroll": true },
-                        viewportClass: "tv-context-help-viewport",
-                        scrollbarClass: "tv-context-help-scrollbar",
-                    })}
-                    <div class="tv-context-help-nav">
-                        <button type="button" data-tv-context-help-back disabled>◄ Back</button>
-                        <button type="button" data-tv-context-help-contents>Contents</button>
-                        <span>F1 Help</span>
-                    </div>
-                </div>
-            `,
+            bodyMarkup: helpMain,
             footerMarkup: TVDialog.footerMarkup(),
             width: "72ch",
             height: "24em",
@@ -263,7 +279,6 @@ class TVContextHelpDialog extends TVDialog {
         this.context = hcApplication;
         this.bundle = null;
         this.topicHistory = [];
-        setElementHelpContext(this.dialog, hcContextHelp);
         this.bindCommonClose(() => this.close());
         this.bindDrag();
         this.viewport?.addEventListener("click", (event) => {
@@ -361,6 +376,7 @@ class TVAboutDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcAbout,
             ariaLabel: "About",
             title: "About",
             closeAttrs: {
@@ -466,6 +482,7 @@ class TVWidgetGalleryDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcWidgetGallery,
             ariaLabel: "Widget Gallery",
             title: "Widget Gallery",
             bodyClass: "tv-widget-gallery-body",
@@ -659,6 +676,24 @@ class TVHistory {
 class TVHistoryViewer extends TVVerticalListViewer {}
 
 class TVHistoryWindow extends TVWindow {
+    static triggerMarkup({ className = "", attrs = {}, ariaLabel = "History" } = {}) {
+        return new TVButton({
+            dialog: false,
+            className: ["tv-file-open-history-button", className].filter(Boolean).join(" "),
+            attrs: {
+                ...attrs,
+                "aria-label": ariaLabel,
+                "aria-expanded": "false",
+                disabled: true,
+            },
+            labelMarkup: [
+                '<span class="tv-file-open-history-side" aria-hidden="true">▐</span>',
+                '<span class="tv-file-open-history-arrow" aria-hidden="true">↓</span>',
+                '<span class="tv-file-open-history-side" aria-hidden="true">▌</span>',
+            ].join(""),
+        }).renderMarkup();
+    }
+
     static renderMarkup({ popupClass = "", popupAttrs = {}, listAttrs = {} } = {}) {
         const viewerMarkup = TVVerticalListViewer.renderMarkup({
             rootClass: "tv-file-open-history-listviewer",
@@ -904,9 +939,53 @@ class TVFileOpenDialog extends TVDialog {
             attrs: { "data-tv-file-open-cancel": true },
             label: "Cancel",
         });
+        const fileOpenMain = new TVGroup({
+            className: "tv-file-open-main",
+            children: [
+                new TVGroup({ className: "tv-file-open-name-label", children: [nameLabel] }),
+                new TVGroup({ className: "tv-file-open-name-input", children: [nameInput] }),
+                TVHistoryWindow.triggerMarkup({ attrs: { "data-tv-file-open-history": true } }),
+                new TVGroup({ className: "tv-file-open-files-label", children: [filesLabel] }),
+                new TVGroup({
+                    className: "tv-file-open-file-list",
+                    attrs: { "data-tv-file-open-files": true },
+                }),
+                new TVGroup({
+                    className: "tv-file-open-hscroll",
+                    attrs: { "data-tv-file-open-hscroll": true, "aria-hidden": "true" },
+                    children: [
+                        new TVButton({
+                            dialog: false,
+                            attrs: { "data-tv-file-open-scroll-left": true, tabindex: "-1" },
+                            labelMarkup: escapeHtml(displayCp437Char(17)),
+                        }),
+                        new TVStaticText({ tag: "span", attrs: { "data-tv-file-open-scroll-track": true } }),
+                        new TVButton({
+                            dialog: false,
+                            attrs: { "data-tv-file-open-scroll-right": true, tabindex: "-1" },
+                            labelMarkup: escapeHtml(displayCp437Char(16)),
+                        }),
+                    ],
+                }),
+                new TVGroup({ className: "tv-file-open-open-button", children: [openButton] }),
+                new TVGroup({ className: "tv-file-open-cancel-button", children: [cancelButton] }),
+                new TVGroup({
+                    className: "tv-file-open-info",
+                    children: [
+                        new TVStaticText({ attrs: { "data-tv-file-open-path": true } }),
+                        new TVStaticText({ attrs: { "data-tv-file-open-detail": true } }),
+                    ],
+                }),
+                TVHistoryWindow.renderMarkup({
+                    popupAttrs: { "data-tv-file-open-history-popup": true },
+                    listAttrs: { "data-tv-file-open-history-list": true },
+                }),
+            ],
+        }).renderMarkup();
 
         super({
             desktop,
+            helpCtx: hcFileOpen,
             ariaLabel: "Open a File",
             title: "Open a File",
             bodyClass: "tv-file-open-body",
@@ -914,31 +993,7 @@ class TVFileOpenDialog extends TVDialog {
                 "data-tv-file-open-close": true,
                 "aria-label": "Close file open dialog",
             },
-            bodyMarkup: `
-                <div class="tv-file-open-main">
-                    <div class="tv-file-open-name-label">${nameLabel.renderMarkup()}</div>
-                    <div class="tv-file-open-name-input">${nameInput.renderMarkup()}</div>
-                    <button type="button" class="tv-file-open-history-button" data-tv-file-open-history
-                            aria-label="History" disabled><span class="tv-file-open-history-side">▐</span><span class="tv-file-open-history-arrow">↓</span><span class="tv-file-open-history-side">▌</span></button>
-                    <div class="tv-file-open-files-label">${filesLabel.renderMarkup()}</div>
-                    <div class="tv-file-open-file-list" data-tv-file-open-files></div>
-                    <div class="tv-file-open-hscroll" data-tv-file-open-hscroll aria-hidden="true">
-                        <button type="button" data-tv-file-open-scroll-left tabindex="-1">${escapeHtml(displayCp437Char(17))}</button>
-                        <span data-tv-file-open-scroll-track></span>
-                        <button type="button" data-tv-file-open-scroll-right tabindex="-1">${escapeHtml(displayCp437Char(16))}</button>
-                    </div>
-                    <div class="tv-file-open-open-button">${openButton.renderMarkup()}</div>
-                    <div class="tv-file-open-cancel-button">${cancelButton.renderMarkup()}</div>
-                    <div class="tv-file-open-info">
-                        <div data-tv-file-open-path></div>
-                        <div data-tv-file-open-detail></div>
-                    </div>
-                    ${TVHistoryWindow.renderMarkup({
-                        popupAttrs: { "data-tv-file-open-history-popup": true },
-                        listAttrs: { "data-tv-file-open-history-list": true },
-                    })}
-                </div>
-            `,
+            bodyMarkup: fileOpenMain,
             footerMarkup: TVDialog.footerMarkup(),
             width: "49ch",
             height: "19em",
@@ -1267,9 +1322,40 @@ class TVChangeDirectoryDialog extends TVDialog {
             attrs: { "data-tv-change-dir-cancel": true },
             label: "Cancel",
         });
+        const changeDirectoryMain = new TVGroup({
+            className: "tv-change-dir-main",
+            children: [
+                new TVGroup({ className: "tv-change-dir-path-label", children: [directoryLabel] }),
+                new TVGroup({ className: "tv-change-dir-path-input", children: [directoryInput] }),
+                TVHistoryWindow.triggerMarkup({
+                    className: "tv-change-dir-history-button",
+                    attrs: { "data-tv-change-dir-history": true },
+                    ariaLabel: "Directory history",
+                }),
+                new TVGroup({ className: "tv-change-dir-tree-label", children: [treeLabel] }),
+                TVVerticalListViewer.renderMarkup({
+                    rootClass: "tv-change-dir-listviewer",
+                    rootAttrs: { "data-tv-change-dir-list": true },
+                    viewportClass: "tv-change-dir-list",
+                }),
+                new TVGroup({ className: "tv-change-dir-confirm-button", children: [changeButton] }),
+                new TVGroup({ className: "tv-change-dir-revert-button", children: [revertButton] }),
+                new TVGroup({ className: "tv-change-dir-cancel-button", children: [cancelButton] }),
+                new TVStaticText({
+                    className: "tv-change-dir-detail",
+                    attrs: { "data-tv-change-dir-detail": true },
+                }),
+                TVHistoryWindow.renderMarkup({
+                    popupClass: "tv-change-dir-history-popup",
+                    popupAttrs: { "data-tv-change-dir-history-popup": true },
+                    listAttrs: { "data-tv-change-dir-history-list": true },
+                }),
+            ],
+        }).renderMarkup();
 
         super({
             desktop,
+            helpCtx: hcChangeDirectory,
             ariaLabel: "Change Directory",
             title: "Change Directory",
             bodyClass: "tv-change-dir-body",
@@ -1277,29 +1363,7 @@ class TVChangeDirectoryDialog extends TVDialog {
                 "data-tv-change-dir-close": true,
                 "aria-label": "Close change directory dialog",
             },
-            bodyMarkup: `
-                <div class="tv-change-dir-main">
-                    <div class="tv-change-dir-path-label">${directoryLabel.renderMarkup()}</div>
-                    <div class="tv-change-dir-path-input">${directoryInput.renderMarkup()}</div>
-                    <button type="button" class="tv-file-open-history-button tv-change-dir-history-button"
-                            data-tv-change-dir-history aria-label="Directory history" disabled><span class="tv-file-open-history-side">▐</span><span class="tv-file-open-history-arrow">↓</span><span class="tv-file-open-history-side">▌</span></button>
-                    <div class="tv-change-dir-tree-label">${treeLabel.renderMarkup()}</div>
-                    ${TVVerticalListViewer.renderMarkup({
-                        rootClass: "tv-change-dir-listviewer",
-                        rootAttrs: { "data-tv-change-dir-list": true },
-                        viewportClass: "tv-change-dir-list",
-                    })}
-                    <div class="tv-change-dir-confirm-button">${changeButton.renderMarkup()}</div>
-                    <div class="tv-change-dir-revert-button">${revertButton.renderMarkup()}</div>
-                    <div class="tv-change-dir-cancel-button">${cancelButton.renderMarkup()}</div>
-                    <div class="tv-change-dir-detail" data-tv-change-dir-detail></div>
-                    ${TVHistoryWindow.renderMarkup({
-                        popupClass: "tv-change-dir-history-popup",
-                        popupAttrs: { "data-tv-change-dir-history-popup": true },
-                        listAttrs: { "data-tv-change-dir-history-list": true },
-                    })}
-                </div>
-            `,
+            bodyMarkup: changeDirectoryMain,
             footerMarkup: TVDialog.footerMarkup(),
             width: "46ch",
             height: "18em",
@@ -1521,6 +1585,7 @@ class TVAsciiTableDialog extends TVDialog {
         });
         super({
             desktop,
+            helpCtx: hcAsciiTable,
             windowClass: "tv-ascii-window",
             palette: "ascii",
             ariaLabel: "ASCII Table",
@@ -1695,6 +1760,7 @@ class TVCalculatorDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcCalculator,
             ariaLabel: "Calculator",
             title: "Calculator",
             closeAttrs: {
@@ -1981,6 +2047,7 @@ class TVCalendarDialog extends TVDialog {
         }).renderMarkup();
         super({
             desktop,
+            helpCtx: hcCalendar,
             windowClass: "tv-calendar-window",
             palette: "calendar",
             ariaLabel: "Calendar",
@@ -2125,6 +2192,7 @@ class TVColorsDialog extends TVDialog {
         }).renderMarkup();
         super({
             desktop,
+            helpCtx: hcColors,
             ariaLabel: "Colors",
             title: "Colors",
             windowClass: "tv-colors-window",
@@ -3248,6 +3316,7 @@ class TVMidiPlayerDialog extends TVDialog {
         }).renderMarkup();
         super({
             desktop,
+            helpCtx: hcMidiPlayer,
             ariaLabel: "MIDI Player",
             title: "CD/MIDI Player",
             bodyClass: "tv-midi-body",
@@ -3578,6 +3647,19 @@ class TVMidiPlayerDialog extends TVDialog {
 
 class TVFindDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const findLabel = new TVLabel({
+            text: "~T~ext to find",
+            hotkey: true,
+            forId: "tv-find-text",
+        });
+        const findInput = new TVInputLine({
+            attrs: {
+                id: "tv-find-text",
+                autocomplete: "off",
+                spellcheck: "false",
+                "data-tv-find-input": true,
+            },
+        });
         const findButton = new TVButton({
             className: "is-default",
             attrs: { "data-tv-find-confirm": true },
@@ -3587,33 +3669,37 @@ class TVFindDialog extends TVDialog {
             attrs: { "data-tv-find-cancel": true },
             label: "Cancel",
         });
+        const findMain = new TVGroup({
+            className: "tv-find-main",
+            children: [
+                new TVGroup({ className: "tv-find-label", children: [findLabel] }),
+                new TVGroup({ className: "tv-find-input", children: [findInput] }),
+                TVHistoryWindow.triggerMarkup({
+                    className: "tv-find-history-button",
+                    attrs: { "data-tv-find-history": true },
+                    ariaLabel: "Find history",
+                }),
+                new TVGroup({ className: "tv-find-confirm", children: [findButton] }),
+                new TVGroup({ className: "tv-find-cancel", children: [cancelButton] }),
+                new TVStaticText({
+                    className: "tv-find-status",
+                    attrs: { "data-tv-find-status": true },
+                }),
+                TVHistoryWindow.renderMarkup({
+                    popupClass: "tv-find-history-popup",
+                    popupAttrs: { "data-tv-find-history-popup": true },
+                    listAttrs: { "data-tv-find-history-list": true },
+                }),
+            ],
+        }).renderMarkup();
         super({
             desktop,
+            helpCtx: hcFind,
             ariaLabel: "Find text",
             title: "Find",
             bodyClass: "tv-find-body",
             closeAttrs: { "data-tv-find-close": true, "aria-label": "Close Find" },
-            bodyMarkup: `
-                <div class="tv-find-main">
-                    <div class="tv-find-label">${new TVLabel({ text: "~T~ext to find", hotkey: true, forId: "tv-find-text" }).renderMarkup()}</div>
-                    <div class="tv-find-input">${new TVInputLine({ attrs: {
-                        id: "tv-find-text",
-                        autocomplete: "off",
-                        spellcheck: "false",
-                        "data-tv-find-input": true,
-                    } }).renderMarkup()}</div>
-                    <button type="button" class="tv-file-open-history-button tv-find-history-button"
-                            data-tv-find-history aria-label="Find history" disabled><span class="tv-file-open-history-side">▐</span><span class="tv-file-open-history-arrow">↓</span><span class="tv-file-open-history-side">▌</span></button>
-                    <div class="tv-find-confirm">${findButton.renderMarkup()}</div>
-                    <div class="tv-find-cancel">${cancelButton.renderMarkup()}</div>
-                    <div class="tv-find-status" data-tv-find-status></div>
-                    ${TVHistoryWindow.renderMarkup({
-                        popupClass: "tv-find-history-popup",
-                        popupAttrs: { "data-tv-find-history-popup": true },
-                        listAttrs: { "data-tv-find-history-list": true },
-                    })}
-                </div>
-            `,
+            bodyMarkup: findMain,
             footerMarkup: TVDialog.footerMarkup(),
             width: "49ch",
             height: "10em",
@@ -3760,6 +3846,7 @@ class TVSearchDialog extends TVDialog {
 
         super({
             desktop,
+            helpCtx: hcSearch,
             ariaLabel: "Search help",
             title: "Find",
             bodyClass: "tv-search-body",

@@ -45,37 +45,8 @@ const {
 
 const {
     hcSystemMenu,
-    hcContextHelp,
-    hcAbout,
-    hcSearch,
-    hcGames,
-    hcColors,
-    hcWidgetGallery,
-    hcMidiPlayer,
     hcHelpViewer,
-    hcDialog,
-    hcCalendar,
-    hcAsciiTable,
-    hcCalculator,
-    hcPuzzle,
-    hcHanoi,
-    hcTron,
 } = TV_HELP_CONTEXTS;
-
-const DIALOG_HELP_CONTEXTS = Object.freeze({
-    contexthelp: hcContextHelp,
-    about: hcAbout,
-    search: hcSearch,
-    colors: hcColors,
-    widgets: hcWidgetGallery,
-    midi: hcMidiPlayer,
-    calendar: hcCalendar,
-    ascii: hcAsciiTable,
-    calc: hcCalculator,
-    puzzle: hcPuzzle,
-    hanoi: hcHanoi,
-    tron: hcTron,
-});
 
 class TVMenuBar extends TVMenuView {
     constructor(container, context) {
@@ -723,7 +694,6 @@ class TVApplication {
             if (!dialog) {
                 return null;
             }
-            setElementHelpContext(dialog.dialog, DIALOG_HELP_CONTEXTS[name] || hcDialog);
             return this.dialogManager.register(name, dialog);
         } catch (error) {
             this.errors.push({ name, error });

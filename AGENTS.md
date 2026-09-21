@@ -187,6 +187,24 @@ Prevents:
 
 ---
 
+## Rule 13 — Compose Dialogs From TVision Objects
+
+Build individual dialog client areas from existing TVision JS objects such as
+`TVGroup`, `TVStaticText`, `TVLabel`, `TVInputLine`, `TVListViewer`,
+`TVOutline`, `TVCluster` and `TVButton`.
+
+Keep handwritten HTML/CSS at the shared primitive/rendering layer (`TVFrame`,
+`TVWindow`, `TVDialog`, scrollbars and basic static markup). Do not create a
+dialog-specific control when an existing shared TVision object can express the
+same role.
+
+Prevents:
+- duplicated dialog behaviour
+- HTML-only controls outside the TVision hierarchy
+- visual and keyboard drift between dialogs
+
+---
+
 ## Rule 13 — Record User-Visible Changes
 
 For every user-visible feature, behavior fix, or format-parser correction:

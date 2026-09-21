@@ -464,6 +464,7 @@ const TV_HELP_CONTEXTS = Object.freeze({
 const {
     hcNoContext,
     hcApplication,
+    hcDialog,
 } = TV_HELP_CONTEXTS;
 
 function normalizeHelpContext(value, fallback = hcNoContext) {
@@ -1911,6 +1912,7 @@ class TVVerticalListViewer extends TVListBox {
         rootClass = "",
         rootAttrs = {},
         viewportClass = "",
+        scrollbar = true,
         scrollbarClass = "tv-vlist-scrollbar",
         arrowClass = "tv-vlist-arrow",
         trackClass = "tv-vlist-track",
@@ -1921,16 +1923,20 @@ class TVVerticalListViewer extends TVListBox {
         const rootAttrsText = rootAttrString ? ` ${rootAttrString}` : "";
         const rootClasses = ["tv-vlist-viewer", rootClass].filter(Boolean).join(" ");
         const viewportClasses = ["tv-vlist-viewport", viewportClass].filter(Boolean).join(" ");
+        const scrollFrameAttr = scrollbar ? " data-tv-scroll-frame" : "";
+        const scrollbarMarkup = scrollbar
+            ? TVScrollBar.renderMarkup("y", {
+                rootClass: scrollbarClass,
+                arrowClass,
+                trackClass,
+                cellsClass,
+                thumbClass,
+            })
+            : "";
         return `
-            <div class="${escapeHtml(rootClasses)}" data-tv-scroll-frame${rootAttrsText}>
+            <div class="${escapeHtml(rootClasses)}"${scrollFrameAttr}${rootAttrsText}>
                 <div class="${escapeHtml(viewportClasses)}" data-tv-list-viewport data-tv-viewport></div>
-                ${TVScrollBar.renderMarkup("y", {
-                    rootClass: scrollbarClass,
-                    arrowClass,
-                    trackClass,
-                    cellsClass,
-                    thumbClass,
-                })}
+                ${scrollbarMarkup}
             </div>
         `;
     }
@@ -1950,7 +1956,11 @@ class TVVerticalListViewer extends TVListBox {
             renderItemMarkup,
         });
         this.viewport = this.query("[data-tv-list-viewport]");
-        this.scrollbarWidget = this.root ? new TVScrollBar(this.root) : null;
+        this.scrollViewport = this.viewport;
+        this.externalScrollbarWidget = null;
+        this.scrollbarWidget = this.root?.querySelector(".tv-scrollbar-y")
+            ? new TVScrollBar(this.root)
+            : null;
         this.scrollbar = this.scrollbarWidget?.axes.y?.root || null;
         this.active = true;
         if (this.root) {
@@ -1978,8 +1988,8 @@ class TVVerticalListViewer extends TVListBox {
     }
 
     setItems(items = [], selectedIndex = -1) {
-        if (this.viewport) {
-            this.viewport.scrollTop = 0;
+        if (this.scrollViewport) {
+            this.scrollViewport.scrollTop = 0;
         }
         super.setItems(items, selectedIndex);
         this.updateScrollbar();
@@ -1992,27 +2002,35 @@ class TVVerticalListViewer extends TVListBox {
 
     ensureSelectionVisible() {
         const element = this.selectedElement();
-        if (!element || !this.viewport) {
+        const viewport = this.scrollViewport;
+        if (!element || !viewport) {
             return;
         }
         const elementRect = element.getBoundingClientRect();
-        const viewportRect = this.viewport.getBoundingClientRect();
+        const viewportRect = viewport.getBoundingClientRect();
         if (elementRect.top < viewportRect.top) {
-            this.viewport.scrollTop -= viewportRect.top - elementRect.top;
+            viewport.scrollTop -= viewportRect.top - elementRect.top;
         } else if (elementRect.bottom > viewportRect.bottom) {
-            this.viewport.scrollTop += elementRect.bottom - viewportRect.bottom;
+            viewport.scrollTop += elementRect.bottom - viewportRect.bottom;
         }
     }
 
     visibleRows() {
-        if (!this.viewport) {
+        if (!this.scrollViewport) {
             return 1;
         }
-        return Math.max(1, Math.floor(this.viewport.clientHeight / measureCells().height));
+        return Math.max(1, Math.floor(this.scrollViewport.clientHeight / measureCells().height));
+    }
+
+    setScrollViewport(viewport = null, scrollbarWidget = null) {
+        this.scrollViewport = viewport || this.viewport;
+        this.externalScrollbarWidget = scrollbarWidget;
+        return this;
     }
 
     updateScrollbar() {
         this.scrollbarWidget?.refresh();
+        this.externalScrollbarWidget?.refresh();
     }
 
     setActive(active) {
@@ -2108,6 +2126,7 @@ class TVVerticalListViewer extends TVListBox {
     destroy() {
         this.scrollbarWidget?.destroy();
         this.scrollbarWidget = null;
+        this.externalScrollbarWidget = null;
     }
 }
 
@@ -2335,7 +2354,7 @@ class TVMenuBox extends TVMenuView {
         // Split items into segments at separator strings to render them as body-level rows.
         const segments = [[]];
         for (const html of this.renderItems(this.items)) {
-            if (html.indexOf("tv-menu-popup-separator") !== -1) {
+            if (/^<div class="tv-menu-popup-separator(?:\s|\")/.test(html.trim())) {
                 segments.push("separator");
                 segments.push([]);
             } else {
@@ -3257,9 +3276,10 @@ class TVFrame extends TVWidget {
 }
 
 class TVWindow extends TVGroup {
-    constructor(root = null) {
-        super();
+    constructor(root = null, { helpCtx = hcNoContext } = {}) {
+        super({ helpCtx });
         this.root = root;
+        setElementHelpContext(this.root, helpCtx);
     }
 
     static renderMarkup({
@@ -3352,6 +3372,7 @@ class TVDialog extends TVWindow {
         top,
         modal = false,
         palette = "dialog",
+        helpCtx = hcDialog,
         keyboard = true,
         escapeCloses = true,
         defaultButtonSelector = ".tv-dialog-button.is-default",
@@ -3375,10 +3396,11 @@ class TVDialog extends TVWindow {
                 palette,
             })
         );
-        super(root);
+        super(root, { helpCtx });
         this.desktop = desktop;
         this.overlay = root;
         this.dialog = this.query(".tv-dialog-window");
+        setElementHelpContext(this.dialog, helpCtx);
         this.titlebar = this.query(".tv-dialog-titlebar");
         this.closeButton = this.query(".tv-dialog-close-control");
         if (width) this.dialog.style.setProperty("--tv-dialog-width", width);

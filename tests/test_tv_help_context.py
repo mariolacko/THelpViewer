@@ -17,6 +17,28 @@ HELP_BUNDLE_PATHS = (
 )
 
 
+def test_dialogs_own_their_help_contexts_without_registration_maps():
+    dialogs = Path("www/assets/tv-dialogs.js").read_text(encoding="utf-8")
+    games = Path("www/assets/tv-games.js").read_text(encoding="utf-8")
+    bundle = Path("www/assets/tv-bundle-app.js").read_text(encoding="utf-8")
+    shell = Path("www/assets/tv-shell.js").read_text(encoding="utf-8")
+
+    assert "DIALOG_HELP_CONTEXTS" not in bundle
+    assert "DIALOG_HELP_CONTEXTS" not in shell
+    for context in (
+        "hcContextHelp", "hcAbout", "hcWidgetGallery", "hcFileOpen",
+        "hcChangeDirectory", "hcAsciiTable", "hcCalculator", "hcCalendar",
+        "hcColors", "hcMidiPlayer", "hcFind", "hcSearch",
+    ):
+        assert f"helpCtx: {context}" in dialogs
+    for context in (
+        "hcPuzzle", "hcTetris", "hcMines", "hcBreakOut", "hcSokoban",
+        "hcLines", "hcReversi", "hcLudo", "hcMastermind", "hcTron",
+        "hcHanoi", "hcSnake",
+    ):
+        assert f"helpCtx: {context}" in games
+
+
 def test_context_help_is_a_complete_uhf_bundle():
     assert HELP_BUNDLE_PATHS[0].read_bytes() == HELP_BUNDLE_PATHS[1].read_bytes()
     bundle = json.loads(HELP_BUNDLE_PATHS[0].read_text(encoding="utf-8"))
