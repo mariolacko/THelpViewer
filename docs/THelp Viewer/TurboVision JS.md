@@ -167,19 +167,19 @@ standard-dialog contexts. The constants are also exposed directly on
   target and finally `hcApplication`.
 - `TVHelpController` captures plain F1 and sends the resolved context to the
   application callback.
-- `TVContextHelpDialog.openContext(hc)` displays THelpViewer's own topic for
-  the active menu, HELP/Docs window, dialog, tool or game. It opens the
-  72×24 Help-palette window immediately with a built-in fallback, then loads
-  `assets/tv-context-help.json`, a native UHF 2.0 `THELPVIEWER.HLP` bundle.
-- The context viewer renders UHF bold/italic/underline spans, internal topic
-  links, fixed-width tables and long text through the shared vertical
-  scrollbar. Back and Contents navigate within the same bundle. Its URL state
-  stores the current `hc...` topic, so restoring an open Help dialog restores
-  content as well as the frame.
+- The bundle application loads `assets/tv-context-help.json`, a native UHF 2.0
+  `THELPVIEWER.HLP` bundle, and passes the resolved `hc...` value directly to
+  `BundleWindowManager.showTopic()`.
+- THelpViewer Help therefore uses the same `TVWindow`, UHF renderer, right-edge
+  `TVScrollBar`, frame controls and URL-state path as every converted HELP
+  file. Back, Help Contents, Content, Search and Close stay in the global
+  status line; no second navigation strip is rendered inside the window.
+- Internal topic links, fixed-width tables and long text are handled by the
+  existing UHF renderer. Restoring URL state reloads the same context bundle
+  and selected topic.
 
-The bundle and generated-page applications both register this controller.
-Their Help menu and `F1 Help` status command use the same resolution path as
-the keyboard.
+The Help menu and `F1 Help` status command use the same context-resolution path
+as the keyboard.
 
 ### TVDesktop
 

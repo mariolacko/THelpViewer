@@ -35,11 +35,11 @@ def test_context_help_is_a_complete_uhf_bundle():
     assert any("┌" in line and "┬" in line for line in contents)
     assert sum("[link:topic=" in line for line in contents) >= 3
 
-    dialogs = Path("www/assets/tv-dialogs.js").read_text(encoding="utf-8")
-    assert "class TVContextHelpDialog extends TVDialog" in dialogs
-    assert "captureUrlState()" in dialogs
-    assert "restoreUrlState(state)" in dialogs
-    assert "this.context = normalizeHelpContext(state?.topic, hcApplication)" in dialogs
+    app = Path("www/assets/tv-bundle-app.js").read_text(encoding="utf-8")
+    assert 'const CONTEXT_HELP_BUNDLE_FILE = "../assets/tv-context-help.json"' in app
+    assert "loadBundle(CONTEXT_HELP_BUNDLE_FILE)" in app
+    assert "this.windowManager.showTopic(bundle, helpCtx)" in app
+    assert 'this._registerDialog("contexthelp"' not in app
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the help-context test")

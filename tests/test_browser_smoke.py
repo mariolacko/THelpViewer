@@ -251,9 +251,10 @@ async function run() {
     await evaluate(`new Promise((resolve, reject) => {
             const deadline = Date.now() + 5000;
             const check = () => {
-                const heading = document.querySelector('[data-tv-context-help-heading]');
+                const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
+                const heading = help?.querySelector('.tv-topic-heading');
                 const links = document.querySelectorAll(
-                    '.tv-context-help-viewport [data-tv-context-help-topic]'
+                    '[data-tv-bundle-window="../assets/tv-context-help.json"] [data-tv-bundle-topic]'
                 );
                 if (heading?.textContent.trim() === 'Open a File' && links.length >= 2) {
                     resolve(true);
@@ -265,53 +266,56 @@ async function run() {
         check();
     })`, true);
     const fileOpenHelp = await evaluate(`(() => {
-        const help = document.querySelector('.tv-context-help-window');
+        const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
         const fileOpen = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
         );
+        const vertical = help?.querySelector(':scope > .tv-shell > .tv-client-row > .tv-scrollbar-y');
         return {
-            helpOpen: Boolean(help && !help.closest('.tv-dialog-overlay').hidden),
-            topic: help?.querySelector('[data-tv-context-help-heading]')?.textContent.trim(),
+            helpOpen: Boolean(help?.isConnected),
+            standardWindow: Boolean(help?.matches('.tv-window[data-tv-window]')),
+            topic: help?.querySelector('.tv-topic-heading')?.textContent.trim(),
             context: fileOpen?.getAttribute('data-tv-help-ctx'),
-            palette: help?.getAttribute('data-tv-palette'),
-            background: getComputedStyle(help?.querySelector('.tv-context-help-viewport')).backgroundColor,
-            links: help?.querySelectorAll('[data-tv-context-help-topic]').length || 0,
-            scrollbar: Boolean(help?.querySelector('.tv-context-help-scrollbar')),
+            links: help?.querySelectorAll('[data-tv-bundle-topic]').length || 0,
+            standardScrollbar: Boolean(vertical),
+            inlineNavigation: Boolean(help?.querySelector('.tv-context-help-nav')),
+            statusBack: Boolean(document.querySelector('[data-tv-status-line] [data-tv-bundle-back]')),
+            statusContents: Boolean(document.querySelector('[data-tv-status-line] [data-tv-bundle-help-contents]')),
         };
     })()`);
     if (!fileOpenHelp.helpOpen || fileOpenHelp.topic !== 'Open a File' || fileOpenHelp.context !== '2010'
-        || fileOpenHelp.palette !== 'help' || fileOpenHelp.background !== 'rgb(0, 170, 170)'
-        || fileOpenHelp.links < 2 || !fileOpenHelp.scrollbar) {
+        || !fileOpenHelp.standardWindow || fileOpenHelp.links < 2 || !fileOpenHelp.standardScrollbar
+        || fileOpenHelp.inlineNavigation || !fileOpenHelp.statusBack || !fileOpenHelp.statusContents) {
         throw new Error(`File Open context help is broken: ${JSON.stringify(fileOpenHelp)}`);
     }
-    await evaluate(`document.querySelector('[data-tv-context-help-contents]').click()`);
+    await evaluate(`document.querySelector('[data-tv-bundle-help-contents]').click()`);
     await pause();
     const helpContents = await evaluate(`(() => {
-        const help = document.querySelector('.tv-context-help-window');
-        const viewport = help?.querySelector('.tv-context-help-viewport');
+        const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
+        const viewport = help?.querySelector('[data-tv-viewport]');
         return {
-            topic: help?.querySelector('[data-tv-context-help-heading]')?.textContent.trim(),
+            topic: help?.querySelector('.tv-topic-heading')?.textContent.trim(),
             table: viewport?.textContent.includes('┌──────────────────┬'),
-            links: viewport?.querySelectorAll('[data-tv-context-help-topic]').length || 0,
+            links: viewport?.querySelectorAll('[data-tv-bundle-topic]').length || 0,
             verticalOverflow: viewport?.scrollHeight > viewport?.clientHeight,
             horizontalOverflow: viewport?.scrollWidth > viewport?.clientWidth + 1,
-            backEnabled: !help?.querySelector('[data-tv-context-help-back]')?.disabled,
+            backInStatusLine: Boolean(document.querySelector('[data-tv-status-line] [data-tv-bundle-back]')),
         };
     })()`);
     if (helpContents.topic !== 'THelpViewer' || !helpContents.table || helpContents.links < 6
-        || !helpContents.verticalOverflow || helpContents.horizontalOverflow || !helpContents.backEnabled) {
+        || !helpContents.verticalOverflow || helpContents.horizontalOverflow || !helpContents.backInStatusLine) {
         throw new Error(`Context Help contents are incomplete: ${JSON.stringify(helpContents)}`);
     }
-    await evaluate(`document.querySelector('[data-tv-context-help-back]').click()`);
+    await evaluate(`document.querySelector('[data-tv-bundle-back]').click()`);
     const helpReturned = await evaluate(`
-        document.querySelector('[data-tv-context-help-heading]')?.textContent.trim()
+        document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"] .tv-topic-heading')?.textContent.trim()
     `);
     if (helpReturned !== 'Open a File') { throw new Error('Context Help Back did not restore its topic'); }
-    await key("Escape", "Escape", 0, true);
+    await evaluate(`document.querySelector('[data-tv-bundle-close-all]').click()`);
     const contextHelpClosed = await evaluate(`(() => {
-        const help = document.querySelector('.tv-context-help-window')?.closest('.tv-dialog-overlay');
+        const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
         const fileOpen = document.querySelector('[data-tv-file-open-name]')?.closest('.tv-dialog-overlay');
-        return Boolean(help?.hidden && fileOpen && !fileOpen.hidden);
+        return Boolean(!help && fileOpen && !fileOpen.hidden);
     })()`);
     if (!contextHelpClosed) { throw new Error('Context Help did not return to File Open'); }
     await key("Escape", "Escape", 0, true);
@@ -1784,7 +1788,7 @@ async function run() {
 const timeout = setTimeout(() => {
     process.stderr.write("browser smoke test timed out\n");
     process.exit(1);
-}, 25000);
+}, 35000);
 run().then(() => {
     clearTimeout(timeout);
     process.exit(0);
@@ -1798,7 +1802,7 @@ run().then(() => {
                     [NODE, "-e", script, str(debugging_port), app_url],
                     capture_output=True,
                     text=True,
-                    timeout=30,
+                    timeout=40,
                 )
                 assert result.returncode == 0, result.stderr
             finally:

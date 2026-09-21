@@ -296,7 +296,7 @@ compatibility with old Turbo Vision applications.
     F1 topic. **Resolved in Phase 7.14:** `TVWidget` owns `helpCtx`, `TVGroup`
     inherits it from its current child, menu/dialog managers expose the active
     context, `TVHelpController` resolves priority and dispatches F1, and the
-    application supplies its own context Help dialog and `hc...` constants.
+    application supplies its own context HELP bundle and `hc...` constants.
 39. **Standard-window frame controls were anchors and the grow icon was derived
     from the active double-line frame.** The anchors were fragile in Safari and
     the resulting `═╝` did not match `TFrame::dragIcon`. **Resolved in Phase
@@ -309,9 +309,16 @@ compatibility with old Turbo Vision applications.
     the owner's green frame-icon role.
 41. **The first context Help dialog was only a short plain-text message.** It
     could not exercise the link, table or long-topic behavior of Turbo Vision
-    Help. **Resolved in Phase 7.16:** F1 opens a 72×24 Help-palette window backed
-    by a native UHF 2.0 `THELPVIEWER.HLP` JSON bundle, with internal links,
-    fixed-width tables, Back/Contents navigation and the shared scrollbar.
+    Help. **Resolved in Phase 7.16:** F1 loads a native UHF 2.0
+    `THELPVIEWER.HLP` JSON bundle with internal links, fixed-width tables and
+    long-topic scrolling.
+42. **The UHF context bundle was still displayed by a parallel dialog viewer.**
+    Its scrollbar sat inside the dialog body and Back/Contents were duplicated
+    inside the frame instead of using the standard HELP window and global
+    status line. **Resolved in Phase 7.17:** `TVBundleApp` passes the resolved
+    `hc...` topic to the existing `BundleWindowManager`; THelpViewer Help now
+    uses the same `TVWindow`, UHF renderer, edge scrollbars, status commands,
+    close lifecycle and URL-state restoration as every other HELP bundle.
 
 ## Component assessment
 
@@ -617,3 +624,7 @@ No previously recommended game remains unimplemented.
   `TVHistoryWindow` its source-defined own close control and foreground
   stacking, and replaced the plain F1 message with UHF-backed 72×24 green
   context Help supporting links, tables, Back/Contents and long-topic scroll.
+- [x] Phase 7.17: removed the bundle application's parallel context-help
+  presentation path. F1 now opens `THELPVIEWER.HLP` through the ordinary
+  `BundleWindowManager`, with the standard `TVWindow` frame, right-edge
+  scrollbars and global status-line navigation.

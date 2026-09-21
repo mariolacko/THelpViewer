@@ -14,7 +14,6 @@ const {
     TVMenuController,
     TVHelpController,
     TVDesktop,
-    TVContextHelpDialog,
     TVAboutDialog,
     TVPuzzleDialog,
     TVCalendarDialog,
@@ -94,7 +93,6 @@ const DIALOG_HELP_CONTEXTS = Object.freeze({
     chdir: hcChangeDirectory,
     find: hcFind,
     search: hcSearch,
-    contexthelp: hcContextHelp,
     puzzle: hcGames,
     tetris: hcGames,
     mines: hcGames,
@@ -113,6 +111,7 @@ const DIALOG_HELP_CONTEXTS = Object.freeze({
 
 const HELPS_DIR = "helps/";
 const CATALOG_FILE = HELPS_DIR + "catalog.json";
+const CONTEXT_HELP_BUNDLE_FILE = "../assets/tv-context-help.json";
 const DOCS_DIR = "docs/";
 const DOCS_CATALOG_FILE = DOCS_DIR + "catalog.json";
 const bundleCache = new Map();
@@ -3110,7 +3109,6 @@ class TVBundleApp {
         this.dialogManager = null;
         this.menuController = null;
         this.helpController = null;
-        this.contextHelpDialog = null;
         this.docWindows = new Map();
         this._menuBundleKey = "";
         this._stateSyncTimer = null;
@@ -3144,6 +3142,14 @@ class TVBundleApp {
         };
         this._updateStatusLine("");
 
+        this.windowManager = new BundleWindowManager(this.desktop, (hint) => {
+            this._updateStatusLine(hint);
+            this._syncBundleMenu();
+            this._scheduleUrlStateSync();
+        });
+        this.windowManager.dialogManager = this.dialogManager;
+        this._bindUrlStateSync();
+
         // Register standard dialogs
         this._registerDialog("about", () => new TVAboutDialog(this.desktop));
         this._registerDialog("puzzle", () => new TVPuzzleDialog(this.desktop));
@@ -3168,14 +3174,19 @@ class TVBundleApp {
         this._registerDialog("hanoi", () => new TVHanoiDialog(this.desktop));
         this._registerDialog("tron", () => new TVTronDialog(this.desktop));
         this._registerBundleSearch();
-        this.contextHelpDialog = this._registerDialog(
-            "contexthelp",
-            () => new TVContextHelpDialog(this.desktop),
-        );
         this.helpController = new TVHelpController({
             getMenuController: () => this.menuController,
             getDialogManager: () => this.dialogManager,
-            onHelp: (helpCtx) => this.contextHelpDialog?.openContext(helpCtx),
+            onHelp: (helpCtx) => {
+                void loadBundle(CONTEXT_HELP_BUNDLE_FILE)
+                    .then((bundle) => {
+                        this._updateSearchData(bundle);
+                        if (!this.windowManager.showTopic(bundle, helpCtx)) {
+                            this.windowManager.showDefault(bundle);
+                        }
+                    })
+                    .catch((error) => console.error("Failed to load THelpViewer Help", error));
+            },
         });
         this.dialogManager.applyActiveStates();
 
@@ -3189,13 +3200,6 @@ class TVBundleApp {
         // Layout
         this.desktopView.startLayout();
 
-        this.windowManager = new BundleWindowManager(this.desktop, (hint) => {
-            this._updateStatusLine(hint);
-            this._syncBundleMenu();
-            this._scheduleUrlStateSync();
-        });
-        this.windowManager.dialogManager = this.dialogManager;
-        this._bindUrlStateSync();
     }
 
     _updateStatusLine(hint) {
@@ -3494,8 +3498,8 @@ class TVBundleApp {
                 if (!item || typeof item !== "object") { continue; }
                 if (item.t === "h") {
                     const entry = (catalogData || []).find((candidate) => candidate.file === item.f || candidate.name === item.f);
-                    if (!entry) { continue; }
-                    const bundle = await loadBundle(entry.file);
+                    if (!entry && item.f !== CONTEXT_HELP_BUNDLE_FILE) { continue; }
+                    const bundle = await loadBundle(entry ? entry.file : CONTEXT_HELP_BUNDLE_FILE);
                     this._updateSearchData(bundle);
                     if (item.view === "contents") {
                         this.windowManager.showContents(bundle);
