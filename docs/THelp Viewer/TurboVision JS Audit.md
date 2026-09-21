@@ -259,6 +259,14 @@ compatibility with old Turbo Vision applications.
     HELP/Docs target and Find Again only after that target has a query.
     Mastermind has centered, inset content and its five-column color controls
     explicitly override the generic eleven-column button minimum.
+34. **A component `display` rule could override the HTML `hidden` state.** This
+    made all three shared History popups visible on dialog open and visually
+    immune to closing even though their DOM `hidden` property was true.
+    **Resolved in Phase 7.10:** the presentation layer now enforces semantic
+    hidden state globally; `TVHistoryWindow` owns show/hide/toggle, ARIA state,
+    Escape handling and focus restoration; File Open, Change Directory and
+    Find reset it on every open. Mastermind was widened to 64 columns with a
+    60-column inset client layout.
 
 ## Component assessment
 
@@ -534,3 +542,7 @@ Recommended games remain:
   target and query, and corrected Mastermind geometry plus its inherited
   button-width conflict. Docker-backed Chrome checks dimensions, palettes,
   command states and clipping.
+- [x] Phase 7.10: made semantic hidden state authoritative across TVision,
+  consolidated the complete History popup lifecycle in `TVHistoryWindow`, and
+  widened Mastermind. Browser coverage now checks computed visibility and both
+  directions of the History toggle for File Open, Change Directory and Find.
