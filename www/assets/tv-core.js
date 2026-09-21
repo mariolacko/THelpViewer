@@ -819,10 +819,30 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
 
     setOwnedWidgetsActive(windowElement, active);
     if (closeButton) {
-        closeButton.hidden = !active;
+        closeButton.hidden = dialog && !active;
+        closeButton.classList.toggle("is-frame-control-passive", !dialog && !active);
+        if (!dialog && !active) {
+            closeButton.setAttribute("aria-hidden", "true");
+            closeButton.setAttribute("aria-disabled", "true");
+            closeButton.tabIndex = -1;
+        } else {
+            closeButton.removeAttribute("aria-hidden");
+            closeButton.removeAttribute("aria-disabled");
+            closeButton.removeAttribute("tabindex");
+        }
     }
     if (zoomButton) {
-        zoomButton.hidden = !active;
+        zoomButton.hidden = dialog && !active;
+        zoomButton.classList.toggle("is-frame-control-passive", !dialog && !active);
+        if (!dialog && !active) {
+            zoomButton.setAttribute("aria-hidden", "true");
+            zoomButton.setAttribute("aria-disabled", "true");
+            zoomButton.tabIndex = -1;
+        } else {
+            zoomButton.removeAttribute("aria-hidden");
+            zoomButton.removeAttribute("aria-disabled");
+            zoomButton.removeAttribute("tabindex");
+        }
     }
 
     if (topCorners[0]) {

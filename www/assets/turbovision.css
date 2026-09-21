@@ -836,6 +836,29 @@ button.tv-status-item {
     color: var(--tv-current-title-fg, var(--tv-title-text));
 }
 
+.tv-close-control.is-frame-control-passive,
+.tv-zoom-control.is-frame-control-passive {
+    position: relative;
+    pointer-events: none;
+    cursor: default;
+    color: transparent;
+    background: var(--tv-current-title-bg, var(--tv-window));
+}
+
+.tv-close-control.is-frame-control-passive > *,
+.tv-zoom-control.is-frame-control-passive > * {
+    visibility: hidden;
+}
+
+.tv-close-control.is-frame-control-passive::after,
+.tv-zoom-control.is-frame-control-passive::after {
+    position: absolute;
+    inset: 0;
+    color: var(--tv-current-frame);
+    content: "───";
+    text-align: center;
+}
+
 .tv-close-control:hover,
 .tv-close-control:focus-visible,
 .tv-zoom-control:hover,

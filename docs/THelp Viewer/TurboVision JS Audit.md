@@ -273,6 +273,15 @@ compatibility with old Turbo Vision applications.
     undo history while its dialog supports roving focus, keyboard, click and
     drag-and-drop. Both use the shared managed Hall of Fame and are registered
     in bundle and standalone applications.
+36. **The global semantic `hidden` rule exposed a standard-window frame
+    regression.** `updateWindowFrameState()` hid the close and zoom elements
+    on passive HELP and Docs windows. Because those elements are columns in
+    `TVWindow`'s title-row grid, removing them shifted the caption and the
+    top-right corner and left gaps in the top line. **Resolved in Phase 7.12:**
+    passive standard-window controls retain their grid cells, become
+    non-interactive and paint single-line frame segments; dialog controls keep
+    their overlay-specific hidden behaviour. The exact reported README/TCHELP
+    URL is exercised in both active-window orders in real Chrome.
 
 ## Component assessment
 
@@ -556,3 +565,6 @@ No previously recommended game remains unimplemented.
   integration. Unit tests cover simultaneous collision and reversible Hanoi
   rules; Docker Chrome covers rendering, focus, keyboard, drag and inactive
   pause/resume.
+- [x] Phase 7.12: preserved passive `TVWindow` title-grid geometry while
+  replacing inactive close/zoom controls with non-interactive frame segments.
+  The reported README/TCHELP state is a real-Chrome regression fixture.

@@ -58,6 +58,7 @@ class FakeElement {
     }
     getAttribute(name) { return this.attributes.get(name) || null; }
     setAttribute(name, value) { this.attributes.set(name, String(value)); }
+    removeAttribute(name) { this.attributes.delete(name); }
     getBoundingClientRect() { return { width: 8, height: 16 }; }
     querySelector() { return null; }
     querySelectorAll() { return []; }

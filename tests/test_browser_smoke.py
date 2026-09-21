@@ -1264,6 +1264,83 @@ async function run() {
         throw new Error(`README table layout is broken: ${JSON.stringify(readmeTable)}`);
     }
 
+    const inactiveFrameState = "#tv=1.eyJ2IjoxLCJhIjowLCJ6IjpbMSwwXSwidyI6W3sidCI6ImgiLCJmIjoiQm9ybGFuZCBDKysgMi4wIERPUyBjdXJyZW50L3RjaGVscC5qc29uLmd6IiwidmlldyI6InRvcGljIiwiZyI6WzkzLDE0MCw4NCwyOCwwXSwidG9waWMiOiIxMTY1IiwibGluZSI6MSwicyI6WzAsMF19LHsidCI6ImRvYyIsImYiOiJSRUFETUUubWQiLCJnIjpbNDcsMTcsOTcsMzIsMF0sInMiOlswLDcyMl19XX0";
+    await send("Page.navigate", { url: appUrl + "?inactive-frame=1" + inactiveFrameState });
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const readme = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
+                element.querySelector('.tv-window-caption')?.textContent === 'README'
+            );
+            const help = document.querySelector('[data-tv-bundle-window]');
+            if (readme && help) { resolve(true); return; }
+            if (Date.now() >= deadline) { reject(new Error('reported inactive-frame state did not restore')); return; }
+            setTimeout(check, 50);
+        };
+        check();
+    })`, true);
+    const inspectPassiveFrame = `(windowElement) => {
+        const top = windowElement.querySelector('.tv-border-top');
+        const windowRect = windowElement.getBoundingClientRect();
+        const topRect = top.getBoundingClientRect();
+        const cells = Array.from(top.children)
+            .filter((cell) => getComputedStyle(cell).display !== 'none')
+            .map((cell) => cell.getBoundingClientRect());
+        const gaps = cells.slice(1).map((cell, index) => cell.left - cells[index].right);
+        const captionRect = top.querySelector('.tv-window-caption').getBoundingClientRect();
+        const controls = Array.from(top.querySelectorAll('.tv-close-control, .tv-zoom-control'));
+        return {
+            inactive: windowElement.classList.contains('is-window-inactive'),
+            leftCorner: top.querySelector('.tv-border-corner-tl')?.textContent,
+            rightCorner: top.querySelector('.tv-border-corner-tr')?.textContent,
+            rightEdgeDelta: Math.abs(windowRect.right - cells[cells.length - 1].right),
+            maxGap: Math.max(0, ...gaps),
+            captionCenterDelta: Math.abs(
+                (captionRect.left + captionRect.width / 2) - (topRect.left + topRect.width / 2)
+            ),
+            controls: controls.map((control) => ({
+                hidden: control.hidden,
+                passive: control.classList.contains('is-frame-control-passive'),
+                ariaHidden: control.getAttribute('aria-hidden'),
+                ariaDisabled: control.getAttribute('aria-disabled'),
+                tabIndex: control.tabIndex,
+                display: getComputedStyle(control).display,
+            })),
+        };
+    }`;
+    const readmePassiveFrame = await evaluate(`(() => {
+        const readme = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
+            element.querySelector('.tv-window-caption')?.textContent === 'README'
+        );
+        return (${inspectPassiveFrame})(readme);
+    })()`);
+    const passiveFrameIsIntact = (frame) => (
+        frame.inactive && frame.leftCorner === '┌' && frame.rightCorner === '┐'
+        && frame.rightEdgeDelta < 1 && frame.maxGap < 1 && frame.captionCenterDelta < 1
+        && frame.controls.length === 2
+        && frame.controls.every((control) => (
+            !control.hidden && control.passive && control.ariaHidden === 'true'
+            && control.ariaDisabled === 'true' && control.tabIndex === -1
+            && control.display !== 'none'
+        ))
+    );
+    if (!passiveFrameIsIntact(readmePassiveFrame)) {
+        throw new Error(`Inactive README frame collapsed: ${JSON.stringify(readmePassiveFrame)}`);
+    }
+    await evaluate(`(() => {
+        const readme = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
+            element.querySelector('.tv-window-caption')?.textContent === 'README'
+        );
+        readme.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    })()`);
+    await pause();
+    const helpPassiveFrame = await evaluate(`(() => {
+        return (${inspectPassiveFrame})(document.querySelector('[data-tv-bundle-window]'));
+    })()`);
+    if (!passiveFrameIsIntact(helpPassiveFrame)) {
+        throw new Error(`Inactive TCHELP frame collapsed: ${JSON.stringify(helpPassiveFrame)}`);
+    }
+
     await evaluate(`(() => {
         const readme = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
             element.querySelector('.tv-window-caption')?.textContent === 'README'

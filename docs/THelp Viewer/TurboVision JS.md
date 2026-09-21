@@ -90,7 +90,10 @@ Header, footer and both row-side glyphs inherit the same current frame color.
   is overlaid at columns 2–4 and the title is centered over one continuous
   frame line, matching `TFrame` rather than participating in the layout.
 - **TVWindow** — Shared `TVGroup` base and standard window-frame composition
-  used by HELP, Docs and dialogs.
+  used by HELP, Docs and dialogs. On a passive standard window, the close and
+  zoom cells remain in the title-row grid but become non-interactive
+  single-line frame segments. This preserves the centered caption and both
+  frame corners while matching the inactive `TFrame` drawing.
 - **TVDialog** — `TVWindow` subclass with a managed overlay; it may be modal or
   non-modal.
   - `open()`, `close()`, `destroy()`, `center()`, `isOpen()`, `isActive()`
