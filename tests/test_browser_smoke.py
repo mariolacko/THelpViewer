@@ -1416,6 +1416,110 @@ async function run() {
     }
     await key("Escape", "Escape", 0, true);
 
+    await evaluate(`document.querySelector('[data-tv-dialog-open="tron"]').click()`);
+    await pause();
+    const tronOpen = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Tron Light Cycles'
+        );
+        const group = dialog?.querySelector('.tv-group');
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
+            cells: dialog?.querySelectorAll('.tv-tron-cell').length || 0,
+            heads: dialog?.querySelectorAll('.tv-tron-cell.is-head').length || 0,
+            hall: dialog?.querySelector('.tv-game-hall-control')?.textContent || '',
+            timer: Boolean(dialog?.querySelector('[data-tv-tron-status]')?.textContent.includes('Ticks:')),
+            clipped: Boolean(group && (group.scrollWidth > group.clientWidth || group.scrollHeight > group.clientHeight)),
+        };
+    })()`);
+    if (!tronOpen.open || tronOpen.cells !== 540 || tronOpen.heads !== 2
+        || tronOpen.hall !== '[H]' || !tronOpen.timer || tronOpen.clipped) {
+        throw new Error(`Tron dialog is incomplete: ${JSON.stringify(tronOpen)}`);
+    }
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="hanoi"]').click()`);
+    await pause();
+    const hanoiOpen = await evaluate(`(() => {
+        const hanoi = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Tower of Hanoi'
+        );
+        const tron = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Tron Light Cycles'
+        );
+        const group = hanoi?.querySelector('.tv-group');
+        return {
+            open: Boolean(hanoi && !hanoi.closest('.tv-dialog-overlay').hidden),
+            towers: hanoi?.querySelectorAll('.tv-hanoi-tower').length || 0,
+            disks: hanoi?.querySelectorAll('.tv-hanoi-disk').length || 0,
+            draggable: hanoi?.querySelectorAll('.tv-hanoi-disk[draggable="true"]').length || 0,
+            focused: document.activeElement?.dataset.tvHanoiTower,
+            emptyHistory: hanoi?.querySelector('[data-tv-hanoi-history]')?.textContent.includes('(empty)'),
+            hall: hanoi?.querySelector('.tv-game-hall-control')?.textContent || '',
+            tronPaused: tron?.querySelector('[data-tv-tron-status]')?.textContent.includes('Inactive window'),
+            tronTicks: Number((tron?.querySelector('[data-tv-tron-status]')?.textContent.match(/Ticks: ([0-9]+)/) || [])[1] || 0),
+            clipped: Boolean(group && (group.scrollWidth > group.clientWidth || group.scrollHeight > group.clientHeight)),
+        };
+    })()`);
+    if (!hanoiOpen.open || hanoiOpen.towers !== 3 || hanoiOpen.disks !== 5
+        || hanoiOpen.draggable !== 1 || hanoiOpen.focused !== '0' || !hanoiOpen.emptyHistory
+        || hanoiOpen.hall !== '[H]' || !hanoiOpen.tronPaused || hanoiOpen.clipped) {
+        throw new Error(`Tower of Hanoi dialog is incomplete: ${JSON.stringify(hanoiOpen)}`);
+    }
+    await key("Enter", "Enter");
+    await key("ArrowRight", "ArrowRight");
+    await key("Enter", "Enter");
+    await pause();
+    const hanoiKeyboardMove = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Tower of Hanoi'
+        );
+        return {
+            history: dialog?.querySelector('[data-tv-hanoi-history]')?.textContent || '',
+            status: dialog?.querySelector('[data-tv-hanoi-status]')?.textContent || '',
+            focused: document.activeElement?.dataset.tvHanoiTower,
+        };
+    })()`);
+    if (!hanoiKeyboardMove.history.includes('1→2 disk 1')
+        || !hanoiKeyboardMove.status.includes('Moves: 1') || hanoiKeyboardMove.focused !== '1') {
+        throw new Error(`Hanoi keyboard move failed: ${JSON.stringify(hanoiKeyboardMove)}`);
+    }
+    await key("u", "KeyU");
+    await pause();
+    const hanoiDragMove = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Tower of Hanoi'
+        );
+        const disk = dialog?.querySelector('[data-tv-hanoi-tower="0"] .tv-hanoi-disk[draggable="true"]');
+        const target = dialog?.querySelector('.tv-hanoi-tower[data-tv-hanoi-tower="2"]');
+        const transfer = new DataTransfer();
+        disk?.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+        target?.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+        target?.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }));
+        disk?.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: transfer }));
+        return {
+            history: dialog?.querySelector('[data-tv-hanoi-history]')?.textContent || '',
+            status: dialog?.querySelector('[data-tv-hanoi-status]')?.textContent || '',
+        };
+    })()`);
+    if (!hanoiDragMove.history.includes('1→3 disk 1') || !hanoiDragMove.status.includes('Moves: 1')) {
+        throw new Error(`Hanoi drag move failed: ${JSON.stringify(hanoiDragMove)}`);
+    }
+    await key("Escape", "Escape", 0, true);
+    await pause();
+    const tronResumed = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Tron Light Cycles'
+        );
+        const text = dialog?.querySelector('[data-tv-tron-status]')?.textContent || '';
+        const ticks = Number((text.match(/Ticks: ([0-9]+)/) || [])[1] || 0);
+        return { text, ticks, active: dialog?.classList.contains('is-window-active') };
+    })()`);
+    if (!tronResumed.active || tronResumed.text.includes('Inactive window')
+        || tronResumed.ticks <= hanoiOpen.tronTicks) {
+        throw new Error(`Tron did not resume after reactivation: ${JSON.stringify({ hanoiOpen, tronResumed })}`);
+    }
+    await key("Escape", "Escape", 0, true);
+
     await evaluate(`document.querySelector('[data-tv-dialog-open="puzzle"]').click()`);
     await pause();
     const hallOpen = await evaluate(`(() => {

@@ -32,7 +32,9 @@ const {
     TVReversiDialog,
     TVLudoDialog,
     TVMastermindDialog,
+    TVHanoiDialog,
     TVSnakeDialog,
+    TVTronDialog,
     TVScreenSaver,
     TVWindow,
     TVWidget,
@@ -2969,6 +2971,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
     // Games menu
     const gamesPopupItems = [
         { type: "dialog", dialog: "breakout", label: "~B~reakOut" },
+        { type: "dialog", dialog: "hanoi", label: "Tower of ~H~anoi" },
         { type: "dialog", dialog: "lines", label: "~L~ines" },
         { type: "dialog", dialog: "ludo", label: "L~u~do" },
         { type: "dialog", dialog: "mastermind", label: "M~a~stermind" },
@@ -2978,6 +2981,7 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { type: "dialog", dialog: "snake", label: "S~n~ake" },
         { type: "dialog", dialog: "sokoban", label: "~S~okoban" },
         { type: "dialog", dialog: "tetris", label: "~T~etris" },
+        { type: "dialog", dialog: "tron", label: "Tr~o~n Light Cycles" },
     ];
     const gamesRootHTML = renderMenuRoot(
         renderHotkeyMarkup("~G~ames"),
@@ -3071,6 +3075,8 @@ class TVBundleApp {
         this._registerDialog("ludo", () => new TVLudoDialog(this.desktop));
         this._registerDialog("mastermind", () => new TVMastermindDialog(this.desktop));
         this._registerDialog("snake", () => new TVSnakeDialog(this.desktop));
+        this._registerDialog("hanoi", () => new TVHanoiDialog(this.desktop));
+        this._registerDialog("tron", () => new TVTronDialog(this.desktop));
         this._registerBundleSearch();
         this.dialogManager.applyActiveStates();
 

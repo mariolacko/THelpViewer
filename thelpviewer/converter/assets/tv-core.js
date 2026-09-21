@@ -215,6 +215,8 @@ const DEFAULT_UI_CONFIG = Object.freeze({
         popup: [
             { type: "dialog", dialog: "about", label: "~A~bout" },
             { type: "dialog", dialog: "puzzle", label: "~P~uzzle" },
+            { type: "dialog", dialog: "hanoi", label: "Tower of ~H~anoi" },
+            { type: "dialog", dialog: "tron", label: "Tr~o~n Light Cycles" },
             { type: "dialog", dialog: "calendar", label: "Ca~l~endar" },
             { type: "dialog", dialog: "ascii", label: "Ascii ~T~able" },
             { type: "dialog", dialog: "calc", label: "~C~alculator" },

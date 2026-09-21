@@ -392,9 +392,161 @@ class MastermindGame {
     }
 }
 
-const LUDO_RULES_EXPORTS = {
+class TronGame {
+    constructor({ width = 30, height = 18 } = {}) {
+        this.width = Math.max(10, Math.trunc(Number(width) || 30));
+        this.height = Math.max(8, Math.trunc(Number(height) || 18));
+        this.reset();
+    }
+
+    reset() {
+        const middle = Math.floor(this.height / 2);
+        this.players = [
+            { x: Math.floor(this.width / 4), y: middle, dx: 1, dy: 0, alive: true },
+            { x: this.width - Math.floor(this.width / 4) - 1, y: middle, dx: -1, dy: 0, alive: true },
+        ];
+        this.pendingDirections = this.players.map(({ dx, dy }) => ({ dx, dy }));
+        this.trails = this.players.map((player) => new Set([this._key(player.x, player.y)]));
+        this.ticks = 0;
+        this.status = "running";
+        this.winner = null;
+        return this;
+    }
+
+    _key(x, y) {
+        return `${x},${y}`;
+    }
+
+    queueDirection(playerIndex, dx, dy) {
+        const player = this.players[playerIndex];
+        if (!player || !player.alive || this.status !== "running") { return false; }
+        const horizontal = Number(dx) !== 0 && Number(dy) === 0;
+        const vertical = Number(dy) !== 0 && Number(dx) === 0;
+        if (!horizontal && !vertical) { return false; }
+        const next = { dx: Math.sign(dx), dy: Math.sign(dy) };
+        if (next.dx === -player.dx && next.dy === -player.dy) { return false; }
+        this.pendingDirections[playerIndex] = next;
+        return true;
+    }
+
+    clearPendingDirections() {
+        this.pendingDirections = this.players.map(({ dx, dy }) => ({ dx, dy }));
+    }
+
+    occupied(x, y) {
+        const key = this._key(x, y);
+        return this.trails.some((trail) => trail.has(key));
+    }
+
+    tick() {
+        if (this.status !== "running") { return this.status; }
+        const next = this.players.map((player, index) => {
+            if (!player.alive) { return null; }
+            const direction = this.pendingDirections[index] || player;
+            return { x: player.x + direction.dx, y: player.y + direction.dy, ...direction };
+        });
+        const crashed = next.map((position) => Boolean(position && (
+            position.x < 0 || position.x >= this.width
+            || position.y < 0 || position.y >= this.height
+            || this.occupied(position.x, position.y)
+        )));
+        if (next[0] && next[1] && next[0].x === next[1].x && next[0].y === next[1].y) {
+            crashed[0] = true;
+            crashed[1] = true;
+        }
+        for (let index = 0; index < this.players.length; index += 1) {
+            const player = this.players[index];
+            const position = next[index];
+            if (!player.alive || !position) { continue; }
+            player.dx = position.dx;
+            player.dy = position.dy;
+            if (crashed[index]) {
+                player.alive = false;
+            } else {
+                player.x = position.x;
+                player.y = position.y;
+                this.trails[index].add(this._key(position.x, position.y));
+            }
+        }
+        this.clearPendingDirections();
+        this.ticks += 1;
+        const alive = this.players.map((player, index) => player.alive ? index : -1).filter((index) => index >= 0);
+        if (alive.length < 2) {
+            this.winner = alive.length === 1 ? alive[0] : null;
+            this.status = alive.length === 1 ? "won" : "draw";
+        }
+        return this.status;
+    }
+}
+
+class HanoiGame {
+    constructor(diskCount = 5) {
+        this.diskCount = Math.max(3, Math.min(7, Math.trunc(Number(diskCount) || 5)));
+        this.reset();
+    }
+
+    reset() {
+        this.towers = [
+            Array.from({ length: this.diskCount }, (_, index) => this.diskCount - index),
+            [],
+            [],
+        ];
+        this.history = [];
+        this.status = "playing";
+        return this;
+    }
+
+    top(tower) {
+        const items = this.towers[tower];
+        return items?.length ? items[items.length - 1] : null;
+    }
+
+    canMove(from, to) {
+        if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || from > 2 || to < 0 || to > 2 || from === to) {
+            return false;
+        }
+        const disk = this.top(from);
+        const target = this.top(to);
+        return disk !== null && (target === null || disk < target);
+    }
+
+    move(from, to) {
+        if (this.status === "won" || !this.canMove(from, to)) { return false; }
+        const disk = this.towers[from].pop();
+        this.towers[to].push(disk);
+        this.history.push({ from, to, disk });
+        if (this.towers[2].length === this.diskCount) { this.status = "won"; }
+        return true;
+    }
+
+    undo() {
+        const move = this.history.pop();
+        if (!move) { return false; }
+        const disk = this.towers[move.to].pop();
+        if (disk !== move.disk) {
+            this.towers[move.to].push(disk);
+            this.history.push(move);
+            return false;
+        }
+        this.towers[move.from].push(disk);
+        this.status = "playing";
+        return true;
+    }
+
+    get moves() {
+        return this.history.length;
+    }
+
+    get minimumMoves() {
+        return (2 ** this.diskCount) - 1;
+    }
+}
+
+const GAME_RULES_EXPORTS = {
     LudoGame,
     MastermindGame,
+    TronGame,
+    HanoiGame,
     LUDO_BASE_POSITIONS,
     LUDO_COMMON_PATH,
     LUDO_DEFAULT_MODES,
@@ -407,10 +559,10 @@ const LUDO_RULES_EXPORTS = {
     LUDO_TRACK_LENGTH,
 };
 
-Object.assign(TV, LUDO_RULES_EXPORTS);
+Object.assign(TV, GAME_RULES_EXPORTS);
 
 if (typeof module === "object" && module.exports && !(root && root.document)) {
-    module.exports = LUDO_RULES_EXPORTS;
+    module.exports = GAME_RULES_EXPORTS;
     return;
 }
 
@@ -526,7 +678,9 @@ const HALL_OF_FAME_GAMES = Object.freeze({
     reversi: { title: "Reversi", unit: "margin" },
     ludo: { title: "Ludo", unit: "moves", lowerIsBetter: true },
     mastermind: { title: "Mastermind", unit: "turns", lowerIsBetter: true },
+    hanoi: { title: "Tower of Hanoi", unit: "moves", lowerIsBetter: true },
     snake: { title: "Snake", unit: "points", legacyKey: "tv-snake-best" },
+    tron: { title: "Tron Light Cycles", unit: "ticks" },
 });
 
 function hallOfFameConfig(game) {
@@ -3582,6 +3736,414 @@ class TVMastermindDialog extends TVDialog {
     }
 }
 
+// ── Tron Light Cycles ────────────────────────────────────────────────
+
+const TRON_COLS = 30;
+const TRON_ROWS = 18;
+const TRON_TICK_MS = 90;
+
+class TVTronDialog extends TVDialog {
+    constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const fieldWidth = TRON_COLS * 2;
+        const infoX = fieldWidth + 2;
+        const tronMain = new TVGroup({
+            w: infoX + 22, h: TRON_ROWS,
+            children: [
+                new TVStaticText({
+                    x: 0, y: 0, w: fieldWidth, h: TRON_ROWS,
+                    attrs: { "data-tv-tron-field": true, role: "img", "aria-label": "Tron arena" },
+                }),
+                new TVStaticText({ x: infoX, y: 0, w: 22, text: "P1: W A S D" }),
+                new TVStaticText({ x: infoX, y: 2, w: 22, text: "P2: Arrow keys" }),
+                new TVStaticText({ x: infoX, y: 5, w: 22, h: 4, attrs: { "data-tv-tron-status": true, "aria-live": "polite" } }),
+                new TVButton({ x: infoX, y: 10, w: 15, className: "is-default", attrs: { type: "button", "data-tv-tron-new": true }, label: "~N~ew round" }),
+                new TVButton({ x: infoX, y: 12, w: 15, attrs: { type: "button", "data-tv-tron-pause": true }, label: "~P~ause" }),
+                new TVStaticText({ x: infoX, y: 15, w: 22, h: 2, text: "Avoid every trail.\nBoth move together." }),
+            ],
+        }).renderMarkup();
+        super({
+            desktop,
+            windowClass: "tv-tron-window",
+            ariaLabel: "Tron Light Cycles",
+            title: "Tron Light Cycles",
+            closeAttrs: { "data-tv-tron-close": true, "aria-label": "Close Tron Light Cycles" },
+            bodyMarkup: tronMain,
+            footerMarkup: TVDialog.footerMarkup(),
+            width: "88ch",
+            height: "min(22em, calc(100% - 2em))",
+        });
+        installHallOfFame(this, "tron");
+        this.game = new TronGame({ width: TRON_COLS, height: TRON_ROWS });
+        this.field = this.query("[data-tv-tron-field]");
+        this.status = this.query("[data-tv-tron-status]");
+        this.pauseButton = this.query("[data-tv-tron-pause]");
+        this.timerId = null;
+        this.manualPause = false;
+        this.inactivePause = false;
+        this.scoreSubmitted = false;
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+        this.bind();
+        this.render();
+    }
+
+    bind() {
+        const directions = new Map([
+            ["w", [0, 0, -1]], ["a", [0, -1, 0]], ["s", [0, 0, 1]], ["d", [0, 1, 0]],
+            ["ArrowUp", [1, 0, -1]], ["ArrowLeft", [1, -1, 0]],
+            ["ArrowDown", [1, 0, 1]], ["ArrowRight", [1, 1, 0]],
+        ]);
+        this._onKeyDown = (event) => {
+            if (!this.isActive()) { return; }
+            const key = event.key.length === 1 ? event.key.toLocaleLowerCase() : event.key;
+            const direction = directions.get(key);
+            if (direction) {
+                event.preventDefault();
+                this.game.queueDirection(direction[0], direction[1], direction[2]);
+                return;
+            }
+            if (key === "n" || (this.game.status !== "running" && event.key === "Enter")) {
+                event.preventDefault();
+                this.newGame();
+            } else if (key === "p") {
+                event.preventDefault();
+                this.togglePause();
+            }
+        };
+        this._onWindowBlur = () => this.game.clearPendingDirections();
+        document.addEventListener("keydown", this._onKeyDown);
+        window.addEventListener("blur", this._onWindowBlur);
+        this.query("[data-tv-tron-new]")?.addEventListener("click", () => this.newGame());
+        this.pauseButton?.addEventListener("click", () => this.togglePause());
+    }
+
+    open() {
+        super.open();
+        this.newGame();
+    }
+
+    close() {
+        this.stopTimer();
+        this.game.clearPendingDirections();
+        super.close();
+    }
+
+    newGame() {
+        this.game.reset();
+        this.manualPause = false;
+        this.inactivePause = false;
+        this.scoreSubmitted = false;
+        this.startTimer();
+        this.render();
+    }
+
+    togglePause() {
+        if (this.game.status !== "running") { return; }
+        this.manualPause = !this.manualPause;
+        this.game.clearPendingDirections();
+        this.renderStatus();
+    }
+
+    startTimer() {
+        this.stopTimer();
+        this.timerId = window.setInterval(() => {
+            if (!this.isActive()) {
+                this.game.clearPendingDirections();
+                if (!this.inactivePause) {
+                    this.inactivePause = true;
+                    this.renderStatus();
+                }
+                return;
+            }
+            if (this.inactivePause) {
+                this.inactivePause = false;
+                this.renderStatus();
+            }
+            if (this.manualPause || this.game.status !== "running") { return; }
+            this.game.tick();
+            if (this.game.status !== "running") { this.finishRound(); }
+            this.render();
+        }, TRON_TICK_MS);
+    }
+
+    stopTimer() {
+        if (this.timerId !== null) {
+            window.clearInterval(this.timerId);
+            this.timerId = null;
+        }
+    }
+
+    finishRound() {
+        if (this.scoreSubmitted || this.game.winner === null) { return; }
+        this.scoreSubmitted = true;
+        submitHallOfFameScore(this, "tron", this.game.ticks, {
+            note: `P${this.game.winner + 1}`,
+        });
+    }
+
+    render() {
+        this.renderField();
+        this.renderStatus();
+        fillBorders(this.root);
+    }
+
+    renderStatus() {
+        if (!this.status) { return; }
+        if (this.inactivePause) {
+            this.status.textContent = "Inactive window\nPaused automatically";
+        } else if (this.manualPause) {
+            this.status.textContent = "PAUSED\nPress P to resume";
+        } else if (this.game.status === "draw") {
+            this.status.textContent = `DRAW\nTicks: ${this.game.ticks}`;
+        } else if (this.game.status === "won") {
+            this.status.textContent = `PLAYER ${this.game.winner + 1} WINS\nTicks: ${this.game.ticks}`;
+        } else {
+            this.status.textContent = `Running\nTicks: ${this.game.ticks}`;
+        }
+        if (this.pauseButton) {
+            const label = this.pauseButton.querySelector(".tv-dialog-button-label");
+            if (label) { label.innerHTML = renderHotkeyMarkup(this.manualPause ? "~R~esume" : "~P~ause"); }
+        }
+    }
+
+    renderField() {
+        if (!this.field) { return; }
+        const owners = new Map();
+        this.game.trails.forEach((trail, player) => {
+            trail.forEach((key) => owners.set(key, player));
+        });
+        const heads = new Map();
+        this.game.players.forEach((player, index) => {
+            if (player.alive) { heads.set(`${player.x},${player.y}`, index); }
+        });
+        const cells = [];
+        for (let y = 0; y < TRON_ROWS; y += 1) {
+            for (let x = 0; x < TRON_COLS; x += 1) {
+                const key = `${x},${y}`;
+                const owner = owners.get(key);
+                const head = heads.get(key);
+                const playerClass = owner === 0 ? " tv-tron-player-one" : owner === 1 ? " tv-tron-player-two" : "";
+                const headClass = head !== undefined ? " is-head" : "";
+                cells.push(`<span class="tv-tron-cell${playerClass}${headClass}">${owner === undefined ? "  " : head !== undefined ? "@@" : "██"}</span>`);
+            }
+        }
+        this.field.innerHTML = cells.join("");
+    }
+}
+
+// ── Tower of Hanoi ──────────────────────────────────────────────────
+
+class TVHanoiDialog extends TVDialog {
+    constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const hanoiMain = new TVGroup({
+            w: 79, h: 15,
+            children: [
+                new TVStaticText({ x: 1, y: 1, w: 54, h: 10, attrs: { "data-tv-hanoi-board": true } }),
+                new TVStaticText({ x: 57, y: 1, w: 20, h: 8, attrs: { "data-tv-hanoi-history": true, "aria-live": "polite" } }),
+                new TVButton({ x: 57, y: 9, w: 12, attrs: { type: "button", "data-tv-hanoi-undo": true }, label: "~U~ndo" }),
+                new TVButton({ x: 57, y: 11, w: 12, className: "is-default", attrs: { type: "button", "data-tv-hanoi-new": true }, label: "~N~ew" }),
+                new TVStaticText({ x: 1, y: 12, w: 54, h: 2, attrs: { "data-tv-hanoi-status": true, "aria-live": "polite" } }),
+            ],
+        }).renderMarkup();
+        super({
+            desktop,
+            windowClass: "tv-hanoi-window",
+            ariaLabel: "Tower of Hanoi",
+            title: "Tower of Hanoi",
+            closeAttrs: { "data-tv-hanoi-close": true, "aria-label": "Close Tower of Hanoi" },
+            bodyMarkup: hanoiMain,
+            footerMarkup: TVDialog.footerMarkup(),
+            width: "83ch",
+            height: "min(19em, calc(100% - 2em))",
+        });
+        installHallOfFame(this, "hanoi");
+        this.game = new HanoiGame(5);
+        this.board = this.query("[data-tv-hanoi-board]");
+        this.historyView = this.query("[data-tv-hanoi-history]");
+        this.status = this.query("[data-tv-hanoi-status]");
+        this.undoButton = this.query("[data-tv-hanoi-undo]");
+        this.focusedTower = 0;
+        this.selectedTower = null;
+        this.dragTower = null;
+        this.scoreSubmitted = false;
+        this.message = "Select a source tower.";
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+        this.bind();
+        this.render();
+    }
+
+    bind() {
+        this.root.addEventListener("click", (event) => {
+            const tower = event.target.closest("[data-tv-hanoi-tower]");
+            if (tower) {
+                this.focusedTower = Number(tower.dataset.tvHanoiTower);
+                this.activateTower(this.focusedTower);
+                return;
+            }
+            if (event.target.closest("[data-tv-hanoi-undo]")) { this.undo(); }
+            if (event.target.closest("[data-tv-hanoi-new]")) { this.newGame(); }
+        });
+        this.root.addEventListener("dragstart", (event) => {
+            const disk = event.target.closest("[data-tv-hanoi-disk][draggable=\"true\"]");
+            if (!disk) { event.preventDefault(); return; }
+            this.dragTower = Number(disk.dataset.tvHanoiTower);
+            this.selectedTower = this.dragTower;
+            event.dataTransfer?.setData("text/plain", String(this.dragTower));
+            if (event.dataTransfer) { event.dataTransfer.effectAllowed = "move"; }
+            disk.closest(".tv-hanoi-tower")?.classList.add("is-selected");
+        });
+        this.root.addEventListener("dragover", (event) => {
+            if (event.target.closest("[data-tv-hanoi-tower]")) { event.preventDefault(); }
+        });
+        this.root.addEventListener("drop", (event) => {
+            const tower = event.target.closest("[data-tv-hanoi-tower]");
+            if (!tower || this.dragTower === null) { return; }
+            event.preventDefault();
+            const from = this.dragTower;
+            this.dragTower = null;
+            this.selectedTower = null;
+            this.focusedTower = Number(tower.dataset.tvHanoiTower);
+            this.move(from, this.focusedTower, true);
+        });
+        this.root.addEventListener("dragend", () => {
+            this.dragTower = null;
+            this.selectedTower = null;
+            this.render(false);
+        });
+        this._onKeyDown = (event) => {
+            if (!this.isActive()) { return; }
+            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                const step = event.key === "ArrowLeft" ? -1 : 1;
+                this.focusTower((this.focusedTower + step + 3) % 3);
+            } else if (/^[1-3]$/.test(event.key)) {
+                event.preventDefault();
+                this.focusTower(Number(event.key) - 1);
+            } else if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                this.activateTower(this.focusedTower);
+            } else if (event.key.toLocaleLowerCase() === "u") {
+                event.preventDefault();
+                this.undo();
+            } else if (event.key.toLocaleLowerCase() === "n") {
+                event.preventDefault();
+                this.newGame();
+            }
+        };
+        document.addEventListener("keydown", this._onKeyDown);
+    }
+
+    open() {
+        super.open();
+        this.newGame();
+        window.requestAnimationFrame(() => this.focusTower(0));
+    }
+
+    newGame() {
+        this.game.reset();
+        this.focusedTower = 0;
+        this.selectedTower = null;
+        this.dragTower = null;
+        this.scoreSubmitted = false;
+        this.message = "Select a source tower.";
+        this.render();
+    }
+
+    focusTower(tower) {
+        this.focusedTower = Math.max(0, Math.min(2, Number(tower) || 0));
+        this.render(false);
+        this.board?.querySelector(`[data-tv-hanoi-tower="${this.focusedTower}"]`)?.focus();
+    }
+
+    activateTower(tower) {
+        if (this.game.status === "won") { return; }
+        if (this.selectedTower === null) {
+            if (this.game.top(tower) === null) {
+                this.message = "That tower is empty.";
+            } else {
+                this.selectedTower = tower;
+                this.message = `Disk ${this.game.top(tower)} selected. Choose a destination.`;
+            }
+            this.render(true);
+            return;
+        }
+        const from = this.selectedTower;
+        this.selectedTower = null;
+        if (from === tower) {
+            this.message = "Selection cancelled.";
+            this.render(true);
+            return;
+        }
+        this.move(from, tower, true);
+    }
+
+    move(from, to, focus = false) {
+        if (!this.game.move(from, to)) {
+            this.message = "Illegal move: smaller disks must stay on top.";
+            this.render(focus);
+            return false;
+        }
+        this.message = `Moved disk to tower ${to + 1}.`;
+        if (this.game.status === "won" && !this.scoreSubmitted) {
+            this.scoreSubmitted = true;
+            this.message = `Solved in ${this.game.moves} moves (minimum ${this.game.minimumMoves}).`;
+            submitHallOfFameScore(this, "hanoi", this.game.moves, { note: `${this.game.diskCount} disks` });
+        }
+        this.render(focus);
+        return true;
+    }
+
+    undo() {
+        this.selectedTower = null;
+        if (!this.game.undo()) {
+            this.message = "No move to undo.";
+        } else {
+            this.scoreSubmitted = false;
+            this.message = "Last move undone.";
+        }
+        this.render(true);
+    }
+
+    render(focus = false) {
+        this.renderBoard();
+        this.renderHistory();
+        if (this.status) {
+            this.status.textContent = `${this.message}\nMoves: ${this.game.moves} / minimum ${this.game.minimumMoves}`;
+        }
+        if (this.undoButton) { this.undoButton.disabled = this.game.history.length === 0; }
+        fillBorders(this.root);
+        if (focus) {
+            window.requestAnimationFrame(() => {
+                this.board?.querySelector(`[data-tv-hanoi-tower="${this.focusedTower}"]`)?.focus();
+            });
+        }
+    }
+
+    renderBoard() {
+        if (!this.board) { return; }
+        this.board.innerHTML = this.game.towers.map((disks, tower) => {
+            const top = this.game.top(tower);
+            const diskMarkup = disks.map((disk) => (
+                `<span class="tv-hanoi-disk tv-hanoi-disk-${disk}" data-tv-hanoi-disk="${disk}" data-tv-hanoi-tower="${tower}"`
+                + ` style="--tv-hanoi-disk-width:${4 + disk * 2}ch" draggable="${disk === top}">${disk}</span>`
+            )).join("");
+            const selected = this.selectedTower === tower ? " is-selected" : "";
+            return `<div class="tv-hanoi-tower${selected}" data-tv-hanoi-tower="${tower}" role="button" tabindex="${tower === this.focusedTower ? 0 : -1}" aria-label="Tower ${tower + 1}"><span class="tv-hanoi-rod" aria-hidden="true"></span>${diskMarkup}<span class="tv-hanoi-base" aria-hidden="true">${"═".repeat(16)}</span><span class="tv-hanoi-number">${tower + 1}</span></div>`;
+        }).join("");
+    }
+
+    renderHistory() {
+        if (!this.historyView) { return; }
+        const recent = this.game.history.slice(-7);
+        const rows = recent.map((move, index) => {
+            const number = this.game.history.length - recent.length + index + 1;
+            return `${String(number).padStart(2, " ")}. ${move.from + 1}→${move.to + 1} disk ${move.disk}`;
+        });
+        this.historyView.textContent = ["Move history", "────────────", ...(rows.length ? rows : ["(empty)"])].join("\n");
+    }
+}
+
 // ── Snake ────────────────────────────────────────────────────────────
 
 const SNAKE_COLS = 20;
@@ -3870,6 +4432,8 @@ Object.assign(TV, {
     TVReversiDialog,
     TVLudoDialog,
     TVMastermindDialog,
+    TVTronDialog,
+    TVHanoiDialog,
     TVSnakeDialog,
 });
 })(typeof window !== "undefined" ? window : globalThis);

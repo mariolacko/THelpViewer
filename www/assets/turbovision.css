@@ -4316,6 +4316,136 @@ button.tv-status-item {
     }
 }
 
+/* ── Tron Light Cycles ─────────────────────────────────────────── */
+
+[data-tv-tron-field] {
+    display: grid;
+    grid-template-columns: repeat(30, 2ch);
+    grid-template-rows: repeat(18, 1em);
+    width: 60ch;
+    height: 18em;
+    overflow: hidden;
+    background: #000000;
+    color: #000000;
+    line-height: 1;
+}
+
+.tv-tron-cell {
+    display: block;
+    width: 2ch;
+    height: 1em;
+    overflow: hidden;
+    white-space: pre;
+}
+
+.tv-tron-player-one {
+    background: #0000aa;
+    color: #55ffff;
+}
+
+.tv-tron-player-two {
+    background: #aa0000;
+    color: #ffff55;
+}
+
+.tv-tron-cell.is-head {
+    background: #ffffff;
+    color: #000000;
+}
+
+/* ── Tower of Hanoi ────────────────────────────────────────────── */
+
+[data-tv-hanoi-board] {
+    display: grid;
+    grid-template-columns: repeat(3, 18ch);
+    width: 54ch;
+    height: 10em;
+    overflow: hidden;
+    background: var(--tv-dialog-bg);
+    color: var(--tv-dialog-fg);
+}
+
+.tv-hanoi-tower {
+    position: relative;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    justify-content: flex-start;
+    width: 18ch;
+    height: 10em;
+    padding: 0 1ch 2em;
+    border: 0;
+    outline: none;
+    box-sizing: border-box;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.tv-hanoi-tower:focus,
+.tv-hanoi-tower.is-selected {
+    background: var(--tv-palette-dialog-list-focused-bg);
+    color: var(--tv-palette-dialog-list-focused-fg);
+}
+
+.tv-hanoi-rod {
+    position: absolute;
+    left: calc(50% - 0.5ch);
+    bottom: 2em;
+    width: 1ch;
+    height: 7em;
+    background: #aa5500;
+}
+
+.tv-hanoi-disk {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: var(--tv-hanoi-disk-width);
+    height: 1em;
+    overflow: hidden;
+    background: #00aaaa;
+    color: #000000;
+    line-height: 1;
+    text-align: center;
+    white-space: pre;
+    cursor: grab;
+}
+
+.tv-hanoi-disk:nth-of-type(even) {
+    background: #0000aa;
+    color: #ffff55;
+}
+
+.tv-hanoi-disk[draggable="false"] {
+    cursor: default;
+}
+
+.tv-hanoi-base {
+    position: absolute;
+    z-index: 2;
+    left: 1ch;
+    bottom: 1em;
+    width: 16ch;
+    color: #aa5500;
+    line-height: 1;
+    white-space: pre;
+}
+
+.tv-hanoi-number {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 18ch;
+    text-align: center;
+}
+
+[data-tv-hanoi-history] {
+    overflow: hidden;
+    white-space: pre;
+    line-height: 1;
+}
+
 /* ── Snake ─────────────────────────────────────────────────────── */
 
 /* Snake: uses position:absolute via x,y,w,h bounds */

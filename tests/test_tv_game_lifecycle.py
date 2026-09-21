@@ -28,11 +28,11 @@ def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
     assert "const HALL_OF_FAME_LIMIT = 10" in helper
     assert "function showHallOfFame(ownerDialog, game)" in helper
     assert "manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg)" in helper
-    assert source.count("installHallOfFame(this,") == 10
-    for game in ("puzzle", "tetris", "mines", "breakout", "sokoban", "lines", "reversi", "ludo", "mastermind", "snake"):
+    assert source.count("installHallOfFame(this,") == 12
+    for game in ("puzzle", "tetris", "mines", "breakout", "sokoban", "lines", "reversi", "ludo", "mastermind", "snake", "tron", "hanoi"):
         assert f'installHallOfFame(this, "{game}")' in source
         assert f'"{game}": {{ title:' in helper or f'{game}: {{ title:' in helper
-    assert source.count('submitHallOfFameScore(this, "') >= 10
+    assert source.count('submitHallOfFameScore(this, "') >= 12
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for Mastermind behavior tests")
@@ -73,6 +73,7 @@ def test_games_pause_background_work_and_clear_transient_input():
     reversi = source[source.index("class TVReversiDialog"):source.index("class TVLudoDialog")]
     ludo = source[source.index("class TVLudoDialog"):source.index("class TVSnakeDialog")]
     snake = source[source.index("class TVSnakeDialog"):]
+    tron = source[source.index("class TVTronDialog"):source.index("class TVHanoiDialog")]
     mines = source[source.index("class TVMinesDialog"):source.index("class TVBreakOutDialog")]
 
     assert 'this._onWindowBlur = () => this.keysDown.clear()' in breakout
@@ -87,6 +88,80 @@ def test_games_pause_background_work_and_clear_transient_input():
     assert "if (!this.isActive()) {\n                this.scheduleCpu();" in ludo
     assert "if (!this.isActive()) { return; }\n            this.tick();" in snake
     assert "if (!this.isActive()) { return; }\n            this.seconds++;" in mines
+    assert "if (!this.isActive()) {\n                this.game.clearPendingDirections();" in tron
+    assert "this.inactivePause = true;" in tron
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for game behavior tests")
+def test_tron_resolves_simultaneous_input_and_collisions_from_one_tick():
+    script = r'''
+const { TronGame } = require(process.argv[1]);
+const game = new TronGame({ width: 10, height: 8 });
+game.players = [
+    { x: 4, y: 4, dx: 1, dy: 0, alive: true },
+    { x: 6, y: 4, dx: -1, dy: 0, alive: true },
+];
+game.trails = [new Set(["4,4"]), new Set(["6,4"])];
+game.clearPendingDirections();
+game.tick();
+if (game.status !== "draw" || game.players.some((player) => player.alive)) {
+    throw new Error("same-cell collision was not resolved simultaneously");
+}
+
+game.reset();
+const before = game.players.map((player) => ({ x: player.x, y: player.y }));
+if (!game.queueDirection(0, 0, -1) || !game.queueDirection(1, 0, 1)) {
+    throw new Error("simultaneous direction input was rejected");
+}
+if (game.queueDirection(0, -1, 0)) {
+    throw new Error("a direct reverse turn was accepted");
+}
+game.tick();
+if (game.players[0].x !== before[0].x || game.players[0].y !== before[0].y - 1
+    || game.players[1].x !== before[1].x || game.players[1].y !== before[1].y + 1) {
+    throw new Error("queued player directions were not applied in the same tick");
+}
+'''
+    result = subprocess.run(
+        [NODE, "-e", script, str(GAME_PATHS[0].resolve())],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for game behavior tests")
+def test_hanoi_validates_moves_tracks_history_and_undoes():
+    script = r'''
+const { HanoiGame } = require(process.argv[1]);
+const game = new HanoiGame(3);
+if (game.minimumMoves !== 7 || game.move(1, 2)) {
+    throw new Error("initial Hanoi state is invalid");
+}
+if (!game.move(0, 2) || !game.move(0, 1) || game.move(1, 2)) {
+    throw new Error("Hanoi legal-move validation failed");
+}
+if (game.moves !== 2 || !game.undo() || game.moves !== 1
+    || game.top(0) !== 2 || game.top(1) !== null) {
+    throw new Error("Hanoi undo did not restore the previous state");
+}
+game.reset();
+for (const [from, to] of [[0, 2], [0, 1], [2, 1], [0, 2], [1, 0], [1, 2], [0, 2]]) {
+    if (!game.move(from, to)) { throw new Error(`legal solution move ${from}->${to} failed`); }
+}
+if (game.status !== "won" || game.moves !== 7 || game.history.length !== 7) {
+    throw new Error("three-disk solution was not recognized");
+}
+if (!game.undo() || game.status !== "playing" || game.moves !== 6) {
+    throw new Error("undo after completion failed");
+}
+'''
+    result = subprocess.run(
+        [NODE, "-e", script, str(GAME_PATHS[0].resolve())],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for game behavior tests")

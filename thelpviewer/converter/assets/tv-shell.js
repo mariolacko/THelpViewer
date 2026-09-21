@@ -20,6 +20,8 @@ const {
     TVMenuController,
     TVAboutDialog,
     TVPuzzleDialog,
+    TVHanoiDialog,
+    TVTronDialog,
     TVCalendarDialog,
     TVAsciiTableDialog,
     TVCalculatorDialog,
@@ -631,7 +633,7 @@ class TurboVisionMenus extends TVMenuController {
             return;
         }
         if (event.key === "Escape") {
-            for (const name of ["about", "puzzle", "calendar", "ascii", "midi", "colors"]) {
+            for (const name of ["about", "puzzle", "hanoi", "tron", "calendar", "ascii", "midi", "colors"]) {
                 if (this.dialogManager.isOpen(name)) {
                     event.preventDefault();
                     this.dialogManager.close(name);
@@ -713,6 +715,8 @@ class TVApplication {
         }
         this.registerDialog("about", () => new TVAboutDialog(desktop));
         this.registerDialog("puzzle", () => new TVPuzzleDialog(desktop));
+        this.registerDialog("hanoi", () => new TVHanoiDialog(desktop));
+        this.registerDialog("tron", () => new TVTronDialog(desktop));
         this.registerDialog("calendar", () => new TVCalendarDialog(desktop));
         this.registerDialog("ascii", () => new TVAsciiTableDialog(desktop));
         this.registerDialog("calc", () => new TVCalculatorDialog(desktop));
