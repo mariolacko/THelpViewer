@@ -17,14 +17,15 @@ def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
     assert GAME_PATHS[0].read_bytes() == GAME_PATHS[1].read_bytes()
     source = GAME_PATHS[0].read_text(encoding="utf-8")
     helper = source[
-        source.index("function showBestNamePrompt"):
-        source.index("// ── Puzzle", source.index("function showBestNamePrompt"))
+        source.index("class TVBestNameDialog"):
+        source.index("// ── Puzzle", source.index("class TVBestNameDialog"))
     ]
 
     assert "const manager = ownerDialog?.manager || null" in helper
     assert "manager.register(`highscore:${++bestNamePromptSequence}`, dlg)" in helper
-    assert "if (finished) { return; }" in helper
-    assert "dlg.destroy();" in helper
+    assert "if (this.finished) { return; }" in helper
+    assert "this.destroy();" in helper
+    assert 'event.command === "best-ok"' in helper
     assert "const HALL_OF_FAME_LIMIT = 10" in helper
     assert "function showHallOfFame(ownerDialog, game)" in helper
     hall = helper[

@@ -215,7 +215,7 @@ def test_temporary_dialogs_use_the_shared_destroy_lifecycle():
     assert "this.manager.unregister(this.managerName, this)" in core
     assert "this.dialog.destroy();" in bundle
     assert bundle.count("dialog.destroy();") >= 3
-    assert "dlg.destroy();" in games
+    assert "this.destroy();" in games
     assert "dialog.overlay.remove();" not in bundle
     assert "dlg.overlay.remove();" not in games
 

@@ -16,6 +16,7 @@ const {
     TVFrame,
     TVWindow,
     TVDialog,
+    TVView,
     TVRect,
     TVRenderer,
     TVStaticText,
@@ -44,6 +45,11 @@ const {
     dayOfWeek,
     TV_HELP_CONTEXTS,
     normalizeHelpContext,
+    evNothing,
+    evMouseDown,
+    evKeyDown,
+    evCommand,
+    evBroadcast,
 } = TV;
 
 const {
@@ -225,17 +231,21 @@ function renderContextHelpTopic(topic) {
 
 class TVContextHelpDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
+        const headingView = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "context-help-heading", presentation: "context-help-topic" });
+        const scrollHost = TVRenderer.markup([TVVerticalScrollArea.renderMarkup({
+            rootClass: "tv-context-help-scroll",
+            rootAttrs: { "data-tv-context-help-scroll": true },
+            viewportClass: "tv-context-help-viewport",
+            scrollbarClass: "tv-context-help-scrollbar",
+        })]);
+        const backButton = TVRenderer.configure(new TVButton(new TVRect(), "", "context-help-back", bfNormal).setState("disabled", true), { labelMarkup: "◄ Back" });
+        const contentsButton = TVRenderer.configure(new TVButton(new TVRect(), "", "context-help-contents", bfNormal), { labelMarkup: "Contents" });
         const helpMain = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
-                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "context-help-heading", presentation: "context-help-topic" }),
-                TVRenderer.markup([TVVerticalScrollArea.renderMarkup({
-                    rootClass: "tv-context-help-scroll",
-                    rootAttrs: { "data-tv-context-help-scroll": true },
-                    viewportClass: "tv-context-help-viewport",
-                    scrollbarClass: "tv-context-help-scrollbar",
-                })]),
+                headingView,
+                scrollHost,
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
-                        TVRenderer.configure(new TVButton(new TVRect(), "", "context-help-back", bfNormal).setState("disabled", true), { labelMarkup: "◄ Back" }),
-                        TVRenderer.configure(new TVButton(new TVRect(), "", "context-help-contents", bfNormal), { labelMarkup: "Contents" }),
+                        backButton,
+                        contentsButton,
                         new TVStaticText(new TVRect(), "F1 Help"),
                     ]), { presentation: "context-help-nav" }),
             ]), { presentation: "context-help-main" });
@@ -248,13 +258,15 @@ class TVContextHelpDialog extends TVDialog {
             palette: "help",
             defaultButtonSelector: "",
         });
-        this.headingElement = this.query("[data-tv-context-help-heading]");
-        this.scrollArea = new TVVerticalScrollArea(new TVRect())
-            .bindRoot(this.query("[data-tv-context-help-scroll]"));
+        this.headingView = headingView;
+        this.scrollArea = TVVerticalScrollArea.bindRendered(
+            new TVVerticalScrollArea(new TVRect()),
+            scrollHost,
+        );
         this.viewport = this.scrollArea.viewport;
         if (this.viewport) { this.viewport.tabIndex = 0; }
-        this.backButton = this.query("[data-tv-context-help-back]");
-        this.contentsButton = this.query("[data-tv-context-help-contents]");
+        this.backButton = backButton;
+        this.contentsButton = contentsButton;
         this.context = hcApplication;
         this.bundle = null;
         this.topicHistory = [];
@@ -266,8 +278,15 @@ class TVContextHelpDialog extends TVDialog {
             event.preventDefault();
             this.showTopic(link.dataset.tvContextHelpTopic, { remember: true });
         });
-        this.backButton?.addEventListener("click", () => this.goBack());
-        this.contentsButton?.addEventListener("click", () => this.showTopic(hcApplication, { remember: true }));
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "context-help-back") { this.goBack(); }
+        else if (event.command === "context-help-contents") { this.showTopic(hcApplication, { remember: true }); }
+        else { return; }
+        this.clearEvent(event);
     }
 
     fallbackTopic(helpCtx) {
@@ -284,12 +303,12 @@ class TVContextHelpDialog extends TVDialog {
         if (remember && this.context !== context) { this.topicHistory.push(this.context); }
         this.context = context;
         const topic = contextHelpTopic(this.bundle, context) || this.fallbackTopic(context);
-        if (this.headingElement) { this.headingElement.textContent = topic.title || "Help"; }
+        this.headingView.setText(topic.title || "Help");
         if (this.viewport) {
             this.viewport.innerHTML = renderContextHelpTopic(topic);
             this.viewport.scrollTop = 0;
         }
-        if (this.backButton) { this.backButton.disabled = this.topicHistory.length === 0; }
+        this.backButton.setState("disabled", this.topicHistory.length === 0);
         window.requestAnimationFrame(() => this.scrollArea?.update());
     }
 
@@ -342,12 +361,13 @@ class TVAboutDialog extends TVDialog {
         const siteName = body.dataset.tvSiteName || "THelpViewer";
         const generatorVersion = body.dataset.tvGeneratorVersion || "unknown";
         const generatorAuthors = body.dataset.tvAuthors || "Mario Lacko + Copilot + Codex";
+        const okButton = new TVButton(new TVRect(9, 9, (9) + (10), 9), '~O~K', "about-ok", bfDefault);
         const aboutMain = new TVGroup(new TVRect(0, 0, (0) + (28), (0) + (14))).insertAll([
                 TVRenderer.configure(new TVStaticText(new TVRect(0, 1, (0) + (28), 1), siteName), { align: "center", title: true }),
                 TVRenderer.configure(new TVStaticText(new TVRect(0, 3, (0) + (28), 3), `Version ${generatorVersion}`), { align: "center" }),
                 TVRenderer.configure(new TVStaticText(new TVRect(0, 5, (0) + (28), 5), "Copyright (c) 2026"), { align: "center" }),
                 TVRenderer.configure(new TVStaticText(new TVRect(0, 7, (0) + (28), 7), generatorAuthors), { align: "center" }),
-                new TVButton(new TVRect(9, 9, (9) + (10), 9), '~O~K', "about-ok", bfDefault),
+                okButton,
             ]);
 
         super(new TVRect(0, 0, 32, 13), "About", {
@@ -356,11 +376,16 @@ class TVAboutDialog extends TVDialog {
             helpCtx: hcAbout,
             content: aboutMain,
         });
-        this.okButton = this.query("[data-tv-about-ok]");
+        this.okButton = okButton;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        if (this.okButton) {
-            this.okButton.addEventListener("click", () => this.close());
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && event.command === "about-ok") {
+            this.close();
+            this.clearEvent(event);
         }
     }
 }
@@ -391,17 +416,26 @@ class TVViewGalleryDialog extends TVDialog {
             { viewName: "gallery-terminal" },
         );
         const infoBox = TVRenderer.configure(new TVInfoBox(new TVRect(0, 0, (0) + (30), 0), "Event log", [terminal]), { viewName: "gallery-status" });
+        const okButton = new TVButton(new TVRect(), "~O~K", "gallery-ok", bfDefault);
+        const applyButton = new TVButton(new TVRect(), "~A~pply", "gallery-apply", bfNormal);
+        const messageButton = new TVButton(new TVRect(), "~M~essage", "gallery-message", bfNormal);
+        const clearLogButton = new TVButton(new TVRect(), "C~l~ear log", "gallery-clear-log", bfNormal);
         const buttons = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
-                new TVButton(new TVRect(), "~O~K", "gallery-ok", bfDefault),
-                new TVButton(new TVRect(), "~A~pply", "gallery-apply", bfNormal),
-                new TVButton(new TVRect(), "~M~essage", "gallery-message", bfNormal),
-                new TVButton(new TVRect(), "C~l~ear log", "gallery-clear-log", bfNormal),
+                okButton,
+                applyButton,
+                messageButton,
+                clearLogButton,
                 new TVButton(new TVRect(), "Disabled", "", bfNormal).setState("disabled", true),
             ]), { presentation: "widget-gallery-buttons" });
         const galleryPanel = (heading, child, role = "") => TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 TVRenderer.configure(new TVStaticText(new TVRect(), heading), { presentation: "widget-gallery-heading" }),
                 child,
             ]), { presentation: ["widget-gallery-panel", role].filter(Boolean).join(" ") });
+        const listHost = TVRenderer.markup([TVVerticalListViewer.renderMarkup({
+            rootClass: "tv-widget-gallery-listviewer",
+            rootAttrs: { "data-tv-gallery-list": true },
+            viewportClass: "tv-widget-gallery-list",
+        })]);
         const galleryMain = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([nameLabel, nameInput]), { presentation: "widget-gallery-field" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
@@ -410,11 +444,7 @@ class TVViewGalleryDialog extends TVDialog {
                         galleryPanel("Multi check boxes", multiChecks),
                         galleryPanel(
                             "List viewer",
-                            TVRenderer.markup([TVVerticalListViewer.renderMarkup({
-                                rootClass: "tv-widget-gallery-listviewer",
-                                rootAttrs: { "data-tv-gallery-list": true },
-                                viewportClass: "tv-widget-gallery-list",
-                            })]),
+                            listHost,
                         ),
                         galleryPanel("Info box", infoBox, "widget-gallery-info"),
                         galleryPanel("Static text", staticText, "widget-gallery-static"),
@@ -428,24 +458,24 @@ class TVViewGalleryDialog extends TVDialog {
             helpCtx: hcWidgetGallery,
             content: galleryMain,
         });
-        this.nameInput = this.query("[data-tv-gallery-name]");
-        this.checks = this.query("[data-tv-gallery-checks]");
-        this.radios = this.query("[data-tv-gallery-radios]");
+        this.nameInput = nameInput;
+        this.checks = checks;
+        this.radios = radios;
         this.multiChecks = multiChecks.bind(
-            this.query("[data-tv-gallery-multichecks]"),
+            multiChecks.root,
             (option, state) => this.setStatus(`${option.value}: state ${state}`),
         );
-        this.okButton = this.query("[data-tv-gallery-ok]");
-        this.applyButton = this.query("[data-tv-gallery-apply]");
-        this.messageButton = this.query("[data-tv-gallery-message]");
-        this.clearLogButton = this.query("[data-tv-gallery-clear-log]");
+        this.okButton = okButton;
+        this.applyButton = applyButton;
+        this.messageButton = messageButton;
+        this.clearLogButton = clearLogButton;
         this.infoBox = infoBox.resolve(this.dialog);
-        this.terminal = terminal.bind(this.query("[data-tv-gallery-terminal]"));
+        this.terminal = terminal.bind(terminal.root);
         this.messageBox = null;
-        this.listBox = TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
+        this.listBox = TVVerticalListViewer.bindRendered(TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
             itemClassName: "tv-widget-gallery-list-item",
             itemAttrName: "data-tv-gallery-list-index",
-        }).bindRoot(this.query("[data-tv-gallery-list]"));
+        }), listHost);
         this.listBox.setItems([
             "TDialog",
             "TInputLine",
@@ -472,37 +502,38 @@ class TVViewGalleryDialog extends TVDialog {
     }
 
     bindGallery() {
-        if (this.nameInput) {
-            this.nameInput.addEventListener("input", () => this.setStatus(`Name: ${this.nameInput.value || "(empty)"}`));
-        }
-        for (const group of [this.checks, this.radios]) {
-            group?.addEventListener("change", (event) => {
-                const input = event.target.closest("input");
+        // TVDialog translates browser input to Turbo Vision events.
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evBroadcast) {
+            if (event.infoPtr === this.nameInput) {
+                this.setStatus(`Name: ${this.nameInput.getData() || "(empty)"}`);
+            } else if (event.infoPtr === this.checks || event.infoPtr === this.radios) {
+                const input = event.nativeEvent.target.closest("input");
                 if (input) { this.setStatus(`${input.value}: ${input.checked ? "on" : "off"}`); }
-            });
+            } else { return; }
+            this.clearEvent(event);
+            return;
         }
-        if (this.applyButton) {
-            this.applyButton.addEventListener("click", () => this.setStatus("Apply command"));
-        }
-        if (this.messageButton) {
-            this.messageButton.addEventListener("click", async () => {
-                if (!this.messageBox) {
-                    this.messageBox = new TVMessageBox(this.desktop);
-                }
-                const command = await this.messageBox.show({
-                    type: TVMessageBox.MF_INFORMATION,
-                    lines: ["Turbo Vision message box"],
-                    buttons: TVMessageBox.MF_OK_CANCEL,
-                });
-                this.setStatus(`Message: ${command}`);
-            });
-        }
-        if (this.clearLogButton) {
-            this.clearLogButton.addEventListener("click", () => this.terminal.clear());
-        }
-        if (this.okButton) {
-            this.okButton.addEventListener("click", () => this.close());
-        }
+        if (event.what !== evCommand) { return; }
+        if (event.command === "gallery-ok") { this.close(); }
+        else if (event.command === "gallery-apply") { this.setStatus("Apply command"); }
+        else if (event.command === "gallery-clear-log") { this.terminal.clear(); }
+        else if (event.command === "gallery-message") { void this.showMessage(); }
+        else { return; }
+        this.clearEvent(event);
+    }
+
+    async showMessage() {
+        if (!this.messageBox) { this.messageBox = new TVMessageBox(this.desktop); }
+        const command = await this.messageBox.show({
+            type: TVMessageBox.MF_INFORMATION,
+            lines: ["Turbo Vision message box"],
+            buttons: TVMessageBox.MF_OK_CANCEL,
+        });
+        this.setStatus(`Message: ${command}`);
     }
 
     open() {
@@ -612,11 +643,16 @@ class TVHistoryWindow extends TVWindow {
 
     constructor({ button, popup, viewer, items = () => [], onSelect = null } = {}) {
         super(new TVRect(), "History");
-        this.bindRoot(popup);
-        this.button = button;
-        this.popup = popup;
+        this.buttonView = button instanceof TVView ? button : null;
+        this.popupView = popup instanceof TVView ? popup : null;
+        this.button = this.buttonView?.root || null;
+        this.popup = this.popupView?.root || null;
+        this.bindRoot(this.popup);
         this.viewer = viewer;
-        this.closeButton = popup?.querySelector("[data-tv-history-close]") || null;
+        if (this.viewer && !this.viewer.root) {
+            this.viewer.bindRoot(this.popup?.querySelector(".tv-file-open-history-listviewer") || null);
+        }
+        this.closeButton = this.popup?.querySelector("[data-tv-history-close]") || null;
         this.items = items;
         this.onSelect = onSelect;
         this.ignoreNextClick = false;
@@ -801,27 +837,35 @@ class TVFileOpenDialog extends TVDialog {
         const filesLabel = TVRenderer.configure(new TVLabel(new TVRect(), "~F~iles"), { hotkey: true });
         const openButton = new TVButton(new TVRect(), "~O~pen", "file-open-confirm", bfDefault);
         const cancelButton = new TVButton(new TVRect(), "Cancel", "file-open-cancel", bfNormal);
+        const historyButton = TVHistoryWindow.triggerView({ name: "file-open-history" });
+        const fileListHost = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "file-open-file-list", viewName: "file-open-files" });
+        const scrollLeftButton = TVRenderer.configure(new TVButton(new TVRect(), "", "file-open-scroll-left", bfNormal), { labelMarkup: escapeHtml(displayCp437Char(17)), tabIndex: -1 });
+        const scrollTrack = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "file-open-scroll-track" });
+        const scrollRightButton = TVRenderer.configure(new TVButton(new TVRect(), "", "file-open-scroll-right", bfNormal), { labelMarkup: escapeHtml(displayCp437Char(16)), tabIndex: -1 });
+        const pathLabel = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "file-open-path" });
+        const detailLabel = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "file-open-detail" });
+        const historyPopup = TVHistoryWindow.view({
+            popupName: "file-open-history-popup",
+            listAttrs: { "data-tv-file-open-history-list": true },
+        });
         const fileOpenMain = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([nameLabel]), { presentation: "file-open-name-label" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([nameInput]), { presentation: "file-open-name-input" }),
-                TVHistoryWindow.triggerView({ name: "file-open-history" }),
+                historyButton,
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([filesLabel]), { presentation: "file-open-files-label" }),
-                TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "file-open-file-list", viewName: "file-open-files" }),
+                fileListHost,
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
-                        TVRenderer.configure(new TVButton(new TVRect(), "", "file-open-scroll-left", bfNormal), { labelMarkup: escapeHtml(displayCp437Char(17)), tabIndex: -1 }),
-                        TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "file-open-scroll-track" }),
-                        TVRenderer.configure(new TVButton(new TVRect(), "", "file-open-scroll-right", bfNormal), { labelMarkup: escapeHtml(displayCp437Char(16)), tabIndex: -1 }),
+                        scrollLeftButton,
+                        scrollTrack,
+                        scrollRightButton,
                     ]), { presentation: "file-open-hscroll", viewName: "file-open-hscroll", ariaHidden: true }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([openButton]), { presentation: "file-open-open-button" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([cancelButton]), { presentation: "file-open-cancel-button" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
-                        TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "file-open-path" }),
-                        TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "file-open-detail" }),
+                        pathLabel,
+                        detailLabel,
                     ]), { presentation: "file-open-info" }),
-                TVHistoryWindow.view({
-                    popupName: "file-open-history-popup",
-                    listAttrs: { "data-tv-file-open-history-list": true },
-                }),
+                historyPopup,
             ]), { presentation: "file-open-main" });
 
         super(new TVRect(0, 0, 49, 19), "Open a File", {
@@ -837,25 +881,27 @@ class TVFileOpenDialog extends TVDialog {
         this.currentItems = [];
         this.onOpen = null;
         this.history = new TVHistory("thelp:file-open-history");
-        this.nameInput = this.query("[data-tv-file-open-name]");
-        this.pathLabel = this.query("[data-tv-file-open-path]");
-        this.detailLabel = this.query("[data-tv-file-open-detail]");
-        this.openButton = this.query("[data-tv-file-open-confirm]");
-        this.cancelButton = this.query("[data-tv-file-open-cancel]");
-        this.historyButton = this.query("[data-tv-file-open-history]");
-        this.historyPopup = this.query("[data-tv-file-open-history-popup]");
-        this.scrollTrack = this.query("[data-tv-file-open-scroll-track]");
+        this.nameInput = nameInput;
+        this.pathLabel = pathLabel;
+        this.detailLabel = detailLabel;
+        this.openButton = openButton;
+        this.cancelButton = cancelButton;
+        this.historyButton = historyButton;
+        this.historyPopup = historyPopup;
+        this.scrollLeftButton = scrollLeftButton;
+        this.scrollRightButton = scrollRightButton;
+        this.scrollTrack = scrollTrack;
         this.fileList = TVRenderer.configure(new TVFileList(new TVRect(), 2), {
             itemClassName: "tv-file-open-list-item",
             itemAttrName: "data-tv-file-open-file-index",
             renderItemContent: (item) => escapeHtml(item.label),
-        }).bindRoot(this.query("[data-tv-file-open-files]"));
+        }).bindRoot(fileListHost.root);
         this.fileList.onViewportChange = () => this.updateHorizontalScrollbar();
         this.historyList = TVRenderer.configure(new TVHistoryViewer(new TVRect()), {
             itemClassName: "tv-file-open-history-item",
             itemAttrName: "data-tv-file-open-history-index",
             renderItemContent: (entry) => escapeHtml(entry.virtualPath),
-        }).bindRoot(this.query("[data-tv-file-open-history-list]"));
+        });
         this.fileList.bind({
             onSelect: (item) => this.selectItem(item),
             onActivate: (item) => this.activateItem(item),
@@ -883,32 +929,42 @@ class TVFileOpenDialog extends TVDialog {
     }
 
     bindFileOpen() {
-        this.openButton?.addEventListener("click", () => this.openSelected());
-        this.cancelButton?.addEventListener("click", () => this.close());
-        this.query("[data-tv-file-open-scroll-left]")?.addEventListener("mousedown", (event) => {
-            event.preventDefault();
-            this.fileList.scrollColumns(-1);
-        });
-        this.query("[data-tv-file-open-scroll-right]")?.addEventListener("mousedown", (event) => {
-            event.preventDefault();
-            this.fileList.scrollColumns(1);
-        });
-        this.nameInput?.addEventListener("input", () => this.selectNameMatch());
-        this.dialog.addEventListener("keydown", (event) => {
-            if (!event.altKey || event.ctrlKey || event.metaKey) { return; }
-            const key = event.key.toLowerCase();
-            if (key === "n" && this.nameInput) {
-                event.preventDefault();
-                this.nameInput.focus();
-                this.nameInput.select();
-            } else if (key === "f") {
-                event.preventDefault();
-                this.fileList.selectedElement()?.focus();
-            } else if (key === "o") {
-                event.preventDefault();
-                this.openSelected();
-            }
-        });
+        // Browser input is translated by TVDialog and handled in handleEvent.
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand) {
+            if (event.command === "file-open-confirm") { this.openSelected(); }
+            else if (event.command === "file-open-cancel") { this.close(); }
+            else if (event.command === "file-open-scroll-left") { this.fileList.scrollColumns(-1); }
+            else if (event.command === "file-open-scroll-right") { this.fileList.scrollColumns(1); }
+            else { return; }
+            this.clearEvent(event);
+            return;
+        }
+        if (event.what === evBroadcast && event.infoPtr === this.nameInput) {
+            this.selectNameMatch();
+            this.clearEvent(event);
+            return;
+        }
+        const keyEvent = event.nativeEvent;
+        if (event.what !== evKeyDown || !keyEvent?.altKey || keyEvent.ctrlKey || keyEvent.metaKey) { return; }
+        const key = keyEvent.key.toLowerCase();
+        if (key === "n") {
+            keyEvent.preventDefault();
+            this.nameInput.focus();
+            this.nameInput.selectAll();
+        } else if (key === "f") {
+            keyEvent.preventDefault();
+            this.fileList.selectedElement()?.focus();
+        } else if (key === "o") {
+            keyEvent.preventDefault();
+            this.openSelected();
+        } else {
+            return;
+        }
+        this.clearEvent(event);
     }
 
     open() {
@@ -917,8 +973,8 @@ class TVFileOpenDialog extends TVDialog {
         super.open();
         window.requestAnimationFrame(() => {
             this.updateHorizontalScrollbar();
-            this.nameInput?.focus();
-            this.nameInput?.select();
+            this.nameInput.focus();
+            this.nameInput.selectAll();
         });
     }
 
@@ -995,7 +1051,7 @@ class TVFileOpenDialog extends TVDialog {
     refresh() {
         this.currentItems = this.buildItems();
         this.fileList.setItems(this.currentItems, this.currentItems.length ? 0 : -1);
-        if (this.nameInput) { this.nameInput.value = "*.*"; }
+        this.nameInput.setData("*.*");
         this.updateInfo(this.currentItems[0] || null);
         this.updateHistoryState();
         this.updateHorizontalScrollbar();
@@ -1007,26 +1063,23 @@ class TVFileOpenDialog extends TVDialog {
     }
 
     selectItem(item) {
-        if (!item || item.type === "status" || !this.nameInput) { return; }
-        this.nameInput.value = item.type === "file" ? item.entry.fileName : `${item.label}*.*`;
+        if (!item || item.type === "status") { return; }
+        this.nameInput.setData(item.type === "file" ? item.entry.fileName : `${item.label}*.*`);
         this.updateInfo(item);
     }
 
     updateInfo(item) {
-        if (this.pathLabel) {
-            this.pathLabel.textContent = ` ${this.currentMaskPath()}`;
-        }
-        if (!this.detailLabel) { return; }
+        this.pathLabel.setText(` ${this.currentMaskPath()}`);
         if (!item) {
-            this.detailLabel.textContent = "";
+            this.detailLabel.setText("");
         } else if (item.type === "status") {
-            this.detailLabel.textContent = ` ${item.label}`;
+            this.detailLabel.setText(` ${item.label}`);
         } else if (item.type === "file") {
             const format = String(item.entry.format || (item.entry.kind === "doc" ? "Markdown" : "Help")).toUpperCase();
             const topics = Number.isInteger(item.entry.topics) ? `  ${item.entry.topics} topics` : "";
-            this.detailLabel.textContent = ` ${item.entry.fileName}  ${format}${topics}`;
+            this.detailLabel.setText(` ${item.entry.fileName}  ${format}${topics}`);
         } else {
-            this.detailLabel.textContent = ` ${item.label}  Directory`;
+            this.detailLabel.setText(` ${item.label}  Directory`);
         }
     }
 
@@ -1042,7 +1095,7 @@ class TVFileOpenDialog extends TVDialog {
     }
 
     selectNameMatch() {
-        const query = String(this.nameInput?.value || "").trim().toLocaleLowerCase();
+        const query = this.nameInput.getData().trim().toLocaleLowerCase();
         if (!query || query.includes("*")) { return; }
         const index = this.currentItems.findIndex((item) => item.label.toLocaleLowerCase().startsWith(query));
         if (index >= 0) {
@@ -1052,7 +1105,7 @@ class TVFileOpenDialog extends TVDialog {
     }
 
     openSelected() {
-        const query = String(this.nameInput?.value || "").trim().toLocaleLowerCase();
+        const query = this.nameInput.getData().trim().toLocaleLowerCase();
         const exact = this.currentItems.find((item) => (
             item.type === "file" && item.entry.fileName.toLocaleLowerCase() === query
         ));
@@ -1071,7 +1124,6 @@ class TVFileOpenDialog extends TVDialog {
     }
 
     updateHorizontalScrollbar() {
-        if (!this.scrollTrack) { return; }
         const trackLength = 29;
         const columns = Math.max(1, Math.ceil(this.currentItems.length / this.fileList.rows));
         const maxColumn = Math.max(0, columns - 2);
@@ -1080,7 +1132,7 @@ class TVFileOpenDialog extends TVDialog {
             : -1;
         const cells = Array.from({ length: trackLength }, () => displayCp437Char(177));
         if (position >= 0) { cells[position] = displayCp437Char(254); }
-        this.scrollTrack.textContent = cells.join("");
+        this.scrollTrack.setText(cells.join(""));
     }
 
     storedHistoryKeys() {
@@ -1120,7 +1172,7 @@ class TVFileOpenDialog extends TVDialog {
             this.openEntry(entry);
         } else {
             this.hideHistory();
-            this.nameInput?.focus();
+            this.nameInput.focus();
         }
     }
 }
@@ -1134,28 +1186,32 @@ class TVChangeDirectoryDialog extends TVDialog {
         const changeButton = new TVButton(new TVRect(), "~C~hdir", "change-dir-confirm", bfDefault);
         const revertButton = new TVButton(new TVRect(), "~R~evert", "change-dir-revert", bfNormal);
         const cancelButton = new TVButton(new TVRect(), "Cancel", "change-dir-cancel", bfNormal);
+        const historyButton = TVHistoryWindow.triggerView({
+            name: "change-dir-history",
+            ariaLabel: "Directory history",
+        });
+        const directoryListHost = TVRenderer.markup([TVVerticalListViewer.renderMarkup({
+            rootClass: "tv-change-dir-listviewer",
+            rootAttrs: { "data-tv-change-dir-list": true },
+            viewportClass: "tv-change-dir-list",
+        })]);
+        const detailView = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "change-dir-detail", presentation: "change-dir-detail" });
+        const historyPopup = TVHistoryWindow.view({
+            popupRole: "change-dir-history-popup",
+            popupName: "change-dir-history-popup",
+            listAttrs: { "data-tv-change-dir-history-list": true },
+        });
         const changeDirectoryMain = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([directoryLabel]), { presentation: "change-dir-path-label" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([directoryInput]), { presentation: "change-dir-path-input" }),
-                TVHistoryWindow.triggerView({
-                    name: "change-dir-history",
-                    ariaLabel: "Directory history",
-                }),
+                historyButton,
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([treeLabel]), { presentation: "change-dir-tree-label" }),
-                TVRenderer.markup([TVVerticalListViewer.renderMarkup({
-                    rootClass: "tv-change-dir-listviewer",
-                    rootAttrs: { "data-tv-change-dir-list": true },
-                    viewportClass: "tv-change-dir-list",
-                })]),
+                directoryListHost,
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([changeButton]), { presentation: "change-dir-confirm-button" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([revertButton]), { presentation: "change-dir-revert-button" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([cancelButton]), { presentation: "change-dir-cancel-button" }),
-                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "change-dir-detail", presentation: "change-dir-detail" }),
-                TVHistoryWindow.view({
-                    popupRole: "change-dir-history-popup",
-                    popupName: "change-dir-history-popup",
-                    listAttrs: { "data-tv-change-dir-history-list": true },
-                }),
+                detailView,
+                historyPopup,
             ]), { presentation: "change-dir-main" });
 
         super(new TVRect(0, 0, 46, 18), "Change Directory", {
@@ -1172,24 +1228,24 @@ class TVChangeDirectoryDialog extends TVDialog {
         this.initialDirectory = "";
         this.onChange = null;
         this.history = new TVHistory("thelp:directory-history");
-        this.pathInput = this.query("[data-tv-change-dir-path]");
-        this.detail = this.query("[data-tv-change-dir-detail]");
-        this.changeButton = this.query("[data-tv-change-dir-confirm]");
-        this.revertButton = this.query("[data-tv-change-dir-revert]");
-        this.cancelButton = this.query("[data-tv-change-dir-cancel]");
-        this.historyButton = this.query("[data-tv-change-dir-history]");
-        this.historyPopup = this.query("[data-tv-change-dir-history-popup]");
-        this.directoryList = TVRenderer.configure(new TVOutline(new TVRect()), {
+        this.pathInput = directoryInput;
+        this.detailView = detailView;
+        this.changeButton = changeButton;
+        this.revertButton = revertButton;
+        this.cancelButton = cancelButton;
+        this.historyButton = historyButton;
+        this.historyPopup = historyPopup;
+        this.directoryList = TVVerticalListViewer.bindRendered(TVRenderer.configure(new TVOutline(new TVRect()), {
             itemClassName: "tv-change-dir-item",
             itemAttrName: "data-tv-change-dir-index",
             getKey: (item) => item.path,
             getLabel: (item) => item.label,
-        }).bindRoot(this.query("[data-tv-change-dir-list]"));
+        }), directoryListHost);
         this.historyList = TVRenderer.configure(new TVHistoryViewer(new TVRect()), {
             itemClassName: "tv-file-open-history-item",
             itemAttrName: "data-tv-change-dir-history-index",
             renderItemContent: (item) => escapeHtml(this.displayPath(item.path)),
-        }).bindRoot(this.query("[data-tv-change-dir-history-list]"));
+        });
         this.directoryList.bind({
             onSelect: (item) => this.selectDirectory(item.path),
             onActivate: (item) => {
@@ -1206,7 +1262,7 @@ class TVChangeDirectoryDialog extends TVDialog {
                 this.selectDirectory(item.path);
                 this.historyWindow.hide();
                 if (activate) { this.commit(); }
-                else { this.pathInput?.focus(); }
+                else { this.pathInput.focus(); }
             },
         });
         this.bindCommonClose(() => this.close());
@@ -1258,35 +1314,56 @@ class TVChangeDirectoryDialog extends TVDialog {
     }
 
     bindChangeDirectory() {
-        this.changeButton?.addEventListener("click", () => this.commit());
-        this.revertButton?.addEventListener("click", () => this.setDirectory(this.initialDirectory));
-        this.cancelButton?.addEventListener("click", () => this.close());
-        this.pathInput?.addEventListener("change", () => this.selectInputPath());
-        this.pathInput?.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                this.selectInputPath();
-                this.commit();
-            }
-        });
-        this.dialog.addEventListener("keydown", (event) => {
-            if (!event.altKey || event.ctrlKey || event.metaKey) { return; }
-            const key = event.key.toLowerCase();
-            if (key === "d") {
-                event.preventDefault();
-                this.pathInput?.focus();
-                this.pathInput?.select();
-            } else if (key === "t") {
-                event.preventDefault();
-                this.directoryList.selectedElement()?.focus();
-            } else if (key === "c") {
-                event.preventDefault();
-                this.commit();
-            } else if (key === "r") {
-                event.preventDefault();
-                this.setDirectory(this.initialDirectory);
-            }
-        });
+        // Browser input is translated by TVDialog and handled in handleEvent.
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand) {
+            if (event.command === "change-dir-confirm") { this.commit(); }
+            else if (event.command === "change-dir-revert") { this.setDirectory(this.initialDirectory); }
+            else if (event.command === "change-dir-cancel") { this.close(); }
+            else { return; }
+            this.clearEvent(event);
+            return;
+        }
+        if (
+            event.infoPtr === this.pathInput
+            && event.what === evBroadcast
+            && event.nativeEvent?.type === "change"
+        ) {
+            this.selectInputPath();
+            this.clearEvent(event);
+            return;
+        }
+        const keyEvent = event.nativeEvent;
+        if (event.what !== evKeyDown || !keyEvent) { return; }
+        if (event.infoPtr === this.pathInput && keyEvent.key === "Enter") {
+            keyEvent.preventDefault();
+            this.selectInputPath();
+            this.commit();
+            this.clearEvent(event);
+            return;
+        }
+        if (!keyEvent.altKey || keyEvent.ctrlKey || keyEvent.metaKey) { return; }
+        const key = keyEvent.key.toLowerCase();
+        if (key === "d") {
+            keyEvent.preventDefault();
+            this.pathInput.focus();
+            this.pathInput.selectAll();
+        } else if (key === "t") {
+            keyEvent.preventDefault();
+            this.directoryList.selectedElement()?.focus();
+        } else if (key === "c") {
+            keyEvent.preventDefault();
+            this.commit();
+        } else if (key === "r") {
+            keyEvent.preventDefault();
+            this.setDirectory(this.initialDirectory);
+        } else {
+            return;
+        }
+        this.clearEvent(event);
     }
 
     displayPath(path) {
@@ -1323,17 +1400,17 @@ class TVChangeDirectoryDialog extends TVDialog {
     }
 
     selectInputPath() {
-        const item = this.findDirectory(this.pathInput?.value || "");
+        const item = this.findDirectory(this.pathInput.getData());
         if (!item) {
-            if (this.detail) { this.detail.textContent = "Directory does not exist"; }
+            this.detailView.setText("Directory does not exist");
             return false;
         }
         return this.selectDirectory(item.path);
     }
 
     updatePath() {
-        if (this.pathInput) { this.pathInput.value = this.displayPath(this.currentDirectory); }
-        if (this.detail) { this.detail.textContent = `${this.entries.filter((entry) => entry.directory === this.currentDirectory).length} files`; }
+        this.pathInput.setData(this.displayPath(this.currentDirectory));
+        this.detailView.setText(`${this.entries.filter((entry) => entry.directory === this.currentDirectory).length} files`);
     }
 
     commit() {
@@ -1353,8 +1430,8 @@ class TVChangeDirectoryDialog extends TVDialog {
         super.open();
         window.requestAnimationFrame(() => {
             this.directoryList.updateScrollbar();
-            this.pathInput?.focus();
-            this.pathInput?.select();
+            this.pathInput.focus();
+            this.pathInput.selectAll();
         });
     }
 
@@ -1381,14 +1458,13 @@ class TVAsciiTableDialog extends TVDialog {
             content: [chart, report],
         });
         this.selectedCode = 0;
-        this.chart = this.query("[data-tv-ascii-chart]");
-        this.report = this.query("[data-tv-ascii-report]");
+        this.chartView = chart;
+        this.reportView = report;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        if (this.chart) {
-            this.chart.addEventListener("click", (event) => this.onCellEvent(event));
-            this.chart.addEventListener("focusin", (event) => this.onCellEvent(event));
-            this.chart.addEventListener("mousemove", (event) => {
+        if (this.chartView.root) {
+            this.chartView.root.addEventListener("focusin", (event) => this.onCellEvent(event));
+            this.chartView.root.addEventListener("mousemove", (event) => {
                 if (event.buttons & 1) {
                     this.onCellEvent(event);
                 }
@@ -1398,21 +1474,26 @@ class TVAsciiTableDialog extends TVDialog {
         this.renderChart();
     }
 
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evMouseDown && event.infoPtr === this.chartView) {
+            this.onCellEvent(event.nativeEvent);
+            this.clearEvent(event);
+        }
+    }
+
     open() {
         super.open();
         this.renderChart();
     }
 
     renderChart() {
-        if (!this.chart) {
-            return;
-        }
         const items = [];
         for (let code = 0; code < 256; code += 1) {
             const selected = code === this.selectedCode ? " is-selected" : "";
             items.push(TVRenderer.configure(new TVButton(new TVRect(), "", "ascii-code", bfNormal).setValue(code).setCommandData({ selected: Boolean(selected) }), { labelMarkup: escapeHtml(displayCp437Char(code)), ariaLabel: `ASCII ${code}` }).renderMarkup());
         }
-        this.chart.innerHTML = items.join("");
+        this.chartView.setHTML(items.join(""));
         this.updateReport(this.selectedCode);
     }
 
@@ -1454,23 +1535,18 @@ class TVAsciiTableDialog extends TVDialog {
 
     selectCode(code) {
         this.selectedCode = code;
-        if (this.chart) {
-            this.chart.querySelectorAll("[data-tv-ascii-code]").forEach((element) => {
-                const cellCode = Number.parseInt(element.getAttribute("data-tv-ascii-code"), 10);
-                element.classList.toggle("is-selected", cellCode === code);
-            });
-        }
+        this.chartView.queryAll("[data-tv-ascii-code]").forEach((element) => {
+            const cellCode = Number.parseInt(element.getAttribute("data-tv-ascii-code"), 10);
+            element.classList.toggle("is-selected", cellCode === code);
+        });
         this.updateReport(code);
     }
 
     updateReport(code) {
-        if (!this.report) {
-            return;
-        }
         const char = code === 0 ? " " : displayCp437Char(code);
         const decimal = String(code).padStart(3, " ");
         const hex = code.toString(16).toUpperCase().padStart(2, "0");
-        this.report.textContent = `  Char: ${char} Decimal: ${decimal} Hex ${hex}`.padEnd(32, " ");
+        this.reportView.setText(`  Char: ${char} Decimal: ${decimal} Hex ${hex}`.padEnd(32, " "));
     }
 }
 
@@ -1513,8 +1589,9 @@ class TVCalculatorDialog extends TVDialog {
         const buttons = buttonKeys.map(([key, label, aria]) =>
             TVRenderer.configure(new TVButton(new TVRect(), "", "calc-key", bfNormal).setValue(key), { labelMarkup: escapeHtml(label), ariaLabel: `Calculator key ${aria}` })
         );
+        const displayView = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "calc-display", presentation: "calc-display" });
         const calcMain = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
-                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "calc-display", presentation: "calc-display" }),
+                displayView,
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll(buttons), { presentation: "calc-keypad" }),
             ]), { presentation: "calc-main" });
 
@@ -1531,8 +1608,8 @@ class TVCalculatorDialog extends TVDialog {
         this.sign = " ";
         this.operate = "=";
         this.operand = 0;
-        this.display = this.query("[data-tv-calc-display]");
-        this.buttons = this.queryAll("[data-tv-calc-key]");
+        this.displayView = displayView;
+        this.buttons = buttons;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
         this.bind();
@@ -1540,14 +1617,17 @@ class TVCalculatorDialog extends TVDialog {
     }
 
     bind() {
-        this.buttons.forEach((button) => {
-            button.addEventListener("click", () => {
-                const token = button.getAttribute("data-tv-calc-key") || "";
-                this.calcKey(this.buttonValueMap[token] || token);
-            });
-        });
         document.addEventListener("keydown", (event) => this.onKeyDown(event));
         document.addEventListener("keyup", (event) => this.onKeyUp(event));
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && event.command === "calc-key") {
+            const token = String(event.infoPtr.value || "");
+            this.calcKey(this.buttonValueMap[token] || token);
+            this.clearEvent(event);
+        }
     }
 
     onKeyDown(event) {
@@ -1738,28 +1818,29 @@ class TVCalculatorDialog extends TVDialog {
     }
 
     updateDisplay() {
-        if (!this.display) {
-            return;
-        }
         const width = 18;
         const lead = Math.max(0, width - this.number.length - 2);
         const text = `${" ".repeat(lead)}${this.sign}${this.number} `;
-        this.display.textContent = text.slice(-width).padEnd(width, " ");
+        this.displayView.setText(text.slice(-width).padEnd(width, " "));
     }
 }
 
 class TVCalendarDialog extends TVDialog {
     constructor(desktop = document.querySelector(".tv-desktop") || document.body) {
         const now = new Date();
+        const captionView = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "calendar-caption" });
+        const prevButton = TVRenderer.configure(new TVButton(new TVRect(), "", "calendar-prev", bfNormal), { labelMarkup: escapeHtml(displayCp437Char(30)), ariaLabel: "Previous month" });
+        const nextButton = TVRenderer.configure(new TVButton(new TVRect(), "", "calendar-next", bfNormal), { labelMarkup: escapeHtml(displayCp437Char(31)), ariaLabel: "Next month" });
+        const gridView = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "calendar-grid", presentation: "calendar-grid" });
         const calendarMain = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
-                        TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "calendar-caption" }),
-                        TVRenderer.configure(new TVButton(new TVRect(), "", "calendar-prev", bfNormal), { labelMarkup: escapeHtml(displayCp437Char(30)), ariaLabel: "Previous month" }),
+                        captionView,
+                        prevButton,
                         new TVStaticText(new TVRect(), "  "),
-                        TVRenderer.configure(new TVButton(new TVRect(), "", "calendar-next", bfNormal), { labelMarkup: escapeHtml(displayCp437Char(31)), ariaLabel: "Next month" }),
+                        nextButton,
                     ]), { presentation: "calendar-header" }),
                 new TVStaticText(new TVRect(), "Su Mo Tu We Th Fr Sa"),
-                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "calendar-grid", presentation: "calendar-grid" }),
+                gridView,
             ]), { presentation: "calendar-main" });
         super(new TVRect(0, 0, 27, 11), "Calendar", {
             desktop,
@@ -1768,10 +1849,10 @@ class TVCalendarDialog extends TVDialog {
             palette: "calendar",
             content: calendarMain,
         });
-        this.caption = this.query("[data-tv-calendar-caption]");
-        this.grid = this.query("[data-tv-calendar-grid]");
-        this.prevButton = this.query("[data-tv-calendar-prev]");
-        this.nextButton = this.query("[data-tv-calendar-next]");
+        this.captionView = captionView;
+        this.gridView = gridView;
+        this.prevButton = prevButton;
+        this.nextButton = nextButton;
         this.curYear = now.getFullYear();
         this.curMonth = now.getMonth() + 1;
         this.curDay = now.getDate();
@@ -1784,13 +1865,16 @@ class TVCalendarDialog extends TVDialog {
     }
 
     bind() {
-        if (this.prevButton) {
-            this.prevButton.addEventListener("click", () => this.changeMonth(-1));
-        }
-        if (this.nextButton) {
-            this.nextButton.addEventListener("click", () => this.changeMonth(1));
-        }
         document.addEventListener("keydown", (event) => this.onKeyDown(event));
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "calendar-prev") { this.changeMonth(-1); }
+        else if (event.command === "calendar-next") { this.changeMonth(1); }
+        else { return; }
+        this.clearEvent(event);
     }
 
     onKeyDown(event) {
@@ -1826,10 +1910,7 @@ class TVCalendarDialog extends TVDialog {
     }
 
     render() {
-        if (!this.grid || !this.caption) {
-            return;
-        }
-        this.caption.textContent = `${MONTH_NAMES[this.month].padStart(9, " ")} ${String(this.year).padStart(4, " ")}`;
+        this.captionView.setText(`${MONTH_NAMES[this.month].padStart(9, " ")} ${String(this.year).padStart(4, " ")}`);
         const first = 1 - dayOfWeek(1, this.month, this.year);
         const days = this.daysInMonth(this.month, this.year);
         const cells = [];
@@ -1845,7 +1926,7 @@ class TVCalendarDialog extends TVDialog {
                 current += 1;
             }
         }
-        this.grid.innerHTML = cells.join("");
+        this.gridView.setHTML(cells.join(""));
     }
 }
 
@@ -1863,24 +1944,29 @@ class TVColorsDialog extends TVDialog {
         const itemTitle = TVRenderer.configure(new TVLabel(new TVRect(), "~I~tem"), { presentation: "colors-item-label", hotkey: true });
         const fgTitle = TVRenderer.configure(new TVLabel(new TVRect(), "~F~oreground"), { presentation: "colors-foreground-label", hotkey: true });
         const bgTitle = TVRenderer.configure(new TVLabel(new TVRect(), "~B~ackground"), { presentation: "colors-background-label", hotkey: true });
+        const groupListHost = TVRenderer.markup([TVVerticalListViewer.renderMarkup({
+            rootClass: "tv-colors-listviewer tv-colors-groups-listviewer",
+            rootAttrs: { "data-tv-colors-groups": true },
+            viewportClass: "tv-colors-list-viewport",
+        })]);
+        const itemListHost = TVRenderer.markup([TVVerticalListViewer.renderMarkup({
+            rootClass: "tv-colors-listviewer tv-colors-items-listviewer",
+            rootAttrs: { "data-tv-colors-items": true },
+            viewportClass: "tv-colors-list-viewport",
+        })]);
+        const foregroundView = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "colors-selector colors-foreground", viewName: "colors-foreground" });
+        const backgroundView = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "colors-selector colors-background is-background", viewName: "colors-background" });
+        const displayView = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "colors-display", viewName: "colors-display" });
         const colorsMain = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 groupTitle,
-                TVRenderer.markup([TVVerticalListViewer.renderMarkup({
-                    rootClass: "tv-colors-listviewer tv-colors-groups-listviewer",
-                    rootAttrs: { "data-tv-colors-groups": true },
-                    viewportClass: "tv-colors-list-viewport",
-                })]),
+                groupListHost,
                 itemTitle,
-                TVRenderer.markup([TVVerticalListViewer.renderMarkup({
-                    rootClass: "tv-colors-listviewer tv-colors-items-listviewer",
-                    rootAttrs: { "data-tv-colors-items": true },
-                    viewportClass: "tv-colors-list-viewport",
-                })]),
+                itemListHost,
                 fgTitle,
-                TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "colors-selector colors-foreground", viewName: "colors-foreground" }),
+                foregroundView,
                 bgTitle,
-                TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "colors-selector colors-background is-background", viewName: "colors-background" }),
-                TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "colors-display", viewName: "colors-display" }),
+                backgroundView,
+                displayView,
                 buttonStrip,
             ]), { presentation: "colors-main" });
         super(new TVRect(0, 0, 61, 18), "Colors", {
@@ -1889,25 +1975,23 @@ class TVColorsDialog extends TVDialog {
             helpCtx: hcColors,
             content: colorsMain,
         });
-        this.groupList = this.query("[data-tv-colors-groups]");
-        this.itemList = this.query("[data-tv-colors-items]");
-        this.foreground = this.query("[data-tv-colors-foreground]");
-        this.background = this.query("[data-tv-colors-background]");
-        this.display = this.query("[data-tv-colors-display]");
-        this.okButton = this.query("[data-tv-colors-ok]");
-        this.cancelButton = this.query("[data-tv-colors-cancel]");
-        this.defaultButton = this.query("[data-tv-colors-default]");
-        this.resetAllButton = this.query("[data-tv-colors-reset-all]");
-        this.groupBox = TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
+        this.foregroundView = foregroundView;
+        this.backgroundView = backgroundView;
+        this.displayView = displayView;
+        this.okButton = okButton;
+        this.cancelButton = cancelButton;
+        this.defaultButton = defaultButton;
+        this.resetAllButton = resetAllButton;
+        this.groupBox = TVVerticalListViewer.bindRendered(TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
             itemClassName: "tv-colors-list-item",
             itemAttrName: "data-tv-colors-group",
             renderItemContent: (group) => escapeHtml(group.name),
-        }).bindRoot(this.groupList);
-        this.itemBox = TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
+        }), groupListHost);
+        this.itemBox = TVVerticalListViewer.bindRendered(TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
             itemClassName: "tv-colors-list-item",
             itemAttrName: "data-tv-colors-item",
             renderItemContent: (item) => escapeHtml(item.name),
-        }).bindRoot(this.itemList);
+        }), itemListHost);
         this.selectedGroup = 0;
         this.pendingPalette = cloneColorPalette(TV.getActiveColorPalette() || buildDefaultColorPalette());
         this.previousPalette = cloneColorPalette(this.pendingPalette);
@@ -1927,25 +2011,23 @@ class TVColorsDialog extends TVDialog {
         this.itemBox.bind({
             onSelect: (_item, index) => this.onItemSelect(index),
         });
-        if (this.foreground) {
-            this.foreground.addEventListener("click", (event) => this.onSelectorClick(event, "fg"));
-            this.foreground.addEventListener("keydown", (event) => this.onSelectorKeyDown(event, "fg"));
-        }
-        if (this.background) {
-            this.background.addEventListener("click", (event) => this.onSelectorClick(event, "bg"));
-            this.background.addEventListener("keydown", (event) => this.onSelectorKeyDown(event, "bg"));
-        }
-        if (this.okButton) {
-            this.okButton.addEventListener("click", () => this.confirm());
-        }
-        if (this.cancelButton) {
-            this.cancelButton.addEventListener("click", () => this.cancel());
-        }
-        if (this.defaultButton) {
-            this.defaultButton.addEventListener("click", () => this.restoreSelectedDefault());
-        }
-        if (this.resetAllButton) {
-            this.resetAllButton.addEventListener("click", () => this.resetAllColors());
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand) {
+            if (event.command === "colors-ok") { this.confirm(); }
+            else if (event.command === "colors-cancel") { this.cancel(); }
+            else if (event.command === "colors-default") { this.restoreSelectedDefault(); }
+            else if (event.command === "colors-reset-all") { this.resetAllColors(); }
+            else { return; }
+            this.clearEvent(event);
+        } else if (event.what === evMouseDown && (event.infoPtr === this.foregroundView || event.infoPtr === this.backgroundView)) {
+            this.onSelectorClick(event.nativeEvent, event.infoPtr === this.foregroundView ? "fg" : "bg");
+            this.clearEvent(event);
+        } else if (event.what === evKeyDown && (event.infoPtr === this.foregroundView || event.infoPtr === this.backgroundView)) {
+            this.onSelectorKeyDown(event.nativeEvent, event.infoPtr === this.foregroundView ? "fg" : "bg");
+            if (event.nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
@@ -2016,9 +2098,9 @@ class TVColorsDialog extends TVDialog {
         this.renderSelectors();
         this.renderDisplay();
         if (keepFocus) {
-            const selector = type === "fg" ? this.foreground : this.background;
+            const selector = type === "fg" ? this.foregroundView : this.backgroundView;
             window.requestAnimationFrame(() => {
-                selector?.querySelector(`[data-tv-color-index="${colorIndex}"]`)?.focus();
+                selector.query(`[data-tv-color-index="${colorIndex}"]`)?.focus();
             });
         }
     }
@@ -2041,9 +2123,9 @@ class TVColorsDialog extends TVDialog {
         }
         event.preventDefault();
         event.stopPropagation();
-        const selector = type === "fg" ? this.foreground : this.background;
-        selector?.querySelector(`[data-tv-color-index="${color}"]`)?.click();
-        selector?.querySelector(`[data-tv-color-index="${color}"]`)?.focus();
+        const selector = type === "fg" ? this.foregroundView : this.backgroundView;
+        selector.query(`[data-tv-color-index="${color}"]`)?.click();
+        selector.query(`[data-tv-color-index="${color}"]`)?.focus();
     }
 
     selectedItem() {
@@ -2111,12 +2193,8 @@ class TVColorsDialog extends TVDialog {
         }
         const fg = item.attr & 0x0F;
         const bg = (item.attr >> 4) & 0x0F;
-        if (this.foreground) {
-            this.foreground.innerHTML = this.renderSelectorCells(16, fg);
-        }
-        if (this.background) {
-            this.background.innerHTML = this.renderSelectorCells(8, bg);
-        }
+        this.foregroundView.setHTML(this.renderSelectorCells(16, fg));
+        this.backgroundView.setHTML(this.renderSelectorCells(8, bg));
     }
 
     renderSelectorCells(count, selected) {
@@ -2136,18 +2214,15 @@ class TVColorsDialog extends TVDialog {
     }
 
     renderDisplay() {
-        if (!this.display) {
-            return;
-        }
         const item = this.selectedItem();
         if (!item) {
             return;
         }
         const fg = dosColor(item.attr, 0);
         const bg = dosColor(item.attr, 4);
-        this.display.innerHTML = TVRenderer.configure(new TVStaticText(new TVRect(), "Text Text Text \nText Text Text "), { presentation: "colors-display-sample" }).renderMarkup();
-        this.display.style.setProperty("--tv-colors-sample-fg", fg);
-        this.display.style.setProperty("--tv-colors-sample-bg", bg);
+        this.displayView.setHTML(TVRenderer.configure(new TVStaticText(new TVRect(), "Text Text Text \nText Text Text "), { presentation: "colors-display-sample" }).renderMarkup());
+        this.displayView.root?.style.setProperty("--tv-colors-sample-fg", fg);
+        this.displayView.root?.style.setProperty("--tv-colors-sample-bg", bg);
     }
 }
 
@@ -2864,23 +2939,29 @@ class TVMidiPlayerDialog extends TVDialog {
             new TVLabel(new TVRect(), "URL", midiUrlInput),
             { presentation: "midi-url-label" },
         );
+        const trackNumberView = TVRenderer.configure(new TVStaticText(new TVRect(), "01"), { viewName: "midi-track-number", presentation: "midi-track-number" });
+        const timeView = TVRenderer.configure(new TVStaticText(new TVRect(), "0:00 / 0:00"), { viewName: "midi-time", presentation: "midi-display-time" });
+        const titleView = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "midi-display-title", presentation: "midi-display-title" });
+        const statusView = TVRenderer.configure(new TVStaticText(new TVRect(), "Ready."), { viewName: "midi-status", presentation: "midi-status" });
         const display = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                         TVRenderer.configure(new TVStaticText(new TVRect(), "Track"), { presentation: "midi-display-label" }),
-                        TVRenderer.configure(new TVStaticText(new TVRect(), "01"), { viewName: "midi-track-number", presentation: "midi-track-number" }),
-                        TVRenderer.configure(new TVStaticText(new TVRect(), "0:00 / 0:00"), { viewName: "midi-time", presentation: "midi-display-time" }),
+                        trackNumberView,
+                        timeView,
                     ]), { presentation: "midi-display-line" }),
-                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "midi-display-title", presentation: "midi-display-title" }),
-                TVRenderer.configure(new TVStaticText(new TVRect(), "Ready."), { viewName: "midi-status", presentation: "midi-status" }),
+                titleView,
+                statusView,
             ]), { presentation: "midi-display" });
+        const meterView = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "midi-meter", presentation: "midi-meter-fill" });
         const meter = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
-                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "midi-meter", presentation: "midi-meter-fill" }),
+                meterView,
             ]), { presentation: "midi-meter" });
+        const loadUrlButton = new TVButton(new TVRect(), "Load", "midi-load-url", bfNormal);
         const externalSource = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                         midiUrlLabel,
                         midiUrlInput,
-                        new TVButton(new TVRect(), "Load", "midi-load-url", bfNormal),
+                        loadUrlButton,
                     ]), { presentation: "midi-url-row" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll(sourceButtons), { presentation: "midi-source-presets" }),
             ]), { presentation: "midi-external", viewName: "midi-advanced", hidden: true });
@@ -2906,24 +2987,24 @@ class TVMidiPlayerDialog extends TVDialog {
         this.loadSerial = 0;
         this.isPlaying = false;
         this.synth = new TVMidiSynth();
-        this.trackNumber = this.query("[data-tv-midi-track-number]");
-        this.displayTitle = this.query("[data-tv-midi-display-title]");
-        this.time = this.query("[data-tv-midi-time]");
-        this.status = this.query("[data-tv-midi-status]");
-        this.meter = this.query("[data-tv-midi-meter]");
-        this.previousButton = this.query("[data-tv-midi-previous]");
-        this.playButton = this.query("[data-tv-midi-play]");
-        this.pauseButton = this.query("[data-tv-midi-pause]");
-        this.stopButton = this.query("[data-tv-midi-stop]");
-        this.nextButton = this.query("[data-tv-midi-next]");
-        this.moreButton = this.query("[data-tv-midi-more]");
-        this.closeActionButton = this.query("[data-tv-midi-close-button]");
-        this.main = this.query("[data-tv-midi-main]");
-        this.advanced = this.query("[data-tv-midi-advanced]");
-        this.urlInput = this.query("[data-tv-midi-url]");
-        this.loadUrlButton = this.query("[data-tv-midi-load-url]");
-        this.sourceButtons = this.queryAll("[data-tv-midi-source]");
-        this.trackListBox = TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
+        this.trackNumberView = trackNumberView;
+        this.titleView = titleView;
+        this.timeView = timeView;
+        this.statusView = statusView;
+        this.meterView = meterView;
+        this.previousButton = previousButton;
+        this.playButton = playButton;
+        this.pauseButton = pauseButton;
+        this.stopButton = stopButton;
+        this.nextButton = nextButton;
+        this.moreButton = moreButton;
+        this.closeActionButton = closeButton;
+        this.mainView = main;
+        this.advancedView = externalSource;
+        this.urlInput = midiUrlInput;
+        this.loadUrlButton = loadUrlButton;
+        this.sourceButtons = sourceButtons;
+        this.trackListBox = TVVerticalListViewer.bindRendered(TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
             itemClassName: "tv-midi-track",
             itemAttrName: "data-tv-midi-track",
             renderItemMarkup: (track, index, selected) => TVRenderer.configure(new TVButton(new TVRect(), "", "midi-track", bfNormal).setValue(index).setCommandData({ selected }), { labelMarkup: [
@@ -2931,7 +3012,7 @@ class TVMidiPlayerDialog extends TVDialog {
                     TVRenderer.markup([escapeHtml(track.title)], { element: "span", className: "tv-midi-track-title" }),
                     TVRenderer.markup([escapeHtml(track.credit)], { element: "span", className: "tv-midi-track-credit" }),
                 ].map((widget) => widget.renderMarkup()).join("") }).renderMarkup(),
-        }).bindRoot(this.query("[data-tv-midi-track-list]"));
+        }), trackList);
         this.bindCommonClose(() => this.close());
         this.bindDrag();
         this.bind();
@@ -2947,44 +3028,27 @@ class TVMidiPlayerDialog extends TVDialog {
                 this.playSelected();
             },
         });
-        if (this.previousButton) {
-            this.previousButton.addEventListener("click", () => this.previousTrack());
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand) {
+            if (event.command === "midi-previous") { this.previousTrack(); }
+            else if (event.command === "midi-play") { void this.playSelected(); }
+            else if (event.command === "midi-pause") { this.pausePlayback(); }
+            else if (event.command === "midi-stop") { this.stopPlayback(); }
+            else if (event.command === "midi-next") { this.nextTrack(); }
+            else if (event.command === "midi-more") { this.toggleAdvanced(); }
+            else if (event.command === "midi-close-button") { this.close(); }
+            else if (event.command === "midi-load-url") { this.playExternalUrl(); }
+            else if (event.command === "midi-source") { this.playExternalPreset(Number(event.infoPtr.value)); }
+            else { return; }
+            this.clearEvent(event);
+        } else if (event.what === evKeyDown && event.infoPtr === this.urlInput && event.nativeEvent.key === "Enter") {
+            event.nativeEvent.preventDefault();
+            this.playExternalUrl();
+            this.clearEvent(event);
         }
-        if (this.playButton) {
-            this.playButton.addEventListener("click", () => this.playSelected());
-        }
-        if (this.pauseButton) {
-            this.pauseButton.addEventListener("click", () => this.pausePlayback());
-        }
-        if (this.stopButton) {
-            this.stopButton.addEventListener("click", () => this.stopPlayback());
-        }
-        if (this.nextButton) {
-            this.nextButton.addEventListener("click", () => this.nextTrack());
-        }
-        if (this.moreButton) {
-            this.moreButton.addEventListener("click", () => this.toggleAdvanced());
-        }
-        if (this.closeActionButton) {
-            this.closeActionButton.addEventListener("click", () => this.close());
-        }
-        if (this.loadUrlButton) {
-            this.loadUrlButton.addEventListener("click", () => this.playExternalUrl());
-        }
-        if (this.urlInput) {
-            this.urlInput.addEventListener("keydown", (event) => {
-                if (event.key === "Enter") {
-                    event.preventDefault();
-                    this.playExternalUrl();
-                }
-            });
-        }
-        this.sourceButtons.forEach((button) => {
-            button.addEventListener("click", () => {
-                const index = Number.parseInt(button.getAttribute("data-tv-midi-source"), 10);
-                this.playExternalPreset(index);
-            });
-        });
     }
 
     close() {
@@ -2993,16 +3057,11 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 
     toggleAdvanced() {
-        if (!this.advanced) {
-            return;
-        }
-        const expanded = this.advanced.hidden;
-        this.advanced.hidden = !expanded;
-        this.main?.classList.toggle("is-advanced", expanded);
-        this.moreButton?.setAttribute("aria-expanded", expanded ? "true" : "false");
-        if (this.moreButton) {
-            this.moreButton.textContent = expanded ? "Less" : "More";
-        }
+        const expanded = this.advancedView.root.hidden;
+        this.advancedView.setState("visible", expanded);
+        this.mainView.root?.classList.toggle("is-advanced", expanded);
+        this.moreButton.setState("expanded", expanded);
+        this.moreButton.setTitle(expanded ? "Less" : "More");
         this.setSize({
             height: expanded ? "min(27em, calc(100% - 2em))" : "min(23em, calc(100% - 2em))",
         });
@@ -3045,15 +3104,9 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 
     updateTrackDisplay(track, number) {
-        if (this.trackNumber) {
-            this.trackNumber.textContent = number;
-        }
-        if (this.displayTitle) {
-            this.displayTitle.textContent = track.title;
-        }
-        if (this.time) {
-            this.time.textContent = "0:00 / 0:00";
-        }
+        this.trackNumberView.setText(number);
+        this.titleView.setText(track.title);
+        this.timeView.setText("0:00 / 0:00");
     }
 
     async loadTrack(track) {
@@ -3116,7 +3169,7 @@ class TVMidiPlayerDialog extends TVDialog {
     playExternalUrl() {
         let file;
         try {
-            file = normalizeMidiUrl(this.urlInput ? this.urlInput.value : "");
+            file = normalizeMidiUrl(this.urlInput.getData());
         } catch (error) {
             this.setStatus(error && error.message ? error.message : "Invalid MIDI URL.");
             return;
@@ -3134,9 +3187,7 @@ class TVMidiPlayerDialog extends TVDialog {
         if (!source) {
             return;
         }
-        if (this.urlInput) {
-            this.urlInput.value = source.file;
-        }
+        this.urlInput.setData(source.file);
         this.playExternalTrack(source);
     }
 
@@ -3150,9 +3201,7 @@ class TVMidiPlayerDialog extends TVDialog {
         this.updateTrackDisplay(track, number);
         this.setStatus(`Loading ${track.title}...`);
         this.updateProgress(0, 0, { status: false });
-        if (this.playButton) {
-            this.playButton.disabled = true;
-        }
+        this.playButton.setState("disabled", true);
         try {
             const sequence = await this.loadTrack(track);
             if (serial !== this.loadSerial) {
@@ -3172,9 +3221,7 @@ class TVMidiPlayerDialog extends TVDialog {
             this.isPlaying = false;
             this.setStatus(error && error.message ? error.message : "MIDI playback failed.");
         } finally {
-            if (this.playButton) {
-                this.playButton.disabled = false;
-            }
+            this.playButton.setState("disabled", false);
         }
     }
 
@@ -3194,22 +3241,16 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 
     updateProgress(elapsed, duration, { status = true } = {}) {
-        if (this.meter) {
-            const ratio = duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0;
-            this.meter.style.width = `${Math.round(ratio * 100)}%`;
-        }
-        if (this.time) {
-            this.time.textContent = `${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}`;
-        }
+        const ratio = duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0;
+        if (this.meterView.root) { this.meterView.root.style.width = `${Math.round(ratio * 100)}%`; }
+        this.timeView.setText(`${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}`);
         if (status && duration > 0) {
             this.setStatus(`Playing ${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}.`);
         }
     }
 
     setStatus(message) {
-        if (this.status) {
-            this.status.textContent = message;
-        }
+        this.statusView.setText(message);
     }
 }
 
@@ -3220,21 +3261,24 @@ class TVFindDialog extends TVDialog {
         findLabel.link = findInput;
         const findButton = new TVButton(new TVRect(), "~F~ind", "find-confirm", bfDefault);
         const cancelButton = new TVButton(new TVRect(), "Cancel", "find-cancel", bfNormal);
+        const findStatus = TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "find-status", presentation: "find-status" });
+        const historyButton = TVHistoryWindow.triggerView({
+            name: "find-history",
+            ariaLabel: "Find history",
+        });
+        const historyPopup = TVHistoryWindow.view({
+            popupRole: "find-history-popup",
+            popupName: "find-history-popup",
+            listAttrs: { "data-tv-find-history-list": true },
+        });
         const findMain = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([findLabel]), { presentation: "find-label" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([findInput]), { presentation: "find-input" }),
-                TVHistoryWindow.triggerView({
-                    name: "find-history",
-                    ariaLabel: "Find history",
-                }),
+                historyButton,
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([findButton]), { presentation: "find-confirm" }),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([cancelButton]), { presentation: "find-cancel" }),
-                TVRenderer.configure(new TVStaticText(new TVRect(), ""), { viewName: "find-status", presentation: "find-status" }),
-                TVHistoryWindow.view({
-                    popupRole: "find-history-popup",
-                    popupName: "find-history-popup",
-                    listAttrs: { "data-tv-find-history-list": true },
-                }),
+                findStatus,
+                historyPopup,
             ]), { presentation: "find-main" });
         super(new TVRect(0, 0, 49, 10), "Find", {
             desktop,
@@ -3247,39 +3291,50 @@ class TVFindDialog extends TVDialog {
         this.findHandler = null;
         this.findAgainHandler = null;
         this.targetLabel = "active window";
-        this.input = this.query("[data-tv-find-input]");
-        this.status = this.query("[data-tv-find-status]");
-        this.findButton = this.query("[data-tv-find-confirm]");
-        this.cancelButton = this.query("[data-tv-find-cancel]");
-        this.historyButton = this.query("[data-tv-find-history]");
-        this.historyPopup = this.query("[data-tv-find-history-popup]");
+        this.input = findInput;
+        this.statusView = findStatus;
+        this.findButton = findButton;
+        this.cancelButton = cancelButton;
+        this.historyButton = historyButton;
+        this.historyPopup = historyPopup;
         this.historyList = TVRenderer.configure(new TVHistoryViewer(new TVRect()), {
             itemClassName: "tv-file-open-history-item",
             itemAttrName: "data-tv-find-history-index",
             renderItemContent: (item) => escapeHtml(item.value),
-        }).bindRoot(this.query("[data-tv-find-history-list]"));
+        });
         this.historyWindow = new TVHistoryWindow({
             button: this.historyButton,
             popup: this.historyPopup,
             viewer: this.historyList,
             items: () => this.history.keys().map((value) => ({ historyKey: value, value })),
             onSelect: (item, activate) => {
-                if (this.input) { this.input.value = item.value; }
+                this.input.setData(item.value);
                 this.historyWindow.hide();
                 if (activate) { this.performFind(); }
-                else { this.input?.focus(); }
+                else { this.input.focus(); }
             },
-        });
-        this.findButton?.addEventListener("click", () => this.performFind());
-        this.cancelButton?.addEventListener("click", () => this.close());
-        this.input?.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                this.performFind();
-            }
         });
         this.bindCommonClose(() => this.close());
         this.bindDrag();
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && event.command === "find-confirm") {
+            this.performFind();
+            this.clearEvent(event);
+        } else if (event.what === evCommand && event.command === "find-cancel") {
+            this.close();
+            this.clearEvent(event);
+        } else if (
+            event.what === evKeyDown
+            && event.infoPtr === this.input
+            && event.nativeEvent?.key === "Enter"
+        ) {
+            event.nativeEvent.preventDefault();
+            this.performFind();
+            this.clearEvent(event);
+        }
     }
 
     configure({ find = null, findAgain = null, targetLabel = "active window" } = {}) {
@@ -3291,26 +3346,24 @@ class TVFindDialog extends TVDialog {
 
     open(initialQuery = "") {
         this.historyWindow.hide();
-        if (this.input && initialQuery) { this.input.value = initialQuery; }
-        if (this.status) { this.status.textContent = `Find in ${this.targetLabel}`; }
+        if (initialQuery) { this.input.setData(initialQuery); }
+        this.statusView.setText(`Find in ${this.targetLabel}`);
         this.historyWindow.refresh();
         super.open();
-        this.input?.focus();
-        this.input?.select();
+        this.input.focus();
+        this.input.selectAll();
     }
 
     performFind() {
-        const query = String(this.input?.value || "").trim();
+        const query = this.input.getData().trim();
         if (!query || !this.findHandler) {
-            if (this.status) { this.status.textContent = "Enter text to find."; }
+            this.statusView.setText("Enter text to find.");
             return false;
         }
         this.history.remember(query);
         this.historyWindow.refresh();
         const found = Boolean(this.findHandler(query));
-        if (this.status) {
-            this.status.textContent = found ? `Found in ${this.targetLabel}` : `Text not found in ${this.targetLabel}`;
-        }
+        this.statusView.setText(found ? `Found in ${this.targetLabel}` : `Text not found in ${this.targetLabel}`);
         if (found) { this.close(); }
         return found;
     }
@@ -3343,6 +3396,11 @@ class TVSearchDialog extends TVDialog {
             { autocomplete: "off", spellcheck: "false", viewName: "search-input" },
         );
         const searchLabel = new TVLabel(new TVRect(), "Find:", searchInput);
+        const resultsHost = TVRenderer.markup([TVVerticalListViewer.renderMarkup({
+            rootClass: "tv-search-results-scroll",
+            rootAttrs: { "data-tv-search-results": true },
+            viewportClass: "tv-search-results",
+        })]);
         const searchMain = TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
                         searchLabel,
@@ -3350,11 +3408,7 @@ class TVSearchDialog extends TVDialog {
                     ]), { columns: "auto minmax(0,1fr)", gap: "1ch", align: "center" }),
                 new TVStaticText(new TVRect(), "Enter text and choose a topic."),
                 TVRenderer.configure(new TVGroup(new TVRect()).insertAll([
-                        TVRenderer.markup([TVVerticalListViewer.renderMarkup({
-                            rootClass: "tv-search-results-scroll",
-                            rootAttrs: { "data-tv-search-results": true },
-                            viewportClass: "tv-search-results",
-                        })]),
+                        resultsHost,
                     ]), { presentation: "search-results-panel" }),
             ]), { presentation: "search-main" });
 
@@ -3367,10 +3421,10 @@ class TVSearchDialog extends TVDialog {
         this.searchData = window.TV_SEARCH_INDEX && Array.isArray(window.TV_SEARCH_INDEX.topics)
             ? window.TV_SEARCH_INDEX
             : { topics: [] };
-        this.input = this.query("[data-tv-search-input]");
-        this.okButton = this.query("[data-tv-search-ok]");
-        this.cancelButton = this.query("[data-tv-search-cancel]");
-        this.resultsBox = TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
+        this.input = searchInput;
+        this.okButton = okButton;
+        this.cancelButton = cancelButton;
+        this.resultsBox = TVVerticalListViewer.bindRendered(TVRenderer.configure(new TVVerticalListViewer(new TVRect()), {
             itemClassName: "tv-search-result",
             itemAttrName: "data-tv-search-index",
             renderItemMarkup: (entry, index, selected) => {
@@ -3384,7 +3438,7 @@ class TVSearchDialog extends TVDialog {
                 ].map(([className, value]) => TVRenderer.markup([escapeHtml(value)], { element: "span", className: className }).renderMarkup()).join("");
                 return TVRenderer.configure(new TVButton(new TVRect(), "", "search-index", bfNormal).setValue(index).setCommandData({ selected }), { labelMarkup: parts }).renderMarkup();
             },
-        }).bindRoot(this.query("[data-tv-search-results]"));
+        }), resultsHost);
         this.results = this.resultsBox.viewport;
         this.matches = [];
         this.selectedIndex = -1;
@@ -3398,7 +3452,6 @@ class TVSearchDialog extends TVDialog {
             return;
         }
 
-        this.input.addEventListener("input", () => this.renderResults(this.input.value));
         this.resultsBox.bind({
             onSelect: (_entry, index) => {
                 this.selectIndex(index);
@@ -3408,9 +3461,20 @@ class TVSearchDialog extends TVDialog {
                 this.openSelected();
             },
         });
-        this.okButton.addEventListener("click", () => this.openSelected());
-        this.cancelButton.addEventListener("click", () => this.close());
         document.addEventListener("keydown", (event) => this.onKeyDown(event));
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evBroadcast && event.infoPtr === this.input) {
+            this.renderResults(this.input.getData());
+            this.clearEvent(event);
+        } else if (event.what === evCommand) {
+            if (event.command === "search-ok") { this.openSelected(); }
+            else if (event.command === "search-cancel") { this.close(); }
+            else { return; }
+            this.clearEvent(event);
+        }
     }
 
     onKeyDown(event) {
@@ -3418,7 +3482,7 @@ class TVSearchDialog extends TVDialog {
             event.preventDefault();
             if (this.isOpen()) {
                 this.input.focus();
-                this.input.select();
+                this.input.selectAll();
             } else {
                 this.open("");
             }
@@ -3451,12 +3515,12 @@ class TVSearchDialog extends TVDialog {
     open(initialQuery = "") {
         super.open();
         if (typeof initialQuery === "string") {
-            this.input.value = initialQuery;
+            this.input.setData(initialQuery);
         }
-        this.renderResults(this.input.value);
+        this.renderResults(this.input.getData());
         window.requestAnimationFrame(() => this.resultsBox.updateScrollbar());
         this.input.focus();
-        this.input.select();
+        this.input.selectAll();
     }
 
     moveSelection(delta) {
@@ -3481,7 +3545,7 @@ class TVSearchDialog extends TVDialog {
 
     updateSelectionUi() {
         this.resultsBox.select(this.selectedIndex);
-        this.okButton.classList.toggle("is-active", this.selectedIndex >= 0);
+        this.okButton.setState("active", this.selectedIndex >= 0);
     }
 
     openSelected() {
@@ -3497,7 +3561,7 @@ class TVSearchDialog extends TVDialog {
         }
         this.matches = [];
         this.selectedIndex = -1;
-        this.okButton.classList.remove("is-active");
+        this.okButton.setState("active", false);
         if (!this.searchData.topics.length) {
             this.results.innerHTML = TVRenderer.configure(new TVStaticText(new TVRect(), "Search index is not available for this help file."), { presentation: "search-empty" }).renderMarkup();
             this.resultsBox.updateScrollbar();

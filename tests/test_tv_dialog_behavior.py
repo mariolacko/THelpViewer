@@ -10,6 +10,29 @@ ASSET_PATHS = (
     Path("www/assets/tv-core.js"),
     Path("thelpviewer/converter/assets/tv-core.js"),
 )
+DIALOG_PATHS = (
+    Path("www/assets/tv-dialogs.js"),
+    Path("thelpviewer/converter/assets/tv-dialogs.js"),
+)
+GAME_PATHS = (
+    Path("www/assets/tv-games.js"),
+    Path("thelpviewer/converter/assets/tv-games.js"),
+)
+
+
+def test_concrete_dialogs_keep_tv_view_references_instead_of_rediscovering_dom():
+    assert DIALOG_PATHS[0].read_bytes() == DIALOG_PATHS[1].read_bytes()
+    assert GAME_PATHS[0].read_bytes() == GAME_PATHS[1].read_bytes()
+
+    for path in (DIALOG_PATHS[0], GAME_PATHS[0]):
+        source = path.read_text(encoding="utf-8")
+        assert 'this.query("[data-tv-' not in source
+        assert 'this.queryAll("[data-tv-' not in source
+
+    core = ASSET_PATHS[0].read_text(encoding="utf-8")
+    assert "class TVEvent" in core
+    assert "handleEvent(event)" in core
+    assert "target.dispatchEvent(new TVEvent" in core
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the dialog behaviour test")

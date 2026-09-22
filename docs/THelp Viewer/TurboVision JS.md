@@ -70,7 +70,8 @@ Core widget hierarchy and infrastructure.
 - **TVCheckBoxes** — Native checkbox group rendered with DOS `[ ]` / `[X]`
   marks; supports click, Space, focus and disabled state.
 - **TVRadioButtons** — Native mutually exclusive radio group rendered with DOS
-  `( )` / `(·)` marks. An explicit `name` may be supplied.
+  `( )` / `(·)` marks. The renderer generates the native browser group name;
+  it is not part of the public constructor.
 - **TVMultiCheckBoxes** — `TVCluster` subclass with configurable three-state
   DOS marks, keyboard-focusable buttons, disabled state and `aria-checked`.
 - **TVTerminal** — Bounded append-only line buffer. `append(text)`, `clear()`
@@ -91,9 +92,15 @@ Core widget hierarchy and infrastructure.
   `bfBroadcast` flags; `draw()`, `press()`,
   `makeDefault()` and `setState()` provide the basic control operations. It no
   longer represents menus or status-line items and has no `buttonKind`.
-- **TVRenderer** — The one browser adapter for presentation classes, generated
-  element ids, data hooks, ARIA and the few shared raw-markup fragments. These
-  details are not accepted by public TVision constructors.
+- **TVEvent** — Turbo Vision-style event record with `what`, `command`,
+  `infoPtr` and the private browser-event bridge. `TVButton.handleEvent()`
+  changes `evMouseDown` into `evCommand`; `TVView.dispatchEvent()` propagates
+  the event through `owner` until `clearEvent()` changes it to `evNothing`.
+- **TVRenderer** — Private browser adapter for drawing presentation classes,
+  generated element ids, data hooks, ARIA and the few shared raw-markup
+  fragments. It is required because a browser still needs HTML, but it is not
+  a second application object model: concrete dialogs keep child-object
+  references and never use renderer selectors for command routing.
 - **TVMenuItem** / **TVStatusItem** — Command descriptors drawn by
   `TVMenuView`/`TVMenuBox` and the status line, matching Turbo Vision's
   separation between `TButton`, `TMenuItem` and `TStatusItem`.
@@ -151,7 +158,10 @@ Header, footer and both row-side glyphs inherit the same current frame color.
   - `setManager(manager, name)` — Register with TVDialogManager
   - `focusableElements()` — Return the current keyboard focus cycle
   - `onDialogKeyDown(event)` — Shared Escape, default Enter and Tab handling
-  - `query(selector)` — Shortcut for `this.dialog.querySelector()`
+  - Native click, input, change and key events are translated once into
+    `TVEvent` and propagated through the target view's owner chain.
+  - `query(selector)` remains an internal renderer/composite helper; concrete
+    dialogs do not use it to rediscover controls they created.
   - Constructor options `modal`, `keyboard`, `escapeCloses` and
     `defaultButtonSelector` customize shared interaction without duplicating
     document-level key handlers. The `palette` option selects the owner palette

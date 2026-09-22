@@ -205,7 +205,7 @@ Prevents:
 
 ---
 
-## Rule 13 — Record User-Visible Changes
+## Rule 14 — Record User-Visible Changes
 
 For every user-visible feature, behavior fix, or format-parser correction:
 - add a concise entry under `CHANGELOG.md` → `[Unreleased]`
@@ -215,6 +215,23 @@ For every user-visible feature, behavior fix, or format-parser correction:
 Prevents:
 - completed fixes existing only in commit history or internal audit notes
 - release notes drifting away from shipped behavior
+
+---
+
+## Rule 15 — Use The Turbo Vision Event Model
+
+Concrete dialogs and games must retain references to the `TVView` children
+they create and implement `handleEvent()` for commands and input.
+
+Do not rediscover owned controls with dialog-wide `data-tv-*` selectors or add
+parallel click handlers when `TVEvent` owner propagation can express the
+interaction. DOM queries remain allowed inside shared renderer primitives that
+resolve their private substructure.
+
+Prevents:
+- DOM structure becoming the application object model
+- duplicate command paths and browser-specific behavior
+- controls drifting away from Turbo Vision ownership and event semantics
 
 ---
 

@@ -320,12 +320,14 @@ def test_label_and_search_use_native_association_and_separate_activation():
 
     label = core[core.index("class TVLabel"):core.index("class TVInputLine")]
     search = dialogs[dialogs.index("class TVSearchDialog"):]
-    search_binding = search[search.index("this.resultsBox.bind({"):search.index("this.okButton.addEventListener")]
+    search_binding = search[search.index("this.resultsBox.bind({"):search.index("document.addEventListener")]
 
     assert 'const tag = this.link ? "label" : "span"' in label
     assert 'for="${escapeHtml(this.link.viewId)}"' in label
     assert "openSelected()" not in search_binding.split("onActivate:", 1)[0]
     assert "openSelected()" in search_binding.split("onActivate:", 1)[1]
+    assert 'event.command === "search-ok"' in search
+    assert 'this.input.addEventListener("input"' not in search
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the choice control test")

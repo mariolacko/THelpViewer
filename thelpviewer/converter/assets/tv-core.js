@@ -1146,6 +1146,24 @@ class TVRect {
 let tvViewSequence = 0;
 const tvRenderState = new WeakMap();
 
+const evNothing = 0x0000;
+const evMouseDown = 0x0001;
+const evMouseUp = 0x0002;
+const evMouseMove = 0x0004;
+const evMouseAuto = 0x0008;
+const evKeyDown = 0x0010;
+const evCommand = 0x0100;
+const evBroadcast = 0x0200;
+
+class TVEvent {
+    constructor(what = evNothing, { command = "", infoPtr = null, nativeEvent = null } = {}) {
+        this.what = what;
+        this.command = command;
+        this.infoPtr = infoPtr;
+        this.nativeEvent = nativeEvent;
+    }
+}
+
 /**
  * Browser adapter for TVision views.  DOM presentation belongs here, never in
  * a public view constructor.  Application code may select a semantic
@@ -1263,6 +1281,15 @@ class TVView {
         return template.content.firstElementChild;
     }
 
+    static fromElement(element) {
+        let current = element?.nodeType === 1 ? element : null;
+        while (current) {
+            if (current._tvView instanceof TVView) { return current._tvView; }
+            current = current.parentElement;
+        }
+        return null;
+    }
+
     mount(parent) {
         if (this.root && parent) {
             parent.appendChild(this.root);
@@ -1271,7 +1298,9 @@ class TVView {
     }
 
     bindRoot(root) {
+        if (this.root?._tvView === this) { delete this.root._tvView; }
         this.root = root || null;
+        if (this.root) { this.root._tvView = this; }
         setElementHelpContext(this.root, this.helpCtx);
         return this;
     }
@@ -1299,14 +1328,40 @@ class TVView {
         return this;
     }
 
+    setState(state, enable) {
+        if (state === "visible") {
+            if (this.root) { this.root.hidden = !enable; }
+        } else if (state === "active") {
+            this.root?.classList.toggle("is-active", Boolean(enable));
+        } else if (state === "expanded") {
+            this.root?.setAttribute("aria-expanded", enable ? "true" : "false");
+        }
+        return this;
+    }
+
     resolve(root) {
         if (!root) { return this; }
         if (root.getAttribute?.("data-tv-view-id") === this.viewId) {
-            this.root = root;
+            this.bindRoot(root);
         } else {
-            this.root = root.querySelector?.(`[data-tv-view-id="${this.viewId}"]`) || null;
+            this.bindRoot(root.querySelector?.(`[data-tv-view-id="${this.viewId}"]`) || null);
         }
         return this;
+    }
+
+    handleEvent(_event) {}
+
+    clearEvent(event) {
+        event.what = evNothing;
+    }
+
+    dispatchEvent(event) {
+        let view = this;
+        while (view && event.what !== evNothing) {
+            view.handleEvent(event);
+            view = view.owner;
+        }
+        return event;
     }
 
     setHelpCtx(helpCtx) {
@@ -1416,12 +1471,23 @@ class TVInputLine extends TVView {
         return this.root ? this.root.value : this.data;
     }
 
+    focus() {
+        this.root?.focus();
+        return this;
+    }
+
+    selectAll() {
+        this.root?.select();
+        return this;
+    }
+
     setState(state, enable) {
         if (state === "disabled") {
             this.disabled = Boolean(enable);
             if (this.root) { this.root.disabled = this.disabled; }
+            return this;
         }
-        return this;
+        return super.setState(state, enable);
     }
 
     renderMarkup() {
@@ -1591,6 +1657,7 @@ class TVInfoBox extends TVView {
         this.title = String(title ?? "");
         this.children = Array.isArray(children) ? children : [];
         this.children.forEach((child) => {
+            if (child instanceof TVView) { child.owner = this; }
             if (child instanceof TVStaticText && TVRenderer.state(child).viewName) {
                 const rendering = TVRenderer.state(child);
                 TVRenderer.configure(child, {
@@ -1635,7 +1702,9 @@ class TVInfoBox extends TVView {
             ? rootEl
             : rootEl.querySelector(`[data-tv-view-id="${this.viewId}"]`);
         if (!this._el) { return this; }
+        this.bindRoot(this._el);
         for (const child of this.children) {
+            child?.resolve?.(this._el);
             const viewName = child ? TVRenderer.state(child).viewName : "";
             if (viewName) {
                 const el = this._el.querySelector(`[data-tv-row="${viewName}"]`);
@@ -1740,7 +1809,7 @@ class TVTerminal extends TVView {
     }
 
     bind(root) {
-        this.root = root;
+        this.bindRoot(root);
         this.render();
         return this;
     }
@@ -2154,6 +2223,13 @@ class TVVerticalListViewer extends TVListBox {
         `;
     }
 
+    static bindRendered(viewer, hostView) {
+        if (!(viewer instanceof TVVerticalListViewer) || !(hostView instanceof TVView)) {
+            throw new TypeError("TVVerticalListViewer.bindRendered expects viewer and host TVView");
+        }
+        return viewer.bindRoot(hostView.query(".tv-vlist-viewer"));
+    }
+
     constructor(bounds, numCols = 1) {
         super(bounds, numCols);
         this.viewport = null;
@@ -2494,6 +2570,13 @@ class TVOutline extends TVVerticalListViewer {
 }
 
 class TVVerticalScrollArea extends TVView {
+    static bindRendered(scrollArea, hostView) {
+        if (!(scrollArea instanceof TVVerticalScrollArea) || !(hostView instanceof TVView)) {
+            throw new TypeError("TVVerticalScrollArea.bindRendered expects scroll area and host TVView");
+        }
+        return scrollArea.bindRoot(hostView.query("[data-tv-scroll-frame]"));
+    }
+
     static renderMarkup({
         rootClass = "",
         rootAttrs = {},
@@ -3370,7 +3453,7 @@ class TVMultiCheckBoxes extends TVCluster {
     }
 
     bind(root, onChange = null) {
-        this.root = root;
+        this.bindRoot(root);
         this.changeHandler = onChange;
         if (!root || root.dataset.tvMultiCheckBound === "1") { return this; }
         root.dataset.tvMultiCheckBound = "1";
@@ -3533,6 +3616,21 @@ class TVButton extends TVView {
         return this.renderMarkup();
     }
 
+    handleEvent(event) {
+        if (event.what === evMouseDown && this.command && !this.disabled) {
+            event.what = evCommand;
+            event.command = this.command;
+            event.infoPtr = this;
+        }
+    }
+
+    setTitle(title) {
+        this.title = String(title ?? "");
+        const label = this.query(".tv-dialog-button-label");
+        if (label) { label.innerHTML = renderHotkeyMarkup(this.title); }
+        return this;
+    }
+
     makeDefault(enable = true) {
         this.flags = enable ? (this.flags | bfDefault) : (this.flags & ~bfDefault);
         this.root?.classList.toggle("is-default", Boolean(enable));
@@ -3547,8 +3645,9 @@ class TVButton extends TVView {
         if (state === "disabled") {
             this.disabled = Boolean(enable);
             if (this.root) { this.root.disabled = Boolean(enable); }
+            return this;
         }
-        return this;
+        return super.setState(state, enable);
     }
 }
 
@@ -3762,6 +3861,7 @@ class TVDialog extends TVWindow {
         this.setHelpCtx(helpCtx);
         this.desktop = desktop;
         this.content = content instanceof TVView ? content : null;
+        if (this.content) { this.content.owner = this; }
         this.overlay = root;
         this.dialog = this.query(".tv-dialog-window");
         this.content?.resolve(this.dialog);
@@ -3784,7 +3884,22 @@ class TVDialog extends TVWindow {
         this.dialog.tabIndex = -1;
         this.mount(desktop);
         bindCloseButtons(this.overlay);
-        this.dialog.addEventListener("keydown", (event) => this.onDialogKeyDown(event));
+        this.dialog.addEventListener("click", (event) => this.dispatchDomEvent(evMouseDown, event));
+        this.dialog.addEventListener("contextmenu", (event) => this.dispatchDomEvent(evMouseDown, event));
+        this.dialog.addEventListener("input", (event) => this.dispatchDomEvent(evBroadcast, event));
+        this.dialog.addEventListener("change", (event) => this.dispatchDomEvent(evBroadcast, event));
+        this.dialog.addEventListener("keydown", (event) => {
+            this.dispatchDomEvent(evKeyDown, event);
+            this.onDialogKeyDown(event);
+        });
+    }
+
+    dispatchDomEvent(what, nativeEvent) {
+        const target = TVView.fromElement(nativeEvent.target) || this;
+        return target.dispatchEvent(new TVEvent(what, {
+            infoPtr: target,
+            nativeEvent,
+        }));
     }
 
     setManager(manager, name) {
@@ -4978,6 +5093,15 @@ Object.assign(TV, {
     DEFAULT_UI_CONFIG,
     TV_COMMANDS,
     TV_HELP_CONTEXTS,
+    evNothing,
+    evMouseDown,
+    evMouseUp,
+    evMouseMove,
+    evMouseAuto,
+    evKeyDown,
+    evCommand,
+    evBroadcast,
+    TVEvent,
     COLOR_GROUPS,
     buildDefaultColorPalette,
     buildPaletteFromCurrentStyle,

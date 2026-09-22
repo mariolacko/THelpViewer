@@ -34,6 +34,13 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Added the Turbo Vision event path (`TVEvent`, `evMouseDown`, `evKeyDown`,
+  `evCommand`, `evBroadcast`, `handleEvent()` and `clearEvent()`). Concrete
+  dialogs and games now retain their child `TVView` objects and receive button,
+  input and board actions through owner-chain propagation instead of querying
+  their own generated DOM by `data-tv-*` selectors and wiring parallel click
+  handlers. `TVRenderer` is consequently limited to the browser presentation
+  boundary rather than application control flow.
 - Replaced the browser-shaped TVision object API with positional,
   Turbo Vision-style construction for the shared base view, groups, static
   text, labels, input lines, buttons, clusters, info boxes, terminals and menu

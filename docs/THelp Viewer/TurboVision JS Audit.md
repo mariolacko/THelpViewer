@@ -401,6 +401,16 @@ compatibility with old Turbo Vision applications.
     attached separately; browser metadata is isolated in `TVRenderer`;
     redundant `TVButtonStrip` and public `TVMarkupList` objects were removed;
     and the status line shows concise text from the active `helpCtx` topic.
+51. **Concrete dialogs and games still discarded their child-object references
+    after construction, found the same controls again with `data-tv-*` CSS
+    selectors, and attached parallel DOM event listeners. `TVRenderer` had
+    therefore become part of application control flow instead of remaining a
+    browser drawing boundary.** **Resolved in Phase 7.25:** `TVEvent` and the
+    original `evMouseDown`/`evKeyDown`/`evCommand`/`evBroadcast` model now
+    propagate through `TVView.owner`; buttons translate mouse events to
+    commands; and concrete dialogs/games retain their inputs, buttons, lists,
+    status views and game boards as objects. DOM queries remain only inside
+    shared components while resolving their private rendered structure.
 
 ## Component assessment
 
@@ -433,7 +443,7 @@ Borland code and preserves the relevant Turbo Vision 2.0 class hierarchy.
 | Turbo Vision 2.0 | Current JavaScript | Result and required change |
 |---|---|---|
 | `TView` | `TVView` | Bounds-first base with separate browser-root binding and shared `helpCtx`. |
-| `TGroup : TView` | `TVGroup : TVView` | Bounds-only constructor, inserted view children, current child and `helpCtx` inheritance; full event propagation remains incomplete. |
+| `TGroup : TView` | `TVGroup : TVView` | Bounds-only constructor, inserted view children, current child, `helpCtx` inheritance and owner-chain `TVEvent` propagation. |
 | `TWindow : TGroup` | `TVWindow : TVGroup` | Bounds/title/number constructor with separate renderer binding; HELP and Docs use its common frame, title controls, client and scrollbar composition. |
 | `TDialog : TWindow` | `TVDialog : TVWindow` | Correct hierarchy while preserving modal, keyboard, focus, move and destroy behaviour. |
 | `TFrame : TView` | `TVFrame : TVView` | Present and shared by dialogs; `TVWindow` owns the separate standard-window composition. |
@@ -741,3 +751,8 @@ No previously recommended game remains unimplemented.
   generated DOM ids and presentation hooks behind `bindRoot()`/`TVRenderer`;
   removed `TVButtonStrip` and public `TVMarkupList`; and restored context-topic
   mini help in the status line.
+- [x] Phase 7.25: added the shared Turbo Vision event record and owner-chain
+  dispatch; made `TVButton` translate mouse input into commands; removed
+  dialog-wide `data-tv-*` rediscovery and parallel button listeners from
+  concrete dialogs and games; and restricted DOM lookup to shared renderer
+  primitives resolving their own private structure.
