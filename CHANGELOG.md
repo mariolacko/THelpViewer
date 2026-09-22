@@ -34,13 +34,21 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Removed the separate `TVRenderer` adapter and its hidden `WeakMap` state.
+  Every `TVView` now owns its drawing options, browser binding and rendered
+  attributes directly. Dialog and game constructors no longer accept or find
+  a desktop DOM element; `TVDesktop.insert()` establishes ownership and mounts
+  the view, while `TVDialogManager.register()` performs that insertion for
+  managed dialogs. Game frames, labels, buttons, status/info panels and Hall
+  of Fame remain composed from shared TVision objects; only the changing game
+  board markup remains game-specific.
 - Added the Turbo Vision event path (`TVEvent`, `evMouseDown`, `evKeyDown`,
   `evCommand`, `evBroadcast`, `handleEvent()` and `clearEvent()`). Concrete
   dialogs and games now retain their child `TVView` objects and receive button,
   input and board actions through owner-chain propagation instead of querying
   their own generated DOM by `data-tv-*` selectors and wiring parallel click
-  handlers. `TVRenderer` is consequently limited to the browser presentation
-  boundary rather than application control flow.
+  handlers. Browser drawing no longer participates in application control
+  flow.
 - Replaced the browser-shaped TVision object API with positional,
   Turbo Vision-style construction for the shared base view, groups, static
   text, labels, input lines, buttons, clusters, info boxes, terminals and menu
@@ -48,8 +56,9 @@
   and the desktop. `TVGroup` now accepts only `TVRect` and inserted `TVView` children;
   `TVInputLine` no longer accepts caller-provided DOM ids or attributes, and
   `TVLabel` links directly to its input object. Constructors no longer accept
-  browser roots; explicit `bindRoot()` is the renderer boundary. DOM classes,
-  generated ids, ARIA and data hooks are isolated in `TVRenderer`.
+  browser roots; explicit `bindRoot()` is the browser boundary. DOM classes,
+  generated ids, ARIA and data hooks are produced by each shared view's own
+  drawing implementation.
 - Renamed the common `TVWidget` base to `TVView`, removed the redundant
   `TVButtonStrip` and public `TVMarkupList`, and made raw shared markup an
   explicit renderer concern. Invalid non-view children now fail loudly rather

@@ -17,7 +17,7 @@ compatibility with old Turbo Vision applications.
 
 - All eight JavaScript assets pass `node --check`.
 - The source assets and their checked-in `www/assets` mirrors are identical.
-- The complete automated suite passes: 228 tests.
+- The complete automated suite passes: 229 tests.
 - Real-Chrome coverage exercises focus, modal behaviour, keyboard menus,
   dynamic dialog resizing and exact reported multi-window URLs in addition to
   converter-level regressions.
@@ -411,6 +411,16 @@ compatibility with old Turbo Vision applications.
     commands; and concrete dialogs/games retain their inputs, buttons, lists,
     status views and game boards as objects. DOM queries remain only inside
     shared components while resolving their private rendered structure.
+52. **Dialog/game constructors still accepted a desktop DOM element (often
+    obtained through `.tv-desktop`/`document.body`) and a separate
+    `TVRenderer` stored view presentation in a hidden `WeakMap`. This split
+    ownership and drawing away from the Turbo Vision object tree.**
+    **Resolved in Phase 7.26:** dialog and game constructors take no desktop;
+    `TVDesktop.insert()` now assigns the owner and mounts the root, and
+    `TVDialogManager.register()` inserts managed dialogs. Drawing state and
+    rendered attributes live on each `TVView`; `TVRenderer` and its compatibility
+    path were removed. Shared game chrome and controls remain TVision views,
+    while only each game's dynamic playfield keeps specialized markup.
 
 ## Component assessment
 
@@ -756,3 +766,8 @@ No previously recommended game remains unimplemented.
   dialog-wide `data-tv-*` rediscovery and parallel button listeners from
   concrete dialogs and games; and restricted DOM lookup to shared renderer
   primitives resolving their own private structure.
+- [x] Phase 7.26: removed desktop/DOM arguments from dialog and game
+  constructors; made `TVDesktop.insert()` and `TVDialogManager.register()` own
+  mounting and ownership; removed `TVRenderer` and its hidden state; and kept
+  game chrome composed from shared TVision views with specialized markup only
+  inside dynamic playfields.

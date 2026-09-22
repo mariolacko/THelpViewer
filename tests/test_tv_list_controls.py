@@ -107,7 +107,8 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "content: colorsMain" in dialogs
     assert "content: main" in dialogs
     assert 'presentation: "midi-source-presets"' in dialogs
-    assert "TVRenderer.markup(" in dialogs
+    assert "new TVMarkupView(" in dialogs
+    assert "TVRenderer" not in source
     assert '<button type="button" class="tv-file-open-history-button' not in dialogs
     assert "bodyMarkup: `" not in dialogs
     assert "new TVFileList(new TVRect(), 2)" in dialogs
@@ -167,27 +168,22 @@ class FakeElement {
 }
 
 class TVView {
-    constructor() { this.root = null; }
+    constructor() { this.root = null; this.drawOptions = {}; }
     bindRoot(root) { this.root = root; return this; }
     query(selector) { return this.root ? this.root.querySelector(selector) : null; }
+    setDrawOptions(options = {}) {
+        this.drawOptions = { ...this.drawOptions, ...options };
+        return this;
+    }
 }
 
 class TVRect {}
-class TVRenderer {
-    static states = new WeakMap();
-    static configure(view, options = {}) {
-        this.states.set(view, { ...this.state(view), ...options });
-        return view;
-    }
-    static state(view) { return this.states.get(view) || {}; }
-}
 
 global.escapeHtml = (value) => String(value);
 global.attrsToString = () => "";
 global.displayCp437Char = (value) => String(value);
 global.measureCells = () => ({ width: 8, height: 16 });
 global.TVRect = TVRect;
-global.TVRenderer = TVRenderer;
 global.TRACK_CHAR = "░";
 global.DISABLED_TRACK_CHAR = "─";
 global.THUMB_CHAR = "█";
@@ -255,7 +251,7 @@ eval(source.slice(start, end) + "\nglobalThis.TestList = TVVerticalListViewer;")
 
 const selected = [];
 const activated = [];
-const list = TVRenderer.configure(new TestList(new TVRect()), {
+const list = new TestList(new TVRect()).setDrawOptions({
     itemAttrName: "data-test-index",
 }).bindRoot(root);
 list.items = ["zero", "one", "two", "three", "four"];
@@ -349,14 +345,19 @@ global.attrsToString = (attrs = {}) => Object.entries(attrs)
     .join(" ");
 global.TVRect = class {};
 global.TVView = class {
-    constructor() { this.viewId = "test-view"; }
+    constructor() { this.viewId = "test-view"; this.drawOptions = {}; }
     static roleClassNames(value = "") { return value; }
+    setDrawOptions(options = {}) { this.drawOptions = { ...this.drawOptions, ...options }; return this; }
+    renderAttrs(attrs = {}) { return attrs; }
 };
-global.TVRenderer = class {
-    static state() { return {}; }
-    static viewAttrs(_view, attrs = {}) { return attrs; }
-    static markup(items, options = {}) {
-        return { renderMarkup: () => `<div class="${options.className || ""}" ${attrsToString(options.attributes || {})}>${items.join("")}</div>` };
+global.TVMarkupView = class extends TVView {
+    constructor(items, options = {}) {
+        super();
+        this.items = items;
+        this.setDrawOptions(options);
+    }
+    renderMarkup() {
+        return `<div class="${this.drawOptions.className || ""}" ${attrsToString(this.drawOptions.attributes || {})}>${this.items.join("")}</div>`;
     }
 };
 

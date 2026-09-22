@@ -243,8 +243,8 @@ Public TVision constructors describe Turbo Vision objects, not browser nodes.
 - `TVStaticText` must not accept an HTML tag or arbitrary DOM attributes.
 - `TVButton` is a dialog command button; menus and status lines use
   `TVMenuItem` and `TVStatusItem`.
-- DOM classes, ARIA attributes and data attributes belong to the shared
-  renderer, not individual dialog constructors.
+- DOM classes, ARIA attributes and data attributes belong to shared view
+  drawing code, not individual dialog constructors.
 
 Prevents:
 - CSS/HTML details leaking into the object model
@@ -259,9 +259,17 @@ Concrete constructor rules:
   indicator, bufSize)`, `TVScrollBar(bounds, options)`,
   `TVWindow(bounds, title, number)` and `TVDesktop(bounds)` follow the same
   rule; attach browser elements later through `bindRoot()`.
+- Construct dialogs without a desktop argument. Insert them through
+  `TVDesktop.insert()`; `TVDialogManager.register()` performs this step for
+  managed dialogs. Constructors must not query `.tv-desktop` or fall back to
+  `document.body`.
 - Compose groups through `insert()` / `insertAll()` and link labels to the
   target object, never through caller-selected DOM ids.
 - Browser classes, generated ids, data hooks and accessibility attributes are
-  configured only through the shared `TVRenderer` boundary.
+  emitted by the owning `TVView` implementation. Do not reintroduce a
+  separate renderer service or parallel renderer state.
+- In games, compose frames, controls, labels, status/info areas and auxiliary
+  dialogs from shared TVision views. Game-specific markup is limited to the
+  changing playfield itself.
 - Do not restore `TVWidget`, `TVButtonStrip`, `TVMarkupList` or object-literal
   compatibility constructors.

@@ -33,6 +33,18 @@ def test_concrete_dialogs_keep_tv_view_references_instead_of_rediscovering_dom()
     assert "class TVEvent" in core
     assert "handleEvent(event)" in core
     assert "target.dispatchEvent(new TVEvent" in core
+    assert "class TVRenderer" not in core
+    assert "TVRenderer" not in core
+
+    dialogs = DIALOG_PATHS[0].read_text(encoding="utf-8")
+    games = GAME_PATHS[0].read_text(encoding="utf-8")
+    for source in (dialogs, games):
+        assert "constructor(desktop" not in source
+        assert 'document.querySelector(".tv-desktop")' not in source
+    assert "class TVPuzzleDialog extends TVDialog" in games
+    assert "new TVGroup(" in games
+    assert "new TVButton(" in games
+    assert "new TVStaticText(" in games
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the dialog behaviour test")
@@ -108,6 +120,8 @@ global.getComputedStyle = () => ({ getPropertyValue() { return ""; } });
 
 eval(fs.readFileSync(process.argv[1], "utf8"));
 const TV = window.THelpViewerTV;
+const desktop = new TV.TVDesktop(new TV.TVRect()).bindRoot(document.body);
+const manager = desktop.dialogManager;
 
 function buildDialog(options = {}) {
     const overlay = new FakeElement("overlay");
@@ -132,9 +146,9 @@ function buildDialog(options = {}) {
     overlay.querySelectorAll = () => [];
     TV.TVView.fromHTML = () => overlay;
     const instance = new TV.TVDialog(new TV.TVRect(0, 0, 40, 12), "Test", {
-        desktop: document.body,
         ...options,
     });
+    desktop.insert(instance);
     return { instance, overlay, dialogElement, first, second, defaultButton, closeButton };
 }
 
@@ -229,12 +243,9 @@ const nonModalMarkup = TV.TVFrame.dialogMarkup({
 const objectBodyMarkup = TV.TVFrame.dialogMarkup({
     ariaLabel: "Object body",
     title: "Object body",
-    bodyMarkup: TV.TVRenderer.configure(
-        new TV.TVGroup(new TV.TVRect()).insertAll([
+    bodyMarkup: new TV.TVGroup(new TV.TVRect()).insertAll([
             new TV.TVStaticText(new TV.TVRect(), "TV object"),
-        ]),
-        { presentation: "object-body" },
-    ),
+        ]).setDrawOptions({ presentation: "object-body" }),
     footerMarkup: "",
 });
 const objectSectionsMarkup = TV.TVFrame.dialogMarkup({
@@ -279,7 +290,6 @@ if ((titlebarMarkup.match(/data-tv-border-fill=/g) || []).length !== 1) {
     throw new Error("dialog title frame is not a single continuous line");
 }
 
-const manager = new TV.TVDialogManager(document.body);
 const managedWindow = new FakeElement("managed-window");
 let closeCalls = 0;
 let zoomCalls = 0;
@@ -314,7 +324,7 @@ if (!manager.dispatchCommand(TV.TV_COMMANDS.CLOSE) || dialogCloseCalls !== 1) {
     throw new Error("active dialog did not receive Close");
 }
 managedDialog.instance.destroy();
-if (manager.get("managed-dialog") !== null || managedDialog.overlay.isConnected) {
+if (manager.get("managed-dialog") !== null || managedDialog.overlay.isConnected || managedDialog.instance.owner !== null) {
     throw new Error("destroy did not remove and unregister the dialog");
 }
 managedDialog.instance.open();

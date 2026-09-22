@@ -30,7 +30,9 @@ Core widget hierarchy and infrastructure.
 
 - **TVView** — Base for all UI components. `constructor(bounds=TVRect())`,
   following `TView(const TRect&)`. `bindRoot()` is the private browser binding
-  step and is not part of view construction.
+  step and is not part of view construction. Drawing options and generated
+  browser attributes are owned by the view itself; there is no separate
+  renderer object or parallel renderer state.
   `setHelpCtx()` and `getHelpCtx()` attach or resolve a Turbo Vision-style
   context identifier.
 - **TVRect** — Character-cell bounds used by windows and dialogs. It mirrors
@@ -48,8 +50,8 @@ Core widget hierarchy and infrastructure.
   makes `getHelpCtx()` inherit from the current child,
   matching the relevant part of `TGroup::getHelpCtx()`.
 - **TVListViewer** — `constructor(bounds, numCols)`. Items and selection are
-  supplied through `setItems()`/`select()`; browser row renderers and the DOM
-  root are attached separately through `TVRenderer` and `bindRoot()`.
+  supplied through `setItems()`/`select()`; its DOM root is attached later
+  through `bindRoot()`.
 - **TVListBox** — Interactive selectable list. `setItems(items, index)`,
   `select(index)`, `bind({onSelect, onActivate})`; click selects and
   double-click/Enter activates.
@@ -96,17 +98,28 @@ Core widget hierarchy and infrastructure.
   `infoPtr` and the private browser-event bridge. `TVButton.handleEvent()`
   changes `evMouseDown` into `evCommand`; `TVView.dispatchEvent()` propagates
   the event through `owner` until `clearEvent()` changes it to `evNothing`.
-- **TVRenderer** — Private browser adapter for drawing presentation classes,
-  generated element ids, data hooks, ARIA and the few shared raw-markup
-  fragments. It is required because a browser still needs HTML, but it is not
-  a second application object model: concrete dialogs keep child-object
-  references and never use renderer selectors for command routing.
+- **TVMarkupView** — Internal escape hatch for shared browser fragments that
+  are not a Turbo Vision control. It owns its drawing configuration like every
+  other `TVView`; it is not a second object model and is not used for command
+  routing.
 - **TVMenuItem** / **TVStatusItem** — Command descriptors drawn by
   `TVMenuView`/`TVMenuBox` and the status line, matching Turbo Vision's
   separation between `TButton`, `TMenuItem` and `TStatusItem`.
 - **TVMessageBox** — Modal Promise-based message box with OK/Cancel and
   Yes/No/Cancel flag combinations, mnemonics and default-button keyboard
   handling.
+
+Dialogs are constructed without a desktop or DOM-root argument. The
+application inserts them into `TVDesktop`; registering a dialog with
+`TVDialogManager` performs the insertion automatically. `TVDesktop.insert()`
+sets the Turbo Vision owner chain and mounts the already drawn root. This is
+why constructors never query `.tv-desktop` and never fall back to
+`document.body`.
+
+Game windows follow the same composition rule: frames, buttons, labels,
+lists, status/info boxes and Hall of Fame are shared TVision views. Only the
+dynamically changing playfield is currently allowed to use game-specific
+markup.
 
 ### TVInfoBox
 

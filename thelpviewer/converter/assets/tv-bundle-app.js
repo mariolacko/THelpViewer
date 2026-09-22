@@ -43,7 +43,6 @@ const {
     TVView,
     TVGroup,
     TVRect,
-    TVRenderer,
     TVIndicator,
     TVEditor,
     TVOutline,
@@ -1539,7 +1538,7 @@ const PROGRESS_BAR_ANIMATION_MS = 90;
 const PROGRESS_BAR_MIN_VISIBLE_MS = 180;
 
 class TVLoadingDialog {
-    constructor(desktop) {
+    constructor() {
         const {
             TVDialog,
             TVRect,
@@ -1547,7 +1546,6 @@ class TVLoadingDialog {
             TVGroup,
             TVButton: TVBtn,
         } = TV;
-        this.desktop = desktop;
         this.cancelled = false;
         this.abortController = new AbortController();
         this.openedAt = 0;
@@ -1566,14 +1564,13 @@ class TVLoadingDialog {
         );
 
         const bodyGroup = new TVGroup(new TVRect(0, 0, (0) + (38), (0) + (6))).insertAll([
-                TVRenderer.configure(new TVStaticText(new TVRect(0, 1, (0) + (38), 1), ""), { presentation: "loading-filename", align: "center" }),
-                TVRenderer.configure(new TVStaticText(new TVRect(0, 2, (0) + (38), 2), ""), { presentation: "loading-bar-line", align: "center" }),
-                TVRenderer.configure(new TVStaticText(new TVRect(0, 3, (0) + (38), 3), "0%"), { presentation: "loading-percent", align: "center" }),
+                (new TVStaticText(new TVRect(0, 1, (0) + (38), 1), "")).setDrawOptions({ presentation: "loading-filename", align: "center" }),
+                (new TVStaticText(new TVRect(0, 2, (0) + (38), 2), "")).setDrawOptions({ presentation: "loading-bar-line", align: "center" }),
+                (new TVStaticText(new TVRect(0, 3, (0) + (38), 3), "0%")).setDrawOptions({ presentation: "loading-percent", align: "center" }),
                 cancelButton,
             ]);
 
         this.dialog = new TVDialog(new TVRect(0, 0, 40, 9), "Loading", {
-            desktop,
             viewName: "loading",
             content: bodyGroup,
             modal: true,
@@ -2240,7 +2237,7 @@ class BundleWindowManager {
             _outlineKey: `${prefix}${index}`,
             children: withKeys(Array.isArray(node.children) ? node.children : [], `${prefix}${index}/`),
         }));
-        const outline = TVRenderer.configure(new TVOutline(new TVRect()), {
+        const outline = (new TVOutline(new TVRect())).setDrawOptions({
             itemClassName: "tv-contents-outline-item",
             itemAttrName: "data-tv-contents-outline-index",
             getKey: (node) => node._outlineKey,
@@ -2485,7 +2482,7 @@ function renderMenuPopupSeparator() {
 }
 
 function renderMenuPopup(items, attrs = {}, className = "tv-menu-popup") {
-    return TVRenderer.configure(new TVMenuBox(new TVRect(), items), { className: className, attributes: attrs }).renderMarkup();
+    return (new TVMenuBox(new TVRect(), items)).setDrawOptions({ className: className, attributes: attrs }).renderMarkup();
 }
 
 function renderMenuSubmenu(labelMarkup, items) {
@@ -3076,28 +3073,28 @@ class TVBundleApp {
         this._bindUrlStateSync();
 
         // Register standard dialogs
-        this._registerDialog("about", () => new TVAboutDialog(this.desktop));
-        this._registerDialog("puzzle", () => new TVPuzzleDialog(this.desktop));
-        this._registerDialog("calendar", () => new TVCalendarDialog(this.desktop));
-        this._registerDialog("ascii", () => new TVAsciiTableDialog(this.desktop));
-        this._registerDialog("calc", () => new TVCalculatorDialog(this.desktop));
-        this._registerDialog("midi", () => new TVMidiPlayerDialog(this.desktop));
-        this._registerDialog("colors", () => new TVColorsDialog(this.desktop));
-        this._registerDialog("widgets", () => new TVViewGalleryDialog(this.desktop));
-        this.fileOpenDialog = this._registerDialog("fileopen", () => new TVFileOpenDialog(this.desktop));
-        this.changeDirectoryDialog = this._registerDialog("chdir", () => new TVChangeDirectoryDialog(this.desktop));
-        this.findDialog = this._registerDialog("find", () => new TVFindDialog(this.desktop));
-        this._registerDialog("tetris", () => new TVTetrisDialog(this.desktop));
-        this._registerDialog("mines", () => new TVMinesDialog(this.desktop));
-        this._registerDialog("breakout", () => new TVBreakOutDialog(this.desktop));
-        this._registerDialog("sokoban", () => new TVSokobanDialog(this.desktop));
-        this._registerDialog("lines", () => new TVLinesDialog(this.desktop));
-        this._registerDialog("reversi", () => new TVReversiDialog(this.desktop));
-        this._registerDialog("ludo", () => new TVLudoDialog(this.desktop));
-        this._registerDialog("mastermind", () => new TVMastermindDialog(this.desktop));
-        this._registerDialog("snake", () => new TVSnakeDialog(this.desktop));
-        this._registerDialog("hanoi", () => new TVHanoiDialog(this.desktop));
-        this._registerDialog("tron", () => new TVTronDialog(this.desktop));
+        this._registerDialog("about", () => new TVAboutDialog());
+        this._registerDialog("puzzle", () => new TVPuzzleDialog());
+        this._registerDialog("calendar", () => new TVCalendarDialog());
+        this._registerDialog("ascii", () => new TVAsciiTableDialog());
+        this._registerDialog("calc", () => new TVCalculatorDialog());
+        this._registerDialog("midi", () => new TVMidiPlayerDialog());
+        this._registerDialog("colors", () => new TVColorsDialog());
+        this._registerDialog("widgets", () => new TVViewGalleryDialog());
+        this.fileOpenDialog = this._registerDialog("fileopen", () => new TVFileOpenDialog());
+        this.changeDirectoryDialog = this._registerDialog("chdir", () => new TVChangeDirectoryDialog());
+        this.findDialog = this._registerDialog("find", () => new TVFindDialog());
+        this._registerDialog("tetris", () => new TVTetrisDialog());
+        this._registerDialog("mines", () => new TVMinesDialog());
+        this._registerDialog("breakout", () => new TVBreakOutDialog());
+        this._registerDialog("sokoban", () => new TVSokobanDialog());
+        this._registerDialog("lines", () => new TVLinesDialog());
+        this._registerDialog("reversi", () => new TVReversiDialog());
+        this._registerDialog("ludo", () => new TVLudoDialog());
+        this._registerDialog("mastermind", () => new TVMastermindDialog());
+        this._registerDialog("snake", () => new TVSnakeDialog());
+        this._registerDialog("hanoi", () => new TVHanoiDialog());
+        this._registerDialog("tron", () => new TVTronDialog());
         this._registerBundleSearch();
         this.helpController = new TVHelpController({
             getMenuController: () => this.menuController,
@@ -3552,7 +3549,7 @@ class TVBundleApp {
     }
 
     _registerBundleSearch() {
-        const searchDialog = this._registerDialog("search", () => new TVSearchDialog(this.desktop));
+        const searchDialog = this._registerDialog("search", () => new TVSearchDialog());
         if (!searchDialog) { return; }
         this.searchDialog = searchDialog;
         // Provide empty search data initially
@@ -3627,9 +3624,8 @@ class TVBundleApp {
             ).join("");
 
         const dialog = new TVDialog(new TVRect(0, 0, 40, 14), "Window List", {
-            desktop: this.desktop,
             viewName: "winlist",
-            content: TVRenderer.configure(new TVGroup(new TVRect()).insertAll([]), { presentation: "winlist-items" }),
+            content: (new TVGroup(new TVRect()).insertAll([])).setDrawOptions({ presentation: "winlist-items" }),
             modal: true,
         });
 
@@ -3922,7 +3918,8 @@ class TVBundleApp {
         const cached = bundleCache.has(filename);
         let loadingDialog = null;
         if (!cached) {
-            loadingDialog = new TVLoadingDialog(this.desktop);
+            loadingDialog = new TVLoadingDialog();
+            this.desktopView.insert(loadingDialog.dialog);
             loadingDialog.show(bundleLoadingLabel(label, filename));
         }
         try {
@@ -4002,14 +3999,13 @@ class TVBundleApp {
             TVButton: TVBtn,
         } = TV;
         const welcomeBody = new TVGroup(new TVRect(0, 0, (0) + (30), (0) + (9))).insertAll([
-                TVRenderer.configure(new TVStaticText(new TVRect(0, 1, (0) + (30), 1), "THelpViewer"), { align: "center", title: true }),
-                TVRenderer.configure(new TVStaticText(new TVRect(0, 3, (0) + (30), 3), "Select a help file from the"), { align: "center" }),
-                TVRenderer.configure(new TVStaticText(new TVRect(0, 4, (0) + (30), 4), "File menu to get started."), { align: "center" }),
-                TVRenderer.configure(new TVStaticText(new TVRect(0, 6, (0) + (30), 6), `${Array.isArray(catalogData) ? catalogData.length : 0} help file(s) available.`), { align: "center" }),
+                (new TVStaticText(new TVRect(0, 1, (0) + (30), 1), "THelpViewer")).setDrawOptions({ align: "center", title: true }),
+                (new TVStaticText(new TVRect(0, 3, (0) + (30), 3), "Select a help file from the")).setDrawOptions({ align: "center" }),
+                (new TVStaticText(new TVRect(0, 4, (0) + (30), 4), "File menu to get started.")).setDrawOptions({ align: "center" }),
+                (new TVStaticText(new TVRect(0, 6, (0) + (30), 6), `${Array.isArray(catalogData) ? catalogData.length : 0} help file(s) available.`)).setDrawOptions({ align: "center" }),
                 new TVButton(new TVRect(10, 8, (10) + (10), 8), '~O~K', "welcome-ok", bfDefault),
             ]);
         const dialog = new TVDialog(new TVRect(0, 0, 34, 12), "Welcome", {
-            desktop: this.desktop,
             viewName: "welcome",
             content: welcomeBody,
             modal: true,

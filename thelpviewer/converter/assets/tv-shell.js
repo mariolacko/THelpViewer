@@ -5,7 +5,6 @@ const TV = window.THelpViewerTV = window.THelpViewerTV || {};
 const {
     TVAppContext,
     TVRect,
-    TVRenderer,
     TVView,
     TVStaticText,
     TVMenuView,
@@ -88,7 +87,7 @@ class TVMenuBar extends TVMenuView {
     }
 
     renderPopup() {
-        return TVRenderer.configure(new TVMenuBox(new TVRect(), this.menuActions().map((entry) => {
+        return (new TVMenuBox(new TVRect(), this.menuActions().map((entry) => {
                 if (entry.type === "separator") {
                     return '<div class="tv-menu-popup-separator" aria-hidden="true">'
                         + '<span class="tv-border-corner">├</span>'
@@ -102,7 +101,7 @@ class TVMenuBar extends TVMenuView {
                         sub.type === "saver" ? "saver-start" : "dialog-open",
                         sub.type === "saver" ? sub.mode : sub.dialog,
                     ));
-                    const subPopup = TVRenderer.configure(new TVMenuBox(new TVRect(), subItems), {
+                    const subPopup = (new TVMenuBox(new TVRect(), subItems)).setDrawOptions({
                         className: "tv-menu-popup tv-submenu-popup",
                         attributes: { "data-tv-submenu-popup": true, hidden: true },
                     }).renderMarkup();
@@ -125,7 +124,7 @@ class TVMenuBar extends TVMenuView {
                     action.command,
                     action.value,
                 );
-            })), {
+            }))).setDrawOptions({
             attributes: { "data-tv-menu-popup": true, hidden: true },
         }).renderMarkup();
     }
@@ -590,7 +589,7 @@ class TurboVisionWindowResizer {
 class TurboVisionMenus extends TVMenuController {
     constructor(dialogManager) {
         super();
-        this.desktop = document.querySelector(".tv-desktop") || document.body;
+        this.desktop = dialogManager?.desktop?.root || null;
         this.dialogManager = dialogManager;
         this.onHelp = null;
         this.onUnhandledKeyDown = (event) => this.onApplicationKeyDown(event);
@@ -737,20 +736,20 @@ class TVApplication {
                 this.dialogManager.activateHostWindow();
             });
         }
-        this.registerDialog("about", () => new TVAboutDialog(desktop));
-        this.registerDialog("puzzle", () => new TVPuzzleDialog(desktop));
-        this.registerDialog("hanoi", () => new TVHanoiDialog(desktop));
-        this.registerDialog("tron", () => new TVTronDialog(desktop));
-        this.registerDialog("calendar", () => new TVCalendarDialog(desktop));
-        this.registerDialog("ascii", () => new TVAsciiTableDialog(desktop));
-        this.registerDialog("calc", () => new TVCalculatorDialog(desktop));
-        this.registerDialog("midi", () => new TVMidiPlayerDialog(desktop));
-        this.registerDialog("colors", () => new TVColorsDialog(desktop));
-        this.registerDialog("widgets", () => new TVViewGalleryDialog(desktop));
-        this.searchDialog = this.registerDialog("search", () => new TVSearchDialog(desktop));
+        this.registerDialog("about", () => new TVAboutDialog());
+        this.registerDialog("puzzle", () => new TVPuzzleDialog());
+        this.registerDialog("hanoi", () => new TVHanoiDialog());
+        this.registerDialog("tron", () => new TVTronDialog());
+        this.registerDialog("calendar", () => new TVCalendarDialog());
+        this.registerDialog("ascii", () => new TVAsciiTableDialog());
+        this.registerDialog("calc", () => new TVCalculatorDialog());
+        this.registerDialog("midi", () => new TVMidiPlayerDialog());
+        this.registerDialog("colors", () => new TVColorsDialog());
+        this.registerDialog("widgets", () => new TVViewGalleryDialog());
+        this.searchDialog = this.registerDialog("search", () => new TVSearchDialog());
         this.contextHelpDialog = this.registerDialog(
             "contexthelp",
-            () => new TVContextHelpDialog(desktop),
+            () => new TVContextHelpDialog(),
         );
         this.helpController = new TVHelpController({
             getMenuController: () => this.menus,

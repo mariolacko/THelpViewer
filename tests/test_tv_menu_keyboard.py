@@ -245,9 +245,12 @@ const TV_COMMANDS = {
     CLOSE: "close", CANCEL: "cancel", ZOOM: "zoom", NEXT: "next", PREVIOUS: "previous",
 };
 global.document = { querySelector: () => null, body: {} };
+global.TVDesktop = class {};
 eval(source.slice(start, end) + "\nglobalThis.TestDialogManager = TVDialogManager;");
 
-const manager = new TestDialogManager({});
+const desktop = new TVDesktop();
+desktop.root = { querySelector: () => null };
+const manager = new TestDialogManager(desktop);
 if (manager.canDispatchCommand(TV_COMMANDS.CLOSE) || manager.canDispatchCommand(TV_COMMANDS.NEXT)) {
     throw new Error("commands were enabled without a managed target");
 }
