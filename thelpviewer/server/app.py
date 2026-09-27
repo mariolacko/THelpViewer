@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
+from contextlib import asynccontextmanager
+from html import escape
+from math import ceil
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
@@ -13,8 +17,11 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .. import __version__
-from ..public_docs import is_public_doc_path
+from ..public_docs import is_public_doc_path, public_doc_sources
+from .accounts import AccountError, AccountStore, SESSION_LIFETIME
 from .config import AppConfig, load_config
+from .search_index import GlobalSearchIndex
+from .terminal import authorize_job, read_job, send_input
 from .statistics import (
     StatisticsStore,
     bucket_duration,
@@ -41,6 +48,9 @@ from .statistics import (
     normalize_view_duration,
     parse_user_agent,
 )
+
+
+SITEMAP_TOPIC_PAGE_SIZE = 49_999
 
 
 class StatisticsEvent(BaseModel):
@@ -76,6 +86,27 @@ class HallOfFameScore(BaseModel):
     name: str = "Player"
     score: float
     note: str = ""
+    level: int = 0
+
+
+class PasskeyEnrollment(BaseModel):
+    username: str
+    token: str
+
+
+class PasskeyRegistration(BaseModel):
+    name: str
+    email: str
+    token: str
+
+
+class PasskeyLogin(BaseModel):
+    username: str
+
+
+class PasskeyAnswer(BaseModel):
+    ceremony_id: str
+    credential: dict
 
 
 def _help_display_names(config: AppConfig) -> dict[str, str]:
@@ -118,59 +149,58 @@ def _apply_help_display_names(summary: dict[str, object], names: dict[str, str])
     ]
 
 
-def _virtual_docs_map(config: AppConfig) -> dict[str, Path]:
-    virtual_docs: dict[str, Path] = {}
-    for request_path, disk_path in config.virtual_docs:
-        if is_public_doc_path(request_path) and disk_path.is_file():
-            virtual_docs[request_path] = disk_path
-    return virtual_docs
-
-
 def _docs_catalog(config: AppConfig) -> list[dict[str, str]]:
     catalog: list[dict[str, str]] = []
-    virtual_docs = _virtual_docs_map(config)
-    for request_path, _disk_path in config.virtual_docs:
-        if request_path not in virtual_docs:
-            continue
-        request = Path(request_path)
-        entry: dict[str, str] = {"file": request_path, "name": request.stem}
+    for file_name in public_doc_sources(config.docs_dir, config.virtual_docs):
+        request = Path(file_name)
+        entry: dict[str, str] = {"file": file_name, "name": request.stem}
         if request.parent != Path("."):
             entry["group"] = " / ".join(request.parent.parts)
         catalog.append(entry)
-
-    if config.docs_dir.is_dir():
-        for md_path in sorted(config.docs_dir.rglob("*.md")):
-            rel = md_path.relative_to(config.docs_dir)
-            file_name = str(rel).replace("\\", "/")
-            if not is_public_doc_path(file_name):
-                continue
-            if file_name in virtual_docs:
-                continue
-            entry: dict[str, str] = {
-                "file": file_name,
-                "name": md_path.stem,
-            }
-            if rel.parent != Path("."):
-                entry["group"] = " / ".join(rel.parent.parts)
-            catalog.append(entry)
     return catalog
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
     config = config or load_config()
-    app = FastAPI(title="THelpViewer", version=__version__)
+
+    @asynccontextmanager
+    async def lifespan(running_app: FastAPI):
+        running_app.state.global_search.ensure_current()
+        bootstrap_token = running_app.state.accounts.bootstrap_token()
+        if bootstrap_token:
+            print(f"THelpViewer first administrator registration token (valid 1 hour): {bootstrap_token}", flush=True)
+        yield
+
+    app = FastAPI(title="THelpViewer", version=__version__, lifespan=lifespan)
     app.state.config = config
     statistics_path = config.statistics_path or config.state_dir / "statistics.sqlite3"
     app.state.statistics = StatisticsStore(statistics_path)
+    app.state.global_search = GlobalSearchIndex(
+        config.helps_dir, config.state_dir, config.docs_dir, config.virtual_docs
+    )
+    app.state.accounts = AccountStore(config.state_dir)
     app.state.help_display_names = _help_display_names(config)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
         accepts_html = "text/html" in request.headers.get("accept", "")
-        if exc.status_code == 404 and request.method == "GET" and accepts_html and not request.url.path.startswith("/api/"):
+        if (exc.status_code == 404 and request.method == "GET" and accepts_html
+                and not (request.url.path == "/" and any(
+                    key in request.query_params for key in ("file", "topic", "doc")
+                ))
+                and not request.url.path.startswith(("/api/", "/topics/", "/documents/", "/sitemap"))):
             query = urlencode({"server_error": "404", "server_path": request.url.path})
             return RedirectResponse(url=f"/?{query}", status_code=303)
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers)
+
+    @app.exception_handler(ImportError)
+    async def missing_dependency(request: Request, exc: ImportError) -> Response:
+        if request.url.path.startswith("/api/auth/passkey/"):
+            return JSONResponse(
+                {"detail": "Passkey server dependency is unavailable; rebuild the viewer Docker image."},
+                status_code=503,
+            )
+        raise exc
 
     app.mount(
         "/assets",
@@ -183,15 +213,356 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         name="helps",
     )
 
+    def verified_html(page: str) -> str:
+        if not config.google_site_verification:
+            return page
+        if "</head>" not in page:
+            raise HTTPException(status_code=500, detail="Viewer HTML template is incomplete")
+        tag = (f'<meta name="google-site-verification" '
+               f'content="{escape(config.google_site_verification, quote=True)}" />\n')
+        return page.replace("</head>", tag + "</head>", 1)
+
     @app.get("/")
-    async def index() -> Response:
+    async def index(request: Request, file: str = "", topic: str = "", doc: str = "") -> Response:
+        if doc:
+            return public_document(doc, request)
+        if file:
+            return public_topic(file, request, topic) if topic else public_file(file, request)
+        if topic or any(key in request.query_params for key in ("file", "topic", "doc")):
+            raise HTTPException(status_code=404)
         if not config.index_path.is_file():
             raise HTTPException(status_code=404)
-        return Response(config.index_path.read_bytes(), media_type="text/html")
+        return Response(verified_html(config.index_path.read_text(encoding="utf-8")), media_type="text/html")
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
+
+    @app.get("/api/search/status")
+    def search_index_status() -> dict[str, object]:
+        return app.state.global_search.status()
+
+    @app.get("/api/search/global")
+    def global_search(q: str = "", limit: int = 60) -> Response:
+        if len(q) > 255:
+            raise HTTPException(status_code=422, detail="Search text is too long")
+        status, results = app.state.global_search.search(q, limit)
+        if status["state"] != "ready":
+            return JSONResponse(status, status_code=503 if status["state"] == "error" else 202)
+        return JSONResponse({"status": status, "results": results}, headers={"Cache-Control": "no-store"})
+
+    def auth_origin(request: Request, *, require_post: bool = False) -> tuple[str, str]:
+        origin = config.auth_origin
+        parsed = urlparse(origin)
+        secure_context = parsed.scheme == "https" or (
+            parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        )
+        if not secure_context or request.headers.get("host", "").lower() != parsed.netloc.lower():
+            raise HTTPException(status_code=503, detail="Passkey login is not configured for this host")
+        if require_post and request.headers.get("origin") != origin:
+            raise HTTPException(status_code=403, detail="Invalid request origin")
+        return origin, parsed.hostname or ""
+
+    def auth_response(token: str, origin: str) -> JSONResponse:
+        response = JSONResponse({"authenticated": True})
+        response.set_cookie(
+            "thelp_session", token, max_age=SESSION_LIFETIME, httponly=True,
+            secure=origin.startswith("https://"), samesite="strict", path="/",
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.get("/api/auth/session")
+    def auth_session(request: Request) -> JSONResponse:
+        try:
+            auth_origin(request)
+        except HTTPException:
+            return JSONResponse({"enabled": False, "authenticated": False}, headers={"Cache-Control": "no-store"})
+        user = app.state.accounts.session_user(request.cookies.get("thelp_session", ""))
+        return JSONResponse(
+            {"enabled": True, "authenticated": bool(user), "user": user},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.post("/api/auth/passkey/enroll/options")
+    def passkey_enroll_options(data: PasskeyEnrollment, request: Request) -> dict:
+        _origin, rp_id = auth_origin(request, require_post=True)
+        try:
+            return app.state.accounts.registration_options(data.username, data.token, rp_id, "THelpViewer")
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+
+    @app.post("/api/auth/passkey/enroll/verify")
+    def passkey_enroll_verify(data: PasskeyAnswer, request: Request) -> JSONResponse:
+        origin, rp_id = auth_origin(request, require_post=True)
+        try:
+            token = app.state.accounts.verify_registration(data.ceremony_id, data.credential, rp_id, origin)
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+        return auth_response(token, origin)
+
+    @app.post("/api/auth/passkey/register/options")
+    def passkey_register_options(data: PasskeyRegistration, request: Request) -> dict:
+        _origin, rp_id = auth_origin(request, require_post=True)
+        try:
+            return app.state.accounts.new_registration_options(
+                data.name, data.email, data.token, rp_id, "THelpViewer",
+            )
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+
+    @app.post("/api/auth/passkey/register/verify")
+    def passkey_register_verify(data: PasskeyAnswer, request: Request) -> JSONResponse:
+        origin, rp_id = auth_origin(request, require_post=True)
+        try:
+            token = app.state.accounts.verify_new_registration(data.ceremony_id, data.credential, rp_id, origin)
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+        return auth_response(token, origin)
+
+    @app.get("/api/auth/registration-tokens")
+    def registration_tokens(request: Request) -> JSONResponse:
+        auth_origin(request)
+        try:
+            tokens = app.state.accounts.list_registration_tokens(request.cookies.get("thelp_session", ""))
+        except AccountError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from None
+        return JSONResponse({"tokens": tokens}, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/auth/registration-tokens")
+    def registration_token(request: Request) -> JSONResponse:
+        auth_origin(request, require_post=True)
+        try:
+            token = app.state.accounts.issue_registration_token(request.cookies.get("thelp_session", ""))
+        except AccountError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from None
+        return JSONResponse({"token": token, "expires_in": 3600}, headers={"Cache-Control": "no-store"})
+
+    @app.delete("/api/auth/registration-tokens/{token_hash}", status_code=204)
+    def delete_registration_token(token_hash: str, request: Request) -> Response:
+        auth_origin(request, require_post=True)
+        try:
+            app.state.accounts.delete_registration_token(request.cookies.get("thelp_session", ""), token_hash)
+        except AccountError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from None
+        return Response(status_code=204)
+
+    @app.post("/api/auth/passkey/login/options")
+    def passkey_login_options(data: PasskeyLogin, request: Request) -> dict:
+        _origin, rp_id = auth_origin(request, require_post=True)
+        try:
+            return app.state.accounts.authentication_options(data.username, rp_id)
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+
+    @app.post("/api/auth/passkey/login/verify")
+    def passkey_login_verify(data: PasskeyAnswer, request: Request) -> JSONResponse:
+        origin, rp_id = auth_origin(request, require_post=True)
+        try:
+            token = app.state.accounts.verify_authentication(data.ceremony_id, data.credential, rp_id, origin)
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+        return auth_response(token, origin)
+
+    @app.post("/api/auth/logout")
+    def auth_logout(request: Request) -> JSONResponse:
+        auth_origin(request, require_post=True)
+        app.state.accounts.logout(request.cookies.get("thelp_session", ""))
+        response = JSONResponse({"authenticated": False}, headers={"Cache-Control": "no-store"})
+        response.delete_cookie("thelp_session", path="/")
+        return response
+
+    def public_base(request: Request) -> str:
+        if config.public_base_url:
+            return config.public_base_url
+        if request.headers.get("host", "").lower() == urlparse(config.auth_origin).netloc.lower():
+            return config.auth_origin
+        return str(request.base_url).rstrip("/")
+
+    def public_viewer_page(title: str, description: str, url: str, content: str) -> Response:
+        if not config.index_path.is_file():
+            raise HTTPException(status_code=404)
+        page = config.index_path.read_text(encoding="utf-8")
+        page, titles = re.subn(
+            r"<title>.*?</title>", lambda _: f"<title>{escape(title)}</title>", page, count=1, flags=re.S,
+        )
+        page, descriptions = re.subn(
+            r'<meta name="description" content="[^"]*">',
+            lambda _: f'<meta name="description" content="{escape(description, quote=True)}">',
+            page, count=1,
+        )
+        desktop = '<div class="tv-desktop" data-tv-bundle-desktop>'
+        if not titles or not descriptions or desktop not in page or "</head>" not in page:
+            raise HTTPException(status_code=500, detail="Viewer HTML template is incomplete")
+        page = page.replace("</head>", f'<link rel="canonical" href="{escape(url, quote=True)}"></head>', 1)
+        page = page.replace(desktop, desktop + f'<main id="tv-public-fallback">{content}</main>', 1)
+        return Response(verified_html(page), media_type="text/html")
+
+    @app.get("/robots.txt")
+    def robots(request: Request) -> Response:
+        return Response(
+            f"User-agent: *\nAllow: /\nSitemap: {public_base(request)}/sitemap.xml\n",
+            media_type="text/plain",
+        )
+
+    @app.get("/sitemap.xml")
+    def sitemap_index(request: Request) -> Response:
+        if app.state.global_search.status()["state"] != "ready":
+            return Response("Index is being built", status_code=503, media_type="text/plain")
+        base = public_base(request)
+        entries = "".join(
+            f"<sitemap><loc>{escape(base + '/sitemaps/file.xml?' + urlencode({'file': file_path, 'page': page}))}</loc></sitemap>"
+            for file_path, count in app.state.global_search.file_sitemap_counts()
+            for page in range(1, ceil(count / SITEMAP_TOPIC_PAGE_SIZE) + 1)
+        )
+        doc_count = len(app.state.global_search.document_paths())
+        entries += "".join(
+            f"<sitemap><loc>{escape(base + '/sitemaps/docs.xml?' + urlencode({'page': page}))}</loc></sitemap>"
+            for page in range(1, ceil(doc_count / 50_000) + 1)
+        )
+        return Response(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            f"{entries}</sitemapindex>",
+            media_type="application/xml",
+        )
+
+    @app.get("/sitemaps/file.xml")
+    def sitemap_file(request: Request, file: str = "", page: int = 1) -> Response:
+        if app.state.global_search.status()["state"] != "ready":
+            return Response("Index is being built", status_code=503, media_type="text/plain")
+        count = dict(app.state.global_search.file_sitemap_counts()).get(file)
+        if count is None or page < 1 or page > ceil(count / SITEMAP_TOPIC_PAGE_SIZE):
+            raise HTTPException(status_code=404)
+        base = public_base(request)
+        urls = [base + "/?" + urlencode({"file": file})] if page == 1 else []
+        urls.extend(
+            base + "/?" + urlencode({"file": file, "topic": context_id})
+            for context_id, _title, _help_name in app.state.global_search.file_topic_rows(
+                file, (page - 1) * SITEMAP_TOPIC_PAGE_SIZE, SITEMAP_TOPIC_PAGE_SIZE
+            )
+        )
+        entries = "".join(f"<url><loc>{escape(url)}</loc></url>" for url in urls)
+        return Response(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            f"{entries}</urlset>",
+            media_type="application/xml",
+        )
+
+    @app.get("/sitemaps/docs.xml")
+    def sitemap_docs(request: Request, page: int = 1) -> Response:
+        if app.state.global_search.status()["state"] != "ready":
+            return Response("Index is being built", status_code=503, media_type="text/plain")
+        paths = app.state.global_search.document_paths()
+        if page < 1 or page > ceil(len(paths) / 50_000):
+            raise HTTPException(status_code=404)
+        base = public_base(request)
+        entries = "".join(
+            f"<url><loc>{escape(base + '/?' + urlencode({'doc': doc_path}))}</loc></url>"
+            for doc_path in paths[(page - 1) * 50_000:page * 50_000]
+        )
+        return Response(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            f"{entries}</urlset>",
+            media_type="application/xml",
+        )
+
+    @app.get("/sitemap-{page}.xml")
+    def sitemap_topics(page: int, request: Request) -> Response:
+        if app.state.global_search.status()["state"] != "ready":
+            return Response("Index is being built", status_code=503, media_type="text/plain")
+        count = app.state.global_search.sitemap_count()
+        if page < 1 or page > ceil(count / 50_000):
+            raise HTTPException(status_code=404)
+        base = public_base(request)
+        entries = "".join(
+            f"<url><loc>{escape(base + '/?' + urlencode({'file': file_path, 'topic': context_id}))}</loc></url>"
+            for file_path, context_id in app.state.global_search.sitemap_rows((page - 1) * 50_000, 50_000)
+        )
+        return Response(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            f"{entries}</urlset>",
+            media_type="application/xml",
+        )
+
+    def public_topic(file_path: str, request: Request, topic: str = "") -> Response:
+        if len(file_path) > 512 or len(topic) > 64:
+            raise HTTPException(status_code=404)
+        if app.state.global_search.status()["state"] != "ready":
+            return Response("Index is being built", status_code=503, media_type="text/plain")
+        entry = app.state.global_search.topic(file_path, topic)
+        if entry is None or not entry["body"]:
+            raise HTTPException(status_code=404)
+        url = public_base(request) + "/?" + urlencode({"file": file_path, "topic": topic})
+        overview = "/?" + urlencode({"file": file_path})
+        title = f'{entry["title"]} — {entry["help_name"]}'
+        content = (
+            f'<nav><a href="/">THelpViewer</a></nav><h1>{escape(entry["title"])}</h1>'
+            f'<p><a href="{escape(overview, quote=True)}">{escape(entry["help_name"])}</a></p>'
+            f'<pre style="white-space:pre-wrap">{escape(entry["body"])}</pre>'
+        )
+        return public_viewer_page(title, entry["preview"], url, content)
+
+    def public_file(file_path: str, request: Request) -> Response:
+        if len(file_path) > 512:
+            raise HTTPException(status_code=404)
+        if app.state.global_search.status()["state"] != "ready":
+            return Response("Index is being built", status_code=503, media_type="text/plain")
+        topics = app.state.global_search.file_topic_rows(file_path)
+        if not topics:
+            raise HTTPException(status_code=404)
+        name = topics[0][2]
+        url = public_base(request) + "/?" + urlencode({"file": file_path})
+        links = "".join(
+            f'<li><a href="{escape("/?" + urlencode({"file": file_path, "topic": context_id}), quote=True)}">'
+            f'{escape(title)}</a></li>'
+            for context_id, title, _help_name in topics
+        )
+        content = (
+            f'<nav><a href="/">THelpViewer</a></nav><h1>{escape(name)}</h1>'
+            f'<p>{len(topics)} topics</p><ol>{links}</ol>'
+        )
+        return public_viewer_page(f"{name} — THelpViewer", f"Topics in {name}", url, content)
+
+    def public_document(doc_path: str, request: Request) -> Response:
+        if len(doc_path) > 512 or not is_public_doc_path(doc_path):
+            raise HTTPException(status_code=404)
+        if app.state.global_search.status()["state"] != "ready":
+            return Response("Index is being built", status_code=503, media_type="text/plain")
+        entry = app.state.global_search.document(doc_path)
+        if entry is None or not entry["body"]:
+            raise HTTPException(status_code=404)
+        url = public_base(request) + "/?" + urlencode({"doc": doc_path})
+        content = (
+            f'<nav><a href="/">THelpViewer</a></nav><h1>{escape(entry["title"])}</h1>'
+            f'<pre style="white-space:pre-wrap">{escape(entry["body"])}</pre>'
+        )
+        return public_viewer_page(f'{entry["title"]} — THelpViewer Docs', entry["preview"], url, content)
+
+    @app.get("/api/terminal/jobs/{job_id}")
+    def terminal_output(job_id: str, request: Request, offset: int = 0) -> dict[str, object]:
+        return read_job(config.state_dir, job_id, request.headers.get("x-thelp-terminal-key", ""), offset)
+
+    @app.post("/api/terminal/jobs/{job_id}/input", status_code=204)
+    async def terminal_input(job_id: str, request: Request) -> Response:
+        key = request.headers.get("x-thelp-terminal-key", "")
+        authorize_job(config.state_dir, job_id, key)
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 4096:
+                raise HTTPException(status_code=413, detail="Terminal input is too large")
+        try:
+            payload = json.loads(body)
+        except (UnicodeDecodeError, ValueError):
+            raise HTTPException(status_code=422, detail="Invalid terminal input") from None
+        if not isinstance(payload, dict) or not isinstance(payload.get("text"), str):
+            raise HTTPException(status_code=422, detail="Terminal input must contain text")
+        send_input(config.state_dir, job_id, key, payload["text"])
+        return Response(status_code=204)
 
     @app.post("/api/statistics/events", status_code=204)
     def statistics_event(event: StatisticsEvent, request: Request) -> Response:
@@ -319,7 +690,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     def add_hall_of_fame_score(game: str, score: HallOfFameScore) -> JSONResponse:
         try:
             entries, accepted = app.state.statistics.add_hall_of_fame(
-                game, score.name, score.score, score.note
+                game, score.name, score.score, score.note, score.level
             )
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
@@ -333,19 +704,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     async def docs_file(doc_path: str) -> Response:
         if doc_path == "catalog.json" or not is_public_doc_path(doc_path):
             raise HTTPException(status_code=404)
-        virtual_docs = _virtual_docs_map(config)
-        if doc_path in virtual_docs:
-            path = virtual_docs[doc_path]
-        else:
-            resolved = (config.docs_dir / doc_path).resolve()
-            docs_root = config.docs_dir.resolve()
-            if not resolved.is_relative_to(docs_root):
-                raise HTTPException(status_code=404)
-            if resolved.suffix.casefold() != ".md":
-                raise HTTPException(status_code=404)
-            if not resolved.is_file():
-                raise HTTPException(status_code=404)
-            path = resolved
+        path = public_doc_sources(config.docs_dir, config.virtual_docs).get(doc_path)
+        if path is None:
+            raise HTTPException(status_code=404)
         return Response(path.read_bytes(), media_type="text/markdown")
 
     @app.get("/config.json")

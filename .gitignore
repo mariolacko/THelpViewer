@@ -30,6 +30,7 @@ Thumbs.db
 *~
 
 # Local runtime files
+.env
 var/uvicorn.pid
 var/uvicorn.log
 

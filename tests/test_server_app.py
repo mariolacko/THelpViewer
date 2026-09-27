@@ -18,6 +18,42 @@ def test_statistics_store_uses_bind_mount_safe_journal_mode(tmp_path):
         assert connection.execute("PRAGMA journal_mode").fetchone() == ("delete",)
 
 
+def test_sokoban_hall_of_fame_adds_levels_to_existing_database(tmp_path):
+    database = tmp_path / "statistics.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """CREATE TABLE hall_of_fame (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, game TEXT NOT NULL,
+                name TEXT NOT NULL, score REAL NOT NULL, note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            )"""
+        )
+        connection.execute(
+            "INSERT INTO hall_of_fame(game, name, score, note, created_at) VALUES (?, ?, ?, ?, ?)",
+            ("sokoban", "Existing", 77, "5 levels", "2026-01-01"),
+        )
+
+    entries = StatisticsStore(database).hall_of_fame("sokoban")
+    assert [(entry["name"], entry["level"], entry["score"]) for entry in entries] == [
+        ("Existing", 10, 77),
+    ]
+
+
+def test_sokoban_higher_level_outranks_a_full_table_of_lower_levels(tmp_path):
+    store = StatisticsStore(tmp_path / "statistics.sqlite3")
+    for score in range(10, 20):
+        _, accepted = store.add_hall_of_fame("sokoban", "Level two", score, level=2)
+        assert accepted
+
+    entries, accepted = store.add_hall_of_fame("sokoban", "Level three", 100, level=3)
+    assert accepted
+    assert len(entries) == 10
+    assert (entries[0]["level"], entries[0]["score"]) == (3, 100)
+    assert [(entry["level"], entry["score"]) for entry in entries[1:]] == [
+        (2, score) for score in range(10, 19)
+    ]
+
+
 def test_docs_route_rejects_encoded_parent_traversal(tmp_path):
     web_dir = tmp_path / "www"
     docs_dir = tmp_path / "docs"
@@ -30,6 +66,8 @@ def test_docs_route_rejects_encoded_parent_traversal(tmp_path):
     (docs_dir / "inside.md").write_text("inside", encoding="utf-8")
     (docs_dir / "Runtime Audit.md").write_text("private audit", encoding="utf-8")
     (docs_dir / "Format RE Notes.md").write_text("private notes", encoding="utf-8")
+    (docs_dir / "Audit.md").write_text("private audit", encoding="utf-8")
+    (docs_dir / "RE.md").write_text("private notes", encoding="utf-8")
     (docs_dir / "private.txt").write_text("private", encoding="utf-8")
     (tmp_path / "docs-secret.md").write_text("secret", encoding="utf-8")
 
@@ -51,6 +89,8 @@ def test_docs_route_rejects_encoded_parent_traversal(tmp_path):
     assert client.get("/docs/inside.md").status_code == 200
     assert client.get("/docs/Runtime%20Audit.md").status_code == 404
     assert client.get("/docs/Format%20RE%20Notes.md").status_code == 404
+    assert client.get("/docs/Audit.md").status_code == 404
+    assert client.get("/docs/RE.md").status_code == 404
     assert client.get("/docs/private.txt").status_code == 404
     assert client.get("/docs/%2e%2e/docs-secret.md").status_code == 404
 
@@ -347,6 +387,20 @@ def test_hall_of_fame_is_shared_ranked_and_limited(tmp_path):
         ).status_code == 200
     hanoi = client.get("/api/hall-of-fame/hanoi").json()["entries"]
     assert [entry["score"] for entry in hanoi] == [18, 25, 31]
+    assert client.post(
+        "/api/hall-of-fame/sokoban", json={"name": "Old", "score": 77, "note": "5 levels"}
+    ).status_code == 200
+    assert client.post(
+        "/api/hall-of-fame/sokoban", json={"name": "New", "score": 170, "note": "10 levels"}
+    ).status_code == 200
+    assert client.post(
+        "/api/hall-of-fame/sokoban", json={"name": "Partial", "score": 1, "level": 3}
+    ).status_code == 200
+    sokoban = client.get("/api/hall-of-fame/sokoban").json()["entries"]
+    assert [(entry["level"], entry["score"]) for entry in sokoban] == [(10, 77), (10, 170), (3, 1)]
+    assert client.post(
+        "/api/hall-of-fame/sokoban", json={"name": "Invalid", "score": 3, "level": 11}
+    ).status_code == 422
     assert client.get("/api/hall-of-fame/unknown").status_code == 404
     assert client.post(
         "/api/hall-of-fame/tetris", json={"name": "Bad", "score": -1}

@@ -12,6 +12,11 @@ services:
       THELP_README_PATH: "/app/README.md"
       THELP_CHANGELOG_PATH: "/app/CHANGELOG.md"
       THELP_STATE_DIR: "/app/var"
+      # Set on the public host in .env; leave empty for local request URLs.
+      THELP_PUBLIC_BASE_URL: "${THELP_PUBLIC_BASE_URL:-}"
+      THELP_GOOGLE_SITE_VERIFICATION: "${THELP_GOOGLE_SITE_VERIFICATION:-}"
+      # Set separately on the public host; the public URL does not enable Passkeys.
+      THELP_AUTH_ORIGIN: "${THELP_AUTH_ORIGIN:-http://localhost:5448}"
       THELP_HELP_DATABASE_PATH: "/app/thelpviewer/help-database.json"
     ports:
       - "${THELP_PORT:-5448}:${THELP_PORT:-5448}"

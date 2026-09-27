@@ -619,12 +619,22 @@ docker_preflight() {
     return 0
 }
 
+ensure_docker_helps_readable() {
+    if [ ! -f "${HELPS_DIR}/catalog.json" ]; then
+        echo "[thelp] missing HELP catalog: ${HELPS_DIR}/catalog.json"
+        return 1
+    fi
+    echo "=== Check HELP files at original paths ==="
+    find "${HELPS_DIR}" -type f -exec cksum {} + >/dev/null
+}
+
 if $do_start; then
     echo "=== Start Docker ==="
     cd "${SCRIPT_DIR}"
     docker_preflight || exit 1
+    ensure_docker_helps_readable || exit 1
     export THELP_PORT="${PORT}"
-    docker compose up -d
+    docker compose up -d --build
     echo ""
     echo "Ready: http://localhost:${PORT}/"
     echo ""
@@ -645,6 +655,7 @@ if $do_restart; then
     echo "=== Restart Docker ==="
     cd "${SCRIPT_DIR}"
     docker_preflight || exit 1
+    ensure_docker_helps_readable || exit 1
     export THELP_PORT="${PORT}"
     docker compose down
     docker compose build --no-cache

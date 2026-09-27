@@ -343,12 +343,18 @@ class StatisticsStore:
             """CREATE TABLE IF NOT EXISTS hall_of_fame (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, game TEXT NOT NULL,
                 name TEXT NOT NULL, score REAL NOT NULL, note TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL, level INTEGER NOT NULL DEFAULT 0
             )"""
         )
         connection.execute(
             "CREATE INDEX IF NOT EXISTS hall_of_fame_game_score ON hall_of_fame(game, score)"
         )
+        if "level" not in {column[1] for column in connection.execute("PRAGMA table_info(hall_of_fame)")}:
+            try:
+                connection.execute("ALTER TABLE hall_of_fame ADD COLUMN level INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError as error:
+                if "duplicate column name" not in str(error).lower():
+                    raise
         return connection
 
     def add(self, values: dict[str, str]) -> None:
@@ -398,19 +404,28 @@ class StatisticsStore:
         if not normalized:
             raise ValueError("Unsupported game")
         direction = "ASC" if HALL_OF_FAME_GAMES[normalized] else "DESC"
+        order = (
+            "CASE WHEN level = 0 THEN 10 ELSE level END DESC, score ASC"
+            if normalized == "sokoban" else f"score {direction}"
+        )
         with self._connect() as connection:
             rows = connection.execute(
-                f"""SELECT name, score, note FROM hall_of_fame WHERE game = ?
-                ORDER BY score {direction}, id ASC LIMIT ?""",
+                f"""SELECT name, score, note, level FROM hall_of_fame WHERE game = ?
+                ORDER BY {order}, id ASC LIMIT ?""",
                 (normalized, HALL_OF_FAME_LIMIT),
             ).fetchall()
         return [
-            {"name": name, "score": int(score) if float(score).is_integer() else score, "note": note}
-            for name, score, note in rows
+            {
+                "name": name,
+                "score": int(score) if float(score).is_integer() else score,
+                "note": note,
+                "level": (level or 10) if normalized == "sokoban" else level,
+            }
+            for name, score, note, level in rows
         ]
 
     def add_hall_of_fame(
-        self, game: str, name: object, score: object, note: object = ""
+        self, game: str, name: object, score: object, note: object = "", level: object = 0
     ) -> tuple[list[dict[str, object]], bool]:
         normalized = normalize_game(game)
         if not normalized:
@@ -423,16 +438,28 @@ class StatisticsStore:
             raise ValueError("Invalid score") from error
         if not 0 < numeric_score <= 1_000_000_000:
             raise ValueError("Invalid score")
+        try:
+            numeric_level = int(level)
+        except (TypeError, ValueError, OverflowError) as error:
+            raise ValueError("Invalid level") from error
+        if numeric_level != level or not 0 <= numeric_level <= 10:
+            raise ValueError("Invalid level")
+        if normalized != "sokoban":
+            numeric_level = 0
         direction = "ASC" if HALL_OF_FAME_GAMES[normalized] else "DESC"
+        order = (
+            "CASE WHEN level = 0 THEN 10 ELSE level END DESC, score ASC"
+            if normalized == "sokoban" else f"score {direction}"
+        )
         with self._connect() as connection:
             inserted = connection.execute(
-                "INSERT INTO hall_of_fame(game, name, score, note, created_at) VALUES (?, ?, ?, ?, ?)",
-                (normalized, player, numeric_score, annotation, datetime.now(UTC).isoformat()),
+                "INSERT INTO hall_of_fame(game, name, score, note, created_at, level) VALUES (?, ?, ?, ?, ?, ?)",
+                (normalized, player, numeric_score, annotation, datetime.now(UTC).isoformat(), numeric_level),
             )
             connection.execute(
                 f"""DELETE FROM hall_of_fame WHERE game = ? AND id NOT IN (
                     SELECT id FROM hall_of_fame WHERE game = ?
-                    ORDER BY score {direction}, id ASC LIMIT ?
+                    ORDER BY {order}, id ASC LIMIT ?
                 )""",
                 (normalized, normalized, HALL_OF_FAME_LIMIT),
             )
