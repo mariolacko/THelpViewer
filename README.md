@@ -153,6 +153,9 @@ THelpViewer/
 - **Authentic TurboVision UI** — menus, windows, scrollbars, dialogs, resize, maximize
 - **Compressed structured bundles** — UHF 2.0 payload stored as `.json.gz`
 - **Loading progress** — DOS Navigator-style dialog with progress bar and Cancel
+- **Server statistics** — privacy-preserving aggregate SQLite counters shown in a Turbo Vision window
+- **System information** — local application, browser, display, locale, storage and capability details with live server/catalog status
+- **Shared Hall of Fame** — server-wide top-ten tables with automatic local-browser fallback
 - **Full-text search** — search across all topics within a help file
 - **A–Z index navigation** — letter jump links in the index view
 - **Window management** — zoom (F5), close (Alt-F3), drag, resize
@@ -227,6 +230,47 @@ To serve only (if bundles are already built):
 ```
 
 After regeneration, restart the local server or Docker and hard-refresh the browser (Ctrl+F5).
+
+### Server statistics and errors
+
+The System menu's **System Information** dialog reports the current application
+version, page mode, browser/OS, display and Turbo Vision cell geometry, locale,
+storage availability and browser capabilities. Its Server category checks the
+running version and HELP/Docs catalog sizes. These details remain local to the
+dialog and are not submitted as statistics merely by opening it.
+
+The System menu's **Statistics** window reads aggregate counters from
+`var/statistics.sqlite3`. The location can be changed with
+`THELP_STATISTICS_PATH`; `THELP_STATE_DIR` changes the default state directory.
+SQLite uses its rollback journal so the database also works when `var/` is a
+Docker Desktop bind mount.
+The server records daily visits, referrer hosts, proxy-supplied country codes,
+screen/viewport sizes, pixel ratio, color depth, coarse device/OS/browser
+families, language, time zone, theme and orientation/pointer/accessibility
+preferences. Usage counters cover HELP/Docs/topic and dialog opens, searches
+as found/no-results without the entered text, internal/external/broken links,
+game outcomes with duration intervals and coarse client-error categories.
+The viewer also measures active time for each HELP file, Markdown document,
+dialog and game: switching to another window or hiding the browser tab pauses
+that target, and returning resumes it.
+Performance counters group TTFB, page load, LCP, CLS, INP and HELP
+download/decompression/render times into intervals. Active visit time is also
+stored only as an interval. The server deliberately does not store IP
+addresses, cookies, persistent visitor identifiers, full referrer URLs, raw
+user-agent strings, search text, exact timings or individual visit rows. HELP
+statistics show the catalog's long display name rather than its source
+filename.
+
+Game scores use `GET/POST /api/hall-of-fame/{game}` and are shared by all
+visitors of the server. A public score consists only of the entered player
+name, score and short game note. When the API is unavailable (for example when
+the generated viewer runs directly from disk), the existing per-browser
+`localStorage` Hall of Fame remains active; local entries are not uploaded
+automatically.
+
+Unknown browser URLs are redirected into the application and shown through a
+Turbo Vision error MessageBox. `/api/...` callers continue to receive JSON HTTP
+errors.
 
 ## Documentation
 

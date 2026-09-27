@@ -4,8 +4,9 @@ Presentation assets for the generated TurboVision-style HTML viewer:
 
 - `turbovision.css` — window chrome, typography and layout
 - `tv-core.js` — theme engine, utility functions and base TV widgets
+- `tv-context-help.js` — shared UHF `TVHelpWindow`/`TVHelpViewer` and THelpViewer context-help loader
 - `tv-dialogs.js` — standalone dialog windows (About, ASCII, Calculator, Calendar, MIDI, Colors, Search)
-- `tv-context-help.json` — native UHF 2.0 topics for context-sensitive F1 Help
+- `tv-context-help.json` — native UHF 2.0 topics and index for context-sensitive F1 Help
 - `tv-games.js` — built-in game rules and dialogs
 - `tv-screensaver.js` — idle screensaver
 - `tv-shell.js` — menu bar, status line, scrollbars and application shell

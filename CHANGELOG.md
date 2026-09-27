@@ -34,14 +34,331 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
-- Removed the separate `TVRenderer` adapter and its hidden `WeakMap` state.
-  Every `TVView` now owns its drawing options, browser binding and rendered
-  attributes directly. Dialog and game constructors no longer accept or find
+- Unified active-time statistics through the existing `TVDialogManager` for
+  HELP windows, Markdown documents, dialogs and games. Time now accumulates
+  only while the managed target and browser tab are active, pauses across
+  window/tab switches, resumes on return and is stored only as a coarse
+  interval. Game discovery now uses `TVGameDialog` instead of a duplicated
+  hard-coded game-name list.
+- Fixed Server Statistics returning HTTP 500 from Docker Desktop bind mounts:
+  the small aggregate SQLite store now uses the portable rollback journal
+  instead of WAL shared-memory sidecar files.
+- Expanded anonymous Server Statistics with active-visit duration intervals,
+  dialog/tool opens, search outcomes without query text, link outcomes, game
+  results and duration intervals, Navigation Timing, coarse LCP/CLS/INP and
+  HELP download/decompression/render timing. Visit environment counters now
+  include coarse orientation, pointer type and reduced-motion preference; no
+  exact timing or persistent visitor identifier is stored.
+- Added a source-shaped System Information utility to both viewer modes. The
+  standard `TVDialog` uses category/detail `TVListBox` controls and OK/Refresh
+  buttons to show local application, browser, display, locale, storage and web
+  capabilities plus live server version and HELP/Docs catalog sizes. Merely
+  opening the dialog does not add those details to visitor statistics.
+- Corrected Puzzle's Turbo Vision `0x71` highlight so it applies both the
+  light-gray background and blue foreground instead of drawing blue letters
+  on the blue board. Restored Tetris's shared `[H]` Hall of Fame title
+  control. Dynamic `TVWindow.drawContent()` updates now redraw the shared
+  frame, so asynchronously loaded Hall of Fame rows retain both side borders.
+  `TVInfoBox` side cells now keep the owner palette background during row
+  hover, preventing Ludo's Players highlight from painting beneath its frame.
+  Positioned views now use `TVWindow`'s client viewport as their coordinate
+  origin, fixing Find history's one-cell list/scrollbar offset; the taller Find
+  client also leaves room for the popup shadow. ASCII Chart again uses two
+  native `TVDialog` sections with a `╟──╢` separator above its character info.
+  Internal dialog separators now use the active/passive frame palette instead
+  of inheriting the client text color. The single shared `TVScrollBar` now
+  handles mouse wheels over both list contents and scrollbar chrome.
+  Repaired
+  Tetris's Info box by returning its Preview to the normal `TVInfoBox` flow,
+  widening the Preview to the full 23-column frame and giving the complete
+  header/rows/separators/Preview/footer stack its required height.
+- Reduced the stylesheet's responsibility for layout: ASCII Chart, Colors,
+  Calculator and History now receive their child sizes from `TVRect`; Tetris,
+  Ludo and Window List no longer repeat their outer dimensions in CSS; and
+  MIDI/Window List reuse the shared `TVListBox` layout without private copies.
+  Ludo's player controls also use explicit TVision bounds. CSS remains only
+  for shared browser primitives, palettes and the internal drawing of game
+  boards. Renaming Snake's internal body segment removed a collision with the
+  generated dialog-body class, so the gray window no longer needs a masking
+  selector. Calculator keys now inherit the standard `TVButton` face, focus,
+  pressed and shadow rules instead of maintaining a second copy.
+- Unified both UHF display paths on `TVHelpWindow : TVWindow` with an owned
+  `TVHelpViewer : TVScroller`. Generated-page F1 Help is no longer a bespoke
+  `TVDialog`: Close, Zoom, moving, resizing, outer horizontal/vertical
+  scrollbars, frame colors and inactive state now come from the same shared
+  `TVWindow` chrome as every loaded HELP file; only UHF topic content remains
+  format-specific.
+- Moved THelpViewer's own UHF loader and fallback context-help window out of
+  `tv-dialogs.js` into `tv-context-help.js`. Both generated-page and SPA
+  bootstraps load the focused module before dialogs, while the SPA continues
+  to show the native UHF through the same `TVHelpWindow` used by other HELP
+  files.
+- Removed About from the system menu and kept it under Help. The Help menu now
+  also exposes Index, backed by a populated alphabetical index in
+  `tv-context-help.json`; F1, topic links, Contents and Index all reuse the
+  existing bundle window manager.
+- Made Search Topics use the shared `TVListBox` normal/focused palette instead
+  of its private blue result pane. The stylesheet audit removed that obsolete
+  theme token and merged the remaining duplicate Ludo state rules; dynamic
+  `viewName`, palette and game-state selectors were retained deliberately.
+- Repaired the shared `TVListBox` layout used by Open a File: its two-column
+  viewport no longer replaces the right `TVScrollBar` grid, so both arrows,
+  page track and thumb area keep their proper vertical positions. Change
+  Directory now leaves its `TVOutline` viewport wheel-scrollable.
+- Made untitled `TVWindow` frames draw a continuous top border instead of an
+  empty two-cell caption gap. File Open, Change Directory and Find History
+  popups all inherit the fix from the shared window renderer.
+- Matched Calendar more closely to DOS Navigator's 28x8 `TCalendarView`, with
+  Monday-first columns, selected/current-day states, `<`, `>`, `=` controls
+  and day/week/month/year keyboard navigation. Tetris now uses the original
+  DOS Navigator `TGameWindow.Init` geometry; Mastermind was tightened and
+  Snake/Tetris explicitly retain the dialog palette outside their playfields.
+- Expanded privacy-preserving Server Statistics into a `TVDialog`
+  with summary counters and browsable category/detail lists. Daily visits now
+  include aggregate device, viewport, pixel ratio, color depth, language,
+  time-zone and theme data; HELP/Docs/topic opens, individual game launches
+  and coarse client-error categories are counted as well. No IP address,
+  cookie, persistent visitor ID, full referrer URL, raw user agent or
+  per-visit record is stored.
+- Returned Server Statistics to a classic gray `TVDialog`, composed from two
+  standard green/cyan `TVListBox` controls and explicit OK/Refresh buttons.
+  HELP usage now records the catalog's long display name instead of exposing
+  the source filename in the statistics list. Legacy ambiguous counters are
+  left unchanged instead of guessing which catalog title they represented.
+- Simplified `TVMessageBox` to the shared dialog implementation: message rows
+  are ordinary `TVStaticText`, title refresh uses `TVFrame.drawTitle()`, and
+  Enter/Escape/Tab use `TVDialog.onDialogKeyDown()`. Removed its private title
+  element, duplicate DOM propagation listeners and complete CSS override.
+- Added server-wide SQLite Hall of Fame tables and `GET/POST
+  /api/hall-of-fame/{game}` endpoints. Games fetch and save the global top ten,
+  fall back to the existing browser-local table when the server API is absent,
+  and never upload pre-existing local names automatically.
+- Reduced the shared stylesheet by consolidating identical menu, window,
+  scrollbar, list-cell and game-overlay rules. Static selector analysis found
+  no safely removable control selectors; all dynamically generated dialog and
+  game roles remain covered.
+- Removed another layer of Search, File Open and Change Directory list CSS
+  that duplicated the geometry and overflow already supplied by
+  `TVListBox`/`TVListViewer`. Search result rows now rely on normal grid-item
+  stretching instead of a redundant `width: 100%`. Menu command cleanup also
+  preserves focus moved by the command, so Find and Open a File open with
+  their first `TVInputLine` selected and ready for typing.
+- Browser requests for missing server paths now return to the viewer with a
+  Turbo Vision `TVMessageBox`; failed HELP and Markdown loads also surface an
+  error dialog instead of only writing to the developer console. JSON API
+  clients retain normal structured HTTP errors.
+- Local links clicked inside the running viewer are now checked by the current
+  `TVBundleApp`. A 404 opens its existing `TVMessageBox` without navigating,
+  reloading the desktop or opening another THelpViewer tab; direct invalid URLs
+  still use the server-side fallback.
+- Added DOS Navigator-compatible `TVPercentGauge` and `TVBarGauge` views from
+  the `GAUGE.PAS` design, including `cmUpdateGauge`, `cmResetGauge` and
+  `cmAddGauge` broadcast commands. Bundle loading is now a real
+  `TVLoadingDialog` composed from those gauges, filename text and a
+  `TVButton`, rather than a dialog-specific progress-bar implementation.
+- Routed shell and bundle menu/status commands, History navigation, Hall of
+  Fame, shared window Close/Zoom controls and Loading Cancel through
+  `handleEvent()`. Native DOM listeners remain only at shared browser input
+  adapters, global lifecycle boundaries, scrolling/dragging and specialised
+  game playfields.
+- Fixed `TVScrollBar.bindRoot()` overwriting the logical `TVView` stored on a
+  list/scroller frame. Keyboard events now continue through the real owner
+  chain, so Escape closes an open History window before its parent dialog;
+  shared window Close also preserves the previously active target on Safari.
+- Removed the remaining presentation-only dialog/game subclasses that existed
+  solely to emit a CSS role. Their owners now compose the corresponding
+  `TVGroup`, `TVStaticText`, `TVInputLine`, `TVListBox` or `TVOutline`
+  directly. Colors arrow navigation now belongs to
+  `TVColorSelector.handleEvent()` and reaches `TVColorsDialog` as the normal
+  `evCommand` owner flow instead of a dialog-specific key-down method.
+- Fixed `TVTerminal` framed-row width accounting so Widget Gallery's Event
+  Log draws its right border inside the bounded 62-column `TVInfoBox` instead
+  of clipping it. Removed the role-only Search/Find status subclasses and
+  their stale CSS hooks; both dialogs now use ordinary bounded
+  `TVStaticText`, while Search keeps result styling scoped to its owned list.
+- Removed unused bundle-diagnostic, list-text, game-info and menu-scroll CSS
+  selectors left behind by the TVision object refactor. Consolidated input
+  sizing in the shared `TVInputLine` rule and removed redundant per-dialog
+  clipping, repeated `[hidden]` rules and unused compatibility variables.
+- Removed MIDI subclasses that existed only to inject a CSS `role`.
+  The external-source area is now an ordinary `TVGroup`; `TVMidiDisplay`
+  owns and updates its text children, `TVMidiMeter` owns progress state, and
+  `TVMidiTrackList` keeps only its real list-item behaviour.
+- Removed the separate `TVRenderer` adapter, its hidden `WeakMap` state and
+  the replacement `setDrawOptions`/`drawOptions` API. Each concrete view now
+  draws from its Turbo Vision state and fields; there is no generic public
+  class/attribute/tag renderer. Dialog and game constructors no longer accept or find
   a desktop DOM element; `TVDesktop.insert()` establishes ownership and mounts
   the view, while `TVDialogManager.register()` performs that insertion for
   managed dialogs. Game frames, labels, buttons, status/info panels and Hall
   of Fame remain composed from shared TVision objects; only the changing game
   board markup remains game-specific.
+- Removed the generic `TVMarkupView` escape hatch. Shared dialog content is now
+  made from concrete TVision objects; only specialised drawing code emits the
+  browser markup required to display a control or a changing game board.
+- Added the original `sf...`, `of...`, `gf...` and `dm...` masks plus useful
+  Turbo Vision operations including `getBounds`, `getExtent`, `locate`,
+  `moveTo`, cursor state, `focus`, `select`, `makeFirst`, group traversal,
+  `focusNext`, `newList`, `focusItem`, `selectItem`, and scrollbar
+  `setParams`/`setRange`/`setStep`/`setValue`.
+- Replaced the public scrollbar markup/options renderer with
+  `TVScrollBar(bounds, options).draw()`; `sbHorizontal`/`sbVertical` now select
+  the axis and windows, menus, lists and scrollers use the same control and
+  generic palette path.
+- Folded the former `TVVerticalListViewer` into `TVListBox : TVListViewer` and
+  replaced `TVVerticalScrollArea` with the source-like
+  `TVScroller(bounds, hScrollBar, vScrollBar)`. Lists no longer have a second
+  browser-specific inheritance branch.
+- Made `TVMenuItem` and `TVStatusItem` plain command descriptors instead of
+  views. Their owning `TVMenuView` and `TVStatusLine` now draw them, matching
+  the original separation between menu/status records and visible views.
+- Added the source-like `TVMenu` record and changed `TVMenuView`/`TVMenuBox`
+  constructors to receive it. Menu item parameters now carry command values
+  and payload instead of a second browser-specific attribute object.
+- Restored the Turbo Vision `TVMenuItem(name, command, keyCode, helpCtx,
+  param, next)` constructor order. Ctrl-F, Ctrl-L, F3, F5, F6, Shift-F6,
+  Alt-F3 and Alt-0 now activate their owning menu records through the shared
+  `TVMenuController`; the bundle application no longer duplicates those
+  shortcuts in an application-specific key switch.
+- Replaced caller-built submenu and separator HTML with source-like
+  `NewSubMenu()` and `NewLine()` records. Nested menu markup is now emitted
+  only by `TVMenuView`/`TVMenuBox`.
+- Added `TVStatusDef`, `NewStatusDef()` and `NewStatusKey()` and changed
+  `TVStatusLine` to own context ranges and status records instead of receiving
+  an untyped array of rendered buttons.
+- Internalized list rendering hooks. `TVListBox` no longer exposes caller-set
+  item classes, data-attribute names, markup callbacks or root/viewport CSS
+  classes; File, History, Directory, Colors, MIDI, Search, Widget Gallery and
+  Contents lists now encapsulate their own drawing. `TVOutline` uses normal
+  overridable `getChildren`, `getKey`, `getLabel` and `renderNodeContent`
+  methods.
+- Added explicit `TVHelpViewer : TVScroller` and `TVHelpWindow : TVWindow`
+  objects for every converted HELP bundle. Topic/Contents/Back updates now
+  replace the owned viewer content instead of overwriting the window viewport,
+  and closing the window destroys that object lifecycle cleanly.
+- Added `TVProgram : TVGroup` and made both `TVApplication` and `TVBundleApp`
+  derive from it, restoring the original program/application ownership level
+  without adding DOM parameters to either constructor.
+- Made `TVStatusLine` emit its `TVStatusItem.keyCode` records. F1, F3 and
+  Alt-F3 status actions now share the same key-code dispatcher as menu items,
+  and the clickable F1 item reaches the same `TVHelpController` path.
+- Rebuilt Calculator geometry from `TVRect` bounds: an owned `TVStaticText`
+  displays the value and all twenty `TVButton` keys have fixed Turbo Vision
+  coordinates. The former `calc-main`/`calc-keypad` CSS layout wrappers and
+  generic group grid-option fields are gone.
+- Migrated Calendar and Find to bounds-first client composition. Calendar's
+  caption, arrows, weekday heading and grid, plus Find's label, input,
+  History trigger, buttons and status, now carry their own `TVRect` geometry
+  instead of dialog-specific positioning wrappers. `TVHistory` also derives
+  its command from its semantic history id rather than an input's browser
+  `viewName`.
+- Migrated Open a File's labels, input/history pair, two-column file list and
+  Open/Cancel buttons to their original 47×17 client `TVRect` coordinates.
+  Dialog CSS now handles only the controls' intrinsic appearance and list
+  flow; it no longer positions those objects through wrapper groups.
+- Migrated Change Directory's path input/history pair, outline, status and
+  three command buttons to direct `TVRect` geometry, matching the same
+  bounds-first construction now used by Open a File and Find.
+- Removed browser presentation names from the Open, Change Directory and Find
+  `TVInputLine` objects. Their History links and tests now follow owned
+  controls and dialog types instead of caller-assigned `data-tv-*`
+  identities; no empty input subclass is kept without source behaviour.
+- Made `TVListViewer`, `TVListBox`, `TVCluster` and `TVTerminal` honor their
+  `TVRect` bounds. Widget Gallery is now assembled at fixed character-cell
+  coordinates without its former CSS grid/flex layout or caller-assigned DOM
+  identities; `TVMultiCheckBoxes` reports changes through the owner event
+  chain instead of a parallel click listener.
+- Rebuilt the Colors dialog at its original 59×16 client geometry with direct
+  `TVRect` bounds for labels, both lists, selectors, sample and four buttons.
+  CSS now styles those controls but no longer positions the dialog.
+- Rebuilt full-text Search from bounded TVision controls and removed its CSS
+  row/panel/button layout plus input DOM identity. Empty-result messages are
+  now drawn by a concrete `TVStaticText` descendant inside the owned list.
+- Rebuilt MIDI Player's display, transport controls, track list and optional
+  external-source area with direct `TVRect` coordinates. More/Less now resizes
+  the client group and dialog through source-like `changeBounds()`/`locate()`;
+  the browser-only `TVDialog.setSize()` API and MIDI layout wrappers are gone.
+- Fixed the shared dialog client coordinate system: bounded `TVGroup` objects
+  now keep absolute Turbo Vision positioning, dialog content is clipped inside
+  the framed client area, and MIDI Player's More/Less expansion keeps its
+  controls and both frame sides inside the resized window.
+- Reflowed Widget Gallery to a 68-column dialog so every action button stays
+  inside the frame, and moved Event log into a full-width 62-column
+  `TVInfoBox` whose bounded terminal now preserves both frame rows.
+- Matched DOS Navigator's Pascal `MessageBox` geometry: a minimum 42×7 dialog,
+  standard close control, ten-column buttons separated by two columns, and
+  message/button-driven growth without a broken top-right frame.
+- Removed the stale four-column Search body override so the shared
+  `TVDialog` client and right frame side reach the actual dialog edge.
+- Restored Window List rows to the shared `TVListViewer` cyan/green palette
+  instead of overriding text-bearing rows with a gray application-bar color.
+- Fixed MIDI Player's progress meter ownership (`TVGroup.insert()` had
+  returned the fill child), removed that zero-bounds child entirely, and draw
+  the fill inside the bounded `TVMidiMeter`. Display, meter, two-row controls
+  and track list now follow the coordinate sequence from DOS Navigator
+  `CDPLAYER.PAS`.
+- Reworked MIDI Player's geometry after direct comparison with DOS Navigator
+  `CDPLAYER.PAS` and its original HELP illustration. It now opens as a compact
+  44×10 window with one empty character row between the three-row display,
+  meter and real two-line `TVButton` controls; the track list and external
+  sources stay hidden until `More`. The expanded URL/Load row and its source
+  buttons are also separated by one row.
+  Removed the duplicate client-area Close button, and made bounded `TVButton`
+  widths honor their `TVRect` instead of a browser-only ten-column minimum.
+  URL state now records `More/Less`, so old saved 58×21 geometry is normalized
+  to the new compact size rather than reopening with empty space.
+- Moved Calculator's bounded keypad one character row upward while retaining
+  its original twenty two-row command buttons and white-on-blue display.
+- Removed `TVHistoryWindow`'s duplicate handwritten frame. The original-style
+  `wfClose` window now inherits `TVWindow.draw()`; the shared window renderer
+  honors fixed windows without zoom, grow handle or outer scrollbars while
+  preserving the History viewer's own list scrollbar.
+- Restored Tower of Hanoi focus synchronously after board redraws, preventing
+  a rapid Arrow key immediately after Enter from being lost between animation
+  frames.
+- Removed the remaining dialog-layer `Object.assign(new TV...)` construction.
+  Open a File's horizontal controls/info panes, ASCII report, Find status and
+  the standalone Context Help dialog now use concrete bounded TVision views.
+- Replaced the bundle application's handwritten Window List buttons, DOM
+  selection and parallel keyboard/click handlers with `TVWindowList :
+  TVListBox`. Loading progress text uses concrete views and Cancel now travels
+  through `TVLoadingDialog.handleEvent()`.
+- Completed the bounds/event cleanup across shared dialogs and games. Removed
+  zero-height `TVRect` controls, rebuilt `TVMessageBox` from owned
+  `TVGroup`/`TVStaticText`/`TVButton` children, moved History toggling and all
+  dialog/game keyboard input to `handleEvent()`, and kept browser key-up only
+  as a shared `TVDialog` bridge for BreakOut's held-key state.
+- Removed caller-assigned `presentation`, `viewName`, `_presentation` and
+  `_viewName` state. Concrete view classes now declare their drawing role and
+  stable browser identity themselves; the original positional constructors
+  remain free of CSS classes, DOM attributes and selector options.
+- Made `TVInfoRow` derive its frame palette from its owning `TVInfoBox`, fixed
+  all game info-panel bounds, and moved Tetris/Pentix title refresh into the
+  shared `TVFrame.drawTitle()` path.
+- Removed the dialog default-button CSS selector. Enter now finds the nested
+  `TVButton` with `bfDefault` through recursive `TVGroup.firstThat()`, so
+  object ownership—not generated markup—controls command dispatch.
+- Removed browser-only state such as `ariaLabel`, `ariaExpanded`, `tabIndex`,
+  `tooltip`, `labelMarkup` and CSS width from `TVButton`. Its private drawing
+  path now derives markup and accessibility from the command, value, flags and
+  semantic command data; dynamic controls redraw through `drawView()`.
+- Fixed bounds propagation in `TVStaticText`, `TVInputLine`, `TVInfoBox`,
+  `TVTerminal`, `TVCluster` and `TVButton`; their `origin` and `size` now come
+  from the same `TVView(bounds)` initialization path as the original objects.
+- Reworked Tetris/Pentix against DOS Navigator's `tetris.pas`: the dialog now
+  owns a separate `TVTetrisGameView` and `TVTetrisGameInfo`, exposes New,
+  Setup, Top 10 and Pause commands, pauses on inactive/focus state, and keeps
+  separate Tetris/Pentix score tables with starting and ending levels.
+- Promoted ASCII table, calendar and Colors internals to reusable
+  `TVAsciiTable`, `TVCalendarView`, `TVColorSelector` and `TVColorDisplay`
+  views. Their dialogs retain object references and route interaction through
+  `handleEvent` instead of rediscovering generated elements with selectors.
+- Rebuilt History as `TVHistory : TVButton`, `TVHistoryViewer` and an owned
+  `TVHistoryWindow : TVWindow`. File Open, Change Directory and Find share the
+  same closable popup and empty History remains usable.
+- Made the dynamically redrawn status line use one persistent command
+  dispatcher, fixing lost Content/Back/Index/Search/Close actions after a
+  HELP window changed the available status items.
 - Added the Turbo Vision event path (`TVEvent`, `evMouseDown`, `evKeyDown`,
   `evCommand`, `evBroadcast`, `handleEvent()` and `clearEvent()`). Concrete
   dialogs and games now retain their child `TVView` objects and receive button,
@@ -117,7 +434,7 @@
 - Began the object-composition migration for dialog clients: Context Help,
   Open a File, Change Directory and Find now assemble their content from
   `TVGroup`, `TVStaticText`, `TVLabel`, `TVInputLine`, `TVButton`,
-  `TVVerticalListViewer`/`TVOutline` and the shared `TVHistoryWindow` trigger
+  `TVListBox`/`TVOutline` and the shared `TVHistoryWindow` trigger
   instead of dialog-specific HTML templates
 - Added a distinct `hc...` context and UHF topic for every game, so F1 from
   Puzzle, Tetris, Mines, BreakOut, Sokoban, Lines, Reversi, Ludo, Mastermind,
@@ -160,6 +477,10 @@
   coloring instead of deriving a double-line resize corner from the frame
 
 ### Tooling
+- Removed the obsolete internal `TurboVision JS Audit` document. The current
+  API and module layout remain documented in `TurboVision JS.md`, while
+  implementation history and user-visible changes are tracked in this
+  changelog.
 - Added built-in ZIP member listing support to `tools/zip_implode.py`, so old
   PKZIP method-6 archives can be inspected with a repo-local tool instead of
   depending on external `unzip` / `7z` output

@@ -218,6 +218,29 @@ Prevents:
 
 ---
 
+## Rule 15 — Keep The Public TVision API Source-Like
+
+Use the original Turbo Vision object hierarchy, constructor order, method
+names, state masks and owner/event flow wherever the browser permits it.
+
+Do not add public TVision constructor parameters or generic setters for:
+- CSS class names
+- HTML tags
+- arbitrary HTML attributes
+- DOM selectors
+- renderer option bags
+
+Browser markup and accessibility attributes belong inside the drawing code of
+the concrete shared control. Game-specific board drawing may remain
+specialised, but game chrome must be composed from TVision objects.
+
+Prevents:
+- a second HTML/CSS object model leaking into the TVision API
+- every dialog inventing its own controls and event wiring
+- source comparison becoming meaningless despite similar visuals
+
+---
+
 ## Rule 15 — Use The Turbo Vision Event Model
 
 Concrete dialogs and games must retain references to the `TVView` children
