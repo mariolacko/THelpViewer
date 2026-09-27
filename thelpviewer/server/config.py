@@ -32,6 +32,7 @@ class AppConfig:
     changelog_path: Path
     state_dir: Path
     virtual_docs: tuple[tuple[str, Path], ...]
+    statistics_path: Path | None = None
 
 
 def _resolve_virtual_doc_disk_path(disk_path: str, root: Path, readme_path: Path, changelog_path: Path) -> Path:
@@ -63,6 +64,7 @@ def load_config() -> AppConfig:
     web_dir = Path(os.environ.get("THELP_WEB_DIR", root / "www"))
     readme_path = Path(os.environ.get("THELP_README_PATH", root / "README.md"))
     changelog_path = Path(os.environ.get("THELP_CHANGELOG_PATH", root / "CHANGELOG.md"))
+    state_dir = Path(os.environ.get("THELP_STATE_DIR", root / "var"))
     return AppConfig(
         host=os.environ.get("THELP_HOST", "0.0.0.0"),
         port=int(os.environ.get("THELP_PORT", "5448")),
@@ -73,6 +75,7 @@ def load_config() -> AppConfig:
         docs_dir=Path(os.environ.get("THELP_DOCS_DIR", root / "docs")),
         readme_path=readme_path,
         changelog_path=changelog_path,
-        state_dir=Path(os.environ.get("THELP_STATE_DIR", root / "var")),
+        state_dir=state_dir,
         virtual_docs=_resolve_virtual_docs(root, readme_path, changelog_path),
+        statistics_path=Path(os.environ.get("THELP_STATISTICS_PATH", state_dir / "statistics.sqlite3")),
     )

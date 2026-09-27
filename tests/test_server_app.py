@@ -1,7 +1,21 @@
+import sqlite3
+
 from fastapi.testclient import TestClient
 
+from thelpviewer import __version__
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import AppConfig
+from thelpviewer.server.statistics import StatisticsStore
+
+
+def test_statistics_store_uses_bind_mount_safe_journal_mode(tmp_path):
+    database = tmp_path / "var" / "statistics.sqlite3"
+    store = StatisticsStore(database)
+
+    store.add({"visit": "1"})
+
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("PRAGMA journal_mode").fetchone() == ("delete",)
 
 
 def test_docs_route_rejects_encoded_parent_traversal(tmp_path):
@@ -54,3 +68,286 @@ def test_docs_route_rejects_encoded_parent_traversal(tmp_path):
     catalog = client.get("/docs/catalog.json")
     assert catalog.status_code == 200
     assert catalog.json() == [{"file": "inside.md", "name": "inside"}]
+
+
+def test_browser_404_redirects_to_viewer_message_while_api_keeps_json(tmp_path):
+    web_dir = tmp_path / "www"
+    docs_dir = tmp_path / "docs"
+    assets_dir = web_dir / "assets"
+    helps_dir = tmp_path / "helps"
+    for directory in (web_dir, docs_dir, assets_dir, helps_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    index_path = web_dir / "index.html"
+    index_path.write_text("index", encoding="utf-8")
+    config = AppConfig(
+        host="127.0.0.1",
+        port=5448,
+        web_dir=web_dir,
+        index_path=index_path,
+        assets_dir=assets_dir,
+        helps_dir=helps_dir,
+        docs_dir=docs_dir,
+        readme_path=tmp_path / "README.md",
+        changelog_path=tmp_path / "CHANGELOG.md",
+        state_dir=tmp_path / "var",
+        virtual_docs=(),
+    )
+    client = TestClient(create_app(config))
+
+    assert client.get("/healthz").json() == {"status": "ok", "version": __version__}
+
+    browser = client.get("/missing", headers={"accept": "text/html"}, follow_redirects=False)
+    assert browser.status_code == 303
+    assert browser.headers["location"] == "/?server_error=404&server_path=%2Fmissing"
+    api = client.get("/api/missing", headers={"accept": "application/json"})
+    assert api.status_code == 404
+    assert api.json() == {"detail": "Not Found"}
+
+
+def test_statistics_are_aggregate_and_do_not_store_private_request_data(tmp_path):
+    web_dir = tmp_path / "www"
+    docs_dir = tmp_path / "docs"
+    assets_dir = web_dir / "assets"
+    helps_dir = tmp_path / "helps"
+    for directory in (web_dir, docs_dir, assets_dir, helps_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    index_path = web_dir / "index.html"
+    index_path.write_text("index", encoding="utf-8")
+    (helps_dir / "catalog.json").write_text(
+        '[{"file":"Norton Guides/vista.json.gz","source_file":"VISTA.NG",'
+        '"name":"db_VISTA III Database Programming Guide"}]',
+        encoding="utf-8",
+    )
+    statistics_path = tmp_path / "state" / "stats.sqlite3"
+    config = AppConfig(
+        host="127.0.0.1",
+        port=5448,
+        web_dir=web_dir,
+        index_path=index_path,
+        assets_dir=assets_dir,
+        helps_dir=helps_dir,
+        docs_dir=docs_dir,
+        readme_path=tmp_path / "README.md",
+        changelog_path=tmp_path / "CHANGELOG.md",
+        state_dir=tmp_path / "state",
+        virtual_docs=(),
+        statistics_path=statistics_path,
+    )
+    client = TestClient(create_app(config))
+    headers = {
+        "user-agent": "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Version/18 Safari/605.1.15",
+        "cf-ipcountry": "sk",
+        "x-forwarded-for": "203.0.113.42",
+    }
+
+    visit = client.post(
+        "/api/statistics/events",
+        headers=headers,
+        json={
+            "event": "visit",
+            "referrer": "https://example.test/private/path?secret=yes",
+            "screen_width": 1920,
+            "screen_height": 1080,
+            "viewport_width": 1512,
+            "viewport_height": 982,
+            "pixel_ratio": 2,
+            "color_depth": 24,
+            "language": "sk-SK",
+            "timezone": "Europe/Bratislava",
+            "theme": "dark",
+            "orientation": "landscape",
+            "pointer": "fine",
+            "reduced_motion": "reduce",
+        },
+    )
+    opened = client.post(
+        "/api/statistics/events",
+        json={
+            "event": "open",
+            "help_file": "Norton Guides/VISTA.NG",
+            "help_name": "db_VISTA III Database Programming Guide",
+        },
+    )
+    legacy_opened = client.post(
+        "/api/statistics/events",
+        json={"event": "open", "help_file": "VISTA.NG"},
+    )
+    document = client.post(
+        "/api/statistics/events",
+        json={"event": "doc_open", "document": "README.md"},
+    )
+    game = client.post(
+        "/api/statistics/events",
+        json={"event": "game_open", "game": "tetris"},
+    )
+    client_error = client.post(
+        "/api/statistics/events",
+        json={"event": "client_error", "error": "javascript:TypeError"},
+    )
+    detail_events = [
+        {"event": "session_end", "duration_ms": 95_000},
+        {"event": "dialog_open", "name": "systeminfo"},
+        {"event": "tool_open", "name": "screen-saver-stars"},
+        {"event": "search", "scope": "topic", "result": "found"},
+        {"event": "search", "scope": "find", "result": "no-results"},
+        {"event": "link", "result": "internal"},
+        {"event": "link", "result": "external"},
+        {"event": "link", "result": "broken"},
+        {
+            "event": "view_duration", "scope": "help",
+            "name": "db_VISTA III Database Programming Guide", "duration_ms": 95_000,
+        },
+        {
+            "event": "view_duration", "scope": "document",
+            "name": "README.md", "duration_ms": 15_000,
+        },
+        {
+            "event": "view_duration", "scope": "dialog",
+            "name": "systeminfo", "duration_ms": 45_000,
+        },
+        {
+            "event": "view_duration", "scope": "game", "name": "tetris", "result": "lost",
+            "duration_ms": 245_000,
+        },
+        {
+            "event": "game_complete", "game": "snake", "result": "abandoned",
+            "duration_ms": 4_000,
+        },
+        {"event": "performance", "metric": "page_ttfb", "value": 83},
+        {"event": "performance", "metric": "page_load", "value": 870},
+        {"event": "performance", "metric": "lcp", "value": 1800},
+        {"event": "performance", "metric": "cls", "value": 0.18},
+        {"event": "performance", "metric": "inp", "value": 275},
+        {"event": "help_performance", "metric": "load", "duration_ms": 620},
+        {"event": "help_performance", "metric": "decompress", "duration_ms": 42},
+        {"event": "help_performance", "metric": "render", "duration_ms": 130},
+    ]
+    detail_responses = [
+        client.post("/api/statistics/events", json=event) for event in detail_events
+    ]
+    assert visit.status_code == 204
+    assert opened.status_code == 204
+    assert legacy_opened.status_code == 204
+    assert document.status_code == 204
+    assert game.status_code == 204
+    assert client_error.status_code == 204
+    assert all(response.status_code == 204 for response in detail_responses)
+
+    summary = client.get("/api/statistics/summary").json()
+    assert summary["visits"] == 1
+    assert summary["country"] == [{"value": "SK", "count": 1}]
+    assert summary["referrer"] == [{"value": "example.test", "count": 1}]
+    assert summary["resolution"] == [{"value": "1920×1080", "count": 1}]
+    assert summary["viewport"] == [{"value": "1512×982", "count": 1}]
+    assert summary["pixel_ratio"] == [{"value": "2×", "count": 1}]
+    assert summary["color_depth"] == [{"value": "24 bit", "count": 1}]
+    assert summary["os"] == [{"value": "macOS", "count": 1}]
+    assert summary["browser"] == [{"value": "Safari", "count": 1}]
+    assert summary["device"] == [{"value": "Desktop", "count": 1}]
+    assert summary["language"] == [{"value": "sk-SK", "count": 1}]
+    assert summary["timezone"] == [{"value": "Europe/Bratislava", "count": 1}]
+    assert summary["theme"] == [{"value": "dark", "count": 1}]
+    assert summary["orientation"] == [{"value": "landscape", "count": 1}]
+    assert summary["pointer"] == [{"value": "fine", "count": 1}]
+    assert summary["reduced_motion"] == [{"value": "reduce", "count": 1}]
+    assert summary["active_duration"] == [{"value": "1–2 min", "count": 1}]
+    assert summary["dialog"] == [{"value": "systeminfo", "count": 1}]
+    assert summary["tool"] == [{"value": "screen-saver-stars", "count": 1}]
+    assert summary["search"] == [
+        {"value": "find · no-results", "count": 1},
+        {"value": "topic · found", "count": 1},
+    ]
+    assert summary["link"] == [
+        {"value": "broken", "count": 1},
+        {"value": "external", "count": 1},
+        {"value": "internal", "count": 1},
+    ]
+    assert summary["help_file"] == [
+        {"value": "db_VISTA III Database Programming Guide", "count": 2}
+    ]
+    assert summary["document_opens"] == 1
+    assert summary["game_launches"] == 1
+    assert summary["dialog_opens"] == 1
+    assert summary["tool_opens"] == 1
+    assert summary["searches"] == 2
+    assert summary["link_opens"] == 3
+    assert summary["client_errors"] == 1
+    assert summary["document"] == [{"value": "README.md", "count": 1}]
+    assert summary["game"] == [{"value": "tetris", "count": 1}]
+    assert summary["help_duration"] == [
+        {"value": "db_VISTA III Database Programming Guide · 1–2 min", "count": 1}
+    ]
+    assert summary["document_duration"] == [
+        {"value": "README.md · 10–29 s", "count": 1}
+    ]
+    assert summary["dialog_duration"] == [
+        {"value": "systeminfo · 30–59 s", "count": 1}
+    ]
+    assert summary["game_completions"] == 1
+    assert summary["game_outcome"] == [
+        {"value": "snake · abandoned", "count": 1},
+        {"value": "tetris · lost", "count": 1},
+    ]
+    assert summary["game_duration"] == [
+        {"value": "snake · <10 s", "count": 1},
+        {"value": "tetris · 3–9 min", "count": 1},
+    ]
+    assert summary["page_ttfb"] == [{"value": "<100 ms", "count": 1}]
+    assert summary["page_load"] == [{"value": "0.5–0.9 s", "count": 1}]
+    assert summary["lcp"] == [{"value": "1–2.4 s", "count": 1}]
+    assert summary["cls"] == [{"value": "0.1–0.25", "count": 1}]
+    assert summary["inp"] == [{"value": "250–499 ms", "count": 1}]
+    assert summary["help_load"] == [{"value": "0.5–0.9 s", "count": 1}]
+    assert summary["help_decompress"] == [{"value": "<100 ms", "count": 1}]
+    assert summary["help_render"] == [{"value": "100–249 ms", "count": 1}]
+    assert summary["client_error"] == [{"value": "javascript:TypeError", "count": 1}]
+    database_bytes = statistics_path.read_bytes()
+    assert b"203.0.113.42" not in database_bytes
+    assert b"private/path" not in database_bytes
+    assert b"secret=yes" not in database_bytes
+
+
+def test_hall_of_fame_is_shared_ranked_and_limited(tmp_path):
+    web_dir = tmp_path / "www"
+    docs_dir = tmp_path / "docs"
+    assets_dir = web_dir / "assets"
+    helps_dir = tmp_path / "helps"
+    for directory in (web_dir, docs_dir, assets_dir, helps_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    index_path = web_dir / "index.html"
+    index_path.write_text("index", encoding="utf-8")
+    config = AppConfig(
+        host="127.0.0.1", port=5448, web_dir=web_dir, index_path=index_path,
+        assets_dir=assets_dir, helps_dir=helps_dir, docs_dir=docs_dir,
+        readme_path=tmp_path / "README.md", changelog_path=tmp_path / "CHANGELOG.md",
+        state_dir=tmp_path / "state", virtual_docs=(),
+        statistics_path=tmp_path / "state" / "stats.sqlite3",
+    )
+    client = TestClient(create_app(config))
+
+    for score in range(5, 17):
+        response = client.post(
+            "/api/hall-of-fame/tetris",
+            json={"name": f"Player {score}", "score": score, "note": "L1"},
+        )
+        assert response.status_code == 200
+        assert response.json()["accepted"] is True
+    tetris = client.get("/api/hall-of-fame/tetris").json()["entries"]
+    assert len(tetris) == 10
+    assert [entry["score"] for entry in tetris] == list(range(16, 6, -1))
+    rejected = client.post(
+        "/api/hall-of-fame/tetris", json={"name": "Too low", "score": 1}
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["accepted"] is False
+
+    for score in (25, 18, 31):
+        assert client.post(
+            "/api/hall-of-fame/hanoi", json={"name": "Mario", "score": score}
+        ).status_code == 200
+    hanoi = client.get("/api/hall-of-fame/hanoi").json()["entries"]
+    assert [entry["score"] for entry in hanoi] == [18, 25, 31]
+    assert client.get("/api/hall-of-fame/unknown").status_code == 404
+    assert client.post(
+        "/api/hall-of-fame/tetris", json={"name": "Bad", "score": -1}
+    ).status_code == 422
