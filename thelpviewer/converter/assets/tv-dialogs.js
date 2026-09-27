@@ -13,20 +13,18 @@ const {
     dosColor,
     DOS_COLORS,
     COLOR_GROUPS,
-    TVFrame,
     TVWindow,
+    wfClose,
+    wnNoNumber,
     TVDialog,
     TVView,
     TVRect,
     TVStaticText,
-    TVMarkupView,
     TVLabel,
     TVInputLine,
     TVGroup,
     TVListViewer,
     TVListBox,
-    TVVerticalListViewer,
-    TVVerticalScrollArea,
     TVOutline,
     TVInfoBox,
     TVTerminal,
@@ -43,24 +41,21 @@ const {
     DAYS_IN_MONTH,
     isLeapYear,
     dayOfWeek,
+    measureCells,
     TV_HELP_CONTEXTS,
-    normalizeHelpContext,
     evNothing,
     evMouseDown,
     evKeyDown,
     evCommand,
     evBroadcast,
+    sfVisible,
+    sfActive,
+    sfDisabled,
+    sfModal,
 } = TV;
 
 const {
-    hcApplication,
-    hcSystemMenu,
-    hcHelpFiles,
-    hcDocuments,
     hcSearch,
-    hcGames,
-    hcWindows,
-    hcContextHelp,
     hcAbout,
     hcFileOpen,
     hcChangeDirectory,
@@ -68,312 +63,33 @@ const {
     hcColors,
     hcWidgetGallery,
     hcMidiPlayer,
-    hcHelpViewer,
-    hcDocumentViewer,
-    hcDialog,
     hcCalendar,
     hcAsciiTable,
     hcCalculator,
-    hcScreenSaver,
-    hcPuzzle,
-    hcTetris,
-    hcMines,
-    hcBreakOut,
-    hcSokoban,
-    hcLines,
-    hcReversi,
-    hcLudo,
-    hcMastermind,
-    hcSnake,
-    hcHanoi,
-    hcTron,
+    hcStatistics,
+    hcSystemInformation,
 } = TV_HELP_CONTEXTS;
 
-const TV_CONTEXT_HELP_TOPICS = Object.freeze({
-    [hcApplication]: { title: "THelpViewer", text: "Use the menu bar to open HELP files, documentation, tools and games.\n\nF10 activates the menu bar. F1 opens help for the current view. F6 and Shift-F6 cycle windows." },
-    [hcSystemMenu]: { title: "System menu", text: "The system menu contains About, utilities, Colors, Widget Gallery, screen savers and theme selection." },
-    [hcHelpFiles]: { title: "Help Files", text: "Open installs a HELP or Docs file. Catalog submenus open a source directly. The viewer preserves links between related files when the target exists." },
-    [hcDocuments]: { title: "Documents", text: "Documentation opens in a read-only Editor-style window. Use Ctrl-F to find text and Ctrl-L to find the next occurrence." },
-    [hcSearch]: { title: "Search", text: "Find searches the active HELP or Docs window. Find Again repeats its query. Search Topics searches the current help bundle index." },
-    [hcGames]: { title: "Games", text: "Games share Turbo Vision dialogs, keyboard focus, inactive-window pause policies and a ten-entry Hall of Fame." },
-    [hcWindows]: { title: "Windows", text: "Tile, Cascade and Window List arrange managed windows. F5 zooms, F6 selects the next window and Alt-F3 closes the active target." },
-    [hcContextHelp]: { title: "Context Help", text: "This is THelpViewer's own context-sensitive help. Each view and menu item carries an hc... identifier, following Turbo Vision's helpCtx model." },
-    [hcAbout]: { title: "About", text: "Shows the application version and authors. The version is read from the running package metadata." },
-    [hcFileOpen]: { title: "Open a File", text: "Choose a HELP or Docs file from the two-column list. The down-arrow opens recent files; press it again or Escape to close the history." },
-    [hcChangeDirectory]: { title: "Change Directory", text: "Select a virtual HELP/DOCS directory. Chdir applies it to Open a File, Revert restores the initial path and the arrow opens directory history." },
-    [hcFind]: { title: "Find", text: "Enter text to search in the active HELP or Docs window. The arrow opens previous queries." },
-    [hcColors]: { title: "Colors", text: "Choose a group and item, then edit its DOS foreground/background attribute. Default restores one item; Reset All restores the complete palette." },
-    [hcWidgetGallery]: { title: "Widget Gallery", text: "Exercises shared labels, inputs, lists, clusters, scrollbars, buttons, static text, terminal and message-box components." },
-    [hcMidiPlayer]: { title: "CD/MIDI Player", text: "The compact view contains transport and track selection. More reveals advanced sources and resizes the shared dialog frame." },
-    [hcHelpViewer]: { title: "HELP viewer", text: "Links open topics or external companion HELP files. Use Back, Index, Contents and Search from the status line or menus." },
-    [hcDocumentViewer]: { title: "Document viewer", text: "Markdown is displayed with the read-only Editor palette. The lower-left indicator reports the current line and column." },
-    [hcDialog]: { title: "Dialog", text: "Tab and Shift-Tab move focus. Enter activates the default button and Escape closes the dialog unless the control uses Escape itself." },
-    [hcCalendar]: { title: "Calendar", text: "Browse months and years with the arrow controls. Date calculations use Gregorian leap-year rules." },
-    [hcAsciiTable]: { title: "ASCII Table", text: "Shows character codes and glyphs using the configured DOS code page presentation." },
-    [hcCalculator]: { title: "Calculator", text: "Use number and operation buttons or the keyboard. Escape is reserved by the calculator and does not close it." },
-    [hcScreenSaver]: { title: "Screen saver", text: "Choose a mode from the system menu. Input stops the saver and restores the previously focused control." },
-    [hcPuzzle]: { title: "Puzzle", text: "Move a tile next to the blank square with the mouse or arrow keys. Solve the shuffled 4 x 4 board in as few moves as possible." },
-    [hcTetris]: { title: "Tetris", text: "New starts a game. Use Left/Right to move, Up to rotate, Down to drop faster and P to pause. Pentix toggles the extended pieces." },
-    [hcMines]: { title: "Mines", text: "Reveal safe squares and mark suspected mines. The game pauses while its window is inactive." },
-    [hcBreakOut]: { title: "BreakOut", text: "Move the paddle, keep the ball in play and clear the bricks. The game timer pauses while another window is active." },
-    [hcSokoban]: { title: "Sokoban", text: "Push every crate onto a goal. Arrow keys move the player; crates can be pushed but not pulled." },
-    [hcLines]: { title: "Lines", text: "Move coloured balls to form scoring lines. Selecting and moving a ball consumes a turn unless a line is completed." },
-    [hcReversi]: { title: "Reversi", text: "Place a disc that brackets one or more opposing discs. The player with the most discs when no move remains wins." },
-    [hcLudo]: { title: "Ludo", text: "Roll the die and move a legal piece around the board. Bring all of your pieces home before the other players." },
-    [hcMastermind]: { title: "Mastermind", text: "Build a colour guess and submit it. Feedback reports correct colours in the correct and incorrect positions." },
-    [hcSnake]: { title: "Snake", text: "Use the arrow keys to steer. Eat food to grow without hitting the wall or your own body." },
-    [hcHanoi]: { title: "Tower of Hanoi", text: "Move the stack to another peg without placing a larger disc on a smaller one. Use mouse, keyboard and the move history." },
-    [hcTron]: { title: "Tron Light Cycles", text: "Steer both cycles simultaneously and avoid every trail. The timer pauses while the game window is inactive." },
-});
-
-const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20260921b";
-let contextHelpBundlePromise = null;
-
-function loadContextHelpBundle() {
-    if (!contextHelpBundlePromise) {
-        contextHelpBundlePromise = fetch(TV_CONTEXT_HELP_BUNDLE_URL, { cache: "no-cache" })
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error(`Context help request failed: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then((bundle) => {
-                if (!bundle || bundle.uhf_version !== "2.0" || !bundle.topics) {
-                    throw new Error("Context help is not a UHF 2.0 bundle");
-                }
-                return bundle;
-            });
-    }
-    return contextHelpBundlePromise;
-}
-
-function contextHelpTopic(bundle, helpCtx) {
-    const direct = bundle?.topics?.[String(helpCtx)];
-    if (direct) { return direct; }
-    return Object.values(bundle?.topics || {}).find((topic) =>
-        Array.isArray(topic?.aliases?.ids) && topic.aliases.ids.includes(helpCtx)
-    ) || bundle?.topics?.[String(hcApplication)] || null;
-}
-
-function contextHelpTag(tagBody) {
-    const lowered = tagBody.toLowerCase();
-    if (lowered === "b") { return { name: "b", open: "<b>", close: "</b>", raw: tagBody }; }
-    if (lowered === "i") { return { name: "i", open: "<i>", close: "</i>", raw: tagBody }; }
-    if (lowered === "u") { return { name: "u", open: "<u>", close: "</u>", raw: tagBody }; }
-    const link = tagBody.match(/^link:topic=(-?\d+)$/i);
-    if (link) {
-        return {
-            name: "link",
-            open: `<a href="#" data-tv-context-help-topic="${escapeHtml(link[1])}">`,
-            close: "</a>",
-            raw: tagBody,
-        };
-    }
-    return null;
-}
-
-function renderContextHelpInline(text) {
-    const root = { name: null, open: "", close: "", raw: "", children: [] };
-    const stack = [root];
-    const append = (fragment) => stack[stack.length - 1].children.push(fragment);
-    let index = 0;
-    while (index < text.length) {
-        const open = text.indexOf("[", index);
-        if (open < 0) {
-            append(escapeHtml(text.slice(index)));
-            break;
-        }
-        if (open > index) { append(escapeHtml(text.slice(index, open))); }
-        if (text[open + 1] === "[") {
-            append("[");
-            index = open + 2;
-            continue;
-        }
-        const close = text.indexOf("]", open + 1);
-        if (close < 0) {
-            append(escapeHtml(text.slice(open)));
-            break;
-        }
-        const tagBody = text.slice(open + 1, close);
-        if (tagBody.startsWith("/")) {
-            const name = tagBody.slice(1).toLowerCase();
-            if (stack.length > 1 && stack[stack.length - 1].name === name) {
-                const node = stack.pop();
-                append(node.open + node.children.join("") + node.close);
-            } else {
-                append(escapeHtml(text.slice(open, close + 1)));
-            }
-        } else {
-            const descriptor = contextHelpTag(tagBody);
-            if (descriptor) { stack.push({ ...descriptor, children: [] }); }
-            else { append(escapeHtml(text.slice(open, close + 1))); }
-        }
-        index = close + 1;
-    }
-    while (stack.length > 1) {
-        const node = stack.pop();
-        stack[stack.length - 1].children.push(escapeHtml(`[${node.raw}]`) + node.children.join(""));
-    }
-    return root.children.join("");
-}
-
-function renderContextHelpTopic(topic) {
-    const content = Array.isArray(topic?.content) ? topic.content : [];
-    return content.map((line) => {
-        const raw = String(line || "");
-        if (raw === "[rule]") {
-            return '<div class="tv-context-help-line tv-context-help-rule" aria-hidden="true"></div>';
-        }
-        return `<div class="tv-context-help-line">${raw ? renderContextHelpInline(raw) : "&nbsp;"}</div>`;
-    }).join("");
-}
-
-class TVContextHelpDialog extends TVDialog {
-    constructor() {
-        const headingView = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "context-help-heading", presentation: "context-help-topic" });
-        const scrollHost = new TVMarkupView([TVVerticalScrollArea.renderMarkup({
-            rootClass: "tv-context-help-scroll",
-            rootAttrs: { "data-tv-context-help-scroll": true },
-            viewportClass: "tv-context-help-viewport",
-            scrollbarClass: "tv-context-help-scrollbar",
-        })]);
-        const backButton = (new TVButton(new TVRect(), "", "context-help-back", bfNormal).setState("disabled", true)).setDrawOptions({ labelMarkup: "◄ Back" });
-        const contentsButton = (new TVButton(new TVRect(), "", "context-help-contents", bfNormal)).setDrawOptions({ labelMarkup: "Contents" });
-        const helpMain = (new TVGroup(new TVRect()).insertAll([
-                headingView,
-                scrollHost,
-                (new TVGroup(new TVRect()).insertAll([
-                        backButton,
-                        contentsButton,
-                        new TVStaticText(new TVRect(), "F1 Help"),
-                    ])).setDrawOptions({ presentation: "context-help-nav" }),
-            ])).setDrawOptions({ presentation: "context-help-main" });
-        super(new TVRect(0, 0, 72, 24), "THelpViewer Help", {
-            viewName: "context-help",
-            helpCtx: hcContextHelp,
-            content: helpMain,
-            modal: true,
-            palette: "help",
-            defaultButtonSelector: "",
-        });
-        this.headingView = headingView;
-        this.scrollArea = TVVerticalScrollArea.bindRendered(
-            new TVVerticalScrollArea(new TVRect()),
-            scrollHost,
-        );
-        this.viewport = this.scrollArea.viewport;
-        if (this.viewport) { this.viewport.tabIndex = 0; }
-        this.backButton = backButton;
-        this.contentsButton = contentsButton;
-        this.context = hcApplication;
-        this.bundle = null;
-        this.topicHistory = [];
-        this.bindCommonClose(() => this.close());
-        this.bindDrag();
-        this.viewport?.addEventListener("click", (event) => {
-            const link = event.target.closest("[data-tv-context-help-topic]");
-            if (!link || !this.viewport.contains(link)) { return; }
-            event.preventDefault();
-            this.showTopic(link.dataset.tvContextHelpTopic, { remember: true });
-        });
-    }
-
-    handleEvent(event) {
-        super.handleEvent(event);
-        if (event.what !== evCommand) { return; }
-        if (event.command === "context-help-back") { this.goBack(); }
-        else if (event.command === "context-help-contents") { this.showTopic(hcApplication, { remember: true }); }
-        else { return; }
-        this.clearEvent(event);
-    }
-
-    fallbackTopic(helpCtx) {
-        const fallback = TV_CONTEXT_HELP_TOPICS[helpCtx] || TV_CONTEXT_HELP_TOPICS[hcApplication];
-        return {
-            id: helpCtx,
-            title: fallback.title,
-            content: fallback.text.split("\n"),
-        };
-    }
-
-    showTopic(helpCtx, { remember = false } = {}) {
-        const context = normalizeHelpContext(helpCtx, hcApplication);
-        if (remember && this.context !== context) { this.topicHistory.push(this.context); }
-        this.context = context;
-        const topic = contextHelpTopic(this.bundle, context) || this.fallbackTopic(context);
-        this.headingView.setText(topic.title || "Help");
-        if (this.viewport) {
-            this.viewport.innerHTML = renderContextHelpTopic(topic);
-            this.viewport.scrollTop = 0;
-        }
-        this.backButton.setState("disabled", this.topicHistory.length === 0);
-        window.requestAnimationFrame(() => this.scrollArea?.update());
-    }
-
-    goBack() {
-        const previous = this.topicHistory.pop();
-        if (previous == null) { return; }
-        this.showTopic(previous);
-    }
-
-    open() {
-        this.topicHistory = [];
-        this.showTopic(this.context);
-        super.open();
-        this.viewport?.focus();
-        void loadContextHelpBundle()
-            .then((bundle) => {
-                this.bundle = bundle;
-                this.showTopic(this.context);
-            })
-            .catch((error) => {
-                console.error("Failed to load context help bundle", error);
-            });
-    }
-
-    openContext(helpCtx = hcApplication) {
-        this.context = normalizeHelpContext(helpCtx, hcApplication);
-        this.open();
-    }
-
-    captureUrlState() {
-        return { topic: this.context };
-    }
-
-    restoreUrlState(state) {
-        this.context = normalizeHelpContext(state?.topic, hcApplication);
-        this.topicHistory = [];
-        this.showTopic(this.context);
-    }
-
-    destroy() {
-        this.scrollArea?.destroy();
-        this.scrollArea = null;
-        super.destroy();
-    }
-}
-
 class TVAboutDialog extends TVDialog {
+    static viewName = "about";
+
     constructor() {
         const body = document.body;
         const siteName = body.dataset.tvSiteName || "THelpViewer";
         const generatorVersion = body.dataset.tvGeneratorVersion || "unknown";
         const generatorAuthors = body.dataset.tvAuthors || "Mario Lacko + Copilot + Codex";
-        const okButton = new TVButton(new TVRect(9, 9, (9) + (10), 9), '~O~K', "about-ok", bfDefault);
-        const aboutMain = new TVGroup(new TVRect(0, 0, (0) + (28), (0) + (14))).insertAll([
-                (new TVStaticText(new TVRect(0, 1, (0) + (28), 1), siteName)).setDrawOptions({ align: "center", title: true }),
-                (new TVStaticText(new TVRect(0, 3, (0) + (28), 3), `Version ${generatorVersion}`)).setDrawOptions({ align: "center" }),
-                (new TVStaticText(new TVRect(0, 5, (0) + (28), 5), "Copyright (c) 2026")).setDrawOptions({ align: "center" }),
-                (new TVStaticText(new TVRect(0, 7, (0) + (28), 7), generatorAuthors)).setDrawOptions({ align: "center" }),
+        const okButton = new TVButton(new TVRect(9, 9, 19, 11), '~O~K', "about-ok", bfDefault);
+        const aboutMain = new TVGroup(new TVRect(0, 0, 28, 11)).insertAll([
+                new TVStaticText(new TVRect(0, 1, 28, 2), `\x03${siteName}`),
+                new TVStaticText(new TVRect(0, 3, 28, 4), `\x03Version ${generatorVersion}`),
+                new TVStaticText(new TVRect(0, 5, 28, 6), "\x03Copyright (c) 2026"),
+                new TVStaticText(new TVRect(0, 7, 28, 8), `\x03${generatorAuthors}`),
                 okButton,
             ]);
 
-        super(new TVRect(0, 0, 32, 13), "About", {
-            viewName: "about",
-            helpCtx: hcAbout,
-            content: aboutMain,
-        });
+        super(new TVRect(0, 0, 32, 13), "About");
+        this.setHelpCtx(hcAbout);
+        this.insert(aboutMain);
         this.okButton = okButton;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
@@ -389,76 +105,66 @@ class TVAboutDialog extends TVDialog {
 }
 
 class TVViewGalleryDialog extends TVDialog {
+    static viewName = "widget-gallery";
+
     constructor() {
-        const nameLabel = (new TVLabel(new TVRect(), "~N~ame:")).setDrawOptions({ hotkey: true });
-        const nameInput = (new TVInputLine(new TVRect(), 255).setData("Turbo Vision")).setDrawOptions({ autocomplete: "off", viewName: 'gallery-name' });
-        nameLabel.link = nameInput;
-        const checks = (new TVCheckBoxes(new TVRect(), [
+        const nameInput = new TVInputLine(new TVRect(10, 1, 38, 2), 255).setData("Turbo Vision");
+        const nameLabel = new TVLabel(new TVRect(2, 1, 10, 2), "~N~ame:", nameInput);
+        const checks = new TVCheckBoxes(new TVRect(2, 4, 31, 7), [
                 { label: "~F~rames", value: "frames", checked: true },
                 { label: "~S~hadows", value: "shadows", checked: true },
                 { label: "D~i~sabled", value: "disabled", disabled: true },
-            ])).setDrawOptions({ viewName: "gallery-checks" });
-        const radios = (new TVRadioButtons(new TVRect(), [
+            ]);
+        const radios = new TVRadioButtons(new TVRect(2, 10, 31, 13), [
                 { label: "~T~ext", value: "text", checked: true },
                 { label: "~G~raphics", value: "graphics" },
                 { label: "~M~ono", value: "mono", disabled: true },
-            ])).setDrawOptions({ viewName: "gallery-radios" });
-        const multiChecks = (new TVMultiCheckBoxes(new TVRect(), [
+            ]);
+        const multiChecks = new TVMultiCheckBoxes(new TVRect(2, 16, 31, 19), [
                 { label: "~O~ff / On / Auto", value: "mode", state: 0 },
                 { label: "~R~ead / Write / Both", value: "access", state: 1 },
                 { label: "D~i~sabled", value: "disabled", state: 2, disabled: true },
-            ])).setDrawOptions({ viewName: "gallery-multichecks" });
-        const staticText = (new TVStaticText(new TVRect(), "Static text · label hotkeys · disabled states")).setDrawOptions({ viewName: "gallery-static" });
-        const terminal = (new TVTerminal(new TVRect(0, 0, 28, 3), 50)).setDrawOptions({ viewName: "gallery-terminal" });
-        const infoBox = (new TVInfoBox(new TVRect(0, 0, (0) + (30), 0), "Event log", [terminal])).setDrawOptions({ viewName: "gallery-status" });
-        const okButton = new TVButton(new TVRect(), "~O~K", "gallery-ok", bfDefault);
-        const applyButton = new TVButton(new TVRect(), "~A~pply", "gallery-apply", bfNormal);
-        const messageButton = new TVButton(new TVRect(), "~M~essage", "gallery-message", bfNormal);
-        const clearLogButton = new TVButton(new TVRect(), "C~l~ear log", "gallery-clear-log", bfNormal);
-        const buttons = (new TVGroup(new TVRect()).insertAll([
-                okButton,
-                applyButton,
-                messageButton,
-                clearLogButton,
-                new TVButton(new TVRect(), "Disabled", "", bfNormal).setState("disabled", true),
-            ])).setDrawOptions({ presentation: "widget-gallery-buttons" });
-        const galleryPanel = (heading, child, role = "") => (new TVGroup(new TVRect()).insertAll([
-                (new TVStaticText(new TVRect(), heading)).setDrawOptions({ presentation: "widget-gallery-heading" }),
-                child,
-            ])).setDrawOptions({ presentation: ["widget-gallery-panel", role].filter(Boolean).join(" ") });
-        const listHost = new TVMarkupView([TVVerticalListViewer.renderMarkup({
-            rootClass: "tv-widget-gallery-listviewer",
-            rootAttrs: { "data-tv-gallery-list": true },
-            viewportClass: "tv-widget-gallery-list",
-        })]);
-        const galleryMain = (new TVGroup(new TVRect()).insertAll([
-                (new TVGroup(new TVRect()).insertAll([nameLabel, nameInput])).setDrawOptions({ presentation: "widget-gallery-field" }),
-                (new TVGroup(new TVRect()).insertAll([
-                        galleryPanel("Check boxes", checks),
-                        galleryPanel("Radio buttons", radios),
-                        galleryPanel("Multi check boxes", multiChecks),
-                        galleryPanel(
-                            "List viewer",
-                            listHost,
-                        ),
-                        galleryPanel("Info box", infoBox, "widget-gallery-info"),
-                        galleryPanel("Static text", staticText, "widget-gallery-static"),
-                    ])).setDrawOptions({ presentation: "widget-gallery-samples" }),
-                buttons,
-            ])).setDrawOptions({ presentation: "widget-gallery-main" });
+            ]);
+        const staticText = new TVStaticText(
+            new TVRect(2, 20, 64, 21),
+            "Static text · label hotkeys · disabled states",
+        );
+        const terminal = new TVTerminal(new TVRect(0, 1, 62, 4), 50);
+        const infoBox = new TVInfoBox(new TVRect(2, 21, 64, 26), "Event log", [terminal]);
+        const okButton = new TVButton(new TVRect(2, 27, 12, 29), "~O~K", "gallery-ok", bfDefault);
+        const applyButton = new TVButton(new TVRect(13, 27, 24, 29), "~A~pply", "gallery-apply", bfNormal);
+        const messageButton = new TVButton(new TVRect(25, 27, 38, 29), "~M~essage", "gallery-message", bfNormal);
+        const clearLogButton = new TVButton(new TVRect(39, 27, 52, 29), "C~l~ear log", "gallery-clear-log", bfNormal);
+        const disabledButton = new TVButton(new TVRect(53, 27, 64, 29), "Disabled", "", bfNormal)
+            .setState(sfDisabled, true);
+        const listBox = new TVListBox(new TVRect(34, 4, 64, 10));
+        const galleryMain = new TVGroup(new TVRect(0, 0, 66, 30)).insertAll([
+            nameLabel,
+            nameInput,
+            new TVStaticText(new TVRect(2, 3, 31, 4), "Check boxes"),
+            checks,
+            new TVStaticText(new TVRect(2, 9, 31, 10), "Radio buttons"),
+            radios,
+            new TVStaticText(new TVRect(2, 15, 31, 16), "Multi check boxes"),
+            multiChecks,
+            new TVStaticText(new TVRect(34, 3, 64, 4), "List viewer"),
+            listBox,
+            infoBox,
+            staticText,
+            okButton,
+            applyButton,
+            messageButton,
+            clearLogButton,
+            disabledButton,
+        ]);
 
-        super(new TVRect(0, 0, 68, 29), "Widget Gallery", {
-            viewName: "widget-gallery",
-            helpCtx: hcWidgetGallery,
-            content: galleryMain,
-        });
+        super(new TVRect(0, 0, 68, 32), "Widget Gallery");
+        this.setHelpCtx(hcWidgetGallery);
+        this.insert(galleryMain);
         this.nameInput = nameInput;
         this.checks = checks;
         this.radios = radios;
-        this.multiChecks = multiChecks.bind(
-            multiChecks.root,
-            (option, state) => this.setStatus(`${option.value}: state ${state}`),
-        );
+        this.multiChecks = multiChecks;
         this.okButton = okButton;
         this.applyButton = applyButton;
         this.messageButton = messageButton;
@@ -466,10 +172,7 @@ class TVViewGalleryDialog extends TVDialog {
         this.infoBox = infoBox.resolve(this.dialog);
         this.terminal = terminal.bind(terminal.root);
         this.messageBox = null;
-        this.listBox = TVVerticalListViewer.bindRendered((new TVVerticalListViewer(new TVRect())).setDrawOptions({
-            itemClassName: "tv-widget-gallery-list-item",
-            itemAttrName: "data-tv-gallery-list-index",
-        }), listHost);
+        this.listBox = listBox;
         this.listBox.setItems([
             "TDialog",
             "TInputLine",
@@ -507,6 +210,11 @@ class TVViewGalleryDialog extends TVDialog {
             } else if (event.infoPtr === this.checks || event.infoPtr === this.radios) {
                 const input = event.nativeEvent.target.closest("input");
                 if (input) { this.setStatus(`${input.value}: ${input.checked ? "on" : "off"}`); }
+            } else if (event.infoPtr === this.multiChecks) {
+                const item = event.nativeEvent.target.closest("[data-tv-multicheck-index]");
+                const index = Number.parseInt(item?.dataset.tvMulticheckIndex || "", 10);
+                const option = this.multiChecks.options[index];
+                if (option) { this.setStatus(`${option.value}: state ${option.state}`); }
             } else { return; }
             this.clearEvent(event);
             return;
@@ -561,7 +269,7 @@ function normalizeFileDialogEntries(entries = []) {
     }).filter((entry) => entry.file && entry.fileName);
 }
 
-class TVHistory {
+class TVHistoryStore {
     constructor(storageKey, maxItems = 10) {
         this.storageKey = storageKey;
         this.maxItems = maxItems;
@@ -594,143 +302,145 @@ class TVHistory {
     }
 }
 
-class TVHistoryViewer extends TVVerticalListViewer {}
+class TVHistoryViewer extends TVListBox {
+    constructor(bounds, historyId) {
+        super(bounds);
+        this.historyId = String(historyId || "file-open");
+    }
+
+    _semanticName() { return `${this.historyId}-history-list`; }
+
+    defaultContent(item, index) {
+        const text = item?.virtualPath ?? item?.displayPath ?? item?.value ?? item?.label;
+        return escapeHtml(text == null ? String(index) : String(text));
+    }
+}
+
+class TVHistory extends TVButton {
+    constructor(bounds, link, historyId) {
+        if (!(link instanceof TVInputLine)) {
+            throw new TypeError("TVHistory expects a TVInputLine link");
+        }
+        const normalizedId = String(historyId || "");
+        const command = normalizedId.includes("file-open")
+            ? "file-open-history"
+            : normalizedId.includes("directory")
+                ? "change-dir-history"
+                : "find-history";
+        super(bounds, "", command, bfNormal);
+        this.link = link;
+        this.historyId = normalizedId || "thelp:history";
+        this.store = new TVHistoryStore(this.historyId);
+        this.setCommandData({ expanded: false });
+        this.setState(sfDisabled, true);
+        this.window = null;
+    }
+
+    keys() { return this.store.keys(); }
+    entries(items, keyFor) { return this.store.entries(items, keyFor); }
+    remember(key) { this.store.remember(key); }
+
+    bindWindow(popup, items, onSelect) {
+        if (!(popup instanceof TVHistoryWindow)) {
+            throw new TypeError("TVHistory.bindWindow expects TVHistoryWindow");
+        }
+        this.window = popup.connect(this, items, onSelect);
+        return this.window;
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && event.infoPtr === this && event.command === this.command && this.window) {
+            this.window.toggle();
+            this.clearEvent(event);
+        }
+    }
+}
 
 class TVHistoryWindow extends TVWindow {
-    static triggerView({ name = "", ariaLabel = "History" } = {}) {
-        return (new TVButton(new TVRect(), "", name, bfNormal).setState("disabled", true)).setDrawOptions({ labelMarkup: [
-                '<span class="tv-file-open-history-side" aria-hidden="true">▐</span>',
-                '<span class="tv-file-open-history-arrow" aria-hidden="true">↓</span>',
-                '<span class="tv-file-open-history-side" aria-hidden="true">▌</span>',
-            ].join(""), ariaLabel: ariaLabel, ariaExpanded: false });
+    constructor(bounds, historyId) {
+        super(bounds, "", wnNoNumber);
+        this.flags = wfClose;
+        this.historyId = String(historyId || "file-open");
+        this.viewer = new TVHistoryViewer(new TVRect(
+            0,
+            0,
+            Math.max(0, bounds.width - 2),
+            Math.max(0, bounds.height - 2),
+        ), this.historyId);
+        this.insert(this.viewer);
+        this.setState(sfVisible, false);
+        this.buttonView = null;
+        this.items = () => [];
+        this.onSelect = null;
+        this.bound = false;
     }
 
-    static view({ popupRole = "", popupName = "", listAttrs = {} } = {}) {
-        const viewerMarkup = TVVerticalListViewer.renderMarkup({
-            rootClass: "tv-file-open-history-listviewer",
-            rootAttrs: listAttrs,
-            viewportClass: "tv-file-open-history-list",
-        });
-        return (new TVGroup(new TVRect()).insertAll([new TVMarkupView([[
-                '<div class="tv-history-frame-row tv-history-frame-top">',
-                '<span class="tv-history-frame-corner" aria-hidden="true">╔</span>',
-                '<span class="tv-history-frame-fill" data-tv-border-fill="═" aria-hidden="true"></span>',
-                '<span class="tv-history-frame-corner" aria-hidden="true">╗</span>',
-                TVFrame.titleControlMarkup({
-                    className: "tv-history-close-control",
-                    glyph: "■",
-                    glyphClass: "tv-close-glyph",
-                    attrs: {
-                        "data-tv-history-close": true,
-                        "aria-label": "Close history",
-                    },
-                }),
-                '</div>',
-                '<div class="tv-history-client">',
-                '<span class="tv-history-frame-side" data-tv-border-side="║" aria-hidden="true"></span>',
-                viewerMarkup,
-                '</div>',
-                '<div class="tv-history-frame-row tv-history-frame-bottom" aria-hidden="true">',
-                '<span class="tv-history-frame-corner">╚</span>',
-                '<span class="tv-history-frame-fill" data-tv-border-fill="═"></span>',
-                '<span class="tv-history-frame-corner">╝</span>',
-                '</div>',
-            ].join("")])])).setDrawOptions({ presentation: ["file-open-history-popup", "history-window", popupRole].filter(Boolean).join(" "), viewName: popupName, hidden: true });
-    }
+    _semanticName() { return `${this.historyId}-history-popup`; }
 
-    constructor({ button, popup, viewer, items = () => [], onSelect = null } = {}) {
-        super(new TVRect(), "History");
-        this.buttonView = button instanceof TVView ? button : null;
-        this.popupView = popup instanceof TVView ? popup : null;
-        this.button = this.buttonView?.root || null;
-        this.popup = this.popupView?.root || null;
-        this.bindRoot(this.popup);
-        this.viewer = viewer;
-        if (this.viewer && !this.viewer.root) {
-            this.viewer.bindRoot(this.popup?.querySelector(".tv-file-open-history-listviewer") || null);
-        }
-        this.closeButton = this.popup?.querySelector("[data-tv-history-close]") || null;
+    connect(button, items = () => [], onSelect = null) {
+        this.buttonView = button instanceof TVHistory ? button : null;
         this.items = items;
         this.onSelect = onSelect;
-        this.ignoreNextClick = false;
-        this.button?.addEventListener("mousedown", (event) => {
-            if (event.button !== 0) { return; }
-            event.preventDefault();
-            this.ignoreNextClick = true;
-            this.toggle();
-        });
-        this.button?.addEventListener("keydown", (event) => {
-            if (event.key === "Enter" || event.key === " ") { this.ignoreNextClick = false; }
-        });
-        this.button?.addEventListener("click", () => {
-            // Pointer activation is handled on mousedown, like Turbo Vision's
-            // evMouseDown path. A click without mousedown is keyboard input.
-            if (this.ignoreNextClick) {
-                this.ignoreNextClick = false;
-                return;
-            }
-            this.toggle();
-        });
-        this.closeButton?.addEventListener("mousedown", (event) => event.stopPropagation());
-        this.closeButton?.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            this.hide({ restoreFocus: true });
-        });
+        if (this.bound) { return this; }
+        this.bound = true;
         document.addEventListener("mousedown", (event) => {
             if (!this.isOpen()) { return; }
-            if (this.button?.contains(event.target) || this.popup?.contains(event.target)) { return; }
+            if (this.buttonView?.root?.contains(event.target) || this.root?.contains(event.target)) { return; }
             this.hide();
         });
-        this.viewer?.bind({
+        this.viewer.bind({
             onSelect: (item) => this.onSelect?.(item, false),
             onActivate: (item) => this.onSelect?.(item, true),
         });
         this._setOpen(false);
+        this.refresh();
+        return this;
     }
 
     refresh() {
         const items = this.items();
-        this.viewer?.setItems(items, items.length ? 0 : -1);
-        if (this.button) { this.button.disabled = false; }
+        this.viewer.setItems(items, items.length ? 0 : -1);
+        this.buttonView?.setState(sfDisabled, false);
         return items;
     }
 
     isOpen() {
-        return Boolean(this.popup && !this.popup.hidden);
+        return Boolean(this.root && !this.root.hidden);
     }
 
     _setOpen(open) {
-        if (this.popup) {
-            this.popup.hidden = !open;
-            this.popup.setAttribute("aria-hidden", open ? "false" : "true");
+        if (this.root) {
+            this.root.hidden = !open;
+            this.root.setAttribute("aria-hidden", open ? "false" : "true");
         }
-        this.button?.setAttribute("aria-expanded", open ? "true" : "false");
+        this.buttonView?.root?.setAttribute("aria-expanded", open ? "true" : "false");
+        if (this.buttonView) { this.buttonView.commandData.expanded = open; }
     }
 
     show() {
-        if (!this.popup) { return false; }
-        const items = this.refresh();
+        if (!this.root) { return false; }
+        this.refresh();
         this._setOpen(true);
-        fillBorders(this.popup);
+        fillBorders(this.root);
         window.requestAnimationFrame(() => {
-            this.viewer?.updateScrollbar();
-            const focusTarget = this.viewer?.selectedElement() || this.closeButton;
-            focusTarget?.focus();
+            this.viewer.updateScrollbar();
+            this.viewer.selectedElement()?.focus();
         });
         return true;
     }
 
     toggle() {
-        if (!this.popup) { return; }
         if (this.isOpen()) { this.hide(); }
         else { this.show(); }
     }
 
     hide({ restoreFocus = false } = {}) {
         this._setOpen(false);
-        if (restoreFocus) { this.button?.focus(); }
+        if (restoreFocus) { this.buttonView?.focus(); }
     }
+
+    close() { this.hide({ restoreFocus: true }); }
 
     handleEscape(event) {
         if (event.key !== "Escape" || !this.isOpen()) { return false; }
@@ -742,6 +452,8 @@ class TVHistoryWindow extends TVWindow {
 }
 
 class TVFileList extends TVListBox {
+    static viewName = "file-open-files";
+
     constructor(bounds, numCols = 2) {
         super(bounds, numCols);
         this.rows = 8;
@@ -754,22 +466,24 @@ class TVFileList extends TVListBox {
     }
 
     firstColumn() {
-        if (!this.root || !this.root.clientWidth) { return 0; }
-        const columnWidth = this.root.clientWidth / 2;
-        return Math.max(0, Math.round(this.root.scrollLeft / columnWidth));
+        const viewport = this.scrollViewport;
+        if (!viewport || !viewport.clientWidth) { return 0; }
+        const columnWidth = viewport.clientWidth / 2;
+        return Math.max(0, Math.round(viewport.scrollLeft / columnWidth));
     }
 
     scrollColumns(delta) {
-        if (!this.root || !this.items.length) { return; }
+        const viewport = this.scrollViewport;
+        if (!viewport || !this.items.length) { return; }
         const columns = Math.ceil(this.items.length / this.rows);
         const maxColumn = Math.max(0, columns - 2);
         const nextColumn = Math.min(maxColumn, Math.max(0, this.firstColumn() + delta));
-        this.root.scrollLeft = nextColumn * (this.root.clientWidth / 2);
+        viewport.scrollLeft = nextColumn * (viewport.clientWidth / 2);
         if (this.onViewportChange) { this.onViewportChange(); }
     }
 
     ensureSelectionVisible() {
-        if (!this.root || this.selectedIndex < 0) { return; }
+        if (!this.scrollViewport || this.selectedIndex < 0) { return; }
         const column = Math.floor(this.selectedIndex / this.rows);
         const firstColumn = this.firstColumn();
         if (column < firstColumn) {
@@ -824,59 +538,49 @@ class TVFileList extends TVListBox {
     }
 }
 
-const TVFileListBox = TVFileList;
-
 class TVFileOpenDialog extends TVDialog {
-    constructor() {
-        const nameLabel = (new TVLabel(new TVRect(), "~N~ame")).setDrawOptions({ hotkey: true });
-        const nameInput = (new TVInputLine(new TVRect(), 255).setData("*.*")).setDrawOptions({ autocomplete: "off", spellcheck: "false", viewName: 'file-open-name' });
-        nameLabel.link = nameInput;
-        const filesLabel = (new TVLabel(new TVRect(), "~F~iles")).setDrawOptions({ hotkey: true });
-        const openButton = new TVButton(new TVRect(), "~O~pen", "file-open-confirm", bfDefault);
-        const cancelButton = new TVButton(new TVRect(), "Cancel", "file-open-cancel", bfNormal);
-        const historyButton = TVHistoryWindow.triggerView({ name: "file-open-history" });
-        const fileListHost = (new TVGroup(new TVRect()).insertAll([])).setDrawOptions({ presentation: "file-open-file-list", viewName: "file-open-files" });
-        const scrollLeftButton = (new TVButton(new TVRect(), "", "file-open-scroll-left", bfNormal)).setDrawOptions({ labelMarkup: escapeHtml(displayCp437Char(17)), tabIndex: -1 });
-        const scrollTrack = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "file-open-scroll-track" });
-        const scrollRightButton = (new TVButton(new TVRect(), "", "file-open-scroll-right", bfNormal)).setDrawOptions({ labelMarkup: escapeHtml(displayCp437Char(16)), tabIndex: -1 });
-        const pathLabel = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "file-open-path" });
-        const detailLabel = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "file-open-detail" });
-        const historyPopup = TVHistoryWindow.view({
-            popupName: "file-open-history-popup",
-            listAttrs: { "data-tv-file-open-history-list": true },
-        });
-        const fileOpenMain = (new TVGroup(new TVRect()).insertAll([
-                (new TVGroup(new TVRect()).insertAll([nameLabel])).setDrawOptions({ presentation: "file-open-name-label" }),
-                (new TVGroup(new TVRect()).insertAll([nameInput])).setDrawOptions({ presentation: "file-open-name-input" }),
-                historyButton,
-                (new TVGroup(new TVRect()).insertAll([filesLabel])).setDrawOptions({ presentation: "file-open-files-label" }),
-                fileListHost,
-                (new TVGroup(new TVRect()).insertAll([
-                        scrollLeftButton,
-                        scrollTrack,
-                        scrollRightButton,
-                    ])).setDrawOptions({ presentation: "file-open-hscroll", viewName: "file-open-hscroll", ariaHidden: true }),
-                (new TVGroup(new TVRect()).insertAll([openButton])).setDrawOptions({ presentation: "file-open-open-button" }),
-                (new TVGroup(new TVRect()).insertAll([cancelButton])).setDrawOptions({ presentation: "file-open-cancel-button" }),
-                (new TVGroup(new TVRect()).insertAll([
-                        pathLabel,
-                        detailLabel,
-                    ])).setDrawOptions({ presentation: "file-open-info" }),
-                historyPopup,
-            ])).setDrawOptions({ presentation: "file-open-main" });
+    static viewName = "file-open";
 
-        super(new TVRect(0, 0, 49, 19), "Open a File", {
-            viewName: "file-open",
-            helpCtx: hcFileOpen,
-            content: fileOpenMain,
-            modal: true,
-        });
+    constructor() {
+        const nameInput = new TVInputLine(new TVRect(2, 2, 30, 3), 255).setData("*.*");
+        const nameLabel = new TVLabel(new TVRect(1, 1, 12, 2), "~N~ame", nameInput);
+        const filesLabel = new TVLabel(new TVRect(1, 4, 12, 5), "~F~iles");
+        const openButton = new TVButton(new TVRect(34, 2, 45, 4), "~O~pen", "file-open-confirm", bfDefault);
+        const cancelButton = new TVButton(new TVRect(34, 5, 45, 7), "Cancel", "file-open-cancel", bfNormal);
+        const historyButton = new TVHistory(new TVRect(30, 2, 33, 3), nameInput, "thelp:file-open-history");
+        const fileList = new TVFileList(new TVRect(2, 5, 33, 13), 2);
+        const scrollLeftButton = new TVButton(new TVRect(2, 13, 3, 14), displayCp437Char(17), "file-open-scroll-left", bfNormal);
+        const scrollTrack = new TVStaticText(new TVRect(3, 13, 32, 14), "");
+        const scrollRightButton = new TVButton(new TVRect(32, 13, 33, 14), displayCp437Char(16), "file-open-scroll-right", bfNormal);
+        const pathLabel = new TVStaticText(new TVRect(0, 15, 47, 16), "");
+        const detailLabel = new TVStaticText(new TVRect(0, 16, 47, 17), "");
+        const historyPopup = new TVHistoryWindow(new TVRect(0, 0, 32, 8), "file-open");
+        const fileOpenMain = new TVGroup(new TVRect(0, 0, 47, 17)).insertAll([
+            nameLabel,
+            nameInput,
+            historyButton,
+            filesLabel,
+            fileList,
+            scrollLeftButton,
+            scrollTrack,
+            scrollRightButton,
+            openButton,
+            cancelButton,
+            pathLabel,
+            detailLabel,
+            historyPopup,
+        ]);
+
+        super(new TVRect(0, 0, 49, 19), "Open a File");
+        this.setHelpCtx(hcFileOpen);
+        this.insert(fileOpenMain);
+        this.setState(sfModal, true);
         this.entries = [];
         this.configured = false;
         this.currentDirectory = "";
         this.currentItems = [];
         this.onOpen = null;
-        this.history = new TVHistory("thelp:file-open-history");
+        this.history = historyButton;
         this.nameInput = nameInput;
         this.pathLabel = pathLabel;
         this.detailLabel = detailLabel;
@@ -887,28 +591,18 @@ class TVFileOpenDialog extends TVDialog {
         this.scrollLeftButton = scrollLeftButton;
         this.scrollRightButton = scrollRightButton;
         this.scrollTrack = scrollTrack;
-        this.fileList = (new TVFileList(new TVRect(), 2)).setDrawOptions({
-            itemClassName: "tv-file-open-list-item",
-            itemAttrName: "data-tv-file-open-file-index",
-            renderItemContent: (item) => escapeHtml(item.label),
-        }).bindRoot(fileListHost.root);
+        this.fileList = fileList;
         this.fileList.onViewportChange = () => this.updateHorizontalScrollbar();
-        this.historyList = (new TVHistoryViewer(new TVRect())).setDrawOptions({
-            itemClassName: "tv-file-open-history-item",
-            itemAttrName: "data-tv-file-open-history-index",
-            renderItemContent: (entry) => escapeHtml(entry.virtualPath),
-        });
+        this.historyList = historyPopup.viewer;
         this.fileList.bind({
             onSelect: (item) => this.selectItem(item),
             onActivate: (item) => this.activateItem(item),
         });
-        this.historyWindow = new TVHistoryWindow({
-            button: this.historyButton,
-            popup: this.historyPopup,
-            viewer: this.historyList,
-            items: () => this.historyEntries(),
-            onSelect: (entry, activate) => this.selectHistory(entry, activate),
-        });
+        this.historyWindow = this.historyButton.bindWindow(
+            this.historyPopup,
+            () => this.historyEntries(),
+            (entry, activate) => this.selectHistory(entry, activate),
+        );
         this.bindCommonClose(() => this.close());
         this.bindDrag();
         this.bindFileOpen();
@@ -930,6 +624,10 @@ class TVFileOpenDialog extends TVDialog {
 
     handleEvent(event) {
         super.handleEvent(event);
+        if (event.what === evKeyDown && this.historyWindow.handleEscape(event.nativeEvent)) {
+            this.clearEvent(event);
+            return;
+        }
         if (event.what === evCommand) {
             if (event.command === "file-open-confirm") { this.openSelected(); }
             else if (event.command === "file-open-cancel") { this.close(); }
@@ -977,11 +675,6 @@ class TVFileOpenDialog extends TVDialog {
     close() {
         this.hideHistory();
         super.close();
-    }
-
-    onDialogKeyDown(event) {
-        if (this.historyWindow.handleEscape(event)) { return; }
-        super.onDialogKeyDown(event);
     }
 
     directoryExists(path) {
@@ -1174,55 +867,43 @@ class TVFileOpenDialog extends TVDialog {
 }
 
 class TVChangeDirectoryDialog extends TVDialog {
-    constructor() {
-        const directoryLabel = (new TVLabel(new TVRect(), "~D~irectory")).setDrawOptions({ hotkey: true });
-        const directoryInput = (new TVInputLine(new TVRect(), 255).setData("")).setDrawOptions({ autocomplete: "off", spellcheck: "false", viewName: 'change-dir-path' });
-        directoryLabel.link = directoryInput;
-        const treeLabel = (new TVLabel(new TVRect(), "Directory ~t~ree")).setDrawOptions({ hotkey: true });
-        const changeButton = new TVButton(new TVRect(), "~C~hdir", "change-dir-confirm", bfDefault);
-        const revertButton = new TVButton(new TVRect(), "~R~evert", "change-dir-revert", bfNormal);
-        const cancelButton = new TVButton(new TVRect(), "Cancel", "change-dir-cancel", bfNormal);
-        const historyButton = TVHistoryWindow.triggerView({
-            name: "change-dir-history",
-            ariaLabel: "Directory history",
-        });
-        const directoryListHost = new TVMarkupView([TVVerticalListViewer.renderMarkup({
-            rootClass: "tv-change-dir-listviewer",
-            rootAttrs: { "data-tv-change-dir-list": true },
-            viewportClass: "tv-change-dir-list",
-        })]);
-        const detailView = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "change-dir-detail", presentation: "change-dir-detail" });
-        const historyPopup = TVHistoryWindow.view({
-            popupRole: "change-dir-history-popup",
-            popupName: "change-dir-history-popup",
-            listAttrs: { "data-tv-change-dir-history-list": true },
-        });
-        const changeDirectoryMain = (new TVGroup(new TVRect()).insertAll([
-                (new TVGroup(new TVRect()).insertAll([directoryLabel])).setDrawOptions({ presentation: "change-dir-path-label" }),
-                (new TVGroup(new TVRect()).insertAll([directoryInput])).setDrawOptions({ presentation: "change-dir-path-input" }),
-                historyButton,
-                (new TVGroup(new TVRect()).insertAll([treeLabel])).setDrawOptions({ presentation: "change-dir-tree-label" }),
-                directoryListHost,
-                (new TVGroup(new TVRect()).insertAll([changeButton])).setDrawOptions({ presentation: "change-dir-confirm-button" }),
-                (new TVGroup(new TVRect()).insertAll([revertButton])).setDrawOptions({ presentation: "change-dir-revert-button" }),
-                (new TVGroup(new TVRect()).insertAll([cancelButton])).setDrawOptions({ presentation: "change-dir-cancel-button" }),
-                detailView,
-                historyPopup,
-            ])).setDrawOptions({ presentation: "change-dir-main" });
+    static viewName = "change-dir";
 
-        super(new TVRect(0, 0, 46, 18), "Change Directory", {
-            viewName: "change-dir",
-            helpCtx: hcChangeDirectory,
-            content: changeDirectoryMain,
-            modal: true,
-        });
+    constructor() {
+        const directoryInput = new TVInputLine(new TVRect(2, 2, 31, 3), 255).setData("");
+        const directoryLabel = new TVLabel(new TVRect(1, 1, 18, 2), "~D~irectory", directoryInput);
+        const treeLabel = new TVLabel(new TVRect(1, 4, 18, 5), "Directory ~t~ree");
+        const changeButton = new TVButton(new TVRect(33, 4, 43, 6), "~C~hdir", "change-dir-confirm", bfDefault);
+        const revertButton = new TVButton(new TVRect(33, 7, 43, 9), "~R~evert", "change-dir-revert", bfNormal);
+        const cancelButton = new TVButton(new TVRect(33, 10, 43, 12), "Cancel", "change-dir-cancel", bfNormal);
+        const historyButton = new TVHistory(new TVRect(31, 2, 34, 3), directoryInput, "thelp:directory-history");
+        const directoryList = new TVOutline(new TVRect(2, 5, 31, 13));
+        const detailView = new TVStaticText(new TVRect(2, 14, 42, 15), "");
+        const historyPopup = new TVHistoryWindow(new TVRect(0, 0, 33, 8), "change-dir");
+        const changeDirectoryMain = new TVGroup(new TVRect(0, 0, 44, 16)).insertAll([
+            directoryLabel,
+            directoryInput,
+            historyButton,
+            treeLabel,
+            directoryList,
+            changeButton,
+            revertButton,
+            cancelButton,
+            detailView,
+            historyPopup,
+        ]);
+
+        super(new TVRect(0, 0, 46, 18), "Change Directory");
+        this.setHelpCtx(hcChangeDirectory);
+        this.insert(changeDirectoryMain);
+        this.setState(sfModal, true);
         this.entries = [];
         this.directories = [];
         this.directoryTree = [];
         this.currentDirectory = "";
         this.initialDirectory = "";
         this.onChange = null;
-        this.history = new TVHistory("thelp:directory-history");
+        this.history = historyButton;
         this.pathInput = directoryInput;
         this.detailView = detailView;
         this.changeButton = changeButton;
@@ -1230,17 +911,8 @@ class TVChangeDirectoryDialog extends TVDialog {
         this.cancelButton = cancelButton;
         this.historyButton = historyButton;
         this.historyPopup = historyPopup;
-        this.directoryList = TVVerticalListViewer.bindRendered((new TVOutline(new TVRect())).setDrawOptions({
-            itemClassName: "tv-change-dir-item",
-            itemAttrName: "data-tv-change-dir-index",
-            getKey: (item) => item.path,
-            getLabel: (item) => item.label,
-        }), directoryListHost);
-        this.historyList = (new TVHistoryViewer(new TVRect())).setDrawOptions({
-            itemClassName: "tv-file-open-history-item",
-            itemAttrName: "data-tv-change-dir-history-index",
-            renderItemContent: (item) => escapeHtml(this.displayPath(item.path)),
-        });
+        this.directoryList = directoryList;
+        this.historyList = historyPopup.viewer;
         this.directoryList.bind({
             onSelect: (item) => this.selectDirectory(item.path),
             onActivate: (item) => {
@@ -1248,18 +920,19 @@ class TVChangeDirectoryDialog extends TVDialog {
                 this.commit();
             },
         });
-        this.historyWindow = new TVHistoryWindow({
-            button: this.historyButton,
-            popup: this.historyPopup,
-            viewer: this.historyList,
-            items: () => this.history.entries(this.directories),
-            onSelect: (item, activate) => {
+        this.historyWindow = this.historyButton.bindWindow(
+            this.historyPopup,
+            () => this.history.entries(this.directories).map((item) => ({
+                ...item,
+                displayPath: this.displayPath(item.path),
+            })),
+            (item, activate) => {
                 this.selectDirectory(item.path);
                 this.historyWindow.hide();
                 if (activate) { this.commit(); }
                 else { this.pathInput.focus(); }
             },
-        });
+        );
         this.bindCommonClose(() => this.close());
         this.bindDrag();
         this.bindChangeDirectory();
@@ -1314,6 +987,10 @@ class TVChangeDirectoryDialog extends TVDialog {
 
     handleEvent(event) {
         super.handleEvent(event);
+        if (event.what === evKeyDown && this.historyWindow.handleEscape(event.nativeEvent)) {
+            this.clearEvent(event);
+            return;
+        }
         if (event.what === evCommand) {
             if (event.command === "change-dir-confirm") { this.commit(); }
             else if (event.command === "change-dir-revert") { this.setDirectory(this.initialDirectory); }
@@ -1435,59 +1112,64 @@ class TVChangeDirectoryDialog extends TVDialog {
         super.close();
     }
 
-    onDialogKeyDown(event) {
-        if (this.historyWindow.handleEscape(event)) { return; }
-        super.onDialogKeyDown(event);
+}
+
+class TVAsciiTable extends TVGroup {
+    static viewName = "ascii-chart";
+
+    constructor(bounds) {
+        super(bounds);
+        this.cells = Array.from({ length: 256 }, (_unused, code) => {
+            const button = new TVButton(new TVRect(), displayCp437Char(code), "ascii-code", bfNormal).setValue(code);
+            button.setCommandData({ selected: code === 0 });
+            return button;
+        });
+        this.insertAll(this.cells);
+    }
+
+    select(code) {
+        this.cells.forEach((cell, index) => {
+            const selected = index === code;
+            cell.commandData.selected = selected;
+            cell.root?.classList.toggle("is-selected", selected);
+            cell.root?.setAttribute("aria-pressed", selected ? "true" : "false");
+        });
+        this.cells[code]?.root?.focus();
     }
 }
 
 class TVAsciiTableDialog extends TVDialog {
+    static viewName = "ascii";
+    static palette = "ascii";
+
     constructor() {
-        const chart = new TVMarkupView([], { className: "tv-ascii-chart", attributes: { "data-tv-ascii-chart": true } });
-        const report = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "ascii-report", presentation: "ascii-report" });
-        super(new TVRect(0, 0, 34, 12), "ASCII Chart", {
-            viewName: "ascii",
-            helpCtx: hcAsciiTable,
-            palette: "ascii",
-            content: [chart, report],
-        });
+        const chart = new TVAsciiTable(new TVRect());
+        const report = new TVStaticText(new TVRect(), "");
+        super(new TVRect(0, 0, 34, 12), "ASCII Chart");
+        this.setHelpCtx(hcAsciiTable);
+        this.insertAll([chart, report]);
         this.selectedCode = 0;
         this.chartView = chart;
         this.reportView = report;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        if (this.chartView.root) {
-            this.chartView.root.addEventListener("focusin", (event) => this.onCellEvent(event));
-            this.chartView.root.addEventListener("mousemove", (event) => {
-                if (event.buttons & 1) {
-                    this.onCellEvent(event);
-                }
-            });
-        }
-        document.addEventListener("keydown", (event) => this.onKeyDown(event));
-        this.renderChart();
+        this.updateReport(this.selectedCode);
     }
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what === evMouseDown && event.infoPtr === this.chartView) {
-            this.onCellEvent(event.nativeEvent);
+        if (event.what === evCommand && event.command === "ascii-code") {
+            this.selectCode(Number(event.infoPtr?.value));
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
     open() {
         super.open();
-        this.renderChart();
-    }
-
-    renderChart() {
-        const items = [];
-        for (let code = 0; code < 256; code += 1) {
-            const selected = code === this.selectedCode ? " is-selected" : "";
-            items.push((new TVButton(new TVRect(), "", "ascii-code", bfNormal).setValue(code).setCommandData({ selected: Boolean(selected) })).setDrawOptions({ labelMarkup: escapeHtml(displayCp437Char(code)), ariaLabel: `ASCII ${code}` }).renderMarkup());
-        }
-        this.chartView.setHTML(items.join(""));
+        this.chartView.select(this.selectedCode);
         this.updateReport(this.selectedCode);
     }
 
@@ -1515,24 +1197,10 @@ class TVAsciiTableDialog extends TVDialog {
         this.selectCode(nextCode);
     }
 
-    onCellEvent(event) {
-        const cell = event.target.closest("[data-tv-ascii-code]");
-        if (!cell) {
-            return;
-        }
-        const code = Number.parseInt(cell.getAttribute("data-tv-ascii-code"), 10);
-        if (!Number.isInteger(code) || code < 0 || code > 255) {
-            return;
-        }
-        this.selectCode(code);
-    }
-
     selectCode(code) {
+        if (!Number.isInteger(code) || code < 0 || code > 255) { return; }
         this.selectedCode = code;
-        this.chartView.queryAll("[data-tv-ascii-code]").forEach((element) => {
-            const cellCode = Number.parseInt(element.getAttribute("data-tv-ascii-code"), 10);
-            element.classList.toggle("is-selected", cellCode === code);
-        });
+        this.chartView.select(code);
         this.updateReport(code);
     }
 
@@ -1545,6 +1213,8 @@ class TVAsciiTableDialog extends TVDialog {
 }
 
 class TVCalculatorDialog extends TVDialog {
+    static viewName = "calc";
+
     constructor() {
         const buttonKeys = [
             ["CLEAR", "C", "C"],
@@ -1580,21 +1250,27 @@ class TVCalculatorDialog extends TVDialog {
             EQUALS: "=",
             PLUS: "+",
         };
-        const buttons = buttonKeys.map(([key, label, aria]) =>
-            (new TVButton(new TVRect(), "", "calc-key", bfNormal).setValue(key)).setDrawOptions({ labelMarkup: escapeHtml(label), ariaLabel: `Calculator key ${aria}` })
-        );
-        const displayView = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "calc-display", presentation: "calc-display" });
-        const calcMain = (new TVGroup(new TVRect()).insertAll([
-                displayView,
-                (new TVGroup(new TVRect()).insertAll(buttons)).setDrawOptions({ presentation: "calc-keypad" }),
-            ])).setDrawOptions({ presentation: "calc-main" });
+        const buttons = buttonKeys.map(([key, label, aria], index) => (
+            new TVButton(new TVRect(
+                (index % 4) * 5,
+                Math.floor(index / 4) * 2,
+                (index % 4) * 5 + 5,
+                Math.floor(index / 4) * 2 + 2,
+            ), label, "calc-key", bfNormal)
+                .setValue(key)
+                .setCommandData({ description: aria })
+        ));
+        const displayView = new TVStaticText(new TVRect(2, 1, 20, 2), "");
+        const keypad = new TVGroup(new TVRect(1, 3, 21, 13)).insertAll(buttons);
+        const calcMain = new TVGroup(new TVRect(0, 0, 22, 14)).insertAll([
+            displayView,
+            keypad,
+        ]);
 
-        super(new TVRect(0, 0, 24, 15), "Calculator", {
-            viewName: "calc",
-            helpCtx: hcCalculator,
-            content: calcMain,
-            escapeCloses: false,
-        });
+        super(new TVRect(0, 0, 24, 15), "Calculator");
+        this.setHelpCtx(hcCalculator);
+        this.insert(calcMain);
+        this.escapeCloses = false;
         this.buttonValueMap = buttonValueMap;
         this.status = "first";
         this.number = "0";
@@ -1605,13 +1281,7 @@ class TVCalculatorDialog extends TVDialog {
         this.buttons = buttons;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
         this.updateDisplay();
-    }
-
-    bind() {
-        document.addEventListener("keydown", (event) => this.onKeyDown(event));
-        document.addEventListener("keyup", (event) => this.onKeyUp(event));
     }
 
     handleEvent(event) {
@@ -1620,6 +1290,9 @@ class TVCalculatorDialog extends TVDialog {
             const token = String(event.infoPtr.value || "");
             this.calcKey(this.buttonValueMap[token] || token);
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
@@ -1637,16 +1310,6 @@ class TVCalculatorDialog extends TVDialog {
         event.preventDefault();
         event.stopPropagation();
         this.calcKey(mapped);
-    }
-
-    onKeyUp(event) {
-        if (!this.isActive()) {
-            return;
-        }
-        if (event.key === "Enter" || event.key === "Backspace" || event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-        }
     }
 
     mapKeyEvent(event) {
@@ -1818,55 +1481,84 @@ class TVCalculatorDialog extends TVDialog {
     }
 }
 
+class TVCalendarView extends TVGroup {
+    static viewName = "calendar-grid";
+
+    constructor(bounds) {
+        super(bounds);
+        this.cells = Array.from({ length: 42 }, () => {
+            return new TVStaticText(new TVRect(), "  ");
+        });
+        this.insertAll(this.cells);
+    }
+
+    setMonth(first, days, today = 0, selected = today) {
+        this.cells.forEach((cell, index) => {
+            const day = first + index;
+            const inMonth = day >= 1 && day <= days;
+            cell.setText(inMonth ? String(day).padStart(2, " ") : "  ");
+            cell.value = inMonth ? day : 0;
+            cell.root?.classList.toggle("is-current", inMonth && day === today);
+            cell.root?.classList.toggle("is-selected", inMonth && day === selected);
+            cell.root?.classList.toggle("is-empty", !inMonth);
+        });
+    }
+}
+
 class TVCalendarDialog extends TVDialog {
+    static viewName = "calendar";
+    static palette = "calendar";
+
     constructor() {
         const now = new Date();
-        const captionView = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "calendar-caption" });
-        const prevButton = (new TVButton(new TVRect(), "", "calendar-prev", bfNormal)).setDrawOptions({ labelMarkup: escapeHtml(displayCp437Char(30)), ariaLabel: "Previous month" });
-        const nextButton = (new TVButton(new TVRect(), "", "calendar-next", bfNormal)).setDrawOptions({ labelMarkup: escapeHtml(displayCp437Char(31)), ariaLabel: "Next month" });
-        const gridView = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "calendar-grid", presentation: "calendar-grid" });
-        const calendarMain = (new TVGroup(new TVRect()).insertAll([
-                (new TVGroup(new TVRect()).insertAll([
-                        captionView,
-                        prevButton,
-                        new TVStaticText(new TVRect(), "  "),
-                        nextButton,
-                    ])).setDrawOptions({ presentation: "calendar-header" }),
-                new TVStaticText(new TVRect(), "Su Mo Tu We Th Fr Sa"),
-                gridView,
-            ])).setDrawOptions({ presentation: "calendar-main" });
-        super(new TVRect(0, 0, 27, 11), "Calendar", {
-            viewName: "calendar",
-            helpCtx: hcCalendar,
-            palette: "calendar",
-            content: calendarMain,
-        });
+        const captionView = new TVStaticText(new TVRect(0, 0, 19, 1), "");
+        const prevButton = new TVButton(new TVRect(19, 0, 22, 1), "<", "calendar-prev", bfNormal);
+        const nextButton = new TVButton(new TVRect(22, 0, 25, 1), ">", "calendar-next", bfNormal);
+        const todayButton = new TVButton(new TVRect(25, 0, 28, 1), "=", "calendar-today", bfNormal);
+        const gridView = new TVCalendarView(new TVRect(0, 2, 28, 8));
+        const calendarMain = new TVGroup(new TVRect(0, 0, 28, 8)).insertAll([
+            captionView,
+            prevButton,
+            nextButton,
+            todayButton,
+            new TVStaticText(new TVRect(0, 1, 28, 2), "Mo  Tu  We  Th  Fr  Sa  Su  "),
+            gridView,
+        ]);
+        super(new TVRect(0, 0, 30, 10), "Calendar");
+        this.setHelpCtx(hcCalendar);
+        this.insert(calendarMain);
         this.captionView = captionView;
         this.gridView = gridView;
         this.prevButton = prevButton;
         this.nextButton = nextButton;
+        this.todayButton = todayButton;
         this.curYear = now.getFullYear();
         this.curMonth = now.getMonth() + 1;
         this.curDay = now.getDate();
         this.year = this.curYear;
         this.month = this.curMonth;
+        this.day = this.curDay;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
         this.render();
-    }
-
-    bind() {
-        document.addEventListener("keydown", (event) => this.onKeyDown(event));
     }
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what !== evCommand) { return; }
-        if (event.command === "calendar-prev") { this.changeMonth(-1); }
-        else if (event.command === "calendar-next") { this.changeMonth(1); }
-        else { return; }
-        this.clearEvent(event);
+        if (event.what === evCommand) {
+            if (event.command === "calendar-prev") { this.changeMonth(-1); }
+            else if (event.command === "calendar-next") { this.changeMonth(1); }
+            else if (event.command === "calendar-today") { this.resetToday(); }
+            else { return; }
+            this.clearEvent(event);
+        } else if (event.what === evMouseDown && event.infoPtr?.owner === this.gridView) {
+            const day = Number(event.infoPtr.value) || 0;
+            if (day) { this.day = day; this.render(); }
+            this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+        }
     }
 
     onKeyDown(event) {
@@ -1876,12 +1568,29 @@ class TVCalendarDialog extends TVDialog {
         if (event.target && event.target.closest("input, textarea, select")) {
             return;
         }
-        if (event.key === "+" || event.key === "ArrowDown") {
+        if (event.key === "+" || event.key === "ArrowRight") {
             event.preventDefault();
-            this.changeMonth(1);
-        } else if (event.key === "-" || event.key === "ArrowUp") {
+            this.changeDay(1);
+        } else if (event.key === "-" || event.key === "ArrowLeft") {
             event.preventDefault();
-            this.changeMonth(-1);
+            this.changeDay(-1);
+        } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            this.changeDay(-7);
+        } else if (event.key === "ArrowDown") {
+            event.preventDefault();
+            this.changeDay(7);
+        } else if (event.key === "PageUp") {
+            event.preventDefault();
+            if (event.ctrlKey) { this.changeYear(-1); }
+            else { this.changeMonth(-1); }
+        } else if (event.key === "PageDown") {
+            event.preventDefault();
+            if (event.ctrlKey) { this.changeYear(1); }
+            else { this.changeMonth(1); }
+        } else if (event.key === "Home" || event.key === " ") {
+            event.preventDefault();
+            this.resetToday();
         }
     }
 
@@ -1894,6 +1603,28 @@ class TVCalendarDialog extends TVDialog {
             this.month = 12;
             this.year -= 1;
         }
+        this.day = Math.min(this.day, this.daysInMonth(this.month, this.year));
+        this.render();
+    }
+
+    changeYear(delta) {
+        this.year = Math.max(1, this.year + delta);
+        this.day = Math.min(this.day, this.daysInMonth(this.month, this.year));
+        this.render();
+    }
+
+    changeDay(delta) {
+        const date = new Date(Date.UTC(this.year, this.month - 1, this.day + delta));
+        this.year = date.getUTCFullYear();
+        this.month = date.getUTCMonth() + 1;
+        this.day = date.getUTCDate();
+        this.render();
+    }
+
+    resetToday() {
+        this.year = this.curYear;
+        this.month = this.curMonth;
+        this.day = this.curDay;
         this.render();
     }
 
@@ -1902,67 +1633,141 @@ class TVCalendarDialog extends TVDialog {
     }
 
     render() {
-        this.captionView.setText(`${MONTH_NAMES[this.month].padStart(9, " ")} ${String(this.year).padStart(4, " ")}`);
-        const first = 1 - dayOfWeek(1, this.month, this.year);
+        this.captionView.setText(` ${MONTH_NAMES[this.month].padEnd(14, " ")}${String(this.year).padStart(4, " ")}`);
+        const mondayIndex = (dayOfWeek(1, this.month, this.year) + 6) % 7;
+        const first = 1 - mondayIndex;
         const days = this.daysInMonth(this.month, this.year);
-        const cells = [];
-        let current = first;
-        for (let row = 0; row < 6; row += 1) {
-            for (let col = 0; col < 7; col += 1) {
-                const inMonth = current >= 1 && current <= days;
-                const isToday = inMonth
-                    && this.year === this.curYear
-                    && this.month === this.curMonth
-                    && current === this.curDay;
-                cells.push((new TVStaticText(new TVRect(), inMonth ? String(current).padStart(2, " ") : "  ")).setDrawOptions({ presentation: `calendar-cell${isToday ? " is-current" : ""}${!inMonth ? " is-empty" : ""}` }).renderMarkup());
-                current += 1;
-            }
-        }
-        this.gridView.setHTML(cells.join(""));
+        const today = this.year === this.curYear && this.month === this.curMonth ? this.curDay : 0;
+        this.gridView.setMonth(first, days, today, this.day);
     }
 }
 
+class TVColorSelector extends TVGroup {
+    constructor(bounds, colorCount = 16) {
+        super(bounds);
+        this.colorCount = colorCount === 8 ? 8 : 16;
+        const background = this.colorCount === 8;
+        this.background = background;
+        this.buttons = Array.from({ length: this.colorCount }, (_unused, index) => {
+            const button = new TVButton(new TVRect(), "", "color-index", bfNormal).setValue(index);
+            button.setCommandData({ selected: index === 0, color: DOS_COLORS[index] });
+            return button;
+        });
+        this.insertAll(this.buttons);
+        this.selected = 0;
+    }
+
+    _semanticName() { return this.background ? "colors-background" : "colors-foreground"; }
+
+    nextColor(key) {
+        const maxColor = this.colorCount - 1;
+        let color = this.selected;
+        if (key === "ArrowLeft") { color = color > 0 ? color - 1 : maxColor; }
+        else if (key === "ArrowRight") { color = color < maxColor ? color + 1 : 0; }
+        else if (key === "ArrowUp") {
+            color = color > 3 ? color - 4 : (color === 0 ? maxColor : color + maxColor - 4);
+        } else if (key === "ArrowDown") {
+            color = color < maxColor - 3 ? color + 4 : (color === maxColor ? 0 : color - maxColor + 4);
+        } else { return -1; }
+        return color;
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evKeyDown || event.infoPtr?.owner !== this) { return; }
+        const color = this.nextColor(event.nativeEvent?.key);
+        if (color < 0) { return; }
+        event.nativeEvent.preventDefault();
+        event.nativeEvent.stopPropagation();
+        this.select(color, true);
+        event.what = evCommand;
+        event.command = "color-index";
+        event.infoPtr = this.buttons[color];
+    }
+
+    select(index, focus = false) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.buttons.length) { return; }
+        this.selected = index;
+        this.buttons.forEach((button, color) => {
+            const selected = color === index;
+            button.commandData.selected = selected;
+            if (button.root) {
+                button.drawView();
+            }
+        });
+        if (focus) { this.buttons[index].root?.focus(); }
+    }
+
+    buttonAt(index) {
+        return this.buttons[index] || null;
+    }
+}
+
+class TVColorDisplay extends TVGroup {
+    static viewName = "colors-display";
+
+    constructor(bounds) {
+        super(bounds);
+        const sample = new TVStaticText(
+            new TVRect(0, 0, bounds.width, bounds.height),
+            "Text Text Text \nText Text Text ",
+        );
+        this.insert(sample);
+    }
+
+    setColors(foreground, background) {
+        this.root?.style.setProperty("--tv-colors-sample-fg", foreground);
+        this.root?.style.setProperty("--tv-colors-sample-bg", background);
+    }
+}
+
+class TVColorGroupList extends TVListBox {
+    static viewName = "colors-groups";
+
+    defaultContent(item) { return escapeHtml(item?.name || ""); }
+}
+
+class TVColorItemList extends TVListBox {
+    static viewName = "colors-items";
+
+    defaultContent(item) { return escapeHtml(item?.name || ""); }
+}
+
 class TVColorsDialog extends TVDialog {
+    static viewName = "colors";
+
     constructor() {
-        const okButton = new TVButton(new TVRect(), 'O~K~', "colors-ok", bfDefault);
-        const cancelButton = new TVButton(new TVRect(), '~C~ancel', "colors-cancel", bfNormal);
-        const resetAllButton = new TVButton(new TVRect(), '~R~eset All', "colors-reset-all", bfNormal);
-        const defaultButton = new TVButton(new TVRect(), '~D~efault', "colors-default", bfNormal);
-        const buttonStrip = (new TVGroup(new TVRect()).insertAll([defaultButton, resetAllButton, okButton, cancelButton])).setDrawOptions({ presentation: "colors-dialog-buttons" });
-        const groupTitle = (new TVLabel(new TVRect(), "~G~roup")).setDrawOptions({ presentation: "colors-group-label", hotkey: true });
-        const itemTitle = (new TVLabel(new TVRect(), "~I~tem")).setDrawOptions({ presentation: "colors-item-label", hotkey: true });
-        const fgTitle = (new TVLabel(new TVRect(), "~F~oreground")).setDrawOptions({ presentation: "colors-foreground-label", hotkey: true });
-        const bgTitle = (new TVLabel(new TVRect(), "~B~ackground")).setDrawOptions({ presentation: "colors-background-label", hotkey: true });
-        const groupListHost = new TVMarkupView([TVVerticalListViewer.renderMarkup({
-            rootClass: "tv-colors-listviewer tv-colors-groups-listviewer",
-            rootAttrs: { "data-tv-colors-groups": true },
-            viewportClass: "tv-colors-list-viewport",
-        })]);
-        const itemListHost = new TVMarkupView([TVVerticalListViewer.renderMarkup({
-            rootClass: "tv-colors-listviewer tv-colors-items-listviewer",
-            rootAttrs: { "data-tv-colors-items": true },
-            viewportClass: "tv-colors-list-viewport",
-        })]);
-        const foregroundView = (new TVGroup(new TVRect()).insertAll([])).setDrawOptions({ presentation: "colors-selector colors-foreground", viewName: "colors-foreground" });
-        const backgroundView = (new TVGroup(new TVRect()).insertAll([])).setDrawOptions({ presentation: "colors-selector colors-background is-background", viewName: "colors-background" });
-        const displayView = (new TVGroup(new TVRect()).insertAll([])).setDrawOptions({ presentation: "colors-display", viewName: "colors-display" });
-        const colorsMain = (new TVGroup(new TVRect()).insertAll([
+        const groupBox = new TVColorGroupList(new TVRect(2, 2, 18, 13));
+        const itemBox = new TVColorItemList(new TVRect(20, 2, 41, 13));
+        const foregroundView = new TVColorSelector(new TVRect(44, 2, 56, 6), 16);
+        const backgroundView = new TVColorSelector(new TVRect(44, 8, 56, 10), 8);
+        const displayView = new TVColorDisplay(new TVRect(43, 11, 57, 13));
+        const okButton = new TVButton(new TVRect(31, 14, 41, 16), 'O~K~', "colors-ok", bfDefault);
+        const cancelButton = new TVButton(new TVRect(43, 14, 55, 16), '~C~ancel', "colors-cancel", bfNormal);
+        const resetAllButton = new TVButton(new TVRect(17, 14, 29, 16), '~R~eset All', "colors-reset-all", bfNormal);
+        const defaultButton = new TVButton(new TVRect(5, 14, 15, 16), '~D~efault', "colors-default", bfNormal);
+        const groupTitle = new TVLabel(new TVRect(1, 1, 7, 2), "~G~roup", groupBox);
+        const itemTitle = new TVLabel(new TVRect(19, 1, 24, 2), "~I~tem", itemBox);
+        const fgTitle = new TVLabel(new TVRect(44, 1, 56, 2), "~F~oreground", foregroundView);
+        const bgTitle = new TVLabel(new TVRect(44, 7, 56, 8), "~B~ackground", backgroundView);
+        const colorsMain = new TVGroup(new TVRect(0, 0, 59, 16)).insertAll([
                 groupTitle,
-                groupListHost,
+                groupBox,
                 itemTitle,
-                itemListHost,
+                itemBox,
                 fgTitle,
                 foregroundView,
                 bgTitle,
                 backgroundView,
                 displayView,
-                buttonStrip,
-            ])).setDrawOptions({ presentation: "colors-main" });
-        super(new TVRect(0, 0, 61, 18), "Colors", {
-            viewName: "colors",
-            helpCtx: hcColors,
-            content: colorsMain,
-        });
+                defaultButton,
+                resetAllButton,
+                okButton,
+                cancelButton,
+            ]);
+        super(new TVRect(0, 0, 61, 18), "Colors");
+        this.setHelpCtx(hcColors);
+        this.insert(colorsMain);
         this.foregroundView = foregroundView;
         this.backgroundView = backgroundView;
         this.displayView = displayView;
@@ -1970,16 +1775,8 @@ class TVColorsDialog extends TVDialog {
         this.cancelButton = cancelButton;
         this.defaultButton = defaultButton;
         this.resetAllButton = resetAllButton;
-        this.groupBox = TVVerticalListViewer.bindRendered((new TVVerticalListViewer(new TVRect())).setDrawOptions({
-            itemClassName: "tv-colors-list-item",
-            itemAttrName: "data-tv-colors-group",
-            renderItemContent: (group) => escapeHtml(group.name),
-        }), groupListHost);
-        this.itemBox = TVVerticalListViewer.bindRendered((new TVVerticalListViewer(new TVRect())).setDrawOptions({
-            itemClassName: "tv-colors-list-item",
-            itemAttrName: "data-tv-colors-item",
-            renderItemContent: (item) => escapeHtml(item.name),
-        }), itemListHost);
+        this.groupBox = groupBox;
+        this.itemBox = itemBox;
         this.selectedGroup = 0;
         this.pendingPalette = cloneColorPalette(TV.getActiveColorPalette() || buildDefaultColorPalette());
         this.previousPalette = cloneColorPalette(this.pendingPalette);
@@ -2008,14 +1805,17 @@ class TVColorsDialog extends TVDialog {
             else if (event.command === "colors-cancel") { this.cancel(); }
             else if (event.command === "colors-default") { this.restoreSelectedDefault(); }
             else if (event.command === "colors-reset-all") { this.resetAllColors(); }
+            else if (event.command === "color-index") {
+                const selector = event.infoPtr?.owner;
+                if (selector === this.foregroundView || selector === this.backgroundView) {
+                    this.selectColor(selector, Number(event.infoPtr.value));
+                    if (event.nativeEvent?.type === "keydown") {
+                        selector.select(Number(event.infoPtr.value), true);
+                    }
+                }
+            }
             else { return; }
             this.clearEvent(event);
-        } else if (event.what === evMouseDown && (event.infoPtr === this.foregroundView || event.infoPtr === this.backgroundView)) {
-            this.onSelectorClick(event.nativeEvent, event.infoPtr === this.foregroundView ? "fg" : "bg");
-            this.clearEvent(event);
-        } else if (event.what === evKeyDown && (event.infoPtr === this.foregroundView || event.infoPtr === this.backgroundView)) {
-            this.onSelectorKeyDown(event.nativeEvent, event.infoPtr === this.foregroundView ? "fg" : "bg");
-            if (event.nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
@@ -2056,26 +1856,14 @@ class TVColorsDialog extends TVDialog {
         this.renderDisplay();
     }
 
-    onSelectorClick(event, type) {
-        const button = event.target.closest("[data-tv-color-index]");
-        if (!button) {
-            return;
-        }
-        const colorIndex = Number.parseInt(button.getAttribute("data-tv-color-index"), 10);
-        if (!Number.isInteger(colorIndex)) {
-            return;
-        }
+    selectColor(selector, colorIndex) {
+        if (!Number.isInteger(colorIndex)) { return; }
         const group = this.pendingPalette[this.selectedGroup];
-        if (!group) {
-            return;
-        }
+        if (!group) { return; }
         const item = group.items[group.index] || group.items[0];
-        if (!item) {
-            return;
-        }
-        const keepFocus = document.activeElement === button;
+        if (!item) { return; }
         let attr;
-        if (type === "fg") {
+        if (selector === this.foregroundView) {
             attr = (item.attr & 0xF0) | (colorIndex & 0x0F);
         } else {
             attr = ((colorIndex & 0x0F) << 4) | (item.attr & 0x0F);
@@ -2085,35 +1873,6 @@ class TVColorsDialog extends TVDialog {
         this.renderItems();
         this.renderSelectors();
         this.renderDisplay();
-        if (keepFocus) {
-            const selector = type === "fg" ? this.foregroundView : this.backgroundView;
-            window.requestAnimationFrame(() => {
-                selector.query(`[data-tv-color-index="${colorIndex}"]`)?.focus();
-            });
-        }
-    }
-
-    onSelectorKeyDown(event, type) {
-        const button = event.target.closest("[data-tv-color-index]");
-        if (!button || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
-            return;
-        }
-        const maxColor = type === "bg" ? 7 : 15;
-        let color = Number.parseInt(button.getAttribute("data-tv-color-index"), 10);
-        if (event.key === "ArrowLeft") {
-            color = color > 0 ? color - 1 : maxColor;
-        } else if (event.key === "ArrowRight") {
-            color = color < maxColor ? color + 1 : 0;
-        } else if (event.key === "ArrowUp") {
-            color = color > 3 ? color - 4 : (color === 0 ? maxColor : color + maxColor - 4);
-        } else {
-            color = color < maxColor - 3 ? color + 4 : (color === maxColor ? 0 : color - maxColor + 4);
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        const selector = type === "fg" ? this.foregroundView : this.backgroundView;
-        selector.query(`[data-tv-color-index="${color}"]`)?.click();
-        selector.query(`[data-tv-color-index="${color}"]`)?.focus();
     }
 
     selectedItem() {
@@ -2181,24 +1940,8 @@ class TVColorsDialog extends TVDialog {
         }
         const fg = item.attr & 0x0F;
         const bg = (item.attr >> 4) & 0x0F;
-        this.foregroundView.setHTML(this.renderSelectorCells(16, fg));
-        this.backgroundView.setHTML(this.renderSelectorCells(8, bg));
-    }
-
-    renderSelectorCells(count, selected) {
-        const marker = displayCp437Char(8);
-        const icon = displayCp437Char(219).repeat(3);
-        const cells = [];
-        for (let index = 0; index < count; index += 1) {
-            const isSelected = index === selected;
-            const content = isSelected
-                ? escapeHtml(displayCp437Char(219))
-                    + new TVMarkupView([escapeHtml(marker)], { element: "span", className: "tv-color-cell-marker" }).renderMarkup()
-                    + escapeHtml(displayCp437Char(219))
-                : escapeHtml(icon);
-            cells.push((new TVButton(new TVRect(), "", "color-index", bfNormal).setValue(index).setCommandData({ selected: isSelected, color: DOS_COLORS[index] })).setDrawOptions({ labelMarkup: content, ariaLabel: `Color ${index}`, ariaPressed: isSelected, tabIndex: isSelected ? 0 : -1 }).renderMarkup());
-        }
-        return cells.join("");
+        this.foregroundView.select(fg);
+        this.backgroundView.select(bg);
     }
 
     renderDisplay() {
@@ -2208,9 +1951,7 @@ class TVColorsDialog extends TVDialog {
         }
         const fg = dosColor(item.attr, 0);
         const bg = dosColor(item.attr, 4);
-        this.displayView.setHTML((new TVStaticText(new TVRect(), "Text Text Text \nText Text Text ")).setDrawOptions({ presentation: "colors-display-sample" }).renderMarkup());
-        this.displayView.root?.style.setProperty("--tv-colors-sample-fg", fg);
-        this.displayView.root?.style.setProperty("--tv-colors-sample-bg", bg);
+        this.displayView.setColors(fg, bg);
     }
 }
 
@@ -2898,99 +2639,144 @@ class TVMidiSynth {
     }
 }
 
+class TVMidiTrackList extends TVListBox {
+    static viewName = "midi-track-list";
+
+    itemMarkup(track, index) {
+        return new TVButton(new TVRect(), "", "midi-track", bfNormal)
+            .setValue(index)
+            .setCommandData({
+                listIndex: index,
+                selected: index === this.selectedIndex,
+                index,
+                title: track.title,
+                credit: track.credit,
+            })
+            .draw();
+    }
+}
+
+class TVMidiDisplay extends TVGroup {
+    static viewName = "midi-display";
+
+    constructor(bounds) {
+        super(bounds);
+        this.trackNumberView = new TVStaticText(new TVRect(6, 0, 10, 1), "01");
+        this.timeView = new TVStaticText(new TVRect(20, 0, 40, 1), "0:00 / 0:00");
+        this.titleView = new TVStaticText(new TVRect(0, 1, 40, 2), "");
+        this.statusView = new TVStaticText(new TVRect(0, 2, 40, 3), "Ready.");
+        this.insertAll([
+            new TVStaticText(new TVRect(0, 0, 6, 1), "Track"),
+            this.trackNumberView,
+            this.timeView,
+            this.titleView,
+            this.statusView,
+        ]);
+    }
+
+    setTrack(track, number) {
+        this.trackNumberView.setText(number);
+        this.titleView.setText(track.title);
+        this.timeView.setText("0:00 / 0:00");
+    }
+
+    setTime(elapsed, duration) {
+        this.timeView.setText(`${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}`);
+    }
+
+    setStatus(message) {
+        this.statusView.setText(message);
+    }
+}
+
+class TVMidiMeter extends TVGroup {
+    static viewName = "midi-meter";
+
+    constructor(bounds) {
+        super(bounds);
+        this.progress = 0;
+    }
+
+    setProgress(value) {
+        this.progress = Math.max(0, Math.min(1, Number(value) || 0));
+        if (this.root) {
+            this.root.style.setProperty("--tv-midi-progress", `${Math.round(this.progress * 100)}%`);
+        }
+        return this;
+    }
+}
+
 class TVMidiPlayerDialog extends TVDialog {
+    static viewName = "midi";
+
     constructor() {
-        const previousButton = (new TVButton(new TVRect(), "◄◄", "midi-previous", bfNormal)).setDrawOptions({ tooltip: "Previous track" });
-        const playButton = new TVButton(new TVRect(), "►", "midi-play", bfDefault);
-        const pauseButton = (new TVButton(new TVRect(), "▌▌", "midi-pause", bfNormal)).setDrawOptions({ tooltip: "Pause" });
-        const stopButton = new TVButton(new TVRect(), "■", "midi-stop", bfNormal);
-        const nextButton = (new TVButton(new TVRect(), "►►", "midi-next", bfNormal)).setDrawOptions({ tooltip: "Next track" });
-        const moreButton = (new TVButton(new TVRect(), "More", "midi-more", bfNormal)).setDrawOptions({ ariaExpanded: false });
-        const closeButton = new TVButton(new TVRect(), "Close", "midi-close-button", bfNormal);
-        const buttons = (new TVGroup(new TVRect()).insertAll([
-                previousButton, playButton, pauseButton, stopButton, nextButton, moreButton, closeButton,
-            ])).setDrawOptions({ presentation: "midi-buttons" });
-        const sourceButtons = TV_MIDI_EXTERNAL_SOURCES.map((source, index) => (new TVButton(new TVRect(), "", "midi-source", bfNormal).setValue(index)).setDrawOptions({ labelMarkup: escapeHtml(source.label), tooltip: `${source.title} (${source.credit})` }));
-        const midiUrlInput = (new TVInputLine(new TVRect(), 255)).setDrawOptions({
-                presentation: "midi-url-input",
-                placeholder: "https://example.com/song.mid",
-                spellcheck: "false",
-                viewName: "midi-url",
-            });
-        const midiUrlLabel = (new TVLabel(new TVRect(), "URL", midiUrlInput)).setDrawOptions({ presentation: "midi-url-label" });
-        const trackNumberView = (new TVStaticText(new TVRect(), "01")).setDrawOptions({ viewName: "midi-track-number", presentation: "midi-track-number" });
-        const timeView = (new TVStaticText(new TVRect(), "0:00 / 0:00")).setDrawOptions({ viewName: "midi-time", presentation: "midi-display-time" });
-        const titleView = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "midi-display-title", presentation: "midi-display-title" });
-        const statusView = (new TVStaticText(new TVRect(), "Ready.")).setDrawOptions({ viewName: "midi-status", presentation: "midi-status" });
-        const display = (new TVGroup(new TVRect()).insertAll([
-                (new TVGroup(new TVRect()).insertAll([
-                        (new TVStaticText(new TVRect(), "Track")).setDrawOptions({ presentation: "midi-display-label" }),
-                        trackNumberView,
-                        timeView,
-                    ])).setDrawOptions({ presentation: "midi-display-line" }),
-                titleView,
-                statusView,
-            ])).setDrawOptions({ presentation: "midi-display" });
-        const meterView = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "midi-meter", presentation: "midi-meter-fill" });
-        const meter = (new TVGroup(new TVRect()).insertAll([
-                meterView,
-            ])).setDrawOptions({ presentation: "midi-meter" });
-        const loadUrlButton = new TVButton(new TVRect(), "Load", "midi-load-url", bfNormal);
-        const externalSource = (new TVGroup(new TVRect()).insertAll([
-                (new TVGroup(new TVRect()).insertAll([
-                        midiUrlLabel,
-                        midiUrlInput,
-                        loadUrlButton,
-                    ])).setDrawOptions({ presentation: "midi-url-row" }),
-                (new TVGroup(new TVRect()).insertAll(sourceButtons)).setDrawOptions({ presentation: "midi-source-presets" }),
-            ])).setDrawOptions({ presentation: "midi-external", viewName: "midi-advanced", hidden: true });
-        const trackList = new TVMarkupView([TVVerticalListViewer.renderMarkup({
-            rootClass: "tv-midi-track-list",
-            rootAttrs: { "data-tv-midi-track-list": true },
-            viewportClass: "tv-midi-track-viewport",
-            scrollbarClass: "tv-midi-list-scrollbar",
-            arrowClass: "tv-midi-list-arrow",
-            trackClass: "tv-midi-list-track",
-            cellsClass: "tv-midi-list-cells",
-            thumbClass: "tv-midi-list-thumb",
-        })]);
-        const main = (new TVGroup(new TVRect()).insertAll([display, meter, buttons, trackList, externalSource])).setDrawOptions({ presentation: "midi-main", viewName: "midi-main" });
-        super(new TVRect(0, 0, 58, 23), "CD/MIDI Player", {
-            viewName: "midi",
-            helpCtx: hcMidiPlayer,
-            content: main,
-        });
+        const previousButton = new TVButton(new TVRect(1, 6, 7, 8), "◄◄", "midi-previous", bfNormal);
+        const playButton = new TVButton(new TVRect(7, 6, 14, 8), "►", "midi-play", bfDefault);
+        const pauseButton = new TVButton(new TVRect(14, 6, 21, 8), "▌▌", "midi-pause", bfNormal);
+        const stopButton = new TVButton(new TVRect(21, 6, 27, 8), "■", "midi-stop", bfNormal);
+        const nextButton = new TVButton(new TVRect(27, 6, 33, 8), "►►", "midi-next", bfNormal);
+        const moreButton = new TVButton(new TVRect(33, 6, 41, 8), "~M~ore", "midi-more", bfNormal)
+            .setCommandData({ expanded: false });
+        const sourceBounds = [
+            new TVRect(0, 3, 20, 5),
+            new TVRect(20, 3, 40, 5),
+            new TVRect(0, 5, 13, 7),
+            new TVRect(13, 5, 26, 7),
+            new TVRect(26, 5, 40, 7),
+        ];
+        const sourceButtons = TV_MIDI_EXTERNAL_SOURCES.map((source, index) => (
+            new TVButton(sourceBounds[index], source.label, "midi-source", bfNormal)
+                .setValue(index)
+                .setCommandData({ description: `${source.title} (${source.credit})` })
+        ));
+        const midiUrlInput = new TVInputLine(new TVRect(5, 1, 31, 2), 255);
+        const midiUrlLabel = new TVLabel(new TVRect(0, 1, 4, 2), "URL", midiUrlInput);
+        const display = new TVMidiDisplay(new TVRect(1, 0, 41, 3));
+        const meter = new TVMidiMeter(new TVRect(1, 4, 41, 5));
+        const loadUrlButton = new TVButton(new TVRect(32, 1, 40, 3), "~L~oad", "midi-load-url", bfNormal);
+        const externalSource = new TVGroup(new TVRect(1, 16, 41, 23)).insertAll([
+            midiUrlLabel,
+            midiUrlInput,
+            loadUrlButton,
+            ...sourceButtons,
+        ]);
+        externalSource.setState(sfVisible, false);
+        const trackList = new TVMidiTrackList(new TVRect(1, 8, 41, 16));
+        trackList.setState(sfVisible, false);
+        const main = new TVGroup(new TVRect(0, 0, 42, 8)).insertAll([
+            display,
+            meter,
+            previousButton,
+            playButton,
+            pauseButton,
+            stopButton,
+            nextButton,
+            moreButton,
+            trackList,
+            externalSource,
+        ]);
+        super(new TVRect(0, 0, 44, 10), "CD/MIDI Player");
+        this.setHelpCtx(hcMidiPlayer);
+        this.insert(main);
         this.selectedIndex = 0;
         this.cache = new Map();
         this.loadSerial = 0;
         this.isPlaying = false;
         this.synth = new TVMidiSynth();
-        this.trackNumberView = trackNumberView;
-        this.titleView = titleView;
-        this.timeView = timeView;
-        this.statusView = statusView;
-        this.meterView = meterView;
+        this.displayView = display;
+        this.meter = meter;
         this.previousButton = previousButton;
         this.playButton = playButton;
         this.pauseButton = pauseButton;
         this.stopButton = stopButton;
         this.nextButton = nextButton;
         this.moreButton = moreButton;
-        this.closeActionButton = closeButton;
         this.mainView = main;
         this.advancedView = externalSource;
         this.urlInput = midiUrlInput;
         this.loadUrlButton = loadUrlButton;
         this.sourceButtons = sourceButtons;
-        this.trackListBox = TVVerticalListViewer.bindRendered((new TVVerticalListViewer(new TVRect())).setDrawOptions({
-            itemClassName: "tv-midi-track",
-            itemAttrName: "data-tv-midi-track",
-            renderItemMarkup: (track, index, selected) => (new TVButton(new TVRect(), "", "midi-track", bfNormal).setValue(index).setCommandData({ selected })).setDrawOptions({ labelMarkup: [
-                    new TVMarkupView([escapeHtml(String(index + 1).padStart(2, "0"))], { element: "span", className: "tv-midi-track-index" }),
-                    new TVMarkupView([escapeHtml(track.title)], { element: "span", className: "tv-midi-track-title" }),
-                    new TVMarkupView([escapeHtml(track.credit)], { element: "span", className: "tv-midi-track-credit" }),
-                ].map((widget) => widget.renderMarkup()).join("") }).renderMarkup(),
-        }), trackList);
+        this.trackListBox = trackList;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
         this.bind();
@@ -3017,7 +2803,6 @@ class TVMidiPlayerDialog extends TVDialog {
             else if (event.command === "midi-stop") { this.stopPlayback(); }
             else if (event.command === "midi-next") { this.nextTrack(); }
             else if (event.command === "midi-more") { this.toggleAdvanced(); }
-            else if (event.command === "midi-close-button") { this.close(); }
             else if (event.command === "midi-load-url") { this.playExternalUrl(); }
             else if (event.command === "midi-source") { this.playExternalPreset(Number(event.infoPtr.value)); }
             else { return; }
@@ -3034,16 +2819,24 @@ class TVMidiPlayerDialog extends TVDialog {
         super.close();
     }
 
-    toggleAdvanced() {
-        const expanded = this.advancedView.root.hidden;
-        this.advancedView.setState("visible", expanded);
-        this.mainView.root?.classList.toggle("is-advanced", expanded);
-        this.moreButton.setState("expanded", expanded);
-        this.moreButton.setTitle(expanded ? "Less" : "More");
-        this.setSize({
-            height: expanded ? "min(27em, calc(100% - 2em))" : "min(23em, calc(100% - 2em))",
-        });
+    toggleAdvanced(expanded = this.advancedView.root.hidden) {
+        expanded = Boolean(expanded);
+        this.trackListBox.setState(sfVisible, expanded);
+        this.advancedView.setState(sfVisible, expanded);
+        this.mainView.changeBounds(new TVRect(0, 0, 42, expanded ? 23 : 8));
+        this.moreButton.commandData.expanded = expanded;
+        this.moreButton.root?.setAttribute("aria-expanded", expanded ? "true" : "false");
+        this.moreButton.setTitle(expanded ? "~L~ess" : "~M~ore");
+        this.locate(new TVRect(0, 0, 44, expanded ? 25 : 10));
         this.trackListBox.updateScrollbar();
+    }
+
+    captureUrlState() {
+        return { expanded: !this.advancedView.root.hidden };
+    }
+
+    restoreUrlState(state) {
+        this.toggleAdvanced(Boolean(state?.expanded));
     }
 
     selectTrack(index) {
@@ -3082,9 +2875,7 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 
     updateTrackDisplay(track, number) {
-        this.trackNumberView.setText(number);
-        this.titleView.setText(track.title);
-        this.timeView.setText("0:00 / 0:00");
+        this.displayView.setTrack(track, number);
     }
 
     async loadTrack(track) {
@@ -3179,7 +2970,7 @@ class TVMidiPlayerDialog extends TVDialog {
         this.updateTrackDisplay(track, number);
         this.setStatus(`Loading ${track.title}...`);
         this.updateProgress(0, 0, { status: false });
-        this.playButton.setState("disabled", true);
+        this.playButton.setState(sfDisabled, true);
         try {
             const sequence = await this.loadTrack(track);
             if (serial !== this.loadSerial) {
@@ -3199,7 +2990,7 @@ class TVMidiPlayerDialog extends TVDialog {
             this.isPlaying = false;
             this.setStatus(error && error.message ? error.message : "MIDI playback failed.");
         } finally {
-            this.playButton.setState("disabled", false);
+            this.playButton.setState(sfDisabled, false);
         }
     }
 
@@ -3220,51 +3011,393 @@ class TVMidiPlayerDialog extends TVDialog {
 
     updateProgress(elapsed, duration, { status = true } = {}) {
         const ratio = duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0;
-        if (this.meterView.root) { this.meterView.root.style.width = `${Math.round(ratio * 100)}%`; }
-        this.timeView.setText(`${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}`);
+        this.meter.setProgress(ratio);
+        this.displayView.setTime(elapsed, duration);
         if (status && duration > 0) {
             this.setStatus(`Playing ${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}.`);
         }
     }
 
     setStatus(message) {
-        this.statusView.setText(message);
+        this.displayView.setStatus(message);
+    }
+}
+
+function statisticsFlag(country) {
+    const code = String(country || "").toUpperCase();
+    if (!/^[A-Z]{2}$/.test(code)) { return "🌍"; }
+    return String.fromCodePoint(...Array.from(code, (letter) => 0x1F1E6 + letter.charCodeAt(0) - 65));
+}
+
+function statisticsSystemIcon(system) {
+    return ({ Windows: "🪟", macOS: "🍎", iOS: "🍎", Linux: "🐧", Android: "🤖" })[system] || "💻";
+}
+
+class TVStatisticsDialog extends TVDialog {
+    static viewName = "statistics";
+
+    constructor() {
+        const okButton = new TVButton(new TVRect(25, 22, 35, 24), "~O~K", "statistics-ok", bfDefault);
+        const refreshButton = new TVButton(new TVRect(37, 22, 49, 24), "~R~efresh", "statistics-refresh", bfNormal);
+        super(new TVRect(0, 0, 78, 27), "Server Statistics");
+        this.setHelpCtx(hcStatistics);
+        this.summary = new TVStaticText(new TVRect(1, 1, 75, 3), "Loading server statistics...");
+        this.categories = new TVListBox(new TVRect(1, 4, 24, 20));
+        this.details = new TVListBox(new TVRect(26, 4, 75, 20));
+        this.privacy = new TVStaticText(
+            new TVRect(1, 20, 75, 21),
+            "Aggregate counters only — no IP, cookie, visitor ID or raw user agent.",
+        );
+        this.data = null;
+        this.sections = [];
+        this.insert(new TVGroup(new TVRect(0, 0, 76, 25)).insertAll([
+            this.summary,
+            new TVStaticText(new TVRect(1, 3, 24, 4), "Category"),
+            new TVStaticText(new TVRect(26, 3, 75, 4), "Ranked values / count"),
+            this.categories,
+            this.details,
+            this.privacy,
+            okButton,
+            refreshButton,
+        ]));
+        this.okButton = okButton;
+        this.refreshButton = refreshButton;
+        this.categories.bind({ onSelect: (_item, index) => this.showSection(index) });
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "statistics-ok") { this.close(); }
+        else if (event.command === "statistics-refresh") { void this.reload(); }
+        else { return; }
+        this.clearEvent(event);
+    }
+
+    open() {
+        super.open();
+        void this.reload();
+    }
+
+    sectionRows(key) {
+        const rows = Array.isArray(this.data?.[key]) ? this.data[key] : [];
+        if (!rows.length) { return ["No data yet."]; }
+        return rows.map((row, index) => {
+            let value = String(row?.value || "Unknown");
+            if (key === "country") { value = `${statisticsFlag(value)} ${value}`; }
+            else if (key === "os") { value = `${statisticsSystemIcon(value)} ${value}`; }
+            return `${String(index + 1).padStart(2, " ")}. ${value}  ${Number(row?.count) || 0}`;
+        });
+    }
+
+    showSection(index) {
+        const section = this.sections[index];
+        this.details.newList(section ? this.sectionRows(section.key) : ["No data yet."]);
+    }
+
+    async reload() {
+        this.summary.setText("Loading server statistics...");
+        this.categories.newList([]);
+        this.details.newList([]);
+        try {
+            const response = await fetch("/api/statistics/summary", { cache: "no-store" });
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            this.data = await response.json();
+            this.summary.setText([
+                `Visits ${Number(this.data.visits) || 0}  HELP ${Number(this.data.help_opens) || 0}  Docs ${Number(this.data.document_opens) || 0}  Topics ${Number(this.data.topic_views) || 0}`,
+                `Dialogs ${Number(this.data.dialog_opens) || 0}  Tools ${Number(this.data.tool_opens) || 0}  Search ${Number(this.data.searches) || 0}  Games ${Number(this.data.game_launches) || 0}/${Number(this.data.game_completions) || 0}`,
+            ].join("\n"));
+            this.sections = [
+                ["📅 Daily visits", "daily"], ["🌍 Countries", "country"],
+                ["↗ Referrers", "referrer"], ["📖 HELP files", "help_file"],
+                ["📄 Documents", "document"], ["🔗 Topics", "topic"],
+                ["▣ Active time", "active_duration"], ["📖 HELP time", "help_duration"],
+                ["📄 Document time", "document_duration"], ["▤ Dialogs", "dialog"],
+                ["⌛ Dialog time", "dialog_duration"],
+                ["⚒ Tools", "tool"], ["⌕ Searches", "search"], ["↗ Links", "link"],
+                ["🎮 Games", "game"], ["🏁 Game results", "game_outcome"],
+                ["⏱ Game time", "game_duration"], ["🖥 Screens", "resolution"],
+                ["▣ Viewports", "viewport"], ["💻 Devices", "device"],
+                ["↕ Orientation", "orientation"], ["☝ Pointer", "pointer"],
+                ["≈ Reduced motion", "reduced_motion"],
+                ["⚙ Systems", "os"], ["🌐 Browsers", "browser"],
+                ["🗣 Languages", "language"], ["🕒 Time zones", "timezone"],
+                ["◉ Pixel ratio", "pixel_ratio"], ["🎨 Color depth", "color_depth"],
+                ["▦ Themes", "theme"], ["⇥ TTFB", "page_ttfb"],
+                ["⌛ Page load", "page_load"], ["▰ LCP", "lcp"],
+                ["↔ CLS", "cls"], ["⌁ INP", "inp"],
+                ["↓ HELP load", "help_load"], ["⇲ HELP unpack", "help_decompress"],
+                ["▧ HELP render", "help_render"], ["⚠ Client errors", "client_error"],
+            ].map(([label, key]) => ({ label, key }));
+            this.categories.newList(this.sections);
+            this.showSection(0);
+        } catch (error) {
+            this.data = null;
+            this.sections = [];
+            this.summary.setText(`Statistics are unavailable: ${String(error?.message || error)}`);
+            this.details.newList(["The server API could not be reached."]);
+        }
+    }
+}
+
+function systemInformationBrowser() {
+    const userAgent = String(navigator.userAgent || "");
+    const brands = navigator.userAgentData?.brands;
+    if (Array.isArray(brands) && brands.length) {
+        const brand = brands.find((item) => !/not.?a.?brand/i.test(item.brand)) || brands[0];
+        return `${brand.brand} ${brand.version}`;
+    }
+    const patterns = [
+        ["Edge", /Edg\/(\d+(?:\.\d+)?)/],
+        ["Opera", /(?:OPR|Opera)\/(\d+(?:\.\d+)?)/],
+        ["Firefox", /Firefox\/(\d+(?:\.\d+)?)/],
+        ["Chrome", /(?:Chrome|CriOS)\/(\d+(?:\.\d+)?)/],
+        ["Safari", /Version\/(\d+(?:\.\d+)?).*Safari/],
+    ];
+    for (const [name, pattern] of patterns) {
+        const match = userAgent.match(pattern);
+        if (match) { return `${name} ${match[1]}`; }
+    }
+    return "Unknown";
+}
+
+function systemInformationOperatingSystem() {
+    const platform = String(navigator.userAgentData?.platform || navigator.platform || "");
+    const userAgent = String(navigator.userAgent || "");
+    if (/Android/i.test(userAgent)) { return "Android"; }
+    if (/iPhone|iPad|iPod/i.test(userAgent)) { return "iOS"; }
+    if (/Win/i.test(platform) || /Windows/i.test(userAgent)) { return "Windows"; }
+    if (/Mac/i.test(platform) || /Mac OS/i.test(userAgent)) { return "macOS"; }
+    if (/Linux/i.test(platform) || /Linux/i.test(userAgent)) { return "Linux"; }
+    return platform || "Unknown";
+}
+
+function systemInformationStorage(name) {
+    const key = "thelp:system-information-test";
+    try {
+        const storage = window[name];
+        if (!storage) { return "Unavailable"; }
+        storage.setItem(key, "1");
+        storage.removeItem(key);
+        return "Available";
+    } catch {
+        return "Blocked";
+    }
+}
+
+function systemInformationSections() {
+    const body = document.body;
+    const screenInfo = window.screen || {};
+    const cell = measureCells();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown";
+    const orientation = screenInfo.orientation?.type || "Unknown";
+    const pageKind = body.dataset.tvPageKind || "generated HELP";
+    const generatedAt = body.dataset.tvGeneratedAt || "Not reported";
+    const platform = navigator.userAgentData?.platform || navigator.platform || "Unknown";
+    const applicationRows = [
+        `Name: ${body.dataset.tvSiteName || "THelpViewer"}`,
+        `Version: ${body.dataset.tvGeneratorVersion || "Unknown"}`,
+        `Authors: ${body.dataset.tvAuthors || "Unknown"}`,
+        `Page mode: ${pageKind}`,
+        `Theme: ${TV.getActiveThemePreset?.() || "default"}`,
+        `Generated: ${generatedAt}`,
+    ];
+    if (body.dataset.tvFormatName) { applicationRows.push(`Format: ${body.dataset.tvFormatName}`); }
+    if (body.dataset.tvTopicCount) { applicationRows.push(`Topics: ${body.dataset.tvTopicCount}`); }
+    if (body.dataset.tvIndexCount) { applicationRows.push(`Index entries: ${body.dataset.tvIndexCount}`); }
+
+    return [
+        {
+            label: "▣ Application",
+            rows: applicationRows,
+        },
+        {
+            label: "🌐 Browser",
+            rows: [
+                `Browser: ${systemInformationBrowser()}`,
+                `Operating system: ${systemInformationOperatingSystem()}`,
+                `Platform: ${platform}`,
+                `Online: ${navigator.onLine ? "Yes" : "No"}`,
+                `Cookies: ${navigator.cookieEnabled ? "Enabled" : "Disabled"}`,
+                `Do Not Track: ${navigator.doNotTrack || "Not set"}`,
+                `Logical processors: ${navigator.hardwareConcurrency || "Unknown"}`,
+                `Touch points: ${navigator.maxTouchPoints || 0}`,
+            ],
+        },
+        {
+            label: "🖥 Display",
+            rows: [
+                `Screen: ${screenInfo.width || 0} × ${screenInfo.height || 0}`,
+                `Available: ${screenInfo.availWidth || 0} × ${screenInfo.availHeight || 0}`,
+                `Viewport: ${window.innerWidth || 0} × ${window.innerHeight || 0}`,
+                `Pixel ratio: ${window.devicePixelRatio || 1}×`,
+                `Color depth: ${screenInfo.colorDepth || 0} bit`,
+                `Orientation: ${orientation}`,
+                `TV cell: ${Math.round(cell.width * 100) / 100} × ${Math.round(cell.height * 100) / 100} px`,
+            ],
+        },
+        {
+            label: "🗣 Locale",
+            rows: [
+                `Language: ${navigator.language || "Unknown"}`,
+                `Languages: ${(navigator.languages || []).join(", ") || "Unknown"}`,
+                `Time zone: ${timezone}`,
+            ],
+        },
+        {
+            label: "▤ Storage",
+            rows: [
+                `Local storage: ${systemInformationStorage("localStorage")}`,
+                `Session storage: ${systemInformationStorage("sessionStorage")}`,
+                `IndexedDB: ${"indexedDB" in window ? "Available" : "Unavailable"}`,
+                `Cache storage: ${"caches" in window ? "Available" : "Unavailable"}`,
+            ],
+        },
+        {
+            label: "⚙ Capabilities",
+            rows: [
+                `DecompressionStream: ${"DecompressionStream" in window ? "Yes" : "No"}`,
+                `WebAssembly: ${"WebAssembly" in window ? "Yes" : "No"}`,
+                `Web Audio: ${("AudioContext" in window || "webkitAudioContext" in window) ? "Yes" : "No"}`,
+                `Web MIDI: ${typeof navigator.requestMIDIAccess === "function" ? "Yes" : "No"}`,
+                `Service Worker: ${"serviceWorker" in navigator ? "Yes" : "No"}`,
+                `Clipboard: ${"clipboard" in navigator ? "Yes" : "No"}`,
+            ],
+        },
+        {
+            label: "↔ Server",
+            rows: ["Loading server information..."],
+            server: true,
+        },
+    ];
+}
+
+async function systemInformationServerRows() {
+    const requestJson = async (url) => {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+        return response.json();
+    };
+    const [healthResult, helpsResult, docsResult] = await Promise.allSettled([
+        requestJson("/healthz"),
+        requestJson("/helps/catalog.json"),
+        requestJson("/docs/catalog.json"),
+    ]);
+    if (healthResult.status !== "fulfilled") {
+        return [
+            "Status: Unavailable or static viewer",
+            `Origin: ${window.location.origin === "null" ? "Local file" : window.location.origin}`,
+        ];
+    }
+    const health = healthResult.value || {};
+    const helps = helpsResult.status === "fulfilled" && Array.isArray(helpsResult.value)
+        ? helpsResult.value.length
+        : "Unavailable";
+    const docs = docsResult.status === "fulfilled" && Array.isArray(docsResult.value)
+        ? docsResult.value.length
+        : "Unavailable";
+    return [
+        `Status: ${health.status === "ok" ? "Online" : String(health.status || "Unknown")}`,
+        `Version: ${health.version || "Unknown"}`,
+        `HELP catalog: ${helps}`,
+        `Docs catalog: ${docs}`,
+        `Origin: ${window.location.origin}`,
+    ];
+}
+
+class TVSystemInformationDialog extends TVDialog {
+    static viewName = "system-information";
+
+    constructor() {
+        const okButton = new TVButton(new TVRect(25, 22, 35, 24), "~O~K", "system-information-ok", bfDefault);
+        const refreshButton = new TVButton(new TVRect(37, 22, 49, 24), "~R~efresh", "system-information-refresh", bfNormal);
+        super(new TVRect(0, 0, 78, 27), "System Information");
+        this.setHelpCtx(hcSystemInformation);
+        this.summary = new TVStaticText(new TVRect(1, 1, 75, 3), "THelpViewer system and runtime information");
+        this.categories = new TVListBox(new TVRect(1, 4, 24, 20));
+        this.details = new TVListBox(new TVRect(26, 4, 75, 20));
+        this.note = new TVStaticText(
+            new TVRect(1, 20, 75, 21),
+            "Displayed locally — opening this dialog does not submit these details.",
+        );
+        this.sections = [];
+        this.insert(new TVGroup(new TVRect(0, 0, 76, 25)).insertAll([
+            this.summary,
+            new TVStaticText(new TVRect(1, 3, 24, 4), "Category"),
+            new TVStaticText(new TVRect(26, 3, 75, 4), "Value"),
+            this.categories,
+            this.details,
+            this.note,
+            okButton,
+            refreshButton,
+        ]));
+        this.okButton = okButton;
+        this.refreshButton = refreshButton;
+        this.categories.bind({ onSelect: (_item, index) => this.showSection(index) });
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "system-information-ok") { this.close(); }
+        else if (event.command === "system-information-refresh") { void this.reload(); }
+        else { return; }
+        this.clearEvent(event);
+    }
+
+    open() {
+        super.open();
+        void this.reload();
+    }
+
+    showSection(index) {
+        const section = this.sections[index];
+        this.details.newList(section?.rows?.length ? section.rows : ["No information available."]);
+    }
+
+    async reload() {
+        const selected = Math.max(0, this.categories.selectedIndex || 0);
+        this.sections = systemInformationSections();
+        this.categories.newList(this.sections);
+        this.categories.select(Math.min(selected, this.sections.length - 1));
+        this.showSection(this.categories.selectedIndex);
+        const server = this.sections.find((section) => section.server);
+        server.rows = await systemInformationServerRows();
+        if (this.sections[this.categories.selectedIndex] === server) {
+            this.showSection(this.categories.selectedIndex);
+        }
     }
 }
 
 class TVFindDialog extends TVDialog {
+    static viewName = "find";
+
     constructor() {
-        const findLabel = (new TVLabel(new TVRect(), "~T~ext to find")).setDrawOptions({ hotkey: true });
-        const findInput = (new TVInputLine(new TVRect(), 255).setData("")).setDrawOptions({ autocomplete: "off", spellcheck: "false", viewName: 'find-input' });
-        findLabel.link = findInput;
-        const findButton = new TVButton(new TVRect(), "~F~ind", "find-confirm", bfDefault);
-        const cancelButton = new TVButton(new TVRect(), "Cancel", "find-cancel", bfNormal);
-        const findStatus = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "find-status", presentation: "find-status" });
-        const historyButton = TVHistoryWindow.triggerView({
-            name: "find-history",
-            ariaLabel: "Find history",
-        });
-        const historyPopup = TVHistoryWindow.view({
-            popupRole: "find-history-popup",
-            popupName: "find-history-popup",
-            listAttrs: { "data-tv-find-history-list": true },
-        });
-        const findMain = (new TVGroup(new TVRect()).insertAll([
-                (new TVGroup(new TVRect()).insertAll([findLabel])).setDrawOptions({ presentation: "find-label" }),
-                (new TVGroup(new TVRect()).insertAll([findInput])).setDrawOptions({ presentation: "find-input" }),
-                historyButton,
-                (new TVGroup(new TVRect()).insertAll([findButton])).setDrawOptions({ presentation: "find-confirm" }),
-                (new TVGroup(new TVRect()).insertAll([cancelButton])).setDrawOptions({ presentation: "find-cancel" }),
-                findStatus,
-                historyPopup,
-            ])).setDrawOptions({ presentation: "find-main" });
-        super(new TVRect(0, 0, 49, 10), "Find", {
-            viewName: "find",
-            helpCtx: hcFind,
-            content: findMain,
-            modal: true,
-        });
-        this.history = new TVHistory("thelp:find-history");
+        const findInput = new TVInputLine(new TVRect(2, 2, 32, 3), 255).setData("");
+        const findLabel = new TVLabel(new TVRect(1, 1, 20, 2), "~T~ext to find", findInput);
+        const findButton = new TVButton(new TVRect(35, 1, 45, 3), "~F~ind", "find-confirm", bfDefault);
+        const cancelButton = new TVButton(new TVRect(35, 4, 45, 6), "Cancel", "find-cancel", bfNormal);
+        const findStatus = new TVStaticText(new TVRect(2, 5, 33, 7), "");
+        const historyButton = new TVHistory(new TVRect(32, 2, 35, 3), findInput, "thelp:find-history");
+        const historyPopup = new TVHistoryWindow(new TVRect(0, 0, 34, 8), "find");
+        const findMain = new TVGroup(new TVRect(0, 0, 47, 10)).insertAll([
+            findLabel,
+            findInput,
+            historyButton,
+            findButton,
+            cancelButton,
+            findStatus,
+            historyPopup,
+        ]);
+        super(new TVRect(0, 0, 49, 12), "Find");
+        this.setHelpCtx(hcFind);
+        this.insert(findMain);
+        this.setState(sfModal, true);
+        this.history = historyButton;
         this.findHandler = null;
         this.findAgainHandler = null;
         this.targetLabel = "active window";
@@ -3274,29 +3407,27 @@ class TVFindDialog extends TVDialog {
         this.cancelButton = cancelButton;
         this.historyButton = historyButton;
         this.historyPopup = historyPopup;
-        this.historyList = (new TVHistoryViewer(new TVRect())).setDrawOptions({
-            itemClassName: "tv-file-open-history-item",
-            itemAttrName: "data-tv-find-history-index",
-            renderItemContent: (item) => escapeHtml(item.value),
-        });
-        this.historyWindow = new TVHistoryWindow({
-            button: this.historyButton,
-            popup: this.historyPopup,
-            viewer: this.historyList,
-            items: () => this.history.keys().map((value) => ({ historyKey: value, value })),
-            onSelect: (item, activate) => {
+        this.historyList = historyPopup.viewer;
+        this.historyWindow = this.historyButton.bindWindow(
+            this.historyPopup,
+            () => this.history.keys().map((value) => ({ historyKey: value, value })),
+            (item, activate) => {
                 this.input.setData(item.value);
                 this.historyWindow.hide();
                 if (activate) { this.performFind(); }
                 else { this.input.focus(); }
             },
-        });
+        );
         this.bindCommonClose(() => this.close());
         this.bindDrag();
     }
 
     handleEvent(event) {
         super.handleEvent(event);
+        if (event.what === evKeyDown && this.historyWindow.handleEscape(event.nativeEvent)) {
+            this.clearEvent(event);
+            return;
+        }
         if (event.what === evCommand && event.command === "find-confirm") {
             this.performFind();
             this.clearEvent(event);
@@ -3354,62 +3485,77 @@ class TVFindDialog extends TVDialog {
         super.close();
     }
 
-    onDialogKeyDown(event) {
-        if (this.historyWindow.handleEscape(event)) { return; }
-        super.onDialogKeyDown(event);
+}
+
+class TVSearchResultsList extends TVListBox {
+    static viewName = "search-results";
+
+    constructor(bounds) {
+        super(bounds);
+        this.messageView = null;
+    }
+
+    setMessage(text) {
+        const messageView = new TVStaticText(new TVRect(), String(text ?? ""));
+        messageView.owner = this;
+        this.messageView = messageView;
+        super.setItems([messageView], -1);
+        messageView.resolve(this.itemsRoot());
+    }
+
+    setItems(items, selectedIndex = -1) {
+        this.messageView = null;
+        super.setItems(items, selectedIndex);
+    }
+
+    itemMarkup(entry, index) {
+        if (entry === this.messageView) {
+            return entry.draw();
+        }
+        const terms = entry.index_terms && entry.index_terms.length
+            ? `Index: ${entry.index_terms.slice(0, 4).join(", ")}`
+            : entry.title;
+        return new TVButton(new TVRect(), "", "search-index", bfNormal)
+            .setValue(index)
+            .setCommandData({
+                listIndex: index,
+                selected: index === this.selectedIndex,
+                title: entry.title,
+                meta: terms,
+                preview: entry.preview || entry.text.slice(0, 180),
+            })
+            .draw();
     }
 }
 
 class TVSearchDialog extends TVDialog {
-    constructor() {
-        const okButton = new TVButton(new TVRect(), '~O~K', "search-ok", bfDefault);
-        const cancelButton = new TVButton(new TVRect(), '~C~ancel', "search-cancel", bfNormal);
-        const buttonStrip = (new TVGroup(new TVRect()).insertAll([okButton, cancelButton])).setDrawOptions({ presentation: "search-buttons" });
-        const searchInput = (new TVInputLine(new TVRect(), 255)).setDrawOptions({ autocomplete: "off", spellcheck: "false", viewName: "search-input" });
-        const searchLabel = new TVLabel(new TVRect(), "Find:", searchInput);
-        const resultsHost = new TVMarkupView([TVVerticalListViewer.renderMarkup({
-            rootClass: "tv-search-results-scroll",
-            rootAttrs: { "data-tv-search-results": true },
-            viewportClass: "tv-search-results",
-        })]);
-        const searchMain = (new TVGroup(new TVRect()).insertAll([
-                (new TVGroup(new TVRect()).insertAll([
-                        searchLabel,
-                        searchInput,
-                    ])).setDrawOptions({ columns: "auto minmax(0,1fr)", gap: "1ch", align: "center" }),
-                new TVStaticText(new TVRect(), "Enter text and choose a topic."),
-                (new TVGroup(new TVRect()).insertAll([
-                        resultsHost,
-                    ])).setDrawOptions({ presentation: "search-results-panel" }),
-            ])).setDrawOptions({ presentation: "search-main" });
+    static viewName = "search";
 
-        super(new TVRect(0, 0, 76, 26), "Find", {
-            viewName: "search",
-            helpCtx: hcSearch,
-            content: new TVGroup(new TVRect()).insertAll([searchMain, buttonStrip]),
-        });
+    constructor() {
+        const searchInput = new TVInputLine(new TVRect(7, 1, 61, 2), 255);
+        const searchLabel = new TVLabel(new TVRect(1, 1, 7, 2), "Find:", searchInput);
+        const resultsBox = new TVSearchResultsList(new TVRect(1, 5, 61, 23));
+        const okButton = new TVButton(new TVRect(62, 1, 73, 3), '~O~K', "search-ok", bfDefault);
+        const cancelButton = new TVButton(new TVRect(62, 4, 73, 6), '~C~ancel', "search-cancel", bfNormal);
+        const searchMain = new TVGroup(new TVRect(0, 0, 74, 24)).insertAll([
+            searchLabel,
+            searchInput,
+            new TVStaticText(new TVRect(1, 3, 61, 4), "Enter text and choose a topic."),
+            resultsBox,
+            okButton,
+            cancelButton,
+        ]);
+
+        super(new TVRect(0, 0, 76, 26), "Find");
+        this.setHelpCtx(hcSearch);
+        this.insert(searchMain);
         this.searchData = window.TV_SEARCH_INDEX && Array.isArray(window.TV_SEARCH_INDEX.topics)
             ? window.TV_SEARCH_INDEX
             : { topics: [] };
         this.input = searchInput;
         this.okButton = okButton;
         this.cancelButton = cancelButton;
-        this.resultsBox = TVVerticalListViewer.bindRendered((new TVVerticalListViewer(new TVRect())).setDrawOptions({
-            itemClassName: "tv-search-result",
-            itemAttrName: "data-tv-search-index",
-            renderItemMarkup: (entry, index, selected) => {
-                const terms = entry.index_terms && entry.index_terms.length
-                    ? `Index: ${entry.index_terms.slice(0, 4).join(", ")}`
-                    : entry.title;
-                const parts = [
-                    ["tv-search-result-title", entry.title],
-                    ["tv-search-result-meta", terms],
-                    ["tv-search-result-preview", entry.preview || entry.text.slice(0, 180)],
-                ].map(([className, value]) => new TVMarkupView([escapeHtml(value)], { element: "span", className: className }).renderMarkup()).join("");
-                return (new TVButton(new TVRect(), "", "search-index", bfNormal).setValue(index).setCommandData({ selected })).setDrawOptions({ labelMarkup: parts }).renderMarkup();
-            },
-        }), resultsHost);
-        this.results = this.resultsBox.viewport;
+        this.resultsBox = resultsBox;
         this.matches = [];
         this.selectedIndex = -1;
         this.bindCommonClose(() => this.close());
@@ -3431,7 +3577,6 @@ class TVSearchDialog extends TVDialog {
                 this.openSelected();
             },
         });
-        document.addEventListener("keydown", (event) => this.onKeyDown(event));
     }
 
     handleEvent(event) {
@@ -3444,6 +3589,9 @@ class TVSearchDialog extends TVDialog {
             else if (event.command === "search-cancel") { this.close(); }
             else { return; }
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
@@ -3515,7 +3663,7 @@ class TVSearchDialog extends TVDialog {
 
     updateSelectionUi() {
         this.resultsBox.select(this.selectedIndex);
-        this.okButton.setState("active", this.selectedIndex >= 0);
+        this.okButton.setState(sfDisabled, this.selectedIndex < 0);
     }
 
     openSelected() {
@@ -3526,14 +3674,14 @@ class TVSearchDialog extends TVDialog {
     }
 
     renderResults(query) {
-        if (!this.results) {
+        if (!this.resultsBox.itemsRoot()) {
             return;
         }
         this.matches = [];
         this.selectedIndex = -1;
-        this.okButton.setState("active", false);
+        this.okButton.setState(sfDisabled, true);
         if (!this.searchData.topics.length) {
-            this.results.innerHTML = (new TVStaticText(new TVRect(), "Search index is not available for this help file.")).setDrawOptions({ presentation: "search-empty" }).renderMarkup();
+            this.resultsBox.setMessage("Search index is not available for this help file.");
             this.resultsBox.updateScrollbar();
             fillBorders();
             return;
@@ -3541,7 +3689,7 @@ class TVSearchDialog extends TVDialog {
 
         const trimmed = query.trim();
         if (!trimmed) {
-            this.results.innerHTML = (new TVStaticText(new TVRect(), "Type text to search across all generated topics.")).setDrawOptions({ presentation: "search-empty" }).renderMarkup();
+            this.resultsBox.setMessage("Type text to search across all generated topics.");
             this.resultsBox.updateScrollbar();
             fillBorders();
             return;
@@ -3549,7 +3697,7 @@ class TVSearchDialog extends TVDialog {
 
         const matches = this.search(trimmed);
         if (!matches.length) {
-            this.results.innerHTML = (new TVStaticText(new TVRect(), `No matches for "${trimmed}".`)).setDrawOptions({ presentation: "search-empty" }).renderMarkup();
+            this.resultsBox.setMessage(`No matches for "${trimmed}".`);
             this.resultsBox.updateScrollbar();
             fillBorders();
             return;
@@ -3604,23 +3752,25 @@ class TVSearchDialog extends TVDialog {
 
 
 Object.assign(TV, {
-    TV_CONTEXT_HELP_TOPICS,
-    TV_CONTEXT_HELP_BUNDLE_URL,
-    TVContextHelpDialog,
     TVAboutDialog,
     TVViewGalleryDialog,
     TVHistory,
     TVHistoryViewer,
     TVHistoryWindow,
     TVFileList,
-    TVFileListBox,
     TVFileOpenDialog,
     TVChangeDirectoryDialog,
+    TVAsciiTable,
     TVAsciiTableDialog,
     TVCalculatorDialog,
+    TVCalendarView,
     TVCalendarDialog,
+    TVColorSelector,
+    TVColorDisplay,
     TVColorsDialog,
     TVMidiPlayerDialog,
+    TVStatisticsDialog,
+    TVSystemInformationDialog,
     TVFindDialog,
     TVSearchDialog,
 });

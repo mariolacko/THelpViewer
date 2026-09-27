@@ -59,9 +59,17 @@ global.getComputedStyle = () => ({ getPropertyValue() { return ""; } });
 eval(fs.readFileSync(process.argv[1], "utf8"));
 const TV = window.THelpViewerTV;
 
-const nestedSubmenu = '<div class="tv-submenu-root"><div class="tv-menu-popup-separator"></div></div>';
-const nestedMenuMarkup = new TV.TVMenuBox(new TV.TVRect(), [nestedSubmenu]).renderMarkup();
-if (!nestedMenuMarkup.includes(nestedSubmenu)) {
+const nestedSubmenu = TV.NewSubMenu(
+    "Nested",
+    0,
+    new TV.TVMenu([TV.NewLine()]),
+);
+const nestedMenuMarkup = new TV.TVMenuBox(
+    new TV.TVRect(),
+    new TV.TVMenu([nestedSubmenu]),
+).draw();
+if (!nestedMenuMarkup.includes('class="tv-submenu-root"')
+    || !nestedMenuMarkup.includes('class="tv-menu-popup-separator"')) {
     throw new Error("a separator inside a submenu erased the complete Contents item");
 }
 
@@ -228,6 +236,8 @@ def test_shell_and_bundle_use_the_shared_menu_controller():
     assert "class TurboVisionMenus extends TVMenuController" in shell
     assert "new TVMenuController" in bundle
     assert "menuController.refresh()" in bundle
+    assert "activateKeyCode(getKeyCode(event))" in Path("www/assets/tv-core.js").read_text(encoding="utf-8")
+    assert "_handleMenuShortcut" not in bundle
     assert "_menuGlobalsBound" not in bundle
     assert ".tv-menu-popup-item.is-menu-selected" in css
 
@@ -303,6 +313,7 @@ const source = fs.readFileSync(process.argv[1], "utf8");
 const start = source.indexOf("class TVBundleApp");
 const end = source.indexOf("// ── Bootstrap", start);
 const TV_COMMANDS = { CLOSE: "close", ZOOM: "zoom", NEXT: "next", PREVIOUS: "previous" };
+global.TVProgram = class {};
 eval(source.slice(start, end) + "\nglobalThis.TestBundleApp = TVBundleApp;");
 
 function item(command) {

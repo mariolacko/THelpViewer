@@ -572,15 +572,16 @@ const {
     TVDialog,
     TVRect,
     TVStaticText,
-    TVMarkupView,
     TVGroup,
     TVButton,
     bfNormal,
     bfDefault,
     TVLabel,
     TVInputLine,
+    TVInfoRow,
     TVInfoBox,
-    TVFrame,
+    TVRadioButtons,
+    TVCheckBoxes,
     TV_HELP_CONTEXTS,
     fillBorders,
     PUZZLE_START,
@@ -588,7 +589,43 @@ const {
     evMouseDown,
     evKeyDown,
     evCommand,
+    sfDisabled,
+    sfModal,
+    sfActive,
+    sfFocused,
+    ofSelectable,
+    ofFramed,
+    ofPreProcess,
+    ofCentered,
 } = TV;
+
+class TVGameSurface extends TVStaticText {
+    constructor(bounds) {
+        super(bounds, "");
+    }
+}
+
+class TVTetrisPreview extends TVGameSurface { static viewName = "tetris-preview"; }
+class TVMinesField extends TVGameSurface { static viewName = "mines-grid"; }
+class TVBreakOutField extends TVGameSurface { static viewName = "break-field"; }
+class TVSokobanField extends TVGameSurface { static viewName = "sokoban-field"; }
+class TVLinesField extends TVGameSurface { static viewName = "lines-grid"; }
+class TVReversiField extends TVGameSurface { static viewName = "reversi-grid"; }
+class TVLudoBoard extends TVGameSurface {
+    static viewName = "ludo-board";
+}
+class TVMastermindBoard extends TVGameSurface { static viewName = "mastermind-board"; }
+class TVMastermindStatus extends TVGameSurface { static viewName = "mastermind-status"; }
+class TVTronField extends TVGameSurface { static viewName = "tron-field"; }
+class TVTronStatus extends TVGameSurface { static viewName = "tron-status"; }
+class TVHanoiBoard extends TVGameSurface { static viewName = "hanoi-board"; }
+class TVHanoiHistory extends TVGameSurface { static viewName = "hanoi-history"; }
+class TVHanoiStatus extends TVGameSurface { static viewName = "hanoi-status"; }
+class TVSnakeField extends TVGameSurface { static viewName = "snake-field"; }
+
+class TVGameInfoBox extends TVInfoBox {
+    static borderRole = "game-border";
+}
 
 const {
     hcGames,
@@ -630,26 +667,26 @@ function saveBest(key, score, name) {
 let bestNamePromptSequence = 0;
 
 class TVBestNameDialog extends TVDialog {
+    static viewName = "best";
+
     constructor(ownerDialog, score, callback, {
     heading = "New High Score!",
     scoreLabel = "Score",
     } = {}) {
-        const nameInput = (new TVInputLine(new TVRect(1, 6, 27, 6), 15)).setDrawOptions({ placeholder: "Player", viewName: "best-name-input" });
-        const nameLabel = new TVLabel(new TVRect(1, 5, 27, 5), "Your name:", nameInput);
-        const okButton = new TVButton(new TVRect(9, 8, (9) + (10), 8), '~O~K', "best-ok", bfDefault);
+        const nameInput = new TVInputLine(new TVRect(1, 6, 27, 7), 15);
+        const nameLabel = new TVLabel(new TVRect(1, 5, 27, 6), "Your name:", nameInput);
+        const okButton = new TVButton(new TVRect(9, 8, 19, 10), '~O~K', "best-ok", bfDefault);
         const body = new TVGroup(new TVRect(0, 0, (0) + (28), (0) + (10))).insertAll([
-            (new TVStaticText(new TVRect(0, 1, (0) + (28), 1), heading)).setDrawOptions({ align: "center", title: true }),
-            (new TVStaticText(new TVRect(0, 3, (0) + (28), 3), `${scoreLabel}: ${score}`)).setDrawOptions({ align: "center" }),
+            new TVStaticText(new TVRect(0, 1, 28, 2), `\x03${heading}`),
+            new TVStaticText(new TVRect(0, 3, 28, 4), `\x03${scoreLabel}: ${score}`),
             nameLabel,
             nameInput,
             okButton,
         ]);
-        super(new TVRect(0, 0, 32, 13), "High Score", {
-            viewName: "best",
-            helpCtx: ownerDialog?.getHelpCtx?.() || hcGames,
-            content: body,
-            modal: true,
-        });
+        super(new TVRect(0, 0, 32, 13), "High Score");
+        this.setHelpCtx(ownerDialog?.getHelpCtx?.() || hcGames);
+        this.insert(body);
+        this.setState(sfModal, true);
         this.nameInput = nameInput;
         this.okButton = okButton;
         this.callback = callback;
@@ -697,9 +734,11 @@ function showBestNamePrompt(ownerDialog, score, callback, options = {}) {
 
 const HALL_OF_FAME_LIMIT = 10;
 const HALL_OF_FAME_PREFIX = "tv-hall-of-fame:";
+const serverHallOfFame = new Map();
 const HALL_OF_FAME_GAMES = Object.freeze({
     puzzle: { title: "Puzzle", unit: "moves", lowerIsBetter: true },
     tetris: { title: "Tetris", unit: "points", legacyKey: "tv-tetris-best" },
+    pentix: { title: "Pentix", unit: "points", legacyKey: "tv-pentix-best" },
     mines: { title: "Mines", unit: "seconds", lowerIsBetter: true },
     breakout: { title: "Breakout", unit: "points", legacyKey: "tv-breakout-best" },
     sokoban: { title: "Sokoban", unit: "moves", lowerIsBetter: true },
@@ -723,7 +762,7 @@ function sortHallOfFame(game, entries) {
         : right.score - left.score);
 }
 
-function loadHallOfFame(game) {
+function loadLocalHallOfFame(game) {
     let entries = [];
     try {
         const parsed = JSON.parse(localStorage.getItem(HALL_OF_FAME_PREFIX + game) || "[]");
@@ -746,6 +785,30 @@ function loadHallOfFame(game) {
     return sortHallOfFame(game, entries).slice(0, HALL_OF_FAME_LIMIT);
 }
 
+function normalizeHallOfFameEntries(game, entries) {
+    if (!Array.isArray(entries)) { return []; }
+    return sortHallOfFame(game, entries
+        .filter((entry) => Number.isFinite(Number(entry?.score)) && Number(entry.score) > 0)
+        .map((entry) => ({
+            name: String(entry.name || "Player").slice(0, 15),
+            score: Number(entry.score),
+            note: String(entry.note || "").slice(0, 12),
+        }))).slice(0, HALL_OF_FAME_LIMIT);
+}
+
+function loadHallOfFame(game) {
+    return serverHallOfFame.get(game) || loadLocalHallOfFame(game);
+}
+
+async function loadServerHallOfFame(game) {
+    const response = await fetch(`/api/hall-of-fame/${encodeURIComponent(game)}`, { cache: "no-store" });
+    if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+    const payload = await response.json();
+    const entries = normalizeHallOfFameEntries(game, payload?.entries);
+    serverHallOfFame.set(game, entries);
+    return entries;
+}
+
 function hallOfFameQualifies(game, score) {
     if (!Number.isFinite(score) || score <= 0) { return false; }
     const entries = loadHallOfFame(game);
@@ -754,9 +817,9 @@ function hallOfFameQualifies(game, score) {
     return hallOfFameConfig(game).lowerIsBetter ? score < last.score : score > last.score;
 }
 
-function saveHallOfFameScore(game, score, name, note = "") {
+function saveLocalHallOfFameScore(game, score, name, note = "") {
     if (!Number.isFinite(score) || score <= 0) { return false; }
-    const entries = loadHallOfFame(game);
+    const entries = loadLocalHallOfFame(game);
     entries.push({ name: String(name || "Player").slice(0, 15), score, note: String(note || "").slice(0, 12) });
     const sorted = sortHallOfFame(game, entries).slice(0, HALL_OF_FAME_LIMIT);
     try {
@@ -764,6 +827,28 @@ function saveHallOfFameScore(game, score, name, note = "") {
         return true;
     } catch {
         return false;
+    }
+}
+
+async function saveHallOfFameScore(game, score, name, note = "") {
+    if (!Number.isFinite(score) || score <= 0) { return false; }
+    const entry = {
+        name: String(name || "Player").slice(0, 15),
+        score,
+        note: String(note || "").slice(0, 12),
+    };
+    try {
+        const response = await fetch(`/api/hall-of-fame/${encodeURIComponent(game)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(entry),
+        });
+        if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+        const payload = await response.json();
+        serverHallOfFame.set(game, normalizeHallOfFameEntries(game, payload?.entries));
+        return payload?.accepted !== false;
+    } catch {
+        return saveLocalHallOfFameScore(game, score, name, note);
     }
 }
 
@@ -776,8 +861,9 @@ function submitHallOfFameScore(ownerDialog, game, score, {
         return false;
     }
     const save = (playerName) => {
-        saveHallOfFameScore(game, score, playerName, note);
-        if (onSaved) { onSaved(playerName); }
+        void saveHallOfFameScore(game, score, playerName, note).then((saved) => {
+            if (saved && onSaved) { onSaved(playerName); }
+        });
     };
     if (name) {
         save(name);
@@ -797,29 +883,64 @@ function formatHallOfFameScore(game, entry) {
     return `${entry.score} ${config.unit}${note}`;
 }
 
-function showHallOfFame(ownerDialog, game) {
-    const config = hallOfFameConfig(game);
-    const entries = loadHallOfFame(game);
-    const row = (kind, rank, player, score) => (new TVGroup(new TVRect()).insertAll([
-            new TVStaticText(new TVRect(), rank),
-            new TVStaticText(new TVRect(), player),
-            new TVStaticText(new TVRect(), score),
-        ])).setDrawOptions({ presentation: kind });
+class TVHallOfFameDialog extends TVDialog {
+    static viewName = "hall";
+
+    constructor(title, helpCtx, body) {
+        super(new TVRect(0, 0, 45, 15), title);
+        this.setHelpCtx(helpCtx);
+        this.insert(body);
+        this.body = body;
+        this.setState(sfModal, true);
+    }
+
+    setRows(rows) {
+        this.body.children.slice().forEach((view) => this.body.remove(view));
+        this.body.insertAll(rows);
+        this.drawContent();
+    }
+}
+
+class TVHallRow extends TVGroup {
+    constructor(bounds, kind, rank, player, score) {
+        super(bounds);
+        this.kind = String(kind || "");
+        this.insertAll([
+            new TVStaticText(new TVRect(1, 0, 5, 1), rank),
+            new TVStaticText(new TVRect(6, 0, 24, 1), player),
+            new TVStaticText(new TVRect(25, 0, 42, 1), score),
+        ]);
+    }
+
+    _drawRole() { return this.kind; }
+}
+
+function hallOfFameRows(game, entries) {
     const rows = entries.length
-        ? entries.map((entry, index) => row(
+        ? entries.map((entry, index) => new TVHallRow(
+            new TVRect(0, index + 2, 43, index + 3),
             "hall-row",
             `${String(index + 1).padStart(2, " ")}.`,
             entry.name,
             formatHallOfFameScore(game, entry),
         ))
-        : [(new TVStaticText(new TVRect(), "No scores yet.")).setDrawOptions({ presentation: "hall-empty" })];
-    const body = (new TVGroup(new TVRect()).insertAll([row("hall-header", "#", "Player", "Score"), ...rows])).setDrawOptions({ presentation: "hall-main" });
-    const dlg = new TVDialog(new TVRect(0, 0, 45, 15), `${config.title} Hall of Fame`, {
-        viewName: "hall",
-        helpCtx: ownerDialog?.getHelpCtx?.() || hcGames,
-        content: body,
-        modal: true,
-    });
+        : [new TVStaticText(new TVRect(1, 3, 42, 4), "\x03No scores yet.")];
+    return [
+        new TVHallRow(new TVRect(0, 1, 43, 2), "hall-header", "#", "Player", "Score"),
+        ...rows,
+    ];
+}
+
+function showHallOfFame(ownerDialog, game) {
+    const config = hallOfFameConfig(game);
+    const body = new TVGroup(new TVRect(0, 0, 43, 13)).insertAll(
+        hallOfFameRows(game, loadHallOfFame(game)),
+    );
+    const dlg = new TVHallOfFameDialog(
+        `${config.title} Hall of Fame`,
+        ownerDialog?.getHelpCtx?.() || hcGames,
+        body,
+    );
     const manager = ownerDialog?.manager || null;
     if (manager) {
         manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg);
@@ -829,42 +950,80 @@ function showHallOfFame(ownerDialog, game) {
     dlg.bindCommonClose(() => dlg.destroy());
     dlg.bindDrag();
     dlg.open();
+    void loadServerHallOfFame(game).then((entries) => {
+        if (!dlg.destroyed) { dlg.setRows(hallOfFameRows(game, entries)); }
+    }).catch(() => {});
+}
+
+class TVGameDialog extends TVDialog {
+    getGameResult() {
+        const status = String(this.game?.status || "").toLowerCase();
+        if (this.solved || this.won || status === "won") { return "won"; }
+        if (status === "lost") { return "lost"; }
+        if (status === "draw") { return "draw"; }
+        if (this.gameOver) { return "lost"; }
+        return "abandoned";
+    }
+
+    open() {
+        const wasOpen = this.isOpen();
+        super.open();
+        if (!wasOpen && this.hallOfFameGame) {
+            void loadServerHallOfFame(this.hallOfFameGame).catch(() => {});
+        }
+    }
+
+    setHallOfFame(game) {
+        this.hallOfFameGame = String(game || "");
+        const button = this.frame.createTitleControl(
+            "hall-of-fame",
+            "H",
+            `${hallOfFameConfig(this.hallOfFameGame).title} Hall of Fame`,
+        );
+        this.titlebar?.appendChild(button);
+        return this;
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && event.command === "hall-of-fame" && this.hallOfFameGame) {
+            showHallOfFame(this, this.hallOfFameGame);
+            this.clearEvent(event);
+        }
+    }
 }
 
 function installHallOfFame(ownerDialog, game) {
-    const button = TVFrame.createTitleControl({
-        className: "tv-game-hall-control",
-        glyph: "H",
-        glyphClass: "tv-game-hall-glyph",
-        attrs: {
-            title: "Hall of Fame",
-            "aria-label": `${hallOfFameConfig(game).title} Hall of Fame`,
-        },
-    });
-    button.addEventListener("mousedown", (event) => event.stopPropagation());
-    button.addEventListener("click", () => showHallOfFame(ownerDialog, game));
-    ownerDialog.titlebar?.appendChild(button);
+    ownerDialog.setHallOfFame(game);
 }
 
 // ── Puzzle (15-game) ────────────────────────────────────────────────
 
-class TVPuzzleDialog extends TVDialog {
+class TVPuzzleBoard extends TVStaticText {
+    static viewName = "puzzle-grid";
+
+    constructor(bounds) {
+        super(bounds, "");
+    }
+}
+
+class TVPuzzleDialog extends TVGameDialog {
+    static viewName = "puzzle";
+    static palette = "viewer";
+
     constructor() {
         const GRID_W = 12;  // 4 cols × 3ch
         const INFO_X = GRID_W + 1;
-        const gridView = (new TVStaticText(new TVRect(0, 0, (0) + (GRID_W), (0) + (4)), "")).setDrawOptions({ viewName: "puzzle-grid" });
-        const movesView = (new TVStaticText(new TVRect(INFO_X, 1, (INFO_X) + (6), 1), "0")).setDrawOptions({ viewName: "puzzle-moves" });
+        const gridView = new TVPuzzleBoard(new TVRect(0, 0, GRID_W, 4));
+        const movesView = new TVStaticText(new TVRect(INFO_X, 1, INFO_X + 6, 2), "0");
         const puzzleMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + 6), (0) + (4))).insertAll([
                 gridView,
-                new TVStaticText(new TVRect(INFO_X, 0, (INFO_X) + (6), 0), "Move"),
+                new TVStaticText(new TVRect(INFO_X, 0, INFO_X + 6, 1), "Move"),
                 movesView,
             ]);
-        super(new TVRect(0, 0, 20, 6), "Puzzle", {
-            viewName: "puzzle",
-            helpCtx: hcPuzzle,
-            palette: "viewer",
-            content: puzzleMain,
-        });
+        super(new TVRect(0, 0, 20, 6), "Puzzle");
+        this.setHelpCtx(hcPuzzle);
+        this.insert(puzzleMain);
         installHallOfFame(this, "puzzle");
         this.gridView = gridView;
         this.movesView = movesView;
@@ -873,12 +1032,7 @@ class TVPuzzleDialog extends TVDialog {
         this.solved = false;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
         this.scramble();
-    }
-
-    bind() {
-        document.addEventListener("keydown", (event) => this.onKeyDown(event));
     }
 
     handleEvent(event) {
@@ -886,6 +1040,9 @@ class TVPuzzleDialog extends TVDialog {
         if (event.what === evMouseDown && event.infoPtr === this.gridView) {
             this.onGridClick(event.nativeEvent);
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
@@ -1022,7 +1179,7 @@ class TVPuzzleDialog extends TVDialog {
                 >${escapeHtml(value === " " ? " " : value)}</button>
             `;
         });
-        this.gridView.setHTML(cells.join(""));
+        this.gridView._setHTML(cells.join(""));
         this.movesView.setText(String(this.moves).padStart(3, " "));
     }
 }
@@ -1033,6 +1190,7 @@ const TETRIS_COLS = 12;  // DN: Shi = 12
 const TETRIS_ROWS = 18;
 const TETRIS_PREVIEW_COLS = 7;
 const TETRIS_PREVIEW_ROWS = 7;
+const TETRIS_INFO_WIDTH = 23;
 const TETRIS_FIGURES = [
     [[0,2],[1,2],[2,2],[2,1]],
     [[0,1],[1,1],[2,1],[2,2]],
@@ -1075,57 +1233,52 @@ const TETRIS_COLORS = [
 ];
 const TETRIS_DELAYS = [1600, 1200, 1000, 600, 500, 400, 300, 200, 100, 80];
 const TETRIS_BEST_KEY = "tv-tetris-best";
+const PENTIX_BEST_KEY = "tv-pentix-best";
 
-class TVTetrisDialog extends TVDialog {
-    constructor() {
-        // Layout in character cells: grid 24×20 left, info panel 22×20 right
-        const GRID_W = TETRIS_COLS * 2;  // 24ch
-        const INFO_X = GRID_W + 1;       // 25ch
-        const INFO_W = 22;               // 22ch
-        const previewView = (new TVStaticText(new TVRect(0, 0, 0, (0) + (TETRIS_PREVIEW_ROWS)), "")).setDrawOptions({ viewName: "tetris-preview" });
-        const gridView = (new TVStaticText(new TVRect(0, 0, (0) + (GRID_W), (0) + (18)), "")).setDrawOptions({ viewName: "tetris-grid" });
-        const newButton = new TVButton(new TVRect(INFO_X, 17, (INFO_X) + (10), 17), '~N~ew', "tetris-new", bfNormal);
-        const pauseButton = new TVButton(new TVRect(INFO_X + 11, 17, (INFO_X + 11) + (10), 17), '~P~ause', "tetris-pause", bfNormal);
-        const pentixButton = new TVButton(new TVRect(INFO_X, 19, (INFO_X) + (INFO_W), 19), 'Penti~x~', "tetris-pentix", bfNormal);
+class TVTetrisGameInfo extends TVInfoBox {
+    static borderRole = "game-border";
 
-        const infoBox = (new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "score" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "lines" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "level" }),
-                (new TVStaticText(new TVRect(), TVInfoBox.separator(INFO_W - 2, "Next"))).setDrawOptions({ presentation: "info-frame" }),
-                previewView,
-            ])).setDrawOptions({ viewName: "info", borderPresentation: "game-border" });
-        const bestBox = (new TVInfoBox(new TVRect(INFO_X, 13, (INFO_X) + (INFO_W), 13), "Best", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "best" }),
-            ])).setDrawOptions({ viewName: "best", borderPresentation: "game-border" });
+    constructor(bounds, previewView) {
+        const scoreView = new TVInfoRow(new TVRect());
+        const linesView = new TVInfoRow(new TVRect());
+        const levelView = new TVInfoRow(new TVRect());
+        const bestNameView = new TVInfoRow(new TVRect());
+        const bestScoreView = new TVInfoRow(new TVRect());
+        const nextSeparator = new TVStaticText(new TVRect(), TVInfoBox.separator(bounds.width - 2, "Next"));
+        const bestSeparator = new TVStaticText(new TVRect(), TVInfoBox.separator(bounds.width - 2, "Best"));
+        super(bounds, "Info", [
+            scoreView,
+            linesView,
+            levelView,
+            nextSeparator,
+            previewView,
+            bestSeparator,
+            bestNameView,
+            bestScoreView,
+        ]);
+        this.scoreView = scoreView;
+        this.linesView = linesView;
+        this.levelView = levelView;
+        this.bestNameView = bestNameView;
+        this.bestScoreView = bestScoreView;
+    }
 
-        const tetrisMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (20))).insertAll([
-                // Grid (left side)
-                gridView,
-                // Info panel (right side) — TVInfoBox containers
-                infoBox,
-                bestBox,
-                // Buttons
-                newButton,
-                pauseButton,
-                pentixButton,
-            ]);
+    update(game) {
+        this.updateRow(this.scoreView, "Score: " + game.score);
+        this.updateRow(this.linesView, "Lines: " + game.lines);
+        this.updateRow(this.levelView, "Level: " + game.level);
+        this.updateRow(this.bestNameView, "Name: " + (game.bestName || "Anonymous"));
+        this.updateRow(this.bestScoreView, "Score: " + game.bestScore);
+    }
+}
 
-        super(new TVRect(0, 0, 50, 24), "Tetris", {
-            viewName: "tetris",
-            helpCtx: hcTetris,
-            content: tetrisMain,
-        });
+class TVTetrisGameView extends TVStaticText {
+    static viewName = "tetris-grid";
 
-        installHallOfFame(this, "tetris");
-        this.gridView = gridView;
-        this.previewView = previewView;
-        this.newButton = newButton;
-        this.pauseButton = pauseButton;
-        this.pentixButton = pentixButton;
-        this.infoBox = infoBox.resolve(this.root);
-        this.bestBox = bestBox.resolve(this.root);
-
+    constructor(bounds) {
+        super(bounds, "");
+        this.options |= ofFramed | ofSelectable | ofPreProcess;
+        this.eventMask = 0xffff;
         this.glass = [];
         this.curFig = 0;
         this.nextFig = 0;
@@ -1143,40 +1296,53 @@ class TVTetrisDialog extends TVDialog {
         this.preview = true;
         this.bestScore = 0;
         this.bestName = "";
+        this.infoView = null;
+        this.previewView = null;
         this._loadBestData();
+    }
 
-        this.bindCommonClose(() => this.close());
-        this.bindDrag();
-        this.bind();
+    attach(infoView, previewView) {
+        this.infoView = infoView;
+        this.previewView = previewView;
+        return this;
+    }
+
+    gameWindow() {
+        let view = this.owner;
+        while (view && !(view instanceof TVDialog)) { view = view.owner; }
+        return view;
     }
 
     _loadBestData() {
-        const b = loadBest(TETRIS_BEST_KEY);
+        const b = loadBest(this.pentix ? PENTIX_BEST_KEY : TETRIS_BEST_KEY);
         this.bestScore = b.score;
         this.bestName = b.name;
     }
     _saveBest() {
-        saveBest(TETRIS_BEST_KEY, this.bestScore, this.bestName);
-    }
-
-    bind() {
-        this._onKeyDown = (event) => this.onKeyDown(event);
-        document.addEventListener("keydown", this._onKeyDown);
+        saveBest(this.pentix ? PENTIX_BEST_KEY : TETRIS_BEST_KEY, this.bestScore, this.bestName);
     }
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what !== evCommand) { return; }
-        if (event.command === "tetris-new") { this.newGame(); }
-        else if (event.command === "tetris-pause") { this.togglePause(); }
-        else if (event.command === "tetris-pentix") { this.togglePentix(); }
-        else { return; }
-        this.clearEvent(event);
+        if (event.what === evCommand) {
+            if (event.command === "tetris-new") { this.newGame(); }
+            else if (event.command === "tetris-pause") { this.togglePause(); }
+            else if (event.command === "tetris-setup") { this.gameWindow()?.openSetup(); }
+            else if (event.command === "tetris-top10") {
+                showHallOfFame(this.gameWindow(), this.pentix ? "pentix" : "tetris");
+            }
+            else { return; }
+            this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+        }
     }
 
     onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (event.key === "Escape") { event.preventDefault(); this.close(); return; }
+        const window = this.gameWindow();
+        if (!window?.isActive()) { return; }
+        if (event.key === "Escape") { event.preventDefault(); window.close(); return; }
         if (this.gameOver) {
             if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
@@ -1219,10 +1385,6 @@ class TVTetrisDialog extends TVDialog {
                 event.preventDefault();
                 this.togglePause();
                 break;
-            case "x": case "X":
-                event.preventDefault();
-                this.togglePentix();
-                break;
         }
     }
 
@@ -1233,22 +1395,26 @@ class TVTetrisDialog extends TVDialog {
         this.render();
     }
 
-    togglePentix() {
-        this.pentix = !this.pentix;
-        const titleEl = this.dialog ? this.dialog.querySelector(".tv-dialog-title-text") : null;
-        if (titleEl) { titleEl.textContent = this.pentix ? "Pentix" : "Tetris"; }
-        this.pentixButton.setTitle(this.pentix ? 'Tetri~s~' : 'Penti~x~');
+    applySettings({ startLevel, pentix, preview }) {
+        this.startLevel = Math.max(1, Math.min(10, Number(startLevel) || 1));
+        this.pentix = Boolean(pentix);
+        this.preview = Boolean(preview);
+        this._loadBestData();
+        const window = this.gameWindow();
+        const title = this.pentix ? "Pentix" : "Tetris";
+        if (window) {
+            window.title = title;
+            window.frame.drawTitle();
+        }
         this.newGame();
     }
 
-    open() {
-        super.open();
-        this.newGame();
-    }
-
-    close() {
-        this.stopTimer();
-        super.close();
+    setState(state, enable) {
+        super.setState(state, enable);
+        if (!enable && (state & (sfActive | sfFocused)) !== 0 && !this.gameOver && !this.paused) {
+            this.togglePause();
+        }
+        return this;
     }
 
     get maxFig() { return this.pentix ? 28 : 7; }
@@ -1367,7 +1533,9 @@ class TVTetrisDialog extends TVDialog {
 
     _checkBest() {
         const isBest = this.score > this.bestScore;
-        submitHallOfFameScore(this, "tetris", this.score, {
+        const game = this.pentix ? "pentix" : "tetris";
+        submitHallOfFameScore(this.gameWindow(), game, this.score, {
+            note: `${this.startLevel}→${this.level}`,
             onSaved: (name) => {
                 if (!isBest) { return; }
                 this.bestScore = this.score;
@@ -1382,7 +1550,7 @@ class TVTetrisDialog extends TVDialog {
         this.stopTimer();
         const delay = TETRIS_DELAYS[this.level - 1] || 80;
         this.timerId = setInterval(() => {
-            if (!this.isActive() || this.gameOver || this.paused) { return; }
+            if (!this.gameWindow()?.isActive() || this.gameOver || this.paused) { return; }
             this.moveDown();
         }, delay);
     }
@@ -1401,13 +1569,7 @@ class TVTetrisDialog extends TVDialog {
     }
 
     renderInfo() {
-        this.infoBox.updateRow("score", "Score: " + this.score);
-        this.infoBox.updateRow("lines", "Lines: " + this.lines);
-        this.infoBox.updateRow("level", "Level: " + this.level);
-        const bestText = this.bestName
-            ? this.bestName + " " + this.bestScore
-            : "Best:  " + this.bestScore;
-        this.bestBox.updateRow("best", bestText);
+        this.infoView?.update(this);
     }
 
     renderGrid() {
@@ -1451,19 +1613,19 @@ class TVTetrisDialog extends TVDialog {
         }
 
         if (this.paused) {
-            this.gridView.setHTML(`<div class="tv-tetris-overlay-msg">PAUSED<br><small>Press P</small></div>`);
+            this._setHTML(`<div class="tv-tetris-overlay-msg">PAUSED<br><small>Press P</small></div>`);
         } else if (this.gameOver) {
-            this.gridView.setHTML(lines.join("") +
+            this._setHTML(lines.join("") +
                 `<div class="tv-tetris-overlay-msg">GAME OVER<br><small>Score: ${this.score}</small><br><small>Press Enter</small></div>`);
         } else {
-            this.gridView.setHTML(lines.join(""));
+            this._setHTML(lines.join(""));
         }
     }
 
     renderPreview() {
         const PCOLS = TETRIS_PREVIEW_COLS;
         const PROWS = TETRIS_PREVIEW_ROWS;
-        const PAD = 20 - PCOLS * 2;
+        const PAD = (TETRIS_INFO_WIDTH - 2) - PCOLS * 2;
         const emptyCell = '<span class="tv-tetris-cell">  </span>';
         const border = '<span class="tv-tetris-preview-border tv-game-border">\u2502</span>';
         const renderRows = (grid, color = "") => {
@@ -1483,7 +1645,7 @@ class TVTetrisDialog extends TVDialog {
         };
         if (!this.preview || this.gameOver) {
             const emptyGrid = Array.from({ length: PROWS }, () => new Array(PCOLS).fill(false));
-            this.previewView.setHTML(renderRows(emptyGrid));
+            this.previewView._setHTML(renderRows(emptyGrid));
             return;
         }
         const fig = TETRIS_FIGURES[this.nextFig];
@@ -1506,7 +1668,137 @@ class TVTetrisDialog extends TVDialog {
             const nc = c + offC;
             if (nr >= 0 && nr < PROWS && nc >= 0 && nc < PCOLS) { grid[nr][nc] = true; }
         }
-        this.previewView.setHTML(renderRows(grid, color));
+        this.previewView._setHTML(renderRows(grid, color));
+    }
+}
+
+class TVTetrisSetupDialog extends TVDialog {
+    static viewName = "tetris-setup";
+
+    constructor(gameView, onAccept) {
+        const levelInput = new TVInputLine(new TVRect(18, 2, 22, 3), 2).setData(String(gameView.startLevel));
+        const gameType = new TVRadioButtons(new TVRect(2, 5, 28, 7), [
+            { label: "~T~etris", value: "tetris", checked: !gameView.pentix },
+            { label: "~P~entix", value: "pentix", checked: gameView.pentix },
+        ]);
+        const preview = new TVCheckBoxes(new TVRect(2, 9, 28, 10), [
+            { label: "Show ~n~ext piece", value: "preview", checked: gameView.preview },
+        ]);
+        const okButton = new TVButton(new TVRect(6, 12, 16, 14), "~O~K", "tetris-setup-ok", bfDefault);
+        const cancelButton = new TVButton(new TVRect(18, 12, 28, 14), "Cancel", "tetris-setup-cancel", bfNormal);
+        const body = new TVGroup(new TVRect(0, 0, 30, 14)).insertAll([
+            new TVLabel(new TVRect(2, 2, 17, 3), "Starting ~l~evel", levelInput),
+            levelInput,
+            new TVStaticText(new TVRect(2, 4, 28, 5), "Game"),
+            gameType,
+            preview,
+            okButton,
+            cancelButton,
+        ]);
+        super(new TVRect(0, 0, 34, 17), "Tetris Setup");
+        this.setHelpCtx(hcTetris);
+        this.insert(body);
+        this.setState(sfModal, true);
+        this.levelInput = levelInput;
+        this.gameType = gameType;
+        this.preview = preview;
+        this.onAccept = onAccept;
+        this.bindCommonClose(() => this.destroy());
+        this.bindDrag();
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "tetris-setup-ok") {
+            this.onAccept({
+                startLevel: this.levelInput.getData(),
+                pentix: this.gameType.getData() === 1,
+                preview: (this.preview.getData() & 1) !== 0,
+            });
+            this.destroy();
+            this.clearEvent(event);
+        } else if (event.command === "tetris-setup-cancel") {
+            this.destroy();
+            this.clearEvent(event);
+        }
+    }
+
+    open() {
+        super.open();
+        this.levelInput.focus();
+        this.levelInput.selectAll();
+    }
+}
+
+class TVTetrisDialog extends TVGameDialog {
+    static viewName = "tetris";
+
+    constructor() {
+        const gridWidth = TETRIS_COLS * 2;
+        // DOS Navigator TGameWindow.Init: game (2,2)-(2+Shi*2,2+Vis),
+        // info (4+Shi*2,1)-(27+Shi*2,Vis-3), dialog width 30+Shi*2.
+        const infoX = gridWidth + 4;
+        const infoWidth = TETRIS_INFO_WIDTH;
+        const gameView = new TVTetrisGameView(new TVRect(2, 2, 2 + gridWidth, 2 + TETRIS_ROWS));
+        const previewView = new TVTetrisPreview(new TVRect());
+        const infoView = new TVTetrisGameInfo(new TVRect(infoX, 1, infoX + infoWidth, 17), previewView);
+        gameView.attach(infoView, previewView);
+        const newButton = new TVButton(new TVRect(infoX, 17, infoX + 10, 19), "~N~ew", "tetris-new", bfNormal);
+        const setupButton = new TVButton(new TVRect(infoX + 11, 17, infoX + 21, 19), "~S~etup", "tetris-setup", bfNormal);
+        const topButton = new TVButton(new TVRect(infoX, 19, infoX + 10, 21), "~T~op 10", "tetris-top10", bfNormal);
+        const pauseButton = new TVButton(new TVRect(infoX + 11, 19, infoX + 21, 21), "~P~ause", "tetris-pause", bfNormal);
+        const main = new TVGroup(new TVRect(0, 0, 52, 21)).insertAll([
+            gameView,
+            infoView,
+            newButton,
+            setupButton,
+            topButton,
+            pauseButton,
+        ]);
+        super(new TVRect(0, 0, 54, 23), "Tetris");
+        this.setHelpCtx(hcTetris);
+        this.options |= ofCentered;
+        this.insert(main);
+        installHallOfFame(this, "tetris");
+        this.gameView = gameView;
+        this.infoView = infoView.resolve(this.root);
+        this.gameView.attach(this.infoView, previewView);
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        this.gameView.handleEvent(event);
+    }
+
+    openSetup() {
+        const dialog = new TVTetrisSetupDialog(this.gameView, (settings) => {
+            this.gameView.applySettings(settings);
+            this.setHelpCtx(hcTetris);
+        });
+        if (this.manager) {
+            this.manager.register(`tetris-setup:${++bestNamePromptSequence}`, dialog);
+        } else {
+            this.owner?.insert(dialog);
+        }
+        dialog.open();
+    }
+
+    open() {
+        super.open();
+        this.gameView.newGame();
+    }
+
+    close() {
+        this.gameView.stopTimer();
+        super.close();
+    }
+
+    destroy() {
+        this.gameView.stopTimer();
+        super.destroy();
     }
 }
 
@@ -1516,13 +1808,15 @@ const MINES_ROWS = 9;
 const MINES_COLS = 9;
 const MINES_COUNT = 10;
 
-class TVMinesDialog extends TVDialog {
+class TVMinesDialog extends TVGameDialog {
+    static viewName = "mines";
+
     constructor() {
         const GRID_W = MINES_COLS * 2;  // 18ch
-        const remainingView = (new TVStaticText(new TVRect(1, 0, (1) + (4), 0), String(MINES_COUNT))).setDrawOptions({ viewName: "mines-remaining", presentation: "mines-info-value" });
-        const faceButton = new TVButton(new TVRect(9, 0, (9) + (2), 0), "☺", "mines-face", bfNormal);
-        const timerView = (new TVStaticText(new TVRect(15, 0, (15) + (4), 0), "0")).setDrawOptions({ viewName: "mines-timer", presentation: "mines-info-value" });
-        const gridView = (new TVStaticText(new TVRect(1, 1, (1) + (GRID_W), (1) + (MINES_ROWS)), "")).setDrawOptions({ viewName: "mines-grid" });
+        const remainingView = new TVStaticText(new TVRect(1, 0, 5, 1), String(MINES_COUNT));
+        const faceButton = new TVButton(new TVRect(9, 0, 11, 1), "☺", "mines-face", bfNormal);
+        const timerView = new TVStaticText(new TVRect(15, 0, 19, 1), "0");
+        const gridView = new TVMinesField(new TVRect(1, 1, 1 + GRID_W, 1 + MINES_ROWS));
         const minesMain = new TVGroup(new TVRect(0, 0, (0) + (GRID_W + 2), (0) + (MINES_ROWS + 1))).insertAll([
                 remainingView,
                 faceButton,
@@ -1530,11 +1824,9 @@ class TVMinesDialog extends TVDialog {
                 gridView,
             ]);
 
-        super(new TVRect(0, 0, 22, 13), "Mines", {
-            viewName: "mines",
-            helpCtx: hcMines,
-            content: minesMain,
-        });
+        super(new TVRect(0, 0, 22, 13), "Mines");
+        this.setHelpCtx(hcMines);
+        this.insert(minesMain);
 
         installHallOfFame(this, "mines");
         this.gridView = gridView;
@@ -1556,12 +1848,6 @@ class TVMinesDialog extends TVDialog {
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
-    }
-
-    bind() {
-        this._onKeyDown = (event) => this.onKeyDown(event);
-        document.addEventListener("keydown", this._onKeyDown);
     }
 
     handleEvent(event) {
@@ -1573,6 +1859,9 @@ class TVMinesDialog extends TVDialog {
             if (event.nativeEvent.type === "contextmenu") { this.onCellRightClick(event.nativeEvent); }
             else { this.onCellClick(event.nativeEvent); }
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
@@ -1800,14 +2089,14 @@ class TVMinesDialog extends TVDialog {
             }
             lines.push(cells.join(""));
         }
-        this.gridView.setHTML(lines.join("\n"));
+        this.gridView._setHTML(lines.join("\n"));
 
         const flagCount = this.flagged.flat().filter(Boolean).length;
         this.remainingView.setText(String(MINES_COUNT - flagCount));
         this.timerView.setText(String(this.seconds));
         this.faceButton.setTitle(this.gameOver && !this.won ? "☹" : "☺");
         if (focusCursor) {
-            const cursor = this.gridView.query(
+            const cursor = this.gridView._query(
                 `[data-tv-mine-r="${this.cursorRow}"][data-tv-mine-c="${this.cursorCol}"]`
             );
             if (cursor) { cursor.focus(); }
@@ -1824,22 +2113,28 @@ const BREAK_BEST_KEY = "tv-breakout-best";
 const BREAK_BRICK_COLORS = ["#ff5555", "#ffff55", "#55ff55", "#55ffff", "#5555ff"];
 const BREAK_FPS = 20;
 
-class TVBreakOutDialog extends TVDialog {
+class TVBreakOutDialog extends TVGameDialog {
+    static viewName = "break";
+
     constructor() {
         const FIELD_X = 1;                // 1ch offset from left
         const FIELD_W = BREAK_COLS * 2;  // 28ch
         const INFO_X = FIELD_X + FIELD_W + 1;  // 30ch
         const INFO_W = 19;
-        const fieldView = (new TVStaticText(new TVRect(FIELD_X, 0, (FIELD_X) + (FIELD_W), (0) + (20)), "")).setDrawOptions({ viewName: "break-field" });
-        const newButton = new TVButton(new TVRect(INFO_X, 17, (INFO_X) + (INFO_W), 17), '~N~ew', "break-new", bfNormal);
-        const infoBox = (new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "score" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "lives" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "level" }),
-            ])).setDrawOptions({ viewName: "info", borderPresentation: "game-border" });
-        const bestBox = (new TVInfoBox(new TVRect(INFO_X, 5, (INFO_X) + (INFO_W), 5), "Best", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "best" }),
-            ])).setDrawOptions({ viewName: "best", borderPresentation: "game-border" });
+        const fieldView = new TVBreakOutField(new TVRect(FIELD_X, 0, FIELD_X + FIELD_W, 20));
+        const newButton = new TVButton(new TVRect(INFO_X, 17, INFO_X + INFO_W, 19), '~N~ew', "break-new", bfNormal);
+        const scoreRow = new TVInfoRow(new TVRect());
+        const livesRow = new TVInfoRow(new TVRect());
+        const levelRow = new TVInfoRow(new TVRect());
+        const bestRow = new TVInfoRow(new TVRect());
+        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
+                scoreRow,
+                livesRow,
+                levelRow,
+            ]);
+        const bestBox = new TVGameInfoBox(new TVRect(INFO_X, 5, INFO_X + INFO_W, 8), "Best", [
+                bestRow,
+            ]);
         const breakMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (20))).insertAll([
                 fieldView,
                 infoBox,
@@ -1847,17 +2142,19 @@ class TVBreakOutDialog extends TVDialog {
                 newButton,
             ]);
 
-        super(new TVRect(0, 0, 53, 22), "BreakOut", {
-            viewName: "break",
-            helpCtx: hcBreakOut,
-            content: breakMain,
-        });
+        super(new TVRect(0, 0, 53, 22), "BreakOut");
+        this.setHelpCtx(hcBreakOut);
+        this.insert(breakMain);
 
         installHallOfFame(this, "breakout");
         this.fieldView = fieldView;
         this.newButton = newButton;
         this.infoBox = infoBox.resolve(this.root);
         this.bestBox = bestBox.resolve(this.root);
+        this.scoreRow = scoreRow;
+        this.livesRow = livesRow;
+        this.levelRow = levelRow;
+        this.bestRow = bestRow;
 
         // Field dimensions: BREAK_COLS×2 chars wide, 20 rows tall
         this.fieldW = BREAK_COLS;
@@ -1882,7 +2179,6 @@ class TVBreakOutDialog extends TVDialog {
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
     }
 
     _loadBestData() {
@@ -1894,39 +2190,35 @@ class TVBreakOutDialog extends TVDialog {
         saveBest(BREAK_BEST_KEY, this.bestScore, this.bestName);
     }
 
-    bind() {
-        this._onKeyDown = (event) => {
-            if (!this.isActive()) { return; }
-            if (event.key === "Escape") { event.preventDefault(); this.close(); return; }
-            this.keysDown.add(event.key);
-            if (this.gameOver && (event.key === "Enter" || event.key === " " || event.key === "n" || event.key === "N")) {
-                event.preventDefault();
-                this.newGame();
-                return;
-            }
-            if (this.waiting && (event.key === " " || event.key === "ArrowUp")) {
-                event.preventDefault();
-                this.launch();
-                return;
-            }
-            if (event.key === "n" || event.key === "N") {
-                event.preventDefault();
-                this.newGame();
-            }
-        };
-        this._onKeyUp = (event) => { this.keysDown.delete(event.key); };
-        this._onWindowBlur = () => this.keysDown.clear();
-        document.addEventListener("keydown", this._onKeyDown);
-        document.addEventListener("keyup", this._onKeyUp);
-        window.addEventListener("blur", this._onWindowBlur);
-    }
-
     handleEvent(event) {
         super.handleEvent(event);
         if (event.what === evCommand && event.command === "break-new") {
             this.newGame();
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
         }
+    }
+
+    onKeyDown(event) {
+        if (!this.isActive()) { return; }
+        if (event.key === "Escape") { event.preventDefault(); this.close(); return; }
+        this.keysDown.add(event.key);
+        if (this.gameOver && (event.key === "Enter" || event.key === " " || event.key === "n" || event.key === "N")) {
+            event.preventDefault();
+            this.newGame();
+        } else if (this.waiting && (event.key === " " || event.key === "ArrowUp")) {
+            event.preventDefault();
+            this.launch();
+        } else if (event.key === "n" || event.key === "N") {
+            event.preventDefault();
+            this.newGame();
+        }
+    }
+
+    onDialogKeyUp(event) {
+        this.keysDown.delete(event.key);
     }
 
     open() {
@@ -1981,7 +2273,7 @@ class TVBreakOutDialog extends TVDialog {
         this.stopTimer();
         const delay = Math.max(30, 80 - this.level * 5);
         this.timerId = setInterval(() => {
-            if (!this.isActive()) {
+            if (!this.isActive() || !document.hasFocus()) {
                 this.keysDown.clear();
                 return;
             }
@@ -2090,13 +2382,13 @@ class TVBreakOutDialog extends TVDialog {
     }
 
     renderInfo() {
-        this.infoBox.updateRow("score", "Score: " + this.score);
-        this.infoBox.updateRow("lives", "Lives: " + this.lives);
-        this.infoBox.updateRow("level", "Level: " + this.level);
+        this.infoBox.updateRow(this.scoreRow, "Score: " + this.score);
+        this.infoBox.updateRow(this.livesRow, "Lives: " + this.lives);
+        this.infoBox.updateRow(this.levelRow, "Level: " + this.level);
         const bestText = this.bestName
             ? this.bestName + " " + this.bestScore
             : "Best:  " + this.bestScore;
-        this.bestBox.updateRow("best", bestText);
+        this.bestBox.updateRow(this.bestRow, bestText);
     }
 
     renderField() {
@@ -2122,13 +2414,13 @@ class TVBreakOutDialog extends TVDialog {
         }
 
         if (this.gameOver) {
-            this.fieldView.setHTML(lines.join("") +
+            this.fieldView._setHTML(lines.join("") +
                 `<div class="tv-break-overlay-msg">GAME OVER<br><small>Score: ${this.score}</small><br><small>Press Enter</small></div>`);
         } else if (this.waiting) {
-            this.fieldView.setHTML(lines.join("") +
+            this.fieldView._setHTML(lines.join("") +
                 `<div class="tv-break-overlay-msg"><small>Press Space</small></div>`);
         } else {
-            this.fieldView.setHTML(lines.join(""));
+            this.fieldView._setHTML(lines.join(""));
         }
     }
 }
@@ -2183,21 +2475,26 @@ const SOKOBAN_LEVELS = [
 ];
 const SOKOBAN_BEST_KEY = "tv-sokoban-best";
 
-class TVSokobanDialog extends TVDialog {
+class TVSokobanDialog extends TVGameDialog {
+    static viewName = "sokoban";
+
     constructor() {
         const FIELD_W = 18;  // max 9 cols × 2ch
         const INFO_X = FIELD_W + 1;
         const INFO_W = 20;
-        const fieldView = (new TVStaticText(new TVRect(0, 0, (0) + (FIELD_W), (0) + (10)), "")).setDrawOptions({ viewName: "sokoban-field" });
-        const restartButton = new TVButton(new TVRect(INFO_X, 6, (INFO_X) + (8), 6), '~R~estart', "sokoban-restart", bfNormal);
-        const undoButton = new TVButton(new TVRect(INFO_X + 11, 6, (INFO_X + 11) + (8), 6), '~U~ndo', "sokoban-undo", bfNormal);
-        const prevButton = new TVButton(new TVRect(INFO_X, 9, (INFO_X) + (8), 9), '< Prev', "sokoban-prev", bfNormal);
-        const nextButton = new TVButton(new TVRect(INFO_X + 11, 9, (INFO_X + 11) + (8), 9), 'Next >', "sokoban-next", bfNormal);
-        const infoBox = (new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "level" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "moves" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "pushes" }),
-            ])).setDrawOptions({ viewName: "info", borderPresentation: "game-border" });
+        const fieldView = new TVSokobanField(new TVRect(0, 0, FIELD_W, 10));
+        const restartButton = new TVButton(new TVRect(INFO_X, 6, INFO_X + 9, 8), '~R~estart', "sokoban-restart", bfNormal);
+        const undoButton = new TVButton(new TVRect(INFO_X + 10, 6, INFO_X + 19, 8), '~U~ndo', "sokoban-undo", bfNormal);
+        const prevButton = new TVButton(new TVRect(INFO_X, 9, INFO_X + 9, 11), '< Prev', "sokoban-prev", bfNormal);
+        const nextButton = new TVButton(new TVRect(INFO_X + 10, 9, INFO_X + 19, 11), 'Next >', "sokoban-next", bfNormal);
+        const levelRow = new TVInfoRow(new TVRect());
+        const movesRow = new TVInfoRow(new TVRect());
+        const pushesRow = new TVInfoRow(new TVRect());
+        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
+                levelRow,
+                movesRow,
+                pushesRow,
+            ]);
         const sokobanMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (11))).insertAll([
                 fieldView,
                 infoBox,
@@ -2207,11 +2504,9 @@ class TVSokobanDialog extends TVDialog {
                 nextButton,
             ]);
 
-        super(new TVRect(0, 0, 44, 18), "Sokoban", {
-            viewName: "sokoban",
-            helpCtx: hcSokoban,
-            content: sokobanMain,
-        });
+        super(new TVRect(0, 0, 44, 18), "Sokoban");
+        this.setHelpCtx(hcSokoban);
+        this.insert(sokobanMain);
 
         installHallOfFame(this, "sokoban");
         this.fieldView = fieldView;
@@ -2220,6 +2515,9 @@ class TVSokobanDialog extends TVDialog {
         this.prevButton = prevButton;
         this.nextButton = nextButton;
         this.infoBox = infoBox.resolve(this.root);
+        this.levelRow = levelRow;
+        this.movesRow = movesRow;
+        this.pushesRow = pushesRow;
 
         this.levelIndex = 0;
         this.board = [];
@@ -2234,23 +2532,21 @@ class TVSokobanDialog extends TVDialog {
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
-    }
-
-    bind() {
-        this._onKeyDown = (event) => this.onKeyDown(event);
-        document.addEventListener("keydown", this._onKeyDown);
     }
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what !== evCommand) { return; }
-        if (event.command === "sokoban-restart") { this.loadLevel(this.levelIndex); }
-        else if (event.command === "sokoban-undo") { this.undo(); }
-        else if (event.command === "sokoban-prev") { this.changeLevel(-1); }
-        else if (event.command === "sokoban-next") { this.changeLevel(1); }
-        else { return; }
-        this.clearEvent(event);
+        if (event.what === evCommand) {
+            if (event.command === "sokoban-restart") { this.loadLevel(this.levelIndex); }
+            else if (event.command === "sokoban-undo") { this.undo(); }
+            else if (event.command === "sokoban-prev") { this.changeLevel(-1); }
+            else if (event.command === "sokoban-next") { this.changeLevel(1); }
+            else { return; }
+            this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+        }
     }
 
     onKeyDown(event) {
@@ -2388,9 +2684,9 @@ class TVSokobanDialog extends TVDialog {
     }
 
     renderInfo() {
-        this.infoBox.updateRow("level", "Level: " + (this.levelIndex + 1) + "/" + SOKOBAN_LEVELS.length);
-        this.infoBox.updateRow("moves", "Moves: " + this.moves);
-        this.infoBox.updateRow("pushes", "Pushes:" + this.pushes);
+        this.infoBox.updateRow(this.levelRow, "Level: " + (this.levelIndex + 1) + "/" + SOKOBAN_LEVELS.length);
+        this.infoBox.updateRow(this.movesRow, "Moves: " + this.moves);
+        this.infoBox.updateRow(this.pushesRow, "Pushes:" + this.pushes);
     }
 
     renderField() {
@@ -2419,10 +2715,10 @@ class TVSokobanDialog extends TVDialog {
             lines.push(cells.join(""));
         }
         if (this.solved) {
-            this.fieldView.setHTML(lines.join("") +
+            this.fieldView._setHTML(lines.join("") +
                 `<div class="tv-sokoban-overlay-msg">SOLVED!<br><small>Moves: ${this.moves}</small><br><small>Press Enter</small></div>`);
         } else {
-            this.fieldView.setHTML(lines.join(""));
+            this.fieldView._setHTML(lines.join(""));
         }
     }
 }
@@ -2435,38 +2731,44 @@ const LINES_MATCH = 5; // need 5 in a row
 const LINES_SPAWN = 3; // new balls per turn
 const LINES_BEST_KEY = "tv-lines-best";
 
-class TVLinesDialog extends TVDialog {
+class TVLinesDialog extends TVGameDialog {
+    static viewName = "lines";
+
     constructor() {
         const GRID_W = LINES_SIZE * 2;  // 18ch
         const INFO_X = GRID_W + 1;
         const INFO_W = 18;
-        const gridView = (new TVStaticText(new TVRect(0, 0, (0) + (GRID_W), (0) + (LINES_SIZE)), "")).setDrawOptions({ viewName: "lines-grid" });
-        const newButton = new TVButton(new TVRect(INFO_X, 9, (INFO_X) + (INFO_W), 9), '~N~ew', "lines-new", bfNormal);
-        const infoBox = (new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "score" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "best" }),
-            ])).setDrawOptions({ viewName: "info", borderPresentation: "game-border" });
-        const nextBox = (new TVInfoBox(new TVRect(INFO_X, 5, (INFO_X) + (INFO_W), 5), "Next", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "next" }),
-            ])).setDrawOptions({ viewName: "next", borderPresentation: "game-border" });
-        const linesMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (LINES_SIZE + 1))).insertAll([
+        const gridView = new TVLinesField(new TVRect(0, 0, GRID_W, LINES_SIZE));
+        const newButton = new TVButton(new TVRect(INFO_X, 9, INFO_X + INFO_W, 11), '~N~ew', "lines-new", bfNormal);
+        const scoreRow = new TVInfoRow(new TVRect());
+        const bestRow = new TVInfoRow(new TVRect());
+        const nextRow = new TVInfoRow(new TVRect());
+        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 4), "Info", [
+                scoreRow,
+                bestRow,
+            ]);
+        const nextBox = new TVGameInfoBox(new TVRect(INFO_X, 5, INFO_X + INFO_W, 8), "Next", [
+                nextRow,
+            ]);
+        const linesMain = new TVGroup(new TVRect(0, 0, INFO_X + INFO_W, LINES_SIZE + 2)).insertAll([
                 gridView,
                 infoBox,
                 nextBox,
                 newButton,
             ]);
 
-        super(new TVRect(0, 0, 41, 13), "Lines", {
-            viewName: "lines",
-            helpCtx: hcLines,
-            content: linesMain,
-        });
+        super(new TVRect(0, 0, 41, 13), "Lines");
+        this.setHelpCtx(hcLines);
+        this.insert(linesMain);
 
         installHallOfFame(this, "lines");
         this.gridView = gridView;
         this.newButton = newButton;
         this.infoBox = infoBox.resolve(this.root);
         this.nextBox = nextBox.resolve(this.root);
+        this.scoreRow = scoreRow;
+        this.bestRow = bestRow;
+        this.nextRow = nextRow;
 
         this.board = [];
         this.selected = null; // {r, c}
@@ -2479,7 +2781,6 @@ class TVLinesDialog extends TVDialog {
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
     }
 
     _loadBestData() {
@@ -2491,15 +2792,6 @@ class TVLinesDialog extends TVDialog {
         saveBest(LINES_BEST_KEY, this.bestScore, this.bestName);
     }
 
-    bind() {
-        this._onKeyDown = (event) => {
-            if (!this.isActive()) { return; }
-            if (event.key === "Escape") { event.preventDefault(); this.close(); }
-            if (event.key === "n" || event.key === "N") { event.preventDefault(); this.newGame(); }
-        };
-        document.addEventListener("keydown", this._onKeyDown);
-    }
-
     handleEvent(event) {
         super.handleEvent(event);
         if (event.what === evCommand && event.command === "lines-new") {
@@ -2508,7 +2800,16 @@ class TVLinesDialog extends TVDialog {
         } else if (event.what === evMouseDown && event.infoPtr === this.gridView) {
             this.onCellClick(event.nativeEvent);
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
         }
+    }
+
+    onKeyDown(event) {
+        if (!this.isActive()) { return; }
+        if (event.key === "Escape") { event.preventDefault(); this.close(); }
+        else if (event.key === "n" || event.key === "N") { event.preventDefault(); this.newGame(); }
     }
 
     open() {
@@ -2666,15 +2967,15 @@ class TVLinesDialog extends TVDialog {
     }
 
     renderInfo() {
-        this.infoBox.updateRow("score", "Score: " + this.score);
+        this.infoBox.updateRow(this.scoreRow, "Score: " + this.score);
         const bestText = this.bestName
             ? this.bestName + " " + this.bestScore
             : "Best:  " + this.bestScore;
-        this.infoBox.updateRow("best", bestText);
+        this.infoBox.updateRow(this.bestRow, bestText);
         const balls = this.nextColors.map((c) =>
             `<span style="color:${LINES_COLORS[(c - 1) % LINES_COLORS.length]}">● </span>`
         ).join("");
-        this.nextBox.updateRowHTML("next", balls, LINES_SPAWN * 2);
+        this.nextBox.updateRowHTML(this.nextRow, balls, LINES_SPAWN * 2);
     }
 
     renderGrid() {
@@ -2696,10 +2997,10 @@ class TVLinesDialog extends TVDialog {
             lines.push(cells.join(""));
         }
         if (this.gameOver) {
-            this.gridView.setHTML(lines.join("") +
+            this.gridView._setHTML(lines.join("") +
                 `<div class="tv-lines-overlay-msg">GAME OVER<br><small>Score: ${this.score}</small><br><small>Press N</small></div>`);
         } else {
-            this.gridView.setHTML(lines.join(""));
+            this.gridView._setHTML(lines.join(""));
         }
     }
 }
@@ -2709,34 +3010,40 @@ class TVLinesDialog extends TVDialog {
 const REVERSI_SIZE = 8;
 const REVERSI_BEST_KEY = "tv-reversi-wins";
 
-class TVReversiDialog extends TVDialog {
+class TVReversiDialog extends TVGameDialog {
+    static viewName = "reversi";
+
     constructor() {
         const GRID_W = REVERSI_SIZE * 2;  // 16ch
         const INFO_X = GRID_W + 1;
         const INFO_W = 17;
-        const infoBox = (new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "black" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "white" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "turn" }),
-            ])).setDrawOptions({ viewName: "info", borderPresentation: "game-border" });
-        const gridView = (new TVStaticText(new TVRect(0, 0, (0) + (GRID_W), (0) + (REVERSI_SIZE)), "")).setDrawOptions({ viewName: "reversi-grid" });
-        const newButton = new TVButton(new TVRect(INFO_X, 6, (INFO_X) + (INFO_W), 6), '~N~ew', "reversi-new", bfNormal);
+        const blackRow = new TVInfoRow(new TVRect());
+        const whiteRow = new TVInfoRow(new TVRect());
+        const turnRow = new TVInfoRow(new TVRect());
+        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
+                blackRow,
+                whiteRow,
+                turnRow,
+            ]);
+        const gridView = new TVReversiField(new TVRect(0, 0, GRID_W, REVERSI_SIZE));
+        const newButton = new TVButton(new TVRect(INFO_X, 6, INFO_X + INFO_W, 8), '~N~ew', "reversi-new", bfNormal);
         const reversiMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (REVERSI_SIZE))).insertAll([
                 gridView,
                 infoBox,
                 newButton,
             ]);
 
-        super(new TVRect(0, 0, 38, 10), "Reversi", {
-            viewName: "reversi",
-            helpCtx: hcReversi,
-            content: reversiMain,
-        });
+        super(new TVRect(0, 0, 38, 10), "Reversi");
+        this.setHelpCtx(hcReversi);
+        this.insert(reversiMain);
 
         installHallOfFame(this, "reversi");
         this.gridView = gridView;
         this.newButton = newButton;
         this.infoBox = infoBox.resolve(this.root);
+        this.blackRow = blackRow;
+        this.whiteRow = whiteRow;
+        this.turnRow = turnRow;
 
         // 0=empty, 1=black(player), 2=white(computer)
         this.board = [];
@@ -2746,16 +3053,6 @@ class TVReversiDialog extends TVDialog {
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
-    }
-
-    bind() {
-        this._onKeyDown = (event) => {
-            if (!this.isActive()) { return; }
-            if (event.key === "Escape") { event.preventDefault(); this.close(); }
-            if (event.key === "n" || event.key === "N") { event.preventDefault(); this.newGame(); }
-        };
-        document.addEventListener("keydown", this._onKeyDown);
     }
 
     handleEvent(event) {
@@ -2766,7 +3063,16 @@ class TVReversiDialog extends TVDialog {
         } else if (event.what === evMouseDown && event.infoPtr === this.gridView) {
             this.onCellClick(event.nativeEvent);
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
         }
+    }
+
+    onKeyDown(event) {
+        if (!this.isActive()) { return; }
+        if (event.key === "Escape") { event.preventDefault(); this.close(); }
+        else if (event.key === "n" || event.key === "N") { event.preventDefault(); this.newGame(); }
     }
 
     open() {
@@ -2922,13 +3228,13 @@ class TVReversiDialog extends TVDialog {
 
     renderInfo() {
         const { black, white } = this._countPieces();
-        this.infoBox.updateRow("black", "\u25CF You:  " + black);
-        this.infoBox.updateRow("white", "\u25CB CPU:  " + white);
+        this.infoBox.updateRow(this.blackRow, "\u25CF You:  " + black);
+        this.infoBox.updateRow(this.whiteRow, "\u25CB CPU:  " + white);
         if (this.gameOver) {
             const result = black > white ? "You win!" : (white > black ? "CPU wins" : "Draw");
-            this.infoBox.updateRow("turn", result);
+            this.infoBox.updateRow(this.turnRow, result);
         } else {
-            this.infoBox.updateRow("turn", "Turn: " + (this.currentPlayer === 1 ? "You" : "CPU"));
+            this.infoBox.updateRow(this.turnRow, "Turn: " + (this.currentPlayer === 1 ? "You" : "CPU"));
         }
     }
 
@@ -2963,7 +3269,7 @@ class TVReversiDialog extends TVDialog {
             }
             lines.push(cells.join(""));
         }
-        this.gridView.setHTML(lines.join(""));
+        this.gridView._setHTML(lines.join(""));
     }
 }
 
@@ -3000,37 +3306,45 @@ LUDO_START_OFFSETS.forEach((offset, player) => {
     LUDO_START_CELLS.set(LUDO_CELL_KEY(row, col), player);
 });
 
-class TVLudoDialog extends TVDialog {
-    constructor() {
-        const infoBox = (new TVInfoBox(new TVRect(0, 0, (0) + (22), 0), "Game", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "turn" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "dice" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "status" }),
-            ])).setDrawOptions({ viewName: "info", borderPresentation: "game-border" });
-        const playerButtons = LUDO_PLAYER_NAMES.map((name, player) => (new TVButton(new TVRect(), name, "ludo-player-mode", bfNormal).setValue(player).setCommandData({ color: LUDO_PLAYER_COLORS[player] })).setDrawOptions({ ariaLabel: `${name} player mode` }));
-        const playersBox = (new TVInfoBox(new TVRect(0, 0, (0) + (22), 0), "Players", playerButtons)).setDrawOptions({ borderPresentation: "game-border", presentation: "ludo-players" });
-        const rollButton = new TVButton(new TVRect(), "~R~oll", "ludo-roll", bfNormal);
-        const newButton = new TVButton(new TVRect(), "~N~ew", "ludo-new", bfNormal);
-        const controls = (new TVGroup(new TVRect()).insertAll([
-                rollButton,
-                newButton,
-            ])).setDrawOptions({ presentation: "ludo-controls" });
-        const side = (new TVGroup(new TVRect()).insertAll([infoBox, playersBox, controls])).setDrawOptions({ presentation: "ludo-side" });
-        const boardView = (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "ludo-board", presentation: "ludo-board" });
-        const main = (new TVGroup(new TVRect()).insertAll([
-                boardView,
-                side,
-            ])).setDrawOptions({ presentation: "ludo-main" });
+class TVLudoDialog extends TVGameDialog {
+    static viewName = "ludo";
 
-        super(new TVRect(0, 0, 71, 26), "Ludo", {
-            viewName: "ludo",
-            helpCtx: hcLudo,
-            content: main,
-        });
+    constructor() {
+        const turnRow = new TVInfoRow(new TVRect());
+        const diceRow = new TVInfoRow(new TVRect());
+        const statusRow = new TVInfoRow(new TVRect());
+        const infoBox = new TVGameInfoBox(new TVRect(46, 0, 68, 5), "Game", [
+                turnRow,
+                diceRow,
+                statusRow,
+            ]);
+        const playerButtons = LUDO_PLAYER_NAMES.map((name, player) => (
+            new TVButton(new TVRect(0, player + 1, 22, player + 2), name, "ludo-player-mode", bfNormal)
+                .setValue(player)
+                .setCommandData({ color: LUDO_PLAYER_COLORS[player], playerName: name })
+        ));
+        const playersBox = new TVGameInfoBox(new TVRect(46, 6, 68, 12), "Players", playerButtons);
+        const rollButton = new TVButton(new TVRect(46, 14, 56, 16), "~R~oll", "ludo-roll", bfNormal);
+        const newButton = new TVButton(new TVRect(57, 14, 67, 16), "~N~ew", "ludo-new", bfNormal);
+        const boardView = new TVLudoBoard(new TVRect(0, 0, 45, 23));
+        const main = new TVGroup(new TVRect(0, 0, 68, 24)).insertAll([
+            boardView,
+            infoBox,
+            playersBox,
+            rollButton,
+            newButton,
+        ]);
+
+        super(new TVRect(0, 0, 71, 26), "Ludo");
+        this.setHelpCtx(hcLudo);
+        this.insert(main);
 
         installHallOfFame(this, "ludo");
         this.game = new LudoGame();
         this.infoBox = infoBox.resolve(this.root);
+        this.turnRow = turnRow;
+        this.diceRow = diceRow;
+        this.statusRow = statusRow;
         this.boardView = boardView;
         this.rollButton = rollButton;
         this.newButton = newButton;
@@ -3049,12 +3363,6 @@ class TVLudoDialog extends TVDialog {
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
-    }
-
-    bind() {
-        this._onKeyDown = (event) => this.onKeyDown(event);
-        document.addEventListener("keydown", this._onKeyDown);
     }
 
     handleEvent(event) {
@@ -3069,6 +3377,9 @@ class TVLudoDialog extends TVDialog {
             const piece = event.nativeEvent.target.closest("[data-tv-ludo-piece]");
             if (piece) { this.moveHumanPiece(Number(piece.getAttribute("data-tv-ludo-piece"))); }
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
@@ -3183,7 +3494,7 @@ class TVLudoDialog extends TVDialog {
             const current = Math.max(0, legal.indexOf(this.selectedPiece));
             this.selectedPiece = legal[(current + direction + legal.length) % legal.length];
             this.renderBoard();
-            const selected = this.boardView.query(`[data-tv-ludo-piece="${this.selectedPiece}"]`);
+            const selected = this.boardView._query(`[data-tv-ludo-piece="${this.selectedPiece}"]`);
             if (selected) { selected.focus(); }
             return;
         }
@@ -3355,8 +3666,8 @@ class TVLudoDialog extends TVDialog {
     renderInfo() {
         const player = this.game.winner === null ? this.game.currentPlayer : this.game.winner;
         const name = LUDO_PLAYER_NAMES[player];
-        this.infoBox.updateRow("turn", `Turn: ${name}`);
-        this.infoBox.updateRow("dice", `Dice: ${this.game.die || "-"}`);
+        this.infoBox.updateRow(this.turnRow, `Turn: ${name}`);
+        this.infoBox.updateRow(this.diceRow, `Dice: ${this.game.die || "-"}`);
         let status = this.notice;
         if (this.game.winner !== null) {
             status = `${name} wins!`;
@@ -3369,8 +3680,8 @@ class TVLudoDialog extends TVDialog {
         } else if (!status) {
             status = this.game.rollsLeft > 1 ? `Roll (${this.game.rollsLeft})` : "Roll the dice";
         }
-        this.infoBox.updateRow("status", status);
-        this.rollButton.setState("disabled", this.animating || this.game.winner !== null ||
+        this.infoBox.updateRow(this.statusRow, status);
+        this.rollButton.setState(sfDisabled, this.animating || this.game.winner !== null ||
             this.game.playerMode() !== "human" || this.game.phase !== "roll");
     }
 
@@ -3381,7 +3692,7 @@ class TVLudoDialog extends TVDialog {
             const current = this.game.currentPlayer === player && this.game.winner === null;
             const name = LUDO_PLAYER_NAMES[player].padEnd(6);
             const label = `${current ? ">" : " "} ${LUDO_PLAYER_NAMES[player][0]} ${name} ${LUDO_MODE_LABELS[mode]} ${home}/4`;
-            button.setHTML(TVInfoBox.rowHtml(20, label, "tv-game-border"));
+            button._setHTML(TVInfoBox.rowHtml(20, label, "tv-game-border"));
             button.root?.classList.toggle("is-current", this.game.currentPlayer === player && this.game.winner === null);
             button.root?.classList.toggle("is-off", mode === "off");
         });
@@ -3418,9 +3729,9 @@ class TVLudoDialog extends TVDialog {
         const connected = (fromRow, fromCol, toRow, toCol) => LUDO_ROUTE_EDGES.has(
             `${LUDO_CELL_KEY(fromRow, fromCol)}>${LUDO_CELL_KEY(toRow, toCol)}`
         );
-        const line = (html, textKind = "") => (new TVGroup(new TVRect()).insertAll([new TVMarkupView([html])])).setDrawOptions({ presentation: `ludo-ascii-line ${textKind.replace(/tv-/g, "")}`.trim() }).renderMarkup();
-        const textCell = (text, classes = []) => (new TVStaticText(new TVRect(), text)).setDrawOptions({ presentation: ["ludo-ascii-cell", ...classes.map((name) => name.replace(/tv-/g, ""))].join(" ") }).renderMarkup();
-        const pathSegment = (text) => (new TVStaticText(new TVRect(), text)).setDrawOptions({ presentation: "ludo-ascii-path" }).renderMarkup();
+        const line = (html, textKind = "") => `<div class="${escapeHtml(`tv-ludo-ascii-line ${textKind}`.trim())}">${html}</div>`;
+        const textCell = (text, classes = []) => `<span class="${escapeHtml(["tv-ludo-ascii-cell", ...classes].join(" "))}">${escapeHtml(text)}</span>`;
+        const pathSegment = (text) => `<span class="tv-ludo-ascii-path">${escapeHtml(text)}</span>`;
         const cellContent = (row, col) => {
             const key = LUDO_CELL_KEY(row, col);
             if (!activeCells.has(key)) { return textCell(" "); }
@@ -3452,7 +3763,11 @@ class TVLudoDialog extends TVDialog {
                 animation && player === animation.player && piece === animation.piece ? "is-moving" : "",
                 isCapturedFlash ? "is-captured" : "",
             ].filter(Boolean).join(" ");
-            return (new TVButton(new TVRect(), "", "ludo-piece", bfNormal).setValue(piece).setCommandData({ classes: pieceClasses }).setState("disabled", !isLegal)).setDrawOptions({ labelMarkup: '<span class="tv-ludo-piece-glyph">♟</span>', ariaLabel: `${LUDO_PLAYER_NAMES[player]} piece ${piece + 1}` }).renderMarkup();
+            return new TVButton(new TVRect(), "", "ludo-piece", bfNormal)
+                .setValue(piece)
+                .setCommandData({ classes: pieceClasses, playerName: LUDO_PLAYER_NAMES[player] })
+                .setState(sfDisabled, !isLegal)
+                .draw();
         };
 
         const lines = [line(" ".repeat(45))];
@@ -3477,32 +3792,38 @@ class TVLudoDialog extends TVDialog {
             lines.push(line(pathParts.join("")));
         }
         lines.push(line(" ".repeat(45)));
-        this.boardView.setHTML(lines.join(""));
+        this.boardView._setHTML(lines.join(""));
     }
 }
 
 // ── Mastermind ───────────────────────────────────────────────────────
 
-class TVMastermindDialog extends TVDialog {
+class TVMastermindDialog extends TVGameDialog {
+    static viewName = "mastermind";
+
     constructor() {
-        const paletteButtons = Array.from({ length: 6 }, (_, color) => new TVButton(new TVRect(38 + (color % 3) * 6, 2 + Math.floor(color / 3) * 2, (38 + (color % 3) * 6) + (5), 2 + Math.floor(color / 3) * 2), String(color + 1), "mastermind-color", bfNormal).setValue(color).setCommandData({ color }));
-        const boardView = (new TVStaticText(new TVRect(3, 1, (3) + (28), (1) + (10)), "")).setDrawOptions({ viewName: "mastermind-board" });
-        const guessButton = new TVButton(new TVRect(38, 8, (38) + (11), 8), "~G~uess", "mastermind-guess", bfDefault);
-        const newButton = new TVButton(new TVRect(38, 10, (38) + (11), 10), "~N~ew", "mastermind-new", bfNormal);
-        const statusView = (new TVStaticText(new TVRect(3, 13, (3) + (54), 13), "")).setDrawOptions({ viewName: "mastermind-status" });
-        const body = new TVGroup(new TVRect(0, 0, (0) + (60), (0) + (16))).insertAll([
+        const paletteButtons = Array.from({ length: 6 }, (_, color) => {
+            const x = 34 + (color % 3) * 6;
+            const y = 2 + Math.floor(color / 3) * 2;
+            return new TVButton(new TVRect(x, y, x + 5, y + 2), String(color + 1), "mastermind-color", bfNormal)
+                .setValue(color)
+                .setCommandData({ color });
+        });
+        const boardView = new TVMastermindBoard(new TVRect(3, 1, 31, 11));
+        const guessButton = new TVButton(new TVRect(34, 8, 45, 10), "~G~uess", "mastermind-guess", bfDefault);
+        const newButton = new TVButton(new TVRect(34, 11, 45, 13), "~N~ew", "mastermind-new", bfNormal);
+        const statusView = new TVMastermindStatus(new TVRect(3, 14, 51, 16));
+        const body = new TVGroup(new TVRect(0, 0, 52, 16)).insertAll([
                 boardView,
-                new TVStaticText(new TVRect(38, 1, (38) + (17), 1), "Colors"),
+                new TVStaticText(new TVRect(34, 1, 51, 2), "Colors"),
                 ...paletteButtons,
                 guessButton,
                 newButton,
                 statusView,
             ]);
-        super(new TVRect(0, 0, 64, 20), "Mastermind", {
-            viewName: "mastermind",
-            helpCtx: hcMastermind,
-            content: body,
-        });
+        super(new TVRect(0, 0, 56, 20), "Mastermind");
+        this.setHelpCtx(hcMastermind);
+        this.insert(body);
         installHallOfFame(this, "mastermind");
         this.game = new MastermindGame();
         this.boardView = boardView;
@@ -3512,30 +3833,7 @@ class TVMastermindDialog extends TVDialog {
         this.paletteButtons = paletteButtons;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
         this.render();
-    }
-
-    bind() {
-        this._onKeyDown = (event) => {
-            if (!this.isActive()) { return; }
-            if (/^[1-6]$/.test(event.key)) {
-                event.preventDefault();
-                this.setColor(Number(event.key) - 1);
-            } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-                event.preventDefault();
-                const step = event.key === "ArrowLeft" ? -1 : 1;
-                this.game.cursor = (this.game.cursor + step + this.game.codeLength) % this.game.codeLength;
-                this.render();
-            } else if (event.key === "Enter" || event.key.toLocaleLowerCase() === "g") {
-                event.preventDefault();
-                this.submitGuess();
-            } else if (event.key.toLocaleLowerCase() === "n") {
-                event.preventDefault();
-                this.newGame();
-            }
-        };
-        document.addEventListener("keydown", this._onKeyDown);
     }
 
     handleEvent(event) {
@@ -3553,6 +3851,28 @@ class TVMastermindDialog extends TVDialog {
                 this.render();
             }
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+        }
+    }
+
+    onKeyDown(event) {
+        if (!this.isActive()) { return; }
+        if (/^[1-6]$/.test(event.key)) {
+            event.preventDefault();
+            this.setColor(Number(event.key) - 1);
+        } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            event.preventDefault();
+            const step = event.key === "ArrowLeft" ? -1 : 1;
+            this.game.cursor = (this.game.cursor + step + this.game.codeLength) % this.game.codeLength;
+            this.render();
+        } else if (event.key === "Enter" || event.key.toLocaleLowerCase() === "g") {
+            event.preventDefault();
+            this.submitGuess();
+        } else if (event.key.toLocaleLowerCase() === "n") {
+            event.preventDefault();
+            this.newGame();
         }
     }
 
@@ -3599,12 +3919,12 @@ class TVMastermindDialog extends TVDialog {
             const feedback = turn ? ` ${"●".repeat(turn.exact)}${"○".repeat(turn.misplaced)}` : "";
             rows.push(`<div class="tv-mastermind-row${isCurrent ? " is-current" : ""}"><span>${String(index + 1).padStart(2, " ")}.</span>${pegs}<span class="tv-mastermind-feedback">${feedback}</span></div>`);
         }
-        this.boardView.setHTML(rows.join(""));
-        this.guessButton.setState("disabled", this.game.status !== "playing");
+        this.boardView._setHTML(rows.join(""));
+        this.guessButton.setState(sfDisabled, this.game.status !== "playing");
         if (this.game.status === "won") {
             this.statusView.setText(`Code broken in ${this.game.turns.length} turn(s).`);
         } else if (this.game.status === "lost") {
-            this.statusView.setHTML(`No turns left. Code: ${this.game.secret.map((color) => this.renderPeg(color)).join("")}`);
+            this.statusView._setHTML(`No turns left. Code: ${this.game.secret.map((color) => this.renderPeg(color)).join("")}`);
         } else {
             this.statusView.setText("1-6 choose color, arrows move, Enter guesses.");
         }
@@ -3617,29 +3937,34 @@ class TVMastermindDialog extends TVDialog {
 const TRON_COLS = 30;
 const TRON_ROWS = 18;
 const TRON_TICK_MS = 90;
+const TRON_DIRECTIONS = new Map([
+    ["w", [0, 0, -1]], ["a", [0, -1, 0]], ["s", [0, 0, 1]], ["d", [0, 1, 0]],
+    ["ArrowUp", [1, 0, -1]], ["ArrowLeft", [1, -1, 0]],
+    ["ArrowDown", [1, 0, 1]], ["ArrowRight", [1, 1, 0]],
+]);
 
-class TVTronDialog extends TVDialog {
+class TVTronDialog extends TVGameDialog {
+    static viewName = "tron";
+
     constructor() {
         const fieldWidth = TRON_COLS * 2;
         const infoX = fieldWidth + 2;
-        const fieldView = (new TVStaticText(new TVRect(0, 0, (0) + (fieldWidth), (0) + (TRON_ROWS)), "")).setDrawOptions({ viewName: "tron-field" });
-        const statusView = (new TVStaticText(new TVRect(infoX, 5, (infoX) + (22), (5) + (4)), "")).setDrawOptions({ viewName: "tron-status" });
-        const newButton = new TVButton(new TVRect(infoX, 10, (infoX) + (15), 10), "~N~ew round", "tron-new", bfDefault);
-        const pauseButton = new TVButton(new TVRect(infoX, 12, (infoX) + (15), 12), "~P~ause", "tron-pause", bfNormal);
+        const fieldView = new TVTronField(new TVRect(0, 0, fieldWidth, TRON_ROWS));
+        const statusView = new TVTronStatus(new TVRect(infoX, 5, infoX + 22, 9));
+        const newButton = new TVButton(new TVRect(infoX, 10, infoX + 15, 12), "~N~ew round", "tron-new", bfDefault);
+        const pauseButton = new TVButton(new TVRect(infoX, 13, infoX + 15, 15), "~P~ause", "tron-pause", bfNormal);
         const tronMain = new TVGroup(new TVRect(0, 0, (0) + (infoX + 22), (0) + (TRON_ROWS))).insertAll([
                 fieldView,
-                new TVStaticText(new TVRect(infoX, 0, (infoX) + (22), 0), "P1: W A S D"),
-                new TVStaticText(new TVRect(infoX, 2, (infoX) + (22), 2), "P2: Arrow keys"),
+                new TVStaticText(new TVRect(infoX, 0, infoX + 22, 1), "P1: W A S D"),
+                new TVStaticText(new TVRect(infoX, 2, infoX + 22, 3), "P2: Arrow keys"),
                 statusView,
                 newButton,
                 pauseButton,
-                new TVStaticText(new TVRect(infoX, 15, (infoX) + (22), (15) + (2)), "Avoid every trail.\nBoth move together."),
+                new TVStaticText(new TVRect(infoX, 16, infoX + 22, 18), "Avoid every trail.\nBoth move together."),
             ]);
-        super(new TVRect(0, 0, 88, 22), "Tron Light Cycles", {
-            viewName: "tron",
-            helpCtx: hcTron,
-            content: tronMain,
-        });
+        super(new TVRect(0, 0, 88, 22), "Tron Light Cycles");
+        this.setHelpCtx(hcTron);
+        this.insert(tronMain);
         installHallOfFame(this, "tron");
         this.game = new TronGame({ width: TRON_COLS, height: TRON_ROWS });
         this.fieldView = fieldView;
@@ -3652,45 +3977,36 @@ class TVTronDialog extends TVDialog {
         this.scoreSubmitted = false;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
         this.render();
-    }
-
-    bind() {
-        const directions = new Map([
-            ["w", [0, 0, -1]], ["a", [0, -1, 0]], ["s", [0, 0, 1]], ["d", [0, 1, 0]],
-            ["ArrowUp", [1, 0, -1]], ["ArrowLeft", [1, -1, 0]],
-            ["ArrowDown", [1, 0, 1]], ["ArrowRight", [1, 1, 0]],
-        ]);
-        this._onKeyDown = (event) => {
-            if (!this.isActive()) { return; }
-            const key = event.key.length === 1 ? event.key.toLocaleLowerCase() : event.key;
-            const direction = directions.get(key);
-            if (direction) {
-                event.preventDefault();
-                this.game.queueDirection(direction[0], direction[1], direction[2]);
-                return;
-            }
-            if (key === "n" || (this.game.status !== "running" && event.key === "Enter")) {
-                event.preventDefault();
-                this.newGame();
-            } else if (key === "p") {
-                event.preventDefault();
-                this.togglePause();
-            }
-        };
-        this._onWindowBlur = () => this.game.clearPendingDirections();
-        document.addEventListener("keydown", this._onKeyDown);
-        window.addEventListener("blur", this._onWindowBlur);
     }
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what !== evCommand) { return; }
-        if (event.command === "tron-new") { this.newGame(); }
-        else if (event.command === "tron-pause") { this.togglePause(); }
-        else { return; }
-        this.clearEvent(event);
+        if (event.what === evCommand) {
+            if (event.command === "tron-new") { this.newGame(); }
+            else if (event.command === "tron-pause") { this.togglePause(); }
+            else { return; }
+            this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+        }
+    }
+
+    onKeyDown(event) {
+        if (!this.isActive()) { return; }
+        const key = event.key.length === 1 ? event.key.toLocaleLowerCase() : event.key;
+        const direction = TRON_DIRECTIONS.get(key);
+        if (direction) {
+            event.preventDefault();
+            this.game.queueDirection(direction[0], direction[1], direction[2]);
+        } else if (key === "n" || (this.game.status !== "running" && event.key === "Enter")) {
+            event.preventDefault();
+            this.newGame();
+        } else if (key === "p") {
+            event.preventDefault();
+            this.togglePause();
+        }
     }
 
     open() {
@@ -3723,7 +4039,7 @@ class TVTronDialog extends TVDialog {
     startTimer() {
         this.stopTimer();
         this.timerId = window.setInterval(() => {
-            if (!this.isActive()) {
+            if (!this.isActive() || !document.hasFocus()) {
                 this.game.clearPendingDirections();
                 if (!this.inactivePause) {
                     this.inactivePause = true;
@@ -3798,19 +4114,21 @@ class TVTronDialog extends TVDialog {
                 cells.push(`<span class="tv-tron-cell${playerClass}${headClass}">${owner === undefined ? "  " : head !== undefined ? "@@" : "██"}</span>`);
             }
         }
-        this.fieldView.setHTML(cells.join(""));
+        this.fieldView._setHTML(cells.join(""));
     }
 }
 
 // ── Tower of Hanoi ──────────────────────────────────────────────────
 
-class TVHanoiDialog extends TVDialog {
+class TVHanoiDialog extends TVGameDialog {
+    static viewName = "hanoi";
+
     constructor() {
-        const boardView = (new TVStaticText(new TVRect(1, 1, (1) + (54), (1) + (10)), "")).setDrawOptions({ viewName: "hanoi-board" });
-        const historyView = (new TVStaticText(new TVRect(57, 1, (57) + (20), (1) + (8)), "")).setDrawOptions({ viewName: "hanoi-history" });
-        const undoButton = new TVButton(new TVRect(57, 9, (57) + (12), 9), "~U~ndo", "hanoi-undo", bfNormal);
-        const newButton = new TVButton(new TVRect(57, 11, (57) + (12), 11), "~N~ew", "hanoi-new", bfDefault);
-        const statusView = (new TVStaticText(new TVRect(1, 12, (1) + (54), (12) + (2)), "")).setDrawOptions({ viewName: "hanoi-status" });
+        const boardView = new TVHanoiBoard(new TVRect(1, 1, 55, 11));
+        const historyView = new TVHanoiHistory(new TVRect(57, 1, 77, 9));
+        const undoButton = new TVButton(new TVRect(57, 9, 69, 11), "~U~ndo", "hanoi-undo", bfNormal);
+        const newButton = new TVButton(new TVRect(57, 12, 69, 14), "~N~ew", "hanoi-new", bfDefault);
+        const statusView = new TVHanoiStatus(new TVRect(1, 12, 55, 14));
         const hanoiMain = new TVGroup(new TVRect(0, 0, (0) + (79), (0) + (15))).insertAll([
                 boardView,
                 historyView,
@@ -3818,11 +4136,9 @@ class TVHanoiDialog extends TVDialog {
                 newButton,
                 statusView,
             ]);
-        super(new TVRect(0, 0, 83, 19), "Tower of Hanoi", {
-            viewName: "hanoi",
-            helpCtx: hcHanoi,
-            content: hanoiMain,
-        });
+        super(new TVRect(0, 0, 83, 19), "Tower of Hanoi");
+        this.setHelpCtx(hcHanoi);
+        this.insert(hanoiMain);
         installHallOfFame(this, "hanoi");
         this.game = new HanoiGame(5);
         this.boardView = boardView;
@@ -3869,27 +4185,6 @@ class TVHanoiDialog extends TVDialog {
             this.selectedTower = null;
             this.render(false);
         });
-        this._onKeyDown = (event) => {
-            if (!this.isActive()) { return; }
-            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-                event.preventDefault();
-                const step = event.key === "ArrowLeft" ? -1 : 1;
-                this.focusTower((this.focusedTower + step + 3) % 3);
-            } else if (/^[1-3]$/.test(event.key)) {
-                event.preventDefault();
-                this.focusTower(Number(event.key) - 1);
-            } else if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                this.activateTower(this.focusedTower);
-            } else if (event.key.toLocaleLowerCase() === "u") {
-                event.preventDefault();
-                this.undo();
-            } else if (event.key.toLocaleLowerCase() === "n") {
-                event.preventDefault();
-                this.newGame();
-            }
-        };
-        document.addEventListener("keydown", this._onKeyDown);
     }
 
     handleEvent(event) {
@@ -3906,6 +4201,30 @@ class TVHanoiDialog extends TVDialog {
                 this.activateTower(this.focusedTower);
             }
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+        }
+    }
+
+    onKeyDown(event) {
+        if (!this.isActive()) { return; }
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            event.preventDefault();
+            const step = event.key === "ArrowLeft" ? -1 : 1;
+            this.focusTower((this.focusedTower + step + 3) % 3);
+        } else if (/^[1-3]$/.test(event.key)) {
+            event.preventDefault();
+            this.focusTower(Number(event.key) - 1);
+        } else if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            this.activateTower(this.focusedTower);
+        } else if (event.key.toLocaleLowerCase() === "u") {
+            event.preventDefault();
+            this.undo();
+        } else if (event.key.toLocaleLowerCase() === "n") {
+            event.preventDefault();
+            this.newGame();
         }
     }
 
@@ -3928,7 +4247,7 @@ class TVHanoiDialog extends TVDialog {
     focusTower(tower) {
         this.focusedTower = Math.max(0, Math.min(2, Number(tower) || 0));
         this.render(false);
-        this.boardView.query(`[data-tv-hanoi-tower="${this.focusedTower}"]`)?.focus();
+        this.boardView._query(`[data-tv-hanoi-tower="${this.focusedTower}"]`)?.focus();
     }
 
     activateTower(tower) {
@@ -3984,17 +4303,15 @@ class TVHanoiDialog extends TVDialog {
         this.renderBoard();
         this.renderHistory();
         this.statusView.setText(`${this.message}\nMoves: ${this.game.moves} / minimum ${this.game.minimumMoves}`);
-        this.undoButton.setState("disabled", this.game.history.length === 0);
+        this.undoButton.setState(sfDisabled, this.game.history.length === 0);
         fillBorders(this.root);
         if (focus) {
-            window.requestAnimationFrame(() => {
-                this.boardView.query(`[data-tv-hanoi-tower="${this.focusedTower}"]`)?.focus();
-            });
+            this.boardView._query(`[data-tv-hanoi-tower="${this.focusedTower}"]`)?.focus();
         }
     }
 
     renderBoard() {
-        this.boardView.setHTML(this.game.towers.map((disks, tower) => {
+        this.boardView._setHTML(this.game.towers.map((disks, tower) => {
             const top = this.game.top(tower);
             const diskMarkup = disks.map((disk) => (
                 `<span class="tv-hanoi-disk tv-hanoi-disk-${disk}" data-tv-hanoi-disk="${disk}" data-tv-hanoi-tower="${tower}"`
@@ -4022,21 +4339,27 @@ const SNAKE_ROWS = 15;
 const SNAKE_DELAYS = [200, 160, 130, 110, 90, 75, 60, 50, 40, 35];
 const SNAKE_BEST_KEY = "tv-snake-best";
 
-class TVSnakeDialog extends TVDialog {
+class TVSnakeDialog extends TVGameDialog {
+    static viewName = "snake";
+
     constructor() {
         const FIELD_W = SNAKE_COLS * 2;  // 40ch
         const INFO_X = FIELD_W + 1;
         const INFO_W = 18;
-        const fieldView = (new TVStaticText(new TVRect(0, 0, (0) + (FIELD_W), (0) + (SNAKE_ROWS)), "")).setDrawOptions({ viewName: "snake-field" });
-        const newButton = new TVButton(new TVRect(INFO_X, 13, (INFO_X) + (INFO_W), 13), '~N~ew', "snake-new", bfNormal);
-        const infoBox = (new TVInfoBox(new TVRect(INFO_X, 0, (INFO_X) + (INFO_W), 0), "Info", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "score" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "level" }),
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "length" }),
-            ])).setDrawOptions({ viewName: "info", borderPresentation: "game-border" });
-        const bestBox = (new TVInfoBox(new TVRect(INFO_X, 5, (INFO_X) + (INFO_W), 5), "Best", [
-                (new TVStaticText(new TVRect(), "")).setDrawOptions({ viewName: "best" }),
-            ])).setDrawOptions({ viewName: "best", borderPresentation: "game-border" });
+        const fieldView = new TVSnakeField(new TVRect(0, 0, FIELD_W, SNAKE_ROWS));
+        const newButton = new TVButton(new TVRect(INFO_X, 13, INFO_X + INFO_W, 15), '~N~ew', "snake-new", bfNormal);
+        const scoreRow = new TVInfoRow(new TVRect());
+        const levelRow = new TVInfoRow(new TVRect());
+        const lengthRow = new TVInfoRow(new TVRect());
+        const bestRow = new TVInfoRow(new TVRect());
+        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
+                scoreRow,
+                levelRow,
+                lengthRow,
+            ]);
+        const bestBox = new TVGameInfoBox(new TVRect(INFO_X, 5, INFO_X + INFO_W, 8), "Best", [
+                bestRow,
+            ]);
         const snakeMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (SNAKE_ROWS))).insertAll([
                 fieldView,
                 infoBox,
@@ -4044,17 +4367,19 @@ class TVSnakeDialog extends TVDialog {
                 newButton,
             ]);
 
-        super(new TVRect(0, 0, 64, 19), "Snake", {
-            viewName: "snake",
-            helpCtx: hcSnake,
-            content: snakeMain,
-        });
+        super(new TVRect(0, 0, 64, 19), "Snake");
+        this.setHelpCtx(hcSnake);
+        this.insert(snakeMain);
 
         installHallOfFame(this, "snake");
         this.fieldView = fieldView;
         this.newButton = newButton;
         this.infoBox = infoBox.resolve(this.root);
         this.bestBox = bestBox.resolve(this.root);
+        this.scoreRow = scoreRow;
+        this.levelRow = levelRow;
+        this.lengthRow = lengthRow;
+        this.bestRow = bestRow;
 
         this.snake = [];
         this.dir = { dx: 1, dy: 0 };
@@ -4070,7 +4395,6 @@ class TVSnakeDialog extends TVDialog {
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
     }
 
     _loadBestData() {
@@ -4082,31 +4406,31 @@ class TVSnakeDialog extends TVDialog {
         saveBest(SNAKE_BEST_KEY, this.bestScore, this.bestName);
     }
 
-    bind() {
-        this._onKeyDown = (event) => {
-            if (!this.isActive()) { return; }
-            if (event.key === "Escape") { event.preventDefault(); this.close(); return; }
-            if (this.gameOver && (event.key === "Enter" || event.key === " " || event.key === "n" || event.key === "N")) {
-                event.preventDefault();
-                this.newGame();
-                return;
-            }
-            switch (event.key) {
-                case "ArrowUp":    if (this.dir.dy !== 1)  { this.nextDir = { dx: 0, dy: -1 }; } event.preventDefault(); break;
-                case "ArrowDown":  if (this.dir.dy !== -1) { this.nextDir = { dx: 0, dy: 1 }; }  event.preventDefault(); break;
-                case "ArrowLeft":  if (this.dir.dx !== 1)  { this.nextDir = { dx: -1, dy: 0 }; } event.preventDefault(); break;
-                case "ArrowRight": if (this.dir.dx !== -1) { this.nextDir = { dx: 1, dy: 0 }; }  event.preventDefault(); break;
-                case "n": case "N": event.preventDefault(); this.newGame(); break;
-            }
-        };
-        document.addEventListener("keydown", this._onKeyDown);
-    }
-
     handleEvent(event) {
         super.handleEvent(event);
         if (event.what === evCommand && event.command === "snake-new") {
             this.newGame();
             this.clearEvent(event);
+        } else if (event.what === evKeyDown) {
+            this.onKeyDown(event.nativeEvent);
+            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+        }
+    }
+
+    onKeyDown(event) {
+        if (!this.isActive()) { return; }
+        if (event.key === "Escape") { event.preventDefault(); this.close(); return; }
+        if (this.gameOver && (event.key === "Enter" || event.key === " " || event.key === "n" || event.key === "N")) {
+            event.preventDefault();
+            this.newGame();
+            return;
+        }
+        switch (event.key) {
+            case "ArrowUp":    if (this.dir.dy !== 1)  { this.nextDir = { dx: 0, dy: -1 }; } event.preventDefault(); break;
+            case "ArrowDown":  if (this.dir.dy !== -1) { this.nextDir = { dx: 0, dy: 1 }; }  event.preventDefault(); break;
+            case "ArrowLeft":  if (this.dir.dx !== 1)  { this.nextDir = { dx: -1, dy: 0 }; } event.preventDefault(); break;
+            case "ArrowRight": if (this.dir.dx !== -1) { this.nextDir = { dx: 1, dy: 0 }; }  event.preventDefault(); break;
+            case "n": case "N": event.preventDefault(); this.newGame(); break;
         }
     }
 
@@ -4236,13 +4560,13 @@ class TVSnakeDialog extends TVDialog {
     }
 
     renderInfo() {
-        this.infoBox.updateRow("score", "Score: " + this.score);
-        this.infoBox.updateRow("level", "Level: " + this.level);
-        this.infoBox.updateRow("length", "Length:" + this.snake.length);
+        this.infoBox.updateRow(this.scoreRow, "Score: " + this.score);
+        this.infoBox.updateRow(this.levelRow, "Level: " + this.level);
+        this.infoBox.updateRow(this.lengthRow, "Length:" + this.snake.length);
         const bestText = this.bestName
             ? this.bestName + " " + this.bestScore
             : "Best:  " + this.bestScore;
-        this.bestBox.updateRow("best", bestText);
+        this.bestBox.updateRow(this.bestRow, bestText);
     }
 
     renderField() {
@@ -4263,7 +4587,7 @@ class TVSnakeDialog extends TVDialog {
                 if (v === 2) {
                     cells.push('<span class="tv-snake-cell tv-snake-head">@@</span>');
                 } else if (v === 1) {
-                    cells.push('<span class="tv-snake-cell tv-snake-body">██</span>');
+                    cells.push('<span class="tv-snake-cell tv-snake-segment">██</span>');
                 } else if (v === 3) {
                     cells.push('<span class="tv-snake-cell tv-snake-food">◆ </span>');
                 } else {
@@ -4274,16 +4598,20 @@ class TVSnakeDialog extends TVDialog {
         }
 
         if (this.gameOver) {
-            this.fieldView.setHTML(lines.join("") +
+            this.fieldView._setHTML(lines.join("") +
                 `<div class="tv-snake-overlay-msg">GAME OVER<br><small>Score: ${this.score}</small><br><small>Press Enter</small></div>`);
         } else {
-            this.fieldView.setHTML(lines.join(""));
+            this.fieldView._setHTML(lines.join(""));
         }
     }
 }
 
 Object.assign(TV, {
+    TVGameDialog,
     TVPuzzleDialog,
+    TVTetrisGameView,
+    TVTetrisGameInfo,
+    TVTetrisSetupDialog,
     TVTetrisDialog,
     TVMinesDialog,
     TVBreakOutDialog,

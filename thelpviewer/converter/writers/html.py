@@ -239,6 +239,7 @@ class HelpHtmlRenderer:
                 f"<link rel=\"stylesheet\" href=\"{SITE_ASSET_DIR_NAME}/turbovision.css?v={self.asset_version}\">",
                 f"<script defer src=\"search-index.js?v={self.search_version}\"></script>",
                 f"<script defer src=\"{SITE_ASSET_DIR_NAME}/tv-core.js?v={self.asset_version}\"></script>",
+                f"<script defer src=\"{SITE_ASSET_DIR_NAME}/tv-context-help.js?v={self.asset_version}\"></script>",
                 f"<script defer src=\"{SITE_ASSET_DIR_NAME}/tv-highlight.js?v={self.asset_version}\"></script>",
                 f"<script defer src=\"{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v={self.asset_version}\"></script>",
                 f"<script defer src=\"{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v={self.asset_version}\"></script>",

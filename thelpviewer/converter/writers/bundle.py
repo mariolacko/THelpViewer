@@ -704,14 +704,15 @@ def _render_bundle_index_html() -> str:
 <meta name="twitter:image" content="{SITE_ASSET_DIR_NAME}/Thelp.png">
 <meta name="theme-color" content="#000080">
 <meta name="GENERATOR" content="THelp Viewer Converter {GENERATOR_VERSION}">
-<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260921i">
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20260921j"></script>
+<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260924h">
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20260924f"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20260926b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js?v=20260621n"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20260921h"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20260926b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20260506a"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20260921f"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20260921g"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260921h"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20260926b"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20260924c"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20260926b"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"

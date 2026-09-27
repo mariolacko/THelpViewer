@@ -18,6 +18,79 @@ BUNDLE_PATHS = (
     Path("www/assets/tv-bundle-app.js"),
     Path("thelpviewer/converter/assets/tv-bundle-app.js"),
 )
+CONTEXT_HELP_PATHS = (
+    Path("www/assets/tv-context-help.js"),
+    Path("thelpviewer/converter/assets/tv-context-help.js"),
+)
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for gauge behavior tests")
+def test_dos_navigator_gauges_receive_broadcast_progress_commands():
+    assert CORE_PATHS[0].read_bytes() == CORE_PATHS[1].read_bytes()
+    script = r'''
+const fs = require("fs");
+const source = fs.readFileSync(process.argv[1], "utf8");
+const start = source.indexOf("class TVPercentGauge");
+const end = source.indexOf("\nclass TVLabel", start);
+const evBroadcast = 0x0200;
+const cmUpdateGauge = 12000;
+const cmResetGauge = 12001;
+const cmAddGauge = 12002;
+class TVRect {
+    constructor(x1 = 0, y1 = 0, x2 = 0, y2 = 0) { this.x1 = x1; this.y1 = y1; this.x2 = x2; this.y2 = y2; }
+    get width() { return this.x2 - this.x1; }
+}
+class TVView {
+    constructor(bounds) { this.bounds = bounds; this.size = { x: bounds.width }; this.eventMask = 0; this.root = null; }
+    handleEvent() {}
+    drawView() { this.drawCount = (this.drawCount || 0) + 1; return this; }
+    _drawAttrs(attrs) { return attrs; }
+    static _viewBoundsStyle() { return ""; }
+}
+const attrsToString = () => "";
+const escapeHtml = (value) => String(value);
+eval(source.slice(start, end) + "\nglobalThis.PercentGauge = TVPercentGauge; globalThis.BarGauge = TVBarGauge;");
+
+const percent = new PercentGauge(new TVRect(0, 0, 5, 1), 200);
+percent.handleEvent({ what: evBroadcast, command: cmUpdateGauge, infoLong: 50 });
+if (percent.curValue !== 50 || !percent.draw().includes("25 %")) throw new Error("update failed");
+percent.handleEvent({ what: evBroadcast, command: cmAddGauge, infoLong: 25 });
+if (percent.curValue !== 75) throw new Error("add failed");
+percent.handleEvent({ what: evBroadcast, command: cmResetGauge, infoLong: 300 });
+if (percent.maxValue !== 300 || percent.curValue !== 0) throw new Error("reset failed");
+
+const bar = new BarGauge(new TVRect(0, 0, 10, 1), 100);
+bar.updateView(40);
+const markup = bar.draw();
+if (!markup.includes("▓▓▓▓░░░░░░")) throw new Error(`unexpected bar: ${markup}`);
+'''
+    result = subprocess.run(
+        [NODE, "-e", script, str(CORE_PATHS[0])],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_application_commands_use_tvision_handle_event_flow():
+    core = CORE_PATHS[0].read_text(encoding="utf-8")
+    shell = SHELL_PATHS[0].read_text(encoding="utf-8")
+    bundle = BUNDLE_PATHS[0].read_text(encoding="utf-8")
+    dialogs = Path("www/assets/tv-dialogs.js").read_text(encoding="utf-8")
+    games = Path("www/assets/tv-games.js").read_text(encoding="utf-8")
+
+    assert 'new TVMenuController({ commandTarget: this })' in bundle
+    assert "this.menus.commandTarget = this" in shell
+    assert "class TVApplication extends TVProgram" in shell and "handleEvent(event)" in shell
+    assert "bindActions()" not in shell
+    assert "class TVGameDialog extends TVDialog" in games
+    assert 'event.command === "hall-of-fame"' in games
+    assert "class TVWindow extends TVGroup" in core
+    assert 'event.command === "window-close"' in core
+    assert 'event.command === "window-zoom"' in core
+    assert "_bindCloseButton(" not in bundle
+    assert "_bindZoomButton(" not in bundle
+    assert "onDialogKeyDown(event)" not in dialogs
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the widget lifecycle test")
@@ -108,15 +181,17 @@ class FakeResizeObserver {
 }
 global.ResizeObserver = FakeResizeObserver;
 window.ResizeObserver = FakeResizeObserver;
+global.sbHorizontal = 0x0000;
 
 const core = fs.readFileSync(process.argv[1], "utf8");
 const scrollbarStart = core.indexOf("class TVScrollBar");
-const scrollbarEnd = core.indexOf("\nconst TurboVisionScrollbar", scrollbarStart);
+const scrollbarEnd = core.indexOf("\nclass TVProgram", scrollbarStart);
 eval(core.slice(scrollbarStart, scrollbarEnd) + "\nglobalThis.TestScrollbar = TVScrollBar;");
 TestScrollbar.prototype.update = function () { this.updateCalls = (this.updateCalls || 0) + 1; };
 
 const viewport = new FakeTarget();
 viewport.firstElementChild = new FakeTarget();
+viewport.scrollHeight = 100;
 const x = buildAxis();
 const y = buildAxis();
 const host = new FakeTarget();
@@ -125,10 +200,28 @@ const frame = new FakeTarget();
 frame.closest = (selector) => selector === ".tv-client-row" ? host : null;
 frame.parentElement = host;
 frame.querySelector = (selector) => selector === "[data-tv-viewport]" ? viewport : null;
+const logicalOwner = {};
+frame._tvView = logicalOwner;
 
 const scrollbar = new TestScrollbar(new TVRect()).bindRoot(frame);
-if (!viewport.listeners.has("scroll") || !window.listeners.has("resize") || !document.listeners.has("mouseup")) {
+if (frame._tvView !== logicalOwner) {
+    throw new Error("scrollbar replaced the logical TVView owning its frame");
+}
+if (!viewport.listeners.has("scroll") || !frame.listeners.has("wheel")
+    || !window.listeners.has("resize") || !document.listeners.has("mouseup")) {
     throw new Error("scrollbar did not bind its global resources");
+}
+let wheelPrevented = false;
+let wheelStopped = false;
+frame.listeners.get("wheel")({
+    deltaX: 0,
+    deltaY: 1,
+    deltaMode: 1,
+    preventDefault() { wheelPrevented = true; },
+    stopPropagation() { wheelStopped = true; },
+});
+if (!wheelPrevented || !wheelStopped || viewport.scrollTop !== 16) {
+    throw new Error(`scrollbar ignored wheel input: ${viewport.scrollTop}`);
 }
 scrollbar.refresh();
 if (!observer || observer.observed.length !== 2) {
@@ -143,7 +236,8 @@ if (inactivePrevented || scrollbar.repeatTimer !== null || x.root.getAttribute("
 scrollbar.setActive(true);
 scrollbar.destroy();
 scrollbar.destroy();
-if (viewport.listeners.has("scroll") || window.listeners.has("resize") || document.listeners.has("mouseup")) {
+if (viewport.listeners.has("scroll") || frame.listeners.has("wheel")
+    || window.listeners.has("resize") || document.listeners.has("mouseup")) {
     throw new Error("scrollbar left a global listener behind");
 }
 if (observer.disconnected < 1 || x.parts["[data-role='thumb']"].listeners.has("mousedown")) {
@@ -201,10 +295,29 @@ def test_dynamic_windows_destroy_widgets_before_removing_the_dom():
     assert "function destroyWindowWidgets(windowEl)" in source
     assert "scrollbars.forEach((scrollbar) => scrollbar.destroy())" in source
     assert "windowEl._tvResizer.destroy()" in source
-    assert "this._destroyWindowWidgets(existing);\n            existing.remove();" in source
-    assert "this._destroyWindowWidgets(el);\n            el.remove();" in source
+    assert "this._destroyWindowWidgets(existing);\n            existing._tvWindowView?.destroy();\n            existing.remove();" in source
+    assert "this._destroyWindowWidgets(el);\n            el._tvWindowView?.destroy();\n            el.remove();" in source
     assert "destroyWindowWidgets(windowEl);\n            windowEl.remove();" in source
-    assert "(existing._tvScrollbars || []).forEach((scrollbar) => scrollbar.refresh())" in source
+    context_help = CONTEXT_HELP_PATHS[0].read_text(encoding="utf-8")
+    assert 'frame?.querySelector(".tv-scrollbar")?._tvScrollbar?.refresh()' in context_help
+
+
+def test_help_windows_use_the_tvision_window_and_scroller_hierarchy():
+    assert BUNDLE_PATHS[0].read_bytes() == BUNDLE_PATHS[1].read_bytes()
+    assert CONTEXT_HELP_PATHS[0].read_bytes() == CONTEXT_HELP_PATHS[1].read_bytes()
+    source = CONTEXT_HELP_PATHS[0].read_text(encoding="utf-8")
+    bundle = BUNDLE_PATHS[0].read_text(encoding="utf-8")
+
+    assert "class TVHelpViewer extends TVScroller" in source
+    assert "class TVHelpWindow extends TVWindow" in source
+    assert "this.viewer = this.initViewer(this.getExtent(), bundle)" in source
+    assert "this.insert(this.viewer)" in source
+    assert "const windowView = new TVHelpWindow(" in bundle
+    assert "helpWindow.setContent(contentHTML)" in bundle
+    assert "viewport.innerHTML = contentHTML" not in bundle
+    assert "TVHelpViewer," in source
+    assert "TVHelpWindow," in source
+    assert "class TVHelpWindow" not in bundle
 
 
 def test_temporary_dialogs_use_the_shared_destroy_lifecycle():
@@ -213,11 +326,23 @@ def test_temporary_dialogs_use_the_shared_destroy_lifecycle():
     games = Path("www/assets/tv-games.js").read_text(encoding="utf-8")
 
     assert "this.manager.unregister(this.managerName, this)" in core
-    assert "this.dialog.destroy();" in bundle
-    assert bundle.count("dialog.destroy();") >= 3
+    assert "super.destroy();" in bundle
+    assert bundle.count("dialog.destroy();") >= 2
     assert "this.destroy();" in games
     assert "dialog.overlay.remove();" not in bundle
     assert "dlg.overlay.remove();" not in games
+
+
+def test_applications_follow_the_tvision_program_hierarchy():
+    core = CORE_PATHS[0].read_text(encoding="utf-8")
+    shell = SHELL_PATHS[0].read_text(encoding="utf-8")
+    bundle = BUNDLE_PATHS[0].read_text(encoding="utf-8")
+
+    assert "class TVProgram extends TVGroup" in core
+    assert "class TVApplication extends TVProgram" in shell
+    assert "class TVBundleApp extends TVProgram" in bundle
+    assert "super(new TVRect());" in shell
+    assert "super(new TVRect());" in bundle
 
 
 def test_active_window_state_controls_scrollbars_and_scopes_frame_redraw():
@@ -242,17 +367,10 @@ def test_active_window_state_controls_scrollbars_and_scopes_frame_redraw():
     assert 'windowElement.classList.contains("is-moving")' in frame_state
     assert '.tv-scrollbar, .tv-menu-bar' not in shell
     assert ".tv-scrollbar.is-inactive" in css
-    assert ".tv-vlist-scrollbar.is-inactive" in css
+    assert ".tv-vlist-scrollbar.is-inactive" not in css
     inactive_scrollbar_css = css[
         css.index(".tv-scrollbar.is-inactive"):
         css.index(".tv-js .tv-scrollbar")
     ]
-    inactive_list_start = css.index(".tv-vlist-scrollbar.is-inactive")
-    inactive_list_css = css[
-        inactive_list_start:
-        css.index(".tv-vlist-track", inactive_list_start)
-    ]
     assert "--tv-frame-passive" not in inactive_scrollbar_css
-    assert "--tv-frame-passive" not in inactive_list_css
     assert "pointer-events: none" in inactive_scrollbar_css
-    assert "pointer-events: none" in inactive_list_css

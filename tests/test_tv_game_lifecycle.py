@@ -29,20 +29,36 @@ def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
     assert "const HALL_OF_FAME_LIMIT = 10" in helper
     assert "function showHallOfFame(ownerDialog, game)" in helper
     hall = helper[
-        helper.index("function showHallOfFame(ownerDialog, game)"):
-        helper.index("function installHallOfFame", helper.index("function showHallOfFame(ownerDialog, game)"))
+        helper.index("function hallOfFameRows(game, entries)"):
+        helper.index("function installHallOfFame", helper.index("function hallOfFameRows(game, entries)"))
     ]
-    assert 'new TVGroup(new TVRect())' in hall
-    assert 'new TVStaticText(new TVRect(),' in hall
+    assert "new TVGroup(new TVRect(0, 0, 43, 13))" in hall
+    assert "new TVHallRow(new TVRect(" in hall
+    assert 'new TVStaticText(new TVRect(1, 3, 42, 4), "\\x03No scores yet.")' in hall
+    assert "class TVHallBody" not in source
+    assert "class TVHallEmpty" not in source
+    assert "class TVInfoSeparator" not in source
+    assert "class TVMinesValue" not in source
+    assert "class TVMinesTimer" not in source
     assert '<div class="tv-hall-' not in hall
+    assert 'fetch(`/api/hall-of-fame/${encodeURIComponent(game)}`' in helper
+    assert "return saveLocalHallOfFameScore(game, score, name, note);" in helper
     assert "manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg)" in helper
-    assert "TVFrame.createTitleControl({" in helper
-    assert 'glyphClass: "tv-game-hall-glyph"' in helper
+    assert "class TVGameDialog extends TVDialog" in helper
+    assert "this.frame.createTitleControl(" in helper
+    assert 'event.command === "hall-of-fame"' in helper
+    assert '"hall-of-fame"' in helper
     assert source.count("installHallOfFame(this,") == 12
-    for game in ("puzzle", "tetris", "mines", "breakout", "sokoban", "lines", "reversi", "ludo", "mastermind", "snake", "tron", "hanoi"):
+    assert '"~T~op 10", "tetris-top10"' in source
+    assert 'showHallOfFame(this.gameWindow(), this.pentix ? "pentix" : "tetris")' in source
+    for game in ("puzzle", "mines", "breakout", "sokoban", "lines", "reversi", "ludo", "mastermind", "snake", "tron", "hanoi"):
         assert f'installHallOfFame(this, "{game}")' in source
         assert f'"{game}": {{ title:' in helper or f'{game}: {{ title:' in helper
-    assert source.count('submitHallOfFameScore(this, "') >= 12
+    assert 'tetris: { title:' in helper
+    assert 'installHallOfFame(this, "tetris")' in source
+    # Tetris/Pentix owns its original Top 10 flow; the other games share the
+    # generic score submission helper.
+    assert source.count('submitHallOfFameScore(this, "') >= 11
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for Mastermind behavior tests")
@@ -86,9 +102,10 @@ def test_games_pause_background_work_and_clear_transient_input():
     tron = source[source.index("class TVTronDialog"):source.index("class TVHanoiDialog")]
     mines = source[source.index("class TVMinesDialog"):source.index("class TVBreakOutDialog")]
 
-    assert 'this._onWindowBlur = () => this.keysDown.clear()' in breakout
+    assert 'document.addEventListener("keydown"' not in breakout
+    assert "onDialogKeyUp(event)" in breakout
     assert "this.keysDown.clear();\n        super.close();" in breakout
-    assert "if (!this.isActive()) {\n                this.keysDown.clear();" in breakout
+    assert "if (!this.isActive() || !document.hasFocus()) {\n                this.keysDown.clear();" in breakout
 
     assert "this.computerTimer = null" in reversi
     assert "window.clearTimeout(this.computerTimer)" in reversi
@@ -98,7 +115,7 @@ def test_games_pause_background_work_and_clear_transient_input():
     assert "if (!this.isActive()) {\n                this.scheduleCpu();" in ludo
     assert "if (!this.isActive()) { return; }\n            this.tick();" in snake
     assert "if (!this.isActive()) { return; }\n            this.seconds++;" in mines
-    assert "if (!this.isActive()) {\n                this.game.clearPendingDirections();" in tron
+    assert "if (!this.isActive() || !document.hasFocus()) {\n                this.game.clearPendingDirections();" in tron
     assert "this.inactivePause = true;" in tron
 
 
@@ -181,7 +198,7 @@ const fs = require("fs");
 const source = fs.readFileSync(process.argv[1], "utf8");
 const start = source.indexOf("const MINES_ROWS");
 const end = source.indexOf("// ── BreakOut", start);
-class TVDialog {}
+class TVGameDialog {}
 eval(source.slice(start, end) + "\nglobalThis.TestMines = TVMinesDialog;");
 
 const rows = 9;
@@ -238,7 +255,7 @@ const fs = require("fs");
 const source = fs.readFileSync(process.argv[1], "utf8");
 const start = source.indexOf("const MINES_ROWS");
 const end = source.indexOf("// ── BreakOut", start);
-class TVDialog {}
+class TVGameDialog {}
 eval(source.slice(start, end) + "\nglobalThis.TestMines = TVMinesDialog;");
 
 const game = Object.create(TestMines.prototype);

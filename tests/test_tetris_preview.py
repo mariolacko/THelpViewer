@@ -43,6 +43,7 @@ def test_tetris_next_frame_uses_dialog_background_outside_the_black_preview():
     preview_rule = re.search(r"\[data-tv-tetris-preview\] \{(.*?)\n\}", css, re.DOTALL)
     assert preview_rule is not None
     assert "background: var(--tv-dialog-bg);" in preview_rule.group(1)
+    assert "grid-template-columns: 1ch 3ch repeat(7, 2ch) 4ch 1ch;" in preview_rule.group(1)
 
     assert re.search(
         r"\.tv-tetris-preview-pad,\s*"
@@ -50,3 +51,15 @@ def test_tetris_next_frame_uses_dialog_background_outside_the_black_preview():
         css,
         re.DOTALL,
     )
+
+
+def test_tetris_dialog_uses_dos_navigator_constructor_geometry():
+    source = GAMES_PATH.read_text(encoding="utf-8")
+    dialog = source[source.index("class TVTetrisDialog"):source.index("// ── Minesweeper")]
+    assert "new TVRect(2, 2, 2 + gridWidth, 2 + TETRIS_ROWS)" in dialog
+    assert "const infoX = gridWidth + 4" in dialog
+    assert "const infoWidth = TETRIS_INFO_WIDTH" in dialog
+    assert "const previewView = new TVTetrisPreview(new TVRect())" in dialog
+    assert "new TVRect(infoX, 1, infoX + infoWidth, 17)" in dialog
+    assert 'super(new TVRect(0, 0, 54, 23), "Tetris")' in dialog
+    assert 'installHallOfFame(this, "tetris")' in dialog

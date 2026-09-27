@@ -45,7 +45,6 @@ const THEME_PRESETS = {
             "--tv-appbar-active-hotkey": "#aa0000",
             "--tv-help-pane": "#000000",
             "--tv-window": "#000000",
-            "--tv-search-results-pane": "#000000",
             "--tv-puzzle-pane": "#000000",
             "--tv-calendar-pane": "#000000",
             "--tv-title": "#0000aa",
@@ -118,7 +117,6 @@ const THEME_PRESETS = {
             "--tv-arrow-fg": "#00aa00",
             "--tv-scroll-glyph": "#00aa00",
             "--tv-thumb-fg": "#00ff00",
-            "--tv-search-results-pane": "#00aaaa",
             "--tv-puzzle-pane": "#00aaaa",
             "--tv-puzzle-normal": "#000000",
             "--tv-puzzle-highlight": "#ffffff",
@@ -157,7 +155,6 @@ const THEME_PRESETS = {
             "--tv-scroll-glyph": "#ffaa00",
             "--tv-thumb-fg": "#ffff55",
             "--tv-frame-line": "#ffff55",
-            "--tv-search-results-pane": "#aa5500",
             "--tv-puzzle-pane": "#aa5500",
             "--tv-puzzle-normal": "#000000",
             "--tv-puzzle-highlight": "#ffff55",
@@ -196,7 +193,6 @@ const THEME_PRESETS = {
             "--tv-scroll-glyph": "#c0c0c0",
             "--tv-thumb-fg": "#ffffff",
             "--tv-frame-line": "#ffffff",
-            "--tv-search-results-pane": "#c0c0c0",
             "--tv-puzzle-pane": "#c0c0c0",
             "--tv-puzzle-normal": "#000000",
             "--tv-puzzle-highlight": "#ffffff",
@@ -225,6 +221,7 @@ const DEFAULT_UI_CONFIG = Object.freeze({
             { type: "dialog", dialog: "midi", label: "~M~IDI Player" },
             { type: "dialog", dialog: "colors", label: "C~o~lors" },
             { type: "dialog", dialog: "widgets", label: "~W~idget Gallery" },
+            { type: "dialog", dialog: "systeminfo", label: "System ~I~nformation" },
             { type: "separator" },
             { type: "submenu", label: "~S~creen saver", items: [
                 { type: "saver", mode: "stars", label: "~S~tars" },
@@ -355,7 +352,6 @@ const THEME_PALETTE_TARGETS = Object.freeze({
     "--tv-appbar-active-hotkey": ["--tv-palette-menu-selected-shortcut-fg"],
     "--tv-help-pane": ["--tv-palette-help-text-bg"],
     "--tv-window": ["--tv-palette-help-text-bg"],
-    "--tv-search-results-pane": ["--tv-palette-dialog-info-bg"],
     "--tv-puzzle-pane": ["--tv-palette-viewer-text-bg"],
     "--tv-puzzle-normal": ["--tv-palette-viewer-text-fg"],
     "--tv-puzzle-highlight": ["--tv-palette-viewer-highlight-fg"],
@@ -460,6 +456,8 @@ const TV_HELP_CONTEXTS = Object.freeze({
     hcSnake: 2230,
     hcHanoi: 2240,
     hcTron: 2250,
+    hcStatistics: 2260,
+    hcSystemInformation: 2270,
 });
 const {
     hcNoContext,
@@ -1131,16 +1129,71 @@ function attrsToString(attrs = {}) {
         .join(" ");
 }
 
+class TVPoint {
+    constructor(x = 0, y = 0) {
+        this.x = Number(x) || 0;
+        this.y = Number(y) || 0;
+    }
+
+    copy() { return new TVPoint(this.x, this.y); }
+    equals(other) { return other instanceof TVPoint && this.x === other.x && this.y === other.y; }
+    move(deltaX, deltaY) {
+        this.x += Number(deltaX) || 0;
+        this.y += Number(deltaY) || 0;
+        return this;
+    }
+}
+
 class TVRect {
     constructor(x1 = 0, y1 = 0, x2 = x1, y2 = y1) {
-        this.x1 = Number(x1) || 0;
-        this.y1 = Number(y1) || 0;
-        this.x2 = Number(x2) || this.x1;
-        this.y2 = Number(y2) || this.y1;
+        this.x1 = Number.isFinite(Number(x1)) ? Number(x1) : 0;
+        this.y1 = Number.isFinite(Number(y1)) ? Number(y1) : 0;
+        this.x2 = Number.isFinite(Number(x2)) ? Number(x2) : this.x1;
+        this.y2 = Number.isFinite(Number(y2)) ? Number(y2) : this.y1;
     }
 
     get width() { return Math.max(0, this.x2 - this.x1); }
     get height() { return Math.max(0, this.y2 - this.y1); }
+
+    copy() { return new TVRect(this.x1, this.y1, this.x2, this.y2); }
+    equals(other) {
+        return other instanceof TVRect
+            && this.x1 === other.x1 && this.y1 === other.y1
+            && this.x2 === other.x2 && this.y2 === other.y2;
+    }
+    contains(x, y) {
+        return x >= this.x1 && x < this.x2 && y >= this.y1 && y < this.y2;
+    }
+    move(deltaX, deltaY) {
+        this.x1 += Number(deltaX) || 0;
+        this.x2 += Number(deltaX) || 0;
+        this.y1 += Number(deltaY) || 0;
+        this.y2 += Number(deltaY) || 0;
+        return this;
+    }
+    grow(deltaX, deltaY) {
+        this.x1 -= Number(deltaX) || 0;
+        this.x2 += Number(deltaX) || 0;
+        this.y1 -= Number(deltaY) || 0;
+        this.y2 += Number(deltaY) || 0;
+        return this;
+    }
+    intersect(other) {
+        if (!(other instanceof TVRect)) { return this; }
+        this.x1 = Math.max(this.x1, other.x1);
+        this.y1 = Math.max(this.y1, other.y1);
+        this.x2 = Math.max(this.x1, Math.min(this.x2, other.x2));
+        this.y2 = Math.max(this.y1, Math.min(this.y2, other.y2));
+        return this;
+    }
+    union(other) {
+        if (!(other instanceof TVRect)) { return this; }
+        this.x1 = Math.min(this.x1, other.x1);
+        this.y1 = Math.min(this.y1, other.y1);
+        this.x2 = Math.max(this.x2, other.x2);
+        this.y2 = Math.max(this.y2, other.y2);
+        return this;
+    }
 }
 
 let tvViewSequence = 0;
@@ -1154,11 +1207,104 @@ const evKeyDown = 0x0010;
 const evCommand = 0x0100;
 const evBroadcast = 0x0200;
 
+// DOS Navigator GAUGE.PAS broadcast commands.
+const cmUpdateGauge = 12000;
+const cmResetGauge = 12001;
+const cmAddGauge = 12002;
+
+// TView state masks (Borland Turbo Vision 2.0 / DOS Navigator views.pas).
+const sfVisible = 0x0001;
+const sfCursorVis = 0x0002;
+const sfCursorIns = 0x0004;
+const sfShadow = 0x0008;
+const sfActive = 0x0010;
+const sfSelected = 0x0020;
+const sfFocused = 0x0040;
+const sfDragging = 0x0080;
+const sfDisabled = 0x0100;
+const sfModal = 0x0200;
+const sfDefault = 0x0400;
+const sfExposed = 0x0800;
+
+// TView option masks.
+const ofSelectable = 0x0001;
+const ofTopSelect = 0x0002;
+const ofFirstClick = 0x0004;
+const ofFramed = 0x0008;
+const ofPreProcess = 0x0010;
+const ofPostProcess = 0x0020;
+const ofBuffered = 0x0040;
+const ofTileable = 0x0080;
+const ofCenterX = 0x0100;
+const ofCenterY = 0x0200;
+const ofCentered = 0x0300;
+const ofValidate = 0x0400;
+
+// TView grow and drag masks.
+const gfGrowLoX = 0x01;
+const gfGrowLoY = 0x02;
+const gfGrowHiX = 0x04;
+const gfGrowHiY = 0x08;
+const gfGrowAll = 0x0f;
+const gfGrowRel = 0x10;
+const dmDragMove = 0x01;
+const dmDragGrow = 0x02;
+const dmLimitLoX = 0x10;
+const dmLimitLoY = 0x20;
+const dmLimitHiX = 0x40;
+const dmLimitHiY = 0x80;
+const dmLimitAll = 0xf0;
+
+// TWindow flags and StandardScrollBar options.
+const wfMove = 0x01;
+const wfGrow = 0x02;
+const wfClose = 0x04;
+const wfZoom = 0x08;
+const wfMaxi = 0x10;
+const wnNoNumber = 255;
+const sbHorizontal = 0x0000;
+const sbVertical = 0x0001;
+const sbHandleKeyboard = 0x0002;
+
+// Turbo Vision-compatible key codes used by menu and status descriptors.
+const kbNoKey = 0x0000;
+const kbCtrlF = 0x0006;
+const kbCtrlL = 0x000c;
+const kbF1 = 0x3b00;
+const kbF3 = 0x3d00;
+const kbF5 = 0x3f00;
+const kbF6 = 0x4000;
+const kbShiftF6 = 0x5900;
+const kbAltF3 = 0x6d00;
+const kbAlt0 = 0x8100;
+
+function getKeyCode(event) {
+    if (!event || event.metaKey) { return kbNoKey; }
+    if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key?.length === 1) {
+        const code = event.key.toUpperCase().charCodeAt(0);
+        return code >= 0x40 && code <= 0x5f ? code - 0x40 : kbNoKey;
+    }
+    if (event.altKey && !event.ctrlKey && !event.shiftKey) {
+        if (event.key === "F3") { return kbAltF3; }
+        if (event.key === "0") { return kbAlt0; }
+    }
+    if (!event.altKey && !event.ctrlKey) {
+        if (event.key === "F1" && !event.shiftKey) { return kbF1; }
+        if (event.key === "F3" && !event.shiftKey) { return kbF3; }
+        if (event.key === "F5" && !event.shiftKey) { return kbF5; }
+        if (event.key === "F6") { return event.shiftKey ? kbShiftF6 : kbF6; }
+    }
+    return kbNoKey;
+}
+
+const disabledCommands = new Set();
+
 class TVEvent {
-    constructor(what = evNothing, { command = "", infoPtr = null, nativeEvent = null } = {}) {
+    constructor(what = evNothing, { command = "", infoPtr = null, infoLong = 0, nativeEvent = null } = {}) {
         this.what = what;
         this.command = command;
         this.infoPtr = infoPtr;
+        this.infoLong = Number(infoLong) || 0;
         this.nativeEvent = nativeEvent;
     }
 }
@@ -1172,16 +1318,18 @@ class TVView {
         this.owner = null;
         this.helpCtx = hcNoContext;
         this.bounds = bounds;
+        this.origin = new TVPoint(bounds.x1, bounds.y1);
+        this.size = new TVPoint(bounds.width, bounds.height);
+        this.cursor = new TVPoint();
+        this.growMode = 0;
+        this.dragMode = dmLimitLoY;
+        this.options = 0;
+        this.state = sfVisible;
+        this.eventMask = evMouseDown | evKeyDown | evCommand;
         this.viewId = `tv-view-${++tvViewSequence}`;
-        this.drawOptions = {};
     }
 
-    setDrawOptions(options = {}) {
-        this.drawOptions = { ...this.drawOptions, ...options };
-        return this;
-    }
-
-    renderAttrs(attrs = {}) {
+    _drawAttrs(attrs = {}) {
         return {
             "data-tv-view-id": this.viewId,
             ...(this.helpCtx !== hcNoContext ? { "data-tv-help-ctx": this.helpCtx } : {}),
@@ -1189,8 +1337,14 @@ class TVView {
         };
     }
 
+    _drawRole() { return String(this.constructor.role || ""); }
+
+    _semanticName() {
+        return String(this.constructor.viewName || "").replace(/[^a-zA-Z0-9_-]/g, "-");
+    }
+
     /** Build inline CSS for character-cell bounds (x, y, w, h). */
-    static boundsStyle(x, y, w, h) {
+    static _boundsStyle(x, y, w, h) {
         const parts = [];
         if (x !== undefined || y !== undefined) { parts.push("position:absolute"); }
         if (x !== undefined) { parts.push(`left:${x}ch`); }
@@ -1200,13 +1354,13 @@ class TVView {
         return parts.join(";");
     }
 
-    static viewBoundsStyle(view) {
+    static _viewBoundsStyle(view) {
         const bounds = view?.bounds;
         if (!(bounds instanceof TVRect)) { return ""; }
         if (bounds.x1 === 0 && bounds.y1 === 0 && bounds.x2 === 0 && bounds.y2 === 0) {
             return "";
         }
-        return this.boundsStyle(
+        return this._boundsStyle(
             bounds.x1,
             bounds.y1,
             bounds.width || undefined,
@@ -1214,13 +1368,13 @@ class TVView {
         );
     }
 
-    static roleClassNames(role = "") {
+    static _roleClassNames(role = "") {
         return String(role).split(/\s+/).filter(Boolean).map((name) => (
             name.startsWith("is-") ? name : `tv-${name}`
         )).join(" ");
     }
 
-    static controlAttrs({
+    static _controlAttrs({
         name = "",
         value = true,
         command = "",
@@ -1256,13 +1410,13 @@ class TVView {
         return attrs;
     }
 
-    static fromHTML(markup) {
+    static _fromHTML(markup) {
         const template = document.createElement("template");
         template.innerHTML = markup.trim();
         return template.content.firstElementChild;
     }
 
-    static fromElement(element) {
+    static _fromElement(element) {
         let current = element?.nodeType === 1 ? element : null;
         while (current) {
             if (current._tvView instanceof TVView) { return current._tvView; }
@@ -1286,15 +1440,15 @@ class TVView {
         return this;
     }
 
-    query(selector) {
+    _query(selector) {
         return this.root ? this.root.querySelector(selector) : null;
     }
 
-    queryAll(selector) {
+    _queryAll(selector) {
         return this.root ? Array.from(this.root.querySelectorAll(selector)) : [];
     }
 
-    setHTML(markup) {
+    _setHTML(markup) {
         if (this.root) {
             this.root.innerHTML = markup;
         }
@@ -1306,18 +1460,208 @@ class TVView {
             throw new TypeError("TVView.setBounds expects TVRect");
         }
         this.bounds = bounds;
+        this.origin.x = bounds.x1;
+        this.origin.y = bounds.y1;
+        this.size.x = bounds.width;
+        this.size.y = bounds.height;
         return this;
     }
 
+    getBounds() { return this.bounds.copy(); }
+
+    getExtent() { return new TVRect(0, 0, this.size.x, this.size.y); }
+
+    locate(bounds) { return this.changeBounds(bounds); }
+
+    moveTo(x, y) {
+        return this.changeBounds(new TVRect(
+            Number(x) || 0,
+            Number(y) || 0,
+            (Number(x) || 0) + this.size.x,
+            (Number(y) || 0) + this.size.y,
+        ));
+    }
+
+    setCursor(x, y) {
+        this.cursor.x = Number(x) || 0;
+        this.cursor.y = Number(y) || 0;
+        return this;
+    }
+
+    showCursor() { return this.setState(sfCursorVis, true); }
+    hideCursor() { return this.setState(sfCursorVis, false); }
+    blockCursor() { return this.setState(sfCursorIns, true); }
+    normalCursor() { return this.setState(sfCursorIns, false); }
+
     setState(state, enable) {
-        if (state === "visible") {
-            if (this.root) { this.root.hidden = !enable; }
-        } else if (state === "active") {
-            this.root?.classList.toggle("is-active", Boolean(enable));
-        } else if (state === "expanded") {
-            this.root?.setAttribute("aria-expanded", enable ? "true" : "false");
+        const mask = Number(state) || 0;
+        this.state = enable ? (this.state | mask) : (this.state & ~mask);
+        if ((mask & sfVisible) !== 0 && this.root) { this.root.hidden = !enable; }
+        if ((mask & sfActive) !== 0) { this.root?.classList.toggle("is-active", Boolean(enable)); }
+        if ((mask & sfFocused) !== 0) { this.root?.classList.toggle("is-focused", Boolean(enable)); }
+        if ((mask & sfSelected) !== 0) { this.root?.classList.toggle("is-selected", Boolean(enable)); }
+        if ((mask & sfDisabled) !== 0 && this.root) {
+            this.root.classList.toggle("is-disabled", Boolean(enable));
+            this.root.setAttribute("aria-disabled", enable ? "true" : "false");
         }
         return this;
+    }
+
+    getState(state) {
+        return (this.state & state) !== 0;
+    }
+
+    show() { return this.setState(sfVisible, true); }
+    hide() { return this.setState(sfVisible, false); }
+    exposed() { return this.getState(sfVisible) && !this.root?.hidden; }
+
+    focus() {
+        this.root?.focus?.();
+        return this.setState(sfFocused, true);
+    }
+
+    select() {
+        this.owner?.setCurrent?.(this);
+        return this.setState(sfSelected, true);
+    }
+
+    makeFirst() {
+        if (this.owner instanceof TVGroup) {
+            this.owner.remove(this);
+            this.owner.insert(this);
+            this.root?.parentElement?.appendChild(this.root);
+        }
+        return this;
+    }
+
+    nextView() {
+        if (!(this.owner instanceof TVGroup)) { return null; }
+        const index = this.owner.indexOf(this);
+        return index < 0 ? null : this.owner.at((index + 1) % this.owner.children.length);
+    }
+
+    prevView() {
+        if (!(this.owner instanceof TVGroup)) { return null; }
+        const index = this.owner.indexOf(this);
+        return index < 0 ? null : this.owner.at((index + this.owner.children.length - 1) % this.owner.children.length);
+    }
+
+    topView() {
+        let view = this;
+        while (view.owner) { view = view.owner; }
+        return view;
+    }
+
+    dataSize() { return 0; }
+    getData() { return null; }
+    setData(_value) { return this; }
+    valid(_command = 0) { return true; }
+
+    calcBounds(bounds, delta) {
+        if (!(bounds instanceof TVRect)) { return null; }
+        const change = delta instanceof TVPoint ? delta : new TVPoint(delta?.x, delta?.y);
+        if ((this.growMode & gfGrowLoX) !== 0) { bounds.x1 += change.x; }
+        if ((this.growMode & gfGrowLoY) !== 0) { bounds.y1 += change.y; }
+        if ((this.growMode & gfGrowHiX) !== 0) { bounds.x2 += change.x; }
+        if ((this.growMode & gfGrowHiY) !== 0) { bounds.y2 += change.y; }
+        return bounds;
+    }
+
+    commandEnabled(command) { return !disabledCommands.has(command); }
+
+    disableCommands(commands) {
+        const values = commands instanceof Set || Array.isArray(commands) ? commands : [commands];
+        for (const command of values) { disabledCommands.add(command); }
+    }
+
+    enableCommands(commands) {
+        const values = commands instanceof Set || Array.isArray(commands) ? commands : [commands];
+        for (const command of values) { disabledCommands.delete(command); }
+    }
+
+    getCommands() {
+        return new Set(Object.values(TV_COMMANDS).filter((command) => !disabledCommands.has(command)));
+    }
+
+    setCommands(commands) {
+        disabledCommands.clear();
+        const enabled = new Set(commands instanceof Set || Array.isArray(commands) ? commands : []);
+        Object.values(TV_COMMANDS).forEach((command) => {
+            if (!enabled.has(command)) { disabledCommands.add(command); }
+        });
+    }
+
+    endModal(command) { return this.owner?.endModal?.(command); }
+    execute() { return 0; }
+    getClipRect() { return this.getExtent(); }
+    getColor(color) { return color; }
+    getPalette() { return null; }
+
+    makeGlobal(source) {
+        const point = source instanceof TVPoint ? source.copy() : new TVPoint(source?.x, source?.y);
+        for (let view = this; view; view = view.owner) { point.move(view.origin.x, view.origin.y); }
+        return point;
+    }
+
+    makeLocal(source) {
+        const point = source instanceof TVPoint ? source.copy() : new TVPoint(source?.x, source?.y);
+        const chain = [];
+        for (let view = this; view; view = view.owner) { chain.push(view); }
+        chain.forEach((view) => point.move(-view.origin.x, -view.origin.y));
+        return point;
+    }
+
+    mouseInView(point) {
+        const local = point instanceof TVPoint ? point : new TVPoint(point?.x, point?.y);
+        return this.getExtent().contains(local.x, local.y);
+    }
+
+    putInFrontOf(target) {
+        if (!(this.owner instanceof TVGroup) || target?.owner !== this.owner) { return this; }
+        this.owner.remove(this);
+        this.owner.insertBefore(this, target);
+        target.root?.parentElement?.insertBefore(this.root, target.root);
+        return this;
+    }
+
+    sizeLimits() {
+        return { min: new TVPoint(0, 0), max: new TVPoint(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER) };
+    }
+
+    draw() {
+        return "";
+    }
+    update() { return this.drawView(); }
+
+    drawView() {
+        const markup = this.draw();
+        if (this.root && typeof markup === "string" && markup.trim()) {
+            const replacement = TVView._fromHTML(markup);
+            this.root.replaceWith(replacement);
+            this.resolve(replacement);
+        }
+        return this;
+    }
+
+    changeBounds(bounds) {
+        this.setBounds(bounds);
+        if (!this.root) { return this; }
+        const positioned = !(bounds.x1 === 0 && bounds.y1 === 0 && bounds.x2 === 0 && bounds.y2 === 0);
+        this.root.style.position = positioned ? "absolute" : "";
+        this.root.style.left = positioned ? `${bounds.x1}ch` : "";
+        this.root.style.top = positioned ? `${bounds.y1}em` : "";
+        this.root.style.width = positioned && bounds.width ? `${bounds.width}ch` : "";
+        this.root.style.height = positioned && bounds.height ? `${bounds.height}em` : "";
+        return this;
+    }
+
+    growTo(x, y) {
+        return this.changeBounds(new TVRect(
+            this.bounds.x1,
+            this.bounds.y1,
+            this.bounds.x1 + Math.max(0, Number(x) || 0),
+            this.bounds.y1 + Math.max(0, Number(y) || 0),
+        ));
     }
 
     resolve(root) {
@@ -1339,7 +1683,7 @@ class TVView {
     dispatchEvent(event) {
         let view = this;
         while (view && event.what !== evNothing) {
-            view.handleEvent(event);
+            if ((view.eventMask & event.what) !== 0) { view.handleEvent(event); }
             view = view.owner;
         }
         return event;
@@ -1358,42 +1702,39 @@ class TVView {
 
 class TVStaticText extends TVView {
     constructor(bounds, text) {
-        super();
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVStaticText expects TVRect bounds");
         }
-        this.bounds = bounds;
+        super(bounds);
         this.text = String(text ?? "");
     }
 
-    renderMarkup() {
-        const rendering = this.drawOptions;
+    draw() {
+        const role = this._drawRole();
+        const centered = this.text.charCodeAt(0) === 3;
+        const text = centered ? this.text.slice(1) : this.text;
         const cls = [
             "tv-static-text",
-            rendering.title ? "tv-title" : "",
-            TVView.roleClassNames(rendering.presentation),
+            TVView._roleClassNames(role),
         ].filter(Boolean).join(" ");
         const classAttr = ` class="${escapeHtml(cls)}"`;
-        const bounds = TVView.viewBoundsStyle(this);
-        const alignStyle = rendering.align ? `text-align:${rendering.align}` : "";
+        const bounds = TVView._viewBoundsStyle(this);
+        const alignStyle = centered ? "text-align:center" : "";
         const inlineStyle = [bounds, alignStyle].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
-        const liveKinds = new Set(["calc-display", "midi-status", "find-status"]);
         const liveNames = new Set(["tron-status", "hanoi-history", "hanoi-status"]);
-        const semanticName = rendering.viewName
-            ? String(rendering.viewName).replace(/[^a-zA-Z0-9_-]/g, "-")
-            : "";
-        const attrString = attrsToString(this.renderAttrs({
+        const semanticName = this._semanticName();
+        const attrString = attrsToString(this._drawAttrs({
             ...(semanticName ? {
                 [`data-tv-${semanticName}`]: true,
                 "data-tv-row": semanticName,
             } : {}),
-            ...(liveKinds.has(rendering.presentation) || liveNames.has(semanticName) ? { "aria-live": "polite" } : {}),
+            ...(role === "calc-display" || liveNames.has(semanticName) ? { "aria-live": "polite" } : {}),
             ...(semanticName === "ludo-board" ? { role: "grid", "aria-label": "Ludo board" } : {}),
             ...(semanticName === "tron-field" ? { role: "img", "aria-label": "Tron arena" } : {}),
         }));
         const attrs = attrString ? ` ${attrString}` : "";
-        return `<div${classAttr}${styleAttr}${attrs}>${escapeHtml(this.text)}</div>`;
+        return `<div${classAttr}${styleAttr}${attrs}>${escapeHtml(text)}</div>`;
     }
 
     getText() {
@@ -1402,12 +1743,83 @@ class TVStaticText extends TVView {
 
     setText(text) {
         this.text = String(text ?? "");
-        if (this.root) { this.root.textContent = this.text; }
+        if (this.root) {
+            const centered = this.text.charCodeAt(0) === 3;
+            this.root.textContent = centered ? this.text.slice(1) : this.text;
+            this.root.style.textAlign = centered ? "center" : "";
+        }
         return this;
     }
 
+}
+
+class TVPercentGauge extends TVView {
+    static viewName = "percent-gauge";
+
+    constructor(bounds, maxValue) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVPercentGauge expects TVRect bounds");
+        }
+        super(bounds);
+        this.eventMask |= evBroadcast;
+        this.maxValue = Number(maxValue) || 0;
+        this.curValue = 0;
+    }
+
+    solveForX(y, z) {
+        return Math.trunc((Number(z) || 0) * ((Number(y) || 0) * 0.01));
+    }
+
+    solveForY(x, z) {
+        const total = Number(z) || 0;
+        return total === 0 ? 0 : Math.trunc(((Number(x) || 0) * 100) / total);
+    }
+
     draw() {
-        return this.renderMarkup();
+        const percentDone = this.solveForY(this.curValue, this.maxValue);
+        const text = `${String(percentDone).padEnd(3, " ")}%`;
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        const attrs = attrsToString(this._drawAttrs({ "data-tv-percent-gauge": true }));
+        return `<div class="tv-gauge tv-percent-gauge"${style} ${attrs}>${escapeHtml(text)}</div>`;
+    }
+
+    updateView(progress) {
+        this.curValue = Number(progress) || 0;
+        this.drawView();
+        return this;
+    }
+
+    addProgress(progress) {
+        return this.updateView(this.curValue + (Number(progress) || 0));
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evBroadcast) { return; }
+        if (event.command === cmUpdateGauge) {
+            this.updateView(event.infoLong);
+        } else if (event.command === cmResetGauge) {
+            this.maxValue = event.infoLong;
+            this.updateView(0);
+        } else if (event.command === cmAddGauge) {
+            this.addProgress(event.infoLong);
+        }
+    }
+}
+
+class TVBarGauge extends TVPercentGauge {
+    static viewName = "bar-gauge";
+
+    draw() {
+        const width = Math.max(0, this.size.x);
+        const percentDone = this.solveForY(this.curValue, this.maxValue);
+        const fillSize = Math.min(width, Math.max(0, this.solveForX(percentDone, width)));
+        const text = "▓".repeat(fillSize) + "░".repeat(width - fillSize);
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        const attrs = attrsToString(this._drawAttrs({ "data-tv-bar-gauge": true }));
+        return `<div class="tv-gauge tv-bar-gauge"${style} ${attrs}>${escapeHtml(text)}</div>`;
     }
 }
 
@@ -1417,26 +1829,24 @@ class TVLabel extends TVStaticText {
         this.link = link instanceof TVView ? link : null;
     }
 
-    renderMarkup() {
-        const rendering = this.drawOptions;
+    draw() {
         const tag = this.link ? "label" : "span";
-        const cls = ["tv-static-text", "tv-label", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
-        const bounds = TVView.viewBoundsStyle(this);
+        const cls = ["tv-static-text", "tv-label", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
+        const bounds = TVView._viewBoundsStyle(this);
         const styleAttr = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const forAttr = this.link ? ` for="${escapeHtml(this.link.viewId)}"` : "";
-        const attrs = attrsToString(this.renderAttrs());
-        const content = rendering.hotkey ? renderHotkeyMarkup(this.text) : escapeHtml(this.text);
+        const attrs = attrsToString(this._drawAttrs());
+        const content = renderHotkeyMarkup(this.text);
         return `<${tag} class="${escapeHtml(cls)}"${styleAttr}${forAttr} ${attrs}>${content}</${tag}>`;
     }
 }
 
 class TVInputLine extends TVView {
     constructor(bounds, maxLen = 255) {
-        super();
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVInputLine expects TVRect bounds");
         }
-        this.bounds = bounds;
+        super(bounds);
         this.maxLen = Math.max(1, Number(maxLen) || 255);
         this.data = "";
         this.disabled = false;
@@ -1457,40 +1867,39 @@ class TVInputLine extends TVView {
         return this;
     }
 
-    selectAll() {
-        this.root?.select();
+    selectAll(enable = true) {
+        if (enable) {
+            this.root?.select();
+        } else if (this.root) {
+            const end = this.root.selectionEnd ?? this.root.value.length;
+            this.root.setSelectionRange(end, end);
+        }
         return this;
     }
 
     setState(state, enable) {
-        if (state === "disabled") {
+        if ((state & sfDisabled) !== 0) {
             this.disabled = Boolean(enable);
             if (this.root) { this.root.disabled = this.disabled; }
-            return this;
         }
         return super.setState(state, enable);
     }
 
-    renderMarkup() {
-        const rendering = this.drawOptions;
-        const viewName = rendering.viewName
-            ? String(rendering.viewName).replace(/[^a-zA-Z0-9_-]/g, "-")
-            : "";
-        const attrString = attrsToString(this.renderAttrs({
+    draw() {
+        const viewName = this._semanticName();
+        const attrString = attrsToString(this._drawAttrs({
             type: "text",
             id: this.viewId,
             maxlength: this.maxLen,
             value: this.data,
             disabled: this.disabled,
-            placeholder: rendering.placeholder || null,
-            autocomplete: rendering.autocomplete || null,
-            spellcheck: rendering.spellcheck ?? null,
+            autocomplete: "off",
+            spellcheck: false,
             ...(viewName ? { [`data-tv-${viewName}`]: true } : {}),
         }));
-        const cls = ["tv-input-line", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
-        const bounds = TVView.viewBoundsStyle(this);
-        const inlineStyle = [bounds, rendering.width ? `width:${rendering.width}` : ""].filter(Boolean).join(";");
-        const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
+        const cls = ["tv-input-line", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
+        const bounds = TVView._viewBoundsStyle(this);
+        const styleAttr = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         return `<input class="${escapeHtml(cls)}"${styleAttr} ${attrString}>`;
     }
 
@@ -1504,23 +1913,6 @@ class TVInputLine extends TVView {
     }
 }
 
-class TVMarkupView extends TVView {
-    constructor(items = [], drawOptions = {}) {
-        super();
-        this.items = Array.isArray(items) ? items : [items];
-        this.setDrawOptions(drawOptions);
-    }
-
-    renderMarkup() {
-        const rendering = this.drawOptions;
-        const element = rendering.element || "div";
-        const classAttr = rendering.className ? ` class="${escapeHtml(rendering.className)}"` : "";
-        const attrString = attrsToString(this.renderAttrs(rendering.attributes || {}));
-        const attrs = attrString ? ` ${attrString}` : "";
-        return `<${element}${classAttr}${attrs}>${this.items.join("")}</${element}>`;
-    }
-}
-
 class TVGroup extends TVView {
     constructor(bounds = new TVRect()) {
         if (!(bounds instanceof TVRect)) {
@@ -1529,6 +1921,9 @@ class TVGroup extends TVView {
         super(bounds);
         this.children = [];
         this.current = null;
+        this.lockFlag = 0;
+        this.endState = 0;
+        this.eventMask |= evBroadcast;
     }
 
     /** True if any child has absolute positioning (x or y). */
@@ -1540,46 +1935,143 @@ class TVGroup extends TVView {
 
     renderChildren() {
         return this.children.map((child) => {
-            if (child && typeof child.renderMarkup === "function") {
-                return child.renderMarkup();
+            if (child && typeof child.draw === "function") {
+                return child.draw();
             }
             return "";
         }).join("");
     }
 
-    renderMarkup() {
-        const rendering = this.drawOptions;
-        const cls = ["tv-group", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
-        const bounds = TVView.viewBoundsStyle(this);
-        const positioned = this._hasPositionedChildren() ? "position:relative" : "";
+    draw() {
+        const cls = ["tv-group", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
+        const bounds = TVView._viewBoundsStyle(this);
+        const positioned = this._hasPositionedChildren()
+            ? `${bounds ? "" : "position:relative;"}display:block`
+            : "";
         const parts = [
             bounds,
             positioned,
-            rendering.columns ? `grid-template-columns:${rendering.columns}` : "",
-            rendering.rows ? `grid-template-rows:${rendering.rows}` : "",
-            rendering.gap ? `gap:${rendering.gap}` : "",
-            rendering.align ? `align-items:${rendering.align}` : "",
-            rendering.padding ? `padding:${rendering.padding}` : "",
-            rendering.width ? `width:${rendering.width}` : "",
-            rendering.height ? `height:${rendering.height}` : "",
         ].filter(Boolean).join(";");
         const styleAttr = parts ? ` style="${escapeHtml(parts)}"` : "";
-        const viewName = rendering.viewName
-            ? String(rendering.viewName).replace(/[^a-zA-Z0-9_-]/g, "-")
-            : "";
-        const attrString = attrsToString(this.renderAttrs({
-            ...(viewName ? { [`data-tv-${viewName}`]: rendering.value ?? true } : {}),
-            hidden: rendering.hidden || false,
-            "aria-label": rendering.ariaLabel || null,
-            "aria-hidden": rendering.ariaHidden ?? null,
+        const viewName = this._semanticName();
+        const attrString = attrsToString(this._drawAttrs({
+            ...(viewName ? { [`data-tv-${viewName}`]: this.value ?? true } : {}),
+            hidden: !this.getState(sfVisible),
         }));
         const attrs = attrString ? ` ${attrString}` : "";
         return `<div class="${escapeHtml(cls)}"${styleAttr}${attrs}>${this.renderChildren()}</div>`;
     }
 
     setCurrent(child) {
-        this.current = this.children.includes(child) ? child : null;
+        const next = this.children.includes(child) ? child : null;
+        if (this.current && this.current !== next) {
+            this.current.setState(sfSelected | sfFocused, false);
+        }
+        this.current = next;
+        if (next) { next.setState(sfSelected, true); }
         return this.current;
+    }
+
+    setState(state, enable) {
+        super.setState(state, enable);
+        if ((state & (sfActive | sfDragging)) !== 0) {
+            this.children.forEach((child) => child.setState(state, enable));
+        } else if ((state & sfFocused) !== 0) {
+            this.current?.setState(sfFocused, enable);
+        } else if ((state & sfExposed) !== 0) {
+            this.children.forEach((child) => {
+                if (child.getState(sfVisible)) { child.setState(sfExposed, enable); }
+            });
+        }
+        return this;
+    }
+
+    first() { return this.children[0] || null; }
+    at(index) { return this.children[index] || null; }
+    indexOf(child) { return this.children.indexOf(child); }
+
+    broadcast(command, infoPtr = null, infoLong = 0) {
+        this.children.forEach((child) => {
+            if ((child.eventMask & evBroadcast) !== 0) {
+                child.handleEvent(new TVEvent(evBroadcast, { command, infoPtr, infoLong }));
+            }
+            if (child instanceof TVGroup) {
+                child.broadcast(command, infoPtr, infoLong);
+            }
+        });
+        return infoPtr;
+    }
+
+    firstThat(predicate) {
+        if (typeof predicate !== "function") { return null; }
+        for (const child of this.children) {
+            if (predicate(child)) { return child; }
+            if (child instanceof TVGroup) {
+                const match = child.firstThat(predicate);
+                if (match) { return match; }
+            }
+        }
+        return null;
+    }
+
+    forEach(callback) {
+        if (typeof callback === "function") { this.children.forEach(callback); }
+    }
+
+    insertBefore(child, target) {
+        if (!(child instanceof TVView)) {
+            throw new TypeError("TVGroup.insertBefore expects TVView");
+        }
+        const index = this.indexOf(target);
+        if (index < 0) { return this.insert(child); }
+        child.owner = this;
+        this.children.splice(index, 0, child);
+        return child;
+    }
+
+    delete(child) { return this.remove(child); }
+
+    focusNext(forwards = true) {
+        const selectable = this.children.filter((child) => (
+            child.getState(sfVisible) && !child.getState(sfDisabled)
+            && ((child.options & ofSelectable) !== 0 || child.root?.tabIndex >= 0)
+        ));
+        if (!selectable.length) { return false; }
+        const current = selectable.indexOf(this.current);
+        const offset = forwards ? 1 : -1;
+        const index = (current + offset + selectable.length) % selectable.length;
+        this.setCurrent(selectable[index]);
+        selectable[index].focus();
+        return true;
+    }
+
+    selectNext(forwards = true) { return this.focusNext(forwards); }
+
+    lock() { this.lockFlag += 1; }
+
+    unlock() {
+        if (this.lockFlag > 0) { this.lockFlag -= 1; }
+        if (this.lockFlag === 0) { this.redraw(); }
+    }
+
+    redraw() {
+        if (this.lockFlag === 0) { this.drawView(); }
+        return this;
+    }
+
+    execView(view) { return view instanceof TVView ? view.execute() : 0; }
+
+    execute() {
+        this.endState = 0;
+        this.show();
+        return this.endState;
+    }
+
+    endModal(command) {
+        this.endState = command;
+        if (this.getState(sfModal)) { this.hide(); }
+        else { this.owner?.endModal?.(command); }
+        return command;
     }
 
     insert(child) {
@@ -1604,6 +2096,19 @@ class TVGroup extends TVView {
         return child;
     }
 
+    dataSize() { return this.children.reduce((size, child) => size + (child.dataSize?.() || 0), 0); }
+
+    getData() { return this.children.map((child) => child.getData?.()); }
+
+    setData(values) {
+        if (Array.isArray(values)) {
+            this.children.forEach((child, index) => child.setData?.(values[index]));
+        }
+        return this;
+    }
+
+    valid(command = 0) { return this.children.every((child) => child.valid?.(command) !== false); }
+
     getHelpCtx() {
         const currentContext = this.current && typeof this.current.getHelpCtx === "function"
             ? this.current.getHelpCtx()
@@ -1620,57 +2125,95 @@ class TVGroup extends TVView {
 
 // ── TVInfoBox — framed info-box container with title ────────────────
 
+class TVInfoRow extends TVStaticText {
+    constructor(bounds, text = "") {
+        super(bounds, text);
+        this.infoWidth = 0;
+    }
+
+    _borderRole() { return this.owner instanceof TVInfoBox ? this.owner._borderRole() : ""; }
+
+    draw() {
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        const attrs = attrsToString(this._drawAttrs());
+        return `<div class="tv-static-text tv-info-row"${style} ${attrs}>${TVInfoBox.rowHtml(
+            this.infoWidth,
+            this.text,
+            TVView._roleClassNames(this._borderRole()),
+        )}</div>`;
+    }
+
+    setText(text) {
+        this.text = String(text ?? "");
+        if (this.root) {
+            this.root.innerHTML = TVInfoBox.rowHtml(
+                this.infoWidth,
+                this.text,
+                TVView._roleClassNames(this._borderRole()),
+            );
+        }
+        return this;
+    }
+
+    setHTML(html, contentLen) {
+        if (!this.root) { return this; }
+        const borderClass = TVView._roleClassNames(this._borderRole());
+        const classAttr = borderClass ? ` class="${escapeHtml(borderClass)}"` : "";
+        const border = `<span data-tv-info-side${classAttr}>│</span>`;
+        const padding = " ".repeat(Math.max(0, this.infoWidth - 1 - contentLen));
+        this.root.innerHTML = border + " " + html + padding + border;
+        return this;
+    }
+}
+
 class TVInfoBox extends TVView {
-    /**
-     * @param {Object} opts
-     * @param {string} opts.title   — frame title shown in header
-     * @param {number} opts.w       — total width in ch (including border chars)
-     * @param {Array}  opts.children — array of TVView instances rendered inside the frame
-     * @param {number} [opts.x] — absolute left position in ch
-     * @param {number} [opts.y] — absolute top position in em
-     * @param {number} [opts.h] — explicit height in em
-     */
     constructor(bounds, title, children = []) {
-        super();
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVInfoBox expects TVRect bounds");
         }
-        this.bounds = bounds;
+        super(bounds);
         this.title = String(title ?? "");
         this.children = Array.isArray(children) ? children : [];
         this.children.forEach((child) => {
             if (child instanceof TVView) { child.owner = this; }
-            if (child instanceof TVStaticText && child.drawOptions.viewName) {
-                const rendering = child.drawOptions;
-                child.setDrawOptions({
-                    presentation: [rendering.presentation, "info-row"].filter(Boolean).join(" "),
-                });
-            }
         });
         this._el = null;
-        this._rows = {};
     }
 
     get innerW() { return this.bounds.width - 2; }
 
-    renderMarkup() {
+    _borderRole() { return String(this.constructor.borderRole || ""); }
+
+    draw() {
         const innerW = this.innerW;
+        const bounded = this.children.some((child) => (
+            child instanceof TVView
+            && (child.bounds.x1 !== 0 || child.bounds.y1 !== 0
+                || child.bounds.x2 !== 0 || child.bounds.y2 !== 0)
+        ));
         const parts = [];
         // Header
-        parts.push(`<span data-tv-info-frame>${escapeHtml(TVInfoBox.header(innerW, this.title))}</span>`);
+        parts.push(`<span data-tv-info-frame="top">${escapeHtml(TVInfoBox.header(innerW, this.title))}</span>`);
         // Children — all TVView instances
         for (const child of this.children) {
-            if (child && typeof child.renderMarkup === "function") {
-                parts.push(child.renderMarkup());
+            if (child && typeof child.draw === "function") {
+                if (child instanceof TVInfoRow) {
+                    child.infoWidth = innerW;
+                }
+                parts.push(child.draw());
             }
         }
         // Footer
-        parts.push(`<span data-tv-info-frame>${escapeHtml(TVInfoBox.footer(innerW))}</span>`);
+        parts.push(`<span data-tv-info-frame="bottom">${escapeHtml(TVInfoBox.footer(innerW))}</span>`);
 
-        const rendering = this.drawOptions;
-        const bounds = TVView.viewBoundsStyle(this);
-        const cls = ["tv-info-box", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
-        const attrString = attrsToString(this.renderAttrs());
+        const bounds = TVView._viewBoundsStyle(this);
+        const cls = [
+            "tv-info-box",
+            bounded ? "is-bounded" : "",
+            TVView._roleClassNames(this._drawRole()),
+        ].filter(Boolean).join(" ");
+        const attrString = attrsToString(this._drawAttrs());
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const extra = attrString ? ` ${attrString}` : "";
         return `<div class="${escapeHtml(cls)}" data-tv-info-w="${innerW}"${style}${extra}>${parts.join("")}</div>`;
@@ -1678,7 +2221,6 @@ class TVInfoBox extends TVView {
 
     resolve(rootEl) {
         this._el = null;
-        this._rows = {};
         if (!rootEl) { return this; }
         this._el = rootEl.getAttribute?.("data-tv-view-id") === this.viewId
             ? rootEl
@@ -1687,38 +2229,20 @@ class TVInfoBox extends TVView {
         this.bindRoot(this._el);
         for (const child of this.children) {
             child?.resolve?.(this._el);
-            const viewName = child ? child.drawOptions.viewName : "";
-            if (viewName) {
-                const el = this._el.querySelector(`[data-tv-row="${viewName}"]`);
-                if (el) { this._rows[viewName] = el; }
-            }
         }
         return this;
     }
 
-    updateRow(name, text) {
-        const el = this._rows[name];
-        if (!el) { return; }
-        el.innerHTML = TVInfoBox.rowHtml(
-            this.innerW,
-            text,
-            TVView.roleClassNames(this.drawOptions.borderPresentation),
-        );
+    updateRow(row, text) {
+        if (!(row instanceof TVInfoRow) || !this.children.includes(row)) { return; }
+        row.infoWidth = this.innerW;
+        row.setText(text);
     }
 
-    updateRowHTML(name, html, contentLen) {
-        const el = this._rows[name];
-        if (!el) { return; }
-        const w = this.innerW;
-        const borderClass = TVView.roleClassNames(this.drawOptions.borderPresentation);
-        const classAttr = borderClass ? ` class="${escapeHtml(borderClass)}"` : "";
-        const B = `<span data-tv-info-side${classAttr}>\u2502</span>`;
-        const padding = " ".repeat(Math.max(0, w - 1 - contentLen));
-        el.innerHTML = B + " " + html + padding + B;
-    }
-
-    getRow(name) {
-        return this._rows[name] || null;
+    updateRowHTML(row, html, contentLen) {
+        if (!(row instanceof TVInfoRow) || !this.children.includes(row)) { return; }
+        row.infoWidth = this.innerW;
+        row.setHTML(html, contentLen);
     }
 
     /** ┌─── Title ───┐ */
@@ -1765,29 +2289,29 @@ class TVInfoBox extends TVView {
 
 class TVTerminal extends TVView {
     constructor(bounds, maxLines = 100) {
-        super();
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVTerminal expects TVRect bounds");
         }
-        this.bounds = bounds;
+        super(bounds);
         this.width = bounds.width;
         this.rows = bounds.height;
         this.maxLines = Math.max(1, Number(maxLines) || 100);
         this.lines = [];
     }
 
-    renderMarkup() {
-        const rendering = this.drawOptions;
-        const className = ["tv-terminal", TVView.roleClassNames(rendering.presentation)].filter(Boolean).join(" ");
-        const attrString = attrsToString(this.renderAttrs({
+    draw() {
+        const className = ["tv-terminal", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
+        const attrString = attrsToString(this._drawAttrs({
             role: "log",
             "aria-live": "polite",
-            ...(rendering.viewName ? { [`data-tv-${rendering.viewName}`]: true } : {}),
+            ...(this._semanticName() ? { [`data-tv-${this._semanticName()}`]: true } : {}),
         }));
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const rows = Array.from({ length: this.rows }, (_unused, index) => (
             `<span data-tv-terminal-line="${index}"></span>`
         )).join("");
-        return `<div class="${escapeHtml(className)}" ${attrString}>${rows}</div>`;
+        return `<div class="${escapeHtml(className)}"${style} ${attrString}>${rows}</div>`;
     }
 
     bind(root) {
@@ -1812,20 +2336,21 @@ class TVTerminal extends TVView {
 
     render() {
         if (!this.root) { return; }
+        const innerWidth = Math.max(0, this.width - 2);
         const visible = this.lines.slice(-this.rows);
         const offset = this.rows - visible.length;
-        this.queryAll("[data-tv-terminal-line]").forEach((element, index) => {
+        this._queryAll("[data-tv-terminal-line]").forEach((element, index) => {
             const text = index >= offset ? visible[index - offset] : "";
-            const clipped = Array.from(text).slice(0, Math.max(0, this.width - 1)).join("");
-            element.innerHTML = TVInfoBox.rowHtml(this.width, clipped);
+            const clipped = Array.from(text).slice(0, Math.max(0, innerWidth - 1)).join("");
+            element.innerHTML = TVInfoBox.rowHtml(innerWidth, clipped);
         });
     }
 }
 
 class TVIndicator extends TVView {
-    renderMarkup() {
+    draw() {
         const className = "tv-editor-indicator";
-        const attrString = attrsToString(this.renderAttrs({ "aria-live": "polite" }));
+        const attrString = attrsToString(this._drawAttrs({ "aria-live": "polite" }));
         return `<span class="${escapeHtml(className)}" ${attrString}>RO  1:1</span>`;
     }
 
@@ -1948,36 +2473,35 @@ class TVEditor extends TVView {
 }
 
 class TVListViewer extends TVView {
-    constructor(bounds, numCols = 1) {
+    constructor(bounds, numCols = 1, hScrollBar = null, vScrollBar = null) {
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVListViewer expects TVRect bounds");
         }
         super(bounds);
         this.numCols = Math.max(1, Number(numCols) || 1);
-        this.itemClassName = "";
-        this.itemAttrName = "data-tv-list-index";
-        this.selectedClassName = "is-selected";
-        this.renderItemContent = null;
-        this.renderItemMarkup = null;
+        this.hScrollBar = hScrollBar;
+        this.vScrollBar = vScrollBar;
+        this.topItem = 0;
+        this.focused = -1;
+        this.range = 0;
         this.items = [];
         this.selectedIndex = -1;
         this.selectHandler = null;
         this.activateHandler = null;
     }
 
-    applyRenderer() {
-        const rendering = this.drawOptions;
-        this.itemClassName = rendering.itemClassName || "";
-        this.itemAttrName = rendering.itemAttrName || "data-tv-list-index";
-        this.selectedClassName = rendering.selectedClassName || "is-selected";
-        this.renderItemContent = rendering.renderItemContent || null;
-        this.renderItemMarkup = rendering.renderItemMarkup || null;
-        return this;
+    draw() {
+        const className = ["tv-list-viewer", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
+        const attrs = attrsToString(this._drawAttrs(
+            this._semanticName() ? { [`data-tv-${this._semanticName()}`]: true } : {},
+        ));
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        return `<div class="${escapeHtml(className)}"${style} ${attrs}></div>`;
     }
 
     bindRoot(root) {
         super.bindRoot(root);
-        this.applyRenderer();
         if (this.root) {
             this.root.dataset.tvListBox = "1";
         }
@@ -1989,7 +2513,7 @@ class TVListViewer extends TVView {
     }
 
     itemSelector() {
-        return `[${this.itemAttrName}]`;
+        return "[data-tv-list-index]";
     }
 
     resolveIndex(target) {
@@ -1997,14 +2521,11 @@ class TVListViewer extends TVView {
         if (!element) {
             return -1;
         }
-        const value = Number.parseInt(element.getAttribute(this.itemAttrName), 10);
+        const value = Number.parseInt(element.dataset.tvListIndex || "", 10);
         return Number.isInteger(value) ? value : -1;
     }
 
     defaultContent(item, index) {
-        if (this.renderItemContent) {
-            return this.renderItemContent(item, index);
-        }
         if (typeof item === "string") {
             return escapeHtml(item);
         }
@@ -2014,22 +2535,18 @@ class TVListViewer extends TVView {
     defaultMarkup(item, index) {
         const className = [
             "tv-vlist-item",
-            this.itemClassName,
-            index === this.selectedIndex ? this.selectedClassName : "",
+            index === this.selectedIndex ? "is-selected" : "",
         ].filter(Boolean).join(" ");
-        return `<div role="option" tabindex="-1" class="${className}" ${this.itemAttrName}="${index}"><span class="tv-vlist-text tv-colors-list-text">${this.defaultContent(item, index)}</span></div>`;
+        return `<div role="option" tabindex="-1" class="${className}" data-tv-list-index="${index}"><span class="tv-vlist-text">${this.defaultContent(item, index)}</span></div>`;
     }
 
     itemMarkup(item, index) {
-        if (this.renderItemMarkup) {
-            return this.renderItemMarkup(item, index, index === this.selectedIndex);
-        }
         return this.defaultMarkup(item, index);
     }
 
     setItems(items = [], selectedIndex = -1) {
-        this.applyRenderer();
         this.items = Array.isArray(items) ? [...items] : [];
+        this.range = this.items.length;
         const itemsRoot = this.itemsRoot();
         if (itemsRoot) {
             itemsRoot.innerHTML = this.items.map((item, index) => this.itemMarkup(item, index)).join("");
@@ -2043,7 +2560,35 @@ class TVListViewer extends TVView {
         } else {
             this.selectedIndex = index;
         }
+        this.focused = this.selectedIndex;
         this.updateSelectionUi(scroll);
+    }
+
+    focusItem(index) {
+        this.select(index);
+        this.selectedElement()?.focus();
+    }
+
+    focusItemNum(index) { this.focusItem(index); }
+
+    selectItem(index) {
+        this.select(index);
+        if (this.selectHandler && this.selectedIndex >= 0) {
+            this.selectHandler(this.items[this.selectedIndex], this.selectedIndex, null);
+        }
+    }
+
+    getText(index, maxLen = Number.MAX_SAFE_INTEGER) {
+        const item = this.items[index];
+        const text = typeof item === "string" ? item : String(item?.label ?? "");
+        return Array.from(text).slice(0, Math.max(0, Number(maxLen) || 0)).join("");
+    }
+
+    isSelected(index) { return index === this.selectedIndex; }
+
+    setRange(range) {
+        this.range = Math.max(0, Number(range) || 0);
+        if (this.selectedIndex >= this.range) { this.select(this.range - 1); }
     }
 
     selectedItem() {
@@ -2053,7 +2598,7 @@ class TVListViewer extends TVView {
     selectedElement() {
         const itemsRoot = this.itemsRoot();
         return itemsRoot
-            ? itemsRoot.querySelector(`${this.itemSelector()}[${this.itemAttrName}="${this.selectedIndex}"]`)
+            ? itemsRoot.querySelector(`${this.itemSelector()}[data-tv-list-index="${this.selectedIndex}"]`)
             : null;
     }
 
@@ -2064,10 +2609,10 @@ class TVListViewer extends TVView {
         }
         const elements = Array.from(itemsRoot.querySelectorAll(this.itemSelector()));
         elements.forEach((element, index) => {
-            const value = Number.parseInt(element.getAttribute(this.itemAttrName), 10);
+            const value = Number.parseInt(element.dataset.tvListIndex || "", 10);
             const selected = value === this.selectedIndex;
             element.setAttribute("role", "option");
-            element.classList.toggle(this.selectedClassName, selected);
+            element.classList.toggle("is-selected", selected);
             element.setAttribute("aria-selected", selected ? "true" : "false");
             element.tabIndex = selected || (this.selectedIndex < 0 && index === 0) ? 0 : -1;
         });
@@ -2169,51 +2714,10 @@ class TVListViewer extends TVView {
     }
 }
 
-class TVListBox extends TVListViewer {}
-
-class TVVerticalListViewer extends TVListBox {
-    static renderMarkup({
-        rootClass = "",
-        rootAttrs = {},
-        viewportClass = "",
-        scrollbar = true,
-        scrollbarClass = "tv-vlist-scrollbar",
-        arrowClass = "tv-vlist-arrow",
-        trackClass = "tv-vlist-track",
-        cellsClass = "tv-vlist-cells",
-        thumbClass = "tv-vlist-thumb",
-    } = {}) {
-        const rootAttrString = attrsToString(rootAttrs);
-        const rootAttrsText = rootAttrString ? ` ${rootAttrString}` : "";
-        const rootClasses = ["tv-vlist-viewer", rootClass].filter(Boolean).join(" ");
-        const viewportClasses = ["tv-vlist-viewport", viewportClass].filter(Boolean).join(" ");
-        const scrollFrameAttr = scrollbar ? " data-tv-scroll-frame" : "";
-        const scrollbarMarkup = scrollbar
-            ? TVScrollBar.renderMarkup("y", {
-                rootClass: scrollbarClass,
-                arrowClass,
-                trackClass,
-                cellsClass,
-                thumbClass,
-            })
-            : "";
-        return `
-            <div class="${escapeHtml(rootClasses)}"${scrollFrameAttr}${rootAttrsText}>
-                <div class="${escapeHtml(viewportClasses)}" data-tv-list-viewport data-tv-viewport></div>
-                ${scrollbarMarkup}
-            </div>
-        `;
-    }
-
-    static bindRendered(viewer, hostView) {
-        if (!(viewer instanceof TVVerticalListViewer) || !(hostView instanceof TVView)) {
-            throw new TypeError("TVVerticalListViewer.bindRendered expects viewer and host TVView");
-        }
-        return viewer.bindRoot(hostView.query(".tv-vlist-viewer"));
-    }
-
-    constructor(bounds, numCols = 1) {
-        super(bounds, numCols);
+class TVListBox extends TVListViewer {
+    constructor(bounds, numCols = 1, scrollBar = null) {
+        super(bounds, numCols, null, scrollBar);
+        this.list = [];
         this.viewport = null;
         this.scrollViewport = null;
         this.externalScrollbarWidget = null;
@@ -2222,10 +2726,43 @@ class TVVerticalListViewer extends TVListBox {
         this.active = true;
     }
 
+    hasScrollbar() { return true; }
+
+    newList(list = []) {
+        this.list = Array.isArray(list) ? list : [];
+        this.setItems(this.list, this.list.length ? 0 : -1);
+    }
+
+    draw() {
+        const rootClasses = [
+            "tv-vlist-viewer",
+            TVView._roleClassNames(this._drawRole()),
+        ].filter(Boolean).join(" ");
+        const scrollFrameAttr = this.hasScrollbar() ? " data-tv-scroll-frame" : "";
+        const attrString = attrsToString(this._drawAttrs(
+            {
+                ...(this._semanticName() ? { [`data-tv-${this._semanticName()}`]: true } : {}),
+                hidden: !this.getState(sfVisible),
+            },
+        ));
+        const rootAttrsText = attrString ? ` ${attrString}` : "";
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        const scrollbarMarkup = this.hasScrollbar()
+            ? new TVScrollBar(new TVRect(), sbVertical).draw()
+            : "";
+        return `
+            <div class="${escapeHtml(rootClasses)}"${style}${scrollFrameAttr}${rootAttrsText}>
+                <div class="tv-vlist-viewport" data-tv-list-viewport data-tv-viewport></div>
+                ${scrollbarMarkup}
+            </div>
+        `;
+    }
+
     bindRoot(root) {
         this.scrollbarWidget?.destroy();
         super.bindRoot(root);
-        this.viewport = this.query("[data-tv-list-viewport]");
+        this.viewport = this._query("[data-tv-list-viewport]");
         this.scrollViewport = this.viewport;
         this.scrollbarWidget = this.root?.querySelector(".tv-scrollbar-y")
             ? new TVScrollBar(new TVRect()).bindRoot(this.root)
@@ -2399,30 +2936,24 @@ class TVVerticalListViewer extends TVListBox {
     }
 }
 
-class TVOutline extends TVVerticalListViewer {
+class TVOutline extends TVListBox {
     constructor(bounds, numCols = 1) {
         super(bounds, numCols);
-        this.getChildren = (node) => node?.children || [];
-        this.getKey = (node) => node?.key ?? node?.path ?? node?.id ?? node?.label;
-        this.getLabel = (node) => node?.label ?? "";
-        this.renderNodeContent = null;
-        this.renderItemContent = (entry) => this.renderEntry(entry);
         this.tree = [];
         this.expanded = new Set();
         this.nodeSelectHandler = null;
         this.nodeActivateHandler = null;
     }
 
-    applyRenderer() {
-        super.applyRenderer();
-        const rendering = this.drawOptions;
-        this.getChildren = rendering.getChildren || ((node) => node?.children || []);
-        this.getKey = rendering.getKey || ((node) => node?.key ?? node?.path ?? node?.id ?? node?.label);
-        this.getLabel = rendering.getLabel || ((node) => node?.label ?? "");
-        this.renderNodeContent = rendering.renderNodeContent || null;
-        this.renderItemContent = (entry) => this.renderEntry(entry);
-        return this;
-    }
+    getChildren(node) { return node?.children || []; }
+
+    getKey(node) { return node?.key ?? node?.path ?? node?.id ?? node?.label; }
+
+    getLabel(node) { return node?.label ?? ""; }
+
+    renderNodeContent(node) { return escapeHtml(String(this.getLabel(node))); }
+
+    defaultContent(entry) { return this.renderEntry(entry); }
 
     nodeKey(node, fallback = "") {
         const key = this.getKey(node);
@@ -2469,9 +3000,7 @@ class TVOutline extends TVVerticalListViewer {
     renderEntry(entry) {
         const indent = "  ".repeat(entry.depth);
         const marker = entry.hasChildren ? (entry.expanded ? "▼ " : "► ") : "· ";
-        const content = this.renderNodeContent
-            ? this.renderNodeContent(entry.node, entry)
-            : escapeHtml(String(this.getLabel(entry.node)));
+        const content = this.renderNodeContent(entry.node, entry);
         return `${escapeHtml(indent + marker)}${content}`;
     }
 
@@ -2551,59 +3080,45 @@ class TVOutline extends TVVerticalListViewer {
     }
 }
 
-class TVVerticalScrollArea extends TVView {
-    static bindRendered(scrollArea, hostView) {
-        if (!(scrollArea instanceof TVVerticalScrollArea) || !(hostView instanceof TVView)) {
-            throw new TypeError("TVVerticalScrollArea.bindRendered expects scroll area and host TVView");
+class TVScroller extends TVView {
+    constructor(bounds, hScrollBar = null, vScrollBar = null) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVScroller expects TVRect bounds");
         }
-        return scrollArea.bindRoot(hostView.query("[data-tv-scroll-frame]"));
+        super(bounds);
+        this.hScrollBar = hScrollBar instanceof TVScrollBar ? hScrollBar : null;
+        this.vScrollBar = vScrollBar instanceof TVScrollBar ? vScrollBar : null;
+        this.delta = new TVPoint();
+        this.limit = new TVPoint();
+        this.viewport = null;
     }
 
-    static renderMarkup({
-        rootClass = "",
-        rootAttrs = {},
-        viewportClass = "",
-        scrollbarClass = "",
-        arrowClass = "",
-        trackClass = "",
-        cellsClass = "",
-        thumbClass = "",
-    } = {}) {
-        const rootAttrString = attrsToString(rootAttrs);
-        const rootAttrsText = rootAttrString ? ` ${rootAttrString}` : "";
+    draw() {
+        const attrString = attrsToString(this._drawAttrs(
+            this._semanticName() ? { [`data-tv-${this._semanticName()}`]: true } : {},
+        ));
+        const attrs = attrString ? ` ${attrString}` : "";
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        const className = ["tv-scroller", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
         return `
-            <div class="${escapeHtml(rootClass)}" data-tv-scroll-frame${rootAttrsText}>
-                <div class="${escapeHtml(viewportClass)}" data-tv-scroll-viewport data-tv-viewport></div>
-                ${TVScrollBar.renderMarkup("y", {
-                    rootClass: scrollbarClass,
-                    arrowClass,
-                    trackClass,
-                    cellsClass,
-                    thumbClass,
-                })}
+            <div class="${escapeHtml(className)}" data-tv-scroll-frame${style}${attrs}>
+                <div class="tv-scroller-viewport" data-tv-scroll-viewport data-tv-viewport></div>
+                ${this.vScrollBar?.draw() || ""}
             </div>
         `;
     }
 
-    constructor(bounds) {
-        if (!(bounds instanceof TVRect)) {
-            throw new TypeError("TVVerticalScrollArea expects TVRect bounds");
-        }
-        super(bounds);
-        this.viewport = null;
-        this.scrollbarWidget = null;
-    }
-
     bindRoot(root) {
-        this.scrollbarWidget?.destroy();
+        this.vScrollBar?.destroy();
         super.bindRoot(root);
-        this.viewport = this.query("[data-tv-scroll-viewport]");
-        this.scrollbarWidget = this.root ? new TVScrollBar(new TVRect()).bindRoot(this.root) : null;
+        this.viewport = this._query("[data-tv-scroll-viewport]");
+        this.vScrollBar?.bindRoot(this.root);
         return this;
     }
 
     update() {
-        this.scrollbarWidget?.refresh();
+        this.vScrollBar?.refresh();
     }
 
     bind() {
@@ -2611,31 +3126,106 @@ class TVVerticalScrollArea extends TVView {
     }
 
     destroy() {
-        this.scrollbarWidget?.destroy();
-        this.scrollbarWidget = null;
+        this.vScrollBar?.destroy();
+    }
+}
+
+class TVMenu {
+    constructor(items = []) {
+        this.items = Array.isArray(items) ? items : [];
+        this.defaultItem = null;
     }
 }
 
 class TVMenuView extends TVView {
-    renderItems(items = [], view = "popup") {
+    constructor(bounds, menu = new TVMenu()) {
+        super(bounds);
+        if (!(menu instanceof TVMenu)) {
+            throw new TypeError("TVMenuView expects TVMenu");
+        }
+        this.menu = menu;
+    }
+
+    drawItem(item, view = "popup") {
+        if (item.separator) {
+            return '<div class="tv-menu-popup-separator" aria-hidden="true">'
+                + '<span class="tv-border-corner">├</span>'
+                + '<span class="tv-border-fill" data-tv-border-fill="─"></span>'
+                + '<span class="tv-border-corner">┤</span>'
+                + '</div>';
+        }
+        if (item.subMenu instanceof TVMenu) {
+            const helpAttr = item.helpCtx !== hcNoContext ? ` data-tv-help-ctx="${item.helpCtx}"` : "";
+            return '<div class="tv-submenu-root" data-tv-submenu-root="true"' + helpAttr + '>'
+                + '<button type="button" class="tv-menu-popup-item tv-submenu-toggle" data-tv-submenu-toggle="true">'
+                + item.name + '<span class="tv-submenu-arrow">►</span>'
+                + '</button>'
+                + new TVMenuBox(new TVRect(), item.subMenu, this).draw()
+                + '</div>';
+        }
+        const isMenuBar = view === "bar";
+        const attrs = attrsToString({
+            type: "button",
+            ...(item.keyCode !== kbNoKey ? { "data-tv-key-code": item.keyCode } : {}),
+            ...(item.helpCtx !== hcNoContext ? { "data-tv-help-ctx": item.helpCtx } : {}),
+            ...TVView._controlAttrs({
+                name: item.command,
+                command: item.command,
+                value: item.value(),
+                commandData: item.commandData(),
+                disabled: item.disabled,
+                ariaHasPopup: isMenuBar ? true : null,
+                ariaExpanded: isMenuBar ? false : null,
+            }),
+        });
+        const className = isMenuBar ? "tv-menu-item tv-menu-button" : "tv-menu-popup-item";
+        return `<button class="${className}" ${attrs}>${item.name}</button>`;
+    }
+
+    renderItems(items = this.menu.items, view = "popup") {
         return items.map((item) => (
-            typeof item === "string" ? item : item?.renderMarkup?.(view) || ""
+            typeof item === "string" ? item : item instanceof TVMenuItem ? this.drawItem(item, view) : ""
         ));
     }
+
+    draw(view = "popup") { return this.renderItems(this.menu.items, view).join(""); }
 }
 
 /**
  * Turbo Vision menu command descriptor. TMenuItem is not a TButton: the
  * owning TMenuView decides whether it is drawn in a menu bar or menu box.
  */
-class TVMenuItem extends TVView {
-    constructor(label, command = "", value = true, commandData = {}) {
-        super();
-        this.label = String(label || "");
+class TVMenuItem {
+    constructor(
+        name,
+        command = "",
+        keyCode = kbNoKey,
+        helpCtx = hcNoContext,
+        param = true,
+        next = null,
+    ) {
+        this.next = next instanceof TVMenuItem ? next : null;
+        this.name = String(name || "");
         this.command = command;
-        this.value = value;
-        this.commandData = commandData;
+        this.flags = 0;
+        this.keyCode = Number(keyCode) || kbNoKey;
+        this.helpCtx = normalizeHelpContext(helpCtx);
+        this.param = param;
+        this.subMenu = null;
+        this.separator = false;
         this.disabled = false;
+    }
+
+    value() {
+        return this.param && typeof this.param === "object"
+            ? (Object.hasOwn(this.param, "value") ? this.param.value : true)
+            : this.param;
+    }
+
+    commandData() {
+        if (!this.param || typeof this.param !== "object") { return {}; }
+        const { value: _value, ...data } = this.param;
+        return data;
     }
 
     setDisabled(disabled = true) {
@@ -2643,33 +3233,33 @@ class TVMenuItem extends TVView {
         return this;
     }
 
-    renderMarkup(view = "popup") {
-        const isMenuBar = view === "bar";
-        const attrs = attrsToString({
-            type: "button",
-            ...TVView.controlAttrs({
-                name: this.command,
-                command: this.command,
-                value: this.value,
-                commandData: this.commandData,
-                disabled: this.disabled,
-                ariaHasPopup: isMenuBar ? true : null,
-                ariaExpanded: isMenuBar ? false : null,
-            }),
-        });
-        const className = isMenuBar ? "tv-menu-item tv-menu-button" : "tv-menu-popup-item";
-        return `<button class="${className}" ${attrs}>${this.label}</button>`;
+}
+
+function NewLine(next = null) {
+    const item = new TVMenuItem("");
+    item.separator = true;
+    item.next = next instanceof TVMenuItem ? next : null;
+    return item;
+}
+
+function NewSubMenu(name, helpCtx, subMenu, next = null) {
+    if (!(subMenu instanceof TVMenu)) {
+        throw new TypeError("NewSubMenu expects TVMenu");
     }
+    const item = new TVMenuItem(name, "", kbNoKey, helpCtx);
+    item.subMenu = subMenu;
+    item.next = next instanceof TVMenuItem ? next : null;
+    return item;
 }
 
 /** Turbo Vision status-line command descriptor (TStatusItem). */
-class TVStatusItem extends TVView {
-    constructor(text, command = "", value = true, commandData = {}) {
-        super();
+class TVStatusItem {
+    constructor(text, keyCode = 0, command = "", param = true, next = null) {
+        this.next = next instanceof TVStatusItem ? next : null;
         this.text = String(text || "");
+        this.keyCode = keyCode;
         this.command = command;
-        this.value = value;
-        this.commandData = commandData;
+        this.param = param;
         this.disabled = false;
     }
 
@@ -2678,42 +3268,97 @@ class TVStatusItem extends TVView {
         return this;
     }
 
-    renderMarkup() {
+}
+
+class TVStatusDef {
+    constructor(min, max, items = [], next = null) {
+        this.next = next instanceof TVStatusDef ? next : null;
+        this.min = normalizeHelpContext(min);
+        this.max = normalizeHelpContext(max);
+        this.items = Array.isArray(items) ? items : [];
+    }
+}
+
+function NewStatusKey(text, keyCode, command, param = true, next = null) {
+    return new TVStatusItem(text, keyCode, command, param, next);
+}
+
+function NewStatusDef(min, max, items, next = null) {
+    return new TVStatusDef(min, max, items, next);
+}
+
+class TVStatusLine extends TVView {
+    constructor(bounds, statusDefs = NewStatusDef(hcNoContext, 0xffff, [])) {
+        super(bounds);
+        if (!(statusDefs instanceof TVStatusDef)) {
+            throw new TypeError("TVStatusLine expects TVStatusDef");
+        }
+        this.defs = statusDefs;
+        this.items = statusDefs.items;
+    }
+
+    findItems(helpCtx = this.getHelpCtx()) {
+        const context = normalizeHelpContext(helpCtx);
+        let definition = this.defs;
+        while (definition) {
+            if (context >= definition.min && context <= definition.max) {
+                this.items = definition.items;
+                return this.items;
+            }
+            definition = definition.next;
+        }
+        this.items = [];
+        return this.items;
+    }
+
+    drawItem(item) {
         const attrs = attrsToString({
             type: "button",
-            ...TVView.controlAttrs({
-                name: this.command,
-                command: this.command,
-                value: this.value,
-                commandData: this.commandData,
-                disabled: this.disabled,
+            ...(item.keyCode !== kbNoKey ? { "data-tv-key-code": item.keyCode } : {}),
+            ...TVView._controlAttrs({
+                name: item.command,
+                command: item.command,
+                value: item.param && typeof item.param === "object" && Object.hasOwn(item.param, "value")
+                    ? item.param.value
+                    : item.param,
+                commandData: item.param && typeof item.param === "object"
+                    ? Object.fromEntries(Object.entries(item.param).filter(([key]) => key !== "value"))
+                    : {},
+                disabled: item.disabled,
             }),
         });
-        return `<button class="tv-status-item" ${attrs}>${this.text}</button>`;
+        return `<button class="tv-status-item" ${attrs}>${item.text}</button>`;
+    }
+
+    draw() {
+        return this.items.map((item) => (
+            typeof item === "string" ? item : item instanceof TVStatusItem ? this.drawItem(item) : ""
+        )).join("");
     }
 }
 
 class TVMenuBox extends TVMenuView {
-    constructor(bounds, items = []) {
-        super(bounds);
+    constructor(bounds, menu = new TVMenu(), parentMenu = null) {
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVMenuBox expects TVRect bounds");
         }
-        this.items = Array.isArray(items) ? items : [];
+        super(bounds, menu);
+        this.parentMenu = parentMenu;
     }
 
-    renderMarkup() {
-        const rendering = this.drawOptions;
-        const popupAttrs = attrsToString(this.renderAttrs(rendering.attributes || {}));
+    draw() {
+        const isSubMenu = Boolean(this.parentMenu);
+        const popupAttrs = attrsToString(this._drawAttrs({
+            [isSubMenu ? "data-tv-submenu-popup" : "data-tv-menu-popup"]: true,
+            hidden: true,
+        }));
         const attrs = popupAttrs ? ` ${popupAttrs}` : "";
-        const className = rendering.className || "tv-menu-popup";
+        const className = `tv-menu-popup${isSubMenu ? " tv-submenu-popup" : ""}`;
         const borderFill = '<span class="tv-border-fill" data-tv-border-fill="\u2500" aria-hidden="true"></span>';
-        const scrollbarMarkup = TVScrollBar.renderMarkup("y", {
-            rootClass: "tv-menu-popup-scrollbar",
-        });
+        const scrollbarMarkup = new TVScrollBar(new TVRect(), sbVertical).draw();
         // Split items into segments at separator strings to render them as body-level rows.
         const segments = [[]];
-        for (const html of this.renderItems(this.items, "popup")) {
+        for (const html of this.renderItems(this.menu.items, "popup")) {
             if (/^<div class="tv-menu-popup-separator(?:\s|\")/.test(html.trim())) {
                 segments.push("separator");
                 segments.push([]);
@@ -2769,7 +3414,7 @@ function getMenuPopupScrollbarParts(popup) {
     const body = main
         ? Array.from(main.children).find((node) => node.classList?.contains("tv-menu-popup-body")) || null
         : null;
-    const scrollbar = main?.querySelector(":scope > .tv-menu-popup-scrollbar") || null;
+    const scrollbar = main?.querySelector(":scope > .tv-scrollbar-y") || null;
     const track = scrollbar?.querySelector("[data-role='track']") || null;
     const cells = scrollbar?.querySelector("[data-role='cells']") || null;
     const thumb = scrollbar?.querySelector("[data-role='thumb']") || null;
@@ -2925,9 +3570,10 @@ function fitMenuPopupToViewport(root, popup) {
 }
 
 class TVMenuController {
-    constructor({ root = document, onUnhandledKeyDown = null } = {}) {
+    constructor({ root = document, onUnhandledKeyDown = null, commandTarget = null } = {}) {
         this.root = root;
         this.onUnhandledKeyDown = onUnhandledKeyDown;
+        this.commandTarget = commandTarget;
         this.menuRoots = [];
         this.topLevelActions = [];
         this.activeRoot = null;
@@ -2939,10 +3585,32 @@ class TVMenuController {
                 this.closeMenus();
             }
         };
+        this.onDocumentCommand = (event) => this.onCommand(event);
         this.onDocumentKeyDown = (event) => this.onKeyDown(event);
         document.addEventListener("click", this.onDocumentClick);
+        document.addEventListener("click", this.onDocumentCommand);
         document.addEventListener("keydown", this.onDocumentKeyDown);
         this.refresh();
+    }
+
+    onCommand(nativeEvent) {
+        const control = nativeEvent.target?.closest?.("[data-tv-command]");
+        if (!control || !control.closest("[data-tv-menu-bar], [data-tv-status-line]")) { return; }
+        const command = control.dataset.tvCommand || "";
+        if (!command || command === "menu-toggle" || control.disabled || control.getAttribute("aria-disabled") === "true") {
+            return;
+        }
+        nativeEvent.preventDefault();
+        const event = new TVEvent(evCommand, { command, infoPtr: control, nativeEvent });
+        if (this.commandTarget instanceof TVView) {
+            this.commandTarget.dispatchEvent(event);
+        } else {
+            this.commandTarget?.handleEvent?.(event);
+        }
+        if (control.closest("[data-tv-menu-root]")) {
+            const focusRemainsInMenu = Boolean(document.activeElement?.closest?.("[data-tv-menu-bar]"));
+            this.closeMenus({ restoreFocus: focusRemainsInMenu });
+        }
     }
 
     refresh() {
@@ -3236,8 +3904,23 @@ class TVMenuController {
         return true;
     }
 
+    activateKeyCode(keyCode) {
+        if (!keyCode) { return false; }
+        const item = Array.from(this.root.querySelectorAll(`[data-tv-key-code="${keyCode}"]`))
+            .find((candidate) => !candidate.disabled && candidate.getAttribute("aria-disabled") !== "true");
+        if (!item) { return false; }
+        item.click();
+        if (this.activeRoot) { this.closeMenus(); }
+        return true;
+    }
+
     onKeyDown(event) {
         if (event.defaultPrevented) {
+            return;
+        }
+        if (this.activateKeyCode(getKeyCode(event))) {
+            event.preventDefault();
+            event.stopPropagation();
             return;
         }
         const plainF10 = event.key === "F10" && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
@@ -3271,7 +3954,19 @@ class TVMenuController {
             }
         }
         if (!this.activeRoot) {
-            if (this.onUnhandledKeyDown) { this.onUnhandledKeyDown(event); }
+            if (this.onUnhandledKeyDown) {
+                this.onUnhandledKeyDown(event);
+            } else if (this.commandTarget instanceof TVView) {
+                this.commandTarget.dispatchEvent(new TVEvent(evKeyDown, {
+                    infoPtr: this.commandTarget,
+                    nativeEvent: event,
+                }));
+            } else {
+                this.commandTarget?.handleEvent?.(new TVEvent(evKeyDown, {
+                    infoPtr: this.commandTarget,
+                    nativeEvent: event,
+                }));
+            }
             return;
         }
         if (event.key === "Escape") {
@@ -3337,6 +4032,7 @@ class TVMenuController {
     destroy() {
         this.closeMenus({ restoreFocus: false });
         document.removeEventListener("click", this.onDocumentClick);
+        document.removeEventListener("click", this.onDocumentCommand);
         document.removeEventListener("keydown", this.onDocumentKeyDown);
     }
 }
@@ -3345,19 +4041,22 @@ let tvChoiceGroupId = 0;
 
 class TVCluster extends TVView {
     constructor(bounds, options = []) {
-        super();
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVCluster expects TVRect bounds");
         }
-        this.bounds = bounds;
+        super(bounds);
         this.options = Array.isArray(options) ? options : [];
+        this.value = 0;
+        this.sel = 0;
+        this.enableMask = this.options.reduce((mask, _option, index) => mask | (1 << index), 0);
+        this.eventMask |= evBroadcast;
         this.type = "checkbox";
         this.itemClass = "tv-checkbox-item";
         this.itemAttr = "data-tv-checkbox-index";
         this.markClass = "tv-checkbox-mark";
     }
 
-    renderMarkup() {
+    draw() {
         const items = this.options.map((option, index) => {
             const inputAttrs = attrsToString({
                 type: this.type,
@@ -3366,16 +4065,79 @@ class TVCluster extends TVView {
                 value: option.value !== undefined ? option.value : index,
                 checked: Boolean(option.checked),
                 disabled: Boolean(option.disabled),
-                ...(option.attrs || {}),
             });
             const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
             return `<label class="${className}" ${this.itemAttr}="${index}"><input ${inputAttrs}><span class="${this.markClass}" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
         }).join("");
-        const rendering = this.drawOptions;
-        return new TVMarkupView([items], {
-            className: TVView.roleClassNames(rendering.presentation),
-            attributes: this.renderAttrs(rendering.viewName ? { [`data-tv-${rendering.viewName}`]: true } : {}),
-        }).renderMarkup();
+        const attrs = attrsToString(this._drawAttrs());
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        return `<div${style} ${attrs}>${items}</div>`;
+    }
+
+    buttonState(item) { return (this.enableMask & (1 << item)) !== 0; }
+
+    mark(item) {
+        return this.type === "radio" ? this.value === item : (this.value & (1 << item)) !== 0;
+    }
+
+    movedTo(item) {
+        if (Number.isInteger(item) && item >= 0 && item < this.options.length) { this.sel = item; }
+    }
+
+    press(item) {
+        if (!this.buttonState(item)) { return; }
+        this.movedTo(item);
+        if (this.type === "radio") { this.value = item; }
+        else { this.value ^= 1 << item; }
+        this.syncInputs();
+    }
+
+    setButtonState(mask, enable) {
+        this.enableMask = enable ? (this.enableMask | mask) : (this.enableMask & ~mask);
+        this.syncInputs();
+    }
+
+    getData() { return this.value; }
+
+    setData(value) {
+        this.value = Math.max(0, Number(value) || 0);
+        this.syncInputs();
+        return this;
+    }
+
+    syncInputs() {
+        if (!this.root) { return; }
+        Array.from(this.root.querySelectorAll(".tv-choice-input")).forEach((input, index) => {
+            input.checked = this.mark(index);
+            input.disabled = !this.buttonState(index) || Boolean(this.options[index]?.disabled);
+            this.options[index].checked = input.checked;
+        });
+    }
+
+    resolve(root) {
+        super.resolve(root);
+        this.options.forEach((option, index) => {
+            if (option.checked) {
+                this.value = this.type === "radio" ? index : (this.value | (1 << index));
+            }
+        });
+        this.syncInputs();
+        return this;
+    }
+
+    handleEvent(event) {
+        if (event.what !== evBroadcast || event.nativeEvent?.type !== "change") { return; }
+        const input = event.nativeEvent.target;
+        if (!this.root?.contains(input) || !input.matches?.(".tv-choice-input")) { return; }
+        const label = input.closest(`[${this.itemAttr}]`);
+        const index = Number.parseInt(label?.getAttribute(this.itemAttr) || "", 10);
+        if (!Number.isInteger(index)) { return; }
+        this.movedTo(index);
+        if (this.type === "radio") { this.value = index; }
+        else if (input.checked) { this.value |= 1 << index; }
+        else { this.value &= ~(1 << index); }
+        this.syncInputs();
     }
 }
 
@@ -3406,10 +4168,9 @@ class TVMultiCheckBoxes extends TVCluster {
         this.states = Array.isArray(states) && states.length > 1
             ? states.map(String)
             : [" ", "X", "?"];
-        this.changeHandler = null;
     }
 
-    renderMarkup() {
+    draw() {
         const items = this.options.map((option, index) => {
             const state = Math.max(0, Math.min(
                 this.states.length - 1,
@@ -3427,31 +4188,15 @@ class TVMultiCheckBoxes extends TVCluster {
             const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
             return `<label class="${className}" ${this.itemAttr}="${index}"><button ${attrs}><span class="${this.markClass}" aria-hidden="true">[${escapeHtml(this.states[state])}]</span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></button></label>`;
         }).join("");
-        const rendering = this.drawOptions;
-        return new TVMarkupView([items], {
-            className: TVView.roleClassNames(rendering.presentation),
-            attributes: this.renderAttrs(rendering.viewName ? { [`data-tv-${rendering.viewName}`]: true } : {}),
-        }).renderMarkup();
-    }
-
-    bind(root, onChange = null) {
-        this.bindRoot(root);
-        this.changeHandler = onChange;
-        if (!root || root.dataset.tvMultiCheckBound === "1") { return this; }
-        root.dataset.tvMultiCheckBound = "1";
-        root.addEventListener("click", (event) => {
-            const button = event.target.closest("[data-tv-multicheck-state]");
-            if (!button || button.disabled) { return; }
-            const item = button.closest(`[${this.itemAttr}]`);
-            const index = Number.parseInt(item?.getAttribute(this.itemAttr) || "", 10);
-            this.cycle(index, button);
-        });
-        return this;
+        const attrs = attrsToString(this._drawAttrs());
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        return `<div${style} ${attrs}>${items}</div>`;
     }
 
     cycle(index, button = null) {
         if (!Number.isInteger(index) || index < 0 || index >= this.options.length) { return; }
-        const target = button || this.query(`[${this.itemAttr}="${index}"] [data-tv-multicheck-state]`);
+        const target = button || this._query(`[${this.itemAttr}="${index}"] [data-tv-multicheck-state]`);
         if (!target || target.disabled) { return; }
         const state = (Number.parseInt(target.dataset.tvMulticheckState || "0", 10) + 1) % this.states.length;
         target.dataset.tvMulticheckState = String(state);
@@ -3459,7 +4204,23 @@ class TVMultiCheckBoxes extends TVCluster {
         const mark = target.querySelector(`.${this.markClass}`);
         if (mark) { mark.textContent = `[${this.states[state]}]`; }
         this.options[index].state = state;
-        if (this.changeHandler) { this.changeHandler(this.options[index], state, index); }
+        return state;
+    }
+
+    handleEvent(event) {
+        if (event.what !== evMouseDown || event.nativeEvent?.type !== "click") { return; }
+        const button = event.nativeEvent.target.closest?.("[data-tv-multicheck-state]");
+        if (!button || button.disabled || !this.root?.contains(button)) { return; }
+        const item = button.closest(`[${this.itemAttr}]`);
+        const index = Number.parseInt(item?.getAttribute(this.itemAttr) || "", 10);
+        const state = this.cycle(index, button);
+        if (!Number.isInteger(state)) { return; }
+        this.clearEvent(event);
+        this.owner?.dispatchEvent(new TVEvent(evBroadcast, {
+            command: "cluster-press",
+            infoPtr: this,
+            nativeEvent: event.nativeEvent,
+        }));
     }
 }
 
@@ -3470,11 +4231,10 @@ const bfBroadcast = 0x04;
 
 class TVButton extends TVView {
     constructor(bounds, title, command, flags = bfNormal) {
-        super();
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVButton expects TVRect bounds");
         }
-        this.bounds = bounds;
+        super(bounds);
         this.title = String(title ?? "");
         this.command = String(command || "");
         this.commandData = {};
@@ -3493,15 +4253,12 @@ class TVButton extends TVView {
         return this;
     }
 
-    presentation() {
+    _drawParts() {
         const data = this.commandData || {};
         const plain = new Set([
             "file-open-history", "change-dir-history", "find-history",
-            "context-help-back", "context-help-contents",
             "file-open-scroll-left", "file-open-scroll-right",
             "ascii-code", "calendar-prev", "calendar-next", "color-index",
-            "midi-previous", "midi-play", "midi-pause", "midi-stop", "midi-next",
-            "midi-more", "midi-close-button", "midi-source", "midi-load-url",
             "midi-track", "search-index", "mines-face", "ludo-player-mode", "ludo-piece",
         ]);
         const classes = [];
@@ -3513,18 +4270,10 @@ class TVButton extends TVView {
             classes.push("tv-ascii-cell");
         } else if (["calendar-prev", "calendar-next"].includes(this.command)) {
             classes.push("tv-calendar-arrow");
+        } else if (["file-open-scroll-left", "file-open-scroll-right"].includes(this.command)) {
+            classes.push("tv-file-open-scroll-button");
         } else if (this.command === "color-index") {
             classes.push("tv-color-cell");
-        } else if (["midi-previous", "midi-play", "midi-pause", "midi-stop", "midi-next"].includes(this.command)) {
-            classes.push("tv-midi-control");
-        } else if (this.command === "midi-more") {
-            classes.push("tv-midi-more-action");
-        } else if (this.command === "midi-close-button") {
-            classes.push("tv-midi-close-action");
-        } else if (this.command === "midi-source") {
-            classes.push("tv-midi-source-preset");
-        } else if (this.command === "midi-load-url") {
-            classes.push("tv-midi-url-load");
         } else if (this.command === "midi-track") {
             classes.push("tv-midi-track");
         } else if (this.command === "search-index") {
@@ -3539,45 +4288,105 @@ class TVButton extends TVView {
             classes.push("tv-mastermind-color", `tv-mastermind-color-${data.color ?? 0}`);
         }
         if (data.selected) { classes.push("is-selected"); }
+        const historyCommand = ["file-open-history", "change-dir-history", "find-history"].includes(this.command);
+        const labels = {
+            "file-open-scroll-left": displayCp437Char(17),
+            "file-open-scroll-right": displayCp437Char(16),
+            "calendar-prev": displayCp437Char(30),
+            "calendar-next": displayCp437Char(31),
+            "ludo-piece": "♟",
+        };
+        let labelMarkup = renderHotkeyMarkup(labels[this.command] ?? this.title);
+        if (historyCommand) {
+            labelMarkup = [
+                '<span class="tv-file-open-history-side" aria-hidden="true">▐</span>',
+                '<span class="tv-file-open-history-arrow" aria-hidden="true">↓</span>',
+                '<span class="tv-file-open-history-side" aria-hidden="true">▌</span>',
+            ].join("");
+        } else if (this.command === "ascii-code") {
+            labelMarkup = escapeHtml(displayCp437Char(this.value));
+        } else if (this.command === "color-index") {
+            const full = escapeHtml(displayCp437Char(219));
+            labelMarkup = data.selected
+                ? `${full}<span class="tv-color-cell-marker">${escapeHtml(displayCp437Char(8))}</span>${full}`
+                : full.repeat(3);
+        } else if (this.command === "midi-track") {
+            labelMarkup = [
+                `<span class="tv-midi-track-index">${escapeHtml(String(data.index + 1).padStart(2, "0"))}</span>`,
+                `<span class="tv-midi-track-title">${escapeHtml(data.title || "")}</span>`,
+                `<span class="tv-midi-track-credit">${escapeHtml(data.credit || "")}</span>`,
+            ].join("");
+        } else if (this.command === "search-index") {
+            labelMarkup = [
+                ["tv-search-result-title", data.title],
+                ["tv-search-result-meta", data.meta],
+                ["tv-search-result-preview", data.preview],
+            ].map(([className, text]) => `<span class="${className}">${escapeHtml(text || "")}</span>`).join("");
+        } else if (this.command === "ludo-piece") {
+            labelMarkup = '<span class="tv-ludo-piece-glyph">♟</span>';
+        }
+        const ariaLabels = {
+            "file-open-history": "History",
+            "change-dir-history": "Directory history",
+            "find-history": "Find history",
+            "calendar-prev": "Previous month",
+            "calendar-next": "Next month",
+        };
+        const tooltips = {
+            "midi-previous": "Previous track",
+            "midi-pause": "Pause",
+            "midi-next": "Next track",
+        };
         return {
             dialog: !plain.has(this.command),
-            baseClass: this.command === "calc-key" ? "tv-calc-button" : "tv-dialog-button",
+            baseClass: this.command === "calc-key"
+                ? "tv-dialog-button tv-calc-button"
+                : "tv-dialog-button",
             className: classes.join(" "),
             style: this.command === "color-index" && data.color
                 ? `--tv-color-cell:${data.color}`
                 : "",
+            labelMarkup,
+            ariaLabel: ariaLabels[this.command]
+                || (this.command === "ascii-code" ? `ASCII ${this.value}` : "")
+                || (this.command === "calc-key" ? `Calculator key ${data.description || this.title}` : "")
+                || (this.command === "color-index" ? `Color ${this.value}` : "")
+                || (this.command === "ludo-player-mode" ? `${data.playerName || this.title} player mode` : "")
+                || (this.command === "ludo-piece" ? `${data.playerName || "Ludo"} piece ${Number(this.value) + 1}` : ""),
+            ariaExpanded: historyCommand || this.command === "midi-more" ? Boolean(data.expanded) : null,
+            ariaPressed: this.command === "color-index" ? Boolean(data.selected) : null,
+            tabIndex: ["file-open-scroll-left", "file-open-scroll-right"].includes(this.command)
+                ? -1
+                : (this.command === "color-index" ? (data.selected ? 0 : -1) : null),
+            tooltip: tooltips[this.command] || data.description || "",
         };
     }
 
-    renderMarkup() {
-        const rendering = this.drawOptions;
-        const presentation = this.presentation();
-        const attrString = attrsToString(this.renderAttrs({
+    draw() {
+        const parts = this._drawParts();
+        const attrString = attrsToString(this._drawAttrs({
             type: "button",
-            ...TVView.controlAttrs({
+            ...TVView._controlAttrs({
                 name: this.command,
                 value: this.value,
                 command: this.command,
                 commandData: this.commandData,
                 disabled: this.disabled,
-                hidden: rendering.hidden || false,
-                ariaLabel: rendering.ariaLabel || "",
-                ariaExpanded: rendering.ariaExpanded ?? null,
-                ariaPressed: rendering.ariaPressed ?? null,
-                ariaHasPopup: rendering.ariaHasPopup ?? null,
-                tabIndex: rendering.tabIndex ?? null,
-                tooltip: rendering.tooltip || "",
-                draggable: rendering.draggable ?? null,
+                hidden: !this.getState(sfVisible),
+                ariaLabel: parts.ariaLabel,
+                ariaExpanded: parts.ariaExpanded,
+                ariaPressed: parts.ariaPressed,
+                tabIndex: parts.tabIndex,
+                tooltip: parts.tooltip,
             }),
         }));
-        const classNames = [presentation.className, (this.flags & bfDefault) !== 0 ? "is-default" : ""].filter(Boolean).join(" ");
-        const bounds = TVView.viewBoundsStyle(this);
-        const widthStyle = rendering.width ? `min-width:${rendering.width}` : "";
-        const inlineStyle = [bounds, widthStyle, presentation.style].filter(Boolean).join(";");
+        const classNames = [parts.className, (this.flags & bfDefault) !== 0 ? "is-default" : ""].filter(Boolean).join(" ");
+        const bounds = TVView._viewBoundsStyle(this);
+        const inlineStyle = [bounds, parts.style].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
-        const labelMarkup = rendering.labelMarkup || renderHotkeyMarkup(this.title);
-        if (presentation.dialog) {
-            const buttonClass = [presentation.baseClass, classNames].filter(Boolean).join(" ");
+        const labelMarkup = parts.labelMarkup;
+        if (parts.dialog) {
+            const buttonClass = [parts.baseClass, classNames].filter(Boolean).join(" ");
             const shadow = " " + "\u2580".repeat(20);
             return `
                 <button class="${buttonClass}"${styleAttr} ${attrString}>
@@ -3594,10 +4403,6 @@ class TVButton extends TVView {
         return `<button${classAttr}${styleAttr}${attrs}>${labelMarkup}</button>`;
     }
 
-    draw() {
-        return this.renderMarkup();
-    }
-
     handleEvent(event) {
         if (event.what === evMouseDown && this.command && !this.disabled) {
             event.what = evCommand;
@@ -3608,8 +4413,9 @@ class TVButton extends TVView {
 
     setTitle(title) {
         this.title = String(title ?? "");
-        const label = this.query(".tv-dialog-button-label");
-        if (label) { label.innerHTML = renderHotkeyMarkup(this.title); }
+        const label = this._query(".tv-dialog-button-label");
+        if (label) { label.innerHTML = this._drawParts().labelMarkup; }
+        else if (this.root) { this.root.innerHTML = this._drawParts().labelMarkup; }
         return this;
     }
 
@@ -3619,75 +4425,140 @@ class TVButton extends TVView {
         return this;
     }
 
+    drawState(down) {
+        this.root?.classList.toggle("is-pressed", Boolean(down));
+        return this;
+    }
+
     press() {
         if (this.root && !this.root.disabled) { this.root.click(); }
     }
 
     setState(state, enable) {
-        if (state === "disabled") {
+        if ((state & sfDisabled) !== 0) {
             this.disabled = Boolean(enable);
             if (this.root) { this.root.disabled = Boolean(enable); }
-            return this;
         }
         return super.setState(state, enable);
     }
 }
 
 class TVFrame extends TVView {
-    static titleControlMarkup({
-        className = "", glyph = "", glyphClass = "", glyphAttrs = {}, attrs = {},
-    } = {}) {
-        const attrString = attrsToString(attrs);
-        const glyphAttrString = attrsToString(glyphAttrs);
-        const classes = ["tv-dialog-title-control", className].filter(Boolean).join(" ");
-        const glyphClasses = ["tv-dialog-title-control-glyph", glyphClass].filter(Boolean).join(" ");
-        return `<button type="button" class="${escapeHtml(classes)}" ${attrString}>[<span class="${escapeHtml(glyphClasses)}" ${glyphAttrString}>${escapeHtml(glyph)}</span>]</button>`;
+    constructor(bounds) {
+        super(bounds);
+        this.frameMode = 0;
     }
 
-    static createTitleControl(options = {}) {
-        return TVView.fromHTML(TVFrame.titleControlMarkup(options));
+    getTitleWidth() {
+        return this.owner instanceof TVWindow ? Array.from(this.owner.getTitle()).length : 0;
     }
 
-    static closeMarkup(className, attrs = {}) {
-        return TVFrame.titleControlMarkup({
-            className,
-            glyph: "■",
-            glyphClass: "tv-close-glyph",
-            glyphAttrs: { "data-tv-close-glyph": true },
-            attrs: {
-                ...attrs,
-                "data-tv-close-button": true,
+    getPalette() { return this.owner?.getPalette?.() ?? null; }
+
+    drawTitle() {
+        const title = this.owner?.getTitle?.() || "";
+        const element = this.owner?.root?.querySelector?.(".tv-dialog-title-text, .tv-window-caption");
+        if (element) { element.textContent = title; }
+        return this;
+    }
+
+    frameLine(y, width = this.size.x) {
+        const top = Number(y) <= 0;
+        const bottom = Number(y) >= Math.max(0, this.size.y - 1);
+        if (top || bottom) {
+            return `${top ? "╔" : "╚"}${"═".repeat(Math.max(0, width - 2))}${top ? "╗" : "╝"}`;
+        }
+        return `║${" ".repeat(Math.max(0, width - 2))}║`;
+    }
+
+    draw() {
+        const rows = [];
+        for (let y = 0; y < Math.max(0, this.size.y); y += 1) {
+            rows.push(this.frameLine(y));
+        }
+        return rows.join("\n");
+    }
+
+    handleEvent(event) {
+        if (event.what !== evCommand || !(this.owner instanceof TVWindow)) { return; }
+        if (event.command === "close" && (this.owner.flags & wfClose) !== 0) {
+            this.owner.close();
+            this.clearEvent(event);
+        } else if (event.command === "zoom" && (this.owner.flags & wfZoom) !== 0) {
+            this.owner.zoom();
+            this.clearEvent(event);
+        }
+    }
+
+    setState(state, enable) {
+        super.setState(state, enable);
+        if ((state & (sfActive | sfDragging)) !== 0) { this.drawView(); }
+        return this;
+    }
+
+    drawTitleControl(command, glyph, title = "") {
+        const ownerName = String(this.owner?.constructor?.viewName || "dialog")
+            .replace(/[^a-zA-Z0-9_-]/g, "-");
+        const definitions = {
+            "window-close": {
+                classes: "tv-close-control",
+                glyphClass: "tv-close-glyph",
+                attrs: { "data-tv-close-button": true },
+                glyphAttrs: { "data-tv-close-glyph": true },
             },
+            "window-zoom": {
+                classes: "tv-zoom-control",
+                glyphClass: "tv-zoom-glyph",
+                attrs: {},
+                glyphAttrs: { "data-tv-zoom-glyph": true },
+            },
+            "dialog-close": {
+                classes: `tv-dialog-title-control tv-dialog-close-control tv-${ownerName}-close-control`,
+                glyphClass: "tv-dialog-title-control-glyph tv-close-glyph",
+                attrs: {
+                    "data-tv-close-button": true,
+                    [`data-tv-${ownerName}-close`]: true,
+                },
+                glyphAttrs: { "data-tv-close-glyph": true },
+            },
+            "hall-of-fame": {
+                classes: "tv-dialog-title-control tv-game-hall-control",
+                glyphClass: "tv-dialog-title-control-glyph tv-game-hall-glyph",
+                attrs: {},
+                glyphAttrs: {},
+            },
+        };
+        const definition = definitions[command];
+        if (!definition) { throw new Error(`Unknown TFrame title command: ${command}`); }
+        const attrString = attrsToString({
+            type: "button",
+            "data-tv-command": command,
+            "aria-label": title || command,
+            ...definition.attrs,
         });
+        const glyphAttrString = attrsToString(definition.glyphAttrs);
+        return `<button class="${definition.classes}" ${attrString}>[<span class="${definition.glyphClass}" ${glyphAttrString}>${escapeHtml(glyph)}</span>]</button>`;
     }
 
-    static dialogMarkup({
-        overlayClass,
-        windowClass,
-        ariaLabel,
-        titlebarClass,
-        bodyClass,
-        footerClass,
-        titleClass,
-        title,
-        closeClass,
-        closeAttrs,
-        bodyMarkup,
-        footerMarkup,
-        bodyBorders = true,
-        modal = false,
-        palette = "dialog",
-    }) {
-        const overlayClasses = ["tv-dialog-overlay", modal ? "is-modal" : "", overlayClass].filter(Boolean).join(" ");
-        const windowClasses = ["tv-dialog-window", windowClass].filter(Boolean).join(" ");
-        const titlebarClasses = ["tv-dialog-titlebar", titlebarClass].filter(Boolean).join(" ");
-        const footerClasses = ["tv-dialog-footer", footerClass].filter(Boolean).join(" ");
-        const titleClasses = ["tv-dialog-title-text", titleClass].filter(Boolean).join(" ");
-        const closeClasses = ["tv-dialog-close-control", closeClass].filter(Boolean).join(" ");
-        const bodyClasses = ["tv-dialog-body", bodyClass].filter(Boolean).join(" ");
+    createTitleControl(command, glyph, title = "") {
+        return TVView._fromHTML(this.drawTitleControl(command, glyph, title));
+    }
+
+    drawDialog(bodyMarkup = "", footerMarkup = "", bodyBorders = true) {
+        const dialog = this.owner;
+        const viewName = String(dialog?.constructor?.viewName || "dialog").replace(/[^a-zA-Z0-9_-]/g, "-");
+        const classPrefix = `tv-${viewName}`;
+        const modal = dialog?.getState?.(sfModal) || false;
+        const palette = dialog?.getPalette?.() || "dialog";
+        const overlayClasses = ["tv-dialog-overlay", modal ? "is-modal" : "", `${classPrefix}-overlay`].filter(Boolean).join(" ");
+        const windowClasses = `tv-dialog-window ${classPrefix}-window`;
+        const titlebarClasses = `tv-dialog-titlebar ${classPrefix}-titlebar`;
+        const footerClasses = `tv-dialog-footer ${classPrefix}-footer`;
+        const titleClasses = `tv-dialog-title-text ${classPrefix}-title`;
+        const bodyClasses = `tv-dialog-body ${classPrefix}-body`;
         const renderBody = (value) => (
-            value && typeof value.renderMarkup === "function"
-                ? value.renderMarkup()
+            value instanceof TVView
+                ? value.draw()
                 : String(value ?? "")
         );
         let bodyContent;
@@ -3699,20 +4570,20 @@ class TVFrame extends TVView {
             bodyContent = bodyMarkup.map(section => side + renderBody(section) + side).join(sep);
         } else if (bodyBorders) {
             bodyContent = '<span class="tv-border-side" data-tv-border-side="║" aria-hidden="true"></span>'
-                + renderBody(bodyMarkup)
+                + `<div class="tv-dialog-client">${renderBody(bodyMarkup)}</div>`
                 + '<span class="tv-border-side" data-tv-border-side="║" aria-hidden="true"></span>';
         } else {
             bodyContent = renderBody(bodyMarkup);
         }
         return `
             <div class="${overlayClasses}" hidden>
-                <div class="${windowClasses}" data-tv-palette="${escapeHtml(palette)}" role="dialog" aria-modal="${modal ? "true" : "false"}" aria-label="${escapeHtml(ariaLabel)}">
+                <div class="${windowClasses}" data-tv-palette="${escapeHtml(palette)}" role="dialog" aria-modal="${modal ? "true" : "false"}" aria-label="${escapeHtml(dialog?.title || "")}">
                     <div class="${titlebarClasses}">
                         <span class="tv-border-corner" aria-hidden="true">╔</span>
                         <span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>
                         <span class="tv-border-corner" aria-hidden="true">╗</span>
-                        ${TVFrame.closeMarkup(closeClasses, closeAttrs)}
-                        <div class="${titleClasses}">${escapeHtml(title)}</div>
+                        ${this.drawTitleControl("dialog-close", "■", `Close ${dialog?.title || "dialog"}`)}
+                        <div class="${titleClasses}">${escapeHtml(dialog?.title || "")}</div>
                     </div>
                     <div class="${bodyClasses}">${bodyContent}</div>
                     <div class="${footerClasses}">${footerMarkup}</div>
@@ -3729,43 +4600,160 @@ class TVWindow extends TVGroup {
         }
         super(bounds);
         this.title = String(title ?? "");
-        this.number = Number(number) || 0;
+        this.number = Number(number) === wnNoNumber ? 0 : (Number(number) || 0);
+        this.flags = wfMove | wfGrow | wfClose | wfZoom;
+        this.state |= sfShadow;
+        this.options |= ofSelectable | ofTopSelect;
+        this.growMode = gfGrowAll | gfGrowRel;
+        this.zoomRect = bounds.copy();
+        this.maxiRect = bounds.copy();
+        this.minSize = new TVPoint(16, 6);
+        this.palette = new.target.palette || 0;
+        this.frame = this.initFrame();
+        this.closeAction = null;
+        this.zoomAction = null;
+        this.onWindowControlMouseDown = (event) => {
+            if (event.button !== 0 || !event.target.closest("[data-tv-command='window-close']")) { return; }
+            this.dispatchWindowControl(event);
+        };
+        this.onWindowControlClick = (event) => this.dispatchWindowControl(event);
     }
 
-    static renderMarkup({
-        className = "",
-        attrs = {},
-        style = "",
-        caption = "",
-        contentMarkup = "",
-        closeAttrs = {},
-        zoomAttrs = {},
-    } = {}) {
-        const windowClasses = ["tv-window", className].filter(Boolean).join(" ");
-        const windowAttrs = attrsToString({ "data-tv-window": true, ...attrs });
+    bindRoot(root) {
+        if (this.root?.matches?.("[data-tv-window]")) {
+            this.root.removeEventListener("mousedown", this.onWindowControlMouseDown);
+            this.root.removeEventListener("click", this.onWindowControlClick);
+        }
+        super.bindRoot(root);
+        if (this.root?.matches?.("[data-tv-window]")) {
+            this.root.addEventListener("mousedown", this.onWindowControlMouseDown);
+            this.root.addEventListener("click", this.onWindowControlClick);
+        }
+        return this;
+    }
+
+    dispatchWindowControl(nativeEvent) {
+        const control = nativeEvent.target?.closest?.("[data-tv-command]");
+        if (!control || !this.root?.contains(control)) { return; }
+        const command = control.dataset.tvCommand || "";
+        if (command !== "window-close" && command !== "window-zoom") { return; }
+        nativeEvent.preventDefault();
+        nativeEvent.stopPropagation();
+        if (nativeEvent.type === "mousedown" && command === "window-close") {
+            nativeEvent.stopImmediatePropagation();
+        }
+        this.dispatchEvent(new TVEvent(evCommand, { command, infoPtr: this, nativeEvent }));
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "window-close") {
+            if (typeof this.closeAction === "function") { this.closeAction(); }
+            else { this.close(); }
+            this.clearEvent(event);
+        } else if (event.command === "window-zoom") {
+            if (typeof this.zoomAction === "function") { this.zoomAction(); }
+            else { this.zoom(); }
+            this.clearEvent(event);
+        }
+    }
+
+    initFrame() {
+        const frame = new TVFrame(this.getExtent());
+        frame.owner = this;
+        return frame;
+    }
+
+    getTitle(maxSize = Number.MAX_SAFE_INTEGER) {
+        return Array.from(this.title).slice(0, Math.max(0, Number(maxSize) || 0)).join("");
+    }
+
+    getPalette() { return this.palette; }
+
+    standardScrollBar(options = 0) {
+        const vertical = (options & sbVertical) !== 0;
+        const extent = this.getExtent();
+        const bounds = vertical
+            ? new TVRect(Math.max(0, extent.x2 - 1), 1, extent.x2, Math.max(1, extent.y2 - 1))
+            : new TVRect(1, Math.max(0, extent.y2 - 1), Math.max(1, extent.x2 - 1), extent.y2);
+        const scrollBar = new TVScrollBar(bounds, options);
+        this.insert(scrollBar);
+        return scrollBar;
+    }
+
+    close() { this.hide(); }
+
+    zoom() {
+        this.root?.classList.toggle("is-maximized");
+        return this;
+    }
+
+    sizeLimits() {
+        return {
+            min: this.minSize.copy(),
+            max: new TVPoint(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER),
+        };
+    }
+
+    draw(contentMarkup = this.renderChildren()) {
+        const limits = this.sizeLimits();
+        const semanticName = this._semanticName();
+        const windowAttrs = attrsToString(this._drawAttrs({
+            "data-tv-window": true,
+            ...(semanticName ? { [`data-tv-${semanticName}`]: true } : {}),
+            hidden: !this.getState(sfVisible),
+        }));
+        const growable = (this.flags & wfGrow) !== 0;
+        const windowClasses = [
+            "tv-window",
+            TVView._roleClassNames(this._drawRole()),
+            growable ? "is-growable" : "is-fixed-window",
+        ].filter(Boolean).join(" ");
+        const framePlaceholder = '<span class="tv-border-fill tv-frame-control-placeholder" data-tv-border-fill="═" aria-hidden="true"></span>';
+        const closeControl = (this.flags & wfClose) !== 0
+            ? this.frame.drawTitleControl("window-close", "■", "Close window")
+            : framePlaceholder;
+        const zoomControl = (this.flags & wfZoom) !== 0
+            ? this.frame.drawTitleControl("window-zoom", "↑", "Zoom window")
+            : framePlaceholder;
+        const title = this.getTitle();
+        const titleMarkup = title
+            ? `<div class="tv-window-caption">${escapeHtml(title)}</div>`
+            : '<span class="tv-border-fill tv-window-caption-fill" data-tv-border-fill="═" aria-hidden="true"></span>';
+        const rightFrame = growable
+            ? new TVScrollBar(new TVRect(), sbVertical).draw()
+            : '<span class="tv-border-side tv-border-side-right" data-tv-border-side="║" aria-hidden="true"></span>';
+        const bottomFrame = growable
+            ? [
+                '<span class="tv-scroll-corner tv-scroll-corner-left" data-tv-frame-corner="bl" aria-hidden="true">╚</span>',
+                '<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>',
+                new TVScrollBar(new TVRect(), sbHorizontal).draw(),
+                '<button type="button" class="tv-grow-handle" data-tv-resize-handle aria-label="Resize window">─┘</button>',
+            ].join("")
+            : [
+                '<span class="tv-scroll-corner tv-scroll-corner-left" data-tv-frame-corner="bl" aria-hidden="true">╚</span>',
+                '<span class="tv-border-fill tv-fixed-bottom-fill" data-tv-border-fill="═" aria-hidden="true"></span>',
+                '<span class="tv-scroll-corner tv-scroll-corner-right" data-tv-frame-corner="br" aria-hidden="true">╝</span>',
+            ].join("");
+        const style = [
+            this.size.x ? `--tv-window-cols:${this.size.x}` : "",
+            this.size.y ? `--tv-window-rows:${this.size.y}` : "",
+            limits.min.x ? `--tv-window-min-cols:${limits.min.x}` : "",
+            limits.min.y ? `--tv-window-min-rows:${limits.min.y}` : "",
+        ].filter(Boolean).join(";");
         const styleAttr = style ? ` style="${escapeHtml(style)}"` : "";
-        const closeAttrString = attrsToString({
-            type: "button",
-            "data-tv-close-button": true,
-            "aria-label": "Close window",
-            ...closeAttrs,
-        });
-        const zoomAttrString = attrsToString({
-            type: "button",
-            "aria-label": "Zoom window",
-            ...zoomAttrs,
-        });
         return [
             `<main class="${escapeHtml(windowClasses)}" ${windowAttrs}${styleAttr}>`,
             `<div class="tv-shell">`,
             `<div class="tv-border-row tv-border-top" data-tv-move-handle>`,
             `<span class="tv-border-corner tv-border-corner-tl" data-tv-frame-corner="tl" aria-hidden="true">╔</span>`,
             `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            `<button class="tv-close-control" ${closeAttrString}>[<span class="tv-close-glyph" data-tv-close-glyph>■</span>]</button>`,
+            closeControl,
             `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            `<div class="tv-window-caption">${escapeHtml(caption)}</div>`,
+            titleMarkup,
             `<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            `<button class="tv-zoom-control" ${zoomAttrString}>[<span class="tv-zoom-glyph" data-tv-zoom-glyph>↑</span>]</button>`,
+            zoomControl,
             `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
             `<span class="tv-border-corner tv-border-corner-tr" data-tv-frame-corner="tr" aria-hidden="true">╗</span>`,
             `</div>`,
@@ -3774,25 +4762,21 @@ class TVWindow extends TVGroup {
             `<div class="tv-frame"><div class="tv-scroll-shell" data-tv-scroll-frame>`,
             `<div class="tv-viewport" data-tv-viewport>${contentMarkup}</div>`,
             `</div></div>`,
-            TVScrollBar.renderMarkup("y"),
+            rightFrame,
             `<div class="tv-bottom-bar">`,
-            `<span class="tv-scroll-corner tv-scroll-corner-left" data-tv-frame-corner="bl" aria-hidden="true">╚</span>`,
-            `<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>`,
-            TVScrollBar.renderMarkup("x"),
-            `<button type="button" class="tv-grow-handle" data-tv-resize-handle aria-label="Resize window">─┘</button>`,
+            bottomFrame,
             `</div>`,
             `</div>`,
             `</div>`,
             `</main>`,
         ].join("");
     }
-
-    static create(options = {}) {
-        return TVView.fromHTML(TVWindow.renderMarkup(options));
-    }
 }
 
 class TVDialog extends TVWindow {
+    static viewName = "dialog";
+    static palette = "dialog";
+
     static footerMarkup() {
         return `
             <span class="tv-border-corner" aria-hidden="true">╚</span>
@@ -3801,68 +4785,40 @@ class TVDialog extends TVWindow {
         `;
     }
 
-    constructor(bounds, title, {
-        viewName = "dialog",
-        content = "",
-        modal = false,
-        palette = "dialog",
-        helpCtx = hcDialog,
-        keyboard = true,
-        escapeCloses = true,
-        defaultButtonSelector = ".tv-dialog-button.is-default",
-    } = {}) {
+    constructor(bounds, title) {
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVDialog expects TVRect bounds");
         }
-        const viewClass = String(viewName || "dialog").replace(/[^a-zA-Z0-9_-]/g, "-");
-        const classPrefix = `tv-${viewClass}`;
-        const root = TVView.fromHTML(
-            TVFrame.dialogMarkup({
-                overlayClass: `${classPrefix}-overlay`,
-                windowClass: `${classPrefix}-window`,
-                ariaLabel: title,
-                titlebarClass: `${classPrefix}-titlebar`,
-                bodyClass: `${classPrefix}-body`,
-                footerClass: `${classPrefix}-footer`,
-                titleClass: `${classPrefix}-title`,
-                title,
-                closeClass: `${classPrefix}-close-control`,
-                closeAttrs: {
-                    [`data-tv-${viewClass}-close`]: true,
-                    "aria-label": `Close ${title || "dialog"}`,
-                },
-                bodyMarkup: content,
-                footerMarkup: TVDialog.footerMarkup(),
-                modal,
-                palette,
-            })
-        );
         super(bounds, title);
+        this.flags = wfMove | wfClose;
+        this.growMode = 0;
+        const root = TVView._fromHTML(this.frame.drawDialog("", TVDialog.footerMarkup()));
         this.bindRoot(root);
-        this.setHelpCtx(helpCtx);
-        this.content = content instanceof TVView ? content : null;
-        if (this.content) { this.content.owner = this; }
+        this.setHelpCtx(hcDialog);
+        this.content = null;
         this.overlay = root;
-        this.dialog = this.query(".tv-dialog-window");
-        this.content?.resolve(this.dialog);
-        setElementHelpContext(this.dialog, helpCtx);
-        this.titlebar = this.query(".tv-dialog-titlebar");
-        this.closeButton = this.query(".tv-dialog-close-control");
+        this.dialog = this._query(".tv-dialog-window");
+        setElementHelpContext(this.dialog, this.helpCtx);
+        this.titlebar = this._query(".tv-dialog-titlebar");
+        this.closeButton = this._query(".tv-dialog-close-control");
         if (bounds.width) this.dialog.style.setProperty("--tv-dialog-width", `${bounds.width}ch`);
         if (bounds.height) this.dialog.style.setProperty("--tv-dialog-height", `${bounds.height}em`);
         this.hasPosition = false;
         this.dragState = null;
         this.manager = null;
         this.managerName = "";
-        this.modal = modal;
-        this.keyboard = keyboard;
-        this.escapeCloses = escapeCloses;
-        this.defaultButtonSelector = defaultButtonSelector;
+        this.modal = false;
+        this.keyboard = true;
+        this.escapeCloses = true;
         this.previousFocus = null;
         this.destroyed = false;
         this.closeAction = () => this.close();
         this.dialog.tabIndex = -1;
         bindCloseButtons(this.overlay);
+        this.dialog.addEventListener("mousedown", (event) => {
+            if (event.button !== 0 || !event.target.closest("[data-tv-command='dialog-close']")) { return; }
+            this.dispatchDomEvent(evMouseDown, event);
+        });
         this.dialog.addEventListener("click", (event) => this.dispatchDomEvent(evMouseDown, event));
         this.dialog.addEventListener("contextmenu", (event) => this.dispatchDomEvent(evMouseDown, event));
         this.dialog.addEventListener("input", (event) => this.dispatchDomEvent(evBroadcast, event));
@@ -3871,10 +4827,77 @@ class TVDialog extends TVWindow {
             this.dispatchDomEvent(evKeyDown, event);
             this.onDialogKeyDown(event);
         });
+        this.dialog.addEventListener("keyup", (event) => this.onDialogKeyUp(event));
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evMouseDown && event.infoPtr === this) {
+            const control = event.nativeEvent?.target?.closest?.("[data-tv-command]");
+            if (control && this.dialog.contains(control)) {
+                event.nativeEvent.preventDefault();
+                event.nativeEvent.stopPropagation();
+                event.what = evCommand;
+                event.command = control.dataset.tvCommand || "";
+            }
+        }
+        if (event.what === evCommand && event.command === "dialog-close") {
+            this.closeAction();
+            this.clearEvent(event);
+        }
+    }
+
+    insert(view) {
+        const inserted = super.insert(view);
+        this.content = this.children.length === 1 ? this.children[0] : null;
+        this.drawContent();
+        return inserted;
+    }
+
+    draw() {
+        const content = this.children.map((view) => view.draw()).join("");
+        return this.frame.drawDialog(content, TVDialog.footerMarkup());
+    }
+
+    drawContent() {
+        const body = this._query(".tv-dialog-body");
+        if (!body) { return; }
+        const render = (view) => view?.draw?.() || "";
+        const side = '<span class="tv-border-side" data-tv-border-side="║" aria-hidden="true"></span>';
+        if (this.children.length <= 1) {
+            body.innerHTML = side
+                + `<div class="tv-dialog-client">${this.children[0] ? render(this.children[0]) : ""}</div>`
+                + side;
+        } else {
+            const separator = '<span class="tv-border-corner" aria-hidden="true">╟</span>'
+                + '<span class="tv-border-fill tv-border-separator" data-tv-border-fill="─" aria-hidden="true"></span>'
+                + '<span class="tv-border-corner" aria-hidden="true">╢</span>';
+            body.innerHTML = this.children.map((view) => side + render(view) + side).join(separator);
+        }
+        this.children.forEach((view) => view.resolve?.(body));
+        if (this.isOpen()) {
+            updateWindowFrameState(this.dialog, this.isActive(), { dialog: true });
+        }
+    }
+
+    setState(state, enable) {
+        super.setState(state, enable);
+        if ((state & sfModal) !== 0) {
+            this.modal = Boolean(enable);
+            this.overlay?.classList.toggle("is-modal", this.modal);
+            this.dialog?.setAttribute("aria-modal", this.modal ? "true" : "false");
+        }
+        return this;
+    }
+
+    setHelpCtx(helpCtx) {
+        super.setHelpCtx(helpCtx);
+        setElementHelpContext(this.dialog, this.helpCtx);
+        return this;
     }
 
     dispatchDomEvent(what, nativeEvent) {
-        const target = TVView.fromElement(nativeEvent.target) || this;
+        const target = TVView._fromElement(nativeEvent.target) || this;
         return target.dispatchEvent(new TVEvent(what, {
             infoPtr: target,
             nativeEvent,
@@ -3996,11 +5019,16 @@ class TVDialog extends TVWindow {
             && !event.shiftKey
             && !(event.target && event.target.closest("button, a, textarea, [contenteditable='true']"))
         ) {
-            const defaultButton = this.dialog.querySelector(this.defaultButtonSelector);
-            if (defaultButton && !defaultButton.disabled) {
+            const defaultButton = this.firstThat((view) => (
+                view instanceof TVButton
+                && (view.flags & bfDefault) !== 0
+                && !view.disabled
+                && !view.hidden
+            ));
+            if (defaultButton?.root && !defaultButton.root.disabled) {
                 event.preventDefault();
                 event.stopPropagation();
-                defaultButton.click();
+                defaultButton.press();
                 return;
             }
         }
@@ -4022,6 +5050,8 @@ class TVDialog extends TVWindow {
         }
     }
 
+    onDialogKeyUp(_event) {}
+
     center() {
         const width = this.dialog.offsetWidth;
         const height = this.dialog.offsetHeight;
@@ -4031,37 +5061,25 @@ class TVDialog extends TVWindow {
         this.dialog.style.setProperty("--tv-dialog-top", `${top}px`);
     }
 
-    setSize({ width, height } = {}) {
-        if (width) {
-            this.dialog.style.setProperty("--tv-dialog-width", width);
+    changeBounds(bounds) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVDialog.changeBounds expects TVRect");
         }
-        if (height) {
-            this.dialog.style.setProperty("--tv-dialog-height", height);
-        }
+        this.setBounds(bounds);
+        this.dialog.style.setProperty("--tv-dialog-width", `${bounds.width}ch`);
+        this.dialog.style.setProperty("--tv-dialog-height", `${bounds.height}em`);
         fillBorders(this.dialog);
+        return this;
     }
 
     bindCommonClose(onClose = () => this.close()) {
         this.closeAction = onClose;
-        this.overlay.addEventListener("click", (event) => {
-            if (event.target === this.overlay) {
-                onClose();
-            }
-        });
-        if (this.closeButton) {
-            this.closeButton.addEventListener("mousedown", (event) => {
-                if (event.button !== 0) { return; }
-                event.preventDefault();
-                event.stopPropagation();
-                onClose();
-            });
-            this.closeButton.addEventListener("mouseup", (event) => {
-                event.stopPropagation();
-            });
-            this.closeButton.addEventListener("click", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onClose();
+        if (!this._commonCloseBound) {
+            this._commonCloseBound = true;
+            this.overlay.addEventListener("click", (event) => {
+                if (event.target === this.overlay) {
+                    this.closeAction();
+                }
             });
         }
     }
@@ -4527,6 +5545,8 @@ class TVHelpController {
 //   // cmd === "ok"
 
 class TVMessageBox extends TVDialog {
+    static viewName = "msgbox";
+
     // Title types
     static MF_WARNING      = 0;
     static MF_ERROR        = 1;
@@ -4550,36 +5570,23 @@ class TVMessageBox extends TVDialog {
     ];
 
     constructor() {
-        const contentView = (new TVGroup(new TVRect()).insertAll([])).setDrawOptions({ presentation: "msgbox-content", viewName: "msgbox-content" });
-        const buttonsView = (new TVGroup(new TVRect()).insertAll([])).setDrawOptions({ presentation: "msgbox-buttons", viewName: "msgbox-buttons" });
-        super(new TVRect(0, 0, 42, 12), "", {
-            viewName: "msgbox",
-            content: (new TVGroup(new TVRect()).insertAll([
-                    contentView,
-                    buttonsView,
-                ])).setDrawOptions({ presentation: "msgbox-body", viewName: "msgbox-body" }),
-            modal: true,
-            keyboard: false,
-        });
-        // Remove close button — msgbox has no [■]
-        if (this.closeButton) { this.closeButton.remove(); }
+        const contentView = new TVGroup(new TVRect(2, 1, 39, 3));
+        const buttonsView = new TVGroup(new TVRect(0, 3, 40, 5));
+        const bodyView = new TVGroup(new TVRect(0, 0, 40, 5)).insertAll([
+            contentView,
+            buttonsView,
+        ]);
+        super(new TVRect(0, 0, 42, 7), "");
+        this.insert(bodyView);
+        this.setState(sfModal, true);
         this.contentView = contentView;
         this.buttonsView = buttonsView;
-        this.contentEl = contentView.root;
-        this.buttonsEl = buttonsView.root;
-        this.titleEl = this.query(".tv-dialog-title-text");
-        this.hasPosition = true; // CSS handles centering
+        this.bodyView = bodyView;
+        this.messageViews = [];
+        this.buttonViews = [];
         this._resolve = null;
-        this._onKey = (e) => this._handleKey(e);
-        // Block clicks from reaching parent dialog
-        this.overlay.addEventListener("click", (e) => e.stopPropagation());
-        this.overlay.addEventListener("mousedown", (e) => e.stopPropagation());
-        if (this.buttonsEl) {
-            this.buttonsEl.addEventListener("click", (e) => {
-                const btn = e.target.closest("[data-tv-msgbox-cmd]");
-                if (btn) { this._dismiss(btn.getAttribute("data-tv-msgbox-cmd")); }
-            });
-        }
+        this.closeAction = () => this._dismiss(this._cancelCmd || this._defaultCmd || "cancel");
+        this.bindDrag();
     }
 
     show({ type = 0, title, lines = [], buttons = TVMessageBox.MF_OK_BUTTON } = {}) {
@@ -4587,26 +5594,41 @@ class TVMessageBox extends TVDialog {
             this._dismiss(this._cancelCmd || this._defaultCmd);
         }
         const boxTitle = title !== undefined ? title : TVMessageBox.TITLES[type];
-        if (this.titleEl) { this.titleEl.textContent = boxTitle; }
-        // Content
-        if (this.contentEl) {
-            const parts = [];
-            for (const line of lines) {
-                parts.push('<div class="tv-msgbox-text">' + escapeHtml(line) + '</div>');
-            }
-            this.contentEl.innerHTML = parts.join("");
-        }
-        // Buttons
+        this.title = String(boxTitle ?? "");
+        this.frame.drawTitle();
+        const messageLines = Array.isArray(lines) && lines.length ? lines.map((line) => String(line)) : [""];
         const requestedButtons = TVMessageBox.BUTTON_DEFS.filter(b => (buttons & b.flag) !== 0);
         const btnDefs = requestedButtons.length
             ? requestedButtons
             : TVMessageBox.BUTTON_DEFS.filter(b => b.cmd === "ok");
-        if (this.buttonsEl) {
-            const btnHtml = btnDefs.map((b, index) =>
-                new TVButton(new TVRect(), b.label, "msgbox-cmd", index === 0 ? bfDefault : bfNormal).setValue(b.cmd).renderMarkup()
-            ).join("");
-            this.buttonsEl.innerHTML = btnHtml;
-        }
+        const buttonWidth = 10;
+        const buttonGap = 2;
+        const buttonsWidth = btnDefs.length * buttonWidth + Math.max(0, btnDefs.length - 1) * buttonGap;
+        const textWidth = Math.max(...messageLines.map((line) => Array.from(line).length), 0);
+        const width = Math.max(42, Math.min(70, textWidth) + 6, btnDefs.length * 13);
+        const height = messageLines.length + 6;
+        const buttonsY = height - 4;
+        this.changeBounds(new TVRect(this.bounds.x1, this.bounds.y1, this.bounds.x1 + width, this.bounds.y1 + height));
+        this.bodyView.setBounds(new TVRect(0, 0, width - 2, height - 2));
+        this.contentView.setBounds(new TVRect(2, 1, width - 3, buttonsY));
+        this.buttonsView.setBounds(new TVRect(0, buttonsY, width - 2, buttonsY + 2));
+        this.contentView.children.slice().forEach((view) => this.contentView.remove(view));
+        this.buttonsView.children.slice().forEach((view) => this.buttonsView.remove(view));
+        this.messageViews = messageLines.map((line, index) => (
+            new TVStaticText(new TVRect(0, index, width - 5, index + 1), `\x03${line}`)
+        ));
+        const startX = Math.max(0, Math.floor((width - 2 - buttonsWidth) / 2));
+        this.buttonViews = btnDefs.map((definition, index) => (
+            new TVButton(
+                new TVRect(startX + index * (buttonWidth + buttonGap), 0, startX + index * (buttonWidth + buttonGap) + buttonWidth, 2),
+                definition.label,
+                "msgbox-cmd",
+                index === 0 ? bfDefault : bfNormal,
+            ).setValue(definition.cmd)
+        ));
+        this.contentView.insertAll(this.messageViews);
+        this.buttonsView.insertAll(this.buttonViews);
+        this.drawContent();
         this._buttonDefs = btnDefs;
         // Determine default and cancel commands
         this._defaultCmd = btnDefs.length > 0 ? btnDefs[0].cmd : null;
@@ -4614,15 +5636,11 @@ class TVMessageBox extends TVDialog {
         // Show
         super.open();
         // Focus first button
-        const firstBtn = this.buttonsEl && this.buttonsEl.querySelector("button");
-        if (firstBtn) { firstBtn.focus(); }
-        // Bind events
-        this.overlay.addEventListener("keydown", this._onKey);
+        this.buttonViews[0]?.focus();
         return new Promise((resolve) => { this._resolve = resolve; });
     }
 
     hide() {
-        this.overlay.removeEventListener("keydown", this._onKey);
         super.close();
         this._resolve = null;
     }
@@ -4633,51 +5651,33 @@ class TVMessageBox extends TVDialog {
         if (resolve) { resolve(cmd); }
     }
 
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && event.command === "msgbox-cmd") {
+            this._dismiss(String(event.infoPtr?.value || this._defaultCmd || ""));
+            this.clearEvent(event);
+        }
+    }
+
+    onDialogKeyDown(event) {
+        super.onDialogKeyDown(event);
+        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.key.length !== 1) { return; }
+        const key = event.key.toLowerCase();
+        const definition = (this._buttonDefs || []).find((button) => button.mnemonic === key);
+        if (!definition) { return; }
+        event.preventDefault();
+        event.stopPropagation();
+        this._dismiss(definition.cmd);
+    }
+
     destroy() {
         const resolve = this._resolve;
         const command = this._cancelCmd || this._defaultCmd;
-        this.overlay.removeEventListener("keydown", this._onKey);
         this._resolve = null;
         super.destroy();
         if (resolve) { resolve(command); }
     }
 
-    _handleKey(e) {
-        if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            e.stopPropagation();
-            const focused = this.buttonsEl && this.buttonsEl.querySelector("button:focus");
-            const cmd = focused
-                ? focused.getAttribute("data-tv-msgbox-cmd")
-                : this._defaultCmd;
-            if (cmd) { this._dismiss(cmd); }
-        } else if (e.key === "Escape") {
-            e.preventDefault();
-            e.stopPropagation();
-            this._dismiss(this._cancelCmd || this._defaultCmd);
-        } else if (e.key === "Tab") {
-            // Trap focus within buttons
-            const btns = this.buttonsEl ? [...this.buttonsEl.querySelectorAll("button")] : [];
-            if (btns.length > 1) {
-                e.preventDefault();
-                const idx = btns.indexOf(document.activeElement);
-                const next = e.shiftKey
-                    ? (idx - 1 + btns.length) % btns.length
-                    : (idx + 1) % btns.length;
-                btns[next].focus();
-            }
-        } else {
-            const key = e.key.toLowerCase();
-            const definition = (this._buttonDefs || []).find((button) => button.mnemonic === key);
-            if (definition) {
-                const btn = this.buttonsEl && this.buttonsEl.querySelector(`[data-tv-msgbox-cmd="${definition.cmd}"]`);
-                if (btn) { e.preventDefault(); e.stopPropagation(); this._dismiss(definition.cmd); }
-            }
-            if (!e.defaultPrevented) {
-                e.stopPropagation();
-            }
-        }
-    }
 }
 
 function normalizeSearchText(text) {
@@ -4689,29 +5689,29 @@ function normalizeSearchText(text) {
 }
 
 class TVScrollBar extends TVView {
-    static renderMarkup(axis, {
-        rootClass = "",
-        arrowClass = "",
-        trackClass = "",
-        cellsClass = "",
-        thumbClass = "",
-    } = {}) {
+    draw() {
+        const axis = (this.options & sbVertical) !== 0 ? "y" : "x";
         const glyphs = axis === "y" ? ["▲", "▼"] : ["◄", "►"];
         return [
-            `<div class="tv-scrollbar tv-scrollbar-${axis} ${escapeHtml(rootClass)}" data-axis="${axis}">`,
-            `<button type="button" class="tv-scroll-arrow tv-scroll-arrow-backward ${escapeHtml(arrowClass)}" data-role="backward" aria-label="Scroll ${axis} backward">${glyphs[0]}</button>`,
-            `<div class="tv-scroll-track ${escapeHtml(trackClass)}" data-role="track"><div class="tv-scroll-cells ${escapeHtml(cellsClass)}" data-role="cells"></div><div class="tv-scroll-thumb ${escapeHtml(thumbClass)}" data-role="thumb"></div></div>`,
-            `<button type="button" class="tv-scroll-arrow tv-scroll-arrow-forward ${escapeHtml(arrowClass)}" data-role="forward" aria-label="Scroll ${axis} forward">${glyphs[1]}</button>`,
+            `<div class="tv-scrollbar tv-scrollbar-${axis}" data-axis="${axis}">`,
+            `<button type="button" class="tv-scroll-arrow tv-scroll-arrow-backward" data-role="backward" aria-label="Scroll ${axis} backward">${glyphs[0]}</button>`,
+            `<div class="tv-scroll-track" data-role="track"><div class="tv-scroll-cells" data-role="cells"></div><div class="tv-scroll-thumb" data-role="thumb"></div></div>`,
+            `<button type="button" class="tv-scroll-arrow tv-scroll-arrow-forward" data-role="forward" aria-label="Scroll ${axis} forward">${glyphs[1]}</button>`,
             `</div>`,
         ].join("");
     }
 
-    constructor(bounds, options = 0) {
+    constructor(bounds, options = sbHorizontal) {
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVScrollBar expects TVRect bounds");
         }
         super(bounds);
-        this.options = options;
+        this.options = Number(options) || sbHorizontal;
+        this.value = 0;
+        this.min = 0;
+        this.max = 0;
+        this.pgStep = 1;
+        this.arStep = 1;
         this.frame = null;
         this.host = null;
         this.viewport = null;
@@ -4722,12 +5722,44 @@ class TVScrollBar extends TVView {
         this.destroyed = false;
         this.active = true;
         this.onViewportScroll = () => this.update();
+        this.onWheel = (event) => this.handleWheel(event);
         this.onWindowResize = () => this.update();
         this.onDocumentMouseUp = () => this.stopRepeat();
     }
 
+    setParams(value, min, max, pgStep, arStep) {
+        this.min = Number(min) || 0;
+        this.max = Math.max(this.min, Number(max) || 0);
+        this.pgStep = Math.max(1, Number(pgStep) || 1);
+        this.arStep = Math.max(1, Number(arStep) || 1);
+        this.setValue(value);
+    }
+
+    setRange(min, max) { this.setParams(this.value, min, max, this.pgStep, this.arStep); }
+
+    setStep(pgStep, arStep) { this.setParams(this.value, this.min, this.max, pgStep, arStep); }
+
+    setValue(value) {
+        this.value = this.clamp(Number(value) || 0, this.min, this.max);
+        if (this.viewport) {
+            const axis = this.axes.y ? "y" : "x";
+            this.setScrollPosition(axis, this.value);
+        }
+        return this.value;
+    }
+
     bindRoot(frame) {
-        super.bindRoot(frame);
+        if (!frame) {
+            this.root = null;
+            this.frame = null;
+            this.host = null;
+            this.viewport = null;
+            return this;
+        }
+        if (this.root?._tvView === this) { delete this.root._tvView; }
+        // A scrollbar is an adapter for a scroll frame; it must not replace
+        // the logical TVView that owns that frame (for example TVListViewer).
+        this.root = frame;
         this.frame = frame;
         this.host = frame.querySelector(":scope > .tv-scrollbar")
             ? frame
@@ -4765,6 +5797,7 @@ class TVScrollBar extends TVView {
 
     bind() {
         this.viewport.addEventListener("scroll", this.onViewportScroll, { passive: true });
+        this.frame.addEventListener("wheel", this.onWheel, { passive: false });
         window.addEventListener("resize", this.onWindowResize, { passive: true });
 
         for (const axis of Object.values(this.axes)) {
@@ -4824,6 +5857,25 @@ class TVScrollBar extends TVView {
             this.viewport.scrollLeft += direction * step;
         }
         this.update();
+    }
+
+    handleWheel(event) {
+        if (!this.active) { return; }
+        const preferVertical = Math.abs(Number(event.deltaY) || 0) >= Math.abs(Number(event.deltaX) || 0);
+        const candidates = preferVertical ? ["y", "x"] : ["x", "y"];
+        const axisName = candidates.find((name) => this.axes[name] && this.axisMetrics(name).maxScroll > 0);
+        if (!axisName) { return; }
+        const metrics = this.axisMetrics(axisName);
+        const rawDelta = axisName === "y" ? Number(event.deltaY) || 0 : Number(event.deltaX) || 0;
+        if (!rawDelta) { return; }
+        const unit = event.deltaMode === 1
+            ? metrics.cellSize
+            : (event.deltaMode === 2 ? metrics.viewportSize : 1);
+        const next = this.clamp(metrics.scrollOffset + rawDelta * unit, 0, metrics.maxScroll);
+        if (next === metrics.scrollOffset) { return; }
+        event.preventDefault();
+        event.stopPropagation();
+        this.setScrollPosition(axisName, next);
     }
 
     lineHeight() {
@@ -5014,6 +6066,7 @@ class TVScrollBar extends TVView {
         document.removeEventListener("mouseup", this.onDragEnd);
         document.removeEventListener("mouseup", this.onDocumentMouseUp);
         this.viewport.removeEventListener("scroll", this.onViewportScroll);
+        this.frame.removeEventListener("wheel", this.onWheel);
         window.removeEventListener("resize", this.onWindowResize);
         for (const axis of Object.values(this.axes)) {
             axis.backward.removeEventListener("mousedown", axis.onBackwardMouseDown);
@@ -5025,10 +6078,18 @@ class TVScrollBar extends TVView {
             this.resizeObserver.disconnect();
             this.resizeObserver = null;
         }
+        if (this.root?._tvView === this) { delete this.root._tvView; }
     }
 }
 
-const TurboVisionScrollbar = TVScrollBar;
+class TVProgram extends TVGroup {
+    constructor(bounds = new TVRect()) {
+        super(bounds);
+        this.desktop = null;
+        this.menuBar = null;
+        this.statusLine = null;
+    }
+}
 
 class TVDesktop extends TVGroup {
     constructor(bounds = new TVRect()) {
@@ -5106,6 +6167,66 @@ Object.assign(TV, {
     evKeyDown,
     evCommand,
     evBroadcast,
+    cmUpdateGauge,
+    cmResetGauge,
+    cmAddGauge,
+    sfVisible,
+    sfCursorVis,
+    sfCursorIns,
+    sfShadow,
+    sfActive,
+    sfSelected,
+    sfFocused,
+    sfDragging,
+    sfDisabled,
+    sfModal,
+    sfDefault,
+    sfExposed,
+    ofSelectable,
+    ofTopSelect,
+    ofFirstClick,
+    ofFramed,
+    ofPreProcess,
+    ofPostProcess,
+    ofBuffered,
+    ofTileable,
+    ofCenterX,
+    ofCenterY,
+    ofCentered,
+    ofValidate,
+    gfGrowLoX,
+    gfGrowLoY,
+    gfGrowHiX,
+    gfGrowHiY,
+    gfGrowAll,
+    gfGrowRel,
+    dmDragMove,
+    dmDragGrow,
+    dmLimitLoX,
+    dmLimitLoY,
+    dmLimitHiX,
+    dmLimitHiY,
+    dmLimitAll,
+    wfMove,
+    wfGrow,
+    wfClose,
+    wfZoom,
+    wfMaxi,
+    wnNoNumber,
+    sbHorizontal,
+    sbVertical,
+    sbHandleKeyboard,
+    kbNoKey,
+    kbCtrlF,
+    kbCtrlL,
+    kbF1,
+    kbF3,
+    kbF5,
+    kbF6,
+    kbShiftF6,
+    kbAltF3,
+    kbAlt0,
+    getKeyCode,
     TVEvent,
     COLOR_GROUPS,
     buildDefaultColorPalette,
@@ -5139,26 +6260,35 @@ Object.assign(TV, {
     resetMenuPopupLayout,
     fitMenuPopupToViewport,
     TVAppContext,
+    TVPoint,
     TVRect,
     TVView,
-    TVMarkupView,
     TVStaticText,
+    TVPercentGauge,
+    TVBarGauge,
     TVLabel,
     TVInputLine,
     TVListViewer,
     TVGroup,
+    TVInfoRow,
     TVInfoBox,
     TVTerminal,
     TVIndicator,
     TVEditor,
     TVListBox,
-    TVVerticalListViewer,
     TVOutline,
-    TVVerticalScrollArea,
+    TVScroller,
+    TVMenu,
+    NewLine,
+    NewSubMenu,
     TVMenuView,
     TVMenuItem,
     TVMenuBox,
     TVStatusItem,
+    TVStatusDef,
+    NewStatusKey,
+    NewStatusDef,
+    TVStatusLine,
     TVMenuController,
     TVHelpController,
     TVCluster,
@@ -5175,9 +6305,9 @@ Object.assign(TV, {
     TVDialog,
     TVMessageBox,
     TVDialogManager,
+    TVProgram,
     TVDesktop,
     TVScrollBar,
-    TurboVisionScrollbar,
 });
 Object.assign(TV, TV_HELP_CONTEXTS);
 TV.getActiveThemePreset = () => activeThemePreset;

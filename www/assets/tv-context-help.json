@@ -42,7 +42,9 @@
         {"label": "Find", "topic_id": 2030},
         {"label": "Colors", "topic_id": 2040},
         {"label": "Widget Gallery", "topic_id": 2050},
-        {"label": "CD/MIDI Player", "topic_id": 2060}
+        {"label": "CD/MIDI Player", "topic_id": 2060},
+        {"label": "Server Statistics", "topic_id": 2260},
+        {"label": "System Information", "topic_id": 2270}
       ]
     },
     {
@@ -64,7 +66,74 @@
       ]
     }
   ],
-  "index": [],
+  "index": [
+    {"group": "A", "entries": [
+      {"label": "About", "topic_id": 2000},
+      {"label": "ASCII Table", "topic_id": 2110}
+    ]},
+    {"group": "B", "entries": [
+      {"label": "BreakOut", "topic_id": 2170}
+    ]},
+    {"group": "C", "entries": [
+      {"label": "Calculator", "topic_id": 2120},
+      {"label": "Calendar", "topic_id": 2100},
+      {"label": "CD/MIDI Player", "topic_id": 2060},
+      {"label": "Change Directory", "topic_id": 2020},
+      {"label": "Colors", "topic_id": 2040},
+      {"label": "Context Help", "topic_id": 1700}
+    ]},
+    {"group": "D", "entries": [
+      {"label": "Dialog", "topic_id": 2090},
+      {"label": "Document viewer", "topic_id": 2080},
+      {"label": "Documents", "topic_id": 1300}
+    ]},
+    {"group": "F", "entries": [
+      {"label": "Find", "topic_id": 2030}
+    ]},
+    {"group": "G", "entries": [
+      {"label": "Games", "topic_id": 1500}
+    ]},
+    {"group": "H", "entries": [
+      {"label": "HELP files", "topic_id": 1200},
+      {"label": "HELP viewer", "topic_id": 2070}
+    ]},
+    {"group": "L", "entries": [
+      {"label": "Lines", "topic_id": 2190},
+      {"label": "Ludo", "topic_id": 2210}
+    ]},
+    {"group": "M", "entries": [
+      {"label": "Mastermind", "topic_id": 2220},
+      {"label": "Mines", "topic_id": 2160}
+    ]},
+    {"group": "O", "entries": [
+      {"label": "Open a File", "topic_id": 2010}
+    ]},
+    {"group": "P", "entries": [
+      {"label": "Puzzle", "topic_id": 2140}
+    ]},
+    {"group": "R", "entries": [
+      {"label": "Reversi", "topic_id": 2200}
+    ]},
+    {"group": "S", "entries": [
+      {"label": "Screen saver", "topic_id": 2130},
+      {"label": "Search", "topic_id": 1400},
+      {"label": "Server Statistics", "topic_id": 2260},
+      {"label": "Snake", "topic_id": 2230},
+      {"label": "Sokoban", "topic_id": 2180},
+      {"label": "System Information", "topic_id": 2270},
+      {"label": "System menu", "topic_id": 1100}
+    ]},
+    {"group": "T", "entries": [
+      {"label": "Tetris", "topic_id": 2150},
+      {"label": "THelpViewer", "topic_id": 1000},
+      {"label": "Tower of Hanoi", "topic_id": 2240},
+      {"label": "Tron Light Cycles", "topic_id": 2250}
+    ]},
+    {"group": "W", "entries": [
+      {"label": "Widget Gallery", "topic_id": 2050},
+      {"label": "Windows", "topic_id": 1600}
+    ]}
+  ],
   "topics": {
     "1000": {
       "id": 1000,
@@ -93,6 +162,7 @@
         "",
         "The status line and Help menu invoke this same help file. Each",
         "TVView or managed window supplies a Turbo Vision-style helpCtx.",
+        "Use Help > Index to browse the alphabetical topic index.",
         "",
         "This intentionally contains enough text to exercise the shared",
         "vertical scrollbar. Future application documentation can be added as",
@@ -105,10 +175,12 @@
       "id": 1100,
       "title": "System menu",
       "content": [
-        "The system menu contains About, utilities, palette editing, Widget",
-        "Gallery, screen savers and theme selection.",
+        "The system menu contains utilities, palette editing, Widget Gallery,",
+        "System Information, screen savers and theme selection. About is in",
+        "the Help menu.",
         "",
-        "See also: [link:topic=2040]Colors[/link]  [link:topic=2050]Widget Gallery[/link]  [link:topic=2130]Screen saver[/link]"
+        "See also: [link:topic=2040]Colors[/link]  [link:topic=2270]System Information[/link]",
+        "          [link:topic=2050]Widget Gallery[/link]  [link:topic=2130]Screen saver[/link]"
       ]
     },
     "1200": {
@@ -152,7 +224,7 @@
       "title": "Games",
       "content": [
         "Games share Turbo Vision dialogs, keyboard focus, inactive-window",
-        "pause policies and a persistent ten-entry Hall of Fame.",
+        "pause policies and a shared server ten-entry Hall of Fame.",
         "",
         "The [H] title control opens scores. Its brackets use the title color",
         "and H uses the common frame-icon color."
@@ -242,8 +314,8 @@
       "id": 2060,
       "title": "CD/MIDI Player",
       "content": [
-        "The compact view contains transport and track selection. More reveals",
-        "advanced sources and resizes the shared dialog frame."
+        "The compact view contains the display and transport controls. More",
+        "reveals the track list and external sources inside the resized frame."
       ]
     },
     "2070": {
@@ -412,6 +484,32 @@
       "content": [
         "Steer both cycles simultaneously and avoid walls and every light trail.",
         "The timer and movement pause whenever the game window is inactive."
+      ]
+    },
+    "2260": {
+      "id": 2260,
+      "title": "Server Statistics",
+      "content": [
+        "A Turbo Vision dialog shows visits, opened content, search/link outcomes,",
+        "games, environment and coarse performance intervals. It also shows active",
+        "viewing intervals for HELP files, documents, dialogs and games.",
+        "Target time pauses while another window or browser tab is active.",
+        "",
+        "SQLite stores aggregate counters only. It does not store IP addresses,",
+        "cookies, visitor IDs, search text, exact timings, full referrers, raw user",
+        "agents or individual visits."
+      ]
+    },
+    "2270": {
+      "id": 2270,
+      "title": "System Information",
+      "content": [
+        "This dialog shows local application, browser, display, locale, storage",
+        "and web-capability information. Its Server section reports server",
+        "status, application version and HELP/Docs catalog sizes.",
+        "",
+        "Refresh measures the current runtime again. Opening this dialog does",
+        "not submit the displayed details to visitor statistics."
       ]
     }
   }

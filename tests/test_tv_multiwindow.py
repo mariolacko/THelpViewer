@@ -30,7 +30,9 @@ def test_window_commands_include_cycle_and_layout_for_all_managed_windows():
     assert '{ cmd: "next", label: "~N~ext", hotkey: "F6" }' in bundle
     assert '{ cmd: "previous", label: "~P~revious", hotkey: "Shift-F6" }' in bundle
     assert "[...this.dialogManager.windows.values()]" in bundle
-    assert "dispatchCommand(event.shiftKey ? TV_COMMANDS.PREVIOUS : TV_COMMANDS.NEXT)" in bundle
+    assert "kbF6" in bundle
+    assert "kbShiftF6" in bundle
+    assert "activateKeyCode(getKeyCode(event))" in core
     assert "cycleTarget(delta = 1)" in core
     assert "command === TV_COMMANDS.NEXT" in core
     assert "command === TV_COMMANDS.PREVIOUS" in core

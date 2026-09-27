@@ -23,11 +23,13 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVWindow extends TVGroup" in source
     assert "class TVDialog extends TVWindow" in source
     assert "class TVRect" in source
+    assert "class TVPoint" in source
     dialog_signature = source[
         source.index("class TVDialog extends TVWindow"):
         source.index("if (!(bounds instanceof TVRect))", source.index("class TVDialog extends TVWindow"))
     ]
-    assert "constructor(bounds, title," in dialog_signature
+    assert "constructor(bounds, title)" in dialog_signature
+    assert "setDrawOptions" not in source
     assert "windowClass" not in dialog_signature
     assert "bodyClass" not in dialog_signature
     assert "closeAttrs" not in dialog_signature
@@ -40,17 +42,19 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVMultiCheckBoxes extends TVCluster" in source
     assert "class TVTerminal extends TVView" in source
     assert "class TVEditor extends TVView" in source
-    assert "class TVOutline extends TVVerticalListViewer" in source
+    assert "class TVOutline extends TVListBox" in source
     assert "class TVMenuView extends TVView" in source
-    assert "class TVMenuItem extends TVView" in source
+    assert "class TVMenu {" in source
+    assert "class TVMenuItem {" in source
     assert "class TVMenuBox extends TVMenuView" in source
-    assert "class TVStatusItem extends TVView" in source
+    assert "class TVStatusItem {" in source
+    assert "class TVStatusLine extends TVView" in source
     assert "class TVDesktop extends TVGroup" in source
     assert "class TVScrollBar extends TVView" in source
-    assert "static titleControlMarkup({" in source
-    assert "static createTitleControl(options = {})" in source
-    assert '<button class="tv-close-control"' in source
-    assert '<button class="tv-zoom-control"' in source
+    assert 'drawTitleControl(command, glyph, title = "")' in source
+    assert 'createTitleControl(command, glyph, title = "")' in source
+    assert 'classes: "tv-close-control"' in source
+    assert 'classes: "tv-zoom-control"' in source
     assert '<a class="tv-close-control"' not in source
     assert source.count("class TVScrollBar") == 1
     assert source.count("startRepeat(event, axis, direction)") == 1
@@ -66,6 +70,9 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "attrs" not in button_signature
     assert "role" not in button_signature
     assert "name" not in button_signature
+    button_class = source[source.index("class TVButton extends TVView"):source.index("class TVFrame extends TVView")]
+    for browser_field in ("this.ariaLabel", "this.ariaExpanded", "this.tabIndex", "this.tooltip", "this.labelMarkup"):
+        assert browser_field not in button_class
     assert "constructor(bounds, title, command, flags = bfNormal)" in button_signature
     assert "flags = bfNormal" in button_signature
     assert "defaultButton" not in button_signature
@@ -74,56 +81,184 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "attrs" not in static_text_signature
     assert "tag" not in static_text_signature
     assert "buttonKind" not in source
-    assert 'static roleClassNames(role = "")' in source
+    assert '? "tv-dialog-button tv-calc-button"' in source
+    assert "this.presentation =" not in group_signature
+    assert "this.viewName =" not in group_signature
+    assert 'static _roleClassNames(role = "")' in source
     assert "constructor(bounds = new TVRect())" in group_signature
     assert "constructor(bounds, text)" in static_text_signature
-    assert "constructor(bounds, numCols = 1)" in source[source.index("class TVListViewer"):source.index("class TVListBox")]
+    assert "constructor(bounds, numCols = 1, hScrollBar = null, vScrollBar = null)" in source[source.index("class TVListViewer"):source.index("class TVListBox")]
     assert "constructor(bounds, hScrollBar = null, vScrollBar = null, indicator = null, bufSize = 65535)" in source
     assert 'constructor(bounds, title = "", number = 0)' in source
-    assert "constructor(bounds, options = 0)" in source[source.index("class TVScrollBar"):source.index("const TurboVisionScrollbar")]
+    for original_method in (
+        "calcBounds(bounds, delta)",
+        "commandEnabled(command)",
+        "disableCommands(commands)",
+        "enableCommands(commands)",
+        "endModal(command)",
+        "getClipRect()",
+        "makeGlobal(source)",
+        "makeLocal(source)",
+        "mouseInView(point)",
+        "putInFrontOf(target)",
+        "sizeLimits()",
+        "execView(view)",
+        "lock()",
+        "unlock()",
+        "redraw()",
+        "getTitleWidth()",
+        "frameLine(y, width = this.size.x)",
+    ):
+        assert original_method in source
+    for original_constant in (
+        "const wfMove = 0x01",
+        "const wfGrow = 0x02",
+        "const wfClose = 0x04",
+        "const wfZoom = 0x08",
+        "const sbVertical = 0x0001",
+        "const wnNoNumber = 255",
+    ):
+        assert original_constant in source
+    assert "constructor(bounds, options = sbHorizontal)" in source[source.index("class TVScrollBar"):source.index("class TVDesktop")]
     assert "class TVButtonStrip" not in source
     assert "class TVMarkupList" not in source
 
     dialogs = DIALOG_PATHS[0].read_text(encoding="utf-8")
     assert DIALOG_PATHS[0].read_bytes() == DIALOG_PATHS[1].read_bytes()
     assert "class TVFileList extends TVListBox" in dialogs
-    assert "class TVHistoryViewer extends TVVerticalListViewer" in dialogs
+    assert "class TVHistoryViewer extends TVListBox" in dialogs
     assert "class TVHistoryWindow extends TVWindow" in dialogs
     assert "class TVChangeDirectoryDialog extends TVDialog" in dialogs
-    assert "new TVOutline(new TVRect())" in dialogs
+    assert "class TVDirectoryList" not in dialogs
+    assert "new TVOutline(new TVRect(2, 5, 31, 13))" in dialogs
     assert "class TVHistoryWindow extends TVWindow" in dialogs
-    assert "static view({ popupRole" in dialogs
+    assert "class TVHistory extends TVButton" in dialogs
+    assert "constructor(bounds, link, historyId)" in dialogs
+    assert "this.insert(this.viewer)" in dialogs
     assert "handleEscape(event)" in dialogs
     assert "event.detail" not in dialogs
-    assert "this.ignoreNextClick = true" in dialogs
-    assert "this.button.disabled = false" in dialogs
+    assert "ignoreNextClick" not in dialogs
+    assert "this.window.toggle()" in dialogs
+    assert "this.buttonView?.setState(sfDisabled, false)" in dialogs
     assert "if (!items.length) { return false; }" not in dialogs
-    assert dialogs.count("TVHistoryWindow.view({") == 3
-    assert dialogs.count("TVHistoryWindow.triggerView({") == 3
-    assert "content: fileOpenMain" in dialogs
-    assert "content: changeDirectoryMain" in dialogs
-    assert "content: findMain" in dialogs
-    assert "content: galleryMain" in dialogs
-    assert "content: colorsMain" in dialogs
-    assert "content: main" in dialogs
-    assert 'presentation: "midi-source-presets"' in dialogs
-    assert "new TVMarkupView(" in dialogs
+    assert dialogs.count("new TVHistoryWindow(new TVRect(") == 3
+    assert dialogs.count("new TVHistory(new TVRect(") == 3
+    assert "this.insert(fileOpenMain)" in dialogs
+    assert "this.insert(changeDirectoryMain)" in dialogs
+    assert "this.insert(findMain)" in dialogs
+    assert "this.insert(galleryMain)" in dialogs
+    assert "this.insert(colorsMain)" in dialogs
+    assert "this.insert(main)" in dialogs
+    assert "class TVSearchResultsList extends TVListBox" in dialogs
+    assert "class TVSearchStatusText" not in dialogs
+    assert "class TVFindStatus" not in dialogs
+    assert "_rootClass" not in dialogs
+    assert "_viewportClass" not in dialogs
+    assert "this.mainView.changeBounds(new TVRect(" in dialogs
+    assert "this.locate(new TVRect(0, 0, 44," in dialogs
+    assert "midi-close-button" not in dialogs
+    assert 'static role = "midi-' not in dialogs
+    assert "class TVMidiExternalSource" not in dialogs
+    assert "class TVMidiDisplay extends TVGroup" in dialogs
+    assert "setTrack(track, number)" in dialogs
+    assert "class TVMidiMeter extends TVGroup" in dialogs
+    assert "setProgress(value)" in dialogs
+    assert "this.setSize(" not in dialogs
+    assert "TVMarkupView" not in dialogs
+    assert "class TVAsciiTable extends TVGroup" in dialogs
+    assert "class TVCalendarView extends TVGroup" in dialogs
+    assert "class TVColorSelector extends TVGroup" in dialogs
+    assert "class TVColorDisplay extends TVGroup" in dialogs
+    assert "onSelectorKeyDown" not in dialogs
+    color_selector = dialogs[dialogs.index("class TVColorSelector"):dialogs.index("class TVColorDisplay")]
+    assert "handleEvent(event)" in color_selector
+    assert 'event.what = evCommand' in color_selector
+    assert 'event.command = "color-index"' in color_selector
+    for role_only_class in (
+        "TVContextHelpHeading",
+        "TVContextHelpNavigation",
+        "TVWidgetList",
+        "TVFileInputLine",
+        "TVFileScrollTrack",
+        "TVFileInfoPane",
+        "TVDirectoryDetail",
+        "TVAsciiReport",
+        "TVCalculatorIndicator",
+        "TVCalendarCell",
+        "TVColorSample",
+    ):
+        assert f"class {role_only_class}" not in dialogs
     assert "TVRenderer" not in source
     assert '<button type="button" class="tv-file-open-history-button' not in dialogs
     assert "bodyMarkup: `" not in dialogs
-    assert "new TVFileList(new TVRect(), 2)" in dialogs
-    assert "new TVHistoryWindow({" in dialogs
-    assert 'TVFrame.titleControlMarkup({' in dialogs
-    assert '"data-tv-history-close": true' in dialogs
-    assert 'TVFrame.closeMarkup("tv-history-close-control"' not in dialogs
+    assert "new TVFileList(new TVRect(" in dialogs
+    history_window = dialogs[dialogs.index("class TVHistoryWindow"):dialogs.index("class TVFileList")]
+    assert "draw()" not in history_window
+    assert "this.flags = wfClose" in history_window
+    assert 'static role = "history-window"' not in history_window
 
     bundle = Path("www/assets/tv-bundle-app.js").read_text(encoding="utf-8")
     css = Path("www/assets/turbovision.css").read_text(encoding="utf-8")
-    assert 'rootClass: "tv-contents-outline"' in bundle
-    assert "scrollbar: false" in bundle
+    assert 'static role = "contents-outline"' not in bundle
+    assert "hasScrollbar() { return false; }" in bundle
+    assert 'outline.rootClass = "tv-contents-outline"' not in bundle
     assert "outline.setScrollViewport(" in bundle
-    assert ".tv-contents-outline-viewport" in css
+    assert "[data-tv-contents-outline] > .tv-vlist-viewport" in css
     assert "overflow: visible" in css
+    assert ".tv-search-results-scroll" not in css
+    assert ".tv-search-empty" not in css
+    assert ".tv-find-status" not in css
+    assert "\n[data-tv-search-results] > .tv-vlist-viewport {" not in css
+    assert css.count("[hidden]") == 1
+    assert ".tv-find-window .tv-input-line" not in css
+    assert ".tv-file-open-window .tv-file-input-line" not in css
+    assert ".tv-change-dir-window .tv-file-input-line" not in css
+    assert ".tv-midi-display" not in css
+    assert ".tv-midi-meter" not in css
+    assert ".tv-midi-external" not in css
+    assert ".tv-midi-track-list" not in css
+    assert "[data-tv-midi-display]" in css
+    assert "[data-tv-midi-meter]" in css
+    for stale_selector in (
+        ".tv-file-open-file-list",
+        ".tv-file-open-history-listviewer",
+        ".tv-change-dir-listviewer",
+        ".tv-context-help-topic",
+        ".tv-context-help-nav-text",
+        ".tv-calendar-cell",
+        ".tv-colors-display-sample",
+        ".tv-calc-display",
+        ".tv-winlist-window",
+    ):
+        assert stale_selector not in css
+    assert "\n.tv-calc-button {" not in css
+    for redundant_geometry in (
+        ".tv-ascii-body",
+        ".tv-tetris-window {",
+        ".tv-ludo-window {",
+        "[data-tv-winlist-listviewer] > .tv-vlist-viewport",
+        "[data-tv-winlist-listviewer] .tv-vlist-item",
+    ):
+        assert redundant_geometry not in css
+    for redundant_size in (
+        "min-width: 71ch",
+        "height: 23em",
+        "width: 60ch",
+        "width: 54ch",
+        "    height: 6em;",
+    ):
+        assert redundant_size not in css
+    assert "Math.max(0, bounds.width - 2)" in dialogs
+    assert "Math.max(0, bounds.height - 2)" in dialogs
+    assert "new TVAsciiTable(new TVRect())" in dialogs
+    assert "this.insertAll([chart, report])" in dialogs
+    games = Path("www/assets/tv-games.js").read_text(encoding="utf-8")
+    assert 'new TVButton(new TVRect(0, player + 1, 22, player + 2), name, "ludo-player-mode"' in games
+    assert 'class="tv-snake-cell tv-snake-body"' not in games
+    assert ".tv-snake-body {" not in css
+    input_rule_start = css.index("\n.tv-input-line {")
+    input_rule = css[input_rule_start:css.index("}", input_rule_start) + 1]
+    assert "box-sizing: border-box" in input_rule
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the list control test")
@@ -167,14 +302,10 @@ class FakeElement {
     getBoundingClientRect() { return { top: 0 }; }
 }
 
-class TVView {
-    constructor() { this.root = null; this.drawOptions = {}; }
-    bindRoot(root) { this.root = root; return this; }
-    query(selector) { return this.root ? this.root.querySelector(selector) : null; }
-    setDrawOptions(options = {}) {
-        this.drawOptions = { ...this.drawOptions, ...options };
-        return this;
-    }
+    class TVView {
+        constructor() { this.root = null; }
+        bindRoot(root) { this.root = root; return this; }
+        _query(selector) { return this.root ? this.root.querySelector(selector) : null; }
 }
 
 class TVRect {}
@@ -215,14 +346,15 @@ global.TVScrollBar = class {
 
 const items = Array.from({ length: 5 }, (_, index) => {
     const element = new FakeElement();
-    element.setAttribute("data-test-index", index);
+    element.setAttribute("data-tv-list-index", index);
+    element.dataset.tvListIndex = String(index);
     element.offsetTop = index * 16;
     return element;
 });
 const viewport = new FakeElement();
 viewport.querySelectorAll = () => items;
 viewport.querySelector = (selector) => {
-    const match = selector.match(/data-test-index="(\d+)"/);
+    const match = selector.match(/data-tv-list-index="(\d+)"/);
     return match ? items[Number(match[1])] : null;
 };
 const track = new FakeElement();
@@ -246,14 +378,13 @@ root.querySelector = (selector) => ({
 
 const source = fs.readFileSync(process.argv[1], "utf8");
 const start = source.indexOf("class TVListViewer");
-const end = source.indexOf("\nclass TVVerticalScrollArea", start);
-eval(source.slice(start, end) + "\nglobalThis.TestList = TVVerticalListViewer;");
+const end = source.indexOf("\nclass TVScroller", start);
+eval(source.slice(start, end) + "\nglobalThis.TestList = TVListBox;");
 
 const selected = [];
 const activated = [];
-const list = new TestList(new TVRect()).setDrawOptions({
-    itemAttrName: "data-test-index",
-}).bindRoot(root);
+    const list = new TestList(new TVRect());
+    list.bindRoot(root);
 list.items = ["zero", "one", "two", "three", "four"];
 list.select(1, { scroll: false });
 list.bind({
@@ -316,7 +447,10 @@ def test_label_and_search_use_native_association_and_separate_activation():
 
     label = core[core.index("class TVLabel"):core.index("class TVInputLine")]
     search = dialogs[dialogs.index("class TVSearchDialog"):]
-    search_binding = search[search.index("this.resultsBox.bind({"):search.index("document.addEventListener")]
+    search_binding = search[
+        search.index("this.resultsBox.bind({"):
+        search.index("    handleEvent(event)", search.index("this.resultsBox.bind({"))
+    ]
 
     assert 'const tag = this.link ? "label" : "span"' in label
     assert 'for="${escapeHtml(this.link.viewId)}"' in label
@@ -324,6 +458,7 @@ def test_label_and_search_use_native_association_and_separate_activation():
     assert "openSelected()" in search_binding.split("onActivate:", 1)[1]
     assert 'event.command === "search-ok"' in search
     assert 'this.input.addEventListener("input"' not in search
+    assert 'document.addEventListener("keydown"' not in search
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the choice control test")
@@ -345,22 +480,12 @@ global.attrsToString = (attrs = {}) => Object.entries(attrs)
     .join(" ");
 global.TVRect = class {};
 global.TVView = class {
-    constructor() { this.viewId = "test-view"; this.drawOptions = {}; }
-    static roleClassNames(value = "") { return value; }
-    setDrawOptions(options = {}) { this.drawOptions = { ...this.drawOptions, ...options }; return this; }
-    renderAttrs(attrs = {}) { return attrs; }
+    constructor() { this.viewId = "test-view"; }
+    static _roleClassNames(value = "") { return value; }
+    static _viewBoundsStyle() { return ""; }
+    _drawAttrs(attrs = {}) { return attrs; }
 };
-global.TVMarkupView = class extends TVView {
-    constructor(items, options = {}) {
-        super();
-        this.items = items;
-        this.setDrawOptions(options);
-    }
-    renderMarkup() {
-        return `<div class="${this.drawOptions.className || ""}" ${attrsToString(this.drawOptions.attributes || {})}>${this.items.join("")}</div>`;
-    }
-};
-
+global.evBroadcast = 0x0200;
 const choiceStart = source.indexOf("let tvChoiceGroupId");
 const choiceEnd = source.indexOf("\nclass TVButton extends", choiceStart);
 eval(source.slice(choiceStart, choiceEnd)
@@ -369,7 +494,7 @@ eval(source.slice(choiceStart, choiceEnd)
 const checks = new TestChecks(new TVRect(), [
         { label: "One < two", checked: true, value: "one" },
         { label: "Disabled", disabled: true },
-    ]).renderMarkup();
+    ]).draw();
 if (!checks.includes('type="checkbox"') || !checks.includes("checked") || !checks.includes("disabled")) {
     throw new Error("checkbox group does not expose native state");
 }
@@ -380,14 +505,14 @@ if (!checks.includes('class="tv-checkbox-item is-disabled"')) {
     throw new Error("disabled checkbox does not expose its palette state");
 }
 
-const radios = new TestRadios(new TVRect(), [{ label: "A", checked: true }, { label: "B" }]).renderMarkup();
+const radios = new TestRadios(new TVRect(), [{ label: "A", checked: true }, { label: "B" }]).draw();
 const radioNames = Array.from(radios.matchAll(/name="([^"]+)"/g), (match) => match[1]);
 if ((radios.match(/type="radio"/g) || []).length !== 2
     || radioNames.length !== 2 || radioNames[0] !== radioNames[1]) {
     throw new Error("radio options are not one native group");
 }
 
-global.TVDialog = class {};
+global.TVDialog = class { onDialogKeyDown() {} };
 const messageStart = source.indexOf("class TVMessageBox");
 const messageEnd = source.indexOf("\nfunction normalizeSearchText", messageStart);
 eval(source.slice(messageStart, messageEnd) + "\nglobalThis.TestMessage = TVMessageBox;");
@@ -398,14 +523,14 @@ if (!cancel || cancel.label !== "~C~ancel" || cancel.mnemonic !== "c") {
 let dismissed = "";
 const message = Object.create(TestMessage.prototype);
 message._buttonDefs = [cancel];
-message.buttonsEl = { querySelector() { return {}; } };
+message.buttonViews = [];
 message._dismiss = (command) => { dismissed = command; };
 const event = {
     key: "c",
     preventDefault() {},
     stopPropagation() {},
 };
-message._handleKey(event);
+message.onDialogKeyDown(event);
 if (dismissed !== "cancel") { throw new Error("Cancel mnemonic did not dispatch its command"); }
 """
     result = subprocess.run(

@@ -56,11 +56,13 @@ def _wait_for_file(path: Path, timeout: float = 10.0) -> str:
 def test_real_browser_menu_focus_and_dynamic_command_state():
     external_url = os.environ.get("THELP_BROWSER_BASE_URL", "").rstrip("/")
     server = None
+    server_state_directory = None
     if external_url:
         app_url = external_url + "/"
     else:
         app_port = _free_port()
         app_url = f"http://127.0.0.1:{app_port}/"
+        server_state_directory = tempfile.TemporaryDirectory(prefix="thelpviewer-server-state-")
         server = subprocess.Popen(
             [
                 sys.executable,
@@ -77,6 +79,11 @@ def test_real_browser_menu_focus_and_dynamic_command_state():
             cwd=Path.cwd(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env={
+                **os.environ,
+                "THELP_STATE_DIR": server_state_directory.name,
+                "THELP_STATISTICS_PATH": str(Path(server_state_directory.name) / "statistics.sqlite3"),
+            },
         )
     try:
         _wait_for_url(app_url + "healthz")
@@ -186,13 +193,49 @@ async function run() {
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 10000;
         const check = () => {
-            const open = document.querySelector('[data-tv-file-open][data-tv-menu-bound="1"]');
+            const open = document.querySelector('[data-tv-file-open][data-tv-command="file-open"]');
             if (open) { resolve(true); return; }
             if (Date.now() >= deadline) { reject(new Error('Open was not bound while catalogs loaded')); return; }
             setTimeout(check, 20);
         };
         check();
     })`, true);
+    const helpMenuLayout = await evaluate(`(() => {
+        const system = document.querySelector('[data-tv-menu-root][data-tv-help-ctx="1100"]');
+        const help = document.querySelector('[data-tv-menu-root][data-tv-help-ctx="1700"]');
+        return {
+            systemAbout: system?.querySelectorAll('[data-tv-dialog-open="about"]').length || 0,
+            helpAbout: help?.querySelectorAll('[data-tv-dialog-open="about"]').length || 0,
+            helpIndex: help?.querySelectorAll('[data-tv-command="context-help-index"]').length || 0,
+        };
+    })()`);
+    if (helpMenuLayout.systemAbout !== 0 || helpMenuLayout.helpAbout !== 1 || helpMenuLayout.helpIndex !== 1) {
+        throw new Error(`Help/About menu placement is broken: ${JSON.stringify(helpMenuLayout)}`);
+    }
+    const generatedContextChrome = await evaluate(`(() => {
+        const TV = window.THelpViewerTV;
+        const view = new TV.TVContextHelpWindow();
+        const root = TV.TVView._fromHTML(view.draw());
+        view.resolve(root);
+        const result = {
+            window: root.matches('.tv-window[data-tv-window]'),
+            dialog: root.matches('.tv-dialog-window') || Boolean(root.querySelector('.tv-dialog-window')),
+            close: root.querySelectorAll('[data-tv-command="window-close"]').length,
+            zoom: root.querySelectorAll('[data-tv-command="window-zoom"]').length,
+            vertical: root.querySelectorAll(':scope > .tv-shell > .tv-client-row > .tv-scrollbar-y').length,
+            horizontal: root.querySelectorAll(':scope > .tv-shell > .tv-client-row > .tv-bottom-bar .tv-scrollbar-x').length,
+            grow: root.querySelectorAll('[data-tv-resize-handle]').length,
+            internalButtons: root.querySelectorAll('.tv-help-viewer .tv-dialog-button').length,
+        };
+        view.destroy();
+        return result;
+    })()`);
+    if (!generatedContextChrome.window || generatedContextChrome.dialog
+        || generatedContextChrome.close !== 1 || generatedContextChrome.zoom !== 1
+        || generatedContextChrome.vertical !== 1 || generatedContextChrome.horizontal !== 1
+        || generatedContextChrome.grow !== 1 || generatedContextChrome.internalButtons !== 0) {
+        throw new Error(`Generated UHF Help does not use standard TVWindow chrome: ${JSON.stringify(generatedContextChrome)}`);
+    }
     const helpMenuPoint = await evaluate(`(() => {
         const open = document.querySelector('[data-tv-file-open]');
         const toggle = open.closest('[data-tv-menu-root]').querySelector('[data-tv-menu-toggle]');
@@ -217,20 +260,23 @@ async function run() {
     await send('Input.dispatchMouseEvent', {
         type: 'mouseReleased', x: openPoint.x, y: openPoint.y, button: 'left', clickCount: 1,
     });
+    await pause();
     const loadingOpen = await evaluate(`(() => {
         const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
         );
         const history = dialog?.querySelector('[data-tv-file-open-history-popup]');
-        return {
+            return {
             open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
-            status: dialog?.querySelector('[data-tv-file-open-detail]')?.textContent.trim() || '',
+            status: dialog?.querySelectorAll('[data-tv-file-open-cancel] ~ .tv-static-text')[1]?.textContent.trim() || '',
             historyHidden: Boolean(history?.hidden && getComputedStyle(history).display === 'none'),
             statusHint: document.querySelector('[data-tv-status-hint]')?.textContent.trim() || '',
+            inputFocused: document.activeElement === dialog?.querySelector('.tv-input-line'),
         };
     })()`);
     if (!loadingOpen.open || loadingOpen.status !== 'Loading HELP/DOCS...' || !loadingOpen.historyHidden
-        || loadingOpen.statusHint !== 'Choose a HELP or Docs file from the two-column list.') {
+        || loadingOpen.statusHint !== 'Choose a HELP or Docs file from the two-column list.'
+        || !loadingOpen.inputFocused) {
         throw new Error(`Open did not show its loading state immediately: ${JSON.stringify(loadingOpen)}`);
     }
     await evaluate(`new Promise((resolve, reject) => {
@@ -239,7 +285,7 @@ async function run() {
             const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
                 element.querySelector('.tv-dialog-title-text')?.textContent === 'Open a File'
             );
-            const entries = dialog?.querySelectorAll('[data-tv-file-open-file-index]').length || 0;
+            const entries = dialog?.querySelectorAll('[data-tv-file-open-files] [data-tv-list-index]').length || 0;
             if (dialog && !dialog.closest('.tv-dialog-overlay').hidden && entries >= 2) {
                 resolve(true);
                 return;
@@ -257,7 +303,7 @@ async function run() {
             && button.getAttribute('aria-expanded') === 'true');
         button?.click();
         const closed = Boolean(popup?.hidden && button?.getAttribute('aria-expanded') === 'false');
-        return { opened, closed, entries: popup?.querySelectorAll('[data-tv-file-open-history-index]').length || 0 };
+        return { opened, closed, entries: popup?.querySelectorAll('[data-tv-list-index]').length || 0 };
     })()`);
     if (!emptyFileHistory.opened || !emptyFileHistory.closed || emptyFileHistory.entries !== 0) {
         throw new Error(`Empty File Open history did not toggle: ${JSON.stringify(emptyFileHistory)}`);
@@ -293,15 +339,23 @@ async function run() {
             context: fileOpen?.getAttribute('data-tv-help-ctx'),
             links: help?.querySelectorAll('[data-tv-bundle-topic]').length || 0,
             standardScrollbar: Boolean(vertical),
+            standardClose: Boolean(help?.querySelector('[data-tv-command="window-close"]')),
+            standardZoom: Boolean(help?.querySelector('[data-tv-command="window-zoom"]')),
+            horizontalScrollbar: Boolean(help?.querySelector('.tv-bottom-bar .tv-scrollbar-x')),
+            growHandle: Boolean(help?.querySelector('[data-tv-resize-handle]')),
             inlineNavigation: Boolean(help?.querySelector('.tv-context-help-nav')),
             statusBack: Boolean(document.querySelector('[data-tv-status-line] [data-tv-bundle-back]')),
+            statusIndex: Boolean(document.querySelector('[data-tv-status-line] [data-tv-bundle-index]')),
             statusContents: Boolean(document.querySelector('[data-tv-status-line] [data-tv-bundle-help-contents]')),
             statusHint: document.querySelector('[data-tv-status-hint]')?.textContent.trim() || '',
         };
     })()`);
     if (!fileOpenHelp.helpOpen || fileOpenHelp.topic !== 'Open a File' || fileOpenHelp.context !== '2010'
         || !fileOpenHelp.standardWindow || fileOpenHelp.links < 2 || !fileOpenHelp.standardScrollbar
-        || fileOpenHelp.inlineNavigation || !fileOpenHelp.statusBack || !fileOpenHelp.statusContents
+        || !fileOpenHelp.standardClose || !fileOpenHelp.standardZoom
+        || !fileOpenHelp.horizontalScrollbar || !fileOpenHelp.growHandle
+        || fileOpenHelp.inlineNavigation || !fileOpenHelp.statusBack || !fileOpenHelp.statusIndex
+        || !fileOpenHelp.statusContents
         || fileOpenHelp.statusHint !== 'Links open topics or external companion HELP files.') {
         throw new Error(`File Open context help is broken: ${JSON.stringify(fileOpenHelp)}`);
     }
@@ -323,7 +377,7 @@ async function run() {
         return {
             view: help?.dataset.tvStateView,
             outlines: help?.querySelectorAll('[data-tv-contents-outline]').length || 0,
-            rows: help?.querySelectorAll('[data-tv-contents-outline-index]').length || 0,
+            rows: help?.querySelectorAll('[data-tv-contents-outline] [data-tv-list-index]').length || 0,
             verticalScrollbars: help?.querySelectorAll('.tv-scrollbar-y').length || 0,
         };
     })()`);
@@ -351,17 +405,49 @@ async function run() {
         throw new Error(`Context Help contents are incomplete: ${JSON.stringify(helpContents)}`);
     }
     await evaluate(`document.querySelector('[data-tv-bundle-back]').click()`);
-    const helpReturned = await evaluate(`
-        document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"] .tv-topic-heading')?.textContent.trim()
-    `);
-    if (helpReturned !== 'Open a File') { throw new Error('Context Help Back did not restore its topic'); }
+    const helpReturned = await evaluate(`(() => {
+        const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
+        return {
+            heading: help?.querySelector('.tv-topic-heading')?.textContent.trim(),
+            viewerCount: help?.querySelectorAll('[data-tv-help-viewer]').length || 0,
+            viewerText: help?.querySelector('[data-tv-help-viewer]')?.textContent.slice(0, 100) || '',
+            managerView: help?.dataset.tvStateView,
+            managerTopic: help?.dataset.tvStateTopic,
+        };
+    })()`);
+    if (helpReturned.heading !== 'Open a File') {
+        throw new Error(`Context Help Back did not restore its topic: ${JSON.stringify(helpReturned)}`);
+    }
+    await evaluate(`document.querySelector('[data-tv-command="context-help-index"]').click()`);
+    await pause();
+    const contextHelpIndex = await evaluate(`(() => {
+        const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
+        return {
+            view: help?.dataset.tvStateView,
+            heading: help?.querySelector('.tv-index-heading')?.textContent.trim(),
+            entries: help?.querySelectorAll('.tv-index-entry [data-tv-bundle-topic]').length || 0,
+        };
+    })()`);
+    if (contextHelpIndex.view !== 'index' || contextHelpIndex.heading !== 'Index'
+        || contextHelpIndex.entries < 20) {
+        throw new Error(`Help > Index did not open the UHF index: ${JSON.stringify(contextHelpIndex)}`);
+    }
     await evaluate(`document.querySelector('[data-tv-bundle-close-all]').click()`);
     const contextHelpClosed = await evaluate(`(() => {
         const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
-        const fileOpen = document.querySelector('[data-tv-file-open-name]')?.closest('.tv-dialog-overlay');
-        return Boolean(!help && fileOpen && !fileOpen.hidden);
+            const fileOpen = document.querySelector('.tv-file-open-window .tv-input-line')?.closest('.tv-dialog-overlay');
+        return {
+            helpClosed: !help,
+            fileOpenExists: Boolean(fileOpen),
+            fileOpenVisible: Boolean(fileOpen && !fileOpen.hidden),
+            activeWindows: Array.from(document.querySelectorAll('.is-window-active')).map((item) =>
+                item.querySelector?.('.tv-dialog-title-text, .tv-window-caption')?.textContent || item.className
+            ),
+        };
     })()`);
-    if (!contextHelpClosed) { throw new Error('Context Help did not return to File Open'); }
+    if (!contextHelpClosed.helpClosed || !contextHelpClosed.fileOpenVisible) {
+        throw new Error(`Context Help did not return to File Open: ${JSON.stringify(contextHelpClosed)}`);
+    }
     await key("Escape", "Escape", 0, true);
     await send("Network.emulateNetworkConditions", {
         offline: false,
@@ -385,18 +471,74 @@ async function run() {
     await key("Escape", "Escape", 0, true);
     const calculatorView = await evaluate(`(() => {
         document.querySelector('[data-tv-dialog-open="calc"]')?.click();
-        const display = document.querySelector('[data-tv-calc-display]');
+        const display = document.querySelector('.tv-calc-body .tv-dialog-client > .tv-group > .tv-static-text:first-child');
+        const main = display?.closest('.tv-group');
+        const buttons = Array.from(main?.querySelectorAll('.tv-calc-button') || []);
+        const mainRect = main?.getBoundingClientRect();
+        const displayRect = display?.getBoundingClientRect();
+        const firstButtonRect = buttons[0]?.getBoundingClientRect();
         return {
             open: Boolean(display && !display.closest('.tv-dialog-overlay')?.hidden),
             foreground: display ? getComputedStyle(display).color : '',
+            buttons: buttons.length,
+            keypadRow: Boolean(mainRect && displayRect && firstButtonRect
+                && Math.abs((firstButtonRect.top - mainRect.top) - 3 * displayRect.height) < 1),
+            clipped: Boolean(main && (main.scrollWidth > main.clientWidth || main.scrollHeight > main.clientHeight
+                || buttons.some((button) => {
+                    const rect = button.getBoundingClientRect();
+                    return rect.left < mainRect.left - 0.5 || rect.top < mainRect.top - 0.5
+                        || rect.right > mainRect.right + 0.5 || rect.bottom > mainRect.bottom + 0.5;
+                }))),
             hint: document.querySelector('[data-tv-status-hint]')?.textContent.trim() || '',
         };
     })()`);
     if (!calculatorView.open || calculatorView.foreground !== 'rgb(255, 255, 255)'
+        || calculatorView.buttons !== 20 || !calculatorView.keypadRow || calculatorView.clipped
         || calculatorView.hint !== 'Use number and operation buttons or the keyboard.') {
         throw new Error(`Calculator display/status palette is broken: ${JSON.stringify(calculatorView)}`);
     }
     await evaluate(`document.querySelector('[data-tv-calc-close]')?.click()`);
+    await evaluate(`document.querySelector('[data-tv-dialog-open="ascii"]')?.click()`);
+    await pause();
+    const asciiGeometry = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-ascii-window');
+        const body = dialog?.querySelector('.tv-ascii-body');
+        const chart = dialog?.querySelector('[data-tv-ascii-chart]');
+        const report = body?.querySelector(':scope > .tv-static-text');
+        const separator = body?.querySelector('.tv-border-separator');
+        const separatorCorners = Array.from(body?.querySelectorAll(':scope > .tv-border-corner') || []);
+        const bodyRect = body?.getBoundingClientRect();
+        const chartRect = chart?.getBoundingClientRect();
+        const reportRect = report?.getBoundingClientRect();
+        const separatorRect = separator?.getBoundingClientRect();
+        const cellWidth = chartRect ? chartRect.width / 32 : 0;
+        const cellHeight = chartRect ? chartRect.height / 8 : 0;
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay')?.hidden),
+            chart: chartRect && cellWidth && cellHeight
+                ? [Math.round(chartRect.width / cellWidth), Math.round(chartRect.height / cellHeight)]
+                : [],
+            reportRow: bodyRect && reportRect && cellHeight
+                ? Math.round((reportRect.top - bodyRect.top) / cellHeight)
+                : -1,
+            separator: Boolean(separatorRect && chartRect && reportRect
+                && Math.abs(separatorRect.top - chartRect.bottom) < 1
+                && Math.abs(separatorRect.bottom - reportRect.top) < 1),
+            separatorCorners: separatorCorners.map((corner) => corner.textContent).join(''),
+            separatorColors: [separator, ...separatorCorners]
+                .filter(Boolean)
+                .map((element) => getComputedStyle(element).color),
+            clipped: Boolean(body && (body.scrollWidth > body.clientWidth || body.scrollHeight > body.clientHeight)),
+        };
+    })()`);
+    if (!asciiGeometry.open || asciiGeometry.chart.join() !== '32,8'
+        || asciiGeometry.reportRow !== 9 || !asciiGeometry.separator
+        || asciiGeometry.separatorCorners !== '╟╢'
+        || asciiGeometry.separatorColors.some((color) => color !== 'rgb(255, 255, 255)')
+        || asciiGeometry.clipped) {
+        throw new Error(`ASCII Chart TVRect geometry is broken: ${JSON.stringify(asciiGeometry)}`);
+    }
+    await key("Escape", "Escape", 0, true);
     const initialFindState = await evaluate(`(() => ({
         findDisabled: document.querySelector('[data-tv-find]')?.disabled,
         againDisabled: document.querySelector('[data-tv-find-again]')?.disabled,
@@ -497,22 +639,23 @@ async function run() {
     await key("f", "KeyF", 2);
     await pause();
     const findOpen = await evaluate(`(() => {
-        const input = document.querySelector('[data-tv-find-input]');
+        const input = document.querySelector('.tv-find-window .tv-input-line');
         const history = document.querySelector('[data-tv-find-history-popup]');
         if (!input || input.closest('.tv-dialog-overlay')?.hidden) { return { open: false }; }
         const historyHidden = Boolean(history?.hidden && getComputedStyle(history).display === 'none');
+        const inputFocused = document.activeElement === input;
         input.value = window.__tvFindNeedle;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.focus();
-        return { open: true, historyHidden };
+        return { open: true, historyHidden, inputFocused };
     })()`);
-    if (!findOpen.open || !findOpen.historyHidden) {
+    if (!findOpen.open || !findOpen.historyHidden || !findOpen.inputFocused) {
         throw new Error(`Ctrl-F opened Find incorrectly: ${JSON.stringify(findOpen)}`);
     }
     await key("Enter", "Enter", 0, true);
     await pause();
     const findResult = await evaluate(`(() => ({
-        closed: document.querySelector('[data-tv-find-input]')?.closest('.tv-dialog-overlay')?.hidden,
+        closed: document.querySelector('.tv-find-window .tv-input-line')?.closest('.tv-dialog-overlay')?.hidden,
         selection: window.getSelection()?.toString() || '',
         history: JSON.parse(localStorage.getItem('thelp:find-history') || '[]'),
     }))()`);
@@ -538,18 +681,103 @@ async function run() {
     const findHistoryToggle = await evaluate(`(() => {
         const button = document.querySelector('[data-tv-find-history]');
         const popup = document.querySelector('[data-tv-find-history-popup]');
+        const dialog = document.querySelector('.tv-find-window');
+        const body = dialog?.querySelector('.tv-find-body');
+        const input = dialog?.querySelector('.tv-input-line');
         const initiallyHidden = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none');
         button?.click();
         const opened = Boolean(!popup?.hidden && getComputedStyle(popup).display !== 'none'
             && button?.getAttribute('aria-expanded') === 'true');
+        const viewer = popup?.querySelector('.tv-vlist-viewer');
+        const scrollbar = viewer?.querySelector('.tv-scrollbar-y');
+        const popupRect = popup?.getBoundingClientRect();
+        const viewerRect = viewer?.getBoundingClientRect();
+        const scrollbarRect = scrollbar?.getBoundingClientRect();
+        const bodyRect = body?.getBoundingClientRect();
+        const inputRect = input?.getBoundingClientRect();
+        const cellWidth = inputRect ? inputRect.width / 30 : 0;
+        const cellHeight = inputRect?.height || 0;
+        const viewerInset = popupRect && viewerRect && cellWidth && cellHeight
+            ? [
+                Math.round((viewerRect.left - popupRect.left) / cellWidth),
+                Math.round((viewerRect.top - popupRect.top) / cellHeight),
+            ]
+            : [];
+        const scrollbarAligned = Boolean(viewerRect && scrollbarRect
+            && Math.abs(scrollbarRect.top - viewerRect.top) < 1
+            && Math.abs(scrollbarRect.right - viewerRect.right) < 1
+            && Math.abs(scrollbarRect.bottom - viewerRect.bottom) < 1);
+        const shadowClearance = bodyRect && popupRect && cellHeight
+            ? (bodyRect.bottom - popupRect.bottom) / cellHeight
+            : -1;
         button?.click();
         const closed = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none'
             && button?.getAttribute('aria-expanded') === 'false');
-        return { enabled: !button?.disabled, initiallyHidden, opened, closed };
+        return {
+            enabled: !button?.disabled,
+            initiallyHidden,
+            opened,
+            closed,
+            viewerInset,
+            scrollbarAligned,
+            shadowClearance,
+        };
     })()`);
     if (!findHistoryToggle.enabled || !findHistoryToggle.initiallyHidden
-        || !findHistoryToggle.opened || !findHistoryToggle.closed) {
+        || !findHistoryToggle.opened || !findHistoryToggle.closed
+        || findHistoryToggle.viewerInset.join() !== '1,1'
+        || !findHistoryToggle.scrollbarAligned || findHistoryToggle.shadowClearance < 0.5) {
         throw new Error(`Find history toggle is broken: ${JSON.stringify(findHistoryToggle)}`);
+    }
+    await key("Escape", "Escape", 0, true);
+
+    await key("F3", "F3", 0, true);
+    await pause();
+    const searchFrame = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-search-window');
+        const body = dialog?.querySelector('.tv-search-body');
+        const client = body?.querySelector(':scope > .tv-dialog-client');
+        const sides = Array.from(body?.querySelectorAll(':scope > .tv-border-side') || []);
+        const rect = (element) => {
+            const value = element?.getBoundingClientRect();
+            return value ? { left: value.left, right: value.right, top: value.top, bottom: value.bottom } : null;
+        };
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
+            body: rect(body),
+            client: rect(client),
+            sides: sides.map(rect),
+        };
+    })()`);
+    if (
+        !searchFrame.open || searchFrame.sides.length !== 2
+        || Math.abs(searchFrame.sides[0].left - searchFrame.body.left) > 1
+        || Math.abs(searchFrame.sides[1].right - searchFrame.body.right) > 1
+        || Math.abs(searchFrame.client.left - searchFrame.sides[0].right) > 1
+        || Math.abs(searchFrame.client.right - searchFrame.sides[1].left) > 1
+    ) {
+        throw new Error(`Search Topic frame is misaligned: ${JSON.stringify(searchFrame)}`);
+    }
+    const searchPalette = await evaluate(`(() => {
+        const input = document.querySelector('.tv-search-window .tv-input-line');
+        input.value = 'help';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        const viewport = document.querySelector('[data-tv-search-results] > .tv-vlist-viewport');
+        const selected = viewport?.querySelector('.tv-search-result.is-selected');
+        const colors = (element) => {
+            const style = element ? getComputedStyle(element) : null;
+            return style ? [style.backgroundColor, style.color] : [];
+        };
+        return {
+            entries: viewport?.querySelectorAll('.tv-search-result').length || 0,
+            viewport: colors(viewport),
+            selected: colors(selected),
+        };
+    })()`);
+    if (searchPalette.entries < 1
+        || searchPalette.viewport.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
+        || searchPalette.selected.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()) {
+        throw new Error(`Search Topics does not use the shared list palette: ${JSON.stringify(searchPalette)}`);
     }
     await key("Escape", "Escape", 0, true);
 
@@ -596,10 +824,26 @@ async function run() {
     await pause();
     await key("Enter", "Enter", 0, true);
     await pause();
-    const windowListOpen = await evaluate(
-        `Array.from(document.querySelectorAll('.tv-dialog-title-text')).some((element) => element.textContent === 'Window List')`
-    );
-    if (!windowListOpen) { throw new Error("Enter did not activate the focused Window List command"); }
+    const windowListOpen = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-winlist-window');
+        const list = dialog?.querySelector('[data-tv-winlist-listviewer]');
+        const viewport = list?.querySelector('[data-tv-list-viewport]');
+        const selected = list?.querySelector('.tv-vlist-item.is-selected');
+        const colors = (element) => {
+            const style = getComputedStyle(element);
+            return [style.backgroundColor, style.color];
+        };
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
+            viewport: viewport ? colors(viewport) : [],
+            selected: selected ? colors(selected) : [],
+        };
+    })()`);
+    if (!windowListOpen.open
+        || windowListOpen.viewport.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
+        || windowListOpen.selected.join() !== ['rgb(0, 170, 0)', 'rgb(255, 255, 255)'].join()) {
+        throw new Error(`Window List palette is wrong: ${JSON.stringify(windowListOpen)}`);
+    }
     await key("Escape", "Escape", 0, true);
     await pause();
     const windowListClosed = await evaluate(
@@ -638,7 +882,7 @@ async function run() {
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Colors'
         );
         if (!dialog) { return { open: false }; }
-        const main = dialog.querySelector('.tv-colors-main');
+        const main = dialog.querySelector('.tv-dialog-body > .tv-dialog-client > .tv-group');
         const mainRect = main.getBoundingClientRect();
         const cellWidth = mainRect.width / 59;
         const cellHeight = mainRect.height / 16;
@@ -651,9 +895,18 @@ async function run() {
                 Math.round(rect.height / cellHeight),
             ];
         };
-        const groupItems = dialog.querySelectorAll('[data-tv-colors-group]');
-        const itemSelected = dialog.querySelector('[data-tv-colors-item].is-selected');
-        const groupSelected = dialog.querySelector('[data-tv-colors-group].is-selected');
+        const groupItems = dialog.querySelectorAll('[data-tv-colors-groups] [data-tv-list-index]');
+        const itemSelected = dialog.querySelector('[data-tv-colors-items] [data-tv-list-index].is-selected');
+        const groupSelected = dialog.querySelector('[data-tv-colors-groups] [data-tv-list-index].is-selected');
+        const buttonRects = Array.from(dialog.querySelectorAll(
+            '[data-tv-colors-default], [data-tv-colors-reset-all], [data-tv-colors-ok], [data-tv-colors-cancel]'
+        ), (element) => element.getBoundingClientRect());
+        const buttonsRect = {
+            left: Math.min(...buttonRects.map((rect) => rect.left)),
+            top: Math.min(...buttonRects.map((rect) => rect.top)),
+            right: Math.max(...buttonRects.map((rect) => rect.right)),
+            bottom: Math.max(...buttonRects.map((rect) => rect.bottom)),
+        };
         const stylePair = (element) => {
             const style = getComputedStyle(element);
             return [style.backgroundColor, style.color];
@@ -663,18 +916,23 @@ async function run() {
         return {
             open: !dialog.closest('.tv-dialog-overlay').hidden,
             size: [Math.round(mainRect.width / cellWidth) + 2, Math.round(mainRect.height / cellHeight) + 2],
-            groupList: offset('.tv-colors-groups-listviewer'),
-            itemList: offset('.tv-colors-items-listviewer'),
-            foreground: offset('.tv-colors-foreground'),
-            background: offset('.tv-colors-background'),
-            display: offset('.tv-colors-display'),
-            buttons: offset('.tv-colors-dialog-buttons'),
-            buttonCount: dialog.querySelectorAll('.tv-colors-dialog-buttons .tv-dialog-button').length,
+            groupList: offset('[data-tv-colors-groups]'),
+            itemList: offset('[data-tv-colors-items]'),
+            foreground: offset('[data-tv-colors-foreground]'),
+            background: offset('[data-tv-colors-background]'),
+            display: offset('[data-tv-colors-display]'),
+            buttons: [
+                Math.round((buttonsRect.left - mainRect.left) / cellWidth),
+                Math.round((buttonsRect.top - mainRect.top) / cellHeight),
+                Math.round((buttonsRect.right - buttonsRect.left) / cellWidth),
+                Math.round((buttonsRect.bottom - buttonsRect.top) / cellHeight),
+            ],
+            buttonCount: buttonRects.length,
             resetAllCount: dialog.querySelectorAll('[data-tv-colors-reset-all]').length,
             defaultCount: dialog.querySelectorAll('[data-tv-colors-default]').length,
             foregroundColors: dialog.querySelectorAll('[data-tv-colors-foreground] .tv-color-cell').length,
             backgroundColors: dialog.querySelectorAll('[data-tv-colors-background] .tv-color-cell').length,
-            sampleRows: (dialog.querySelector('.tv-colors-display-sample')?.textContent || '')
+            sampleRows: (dialog.querySelector('[data-tv-colors-display] > .tv-static-text')?.textContent || '')
                 .split(String.fromCharCode(10)).length,
             groupNormalColors: stylePair(groupItems[1]),
             groupFocusedColors: stylePair(groupSelected),
@@ -690,7 +948,7 @@ async function run() {
         foreground: [44, 2, 12, 4],
         background: [44, 8, 12, 2],
         display: [43, 11, 14, 2],
-        buttons: [5, 14, 52, 2],
+        buttons: [5, 14, 50, 2],
     };
     const expectedDialogAttrs = [
         0x7F, 0x7A, 0x13, 0x13, 0x70, 0x70, 0x7F, 0x7E,
@@ -716,10 +974,10 @@ async function run() {
             const style = getComputedStyle(element);
             return [style.backgroundColor, style.color];
         };
-        dialog.querySelector('[data-tv-colors-group="2"]').click();
-        dialog.querySelector('[data-tv-colors-item="1"]').click();
-        const group = dialog.querySelector('[data-tv-colors-group].is-selected');
-        const item = dialog.querySelector('[data-tv-colors-item].is-selected');
+        dialog.querySelector('[data-tv-colors-groups] [data-tv-list-index="2"]').click();
+        dialog.querySelector('[data-tv-colors-items] [data-tv-list-index="1"]').click();
+        const group = dialog.querySelector('[data-tv-colors-groups] [data-tv-list-index].is-selected');
+        const item = dialog.querySelector('[data-tv-colors-items] [data-tv-list-index].is-selected');
         const result = {
             itemFocused: document.activeElement === item,
             groupColors: stylePair(group),
@@ -741,7 +999,8 @@ async function run() {
         const foreground = () => Number(
             dialog.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').dataset.tvColorIndex
         );
-        const chooseItem = (index) => dialog.querySelector('[data-tv-colors-item="' + index + '"]').click();
+        const chooseItem = (index) => dialog
+            .querySelector('[data-tv-colors-items] [data-tv-list-index="' + index + '"]').click();
         const chooseForeground = (index) => dialog
             .querySelector('[data-tv-colors-foreground] [data-tv-color-index="' + index + '"]').click();
 
@@ -802,7 +1061,9 @@ async function run() {
     await pause();
     const passiveColors = await evaluate(`(() => {
         const colorsDialog = document.querySelector('.tv-colors-window');
-        const selected = colorsDialog.querySelector('[data-tv-colors-group].is-selected');
+        const selected = colorsDialog.querySelector(
+            '[data-tv-colors-groups] [data-tv-list-index].is-selected'
+        );
         const corner = colorsDialog.querySelector('.tv-dialog-titlebar > .tv-border-corner');
         const stylePair = (element) => {
             const style = getComputedStyle(element);
@@ -866,7 +1127,7 @@ async function run() {
         );
         if (!dialog) { return { open: false }; }
         const label = dialog.querySelector('label[for]');
-        const input = dialog.querySelector('[data-tv-gallery-name]');
+        const input = dialog.querySelector('.tv-input-line');
         label.click();
         const labelFocus = label.htmlFor === input.id && document.activeElement === input;
         dialog.querySelector('[data-tv-gallery-apply]').click();
@@ -878,7 +1139,7 @@ async function run() {
     if (!gallerySetup.open) { throw new Error('Widget Gallery did not open'); }
     await pause();
     const galleryPoint = await evaluate(`(() => {
-        const item = document.querySelector('[data-tv-gallery-list-index="2"]');
+        const item = document.querySelector('.tv-widget-gallery-window .tv-vlist-viewer [data-tv-list-index="2"]');
         const rect = item.getBoundingClientRect();
         return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     })()`);
@@ -902,19 +1163,26 @@ async function run() {
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Widget Gallery'
         );
         if (!dialog) { return { open: false }; }
-        const clickedItem = dialog.querySelector('[data-tv-gallery-list-index="2"]');
+        const clickedItem = dialog.querySelector('.tv-vlist-viewer [data-tv-list-index="2"]');
         const body = dialog.querySelector('.tv-widget-gallery-body');
         const bodyRect = body.getBoundingClientRect();
         const sideRects = Array.from(body.querySelectorAll(':scope > .tv-border-side'))
             .map((element) => element.getBoundingClientRect());
-        const info = dialog.querySelector('.tv-widget-gallery-info .tv-info-box');
+        const info = dialog.querySelector('.tv-info-box');
         const infoRows = Array.from(dialog.querySelectorAll('[data-tv-terminal-line]'));
         const infoRow = infoRows.at(-1);
         const infoRect = info.getBoundingClientRect();
         const rowRect = infoRow.getBoundingClientRect();
-        const viewport = dialog.querySelector('[data-tv-gallery-list] [data-tv-list-viewport]');
-        const firstItem = dialog.querySelector('[data-tv-gallery-list-index="0"]');
-        const normalItem = dialog.querySelector('[data-tv-gallery-list-index="1"]');
+        const infoSides = Array.from(infoRow.querySelectorAll('[data-tv-info-side]'));
+        const rightInfoSideRect = infoSides.at(-1)?.getBoundingClientRect();
+        const topFrameRect = info.querySelector('[data-tv-info-frame="top"]').getBoundingClientRect();
+        const bottomFrameRect = info.querySelector('[data-tv-info-frame="bottom"]').getBoundingClientRect();
+        const terminalRect = info.querySelector('.tv-terminal').getBoundingClientRect();
+        const disabledButtonRect = dialog.querySelector('.tv-dialog-button:disabled').getBoundingClientRect();
+        const clientRect = dialog.querySelector('.tv-dialog-client').getBoundingClientRect();
+        const viewport = dialog.querySelector('.tv-vlist-viewer [data-tv-list-viewport]');
+        const firstItem = dialog.querySelector('.tv-vlist-viewer [data-tv-list-index="0"]');
+        const normalItem = dialog.querySelector('.tv-vlist-viewer [data-tv-list-index="1"]');
         const check = dialog.querySelector('[data-tv-checkbox-index="0"]');
         const disabledCheck = dialog.querySelector('[data-tv-checkbox-index="2"]');
         const radio = dialog.querySelector('[data-tv-radio-index="0"]');
@@ -926,24 +1194,27 @@ async function run() {
         multiCheck.click();
         return {
             open: true,
-            checks: dialog.querySelectorAll('[data-tv-gallery-checks] input[type="checkbox"]').length,
-            radios: dialog.querySelectorAll('[data-tv-gallery-radios] input[type="radio"]').length,
-            multiChecks: dialog.querySelectorAll('[data-tv-gallery-multichecks] [data-tv-multicheck-state]').length,
-            multiStates: Array.from(dialog.querySelectorAll('[data-tv-gallery-multichecks] [data-tv-multicheck-state]'))
+            checks: dialog.querySelectorAll('[data-tv-checkbox-index] input[type="checkbox"]').length,
+            radios: dialog.querySelectorAll('[data-tv-radio-index] input[type="radio"]').length,
+            multiChecks: dialog.querySelectorAll('[data-tv-multicheck-state]').length,
+            multiStates: Array.from(dialog.querySelectorAll('[data-tv-multicheck-state]'))
                 .map((element) => element.getAttribute('aria-checked')),
             multiCycled: multiCheck.getAttribute('aria-checked'),
             disabledChoices: dialog.querySelectorAll('.tv-choice-input:disabled').length,
-            listItems: dialog.querySelectorAll('[data-tv-gallery-list-index]').length,
-            selectedItems: dialog.querySelectorAll('[data-tv-gallery-list-index].is-selected').length,
-            selectedIndex: dialog.querySelector('[data-tv-gallery-list-index].is-selected')?.dataset.tvGalleryListIndex,
+            listItems: dialog.querySelectorAll('.tv-vlist-viewer [data-tv-list-index]').length,
+            selectedItems: dialog.querySelectorAll('.tv-vlist-viewer [data-tv-list-index].is-selected').length,
+            selectedIndex: dialog.querySelector(
+                '.tv-vlist-viewer [data-tv-list-index].is-selected'
+            )?.dataset.tvListIndex,
             listFocused: document.activeElement === clickedItem,
             disabledButtons: dialog.querySelectorAll('.tv-dialog-button:disabled').length,
             messageButtons: dialog.querySelectorAll('[data-tv-gallery-message]').length,
-            staticTexts: dialog.querySelectorAll('[data-tv-gallery-static]').length,
-            status: dialog.querySelector('[data-tv-gallery-terminal]')?.textContent || '',
+            staticTexts: Array.from(dialog.querySelectorAll('.tv-static-text'))
+                .filter((element) => element.textContent.includes('Static text ·')).length,
+            status: dialog.querySelector('.tv-terminal')?.textContent || '',
             terminalRows: infoRows.length,
             firstRowOffset: Math.abs(firstItem.getBoundingClientRect().top - viewport.getBoundingClientRect().top),
-            scrollbarEnabled: !dialog.querySelector('[data-tv-gallery-list]').classList.contains('is-disabled'),
+            scrollbarEnabled: !dialog.querySelector('.tv-vlist-viewer').classList.contains('is-disabled'),
             listNormalColors: stylePair(normalItem),
             listFocusedColors: stylePair(clickedItem),
             checkColors: stylePair(check),
@@ -951,7 +1222,16 @@ async function run() {
             disabledCheckColors: stylePair(disabledCheck),
             checkHotkeyColor: getComputedStyle(check.querySelector('.tv-hotkey')).color,
             infoRightBorder: infoRow.textContent.endsWith('│'),
+            infoRightBorderAligned: Boolean(
+                rightInfoSideRect && Math.abs(rightInfoSideRect.right - infoRect.right) < 1
+            ),
             infoRowFits: rowRect.right <= infoRect.right + 0.5 && info.scrollWidth <= info.clientWidth,
+            infoColumns: Math.round(infoRect.width / (bodyRect.width / 68)),
+            infoFrameComplete: Math.abs(topFrameRect.top - infoRect.top) < 1
+                && Math.abs(bottomFrameRect.bottom - infoRect.bottom) < 1
+                && terminalRect.top >= topFrameRect.bottom - 1
+                && terminalRect.bottom <= bottomFrameRect.top + 1,
+            disabledButtonInside: disabledButtonRect.right <= clientRect.right + 1,
             infoSideColors: Array.from(infoRow.querySelectorAll('[data-tv-info-side]'))
                 .map((element) => getComputedStyle(element).color),
             frameSidesAligned: sideRects.length === 2 && sideRects.every((rect) =>
@@ -975,7 +1255,9 @@ async function run() {
         || gallery.radioColors.join() !== ['rgb(0, 170, 170)', 'rgb(0, 0, 0)'].join()
         || gallery.disabledCheckColors.join() !== ['rgb(0, 170, 170)', 'rgb(85, 85, 85)'].join()
         || gallery.checkHotkeyColor !== 'rgb(255, 255, 85)'
-        || gallery.terminalRows !== 3 || !gallery.infoRightBorder || !gallery.infoRowFits
+        || gallery.terminalRows !== 3 || !gallery.infoRightBorder || !gallery.infoRightBorderAligned
+        || !gallery.infoRowFits
+        || gallery.infoColumns !== 62 || !gallery.infoFrameComplete || !gallery.disabledButtonInside
         || gallery.infoSideColors.some((color) => color !== 'rgb(255, 255, 255)')
         || !gallery.frameSidesAligned
     ) {
@@ -985,14 +1267,37 @@ async function run() {
     await pause();
     const messageOpen = await evaluate(`(() => {
         const box = document.querySelector('.tv-msgbox-window');
-        return Boolean(box && !box.closest('.tv-dialog-overlay').hidden)
-            && box.querySelector('.tv-dialog-title-text')?.textContent === 'Information';
+        const rect = box?.getBoundingClientRect();
+        const content = box?.querySelector('.tv-dialog-client > .tv-group > .tv-group:first-child')?.getBoundingClientRect();
+        const titlebar = box?.querySelector('.tv-dialog-titlebar')?.getBoundingClientRect();
+        const rightCorner = box?.querySelector('.tv-dialog-titlebar .tv-border-corner:last-of-type')?.getBoundingClientRect();
+        const closeRect = box?.querySelector('.tv-dialog-close-control')?.getBoundingClientRect();
+        const commandButtons = Array.from(box?.querySelectorAll('.tv-dialog-client > .tv-group > .tv-group:last-child .tv-dialog-button') || []);
+        const buttonRects = commandButtons.map((button) => button.getBoundingClientRect());
+        const cellWidth = rect ? rect.width / 42 : 0;
+        return {
+            open: Boolean(box && !box.closest('.tv-dialog-overlay').hidden),
+            title: box?.querySelector('.tv-dialog-title-text')?.textContent || '',
+            width: rect?.width || 0,
+            height: rect?.height || 0,
+            contentInside: Boolean(rect && content && content.left >= rect.left && content.right <= rect.right
+                && content.top >= rect.top && content.bottom <= rect.bottom),
+            closeButton: Boolean(box?.querySelector('.tv-dialog-close-control')),
+            closePoint: closeRect ? { x: closeRect.left + closeRect.width / 2, y: closeRect.top + closeRect.height / 2 } : null,
+            rightCornerAligned: Boolean(titlebar && rightCorner && Math.abs(rightCorner.right - titlebar.right) < 1),
+            buttonGap: buttonRects.length > 1 ? (buttonRects[1].left - buttonRects[0].right) / cellWidth : 0,
+        };
     })()`);
-    if (!messageOpen) { throw new Error('Widget Gallery message box did not open'); }
-    await key("Escape", "Escape", 0, true);
+    if (!messageOpen.open || messageOpen.title !== 'Information'
+        || messageOpen.width < 300 || messageOpen.height < 100 || !messageOpen.contentInside
+        || !messageOpen.closeButton || !messageOpen.closePoint
+        || !messageOpen.rightCornerAligned || messageOpen.buttonGap < 1.5) {
+        throw new Error(`Widget Gallery message box has invalid geometry: ${JSON.stringify(messageOpen)}`);
+    }
+    await clickPoint(messageOpen.closePoint);
     await pause();
     const messageResult = await evaluate(
-        `document.querySelector('[data-tv-gallery-terminal]')?.textContent || ''`
+        `document.querySelector('.tv-widget-gallery-window .tv-terminal')?.textContent || ''`
     );
     if (!messageResult.includes('Message: cancel')) {
         throw new Error(`Widget Gallery message box did not report Cancel: ${messageResult}`);
@@ -1017,20 +1322,21 @@ async function run() {
             historyPopup?.hidden && getComputedStyle(historyPopup).display === 'none'
         );
         const slash = String.fromCharCode(92);
-        const docs = Array.from(dialog?.querySelectorAll('[data-tv-change-dir-index]') || []).find((item) =>
+        const outlineView = dialog?.querySelector('.tv-dialog-client > .tv-group > .tv-vlist-viewer');
+        const docs = Array.from(outlineView?.querySelectorAll('[data-tv-list-index]') || []).find((item) =>
             item.textContent.trim().endsWith('DOCS' + slash)
         );
         docs?.click();
-        const selectedPath = dialog?.querySelector('[data-tv-change-dir-path]')?.value;
+        const selectedPath = dialog?.querySelector('.tv-input-line')?.value;
         dialog?.querySelector('[data-tv-change-dir-revert]')?.click();
-        const revertedPath = dialog?.querySelector('[data-tv-change-dir-path]')?.value;
+        const revertedPath = dialog?.querySelector('.tv-input-line')?.value;
         dialog?.querySelector('[data-tv-change-dir-confirm]')?.click();
         return {
             open: Boolean(dialog),
-            directories: dialog?.querySelectorAll('[data-tv-change-dir-index]').length || 0,
-            sharedScrollbar: Boolean(dialog?.querySelector('[data-tv-change-dir-list] .tv-scrollbar-y')),
-            outline: dialog?.querySelector('[data-tv-change-dir-list]')?.dataset.tvListViewer === '1'
-                && Array.from(dialog?.querySelectorAll('[data-tv-change-dir-index]') || [])
+            directories: outlineView?.querySelectorAll('[data-tv-list-index]').length || 0,
+            sharedScrollbar: Boolean(outlineView?.querySelector('.tv-scrollbar-y')),
+            outline: outlineView?.dataset.tvListViewer === '1'
+                && Array.from(outlineView?.querySelectorAll('[data-tv-list-index]') || [])
                     .some((item) => /[▼►]/.test(item.textContent)),
             selectedPath,
             revertedPath,
@@ -1050,6 +1356,41 @@ async function run() {
     }
     await evaluate(`document.querySelector('[data-tv-dialog-open="chdir"]').click()`);
     await pause();
+    const changeDirectoryWheelTarget = await evaluate(`(() => {
+        const viewport = document.querySelector(
+            '.tv-change-dir-window .tv-dialog-client > .tv-group > .tv-vlist-viewer > .tv-vlist-viewport'
+        );
+        const scrollbar = viewport?.parentElement?.querySelector('.tv-scrollbar-y');
+        const rect = viewport?.getBoundingClientRect();
+        const scrollbarRect = scrollbar?.getBoundingClientRect();
+        return rect && scrollbarRect ? {
+            x: scrollbarRect.left + scrollbarRect.width / 2,
+            y: scrollbarRect.top + scrollbarRect.height / 2,
+            before: viewport.scrollTop,
+            max: viewport.scrollHeight - viewport.clientHeight,
+            overScrollbar: true,
+        } : null;
+    })()`);
+    if (!changeDirectoryWheelTarget || !changeDirectoryWheelTarget.overScrollbar
+        || changeDirectoryWheelTarget.max <= 0) {
+        throw new Error(`Change Directory has no wheel-scrollable directory list: ${JSON.stringify(changeDirectoryWheelTarget)}`);
+    }
+    await send('Input.dispatchMouseEvent', {
+        type: 'mouseWheel',
+        x: changeDirectoryWheelTarget.x,
+        y: changeDirectoryWheelTarget.y,
+        deltaX: 0,
+        deltaY: 160,
+    });
+    await pause();
+    const changeDirectoryWheelAfter = await evaluate(`document.querySelector(
+        '.tv-change-dir-window .tv-vlist-viewport'
+    )?.scrollTop || 0`);
+    if (changeDirectoryWheelAfter <= changeDirectoryWheelTarget.before) {
+        throw new Error(`Change Directory ignored the mouse wheel: ${JSON.stringify({
+            changeDirectoryWheelTarget, changeDirectoryWheelAfter,
+        })}`);
+    }
     const changeDirectoryHistoryInitial = await evaluate(`(() => {
         const button = document.querySelector('[data-tv-change-dir-history]');
         const popup = document.querySelector('[data-tv-change-dir-history-popup]');
@@ -1072,7 +1413,16 @@ async function run() {
         return !popup?.hidden && getComputedStyle(popup).display !== 'none'
             && button?.getAttribute('aria-expanded') === 'true';
     })()`);
-    await clickPoint(changeDirectoryHistoryInitial.point);
+    const changeDirectoryHistoryClosePoint = await evaluate(`(() => {
+        const rect = document.querySelector(
+            '[data-tv-change-dir-history-popup] [data-tv-close-button]'
+        )?.getBoundingClientRect();
+        return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+    })()`);
+    if (!changeDirectoryHistoryClosePoint) {
+        throw new Error('Change Directory history close control is missing');
+    }
+    await clickPoint(changeDirectoryHistoryClosePoint);
     const changeDirectoryHistoryClosed = await evaluate(`(() => {
         const button = document.querySelector('[data-tv-change-dir-history]');
         const popup = document.querySelector('[data-tv-change-dir-history-popup]');
@@ -1094,23 +1444,28 @@ async function run() {
         );
         if (!dialog) { return { open: false }; }
         const slash = String.fromCharCode(92);
-        const rootItems = Array.from(dialog.querySelectorAll('[data-tv-file-open-file-index]'));
+        const rootItems = Array.from(dialog.querySelectorAll('[data-tv-file-open-files] [data-tv-list-index]'));
         const rootDirectories = rootItems.filter((element) => element.textContent.trim().endsWith(slash));
         const docsDirectory = rootDirectories.find((element) => element.textContent.trim() === "DOCS" + slash);
         if (!docsDirectory) { return { open: true, docsDirectory: false }; }
         docsDirectory.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-        const docItems = Array.from(dialog.querySelectorAll('[data-tv-file-open-file-index]'));
+        const docItems = Array.from(dialog.querySelectorAll('[data-tv-file-open-files] [data-tv-list-index]'));
         const firstFile = docItems.find((element) => !element.textContent.trim().endsWith(slash));
         if (!firstFile) { return { open: true, docsDirectory: true, files: 0 }; }
         firstFile.click();
-        const input = dialog.querySelector('[data-tv-file-open-name]');
+        const input = dialog.querySelector('.tv-input-line');
         const fileList = dialog.querySelector('[data-tv-file-open-files]');
+        const fileViewport = fileList.querySelector('[data-tv-list-viewport]');
+        const verticalScrollbar = fileList.querySelector('.tv-scrollbar-y');
+        const backwardRect = verticalScrollbar?.querySelector('[data-role="backward"]')?.getBoundingClientRect();
+        const trackRect = verticalScrollbar?.querySelector('[data-role="track"]')?.getBoundingClientRect();
+        const forwardRect = verticalScrollbar?.querySelector('[data-role="forward"]')?.getBoundingClientRect();
         const titlebar = dialog.querySelector('.tv-dialog-titlebar');
         const title = dialog.querySelector('.tv-dialog-title-text');
         const dialogRect = dialog.getBoundingClientRect();
         const titleRect = title.getBoundingClientRect();
-        const selectedItem = dialog.querySelector('[data-tv-file-open-file-index].is-selected');
-        const normalItem = Array.from(dialog.querySelectorAll('[data-tv-file-open-file-index]'))
+        const selectedItem = dialog.querySelector('[data-tv-file-open-files] [data-tv-list-index].is-selected');
+        const normalItem = Array.from(dialog.querySelectorAll('[data-tv-file-open-files] [data-tv-list-index]'))
             .find((element) => element !== selectedItem);
         const stylePair = (element) => {
             const style = getComputedStyle(element);
@@ -1130,9 +1485,13 @@ async function run() {
             titleCenterOffset: Math.abs(
                 (titleRect.left + titleRect.width / 2) - (dialogRect.left + dialogRect.width / 2)
             ),
-            twoColumnFlow: getComputedStyle(fileList).gridAutoFlow,
-            horizontalScrollbar: Boolean(dialog.querySelector('[data-tv-file-open-hscroll]')),
-            path: (dialog.querySelector('[data-tv-file-open-path]')?.textContent || '').trim(),
+            twoColumnFlow: getComputedStyle(fileViewport).gridAutoFlow,
+            verticalScrollbar: Boolean(backwardRect && trackRect && forwardRect
+                && trackRect.height > 1
+                && forwardRect.top > backwardRect.bottom),
+            horizontalScrollbar: dialog.querySelectorAll('.tv-file-open-scroll-button').length === 2
+                && Boolean(dialog.querySelector('[data-tv-file-open-scroll-left] + .tv-static-text')),
+            path: (dialog.querySelectorAll('[data-tv-file-open-cancel] ~ .tv-static-text')[0]?.textContent || '').trim(),
             name: input.value,
             focused: document.activeElement === input,
             selectedColors: stylePair(selectedItem),
@@ -1158,7 +1517,7 @@ async function run() {
             || fileOpen.files < 2 || fileOpen.rootDirectories !== 2 || fileOpen.internalFrames !== 0
             || fileOpen.outerTitleCorners !== 2 || fileOpen.outerFooterCorners !== 2
             || fileOpen.outerTitleFills !== 1 || fileOpen.titleCenterOffset > 1
-        || fileOpen.twoColumnFlow !== "column" || !fileOpen.horizontalScrollbar
+        || fileOpen.twoColumnFlow !== "column" || !fileOpen.horizontalScrollbar || !fileOpen.verticalScrollbar
         || fileOpen.path !== ["THelpViewer:", "DOCS", "*.*"].join(String.fromCharCode(92))
         || !fileOpen.name || !fileOpen.focused
         || fileOpen.selectedColors.join() !== ['rgb(0, 170, 170)', 'rgb(255, 255, 85)'].join()
@@ -1194,9 +1553,10 @@ async function run() {
         const popup = document.querySelector('[data-tv-file-open-history-popup]');
         const initiallyHidden = Boolean(popup?.hidden && getComputedStyle(popup).display === 'none');
         button.click();
-        const input = document.querySelector('[data-tv-file-open-name]');
+        const input = document.querySelector('.tv-file-open-window .tv-input-line');
         const popupStyle = getComputedStyle(popup);
-        const selected = popup?.querySelector('[data-tv-file-open-history-index].is-selected');
+        const titleFill = popup?.querySelector('.tv-window-caption-fill');
+        const selected = popup?.querySelector('[data-tv-list-index].is-selected');
         const selectedStyle = getComputedStyle(selected);
         const arrowStyle = getComputedStyle(button.querySelector('.tv-file-open-history-arrow'));
         const sideStyles = Array.from(
@@ -1208,7 +1568,7 @@ async function run() {
             enabled: !button.disabled,
             initiallyHidden,
             open: Boolean(popup && !popup.hidden),
-            entries: popup?.querySelectorAll('[data-tv-file-open-history-index]').length || 0,
+            entries: popup?.querySelectorAll('[data-tv-list-index]').length || 0,
             columns: Math.round(popup.getBoundingClientRect().width / cellWidth),
             frame: [popupStyle.backgroundColor, popupStyle.color],
             selected: [selectedStyle.backgroundColor, selectedStyle.color],
@@ -1219,8 +1579,10 @@ async function run() {
                 image: style.backgroundImage,
             })),
             popupAboveButton: Number(popupStyle.zIndex) > Number(getComputedStyle(button).zIndex),
-            corners: popup?.querySelectorAll('.tv-history-frame-corner').length || 0,
-            closeButtons: popup?.querySelectorAll('[data-tv-history-close]').length || 0,
+            corners: popup?.querySelectorAll('[data-tv-frame-corner]').length || 0,
+            closeButtons: popup?.querySelectorAll('[data-tv-close-button]').length || 0,
+            continuousTop: Boolean(titleFill && !popup?.querySelector('.tv-window-caption')
+                && titleFill.textContent.includes('═')),
         };
     })()`);
     if (!historyOpen.enabled || !historyOpen.initiallyHidden || !historyOpen.open || historyOpen.entries !== 1
@@ -1232,11 +1594,11 @@ async function run() {
             || side.color !== 'rgba(0, 0, 0, 0)'
             || !side.image.includes('linear-gradient')
             || !side.image.includes('rgb(0, 170, 0)'))
-        || !historyOpen.popupAboveButton) {
+        || !historyOpen.popupAboveButton || !historyOpen.continuousTop) {
         throw new Error(`File Open history does not match THistoryWindow: ${JSON.stringify(historyOpen)}`);
     }
     const fileHistoryClosePoint = await evaluate(`(() => {
-        const rect = document.querySelector('[data-tv-file-open-history-popup] [data-tv-history-close]')
+        const rect = document.querySelector('[data-tv-file-open-history-popup] [data-tv-close-button]')
             ?.getBoundingClientRect();
         return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
     })()`);
@@ -1283,7 +1645,7 @@ async function run() {
     }
     await clickPoint(fileHistoryArrowPoint);
     const fileHistoryOutsidePoint = await evaluate(`(() => {
-        const rect = document.querySelector('.tv-file-open-info')?.getBoundingClientRect();
+        const rect = document.querySelector('.tv-file-open-window [data-tv-file-open-cancel] ~ .tv-static-text')?.getBoundingClientRect();
         return rect ? { x: rect.left + 2, y: rect.top + 2 } : null;
     })()`);
     if (!fileHistoryOutsidePoint) { throw new Error('File Open info pane is missing'); }
@@ -1312,7 +1674,7 @@ async function run() {
         const check = () => {
             const open = document.querySelector('[data-tv-file-open-files]');
             const more = document.querySelector('[data-tv-line="17"] [data-tv-bundle-topic="327"]');
-            if (open?.querySelectorAll('[data-tv-file-open-file-index]').length >= 2 && more) {
+            if (open?.querySelectorAll('[data-tv-list-index]').length >= 2 && more) {
                 resolve(true);
                 return;
             }
@@ -1339,7 +1701,7 @@ async function run() {
         const movingCorner = titlebar.querySelector('.tv-border-corner')?.textContent;
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
         return {
-            entries: dialog.querySelectorAll('[data-tv-file-open-file-index]').length,
+            entries: dialog.querySelectorAll('[data-tv-file-open-files] [data-tv-list-index]').length,
             active: dialog.classList.contains('is-window-active'),
             dialogZ: Number(getComputedStyle(overlay).zIndex),
             helpZ: Number(getComputedStyle(helpWindow).zIndex),
@@ -1582,6 +1944,48 @@ async function run() {
         const readme = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
             element.querySelector('.tv-window-caption')?.textContent === 'README'
         );
+        const link = document.createElement('a');
+        link.href = '/missing-in-app-link';
+        link.target = '_blank';
+        link.textContent = 'Missing local file';
+        link.dataset.tvMissingLinkProbe = '1';
+        readme.querySelector('[data-tv-doc-editor]').appendChild(link);
+        window.__tvDesktopBeforeMissingLink = document.querySelector('[data-tv-bundle-desktop]');
+        link.click();
+    })()`);
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 5000;
+        const check = () => {
+            const box = document.querySelector('.tv-msgbox-window');
+            const title = box?.querySelector('.tv-dialog-title-text')?.textContent;
+            if (box && !box.closest('.tv-dialog-overlay').hidden && title === 'Server Error') {
+                resolve(true);
+                return;
+            }
+            if (Date.now() >= deadline) { reject(new Error('Local 404 did not open the existing MessageBox')); return; }
+            setTimeout(check, 25);
+        };
+        check();
+    })`, true);
+    const local404 = await evaluate(`(() => {
+        const box = document.querySelector('.tv-msgbox-window');
+        return {
+            sameDesktop: window.__tvDesktopBeforeMissingLink === document.querySelector('[data-tv-bundle-desktop]'),
+            path: window.location.pathname,
+            message: Array.from(box?.querySelectorAll('.tv-static-text') || [])
+                .map((element) => element.textContent || '').join(String.fromCharCode(10)),
+        };
+    })()`);
+    if (!local404.sameDesktop || local404.path !== '/'
+        || !local404.message.includes('/missing-in-app-link')) {
+        throw new Error(`Local 404 replaced the running viewer: ${JSON.stringify(local404)}`);
+    }
+    await evaluate(`document.querySelector('.tv-msgbox-window [data-tv-command="msgbox-cmd"]').click()`);
+
+    await evaluate(`(() => {
+        const readme = Array.from(document.querySelectorAll('.tv-doc-window')).find((element) =>
+            element.querySelector('.tv-window-caption')?.textContent === 'README'
+        );
         const link = readme?.querySelector('a[href="docs/THelp%20Viewer/Bundle.md"]');
         if (!link) { throw new Error('README Bundle link is missing'); }
         link.click();
@@ -1605,15 +2009,21 @@ async function run() {
         const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
             element.querySelector('.tv-dialog-title-text')?.textContent === 'CD/MIDI Player'
         );
-        const advanced = dialog?.querySelector('[data-tv-midi-advanced]');
+        const advanced = dialog?.querySelector('.tv-input-line')?.closest('.tv-group');
         const list = dialog?.querySelector('[data-tv-midi-track-list]');
         const side = dialog?.querySelector('.tv-dialog-body > .tv-border-side');
-        const displayParts = Array.from(dialog?.querySelectorAll(
-            '.tv-midi-display-label, .tv-midi-track-number, .tv-midi-display-time, .tv-midi-display-title, .tv-midi-status'
-        ) || []);
+        const displayParts = Array.from(dialog?.querySelectorAll('[data-tv-midi-display] > .tv-static-text') || []);
+        const displayRect = dialog?.querySelector('[data-tv-midi-display]')?.getBoundingClientRect();
+        const meter = dialog?.querySelector('[data-tv-midi-meter]');
+        meter?._tvView?.setProgress(0.5);
+        const meterRect = meter?.getBoundingClientRect();
+        const meterFillWidth = Number.parseFloat(getComputedStyle(meter, '::before').width || '0');
+        const controlRect = dialog?.querySelector('[data-tv-midi-previous]')?.getBoundingClientRect();
+        const listRect = list?.getBoundingClientRect();
         return {
             open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
             advancedHidden: Boolean(advanced?.hidden),
+            trackListHidden: Boolean(list?.hidden && getComputedStyle(list).display === 'none'),
             moreCollapsed: dialog?.querySelector('[data-tv-midi-more]')?.getAttribute('aria-expanded') === 'false',
             sharedScrollbar: Boolean(list?.querySelector('.tv-scrollbar-y [data-role="thumb"]')),
             height: dialog?.getBoundingClientRect().height || 0,
@@ -1624,11 +2034,27 @@ async function run() {
                 return Boolean(element.textContent.trim()) && rect.width > 0 && rect.height > 0
                     && style.color !== style.backgroundColor;
             }),
+            verticalOrder: Boolean(displayRect && meterRect && controlRect
+                && displayRect.top < meterRect.top && meterRect.top < controlRect.top),
+            separatedRows: Boolean(displayRect && meterRect && controlRect
+                && Math.abs((meterRect.top - displayRect.bottom) - displayRect.height / 3) < 1
+                && Math.abs((controlRect.top - meterRect.bottom) - meterRect.height) < 1),
+            meterOwned: Boolean(meter && meter.childElementCount === 0
+                && meter.style.getPropertyValue('--tv-midi-progress') === '50%'
+                && Math.abs(meterFillWidth - meterRect.width / 2) < 1),
+            positions: {
+                display: displayRect ? [displayRect.top, displayRect.bottom] : null,
+                meter: meterRect ? [meterRect.top, meterRect.bottom] : null,
+                control: controlRect ? [controlRect.top, controlRect.bottom] : null,
+                list: listRect ? [listRect.top, listRect.bottom] : null,
+            },
         };
     })()`);
     if (
-        !midiCompact.open || !midiCompact.advancedHidden || !midiCompact.moreCollapsed
+        !midiCompact.open || !midiCompact.advancedHidden || !midiCompact.trackListHidden
+        || !midiCompact.moreCollapsed
         || !midiCompact.sharedScrollbar || !midiCompact.displayTextVisible
+        || !midiCompact.verticalOrder || !midiCompact.separatedRows || !midiCompact.meterOwned
     ) {
         throw new Error(`MIDI compact mode is incomplete: ${JSON.stringify(midiCompact)}`);
     }
@@ -1639,17 +2065,51 @@ async function run() {
             element.querySelector('.tv-dialog-title-text')?.textContent === 'CD/MIDI Player'
         );
         const side = dialog?.querySelector('.tv-dialog-body > .tv-border-side');
+        const body = dialog?.querySelector('.tv-dialog-body');
+        const main = dialog?.querySelector('.tv-midi-body > .tv-dialog-client > .tv-group');
+        const advanced = dialog?.querySelector('.tv-input-line')?.closest('.tv-group');
+        const urlInput = advanced?.querySelector('.tv-input-line');
+        const rect = (element) => {
+            const value = element?.getBoundingClientRect();
+            return value ? { x: value.x, y: value.y, width: value.width, height: value.height, bottom: value.bottom, right: value.right } : null;
+        };
         return {
-            advancedVisible: !dialog?.querySelector('[data-tv-midi-advanced]')?.hidden,
+            advancedVisible: !advanced?.hidden,
             moreExpanded: dialog?.querySelector('[data-tv-midi-more]')?.getAttribute('aria-expanded') === 'true',
             height: dialog?.getBoundingClientRect().height || 0,
             sideGlyphs: side?.textContent.split('\\n').length || 0,
+            dialogRect: rect(dialog),
+            bodyRect: rect(body),
+            mainRect: rect(main),
+                advancedRect: rect(advanced),
+                urlRect: rect(urlInput),
+                advancedClipped: Array.from(advanced?.children || []).some((element) => {
+                    const child = element.getBoundingClientRect();
+                    const parent = advanced.getBoundingClientRect();
+                    return child.left < parent.left - 0.5 || child.top < parent.top - 0.5
+                        || child.right > parent.right + 0.5 || child.bottom > parent.bottom + 0.5;
+                }),
+            sideRects: Array.from(body?.querySelectorAll(':scope > .tv-border-side') || []).map(rect),
+            bodyClient: body ? { width: body.clientWidth, height: body.clientHeight, scrollWidth: body.scrollWidth, scrollHeight: body.scrollHeight } : null,
         };
     })()`);
     if (
         !midiExpanded.advancedVisible || !midiExpanded.moreExpanded
         || midiExpanded.height <= midiCompact.height
         || midiExpanded.sideGlyphs <= midiCompact.sideGlyphs
+        || midiExpanded.sideRects.length !== 2
+        || Math.abs(midiExpanded.sideRects[0].x - midiExpanded.bodyRect.x) > 1
+        || Math.abs(midiExpanded.sideRects[1].right - midiExpanded.bodyRect.right) > 1
+        || Math.abs(midiExpanded.mainRect.x - midiExpanded.sideRects[0].right) > 1
+        || Math.abs(midiExpanded.mainRect.y - midiExpanded.bodyRect.y) > 1
+        || Math.abs(midiExpanded.mainRect.bottom - midiExpanded.bodyRect.bottom) > 1
+            || midiExpanded.advancedRect.y < midiExpanded.mainRect.y
+            || midiExpanded.advancedRect.bottom > midiExpanded.mainRect.bottom + 1
+            || Math.abs((midiExpanded.urlRect.y - midiExpanded.advancedRect.y)
+                - midiExpanded.urlRect.height) > 1
+            || midiExpanded.advancedClipped
+        || midiExpanded.bodyClient.scrollWidth !== midiExpanded.bodyClient.width
+        || midiExpanded.bodyClient.scrollHeight !== midiExpanded.bodyClient.height
     ) {
         throw new Error(`MIDI expanded frame was not redrawn: ${JSON.stringify({ midiCompact, midiExpanded })}`);
     }
@@ -1685,6 +2145,51 @@ async function run() {
     if (tvcHelpTable.links !== 3 || tvcHelpTable.separators !== 3) {
         throw new Error(`TVCHELP table row is malformed: ${JSON.stringify(tvcHelpTable)}`);
     }
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="statistics"]').click()`);
+    const statisticsDialog = await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 5000;
+        const check = () => {
+            const dialog = document.querySelector('.tv-statistics-window');
+            const overlay = dialog?.closest('.tv-dialog-overlay');
+            const text = Array.from(dialog?.querySelectorAll('.tv-static-text') || [])
+                .map((element) => element.textContent).join('\\n');
+            if (dialog && overlay && !overlay.hidden && text.includes('Visits ')) {
+                resolve({
+                    text,
+                    lists: dialog.querySelectorAll('[data-tv-list-box]').length,
+                    ok: Boolean(dialog.querySelector('[data-tv-command="statistics-ok"]')),
+                    refresh: Boolean(dialog.querySelector('[data-tv-command="statistics-refresh"]')),
+                    modal: overlay.classList.contains('is-modal'),
+                    palette: dialog.getAttribute('data-tv-palette'),
+                    windowBackground: getComputedStyle(dialog.querySelector('.tv-dialog-body')).backgroundColor,
+                    listBackground: getComputedStyle(dialog.querySelector('.tv-vlist-viewer')).backgroundColor,
+                });
+                return;
+            }
+            if (Date.now() >= deadline) { reject(new Error('Statistics dialog did not load')); return; }
+            setTimeout(check, 50);
+        };
+        check();
+    })`, true);
+    if (!statisticsDialog.ok || !statisticsDialog.refresh || statisticsDialog.modal || statisticsDialog.lists !== 2
+        || statisticsDialog.palette !== 'dialog'
+        || statisticsDialog.windowBackground !== 'rgb(170, 170, 170)'
+        || statisticsDialog.listBackground !== 'rgb(0, 170, 170)'
+        || !statisticsDialog.text.includes('no IP')) {
+        throw new Error(`Statistics dialog is incomplete: ${JSON.stringify(statisticsDialog)}`);
+    }
+    await evaluate(`document.querySelector('.tv-statistics-window [data-tv-command="statistics-refresh"]').click()`);
+    await pause();
+    const statisticsRefreshed = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-statistics-window');
+        return Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden
+            && Array.from(dialog.querySelectorAll('.tv-static-text')).some((item) => item.textContent.includes('Visits ')));
+    })()`);
+    if (!statisticsRefreshed) { throw new Error('Statistics Refresh closed or emptied the dialog'); }
+    await evaluate(`document.querySelector('.tv-statistics-window [data-tv-command="statistics-ok"]').click()`);
+    const statisticsClosed = await evaluate(`document.querySelector('.tv-statistics-overlay').hidden`);
+    if (!statisticsClosed) { throw new Error('Statistics OK did not close the dialog'); }
 
     await evaluate(`document.querySelector('[data-tv-dialog-open="mastermind"]').click()`);
     await pause();
@@ -1724,9 +2229,137 @@ async function run() {
         };
     })()`);
     if (!mastermind.open || mastermind.rows !== 10 || mastermind.colors !== 6
-        || mastermind.hall !== '[H]' || mastermind.columns < 64
+        || mastermind.hall !== '[H]' || mastermind.columns < 54 || mastermind.columns > 58
         || mastermind.boardInset <= 0 || mastermind.clipped) {
         throw new Error(`Mastermind dialog is incomplete: ${JSON.stringify(mastermind)}`);
+    }
+    await key("Escape", "Escape", 0, true);
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="tetris"]').click()`);
+    await pause();
+    const tetrisGeometry = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-tetris-window');
+        const group = dialog?.querySelector('.tv-dialog-client > .tv-group');
+        const field = dialog?.querySelector('[data-tv-tetris-grid]');
+        const body = dialog?.querySelector('.tv-dialog-body');
+        const info = dialog?.querySelector('.tv-info-box');
+        const preview = dialog?.querySelector('[data-tv-tetris-preview]');
+        const infoTop = info?.querySelector('[data-tv-info-frame="top"]');
+        const infoBottom = info?.querySelector('[data-tv-info-frame="bottom"]');
+        const hall = dialog?.querySelector('.tv-game-hall-control');
+        const groupRect = group?.getBoundingClientRect();
+        const fieldRect = field?.getBoundingClientRect();
+        const infoRect = info?.getBoundingClientRect();
+        const previewRect = preview?.getBoundingClientRect();
+        const infoTopRect = infoTop?.getBoundingClientRect();
+        const infoBottomRect = infoBottom?.getBoundingClientRect();
+        const cellWidth = fieldRect ? fieldRect.width / 24 : 0;
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
+            columns: dialog && cellWidth ? Math.round(dialog.getBoundingClientRect().width / cellWidth) : 0,
+            fieldInset: fieldRect && groupRect && cellWidth ? {
+                x: Math.round((fieldRect.left - groupRect.left) / cellWidth),
+                y: Math.round((fieldRect.top - groupRect.top) / (fieldRect.height / 18)),
+            } : null,
+            clipped: !group || group.scrollWidth > group.clientWidth || group.scrollHeight > group.clientHeight,
+            infoFlow: Boolean(info && !info.classList.contains('is-bounded')),
+            infoRows: info?.querySelectorAll('.tv-info-row').length || 0,
+            infoClipped: Boolean(info && (info.scrollWidth > info.clientWidth || info.scrollHeight > info.clientHeight)),
+            infoAligned: Boolean(infoRect && previewRect && infoTopRect && infoBottomRect
+                && Math.abs(previewRect.width - infoRect.width) < 1
+                && Math.abs(infoTopRect.width - infoRect.width) < 1
+                && Math.abs(infoBottomRect.width - infoRect.width) < 1
+                && Math.abs(infoBottomRect.bottom - infoRect.bottom) < 1),
+            hall: hall?.textContent,
+            bodyBackground: body ? getComputedStyle(body).backgroundColor : '',
+            fieldBackground: field ? getComputedStyle(field).backgroundColor : '',
+        };
+    })()`);
+    if (!tetrisGeometry.open || tetrisGeometry.columns < 53 || tetrisGeometry.columns > 55
+        || tetrisGeometry.fieldInset?.x !== 2 || tetrisGeometry.fieldInset?.y !== 2
+        || tetrisGeometry.clipped || !tetrisGeometry.infoFlow || tetrisGeometry.infoRows !== 5
+        || tetrisGeometry.infoClipped || !tetrisGeometry.infoAligned || tetrisGeometry.hall !== '[H]'
+        || tetrisGeometry.bodyBackground === 'rgb(0, 0, 0)'
+        || tetrisGeometry.fieldBackground !== 'rgb(0, 0, 0)') {
+        throw new Error(`Tetris geometry differs from DOS Navigator: ${JSON.stringify(tetrisGeometry)}`);
+    }
+    await key("Escape", "Escape", 0, true);
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="snake"]').click()`);
+    await pause();
+    const snakePalette = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-snake-window');
+        const body = dialog?.querySelector('.tv-dialog-body');
+        const field = dialog?.querySelector('[data-tv-snake-field]');
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
+            body: body ? getComputedStyle(body).backgroundColor : '',
+            field: field ? getComputedStyle(field).backgroundColor : '',
+        };
+    })()`);
+    if (!snakePalette.open || snakePalette.body === 'rgb(0, 0, 0)'
+        || snakePalette.field !== 'rgb(0, 0, 0)') {
+        throw new Error(`Snake palette leaked outside its playfield: ${JSON.stringify(snakePalette)}`);
+    }
+    await key("Escape", "Escape", 0, true);
+
+    await evaluate(`document.querySelector('[data-tv-dialog-open="ludo"]').click()`);
+    await pause();
+    const ludoGeometry = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-ludo-window');
+        const group = dialog?.querySelector('.tv-dialog-client > .tv-group');
+        const board = dialog?.querySelector('[data-tv-ludo-board]');
+        const players = Array.from(dialog?.querySelectorAll('.tv-ludo-player-toggle') || []);
+        const groupRect = group?.getBoundingClientRect();
+        const boardRect = board?.getBoundingClientRect();
+        const firstRect = players[0]?.getBoundingClientRect();
+        const secondRect = players[1]?.getBoundingClientRect();
+        const probe = document.createElement('span');
+        probe.className = 'tv-static-text';
+        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+        probe.textContent = '0'.repeat(45);
+        dialog?.appendChild(probe);
+        const cellWidth = probe.getBoundingClientRect().width / 45;
+        probe.remove();
+        return {
+            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay')?.hidden),
+            boardColumns: boardRect && cellWidth ? Math.round(boardRect.width / cellWidth) : 0,
+            players: players.length,
+            hoverPoint: firstRect ? {
+                x: firstRect.left + firstRect.width / 2,
+                y: firstRect.top + firstRect.height / 2,
+            } : null,
+            oneRowButtons: Boolean(firstRect && secondRect && Math.abs(firstRect.height - (secondRect.top - firstRect.top)) < 1),
+            clipped: Boolean(group && (group.scrollWidth > group.clientWidth || group.scrollHeight > group.clientHeight
+                || players.some((button) => {
+                    const rect = button.getBoundingClientRect();
+                    return rect.left < groupRect.left - 0.5 || rect.top < groupRect.top - 0.5
+                        || rect.right > groupRect.right + 0.5 || rect.bottom > groupRect.bottom + 0.5;
+                }))),
+        };
+    })()`);
+    if (ludoGeometry.hoverPoint) {
+        await send('Input.dispatchMouseEvent', {
+            type: 'mouseMoved', x: ludoGeometry.hoverPoint.x, y: ludoGeometry.hoverPoint.y,
+        });
+    }
+    await pause();
+    const ludoHover = await evaluate(`(() => {
+        const dialog = document.querySelector('.tv-ludo-window');
+        const player = dialog?.querySelector('.tv-ludo-player-toggle');
+        const body = dialog?.querySelector('.tv-dialog-body');
+        const sides = Array.from(player?.querySelectorAll('[data-tv-info-side]') || []);
+        return {
+            player: player ? getComputedStyle(player).backgroundColor : '',
+            body: body ? getComputedStyle(body).backgroundColor : '',
+            sides: sides.map((side) => getComputedStyle(side).backgroundColor),
+        };
+    })()`);
+    if (!ludoGeometry.open || ludoGeometry.boardColumns !== 45 || ludoGeometry.players !== 4
+        || !ludoGeometry.oneRowButtons || ludoGeometry.clipped
+        || ludoHover.sides.length !== 2 || ludoHover.player === ludoHover.body
+        || ludoHover.sides.some((background) => background !== ludoHover.body)) {
+        throw new Error(`Ludo TVRect geometry is broken: ${JSON.stringify({ ludoGeometry, ludoHover })}`);
     }
     await key("Escape", "Escape", 0, true);
 
@@ -1795,7 +2428,7 @@ async function run() {
     })`, true);
     const hanoiHelpClosePoint = await evaluate(`(() => {
         const help = document.querySelector('[data-tv-bundle-window="../assets/tv-context-help.json"]');
-        const close = help?.querySelector('[data-tv-bundle-close]');
+        const close = help?.querySelector('[data-tv-close-button]');
         const rect = close?.getBoundingClientRect();
         return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
     })()`);
@@ -1818,9 +2451,9 @@ async function run() {
     if (!hanoiHelpClosedOnPress.helpClosed || !hanoiHelpClosedOnPress.gameActive) {
         throw new Error(`Safari-style mouse press did not close Help: ${JSON.stringify(hanoiHelpClosedOnPress)}`);
     }
-    await key("Enter", "Enter");
-    await key("ArrowRight", "ArrowRight");
-    await key("Enter", "Enter");
+    await key("Enter", "Enter", 0, true);
+    await key("ArrowRight", "ArrowRight", 0, true);
+    await key("Enter", "Enter", 0, true);
     await pause();
     const hanoiKeyboardMove = await evaluate(`(() => {
         const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
@@ -1836,7 +2469,7 @@ async function run() {
         || !hanoiKeyboardMove.status.includes('Moves: 1') || hanoiKeyboardMove.focused !== '1') {
         throw new Error(`Hanoi keyboard move failed: ${JSON.stringify(hanoiKeyboardMove)}`);
     }
-    await key("u", "KeyU");
+    await key("u", "KeyU", 0, true);
     await pause();
     const hanoiDragMove = await evaluate(`(() => {
         const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
@@ -1880,6 +2513,13 @@ async function run() {
             element.querySelector('.tv-dialog-title-text')?.textContent === 'Puzzle'
         );
         const button = puzzle?.querySelector('.tv-game-hall-control');
+        const tiles = Array.from(puzzle?.querySelectorAll('.tv-puzzle-cell') || []);
+        const invisibleTiles = tiles.filter((tile) => {
+            const style = getComputedStyle(tile);
+            return tile.textContent.trim() && style.color === style.backgroundColor;
+        }).length;
+        const highlighted = tiles.find((tile) => tile.classList.contains('is-highlight'));
+        const highlightedStyle = highlighted ? getComputedStyle(highlighted) : null;
         const bracketColor = getComputedStyle(button).color;
         const glyphColor = getComputedStyle(button?.querySelector('.tv-game-hall-glyph')).color;
         button?.click();
@@ -1890,14 +2530,32 @@ async function run() {
             button: button?.textContent,
             bracketColor,
             glyphColor,
+            invisibleTiles,
+            highlightColors: highlightedStyle
+                ? [highlightedStyle.backgroundColor, highlightedStyle.color]
+                : [],
             open: Boolean(hall && !hall.closest('.tv-dialog-overlay').hidden),
-            empty: hall?.querySelector('.tv-hall-empty')?.textContent.trim(),
+            empty: hall?.querySelector('.tv-dialog-client > .tv-group > .tv-static-text')?.textContent.trim(),
+        };
+    })()`);
+    await pause();
+    const hallFrame = await evaluate(`(() => {
+        const hall = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Puzzle Hall of Fame'
+        );
+        const sides = Array.from(hall?.querySelectorAll('.tv-dialog-body > [data-tv-border-side]') || []);
+        return {
+            sides: sides.length,
+            glyphs: sides.map((side) => (side.textContent.match(/[║│]/g) || []).length),
         };
     })()`);
     if (hallOpen.button !== '[H]' || hallOpen.bracketColor !== 'rgb(255, 255, 255)'
         || hallOpen.glyphColor !== 'rgb(85, 255, 85)'
-        || !hallOpen.open || hallOpen.empty !== 'No scores yet.') {
-        throw new Error(`Hall of Fame control is incomplete: ${JSON.stringify(hallOpen)}`);
+        || hallOpen.invisibleTiles !== 0
+        || hallOpen.highlightColors.join() !== ['rgb(170, 170, 170)', 'rgb(0, 0, 170)'].join()
+        || !hallOpen.open || hallOpen.empty !== 'No scores yet.'
+        || hallFrame.sides !== 2 || hallFrame.glyphs.some((count) => count < 10)) {
+        throw new Error(`Hall of Fame control is incomplete: ${JSON.stringify({ hallOpen, hallFrame })}`);
     }
     socket.close();
 }
@@ -1905,7 +2563,7 @@ async function run() {
 const timeout = setTimeout(() => {
     process.stderr.write("browser smoke test timed out\n");
     process.exit(1);
-}, 35000);
+}, 60000);
 run().then(() => {
     clearTimeout(timeout);
     process.exit(0);
@@ -1919,7 +2577,7 @@ run().then(() => {
                     [NODE, "-e", script, str(debugging_port), app_url],
                     capture_output=True,
                     text=True,
-                    timeout=40,
+                    timeout=65,
                 )
                 assert result.returncode == 0, result.stderr
             finally:
@@ -1937,3 +2595,5 @@ run().then(() => {
             except subprocess.TimeoutExpired:
                 server.kill()
                 server.wait(timeout=5)
+        if server_state_directory is not None:
+            server_state_directory.cleanup()

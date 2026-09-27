@@ -15,10 +15,15 @@ HELP_BUNDLE_PATHS = (
     Path("www/assets/tv-context-help.json"),
     Path("thelpviewer/converter/assets/tv-context-help.json"),
 )
+CONTEXT_HELP_JS_PATHS = (
+    Path("www/assets/tv-context-help.js"),
+    Path("thelpviewer/converter/assets/tv-context-help.js"),
+)
 
 
 def test_dialogs_own_their_help_contexts_without_registration_maps():
     dialogs = Path("www/assets/tv-dialogs.js").read_text(encoding="utf-8")
+    context_help = CONTEXT_HELP_JS_PATHS[0].read_text(encoding="utf-8")
     games = Path("www/assets/tv-games.js").read_text(encoding="utf-8")
     bundle = Path("www/assets/tv-bundle-app.js").read_text(encoding="utf-8")
     shell = Path("www/assets/tv-shell.js").read_text(encoding="utf-8")
@@ -26,21 +31,34 @@ def test_dialogs_own_their_help_contexts_without_registration_maps():
     assert "DIALOG_HELP_CONTEXTS" not in bundle
     assert "DIALOG_HELP_CONTEXTS" not in shell
     for context in (
-        "hcContextHelp", "hcAbout", "hcWidgetGallery", "hcFileOpen",
+        "hcAbout", "hcWidgetGallery", "hcFileOpen",
         "hcChangeDirectory", "hcAsciiTable", "hcCalculator", "hcCalendar",
         "hcColors", "hcMidiPlayer", "hcFind", "hcSearch",
+        "hcStatistics", "hcSystemInformation",
     ):
-        assert f"helpCtx: {context}" in dialogs
+        assert f"setHelpCtx({context})" in dialogs
+    assert "setHelpCtx(hcContextHelp)" in context_help
+    assert "TV_CONTEXT_HELP_TOPICS" not in dialogs
+    assert "class TVContextHelpDialog" not in dialogs
+    assert "TV_CONTEXT_HELP_TOPICS" in context_help
+    assert "class TVContextHelpWindow extends TVHelpWindow" in context_help
+    assert "class TVHelpWindow extends TVWindow" in context_help
+    assert "class TVContextHelpDialog" not in context_help
+    assert "class TVContextHelpScroller" not in context_help
+    assert "new TVScrollBar" not in context_help
+    assert "new TVContextHelpWindow()" in shell
+    assert 'this.dialogManager.registerWindow(name, root' in shell
     for context in (
         "hcPuzzle", "hcTetris", "hcMines", "hcBreakOut", "hcSokoban",
         "hcLines", "hcReversi", "hcLudo", "hcMastermind", "hcTron",
         "hcHanoi", "hcSnake",
     ):
-        assert f"helpCtx: {context}" in games
+        assert f"setHelpCtx({context})" in games
 
 
 def test_context_help_is_a_complete_uhf_bundle():
     assert HELP_BUNDLE_PATHS[0].read_bytes() == HELP_BUNDLE_PATHS[1].read_bytes()
+    assert CONTEXT_HELP_JS_PATHS[0].read_bytes() == CONTEXT_HELP_JS_PATHS[1].read_bytes()
     bundle = json.loads(HELP_BUNDLE_PATHS[0].read_text(encoding="utf-8"))
 
     expected_contexts = {
@@ -48,7 +66,7 @@ def test_context_help_is_a_complete_uhf_bundle():
         2000, 2010, 2020, 2030, 2040, 2050, 2060, 2070,
         2080, 2090, 2100, 2110, 2120, 2130,
         2140, 2150, 2160, 2170, 2180, 2190,
-        2200, 2210, 2220, 2230, 2240, 2250,
+        2200, 2210, 2220, 2230, 2240, 2250, 2260, 2270,
     }
     assert bundle["uhf_version"] == "2.0"
     assert bundle["metadata"]["help_contents_topic_id"] == 1000
@@ -58,11 +76,20 @@ def test_context_help_is_a_complete_uhf_bundle():
     assert len(contents) > 24
     assert any("┌" in line and "┬" in line for line in contents)
     assert sum("[link:topic=" in line for line in contents) >= 3
+    index_entries = [entry for group in bundle["index"] for entry in group["entries"]]
+    assert {"About", "THelpViewer", "Widget Gallery"} <= {
+        entry["label"] for entry in index_entries
+    }
+    assert {entry["topic_id"] for entry in index_entries} <= {
+        int(topic_id) for topic_id in bundle["topics"]
+    }
 
     app = Path("www/assets/tv-bundle-app.js").read_text(encoding="utf-8")
     assert 'const CONTEXT_HELP_BUNDLE_FILE = "../assets/tv-context-help.json"' in app
     assert "loadBundle(CONTEXT_HELP_BUNDLE_FILE)" in app
     assert "this.windowManager.showTopic(bundle, helpCtx)" in app
+    assert 'new TVMenuItem(renderHotkeyMarkup("~I~ndex"), "context-help-index")' in app
+    assert 'dialog: "about"' not in app.split("const sysPopupItems = [", 1)[1].split("];", 1)[0]
     assert 'this._registerDialog("contexthelp"' not in app
 
 
@@ -138,7 +165,7 @@ group.setCurrent(child);
 if (group.getHelpCtx() !== H.hcFind) {
     throw new Error("TVGroup did not inherit its current child's help context");
 }
-if (!group.renderMarkup().includes(`data-tv-help-ctx="${H.hcDialog}"`)) {
+if (!group.draw().includes(`data-tv-help-ctx="${H.hcDialog}"`)) {
     throw new Error("TVGroup did not render its own help context");
 }
 

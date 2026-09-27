@@ -7,11 +7,17 @@ const {
     TVRect,
     TVView,
     TVStaticText,
+    TVMenu,
+    NewLine,
+    NewSubMenu,
     TVMenuView,
     TVMenuItem,
     TVMenuBox,
-    TVStatusItem,
+    NewStatusKey,
+    TVStatusLine,
     TVDesktop,
+    TVProgram,
+    TVEvent,
     escapeHtml,
     renderHotkeyMarkup,
     fillBorders,
@@ -23,7 +29,7 @@ const {
     TVMenuController,
     TVHelpController,
     TVAboutDialog,
-    TVContextHelpDialog,
+    TVContextHelpWindow,
     TVPuzzleDialog,
     TVHanoiDialog,
     TVTronDialog,
@@ -33,6 +39,7 @@ const {
     TVColorsDialog,
     TVViewGalleryDialog,
     TVMidiPlayerDialog,
+    TVSystemInformationDialog,
     TVSearchDialog,
     TVScreenSaver,
     TVScrollBar,
@@ -43,11 +50,15 @@ const {
     THUMB_CHAR,
     highlightCodeExamples,
     setElementHelpContext,
+    kbF1,
+    kbF3,
+    evKeyDown,
 } = TV;
 
 const {
     hcSystemMenu,
     hcHelpViewer,
+    hcNoContext,
 } = TV_HELP_CONTEXTS;
 
 class TVMenuBar extends TVMenuView {
@@ -65,10 +76,10 @@ class TVMenuBar extends TVMenuView {
             case "menu-root":
                 return [
                     `<div class="tv-menu-root" data-tv-menu-root data-tv-help-ctx="${hcSystemMenu}">`,
-                    new TVMenuItem(
+                    this.drawItem(new TVMenuItem(
                         renderHotkeyMarkup(entry.label || "~X~"),
                         "menu-toggle",
-                    ).renderMarkup("bar"),
+                    ), "bar"),
                     this.renderPopup(),
                     "</div>",
                 ].join("");
@@ -87,30 +98,23 @@ class TVMenuBar extends TVMenuView {
     }
 
     renderPopup() {
-        return (new TVMenuBox(new TVRect(), this.menuActions().map((entry) => {
+        return new TVMenuBox(new TVRect(), new TVMenu(this.menuActions().map((entry) => {
                 if (entry.type === "separator") {
-                    return '<div class="tv-menu-popup-separator" aria-hidden="true">'
-                        + '<span class="tv-border-corner">├</span>'
-                        + '<span class="tv-border-fill" data-tv-border-fill="─"></span>'
-                        + '<span class="tv-border-corner">┤</span>'
-                        + '</div>';
+                    return NewLine();
                 }
                 if (entry.type === "submenu") {
                     const subItems = (entry.items || []).map((sub) => new TVMenuItem(
                         renderHotkeyMarkup(sub.label),
                         sub.type === "saver" ? "saver-start" : "dialog-open",
+                        0,
+                        hcNoContext,
                         sub.type === "saver" ? sub.mode : sub.dialog,
                     ));
-                    const subPopup = (new TVMenuBox(new TVRect(), subItems)).setDrawOptions({
-                        className: "tv-menu-popup tv-submenu-popup",
-                        attributes: { "data-tv-submenu-popup": true, hidden: true },
-                    }).renderMarkup();
-                    return `<div class="tv-submenu-root" data-tv-submenu-root>`
-                        + `<button type="button" class="tv-menu-popup-item tv-submenu-toggle" data-tv-submenu-toggle>`
-                        + `${renderHotkeyMarkup(entry.label)}<span class="tv-submenu-arrow">►</span>`
-                        + `</button>`
-                        + subPopup
-                        + `</div>`;
+                    return NewSubMenu(
+                        renderHotkeyMarkup(entry.label),
+                        hcSystemMenu,
+                        new TVMenu(subItems),
+                    );
                 }
                 const action = entry.type === "theme"
                     ? { command: "theme-set", value: entry.theme }
@@ -122,11 +126,11 @@ class TVMenuBar extends TVMenuView {
                 return new TVMenuItem(
                     renderHotkeyMarkup(entry.label),
                     action.command,
+                    0,
+                    hcNoContext,
                     action.value,
                 );
-            }))).setDrawOptions({
-            attributes: { "data-tv-menu-popup": true, hidden: true },
-        }).renderMarkup();
+            }))).draw();
     }
 
     render() {
@@ -140,7 +144,7 @@ class TVMenuBar extends TVMenuView {
     }
 }
 
-class TVStatusLine extends TVView {
+class TVPageStatusLine extends TVStatusLine {
     constructor(bounds, context) {
         super(bounds);
         this.context = context;
@@ -149,25 +153,27 @@ class TVStatusLine extends TVView {
     renderItem(entry) {
         switch (entry.type) {
             case "back":
-                return new TVStatusItem(
+                return NewStatusKey(
                     renderHotkeyMarkup(entry.label || "~B~ack"),
+                    0,
                     "back",
-                    true,
-                    { fallback: this.context.indexHref },
-                ).renderMarkup();
+                    { value: true, fallback: this.context.indexHref },
+                );
             case "index-link":
                 return `<a class="tv-status-item" href="${escapeHtml(this.context.indexHref)}">${renderHotkeyMarkup(entry.label || "~F1~ Index")}</a>`;
             case "context-help":
-                return new TVStatusItem(
+                return NewStatusKey(
                     renderHotkeyMarkup(entry.label || "~F1~ Help"),
+                    kbF1,
                     "context-help",
-                ).renderMarkup();
+                );
             case "dialog":
-                return new TVStatusItem(
+                return NewStatusKey(
                     renderHotkeyMarkup(entry.label || ""),
+                    entry.dialog === "search" ? kbF3 : 0,
                     "dialog-open",
                     entry.dialog,
-                ).renderMarkup();
+                );
             case "hint":
                 return `<span class="tv-status-hint">${escapeHtml(this.context.statusHint)}</span>`;
             case "link":
@@ -181,11 +187,12 @@ class TVStatusLine extends TVView {
         const items = this.context.uiConfig.status
             .map((entry) => this.renderItem(entry))
             .filter(Boolean);
-        const hintIndex = items.findIndex((item) => item.indexOf("tv-status-hint") !== -1);
+        const hintIndex = items.findIndex((item) => typeof item === "string" && item.indexOf("tv-status-hint") !== -1);
         if (hintIndex > 0) {
             items.splice(hintIndex, 0, '<span class="tv-status-separator" aria-hidden="true">│</span>');
         }
-        this.root.innerHTML = items.join("");
+        this.items = items;
+        this.root.innerHTML = this.draw();
     }
 }
 
@@ -199,7 +206,7 @@ function buildAppChrome() {
     }
 
     if (statusLine) {
-        new TVStatusLine(new TVRect(), context).bindRoot(statusLine).render();
+        new TVPageStatusLine(new TVRect(), context).bindRoot(statusLine).render();
     }
 }
 
@@ -591,92 +598,75 @@ class TurboVisionMenus extends TVMenuController {
         super();
         this.desktop = dialogManager?.desktop?.root || null;
         this.dialogManager = dialogManager;
-        this.onHelp = null;
-        this.onUnhandledKeyDown = (event) => this.onApplicationKeyDown(event);
-        this.bindActions();
-    }
-
-    bindActions() {
-        document.querySelectorAll("[data-tv-dialog-open]").forEach((element) => {
-            element.addEventListener("click", (event) => this.onDialogOpen(event, element.getAttribute("data-tv-dialog-open") || ""));
-        });
-        document.querySelectorAll("[data-tv-theme-set]").forEach((element) => {
-            element.addEventListener("click", (event) => this.onThemeSet(event, element.getAttribute("data-tv-theme-set") || "default"));
-        });
-        document.querySelectorAll("[data-tv-context-help]").forEach((element) => {
-            element.addEventListener("click", (event) => {
-                event.preventDefault();
-                this.closeMenus();
-                this.onHelp?.();
-            });
-        });
-    }
-
-    onDialogOpen(event, name) {
-        event.preventDefault();
-        this.closeMenus();
-        this.dialogManager.open(name);
-    }
-
-    onThemeSet(event, themeName) {
-        event.preventDefault();
-        this.closeMenus();
-        applyThemeAndSyncPalette(themeName || "default", true);
-        if (this.dialogManager) {
-            this.dialogManager.applyActiveStates();
-        }
-        if (window.THelpViewerTV && typeof window.THelpViewerTV.fillBorders === "function") {
-            window.THelpViewerTV.fillBorders();
-        }
-    }
-
-    onApplicationKeyDown(event) {
-        if (event.defaultPrevented) {
-            return;
-        }
-        if (event.key === "F5" && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-            event.preventDefault();
-            this.dialogManager.dispatchCommand(TV_COMMANDS.ZOOM);
-            return;
-        }
-        if (event.key === "F3" && event.altKey && !event.ctrlKey && !event.shiftKey) {
-            event.preventDefault();
-            this.dialogManager.dispatchCommand(TV_COMMANDS.CLOSE);
-            return;
-        }
-        if (event.key === "F6" && !event.altKey && !event.ctrlKey && !event.metaKey) {
-            event.preventDefault();
-            this.dialogManager.dispatchCommand(event.shiftKey ? TV_COMMANDS.PREVIOUS : TV_COMMANDS.NEXT);
-            return;
-        }
-        if (event.key === "Escape") {
-            for (const name of ["about", "puzzle", "hanoi", "tron", "calendar", "ascii", "midi", "colors"]) {
-                if (this.dialogManager.isOpen(name)) {
-                    event.preventDefault();
-                    this.dialogManager.close(name);
-                    return;
-                }
-            }
-            if (this.dialogManager.isOpen("calc")) {
-                return;
-            }
-        }
     }
 }
 
-class TVApplication {
+class TVApplication extends TVProgram {
     constructor() {
+        super(new TVRect());
         this.menuBar = null;
         this.searchDialog = null;
         this.menus = null;
         this.helpController = null;
-        this.contextHelpDialog = null;
+        this.contextHelpWindow = null;
         this.dialogManager = null;
         this.desktopView = null;
         this.screenSaver = null;
         this.scrollbars = [];
         this.resizers = [];
         this.errors = [];
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evKeyDown) {
+            const keyEvent = event.nativeEvent;
+            const activeDialog = this.dialogManager?.get(this.dialogManager.activeTarget);
+            if (activeDialog?.isOpen()) {
+                activeDialog.dispatchEvent(new TVEvent(evKeyDown, {
+                    infoPtr: activeDialog,
+                    nativeEvent: keyEvent,
+                }));
+                activeDialog.onDialogKeyDown(keyEvent);
+            }
+            if (!keyEvent || keyEvent.defaultPrevented) {
+                this.clearEvent(event);
+                return;
+            }
+            if (keyEvent.key === "F5" && !keyEvent.ctrlKey && !keyEvent.altKey && !keyEvent.shiftKey) {
+                keyEvent.preventDefault();
+                this.dialogManager.dispatchCommand(TV_COMMANDS.ZOOM);
+            } else if (keyEvent.key === "F3" && keyEvent.altKey && !keyEvent.ctrlKey && !keyEvent.shiftKey) {
+                keyEvent.preventDefault();
+                this.dialogManager.dispatchCommand(TV_COMMANDS.CLOSE);
+            } else if (keyEvent.key === "F6" && !keyEvent.altKey && !keyEvent.ctrlKey && !keyEvent.metaKey) {
+                keyEvent.preventDefault();
+                this.dialogManager.dispatchCommand(keyEvent.shiftKey ? TV_COMMANDS.PREVIOUS : TV_COMMANDS.NEXT);
+            } else {
+                return;
+            }
+            this.clearEvent(event);
+            return;
+        }
+        if (event.what !== TV.evCommand) { return; }
+        const control = event.infoPtr;
+        const value = control?.getAttribute?.(`data-tv-${event.command}`) || "";
+        let handled = true;
+        if (event.command === "dialog-open") {
+            this.dialogManager.open(value);
+        } else if (event.command === "theme-set") {
+            applyThemeAndSyncPalette(value || "default", true);
+            this.dialogManager.applyActiveStates();
+            fillBorders();
+        } else if (event.command === "context-help") {
+            this.helpController?.request();
+        } else if (event.command === "saver-start") {
+            const Saver = TVScreenSaver.modes[value];
+            if (Saver) { new Saver().start(); }
+        } else {
+            handled = false;
+        }
+        if (handled) { this.clearEvent(event); }
     }
 
     registerDialog(name, factory) {
@@ -689,6 +679,51 @@ class TVApplication {
         } catch (error) {
             this.errors.push({ name, error });
             console.error(`Failed to initialize dialog: ${name}`, error);
+            return null;
+        }
+    }
+
+    initContextHelpWindow() {
+        try {
+            const name = "contexthelp";
+            const helpWindow = new TVContextHelpWindow();
+            helpWindow.hide();
+            const root = TVView._fromHTML(helpWindow.draw());
+            helpWindow.resolve(root);
+            root.dataset.tvWindowStorageKey = name;
+            this.desktopView.insert(helpWindow);
+            bindCloseButtons(root);
+
+            const frame = root.querySelector("[data-tv-scroll-frame]");
+            const scrollbar = frame ? new TVScrollBar(new TVRect()).bindRoot(frame) : null;
+            const resizer = new TurboVisionWindowResizer(root);
+            if (scrollbar) { this.scrollbars.push(scrollbar); }
+            this.resizers.push(resizer);
+
+            const close = () => {
+                helpWindow.hide();
+                this.dialogManager.unregisterWindow(name);
+                fillBorders(root);
+            };
+            const zoom = () => {
+                if (root.classList.contains("is-maximized")) { resizer.restore(); }
+                else { resizer.maximize(); }
+            };
+            helpWindow.closeAction = close;
+            helpWindow.zoomAction = zoom;
+            helpWindow.openAction = () => {
+                this.dialogManager.registerWindow(name, root, {
+                    [TV_COMMANDS.CLOSE]: close,
+                    [TV_COMMANDS.ZOOM]: zoom,
+                });
+                scrollbar?.refresh();
+                fillBorders(root);
+            };
+            this.contextHelpWindow = helpWindow;
+            return helpWindow;
+        } catch (error) {
+            this.errors.push({ name: "contexthelp", error });
+            console.error("Failed to initialize context help window", error);
             return null;
         }
     }
@@ -727,6 +762,7 @@ class TVApplication {
             },
         } : {});
         this.menus = new TurboVisionMenus(this.dialogManager);
+        this.menus.commandTarget = this;
         if (hostWindow && hostWindow.dataset.tvHostWindowBound !== "1") {
             hostWindow.dataset.tvHostWindowBound = "1";
             hostWindow.addEventListener("mousedown", (event) => {
@@ -746,34 +782,18 @@ class TVApplication {
         this.registerDialog("midi", () => new TVMidiPlayerDialog());
         this.registerDialog("colors", () => new TVColorsDialog());
         this.registerDialog("widgets", () => new TVViewGalleryDialog());
+        this.registerDialog("systeminfo", () => new TVSystemInformationDialog());
         this.searchDialog = this.registerDialog("search", () => new TVSearchDialog());
-        this.contextHelpDialog = this.registerDialog(
-            "contexthelp",
-            () => new TVContextHelpDialog(),
-        );
+        this.initContextHelpWindow();
         this.helpController = new TVHelpController({
             getMenuController: () => this.menus,
             getDialogManager: () => this.dialogManager,
-            onHelp: (helpCtx) => this.contextHelpDialog?.openContext(helpCtx),
+            onHelp: (helpCtx) => this.contextHelpWindow?.openContext(helpCtx),
         });
-        this.menus.onHelp = () => this.helpController.request();
         if (this.searchDialog) {
             this.dialogManager.bindOpeners("[data-tv-search-open]", "search");
         }
         this.dialogManager.applyActiveStates();
-        // Screen savers
-        const saverModes = TVScreenSaver.modes;
-        const savers = {};
-        for (const name of Object.keys(saverModes)) {
-            savers[name] = new saverModes[name]();
-        }
-        document.querySelectorAll("[data-tv-saver-start]").forEach((element) => {
-            element.addEventListener("click", (event) => {
-                event.preventDefault();
-                const saver = savers[element.dataset.tvSaverStart];
-                if (saver) { saver.start(); }
-            });
-        });
         TVScreenSaver.installIdleStart();
         if (this.errors.length) {
             window.THelpViewerTVInitErrors = this.errors;
@@ -796,7 +816,7 @@ class TVApplication {
 
 Object.assign(TV, {
     TVMenuBar,
-    TVStatusLine,
+    TVPageStatusLine,
     TVScrollBar,
     TurboVisionWindowResizer,
     TurboVisionMenus,
