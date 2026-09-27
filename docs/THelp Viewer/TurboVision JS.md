@@ -47,10 +47,14 @@ Core widget hierarchy and infrastructure.
   `draw()` mirror the basic `TStaticText` contract.
 - **TVLabel** — `constructor(bounds, text, link)`. The third argument is the
   target `TVInputLine` object; the browser renderer creates any native id/for
-  pair internally.
+  pair internally. As in DOS Navigator's `TLabel`, `~F~` marks a mnemonic:
+  Alt+F focuses the linked view through the owner event chain; clicking the
+  label also focuses it.
 - **TVInputLine** — `constructor(bounds, maxLen)`, plus `getData()`,
-  `setData()` and disabled-state handling. It accepts no DOM id, attributes,
-  class or style.
+  `setData()`, `setValidator()` and disabled-state handling. It accepts no DOM
+  id, attributes, class or style. `TVPXPictureValidator` implements the fixed
+  `!` (uppercase character) and literal-separator subset of Turbo Vision's
+  picture validator; registration tokens use five groups of five characters.
 - **TVGroup** — `constructor(bounds)`. Children are added with `insert()` or
   `insertAll()`; only `TVView` instances are accepted. `setCurrent(child)`
   makes `getHelpCtx()` inherit from the current child,
@@ -63,22 +67,49 @@ Core widget hierarchy and infrastructure.
   double-click/Enter activates. It owns the shared scrollbar integration,
   row rendering and palette, roving tab focus,
   pointer-coordinate row selection, Arrow, Home/End and Page Up/Down keyboard
-  navigation. Visibility is measured against the real viewport rectangle, so
+  navigation. `TVListViewer.handleEvent()` processes the browser bridge's
+  `TVEvent` for these actions; `TVListBox` supplies its viewport-specific
+  pointer and page movement without a second set of DOM handlers. Visibility
+  is measured against the real viewport rectangle, so
   focus changes cannot introduce an offset between a drawn and clicked row.
   While its dialog is inactive, the scrollbar keeps its Turbo Vision palette
   but ignores input. Browser item classes, data hooks and row markup are
   private to concrete list subclasses, not caller-set `TVListBox` options.
+  When a view owns an `hScrollBar`, an overlong row reveals the shared bottom
+  scrollbar and can be moved horizontally; short rows leave it hidden.
+- **TVGridView** — Read-only two-dimensional `TVListBox` subclass.
+  `TVGridView(bounds, columns, hScrollBar, vScrollBar)` takes column titles and
+  optional character widths; `setRows()` accepts arrays of cell values.
+  Headers are visible by default and `setHeadersVisible()` toggles them.
+  Click or Left/Right/Up/Down selects a cell, while the inherited shared
+  scrollbars move the viewport in both directions. Grid Viewer in the system
+  menu exercises the control; cells are not edited in this first version.
 - **TVOutline** — Tree-oriented `TVListBox` with shared selection,
   scrolling and activation plus expand/collapse state and Left/Right keyboard
-  navigation. HELP Contents and Change Directory both use it.
+  navigation in `handleEvent()`. HELP Contents and Change Directory both use it.
 - **TVScroller** — `TVScroller(bounds, hScrollBar, vScrollBar)` keeps the
   original scroller/scrollbar ownership split and exposes `delta` and `limit`.
-- **TVMenu** / **TVMenuItem** — Plain menu and command records; they are not
-  views and contain no drawing or DOM API. `NewLine()` and `NewSubMenu()`
-  create structural menu items without caller-built markup.
-- **TVMenuView** — Shared menu rendering base that owns a `TVMenu`.
+- **TVMenu** / **TVMenuItem** — Source-shaped menu and command records. A
+  `TVMenu` owns the head of a linked `TVMenuItem.next` list plus `deflt`;
+  neither object exposes browser markup options. `NewItem()`, `NewMenu()`,
+  `NewLine()` and `NewSubMenu()` mirror the Pascal construction helpers.
+- **TVSubMenu** — `TVMenuItem` subclass which owns its nested `TVMenu`, matching
+  the C++ Turbo Vision hierarchy.
+- **TVMenuView** — Owns the menu, current selection and popup state. Its
+  one-time `bindRoot()` maps rendered buttons back to `TVMenuItem`; `refresh()`
+  retains toggle, popup and item elements for navigation instead of querying
+  them again on each event.
+  `handleEvent()` processes `evMouseDown`, `evMouseMove` and `evKeyDown`, then
+  sends the selected item's `evCommand` through the view owner to the app.
+  `~mnemonic~` text is translated only while drawing.
+- **TVMenuBar** — Shared top-level `TVMenuView`; generated pages and the bundle
+  application now compose the same object tree instead of assembling menu
+  HTML.
 - **TVMenuBox** — `TVMenuView` popup subclass constructed from bounds, a
   `TVMenu` and an optional parent menu.
+- **TVMenuController** — Browser boundary only: translates DOM click, hover
+  and key events into `TVEvent` for the bound menu view. Status-line commands
+  retain their separate command bridge.
 - **TVCheckBoxes** — Native checkbox group rendered with DOS `[ ]` / `[X]`
   marks; supports click, Space, focus and disabled state.
 - **TVRadioButtons** — Native mutually exclusive radio group rendered with DOS
@@ -87,14 +118,20 @@ Core widget hierarchy and infrastructure.
 - **TVMultiCheckBoxes** — `TVCluster` subclass with configurable three-state
   DOS marks, keyboard-focusable buttons, disabled state and `aria-checked`.
 - **TVTerminal** — Bounded append-only line buffer. `append(text)`, `clear()`
-  and `bind(root)` update a fixed set of framed terminal rows. Its `TVRect`
+  and `bind(root)` update a fixed set of framed terminal rows. `appendChunk()`
+  retains incomplete trailing lines when process output arrives in pieces.
+  Its `TVRect`
   width includes both `TVInfoBox` side characters, so the right border cannot
   be painted outside and clipped by the owning view.
 - **TVEditor** and **TVIndicator** — `TVEditor(bounds, hScrollBar, vScrollBar,
   indicator, bufSize)` is a read-only document control with selection,
   `find()`, `findNext()`, cursor position reporting and explicit lifecycle.
   Markdown Docs windows instantiate this pair instead of using a styled
-  viewport alone.
+  viewport alone. The editor owns one click-to-`TVEvent` bridge for document
+  links; the application resolves Markdown targets through its `onLink`
+  callback, while other links continue through normal navigation. Docs windows
+  retain their editor, and HELP windows retain a Find editor only after their
+  first search; both are destroyed with their owning `TVWindow`.
 - **TVScrollBar** — `TVScrollBar(bounds, options)` is the sole scrollbar view;
   `sbHorizontal`/`sbVertical` select its axis. It owns
   the original value/range/page-step/arrow-step state and the corresponding
@@ -112,7 +149,11 @@ Core widget hierarchy and infrastructure.
   `makeDefault()` and `setState()` provide the basic control operations. It no
   longer represents menus or status-line items and has no `buttonKind`. Its
   shared minimum width is the original ten character cells; individual
-  dialogs express wider buttons through their `TVRect`.
+  dialogs express wider buttons through their `TVRect`. `press()` dispatches
+  its command through the owner chain; Enter on a dialog's default button does
+  not synthesize a browser click. Its base `_drawParts()` now draws only the
+  generic dialog button; specialized faces belong to the concrete ASCII,
+  calendar, color, MIDI, search-result and game controls.
 - **TVEvent** — Turbo Vision-style event record with `what`, `command`,
   `infoPtr`, `infoLong` and the private browser-event bridge.
   `TVButton.handleEvent()`
@@ -140,7 +181,9 @@ Core widget hierarchy and infrastructure.
   handling. Its text rows and command buttons are owned TVision children; it
   no longer replaces group contents with handwritten button HTML. The sizing
   follows DOS Navigator `MESSAGES.PAS`: at least 42×7 cells, a standard
-  `TVDialog` close control, ten-cell buttons and two-cell button gaps.
+  `TVDialog` close control, ten-cell buttons and two-cell button gaps. The close
+  control and Escape resolve to Cancel when available, otherwise No for a
+  Yes/No prompt; they never return the default affirmative command.
 
 Dialogs are constructed without a desktop or DOM-root argument. The
 application inserts them into `TVDesktop`; registering a dialog with
@@ -174,7 +217,12 @@ remove the bottom border or push it directly below the title.
 
 - **TVFrame** — Generates dialog window markup (titlebar, body, footer, borders).
   Its active frame uses the Turbo Vision 2.0 double-line glyphs; the passive
-  frame uses single-line glyphs and omits the close control. The close control
+  frame uses single-line glyphs. An inactive dialog keeps its close control
+  visible and clickable in passive colors; standard windows retain their
+  clickable Close control but substitute a frame segment for Zoom. The visible
+  passive dialog icon is an intentional local
+  exception to the original Turbo Vision 2.0 frame, which draws no icons in
+  inactive windows. The close control
   is overlaid at columns 2–4 and the title is centered over one continuous
   frame line, matching `TFrame` rather than participating in the layout.
   `drawTitleControl()` / `createTitleControl()` are the single renderer for
@@ -182,15 +230,22 @@ remove the bottom border or push it directly below the title.
   glyph uses the owner's frame-icon color. Dialog close, History close and the
   games' Hall of Fame `[H]` use this path.
 - **TVWindow** — Shared `TVGroup` base and standard window-frame composition
-  used by HELP, Docs and dialogs. On a passive standard window, the close and
-  zoom cells remain in the title-row grid but become non-interactive
-  single-line frame segments. This preserves the centered caption and both
+  used by HELP, Docs and dialogs. On a passive standard window, the Close
+  control remains clickable and Zoom becomes a single-line frame segment.
+  This preserves the centered caption and both
   frame corners while matching the inactive `TFrame` drawing.
-  Standard close/zoom controls are semantic buttons. Close additionally acts
-  on the original Turbo Vision mouse-down event, with propagation stopped
-  before window activation can consume it; native click activation remains for
-  keyboard input. The grow control always draws Turbo Vision 2.0's source-
-  defined single-line `─┘` icon.
+  Standard close/zoom controls are semantic buttons. The close glyph changes
+  to an asterisk while the mouse button is held, and the window closes only
+  when the button is released over the control. Releasing elsewhere leaves the
+  window open; keyboard activation also uses the native click event. If Safari
+  omits the mouse-generated click, the shared close binder dispatches one
+  fallback click after release. A
+  double-click on the title row sends the same Zoom command as the top-right
+  control. The grow
+  control always draws Turbo Vision 2.0's source-
+  defined single-line `─┘` icon. Generated standalone pages bind a `TVWindow`
+  to their existing frame, so their anchor-style Close control dispatches the
+  same window command and then follows its original `index.html` destination.
 - **TVDialog** — `TVWindow` subclass constructed from `TVRect` bounds, a title
   and semantic options/content; it may be modal or non-modal. Callers do not
   provide CSS class names, close attributes or handwritten frame footers.
@@ -201,6 +256,8 @@ remove the bottom border or push it directly below the title.
   - `close()` hides a reusable dialog; `destroy()` permanently removes a
     dynamic dialog, its drag listeners and its manager registration.
   - `bindCommonClose(callback)` — Bind the common close action
+  - Escape, menu Close/Cancel, title control and backdrop clicks converge on
+    the `dialog-close` command in `handleEvent()`.
   - `bindDrag()` — Enable title bar drag. While moving, the shared frame uses
     the single-line Turbo Vision drag glyphs and restores its active/passive
     frame after mouse release.
@@ -220,6 +277,21 @@ remove the bottom border or push it directly below the title.
     identical active/passive/drag frame semantics.
   - `setHelpCtx()` writes the dialog-owned context to both its window and
     overlay roots. Application registration no longer maps names to contexts.
+
+### Window behavior compared with Turbo Vision 2.0
+
+Reference: [Borland Turbo Vision 2.0 Programming Guide](https://jexer.sourceforge.io/tvision/Turbo_Vision_Version_2.0_Programming_Guide_1992.pdf),
+especially `TFrame` drawing/handling and `ofFirstClick` selection semantics.
+
+| Behavior | Current browser implementation | Difference / next step |
+|---|---|---|
+| Active/passive frame | Double-line active and single-line passive frames | Inactive dialog `[■]` remains visible but disabled at the user's request; original `TFrame` omits inactive icons. |
+| Frame commands | Close executes on mouse release; title-row double-click and zoom icon both send the window Zoom command | Browser click/double-click are translated to the existing `TVEvent` command path. |
+| First click on an inactive window | `TVDialogManager` activates it on `mousedown` | `ofFirstClick` is defined but not yet enforced; a child control can still act on the activating click. Original windows normally only select on that first click. |
+| Tab focus | `TVDialog` cycles browser-focusable elements | Original `TGroup` cycles selectable child views; reconcile these before replacing the DOM focus bridge, preserving native input focus and accessibility. |
+
+The remaining first-click and focus differences are recorded here rather than
+changed speculatively across every dialog in one pass.
 
 ### TVDialogManager
 
@@ -287,9 +359,29 @@ The Help menu and `F1 Help` status command use the same context-resolution path
 as the keyboard.
 
 `TVMenuItem` follows the source constructor order `(name, command, keyCode,
-helpCtx, param, next)`. The shared `TVMenuController` resolves Turbo
-Vision-compatible `kb...` key codes before ordinary menu navigation, so a
-shortcut activates the same item and command path as a mouse selection.
+helpCtx, param, next)`. `param` is the right-aligned accelerator label used by
+Turbo Vision (for example `"F3"`), not an application payload. Commands carry
+their application data outside the public TVision constructor. Disabled state
+is changed on the retained `TVMenuItem`, rather than rediscovering a rendered
+button with a DOM selector. `TVMenuView.handleEvent()` uses `TVEvent.infoPtr`
+to identify the item, `TVMenuItem.subMenu` to distinguish submenus and the
+linked menu to resolve keyboard shortcuts and mnemonics. The shared
+`TVMenuController` only translates browser input into `TVEvent`; it does not
+interpret the rendered button's `data-tv-command`. The status line follows
+the same rule with retained `TVStatusItem` objects. Shortcuts activate the
+same command path as mouse selection.
+
+`TVCluster` keeps checkbox/radio selection and multi-check state in its
+options and value. The DOM input or button is mapped to its option when the
+view is resolved; `TVEvent.infoLong` reports that option to its owner. HELP
+window view/topic/line/tag state is stored on `TVHelpWindow`, not the element's
+dataset. URL restoration, context hints and menu availability read these
+objects. Browser attributes remain for view-to-element binding, generated
+page metadata, geometric measurement, accessibility and hit testing of
+dynamic HELP links or game boards; they are not a second application state
+model. `TVFrame` keeps the
+command of each drawn title control; `TVWindow` and `TVDialog` dispatch that
+command without reading a `data-tv-command` attribute back from the button.
 
 ### TVDesktop
 
@@ -305,13 +397,12 @@ and navigation remain in `TVApplication` and `TVBundleApp`.
 
 ### TVMenuController
 
-Shared mouse and keyboard state machine used by both the generated-page shell
-and the bundle viewer.
+Browser event adapter used by both the generated-page shell and the bundle
+viewer. Menu state and navigation belong to `TVMenuView`.
 
-- `refresh()` — Discover and bind a newly rendered menu tree
-- `openMenu(root)` / `closeMenus()` — Open or close the active top-level menu
-- `openSubmenu(toggle)` / `closeSubmenu(popup)` — Manage nested menu levels
-- `moveSelection(delta)` — Move the roving selection through enabled items
+- `refresh()` — Discover the newly rendered `TVMenuView`
+- `onCommand()` / `onHover()` / `onKeyDown()` — Convert browser events to
+  `TVEvent` records carrying menu or status objects
 - `destroy()` — Remove the controller's document-level listeners
 - Supports `F10`, Alt mnemonics, popup mnemonics, arrows, `Home`, `End`,
   `Enter`, Space, Tab/Shift+Tab and `Esc`, including remembered selection and
@@ -325,6 +416,12 @@ The bundle desktop keeps one managed window per opened HELP bundle and one per
 Markdown document. `F6`/`Shift-F6`, Window List, Tile and Cascade all operate
 on the same `TVDialogManager` stack. Dynamic windows use distinct persisted
 geometry keys, so moving or maximizing one does not overwrite another.
+Tile and Cascade place resizable windows through that same resizer, updating
+the restored geometry and zoom glyph together.
+HELP Contents activates a selected `TVOutline` node directly through its
+`TVEvent` handler; it does not click a rendered anchor. The HELP window retains
+its outline and each HELP/Docs window retains its scrollbars for redraw and
+destruction, while DOM references are used only for binding and rendering.
 Window List is a normal `TVListBox`: empty/normal rows use the dialog list cyan
 palette and its focused row uses the original green/white focused colors.
 Markdown documentation uses a dedicated Editor palette: blue background with
@@ -396,13 +493,22 @@ scrollbar column or a button's two-row face), and the internal cells of a
 specialised game surface. It must not repeat outer dialog/control dimensions.
 ASCII Chart, Calculator, Colors, History, MIDI, Window List and the game
 windows follow this rule; their concrete geometry is declared in JS.
+Open a File derives its two-column grid row count from `TVFileList.rows` and
+keeps arrow/Page navigation in `keyDestination()` on the shared
+`TVListViewer.handleEvent()` path. The MIDI display marks its five owned text
+views by semantic part so its palette does not depend on child order.
 
 The shared `TVHelpViewer`/`TVHelpWindow`, THelpViewer's own UHF loading and the
 generated-page `TVContextHelpWindow` live in `tv-context-help.js`; they are not
-part of the standard-dialog module.
+part of the standard-dialog module. The viewer converts clicks on topic,
+contents, index and context-help links to a `help-link` `TVEvent`; the owning
+window handles or delegates navigation. Actual target file/topic/line data
+remains on rendered links because it is required to resolve external files.
 
 The shared `TVDialog` frame supplies a clipped client viewport between its two
-vertical frame sides. A bounded top-level `TVGroup` is positioned relative to
+vertical frame sides. Backdrop clicks become a close command in
+`TVDialog.handleEvent()`, sharing the normal dialog command path. A bounded
+top-level `TVGroup` is positioned relative to
 that client viewport, and nested groups with bounded children preserve their
 absolute `TVRect` coordinates. Dynamic `changeBounds()` operations therefore
 resize content without moving controls into the title, footer or outside the
@@ -413,14 +519,15 @@ frame.
 | Class | Purpose |
 |-------|---------|
 | `TVAboutDialog` | About / splash screen |
+| `TVLoginDialog` | Administrator-issued Passkey enrollment, sign-in, sign-out and server session status |
 | `TVViewGalleryDialog` | Interactive gallery for shared labels, inputs, choices, list focus/activation and scrolling, static/framed information, a full-width 62-column Event log, buttons and source-sized message boxes |
 | `TVFileOpenDialog` | Keyboard-accessible virtual file picker for generated HELP bundles and Markdown documentation, with persistent history |
 | `TVChangeDirectoryDialog` | Turbo Vision-style virtual directory tree with Chdir, Revert and shared persistent History |
-| `TVFindDialog` | Active-window Find dialog with persistent shared History |
-| `TVSearchDialog` | Full-text search across topics |
+| `TVFindDialog` | Active-window Find or global HELP search with persistent shared History |
+| `TVSearchDialog` | Local or server-wide full-text search across HELP topics |
 | `TVAsciiTableDialog` / `TVAsciiTable` | CP437 character table (0–255) |
 | `TVCalculatorDialog` | DOS-style calculator |
-| `TVCalendarDialog` / `TVCalendarView` | DOS Navigator-style 28x8 Monday-first calendar with selected/current day and day/week/month/year navigation |
+| `TVCalendarDialog` / `TVCalendarView` | DOS Navigator-style 28x8 Monday-first calendar with selected/current day and day/week/month/year navigation; previous, next and today are one-row controls |
 | `TVStatisticsDialog` | Aggregate server activity dialog with category and detail lists |
 | `TVSystemInformationDialog` | Local application/runtime capabilities and live server/catalog information |
 | `TVColorsDialog`, `TVColorSelector`, `TVColorDisplay` | Color palette customization editor and reusable selector/display views |
@@ -430,6 +537,14 @@ Turbo Vision, `TVHistory` keeps a direct link to the input object; dialogs do
 not assign DOM selectors or browser identities to it. A specialised
 `TVFileInputLine` will only be introduced when it implements the original
 file-completion behaviour rather than acting as a presentation-only alias.
+
+`TVLoginDialog`, `TVRegistrationDialog` and `TVRegistrationTokenDialog` own
+ordinary `TVLabel`, `TVInputLine`, `TVButton` and `TVStaticText` children.
+Their commands pass through `handleEvent()`. Registration requires an
+administrator-issued one-hour token; the first administrator instead uses the
+bootstrap token printed in the server log. The browser's WebAuthn API supplies
+credentials, while the server validates them and stores opaque sessions. There
+is no password field or tokenless public registration.
 
 `TVColorsDialog` follows the Turbo Vision 2.0 `TColorDialog` 61×18 cell
 geometry from `colorsel.cpp`: Group and Item lists, 4×4 foreground and 4×2
@@ -450,13 +565,40 @@ parallel DOM key handler.
 
 - `search(query)` — Filter topics by query
 - `renderResults(query)` — Update result list UI
+- `searchGlobal(query, serial)` — Query `/api/search/global` without loading
+  every bundle into the browser. A shared two-choice `TVRadioButtons` control
+  selects the exclusive scope. Local scope is available with an active HELP
+  file; global scope becomes available after `/api/search/status` responds.
+- Results use two list rows: title, then original source filename (or bundle
+  path). A static line below the list shows the selected HELP file's long
+  catalog name, or `Docs` for Markdown results.
 - `moveSelection(delta)` — Navigate result list
-- `openSelected()` — Open the highlighted result (override for custom navigation)
+- `openSelected()` — Open the highlighted result. The bundle app loads HELP
+  results through its bundle loader and opens `context_hex`; Docs results use
+  the existing document-window loader.
+- `TVIndexProgressDialog` composes two shared gauge views, static text and a
+  Hide button. It appears when the page detects index creation, even before
+  Search Topics is opened,
+  displays file-count percentage from `/api/search/status`, and does not
+  cancel the server-side index when hidden.
 - Uses the same three-column frame/body/client geometry as every `TVDialog`;
   it has no dialog-specific grid columns that can displace the right frame.
 - Empty/loading/error messages are ordinary bounded `TVStaticText` children
   owned by `TVSearchResultsList`; there is no role-only status widget or
   caller-provided root/viewport CSS class.
+
+The FastAPI server owns `GlobalSearchIndex` in `server/search_index.py`.
+It stores a SQLite FTS5 database at `THELP_STATE_DIR/global-search.sqlite3`
+and fingerprints each bundle by size, modification time and catalog title.
+Startup checks the index; later status/search requests detect additions,
+changes and removals. Only affected bundles are reindexed. Each topic's
+title, index terms and visible UHF text are searchable, and the API returns
+the original relative file path, help display name and topic context. The
+browser receives at most 60 ranked matches. Local/offline search remains
+available without this API. Public `/?doc=<path>` and `/?file=<path>` URLs
+serve a crawler-readable HTML fallback and start the matching TVision document
+or HELP window directly in JavaScript, without a separate "Open in viewer"
+step. `/docs/<path>` remains the Markdown source loaded by the document window.
 
 ### TVMidiPlayerDialog
 
@@ -488,7 +630,9 @@ parallel DOM key handler.
 - `performFind()` / `findAgain()` — Execute the supplied target callbacks.
 - The bundle Search menu exposes Find (`Ctrl+F`), Find Again (`Ctrl+L`) and
   topic-index Search (`F3`) as distinct commands.
-- Find is disabled without an active HELP/Docs window. Find Again remains
+- Find remains available without an active HELP/Docs window for global
+  searching. Its two radio scopes enable only valid targets: local for an open
+  HELP/Docs window, global after the server search API responds. Find Again remains
   disabled until the active target has a previous query.
 
 ### TVFileOpenDialog
@@ -504,10 +648,13 @@ parallel DOM key handler.
   popup is shared by File Open, Change Directory and Find. Its default geometry
   is 32×8 character
   cells, covering the 28-cell File Open input and its three-cell History
-  trigger without padding outside the frame. Like original `THistoryWindow`
+  trigger without padding outside the frame. The `TVHistoryViewer` scrollbar
+  now occupies the popup's right frame column. Like original `THistoryWindow`
   with `wfClose`, it owns a bracketed close control in its top frame. It also
-  owns popup visibility, `aria-expanded` state, Escape handling,
-  outside-click dismissal and focus return to the History button. Pointer and
+  owns popup visibility through `sfVisible`, `aria-expanded` state, Escape handling,
+  outside-click dismissal and focus return to the History button. Its document
+  pointer bridge exists only while the popup is open and forwards dismissal to
+  `handleEvent()`. Pointer and
   keyboard activation are translated by `TVHistory.handleEvent()` into the
   same owner event flow as the other TV buttons. An empty history remains
   an active control and opens the same closable empty window; it is not
@@ -516,7 +663,8 @@ parallel DOM key handler.
   an empty caption. All three History popups therefore keep one continuous top
   frame while retaining the shared Close control and event path.
 - `TVHistory : TVButton` is the single three-cell History trigger used by File
-  Open, Change Directory and Find; it owns the storage model and binds one
+  Open, Change Directory and Find. It draws its own icon, shares the base
+  `TVButton` command flow, owns the storage model and binds one
   `TVHistoryWindow`.
 - The source `THistory::icon` value `\xDE~\x19~\xDD` is rendered as two
   explicit half-cell CSS fills around the arrow. This preserves the original
@@ -554,10 +702,16 @@ parallel DOM key handler.
 
 ### TVScreenSaver
 
-Fullscreen overlay with animated modes.
+`TVView`-derived full-screen saver with a browser overlay as its drawing
+surface. Browser mouse and keyboard input is forwarded as `TVEvent` to
+`handleEvent()`; stopping restores the previously focused control. The idle
+trigger is installed in the page/bundle application and defaults to five
+minutes. This follows DOS Navigator's `TSSaver` / `TProgram.GetEvent` owner
+and event model, while keeping browser timers and DOM drawing at the adapter
+boundary.
 
 - `start()` — Start the selected saver instance and preserve current focus
-- `stop()` — Dismiss, detach resize handling and restore focus (also triggered by click or keypress)
+- `stop()` — Dismiss, detach resize handling and restore focus (also triggered by mouse or keyboard input)
 - `TVScreenSaver.installIdleStart()` — Install the shared five-minute idle trigger once per page
 
 Both the generated-page shell and bundle application install the same idle
@@ -568,6 +722,16 @@ Mode descriptions:
 - **bounce** — Bouncing "THelpViewer" text, color changes on wall bounce
 - **clock** — Big ASCII-art clock with date
 - **matrix** — Matrix-style falling green character streams
+- **projector** — Moving transparent text-cell aperture over a dark screen;
+  adapted from DOS Navigator's `TProjector`. The browser reveals the live page,
+  whereas the DOS version reveals a saved text-mode screen buffer.
+
+[DOS Navigator 1.51 `IDLERS.PAS`](https://github.com/maximmasiutin/Dos-Navigator/blob/master/IDLERS.PAS)
+also includes blank, radial-star and moving-clock savers; its
+[`DNAPP.PAS`](https://github.com/maximmasiutin/Dos-Navigator/blob/master/DNAPP.PAS)
+can launch external saver programs. Our current `stars` and `clock` modes are
+not exact ports of those originals. Projector is credited to RIT Research
+Labs: “Based on Dos Navigator by RIT Research Labs.”
 
 Constants: `SAVER_FPS = 15`, `SAVER_STAR_COUNT = 60`
 
@@ -596,7 +760,7 @@ also suspends the owning game until the prompt is destroyed.
 | `TVTetrisDialog` | Tetris / Pentix | 12×18 | ←→ move, ↑ rotate, ↓/Space drop, P pause, X pentix |
 | `TVMinesDialog` | Minesweeper | 9×9 (10 mines) | Click or Space/Enter reveal, Right-click or F flag, arrows/Home/End move cursor; first reveal is safe |
 | `TVBreakOutDialog` | BreakOut | 14×20 | ←→ paddle, Space launch |
-| `TVSokobanDialog` | Sokoban | Variable (5 levels) | ←→↑↓ move, R restart, U undo |
+| `TVSokobanDialog` | Sokoban | Variable (10 levels) | ←→↑↓ move, R restart, U undo; Enter advances after each solved intermediate level and starts a new game after the last; Hall of Fame ranks the highest legitimately reached level first, then the cumulative moves |
 | `TVLinesDialog` | Color Lines | 9×9 | Click select + click destination |
 | `TVReversiDialog` | Reversi vs AI | 8×8 | Click to place, N new game |
 | `TVLudoDialog` | Ludo | 11×11 path map | Roll, click legal piece |
@@ -666,8 +830,10 @@ scrollbar, while inactive windows continue to reject input.
 `TVStatisticsDialog` derives from `TVDialog`. Its client area is composed from
 `TVGroup`, `TVStaticText`, two `TVListBox` objects and standard `TVButton`
 controls: categories are on the left, ranked values on the right, and OK plus
-Refresh are at the bottom. The classic gray dialog palette is inherited from
-`TVDialog`, while both lists retain the standard colored list palette. It reads
+Refresh are at the bottom. The right list uses a horizontal `TVScrollBar` when
+a topic or other value exceeds its width. The classic gray dialog palette is
+inherited from `TVDialog`, while both lists retain the standard colored list
+palette. It reads
 `/api/statistics/summary` and shows total/daily visits, HELP/Docs/topic opens,
 dialog and game launches, search/link outcomes, shared scores, referrers,
 countries, device/display properties, orientation, pointer type, reduced-motion
@@ -675,6 +841,33 @@ preference, OS/browser families, language, time zone, theme and coarse
 client-error categories. Active visit, HELP/document/dialog/game duration,
 Navigation Timing, LCP/CLS/INP and HELP download/decompression/render
 measurements are converted to named intervals before SQLite persistence.
+The dialog retries one transient network/HTTP 5xx failure; persistent failures
+show their HTTP/network cause, while client rendering failures are labeled
+separately.
+
+### Server Terminal
+
+`TVServerTerminalDialog` is assembled from shared `TVDialog`, `TVTerminal`,
+`TVInputLine`, `TVLabel`, `TVStaticText` and `TVButton` objects. Its black output
+area follows an explicitly launched server-side job. The browser can only
+attach to an existing job using its 12-character ID and random access key;
+it cannot start a command. The key is shown as a password input and is never
+stored by the browser. Output is fetched incrementally, while line input is
+sent only while the job reports `running`; controls lock when it exits.
+
+Launch from the server (or inside Docker) with:
+
+```bash
+python -m thelpviewer.server.terminal --label "Example" -- python -u -c "print(input('Name: '))"
+docker compose exec viewer python -m thelpviewer.server.terminal --label "Example" -- python -u -c "print(input('Name: '))"
+```
+
+Paste the printed ID and access key into System → Server Terminal. Keep the
+launcher running until its command finishes. Jobs, output and input queues live
+under `THELP_STATE_DIR/terminal/`; the state file stores only a hash of the
+key. The terminal API has no process-creation route. Treat output and keys as
+sensitive: use HTTPS when exposing the viewer outside localhost, and do not
+run commands that reveal secrets to other viewers of the server console.
 
 The existing `TVDialogManager` supplies the registered name, active target and
 open/close lifecycle for both dialogs and windows. `TVBundleApp` accumulates
@@ -718,7 +911,7 @@ Application shell: menus, status bar, window management, initialization.
 
 | Class | Purpose |
 |-------|---------|
-| `TVMenuBar` | `TVMenuView` subclass that renders menu bar items and hotkeys |
+| `TVMenuBar` | Shared core `TVMenuView` subclass that draws linked top-level items and submenus |
 | `TVStatusLine` | Renders status line items |
 | `TurboVisionWindowResizer` | Window drag-move and resize, double-click maximize |
 | `TurboVisionMenus` | Generated-page adapter for the shared `TVMenuController` |
@@ -739,7 +932,8 @@ Entry point. Called via `TV.initTurboVision()`.
 ### TurboVisionWindowResizer
 
 - Draggable title bar (move), resize handle (bottom-right corner)
-- `maximize()`, `restore()`, `toggleMaximize()`
+- `maximize()`, `restore()`, `toggle()`/`toggleMaximize()`; `TVWindow.zoom()`
+  uses this shared resizer when one is bound, including HELP and Docs windows
 - Persists geometry to localStorage per optional `data-tv-window-storage-key`
 - `destroy()` persists the final geometry and detaches drag, handle and
   `beforeunload` listeners.
@@ -765,10 +959,10 @@ Single-page application for browsing help file bundles.
 
 ### TVBundleApp
 
-- Implements application commands in `handleEvent()`. The shared menu
-  controller translates browser activation into `evCommand`; File, Search,
-  Window, theme, screen-saver and context-help actions are no longer separate
-  menu click handlers.
+- Implements application commands in `handleEvent()`. `TVMenuView` converts
+  menu selection into `evCommand`; the browser adapter only translates DOM
+  input into menu `TVEvent` records. File, Search, Window, theme, screen-saver
+  and context-help actions are not separate menu click handlers.
 - `start()` — Loads catalog, handles URL params, shows welcome
 - `_loadCatalog()` — Fetches `helps/catalog.json` and `docs/catalog.json`
 - `_openDocWindow(filename, markdown)` — Opens rendered Markdown in a doc window (z-index 5, above help windows but below menu bar)
@@ -828,6 +1022,15 @@ The viewer uses a fixed z-index stack for layering:
 | Menu popups | 20 | Dropdown menu panels |
 | Submenus | 25 | Nested submenu panels |
 | Modal overlay | 9999 | Loading dialog |
+
+### Browser regression tests
+
+`tests/test_browser_smoke.py` exercises the viewer in Chrome. The Safari
+close/history regression is opt-in: enable **Safari → Settings → Developer →
+Allow remote automation**, then run
+`THELP_SAFARI_TEST=1 .venv/bin/python -m pytest -q tests/test_safari_smoke.py`.
+The test starts its own local server and uses macOS `safaridriver`; it is
+skipped by default on machines without this browser configuration.
 
 ### Data Format
 

@@ -91,7 +91,11 @@ Useful Docker commands:
 
 The container image is intentionally minimal: it installs Python deps only and
 docker-compose bind-mounts the whole repository into `/app`, so JS/CSS/docs/help
-data are never copied into the image.
+data are never copied into the image. Docker startup reads HELP files at their
+original paths before mounting the repository. On macOS this also downloads
+files that have been offloaded to cloud storage, so Docker can read them through
+the bind mount. No second copy is created. If macOS offloads them again later,
+use `./thelp.sh docker start` to make them locally available again.
 
 ## Project Structure
 
@@ -155,8 +159,10 @@ THelpViewer/
 - **Loading progress** — DOS Navigator-style dialog with progress bar and Cancel
 - **Server statistics** — privacy-preserving aggregate SQLite counters shown in a Turbo Vision window
 - **System information** — local application, browser, display, locale, storage and capability details with live server/catalog status
+- **Grid Viewer** — two-dimensional Turbo Vision list with visible column headers and two-axis scrolling
+- **Server Terminal** — attach to a command explicitly launched on the server; output streams live and input locks at exit
 - **Shared Hall of Fame** — server-wide top-ten tables with automatic local-browser fallback
-- **Full-text search** — search across all topics within a help file
+- **Full-text search** — search the active window or all public HELP files and Docs through a server-side index
 - **A–Z index navigation** — letter jump links in the index view
 - **Window management** — zoom (F5), close (Alt-F3), drag, resize
 - **Theme support** — light, dark, auto (system preference)
@@ -263,7 +269,8 @@ filename.
 
 Game scores use `GET/POST /api/hall-of-fame/{game}` and are shared by all
 visitors of the server. A public score consists only of the entered player
-name, score and short game note. When the API is unavailable (for example when
+name, score and short game note; Sokoban also stores the level reached and
+ranks it before the move count. When the API is unavailable (for example when
 the generated viewer runs directly from disk), the existing per-browser
 `localStorage` Hall of Fame remains active; local entries are not uploaded
 automatically.
@@ -271,6 +278,86 @@ automatically.
 Unknown browser URLs are redirected into the application and shown through a
 Turbo Vision error MessageBox. `/api/...` callers continue to receive JSON HTTP
 errors.
+
+### Global HELP and Docs search
+
+The server builds `var/global-search.sqlite3` automatically on first start.
+It indexes the existing `.json.gz` HELP bundles and public Markdown Docs in
+place, updating changed or removed files when the catalog is checked again.
+Private RE/audit documents stay excluded; virtual aliases to the same README
+or CHANGELOG are indexed only once. Search
+Topics and Find each have two exclusive radio choices: server-wide search when
+the API is available, and local search when an eligible HELP/Docs window is
+open. Search Topics shows the source filename on each result's second line and
+opens Docs results in the existing TVision document window. `GET /api/search/status`
+reports index progress and `GET /api/search/global?q=...` returns ranked HELP
+topics and Docs. If a global
+search is opened during indexing, a Turbo Vision dialog shows the percentage;
+Hide closes the dialog without stopping the server job. Generated pages opened
+without the server retain local search but cannot use the global API.
+
+### Search-engine pages
+
+The server exposes an overview of each HELP file at `/?file=<bundle-path>`
+with links to its non-empty topics. Each topic is server-rendered at
+`/?file=<bundle-path>&topic=<context>`. The page starts the
+interactive TVision viewer and opens that HELP file/topic directly; its initial
+HTML also contains the topic text for crawlers. `/robots.txt` points to
+`/sitemap.xml`, which lists a separate
+`/sitemaps/file.xml?file=...&page=...` sitemap for each HELP file. Those maps
+contain its overview and topic URLs; a large file is split into multiple maps.
+Public Docs use `/?doc=<path>`: opening the link starts the TVision document
+window directly, while the server-rendered HTML contains the same document
+text for crawlers. They have their own `/sitemaps/docs.xml` entry. The raw
+`/docs/<path>` Markdown endpoint remains available to the TVision viewer.
+The older numbered topic sitemaps remain available but are not listed in the
+main sitemap index. This lets crawlers discover content without executing the
+viewer JavaScript or understanding `#tv=...` fragments. Set
+`THELP_PUBLIC_BASE_URL=https://thelp.zdrojak.dev` on the public deployment so
+canonical and sitemap URLs use the HTTPS hostname. A sitemap advertises pages;
+it does not guarantee indexing by search engines.
+
+`docker-compose.yml` already passes `THELP_PUBLIC_BASE_URL` through. On the
+public host, put `THELP_PUBLIC_BASE_URL=https://thelp.zdrojak.dev` in a `.env`
+file beside `docker-compose.yml`, then run `docker compose up -d --force-recreate viewer`.
+Leave it unset locally so local sitemap links point to localhost. The `.env`
+file is ignored by Git. A plain `docker compose restart` does not apply changed
+environment variables.
+
+For Google Search Console meta-tag verification, set
+`THELP_GOOGLE_SITE_VERIFICATION=<content value from Google>` in that same
+`.env` file and recreate the viewer container. Enter only the `content` value,
+not the whole `<meta>` element. The server inserts the tag into the home page
+and public HELP/Docs pages. If the variable is unset, it emits no verification
+tag; exported standalone HTML never contains a deployment-specific token.
+
+### Admin-created Passkey accounts
+
+On first startup with an empty accounts database, the server prints a one-hour
+bootstrap token in the Docker logs. Find it with
+`docker compose logs viewer | grep 'first administrator registration token' | tail -n 1`;
+`docker compose logs --tail` may omit the startup line after later requests.
+If an account already exists, no bootstrap token is printed. In Help → Login / Passkey → Register, enter
+your name, email and token to create the first administrator Passkey. Signed-in
+admins gain a Registration Token menu item to issue one-hour, single-use tokens
+for other users, review still-valid tokens and revoke selected tokens. The
+Login dialog handles sign-in and sign-out.
+The local origin defaults to `http://localhost:5448`. On the public host, set
+`THELP_AUTH_ORIGIN=https://thelp.zdrojak.dev` in the same `.env` file as
+`THELP_PUBLIC_BASE_URL`; the latter only configures public links and does not
+enable Passkey login. Recreate the container with
+`docker compose up -d --force-recreate viewer` (a restart does not reload
+environment variables), then check that `/api/auth/session` returns
+`"enabled": true`. Do this only after securing the Cloudflare-to-origin
+connection. See [Accounts](docs/THelp%20Viewer/Accounts.md) for setup and the
+current security limitations. Login does not yet replace the Server Terminal
+ID/key mechanism.
+
+Passkey registration also requires the `webauthn` Python package in the Docker
+image. After updating the project or `requirements.txt`, use
+`docker compose up -d --build --force-recreate viewer` on the server (or
+`./thelp.sh docker start`); recreating without `--build` retains old installed
+packages. If the package is missing, Passkey endpoints return JSON HTTP 503.
 
 ## Documentation
 

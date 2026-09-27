@@ -34,6 +34,158 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Closing a Yes/No `TVMessageBox` with [ ] or Escape now returns No, never the
+  default Yes action; dismissing the registration-token deletion prompt keeps
+  the token valid.
+- Register Passkey now shows an Information MessageBox after the server
+  confirms the signed-in session, then closes both registration and Login.
+  Administrators can list still-valid registration tokens with their expiry,
+  select one for copying, and revoke it after confirmation. New token values
+  are encrypted in server state; older hash-only tokens remain revocable but
+  cannot be displayed again.
+- Docker start now rebuilds changed Python dependencies, and Passkey endpoints
+  report a missing server dependency as JSON HTTP 503 instead of a generic 500.
+- Made Google Search Console verification configurable through
+  `THELP_GOOGLE_SITE_VERIFICATION`; the server injects it into public viewer
+  pages without baking the token into generated HTML.
+- Made `TVLabel` mnemonics focus their linked controls via Alt+letter in dialogs,
+  including Search Topics' `~F~ind:` label; the selected search result now shows
+  its HELP catalog name below the list, and radio choices use the larger DOS dot.
+- Added picture-validated, auto-hyphenated registration token input and
+  five-group, one-hour registration tokens; older token formats are rejected
+  even when unexpired. Registration errors now identify the failing Passkey
+  stage.
+- Used the configured HTTPS Passkey origin for public sitemap/robots links
+  when no separate public base URL is set, avoiding an HTTP sitemap hint
+  behind a TLS proxy.
+- Made shared window/dialog Close resilient to Safari omitting a click after
+  mouse release on an inactive title control; the normal click still takes
+  precedence and Close is dispatched only once.
+- Server Statistics retries one transient API failure and reports the actual
+  HTTP/network or display error instead of always claiming the API is unreachable.
+- Public Docs and HELP search URLs now open their content directly in TVision
+  while keeping server-rendered text in the initial HTML for search crawlers.
+- Made `/?doc=<path>` the canonical and sitemap URL for public Docs; removed
+  the unused `/documents/<path>` and `/topics/<path>` aliases while keeping
+  `/docs/<path>` as raw Markdown for the TVision viewer.
+- Indexed public Markdown Docs alongside HELP topics in the existing SQLite
+  global search. Search results open Docs in the standard TVision document
+  window; server-rendered Docs pages and a Docs sitemap make them discoverable
+  to search engines without exposing private RE/audit documents.
+- Added an HTML overview for each HELP file, linking to all of its non-empty
+  topics. The sitemap index now groups overview and topic URLs into a separate
+  sitemap for each HELP file; the older numbered sitemap URLs remain available.
+- Find and Search Topics now use exclusive, availability-aware radio scopes
+  for server-wide and active-window/HELP searching; topic results show their
+  source filename on a second line. Shared `TVCluster` now visibly dims
+  dynamically disabled choices.
+- Added first-admin Passkey bootstrap from a one-hour token logged at server
+  startup, name/email/token registration, and one-hour registration tokens
+  issued only by a signed-in administrator from a conditional menu item.
+- Added server-rendered `/?file=...&topic=...` HELP pages and made these readable
+  query URLs the sitemap/canonical targets, while retaining a link into the
+  interactive viewer.
+- Added administrator-created accounts with one-time Passkey enrollment,
+  WebAuthn sign-in, server-side sessions and a shared TVision Login dialog;
+  public registration remains closed and Server Terminal credentials are
+  unchanged.
+- Added crawlable, server-rendered HELP topic pages plus `robots.txt` and
+  paginated sitemaps so search engines can discover topics without `#tv`
+  fragment or JavaScript execution.
+- Fixed inactive window/dialog close controls so they can be clicked directly;
+  shortened Find and aligned its history scrollbar with the popup frame.
+- Kept `TVButton` drawing generic; ASCII, calendar, color, MIDI, search-result
+  and game buttons now render their special faces in their owning controls.
+- Added an incremental SQLite FTS5 index of every generated HELP bundle under
+  `var/`. Search Topics and Find now offer local/global scope; global queries
+  use the server API, open the result's actual HELP file and topic, and show a
+  Turbo Vision percentage dialog while indexing is still in progress.
+- Added a read-only `TVGridView` with visible/toggleable column headers,
+  keyboard/mouse cell selection and shared horizontal/vertical scrollbars;
+  Grid Viewer in the system menu demonstrates it.
+- Added Server Terminal: a command deliberately started on the server CLI
+  streams its output to a Turbo Vision dialog, accepts line input while
+  running, and locks input after exit. Each job requires a random access key;
+  browser requests cannot launch commands.
+- Server Statistics now reveals a shared horizontal list scrollbar when a
+  topic or other ranked value is wider than the detail viewport.
+- Expanded Sokoban to ten solver-verified levels, retaining its existing
+  Hall of Fame. It now also records the reached level when a run ends and
+  ranks a higher level ahead of fewer moves at a lower level.
+- Replaced unsolvable Sokoban boards with five solver-verified levels and made
+  Hall of Fame rank a completed five-level run by total moves. Finishing the
+  last level now offers a new game instead of a dead-end Next action.
+- Standard windows now zoom on a double-click of the title row, matching
+  Turbo Vision's `TFrame` command path.
+- Fixed Calendar's Today control to occupy one row, kept inactive dialog
+  close controls visible in passive colors, and tightened the Tower of Hanoi
+  and Mastermind windows while giving Tron one more row.
+- Sokoban now allows Enter to advance after a solved intermediate level
+  without an intervening Hall of Fame name prompt.
+- Window and dialog close controls now show the pressed asterisk while the
+  mouse button is held and close only on release over the control.
+- Unified dialog Close/Cancel from Escape and `TVDialogManager` with the
+  existing `TVDialog.handleEvent()` command path. Pressing a default
+  `TVButton` now sends its command through `TVEvent` instead of synthesizing a
+  browser click. HELP Find adapters and Docs editors are retained and cleaned
+  up by their `TVWindow` instances, not by DOM element properties.
+- Contents Outline now activates its target directly from the selected
+  `TVOutline` node instead of synthesizing an anchor click. HELP outlines and
+  window scrollbars are retained by their `TVWindow` instances and cleaned up
+  with the window, not stored on browser elements. Generated-page Close routes
+  through `TVWindow.handleEvent()` while preserving its `index.html` destination.
+  Added an opt-in Safari/WebDriver regression for File Open history and HELP
+  window closing.
+- Routed Markdown Docs links through one `TVEditor` click-to-`TVEvent` bridge
+  and dialog backdrop closing through `TVDialog.handleEvent()`; Tile/Cascade
+  now places windows through the shared resizer so geometry and zoom restore
+  stay in sync. File Open's two-column keyboard navigation again follows its
+  `TVListViewer` event path, with its row count defined in JS. MIDI display
+  colors now follow named child views rather than CSS child positions.
+- Routed list selection, activation and outline expansion through the shared
+  `TVListViewer.handleEvent()` path. HELP topic links now travel through
+  `TVHelpViewer` and their owning `TVHelpWindow`, including Contents and Index
+  links; the link target metadata remains intact. Removed unused page Back/Search
+  DOM hooks and menu key-code markup, read MIDI expansion and History visibility
+  from `TVView` state,
+  and kept History's outside-click listener active only while its popup is open.
+  The three-cell History icon is drawn by `TVHistory`, not by command-name
+  branches in the generic `TVButton`.
+- Shared `TVWindow.zoom()` now uses the existing resizer for HELP and Docs
+  windows, preserving one zoom/restore path for geometry, glyphs and stored
+  state instead of separate window-manager DOM mutations.
+- Cached each menu's rendered toggles, popups and selectable items when
+  `TVMenuView` binds them. Keyboard and mouse navigation now uses those retained
+  references instead of repeatedly querying its own DOM structure.
+- Added DOS Navigator-inspired Projector screen saver to both viewer menus.
+  Screen savers now inherit `TVView`, receive mouse/keyboard input through
+  `TVEvent`, and restore focus when dismissed; the browser implementation
+  reveals the live page through the moving aperture.
+- Moved menu/submenu, status-line and cluster decisions from `data-tv-*`
+  attributes into retained `TVMenuItem`, `TVStatusItem` and `TVCluster`
+  objects. HELP window navigation and URL state now live on `TVHelpWindow`
+  instead of HTML datasets; binding flags stay in JS. DOM attributes remain
+  for view binding, browser hit testing, generated-page metadata and dynamic
+  content links, but no longer own these commands or window/cluster states.
+  `TVFrame` now owns its title-control commands, including game Hall of Fame,
+  so `TVWindow` and `TVDialog` no longer read commands back from HTML.
+- Routed menu mouse movement, clicks and keyboard navigation through
+  `TVMenuView.handleEvent()`. The browser menu controller now only translates
+  DOM input to `TVEvent`; selected commands propagate through the view owner.
+- Docker startup now reads HELP bundles at their original paths before the
+  direct bind mount, making offloaded macOS files locally available without a
+  second copy.
+- Fixed menu commands losing their `TVMenuItem` on click after the linked-menu
+  refactor. HELP, Docs, dialog and game entries again deliver their file or
+  action to the application instead of trying to load an empty filename.
+- Rebuilt menu composition around the original Turbo Vision model: `TVMenu`
+  now owns a linked `TVMenuItem.next` list and default item, `TVSubMenu` owns a
+  nested menu, and `NewItem`/`NewMenu`/`NewLine`/`NewSubMenu` provide
+  source-like construction. Both viewer modes now use the shared `TVMenuBar`;
+  callers pass raw `~hotkey~` labels and accelerator text instead of generated
+  HTML, command payloads no longer leak through `TMenuItem.param`, and dynamic
+  enabled state is updated through retained menu objects rather than DOM
+  selector scans.
 - Unified active-time statistics through the existing `TVDialogManager` for
   HELP windows, Markdown documents, dialogs and games. Time now accumulates
   only while the managed target and browser tab are active, pauses across
