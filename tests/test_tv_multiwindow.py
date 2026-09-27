@@ -14,12 +14,12 @@ def test_bundle_desktop_keeps_multiple_help_and_document_windows():
 
     assert "this.openWindows.clear()" not in open_window
     assert "el.remove()" not in open_window
-    assert 'windowEl.dataset.tvWindowStorageKey = "help:" + key' in open_window
+    assert 'helpWindow.currentView = this.currentView || "index"' in open_window
     assert "this.docWindows.get(docKey)" in open_doc
     assert 'const managerName = "doc:" + docKey' in open_doc
     assert "querySelectorAll(\".tv-doc-window\").forEach" not in open_doc
     assert "this.docWindows.delete(docKey)" in open_doc
-    assert 'targets.push(windowEl.dataset.tvManagerName || ("doc:" + entry.file))' in source
+    assert 'targets.push("doc:" + entry.file)' in source
 
 
 def test_window_commands_include_cycle_and_layout_for_all_managed_windows():
@@ -32,8 +32,9 @@ def test_window_commands_include_cycle_and_layout_for_all_managed_windows():
     assert "[...this.dialogManager.windows.values()]" in bundle
     assert "kbF6" in bundle
     assert "kbShiftF6" in bundle
-    assert "activateKeyCode(getKeyCode(event))" in core
+    assert "this.activateKeyCode(getKeyCode(key), key)" in core
+    assert "this.menuView?.handleEvent(event)" in core
     assert "cycleTarget(delta = 1)" in core
     assert "command === TV_COMMANDS.NEXT" in core
     assert "command === TV_COMMANDS.PREVIOUS" in core
-    assert "dataset.tvWindowStorageKey" in shell
+    assert "this.identity" in shell

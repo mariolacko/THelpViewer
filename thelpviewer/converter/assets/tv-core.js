@@ -207,40 +207,6 @@ const THEME_PRESETS = {
     },
 };
 const DEFAULT_UI_CONFIG = Object.freeze({
-    menu: {
-        popup: [
-            { type: "context-help", label: "~C~ontext Help" },
-            { type: "separator" },
-            { type: "dialog", dialog: "about", label: "~A~bout" },
-            { type: "dialog", dialog: "puzzle", label: "~P~uzzle" },
-            { type: "dialog", dialog: "hanoi", label: "Tower of ~H~anoi" },
-            { type: "dialog", dialog: "tron", label: "Tr~o~n Light Cycles" },
-            { type: "dialog", dialog: "calendar", label: "Ca~l~endar" },
-            { type: "dialog", dialog: "ascii", label: "Ascii ~T~able" },
-            { type: "dialog", dialog: "calc", label: "~C~alculator" },
-            { type: "dialog", dialog: "midi", label: "~M~IDI Player" },
-            { type: "dialog", dialog: "colors", label: "C~o~lors" },
-            { type: "dialog", dialog: "widgets", label: "~W~idget Gallery" },
-            { type: "dialog", dialog: "systeminfo", label: "System ~I~nformation" },
-            { type: "separator" },
-            { type: "submenu", label: "~S~creen saver", items: [
-                { type: "saver", mode: "stars", label: "~S~tars" },
-                { type: "saver", mode: "bounce", label: "~B~ounce" },
-                { type: "saver", mode: "clock", label: "Cloc~k~" },
-                { type: "saver", mode: "matrix", label: "~M~atrix" },
-            ] },
-            { type: "separator" },
-            { type: "theme", theme: "light", label: "~L~ight Theme" },
-            { type: "theme", theme: "dark", label: "~D~ark Theme" },
-            { type: "theme", theme: "auto", label: "A~u~to Theme" },
-        ],
-        items: [
-            { type: "menu-root", label: "~X~" },
-            { type: "help-link", label: "~H~elp" },
-            { type: "index-link", label: "~I~ndex" },
-            { type: "topic-link", label: "~T~opic {topic}", whenTopic: true },
-        ],
-    },
     status: [
         { type: "back", label: "~B~ack" },
         { type: "context-help", label: "~F1~ Help" },
@@ -856,7 +822,7 @@ function setOwnedWidgetsActive(windowElement, active) {
         }
     });
     scrollbarWidgets.forEach((scrollbar) => scrollbar.setActive(active));
-    windowElement.querySelectorAll("[data-tv-list-viewer]").forEach((listRoot) => {
+    windowElement.querySelectorAll(".tv-list-viewer, .tv-vlist-viewer").forEach((listRoot) => {
         if (listRoot._tvListViewer) {
             listRoot._tvListViewer.setActive(active);
         }
@@ -889,15 +855,11 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
 
     setOwnedWidgetsActive(windowElement, active);
     if (closeButton) {
-        closeButton.hidden = dialog && !active;
-        closeButton.classList.toggle("is-frame-control-passive", !dialog && !active);
-        if (!dialog && !active) {
-            closeButton.setAttribute("aria-hidden", "true");
-            closeButton.setAttribute("aria-disabled", "true");
+        closeButton.hidden = false;
+        closeButton.classList.toggle("is-frame-control-passive", !active);
+        if (!active) {
             closeButton.tabIndex = -1;
         } else {
-            closeButton.removeAttribute("aria-hidden");
-            closeButton.removeAttribute("aria-disabled");
             closeButton.removeAttribute("tabindex");
         }
     }
@@ -957,7 +919,7 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
     }
 
     if (closeGlyph) {
-        applyCloseGlyphState(closeButton, closeButton && closeButton.dataset.tvClosePressed === "1");
+        applyCloseGlyphState(closeButton, closeButton && pressedCloseButtons.has(closeButton));
     }
 
     fillBorders(windowElement);
@@ -1048,41 +1010,57 @@ function applyCloseGlyphState(button, active) {
     glyph.textContent = active ? CLOSE_PRESSED_CHAR : "\u25A0";
 }
 
+const boundCloseButtons = new WeakSet();
+const pressedCloseButtons = new WeakSet();
+
 function bindCloseButtons(scope = document) {
     scope.querySelectorAll("[data-tv-close-button]").forEach((button) => {
-        if (button.dataset.tvCloseBound === "1") {
-            return;
-        }
-        button.dataset.tvCloseBound = "1";
+        if (boundCloseButtons.has(button)) { return; }
+        boundCloseButtons.add(button);
+        let mouseDown = false;
+        let fallbackTimer = 0;
         const setPressed = (pressed) => {
-            if (pressed) {
-                button.dataset.tvClosePressed = "1";
-            } else {
-                delete button.dataset.tvClosePressed;
-            }
+            if (pressed) { pressedCloseButtons.add(button); }
+            else { pressedCloseButtons.delete(button); }
             applyCloseGlyphState(button, pressed);
         };
-        button.addEventListener("mousedown", () => setPressed(true));
-        button.addEventListener("mouseup", () => setPressed(false));
+        button.addEventListener("mousedown", (event) => {
+            if (event.button !== 0) { return; }
+            if (fallbackTimer) { window.clearTimeout(fallbackTimer); fallbackTimer = 0; }
+            mouseDown = true;
+            setPressed(true);
+            document.addEventListener("mouseup", (release) => {
+                const wasDown = mouseDown;
+                mouseDown = false;
+                setPressed(false);
+                if (!wasDown || release.button !== 0) { return; }
+                const bounds = button.getBoundingClientRect();
+                const inside = button.contains(release.target)
+                    || (release.clientX >= bounds.left && release.clientX < bounds.right
+                        && release.clientY >= bounds.top && release.clientY < bounds.bottom);
+                if (!inside) { return; }
+                // Safari can omit click after an inactive window gains focus on mousedown.
+                // Let the native click run first; synthesize it only if it never arrives.
+                fallbackTimer = window.setTimeout(() => {
+                    fallbackTimer = 0;
+                    if (button.isConnected && !button.disabled
+                        && !button.closest(".tv-dialog-overlay")?.hidden) { button.click(); }
+                }, 0);
+            }, { once: true });
+        });
+        button.addEventListener("click", () => {
+            mouseDown = false;
+            setPressed(false);
+            if (fallbackTimer) { window.clearTimeout(fallbackTimer); fallbackTimer = 0; }
+        });
         button.addEventListener("mouseleave", () => setPressed(false));
         button.addEventListener("blur", () => setPressed(false));
     });
 }
 
 function cloneUiConfig(config) {
-    function cloneEntry(entry) {
-        const clone = { ...entry };
-        if (Array.isArray(clone.items)) {
-            clone.items = clone.items.map((sub) => ({ ...sub }));
-        }
-        return clone;
-    }
     return {
-        menu: {
-            popup: Array.isArray(config?.menu?.popup) ? config.menu.popup.map(cloneEntry) : [],
-            items: Array.isArray(config?.menu?.items) ? config.menu.items.map(cloneEntry) : [],
-        },
-        status: Array.isArray(config?.status) ? config.status.map(cloneEntry) : [],
+        status: Array.isArray(config?.status) ? config.status.map((entry) => ({ ...entry })) : [],
     };
 }
 
@@ -1091,12 +1069,6 @@ function resolveUiConfig() {
     const override = window.TV_UI_CONFIG;
     if (!override || typeof override !== "object") {
         return base;
-    }
-    if (Array.isArray(override.menu?.popup)) {
-        base.menu.popup = override.menu.popup.map((entry) => ({ ...entry }));
-    }
-    if (Array.isArray(override.menu?.items)) {
-        base.menu.items = override.menu.items.map((entry) => ({ ...entry }));
     }
     if (Array.isArray(override.status)) {
         base.status = override.status.map((entry) => ({ ...entry }));
@@ -1839,6 +1811,53 @@ class TVLabel extends TVStaticText {
         const content = renderHotkeyMarkup(this.text);
         return `<${tag} class="${escapeHtml(cls)}"${styleAttr}${forAttr} ${attrs}>${content}</${tag}>`;
     }
+
+    handleEvent(event) {
+        if (!this.link || this.link.getState(sfDisabled)) { return; }
+        const nativeEvent = event.nativeEvent;
+        const mnemonic = this.text.match(/~([^~])~/)?.[1]?.toLowerCase();
+        if ((event.what === evMouseDown && event.infoPtr === this)
+            || (event.what === evKeyDown && mnemonic && nativeEvent?.altKey
+                && !nativeEvent.ctrlKey && !nativeEvent.metaKey
+                && nativeEvent.key?.toLowerCase() === mnemonic)) {
+            nativeEvent?.preventDefault();
+            this.link.focus();
+            this.clearEvent(event);
+        }
+    }
+}
+
+// Fixed picture subset of Turbo Vision's TPXPictureValidator: ! uppercases
+// one character and literal separators can be filled while typing.
+class TVPXPictureValidator {
+    constructor(picture, autoFill = false) {
+        this.picture = String(picture);
+        this.autoFill = Boolean(autoFill);
+    }
+
+    format(value) {
+        const input = String(value ?? "");
+        const slots = (this.picture.match(/!/g) || []).length;
+        if (!this.autoFill || input.length > this.picture.length || !/^[a-z\d-]*$/i.test(input)) {
+            return input;
+        }
+        const characters = input.replace(/-/g, "").toUpperCase().slice(0, slots);
+        let index = 0;
+        let formatted = "";
+        for (const symbol of this.picture) {
+            if (index >= characters.length) { break; }
+            if (symbol === "!") { formatted += characters[index++]; }
+            else { formatted += symbol; }
+        }
+        return formatted;
+    }
+
+    isValid(value) {
+        const expression = `^${this.picture.split("").map((symbol) => (
+            symbol === "!" ? "[A-Z0-9]" : symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        )).join("")}$`;
+        return new RegExp(expression).test(String(value ?? ""));
+    }
 }
 
 class TVInputLine extends TVView {
@@ -1850,10 +1869,12 @@ class TVInputLine extends TVView {
         this.maxLen = Math.max(1, Number(maxLen) || 255);
         this.data = "";
         this.disabled = false;
+        this.secret = false;
+        this.validator = null;
     }
 
     setData(value) {
-        this.data = String(value ?? "").slice(0, this.maxLen);
+        this.data = (this.validator?.format(value) ?? String(value ?? "")).slice(0, this.maxLen);
         if (this.root) { this.root.value = this.data; }
         return this;
     }
@@ -1862,8 +1883,32 @@ class TVInputLine extends TVView {
         return this.root ? this.root.value : this.data;
     }
 
+    setValidator(validator) {
+        this.validator = validator;
+        this.setData(this.getData());
+        return this;
+    }
+
+    valid(_command = 0) {
+        return !this.validator || this.validator.isValid(this.getData());
+    }
+
+    handleEvent(event) {
+        if (event.what !== evBroadcast || event.infoPtr !== this
+            || event.nativeEvent?.type !== "input" || !this.validator) { return; }
+        const formatted = this.validator.format(this.root.value);
+        if (formatted !== this.root.value) { this.root.value = formatted; }
+        this.data = this.root.value;
+    }
+
     focus() {
         this.root?.focus();
+        return this;
+    }
+
+    setSecret(enable = true) {
+        this.secret = Boolean(enable);
+        if (this.root) { this.root.type = this.secret ? "password" : "text"; }
         return this;
     }
 
@@ -1888,7 +1933,7 @@ class TVInputLine extends TVView {
     draw() {
         const viewName = this._semanticName();
         const attrString = attrsToString(this._drawAttrs({
-            type: "text",
+            type: this.secret ? "password" : "text",
             id: this.viewId,
             maxlength: this.maxLen,
             value: this.data,
@@ -2012,6 +2057,18 @@ class TVGroup extends TVView {
             }
         }
         return null;
+    }
+
+    handleEvent(event) {
+        if (event.what !== evKeyDown || !event.nativeEvent?.altKey
+            || event.nativeEvent.ctrlKey || event.nativeEvent.metaKey
+            || this instanceof TVDesktop
+            || !this.root?.contains(event.nativeEvent.target)) { return; }
+        const mnemonic = event.nativeEvent.key?.toLowerCase();
+        const label = this.firstThat((view) => view instanceof TVLabel
+            && view.link && !view.link.getState(sfDisabled)
+            && view.text.match(/~([^~])~/)?.[1]?.toLowerCase() === mnemonic);
+        label?.handleEvent(event);
     }
 
     forEach(callback) {
@@ -2329,15 +2386,27 @@ class TVTerminal extends TVView {
         this.render();
     }
 
+    appendChunk(value) {
+        const parts = (this.streamTail || "") + String(value ?? "");
+        const lines = parts.replace(/\r\n?/g, "\n").split("\n");
+        this.streamTail = lines.pop();
+        this.lines.push(...lines);
+        if (this.lines.length > this.maxLines) {
+            this.lines.splice(0, this.lines.length - this.maxLines);
+        }
+        this.render();
+    }
+
     clear() {
         this.lines = [];
+        this.streamTail = "";
         this.render();
     }
 
     render() {
         if (!this.root) { return; }
         const innerWidth = Math.max(0, this.width - 2);
-        const visible = this.lines.slice(-this.rows);
+        const visible = [...this.lines, ...(this.streamTail ? [this.streamTail] : [])].slice(-this.rows);
         const offset = this.rows - visible.length;
         this._queryAll("[data-tv-terminal-line]").forEach((element, index) => {
             const text = index >= offset ? visible[index - offset] : "";
@@ -2373,26 +2442,39 @@ class TVEditor extends TVView {
         this.lastQuery = "";
         this.lastMatchEnd = 0;
         this.onSelectionChange = () => this.updateIndicator();
+        this.onLink = null;
+        this.onContentClick = (nativeEvent) => {
+            this.dispatchEvent(new TVEvent(evMouseDown, { infoPtr: this, nativeEvent }));
+        };
     }
 
     bindRoot(root) {
         if (this.root) {
             this.root.removeEventListener("keyup", this.onSelectionChange);
             this.root.removeEventListener("mouseup", this.onSelectionChange);
+            this.root.removeEventListener("click", this.onContentClick);
             document.removeEventListener("selectionchange", this.onSelectionChange);
         }
         super.bindRoot(root);
         if (this.root) {
-            this.root.dataset.tvEditor = "1";
             this.root.setAttribute("role", "document");
             this.root.setAttribute("aria-readonly", this.readOnly ? "true" : "false");
             if (!this.root.hasAttribute("tabindex")) { this.root.tabIndex = 0; }
             this.root.addEventListener("keyup", this.onSelectionChange);
             this.root.addEventListener("mouseup", this.onSelectionChange);
+            if (this.onLink) { this.root.addEventListener("click", this.onContentClick); }
             document.addEventListener("selectionchange", this.onSelectionChange);
         }
         this.updateIndicator();
         return this;
+    }
+
+    handleEvent(event) {
+        if (event.what !== evMouseDown || event.nativeEvent?.type !== "click" || !this.onLink) { return; }
+        const link = event.nativeEvent.target?.closest?.("a[href]");
+        if (!link || !this.root?.contains(link) || !this.onLink(link)) { return; }
+        event.nativeEvent.preventDefault();
+        this.clearEvent(event);
     }
 
     setReadOnly(readOnly = true) {
@@ -2467,6 +2549,7 @@ class TVEditor extends TVView {
         if (!this.root) { return; }
         this.root.removeEventListener("keyup", this.onSelectionChange);
         this.root.removeEventListener("mouseup", this.onSelectionChange);
+        this.root.removeEventListener("click", this.onContentClick);
         document.removeEventListener("selectionchange", this.onSelectionChange);
         this.root = null;
     }
@@ -2498,14 +2581,6 @@ class TVListViewer extends TVView {
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         return `<div class="${escapeHtml(className)}"${style} ${attrs}></div>`;
-    }
-
-    bindRoot(root) {
-        super.bindRoot(root);
-        if (this.root) {
-            this.root.dataset.tvListBox = "1";
-        }
-        return this;
     }
 
     itemsRoot() {
@@ -2578,6 +2653,18 @@ class TVListViewer extends TVView {
         }
     }
 
+    pointerIndex(event) { return this.resolveIndex(event?.target); }
+
+    keyDestination(index, key) {
+        if (key === "ArrowDown" || key === "ArrowRight") { return Math.min(this.items.length - 1, index + 1); }
+        if (key === "ArrowUp" || key === "ArrowLeft") { return Math.max(0, index - 1); }
+        if (key === "Home") { return 0; }
+        if (key === "End") { return this.items.length - 1; }
+        return -1;
+    }
+
+    focusSelectedItem() { this.selectedElement()?.focus(); }
+
     getText(index, maxLen = Number.MAX_SAFE_INTEGER) {
         const item = this.items[index];
         const text = typeof item === "string" ? item : String(item?.label ?? "");
@@ -2640,77 +2727,66 @@ class TVListViewer extends TVView {
         this.selectHandler = onSelect;
         this.activateHandler = onActivate;
         const itemsRoot = this.itemsRoot();
-        if (!itemsRoot || itemsRoot.dataset.tvListBoxBound === "1") {
-            return;
+        if (!itemsRoot || this.boundItemsRoot === itemsRoot) { return; }
+        if (this.boundItemsRoot) {
+            this.boundItemsRoot.removeEventListener("click", this.onListClick);
+            this.boundItemsRoot.removeEventListener("dblclick", this.onListClick);
+            this.boundItemsRoot.removeEventListener("keydown", this.onListKeyDown);
         }
-        itemsRoot.dataset.tvListBoxBound = "1";
+        this.boundItemsRoot = itemsRoot;
         itemsRoot.setAttribute("role", "listbox");
-        itemsRoot.addEventListener("click", (event) => {
-            const index = this.resolveIndex(event.target);
-            if (index < 0) {
-                return;
+        this.onListClick ||= (nativeEvent) => {
+            const event = this.dispatchEvent(new TVEvent(evMouseDown, { infoPtr: this, nativeEvent }));
+            if (event.what === evNothing && !nativeEvent.target?.closest?.("a[href]")) {
+                nativeEvent.stopPropagation();
             }
-            this.select(index);
-            if (this.selectHandler) {
-                this.selectHandler(this.items[index], index, event);
-            }
-        });
-        itemsRoot.addEventListener("dblclick", (event) => {
-            const index = this.resolveIndex(event.target);
-            if (index < 0) {
-                return;
-            }
-            this.select(index);
-            if (this.activateHandler) {
-                this.activateHandler(this.items[index], index, event);
-            }
-        });
-        itemsRoot.addEventListener("keydown", (event) => this.onKeyDown(event));
+        };
+        this.onListKeyDown ||= (nativeEvent) => {
+            const event = this.dispatchEvent(new TVEvent(evKeyDown, { infoPtr: this, nativeEvent }));
+            if (event.what === evNothing) { nativeEvent.stopPropagation(); }
+        };
+        itemsRoot.addEventListener("click", this.onListClick);
+        itemsRoot.addEventListener("dblclick", this.onListClick);
+        itemsRoot.addEventListener("keydown", this.onListKeyDown);
     }
 
-    onKeyDown(event) {
-        const current = this.resolveIndex(event.target);
-        if (current < 0 || !this.items.length) {
+    handleEvent(event) {
+        const nativeEvent = event.nativeEvent;
+        if (event.what === evMouseDown && (nativeEvent?.type === "click" || nativeEvent?.type === "dblclick")) {
+            const index = this.pointerIndex(nativeEvent);
+            if (index < 0 || index >= this.items.length) { return; }
+            this.select(index);
+            if (nativeEvent.type === "dblclick") {
+                this.activateHandler?.(this.items[index], index, nativeEvent);
+            } else {
+                this.selectHandler?.(this.items[index], index, nativeEvent);
+            }
+            this.focusSelectedItem();
+            this.clearEvent(event);
             return;
         }
-        let next = current;
-        if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-            next = Math.min(this.items.length - 1, current + 1);
-        } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-            next = Math.max(0, current - 1);
-        } else if (event.key === "Home") {
-            next = 0;
-        } else if (event.key === "End") {
-            next = this.items.length - 1;
-        } else if (event.key === "Enter") {
-            event.preventDefault();
-            event.stopPropagation();
+        if (event.what !== evKeyDown || !nativeEvent || !this.items.length) { return; }
+        const current = this.resolveIndex(nativeEvent.target);
+        if (current < 0) { return; }
+        if (nativeEvent.key === "Enter" || nativeEvent.key === " ") {
+            nativeEvent.preventDefault();
             this.select(current);
-            if (this.activateHandler) {
-                this.activateHandler(this.items[current], current, event);
-            } else if (this.selectHandler) {
-                this.selectHandler(this.items[current], current, event);
+            if (nativeEvent.key === "Enter" && this.activateHandler) {
+                this.activateHandler(this.items[current], current, nativeEvent);
+            } else {
+                this.selectHandler?.(this.items[current], current, nativeEvent);
             }
-            return;
-        } else if (event.key === " ") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.select(current);
-            if (this.selectHandler) {
-                this.selectHandler(this.items[current], current, event);
-            }
-            return;
-        } else {
+            this.focusSelectedItem();
+            this.clearEvent(event);
             return;
         }
-        event.preventDefault();
-        event.stopPropagation();
+        const next = this.keyDestination(current, nativeEvent.key);
+        if (next < 0) { return; }
+        nativeEvent.preventDefault();
         this.select(next);
-        const element = this.selectedElement();
-        if (element) { element.focus(); }
-        if (this.selectHandler && next !== current) {
-            this.selectHandler(this.items[next], next, event);
-        }
+        this.focusSelectedItem();
+        if (next !== current) { this.selectHandler?.(this.items[next], next, nativeEvent); }
+        this.clearEvent(event);
     }
 }
 
@@ -2723,6 +2799,7 @@ class TVListBox extends TVListViewer {
         this.externalScrollbarWidget = null;
         this.scrollbarWidget = null;
         this.scrollbar = null;
+        this.horizontalResizeObserver = null;
         this.active = true;
     }
 
@@ -2736,6 +2813,7 @@ class TVListBox extends TVListViewer {
     draw() {
         const rootClasses = [
             "tv-vlist-viewer",
+            this.hScrollBar ? "has-h-scrollbar" : "",
             TVView._roleClassNames(this._drawRole()),
         ].filter(Boolean).join(" ");
         const scrollFrameAttr = this.hasScrollbar() ? " data-tv-scroll-frame" : "";
@@ -2749,7 +2827,7 @@ class TVListBox extends TVListViewer {
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const scrollbarMarkup = this.hasScrollbar()
-            ? new TVScrollBar(new TVRect(), sbVertical).draw()
+            ? new TVScrollBar(new TVRect(), sbVertical).draw() + (this.hScrollBar?.draw() || "")
             : "";
         return `
             <div class="${escapeHtml(rootClasses)}"${style}${scrollFrameAttr}${rootAttrsText}>
@@ -2760,18 +2838,23 @@ class TVListBox extends TVListViewer {
     }
 
     bindRoot(root) {
+        this.horizontalResizeObserver?.disconnect();
         this.scrollbarWidget?.destroy();
         super.bindRoot(root);
         this.viewport = this._query("[data-tv-list-viewport]");
         this.scrollViewport = this.viewport;
         this.scrollbarWidget = this.root?.querySelector(".tv-scrollbar-y")
-            ? new TVScrollBar(new TVRect()).bindRoot(this.root)
+            ? (this.hScrollBar || new TVScrollBar(new TVRect())).bindRoot(this.root)
             : null;
         this.scrollbar = this.scrollbarWidget?.axes.y?.root || null;
         if (this.root) {
-            this.root.dataset.tvListViewer = "1";
             this.root._tvListViewer = this;
+            if (this.hScrollBar && typeof ResizeObserver === "function") {
+                this.horizontalResizeObserver = new ResizeObserver(() => this.updateScrollbar());
+                this.horizontalResizeObserver.observe(this.viewport);
+            }
         }
+        this.updateScrollbar();
         return this;
     }
 
@@ -2792,6 +2875,17 @@ class TVListBox extends TVListViewer {
         }
         return this.resolveIndex(event?.target);
     }
+
+    pointerIndex(event) { return this.resolvePointerIndex(event); }
+
+    keyDestination(index, key) {
+        if (key === "ArrowLeft" || key === "ArrowRight") { return -1; }
+        if (key === "PageDown") { return Math.min(this.items.length - 1, index + this.visibleRows()); }
+        if (key === "PageUp") { return Math.max(0, index - this.visibleRows()); }
+        return super.keyDestination(index, key);
+    }
+
+    focusSelectedItem() { this.selectedElement()?.focus({ preventScroll: true }); }
 
     setItems(items = [], selectedIndex = -1) {
         if (this.scrollViewport) {
@@ -2835,6 +2929,10 @@ class TVListBox extends TVListViewer {
     }
 
     updateScrollbar() {
+        if (this.root && this.viewport) {
+            this.root.classList.toggle("is-h-scrollable", Boolean(this.hScrollBar)
+                && this.viewport.scrollWidth > this.viewport.clientWidth + 1);
+        }
         this.scrollbarWidget?.refresh();
         this.externalScrollbarWidget?.refresh();
     }
@@ -2848,91 +2946,134 @@ class TVListBox extends TVListViewer {
     }
 
     bind({ onSelect = null, onActivate = null } = {}) {
-        this.selectHandler = onSelect;
-        this.activateHandler = onActivate;
-        if (!this.root || this.root.dataset.tvListViewerBound === "1") {
-            return;
-        }
-        this.root.dataset.tvListViewerBound = "1";
-        if (this.viewport) {
-            this.viewport.setAttribute("role", "listbox");
-            this.viewport.addEventListener("click", (event) => {
-                const index = this.resolvePointerIndex(event);
-                if (index < 0) {
-                    return;
-                }
-                this.select(index);
-                if (this.selectHandler) {
-                    this.selectHandler(this.items[index], index, event);
-                }
-                this.selectedElement()?.focus({ preventScroll: true });
-            });
-            this.viewport.addEventListener("dblclick", (event) => {
-                const index = this.resolvePointerIndex(event);
-                if (index < 0) {
-                    return;
-                }
-                this.select(index);
-                if (this.activateHandler) {
-                    this.activateHandler(this.items[index], index, event);
-                }
-            });
-            this.viewport.addEventListener("keydown", (event) => {
-                const index = this.resolveIndex(event.target);
-                if (index < 0 || !this.items.length) {
-                    return;
-                }
-                let next = index;
-                if (event.key === "Enter") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.select(index);
-                    if (this.activateHandler) {
-                        this.activateHandler(this.items[index], index, event);
-                    } else if (this.selectHandler) {
-                        this.selectHandler(this.items[index], index, event);
-                    }
-                    this.selectedElement()?.focus({ preventScroll: true });
-                    return;
-                } else if (event.key === " ") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.select(index);
-                    if (this.selectHandler) {
-                        this.selectHandler(this.items[index], index, event);
-                    }
-                    this.selectedElement()?.focus({ preventScroll: true });
-                    return;
-                } else if (event.key === "ArrowDown") {
-                    next = Math.min(this.items.length - 1, index + 1);
-                } else if (event.key === "ArrowUp") {
-                    next = Math.max(0, index - 1);
-                } else if (event.key === "Home") {
-                    next = 0;
-                } else if (event.key === "End") {
-                    next = this.items.length - 1;
-                } else if (event.key === "PageDown") {
-                    next = Math.min(this.items.length - 1, index + this.visibleRows());
-                } else if (event.key === "PageUp") {
-                    next = Math.max(0, index - this.visibleRows());
-                } else {
-                    return;
-                }
-                event.preventDefault();
-                event.stopPropagation();
-                this.select(next);
-                if (this.selectHandler && next !== index) {
-                    this.selectHandler(this.items[next], next, event);
-                }
-                this.selectedElement()?.focus({ preventScroll: true });
-            });
-        }
+        super.bind({ onSelect, onActivate });
     }
 
     destroy() {
+        this.horizontalResizeObserver?.disconnect();
+        this.horizontalResizeObserver = null;
+        if (this.boundItemsRoot) {
+            this.boundItemsRoot.removeEventListener("click", this.onListClick);
+            this.boundItemsRoot.removeEventListener("dblclick", this.onListClick);
+            this.boundItemsRoot.removeEventListener("keydown", this.onListKeyDown);
+            this.boundItemsRoot = null;
+        }
         this.scrollbarWidget?.destroy();
         this.scrollbarWidget = null;
         this.externalScrollbarWidget = null;
+    }
+}
+
+class TVGridView extends TVListBox {
+    constructor(bounds, columns = [], hScrollBar = null, vScrollBar = null) {
+        super(bounds, columns.length || 1, vScrollBar);
+        this.columns = columns.map((column) => typeof column === "string" ? { title: column } : { ...column });
+        this.hScrollBar = hScrollBar || new TVScrollBar(new TVRect(), sbHorizontal);
+        this.headersVisible = true;
+        this.selectedColumn = 0;
+        this.rowsRoot = null;
+    }
+
+    columnWidths() {
+        return this.columns.map((column) => `${Math.min(200, Math.max(3, Number(column.width) || 12))}ch`).join(" ");
+    }
+
+    draw() {
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        const attrs = attrsToString(this._drawAttrs({ hidden: !this.getState(sfVisible) }));
+        const header = this.columns.map((column) => `<span role="columnheader" class="tv-grid-cell">${escapeHtml(String(column.title ?? ""))}</span>`).join("");
+        return `<div role="grid" class="tv-vlist-viewer tv-grid-view has-h-scrollbar${this.headersVisible ? "" : " headers-hidden"}"${style} data-tv-scroll-frame ${attrs}>
+            <div class="tv-vlist-viewport" data-tv-list-viewport data-tv-viewport>
+                <div role="row" class="tv-grid-header" style="grid-template-columns:${escapeHtml(this.columnWidths())}">${header}</div>
+                <div class="tv-grid-rows" data-tv-grid-rows></div>
+            </div>
+            ${new TVScrollBar(new TVRect(), sbVertical).draw()}${this.hScrollBar.draw()}
+        </div>`;
+    }
+
+    bindRoot(root) {
+        super.bindRoot(root);
+        this.rowsRoot = this._query("[data-tv-grid-rows]");
+        this.setItems(this.items, this.selectedIndex);
+        return this;
+    }
+
+    itemsRoot() { return this.rowsRoot; }
+
+    itemMarkup(row, index) {
+        const cells = this.columns.map((_, column) => `<span role="gridcell" class="tv-grid-cell" data-tv-grid-column="${column}">${escapeHtml(String(row?.[column] ?? ""))}</span>`).join("");
+        return `<div role="row" tabindex="-1" class="tv-vlist-item tv-grid-row" data-tv-list-index="${index}" style="grid-template-columns:${escapeHtml(this.columnWidths())}">${cells}</div>`;
+    }
+
+    setRows(rows = []) {
+        this.list = Array.isArray(rows) ? rows : [];
+        this.setItems(this.list, this.list.length ? 0 : -1);
+    }
+
+    setHeadersVisible(visible) {
+        this.headersVisible = Boolean(visible);
+        this.root?.classList.toggle("headers-hidden", !this.headersVisible);
+        this.updateScrollbar();
+    }
+
+    getCell(row, column) { return this.items[row]?.[column]; }
+
+    selectCell(row, column, options = {}) {
+        this.selectedColumn = Math.max(0, Math.min(this.columns.length - 1, Number(column) || 0));
+        this.select(row, options);
+    }
+
+    getText(index, maxLen = Number.MAX_SAFE_INTEGER) {
+        return Array.from((this.items[index] || []).join("\t")).slice(0, maxLen).join("");
+    }
+
+    bind(handlers = {}) {
+        super.bind(handlers);
+        this.rowsRoot?.setAttribute("role", "rowgroup");
+    }
+
+    updateSelectionUi(scroll = true) {
+        super.updateSelectionUi(scroll);
+        this.rowsRoot?.querySelectorAll(this.itemSelector()).forEach((row) => row.setAttribute("role", "row"));
+        this.rowsRoot?.querySelectorAll("[data-tv-grid-column]").forEach((cell) => {
+            cell.classList.toggle("is-selected", this.resolveIndex(cell) === this.selectedIndex
+                && Number(cell.dataset.tvGridColumn) === this.selectedColumn);
+        });
+    }
+
+    ensureSelectionVisible() {
+        super.ensureSelectionVisible();
+        const cell = this.selectedElement()?.querySelector(`[data-tv-grid-column="${this.selectedColumn}"]`);
+        if (!cell || !this.viewport) { return; }
+        const cellRect = cell.getBoundingClientRect();
+        const viewportRect = this.viewport.getBoundingClientRect();
+        if (cellRect.left < viewportRect.left) {
+            this.viewport.scrollLeft -= viewportRect.left - cellRect.left;
+        } else if (cellRect.right > viewportRect.right) {
+            this.viewport.scrollLeft += cellRect.right - viewportRect.right;
+        }
+    }
+
+    handleEvent(event) {
+        const nativeEvent = event.nativeEvent;
+        if (event.what === evMouseDown) {
+            const cell = nativeEvent?.target?.closest?.("[data-tv-grid-column]");
+            if (cell && this.root?.contains(cell)) {
+                this.selectedColumn = Number(cell.dataset.tvGridColumn);
+            }
+        } else if (event.what === evKeyDown && (nativeEvent?.key === "ArrowLeft" || nativeEvent?.key === "ArrowRight")) {
+            const column = this.selectedColumn + (nativeEvent.key === "ArrowRight" ? 1 : -1);
+            if (column >= 0 && column < this.columns.length) {
+                nativeEvent.preventDefault();
+                this.selectCell(this.selectedIndex, column);
+                this.focusSelectedItem();
+                this.selectHandler?.(this.selectedItem(), this.selectedIndex, nativeEvent);
+                this.clearEvent(event);
+            }
+            return;
+        }
+        super.handleEvent(event);
     }
 }
 
@@ -3050,33 +3191,32 @@ class TVOutline extends TVListBox {
     bind({ onSelect = null, onActivate = null } = {}) {
         this.nodeSelectHandler = onSelect;
         this.nodeActivateHandler = onActivate;
-        if (this.viewport && this.viewport.dataset.tvOutlineKeysBound !== "1") {
-            this.viewport.dataset.tvOutlineKeysBound = "1";
-            this.viewport.addEventListener("keydown", (event) => {
-                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") { return; }
-                const index = this.resolveIndex(event.target);
-                const entry = this.items[index];
-                if (!entry) { return; }
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                if (event.key === "ArrowRight") {
-                    if (entry.hasChildren && !entry.expanded) {
-                        this.toggle(index, true);
-                    } else if (entry.hasChildren) {
-                        this.select(index + 1);
-                    }
+        super.bind({
+            onSelect: (entry, index, event) => this.nodeSelectHandler?.(entry.node, index, event),
+            onActivate: (entry, index, event) => this.nodeActivateHandler?.(entry.node, index, event),
+        });
+    }
+
+    handleEvent(event) {
+        if (event.what === evKeyDown && ["ArrowLeft", "ArrowRight"].includes(event.nativeEvent?.key)) {
+            const index = this.resolveIndex(event.nativeEvent.target);
+            const entry = this.items[index];
+            if (entry) {
+                event.nativeEvent.preventDefault();
+                if (event.nativeEvent.key === "ArrowRight") {
+                    if (entry.hasChildren && !entry.expanded) { this.toggle(index, true); }
+                    else if (entry.hasChildren) { this.select(index + 1); }
                 } else if (entry.hasChildren && entry.expanded) {
                     this.toggle(index, false);
                 } else if (entry.parentKey) {
                     this.selectKey(entry.parentKey);
                 }
-                this.selectedElement()?.focus({ preventScroll: true });
-            }, true);
+                this.focusSelectedItem();
+                this.clearEvent(event);
+                return;
+            }
         }
-        super.bind({
-            onSelect: (entry, index, event) => this.nodeSelectHandler?.(entry.node, index, event),
-            onActivate: (entry, index, event) => this.nodeActivateHandler?.(entry.node, index, event),
-        });
+        super.handleEvent(event);
     }
 }
 
@@ -3131,19 +3271,464 @@ class TVScroller extends TVView {
 }
 
 class TVMenu {
-    constructor(items = []) {
-        this.items = Array.isArray(items) ? items : [];
-        this.defaultItem = null;
+    constructor(items = null, deflt = null) {
+        if (items !== null && !(items instanceof TVMenuItem)) {
+            throw new TypeError("TVMenu expects a linked TVMenuItem list");
+        }
+        this.items = items;
+        this.deflt = deflt instanceof TVMenuItem ? deflt : items;
+    }
+
+    entries() {
+        const items = [];
+        const visited = new Set();
+        for (let item = this.items; item instanceof TVMenuItem && !visited.has(item); item = item.next) {
+            visited.add(item);
+            items.push(item);
+        }
+        return items;
     }
 }
 
 class TVMenuView extends TVView {
-    constructor(bounds, menu = new TVMenu()) {
+    constructor(bounds, menu = new TVMenu(), parentMenu = null) {
         super(bounds);
         if (!(menu instanceof TVMenu)) {
             throw new TypeError("TVMenuView expects TVMenu");
         }
         this.menu = menu;
+        this.parentMenu = parentMenu;
+        this.current = menu.deflt;
+        this.eventMask |= evMouseMove;
+        this.menuRoots = [];
+        this.topLevelActions = [];
+        this.activeRoot = null;
+        this.activePopup = null;
+        this.previousFocus = null;
+        this.lastSelection = new WeakMap();
+        this.itemElements = new Map();
+        this.rootControls = new Map();
+        this.rootByItem = new Map();
+        this.submenuControls = new Map();
+        this.submenuByPopup = new Map();
+        this.popupItems = new Map();
+        this.selectedElement = null;
+        this.topLevelItems = new Set(menu.entries());
+    }
+
+    bindRoot(root) {
+        super.bindRoot(root);
+        const items = new Map();
+        const collect = (menu) => menu.entries().forEach((item) => {
+            items.set(item._menuId, item);
+            if (item.subMenu instanceof TVMenu) { collect(item.subMenu); }
+        });
+        collect(this.menu);
+        this.itemElements.clear();
+        root.querySelectorAll("[data-tv-menu-item-id]").forEach((element) => {
+            const item = items.get(element.dataset.tvMenuItemId);
+            if (item) {
+                element._tvMenuItem = item;
+                this.itemElements.set(item, element);
+                this.updateItem(item, element);
+            }
+        });
+        root._tvMenuView = this;
+        this.refresh();
+        return this;
+    }
+
+    refresh() {
+        if (!this.root) { return; }
+        this.menuRoots = Array.from(this.root.querySelectorAll("[data-tv-menu-root]"));
+        this.topLevelActions = Array.from(this.root.querySelectorAll(".tv-menu-items > .tv-menu-item"));
+        this.rootControls.clear();
+        this.rootByItem.clear();
+        this.menuRoots.forEach((menuRoot) => {
+            const toggle = this.directChild(menuRoot, "[data-tv-menu-toggle]");
+            const popup = this.directChild(menuRoot, "[data-tv-menu-popup]");
+            this.rootControls.set(menuRoot, { toggle, popup });
+            if (toggle?._tvMenuItem) { this.rootByItem.set(toggle._tvMenuItem, menuRoot); }
+        });
+        this.submenuControls.clear();
+        this.submenuByPopup.clear();
+        this.root.querySelectorAll("[data-tv-submenu-root]").forEach((submenuRoot) => {
+            const toggle = this.directChild(submenuRoot, "[data-tv-submenu-toggle]");
+            const popup = this.directChild(submenuRoot, "[data-tv-submenu-popup]");
+            if (!toggle || !popup) { return; }
+            this.submenuControls.set(toggle, { root: submenuRoot, popup });
+            this.submenuByPopup.set(popup, {
+                root: submenuRoot,
+                toggle,
+                parentPopup: toggle.closest(".tv-menu-popup"),
+            });
+        });
+        if (this.activeRoot && !this.activeRoot.isConnected) {
+            this.activeRoot = null;
+            this.activePopup = null;
+            this.previousFocus = null;
+        }
+        if (this.selectedElement && !this.selectedElement.isConnected) {
+            this.selectedElement = null;
+        }
+        this.popupItems.clear();
+        this.root.querySelectorAll(".tv-menu-popup").forEach((popup) => {
+            popup.setAttribute("role", "menu");
+            this.popupItems.set(popup, Array.from(popup.querySelectorAll(".tv-menu-popup-item")).filter(
+                (item) => item.closest(".tv-menu-popup") === popup
+            ));
+            this.menuItems(popup).forEach((item) => {
+                item.setAttribute("role", "menuitem");
+                item.tabIndex = -1;
+            });
+        });
+    }
+
+    getHelpCtx() {
+        if (!this.activeRoot) { return hcNoContext; }
+        const rootItem = this.rootControls.get(this.activeRoot)?.toggle?._tvMenuItem;
+        return this.current?.helpCtx || rootItem?.helpCtx || hcNoContext;
+    }
+
+    directChild(root, selector) {
+        return root
+            ? Array.from(root.children).find((child) => child.matches?.(selector)) || null
+            : null;
+    }
+
+    menuItems(popup) {
+        if (!popup) { return []; }
+        return (this.popupItems.get(popup) || []).filter((item) => !item._tvMenuItem?.disabled);
+    }
+
+    menuMnemonic(item) {
+        return item instanceof TVMenuItem
+            ? (String(item.name).match(/~([^~]+)~/)?.[1] || "").charAt(0).toLowerCase()
+            : "";
+    }
+
+    markSelected(element, focus = true) {
+        if (!element) { return; }
+        if (this.selectedElement && this.selectedElement !== element) {
+            this.selectedElement.classList.remove("is-menu-selected");
+            this.selectedElement.tabIndex = -1;
+        }
+        this.selectedElement = element;
+        element.classList.add("is-menu-selected");
+        element.tabIndex = 0;
+        this.current = element._tvMenuItem || this.current;
+        this.activePopup = element.closest(".tv-menu-popup") || this.activePopup;
+        if (this.activePopup) { this.lastSelection.set(this.activePopup, element); }
+        if (focus) {
+            element.focus({ preventScroll: true });
+            element.scrollIntoView({ block: "nearest" });
+        }
+    }
+
+    selectByIndex(popup, index) {
+        const items = this.menuItems(popup);
+        if (!items.length) { return null; }
+        const normalized = (index + items.length) % items.length;
+        this.markSelected(items[normalized]);
+        return items[normalized];
+    }
+
+    moveSelection(delta) {
+        const popup = this.activePopup || this.rootControls.get(this.activeRoot)?.popup;
+        const items = this.menuItems(popup);
+        if (!items.length) { return; }
+        const current = items.indexOf(document.activeElement);
+        this.selectByIndex(popup, current < 0 ? (delta > 0 ? 0 : items.length - 1) : current + delta);
+    }
+
+    openMenu(menuRoot, { focusFirst = true } = {}) {
+        const { popup, toggle } = this.rootControls.get(menuRoot) || {};
+        if (!popup || !toggle) { return; }
+        const savedFocus = this.previousFocus
+            || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        this.closeMenus({ restoreFocus: false, preservePreviousFocus: true });
+        this.previousFocus = savedFocus;
+        popup.hidden = false;
+        toggle.setAttribute("aria-expanded", "true");
+        toggle.classList.add("is-current");
+        this.current = toggle._tvMenuItem || this.current;
+        this.activeRoot = menuRoot;
+        this.activePopup = popup;
+        requestAnimationFrame(() => {
+            fitMenuPopupToViewport(menuRoot, popup);
+            fillBorders(popup);
+            if (focusFirst) {
+                const remembered = this.lastSelection.get(popup);
+                if (remembered && this.menuItems(popup).includes(remembered)) {
+                    this.markSelected(remembered);
+                } else {
+                    this.selectByIndex(popup, 0);
+                }
+            }
+        });
+    }
+
+    openSubmenu(toggle, { focusFirst = true } = {}) {
+        const { root: submenuRoot, popup } = this.submenuControls.get(toggle) || {};
+        if (!submenuRoot || !popup) { return false; }
+        this.closeSubmenusOutsidePath(submenuRoot, popup);
+        popup.hidden = false;
+        toggle.classList.add("is-submenu-open");
+        toggle.setAttribute("aria-expanded", "true");
+        this.current = toggle._tvMenuItem || this.current;
+        this.activePopup = popup;
+        requestAnimationFrame(() => {
+            fitMenuPopupToViewport(submenuRoot, popup);
+            fillBorders(popup);
+            if (focusFirst) {
+                const remembered = this.lastSelection.get(popup);
+                if (remembered && this.menuItems(popup).includes(remembered)) {
+                    this.markSelected(remembered);
+                } else {
+                    this.selectByIndex(popup, 0);
+                }
+            }
+        });
+        return true;
+    }
+
+    closeSubmenu(popup, { focusToggle = true } = {}) {
+        if (!popup || popup.hidden) { return; }
+        const { toggle, parentPopup } = this.submenuByPopup.get(popup) || {};
+        this.submenuByPopup.forEach((_controls, child) => {
+            if (child !== popup && popup.contains(child)) {
+                this.closeSubmenu(child, { focusToggle: false });
+            }
+        });
+        popup.hidden = true;
+        resetMenuPopupLayout(popup);
+        if (toggle) {
+            toggle.classList.remove("is-submenu-open");
+            toggle.setAttribute("aria-expanded", "false");
+        }
+        this.activePopup = parentPopup || null;
+        if (focusToggle && toggle) { this.markSelected(toggle); }
+    }
+
+    closeSubmenusOutsidePath(submenuRoot, activePopup) {
+        this.submenuByPopup.forEach((_controls, popup) => {
+            if (popup !== activePopup && !popup.contains(submenuRoot)) {
+                this.closeSubmenu(popup, { focusToggle: false });
+            }
+        });
+    }
+
+    closeSubmenus() {
+        this.submenuByPopup.forEach((_controls, popup) => {
+            this.closeSubmenu(popup, { focusToggle: false });
+        });
+    }
+
+    closeMenus({ restoreFocus = true, preservePreviousFocus = false } = {}) {
+        const focusTarget = this.previousFocus;
+        this.closeSubmenus();
+        this.menuRoots.forEach((menuRoot) => {
+            const { popup, toggle } = this.rootControls.get(menuRoot) || {};
+            if (popup) {
+                popup.hidden = true;
+                resetMenuPopupLayout(popup);
+            }
+            if (toggle) {
+                toggle.setAttribute("aria-expanded", "false");
+                toggle.classList.remove("is-current");
+            }
+        });
+        if (this.selectedElement) {
+            this.selectedElement.classList.remove("is-menu-selected");
+            this.selectedElement.tabIndex = -1;
+            this.selectedElement = null;
+        }
+        this.activeRoot = null;
+        this.activePopup = null;
+        if (!preservePreviousFocus) { this.previousFocus = null; }
+        if (restoreFocus && focusTarget?.isConnected && typeof focusTarget.focus === "function") {
+            focusTarget.focus({ preventScroll: true });
+        }
+    }
+
+    switchRoot(delta) {
+        if (!this.menuRoots.length) { return; }
+        const current = this.menuRoots.indexOf(this.activeRoot);
+        const index = current < 0 ? 0 : (current + delta + this.menuRoots.length) % this.menuRoots.length;
+        this.openMenu(this.menuRoots[index]);
+    }
+
+    activateItem(item, nativeEvent = null) {
+        if (!(item instanceof TVMenuItem) || item.disabled || !item.command) { return false; }
+        this.current = item;
+        const focusRemainsInMenu = Boolean(document.activeElement?.closest?.("[data-tv-menu-bar]"));
+        this.closeMenus({ restoreFocus: focusRemainsInMenu });
+        this.dispatchEvent(new TVEvent(evCommand, {
+            command: item.command,
+            infoPtr: item,
+            nativeEvent,
+        }));
+        return true;
+    }
+
+    activateMnemonic(key, nativeEvent = null) {
+        const mnemonic = String(key || "").toLowerCase();
+        const element = this.menuItems(this.activePopup).find((candidate) => (
+            this.menuMnemonic(candidate._tvMenuItem) === mnemonic
+        ));
+        if (!element) { return false; }
+        this.markSelected(element);
+        const item = element._tvMenuItem;
+        if (item.subMenu instanceof TVMenu) {
+            this.openSubmenu(element);
+        } else {
+            this.activateItem(item, nativeEvent);
+        }
+        return true;
+    }
+
+    activateKeyCode(keyCode, nativeEvent = null) {
+        if (!keyCode) { return false; }
+        const item = Array.from(this.itemElements.keys())
+            .find((candidate) => candidate.keyCode === keyCode && !candidate.disabled);
+        if (!item) { return false; }
+        const element = this.itemElements.get(item);
+        if (item.subMenu instanceof TVMenu && !this.topLevelItems.has(item)) {
+            this.openSubmenu(element);
+        } else if (item.subMenu instanceof TVMenu) {
+            this.openMenu(this.rootByItem.get(item));
+        } else {
+            this.activateItem(item, nativeEvent);
+        }
+        return true;
+    }
+
+    handleEvent(event) {
+        if (event.what === evMouseDown) {
+            const item = event.infoPtr instanceof TVMenuItem ? event.infoPtr : null;
+            const element = this.itemElements.get(item);
+            if (!item) {
+                this.closeMenus();
+            } else if (element && !item.disabled) {
+                if (item.subMenu instanceof TVMenu && !this.topLevelItems.has(item)) {
+                    this.markSelected(element, false);
+                    this.openSubmenu(element, { focusFirst: false });
+                } else if (item.subMenu instanceof TVMenu) {
+                    const root = this.rootByItem.get(item);
+                    this.openMenu(root, { focusFirst: false });
+                } else {
+                    this.activateItem(item, event.nativeEvent);
+                }
+            }
+            this.clearEvent(event);
+            return;
+        }
+        if (event.what === evMouseMove) {
+            const item = event.infoPtr instanceof TVMenuItem ? event.infoPtr : null;
+            const element = this.itemElements.get(item);
+            if (element && !item.disabled) {
+                if (this.activeRoot && item.subMenu instanceof TVMenu && !this.topLevelItems.has(item)) {
+                    this.markSelected(element, false);
+                    this.openSubmenu(element, { focusFirst: false });
+                } else if (item.subMenu instanceof TVMenu) {
+                    const root = this.rootByItem.get(item);
+                    if (this.activeRoot && this.activeRoot !== root) {
+                        this.openMenu(root, { focusFirst: false });
+                    }
+                } else if (this.activeRoot) {
+                    this.markSelected(element, false);
+                    this.closeSubmenusOutsidePath(element, null);
+                }
+            }
+            this.clearEvent(event);
+            return;
+        }
+        if (event.what !== evKeyDown) { return; }
+        const key = event.nativeEvent;
+        if (!key || key.defaultPrevented) { return; }
+        if (this.activateKeyCode(getKeyCode(key), key)) {
+            this.clearEvent(event);
+            return;
+        }
+        const plainF10 = key.key === "F10" && !key.altKey && !key.ctrlKey && !key.metaKey && !key.shiftKey;
+        if (plainF10) {
+            if (this.activeRoot) { this.closeMenus(); }
+            else if (this.menuRoots.length) { this.openMenu(this.menuRoots[0]); }
+            this.clearEvent(event);
+            return;
+        }
+        if (key.altKey && !key.ctrlKey && !key.metaKey && key.key.length === 1) {
+            const root = this.menuRoots.find((candidate) => (
+                this.menuMnemonic(this.rootControls.get(candidate)?.toggle?._tvMenuItem) === key.key.toLowerCase()
+            ));
+            if (root) {
+                this.openMenu(root);
+                this.clearEvent(event);
+                return;
+            }
+            const action = this.topLevelActions.find((candidate) => (
+                this.menuMnemonic(candidate._tvMenuItem) === key.key.toLowerCase()
+            ));
+            if (action) {
+                this.activateItem(action._tvMenuItem, key);
+                this.clearEvent(event);
+                return;
+            }
+        }
+        if (!this.activeRoot) { return; }
+        if (key.key === "Escape") {
+            if (this.activePopup && this.activePopup !== this.rootControls.get(this.activeRoot)?.popup) {
+                this.closeSubmenu(this.activePopup);
+            } else {
+                this.closeMenus();
+            }
+        } else if (key.key === "ArrowDown" || (key.key === "Tab" && !key.shiftKey)) {
+            this.moveSelection(1);
+        } else if (key.key === "ArrowUp" || (key.key === "Tab" && key.shiftKey)) {
+            this.moveSelection(-1);
+        } else if (key.key === "Home" || key.key === "End") {
+            const items = this.menuItems(this.activePopup);
+            this.selectByIndex(this.activePopup, key.key === "Home" ? 0 : items.length - 1);
+        } else if (key.key === "ArrowRight") {
+            const current = document.activeElement;
+            if (!(current?._tvMenuItem?.subMenu instanceof TVMenu)
+                || !this.openSubmenu(current)) {
+                this.switchRoot(1);
+            }
+        } else if (key.key === "ArrowLeft") {
+            if (this.activePopup && this.activePopup !== this.rootControls.get(this.activeRoot)?.popup) {
+                this.closeSubmenu(this.activePopup);
+            } else {
+                this.switchRoot(-1);
+            }
+        } else if (key.key === "Enter" || key.key === " ") {
+            const current = document.activeElement;
+            if (!this.menuItems(this.activePopup).includes(current)) { return; }
+            if (current._tvMenuItem?.subMenu instanceof TVMenu) {
+                this.openSubmenu(current);
+            } else {
+                this.activateItem(current._tvMenuItem, key);
+            }
+        } else if (!(key.altKey || key.ctrlKey || key.metaKey) && key.key.length === 1) {
+            if (!this.activateMnemonic(key.key, key)) { return; }
+        } else {
+            return;
+        }
+        this.clearEvent(event);
+    }
+
+    updateItem(item, element = null) {
+        if (!(item instanceof TVMenuItem)) { return; }
+        const target = element || this.itemElements.get(item);
+        if (!target) { return; }
+        target.disabled = item.disabled;
+        target.setAttribute("aria-disabled", item.disabled ? "true" : "false");
+        target.classList.toggle("is-disabled", item.disabled);
+        if (item.disabled) {
+            target.classList.remove("is-menu-selected");
+            target.tabIndex = -1;
+            if (this.selectedElement === target) { this.selectedElement = null; }
+        }
     }
 
     drawItem(item, view = "popup") {
@@ -3156,9 +3741,20 @@ class TVMenuView extends TVView {
         }
         if (item.subMenu instanceof TVMenu) {
             const helpAttr = item.helpCtx !== hcNoContext ? ` data-tv-help-ctx="${item.helpCtx}"` : "";
+            const toggleAttrs = attrsToString({
+                type: "button",
+                "data-tv-submenu-toggle": true,
+                "data-tv-menu-item-id": item._menuId,
+                ...TVView._controlAttrs({
+                    command: "menu-toggle",
+                    disabled: item.disabled,
+                    ariaHasPopup: true,
+                    ariaExpanded: false,
+                }),
+            });
             return '<div class="tv-submenu-root" data-tv-submenu-root="true"' + helpAttr + '>'
-                + '<button type="button" class="tv-menu-popup-item tv-submenu-toggle" data-tv-submenu-toggle="true">'
-                + item.name + '<span class="tv-submenu-arrow">►</span>'
+                + '<button class="tv-menu-popup-item tv-submenu-toggle" ' + toggleAttrs + '>'
+                + renderHotkeyMarkup(item.name) + '<span class="tv-submenu-arrow">►</span>'
                 + '</button>'
                 + new TVMenuBox(new TVRect(), item.subMenu, this).draw()
                 + '</div>';
@@ -3166,29 +3762,26 @@ class TVMenuView extends TVView {
         const isMenuBar = view === "bar";
         const attrs = attrsToString({
             type: "button",
-            ...(item.keyCode !== kbNoKey ? { "data-tv-key-code": item.keyCode } : {}),
             ...(item.helpCtx !== hcNoContext ? { "data-tv-help-ctx": item.helpCtx } : {}),
+            "data-tv-menu-item-id": item._menuId,
             ...TVView._controlAttrs({
                 name: item.command,
                 command: item.command,
-                value: item.value(),
-                commandData: item.commandData(),
                 disabled: item.disabled,
-                ariaHasPopup: isMenuBar ? true : null,
-                ariaExpanded: isMenuBar ? false : null,
             }),
         });
         const className = isMenuBar ? "tv-menu-item tv-menu-button" : "tv-menu-popup-item";
-        return `<button class="${className}" ${attrs}>${item.name}</button>`;
+        const shortcut = item.param
+            ? `<span class="tv-menu-hotkey">${escapeHtml(item.param)}</span>`
+            : "";
+        return `<button class="${className}" ${attrs}>${renderHotkeyMarkup(item.name)}${shortcut}</button>`;
     }
 
-    renderItems(items = this.menu.items, view = "popup") {
-        return items.map((item) => (
-            typeof item === "string" ? item : item instanceof TVMenuItem ? this.drawItem(item, view) : ""
-        ));
+    renderItems(view = "popup") {
+        return this.menu.entries().map((item) => this.drawItem(item, view));
     }
 
-    draw(view = "popup") { return this.renderItems(this.menu.items, view).join(""); }
+    draw(view = "popup") { return this.renderItems(view).join(""); }
 }
 
 /**
@@ -3201,38 +3794,70 @@ class TVMenuItem {
         command = "",
         keyCode = kbNoKey,
         helpCtx = hcNoContext,
-        param = true,
+        param = "",
         next = null,
     ) {
         this.next = next instanceof TVMenuItem ? next : null;
+        this._menuId = `tv-menu-item-${TVMenuItem.nextId++}`;
         this.name = String(name || "");
         this.command = command;
         this.flags = 0;
         this.keyCode = Number(keyCode) || kbNoKey;
         this.helpCtx = normalizeHelpContext(helpCtx);
-        this.param = param;
+        this.param = String(param || "");
         this.subMenu = null;
         this.separator = false;
         this.disabled = false;
     }
 
-    value() {
-        return this.param && typeof this.param === "object"
-            ? (Object.hasOwn(this.param, "value") ? this.param.value : true)
-            : this.param;
-    }
-
-    commandData() {
-        if (!this.param || typeof this.param !== "object") { return {}; }
-        const { value: _value, ...data } = this.param;
-        return data;
+    append(item) {
+        if (!(item instanceof TVMenuItem)) {
+            throw new TypeError("TVMenuItem.append expects TVMenuItem");
+        }
+        let tail = this;
+        const visited = new Set();
+        while (tail.next instanceof TVMenuItem && !visited.has(tail)) {
+            visited.add(tail);
+            tail = tail.next;
+        }
+        tail.next = item;
+        return this;
     }
 
     setDisabled(disabled = true) {
         this.disabled = Boolean(disabled);
         return this;
     }
+}
 
+TVMenuItem.nextId = 1;
+
+class TVSubMenu extends TVMenuItem {
+    constructor(name, keyCode = kbNoKey, helpCtx = hcNoContext) {
+        super(name, "", keyCode, helpCtx);
+        this.subMenu = new TVMenu();
+    }
+
+    append(item) {
+        if (!(item instanceof TVMenuItem)) {
+            throw new TypeError("TVSubMenu.append expects TVMenuItem");
+        }
+        if (!this.subMenu.items) {
+            this.subMenu.items = item;
+            this.subMenu.deflt = item;
+        } else {
+            this.subMenu.items.append(item);
+        }
+        return this;
+    }
+}
+
+function NewItem(name, param, keyCode, command, helpCtx, next = null) {
+    return new TVMenuItem(name, command, keyCode, helpCtx, param, next);
+}
+
+function NewMenu(items = null) {
+    return new TVMenu(items);
 }
 
 function NewLine(next = null) {
@@ -3246,10 +3871,38 @@ function NewSubMenu(name, helpCtx, subMenu, next = null) {
     if (!(subMenu instanceof TVMenu)) {
         throw new TypeError("NewSubMenu expects TVMenu");
     }
-    const item = new TVMenuItem(name, "", kbNoKey, helpCtx);
+    const item = new TVSubMenu(name, kbNoKey, helpCtx);
     item.subMenu = subMenu;
     item.next = next instanceof TVMenuItem ? next : null;
     return item;
+}
+
+class TVMenuBar extends TVMenuView {
+    draw() {
+        const items = this.menu.entries().map((item) => {
+            if (item.subMenu instanceof TVMenu) {
+                const helpAttr = item.helpCtx !== hcNoContext ? ` data-tv-help-ctx="${item.helpCtx}"` : "";
+                const toggleAttrs = attrsToString({
+                    type: "button",
+                    "data-tv-menu-toggle": true,
+                    "data-tv-menu-item-id": item._menuId,
+                    ...TVView._controlAttrs({
+                        name: "menu-toggle",
+                        command: "menu-toggle",
+                        disabled: item.disabled,
+                        ariaHasPopup: true,
+                        ariaExpanded: false,
+                    }),
+                });
+                return `<div class="tv-menu-root" data-tv-menu-root="true"${helpAttr}>`
+                    + `<button class="tv-menu-item tv-menu-button" ${toggleAttrs}>${renderHotkeyMarkup(item.name)}</button>`
+                    + new TVMenuBox(new TVRect(), item.subMenu).draw()
+                    + "</div>";
+            }
+            return this.drawItem(item, "bar");
+        });
+        return `<nav class="tv-menu-items">${items.join("")}</nav>`;
+    }
 }
 
 /** Turbo Vision status-line command descriptor (TStatusItem). */
@@ -3314,7 +3967,6 @@ class TVStatusLine extends TVView {
     drawItem(item) {
         const attrs = attrsToString({
             type: "button",
-            ...(item.keyCode !== kbNoKey ? { "data-tv-key-code": item.keyCode } : {}),
             ...TVView._controlAttrs({
                 name: item.command,
                 command: item.command,
@@ -3334,6 +3986,20 @@ class TVStatusLine extends TVView {
         return this.items.map((item) => (
             typeof item === "string" ? item : item instanceof TVStatusItem ? this.drawItem(item) : ""
         )).join("");
+    }
+
+    bindRoot(root) {
+        super.bindRoot(root);
+        this.bindItems();
+        return this;
+    }
+
+    bindItems() {
+        if (!this.root) { return; }
+        this.root._tvStatusLine = this;
+        const buttons = this.root.querySelectorAll("button.tv-status-item");
+        const items = this.items.filter((item) => item instanceof TVStatusItem);
+        buttons.forEach((button, index) => { button._tvStatusItem = items[index] || null; });
     }
 }
 
@@ -3358,7 +4024,7 @@ class TVMenuBox extends TVMenuView {
         const scrollbarMarkup = new TVScrollBar(new TVRect(), sbVertical).draw();
         // Split items into segments at separator strings to render them as body-level rows.
         const segments = [[]];
-        for (const html of this.renderItems(this.menu.items, "popup")) {
+        for (const html of this.renderItems("popup")) {
             if (/^<div class="tv-menu-popup-separator(?:\s|\")/.test(html.trim())) {
                 segments.push("separator");
                 segments.push([]);
@@ -3439,14 +4105,11 @@ function syncMenuPopupScrollbar(popup) {
 }
 
 function bindMenuPopupScrollbar(popup) {
-    if (!popup || popup.dataset.tvMenuScrollbarBound === "1") {
-        return;
-    }
+    if (!popup || popup._tvMenuPopupScrollbar) { return; }
     const parts = getMenuPopupScrollbarParts(popup);
     if (!parts) {
         return;
     }
-    popup.dataset.tvMenuScrollbarBound = "1";
     const main = popup.querySelector(".tv-menu-popup-main");
     popup._tvMenuPopupScrollbar = main ? new TVScrollBar(new TVRect()).bindRoot(main) : null;
 }
@@ -3573,466 +4236,120 @@ class TVMenuController {
     constructor({ root = document, onUnhandledKeyDown = null, commandTarget = null } = {}) {
         this.root = root;
         this.onUnhandledKeyDown = onUnhandledKeyDown;
-        this.commandTarget = commandTarget;
-        this.menuRoots = [];
-        this.topLevelActions = [];
-        this.activeRoot = null;
-        this.activePopup = null;
-        this.previousFocus = null;
-        this.lastSelection = new WeakMap();
+        this._commandTarget = commandTarget;
+        this.menuView = null;
         this.onDocumentClick = (event) => {
-            if (!event.target.closest("[data-tv-menu-root]")) {
-                this.closeMenus();
+            if (!this.menuView?.root?.contains?.(event.target) && this.menuView?.activeRoot) {
+                this.menuView.handleEvent(new TVEvent(evMouseDown, { nativeEvent: event }));
             }
         };
         this.onDocumentCommand = (event) => this.onCommand(event);
+        this.onDocumentHover = (event) => this.onHover(event);
         this.onDocumentKeyDown = (event) => this.onKeyDown(event);
         document.addEventListener("click", this.onDocumentClick);
         document.addEventListener("click", this.onDocumentCommand);
+        document.addEventListener("mouseover", this.onDocumentHover);
         document.addEventListener("keydown", this.onDocumentKeyDown);
         this.refresh();
     }
 
-    onCommand(nativeEvent) {
-        const control = nativeEvent.target?.closest?.("[data-tv-command]");
-        if (!control || !control.closest("[data-tv-menu-bar], [data-tv-status-line]")) { return; }
-        const command = control.dataset.tvCommand || "";
-        if (!command || command === "menu-toggle" || control.disabled || control.getAttribute("aria-disabled") === "true") {
-            return;
-        }
-        nativeEvent.preventDefault();
-        const event = new TVEvent(evCommand, { command, infoPtr: control, nativeEvent });
-        if (this.commandTarget instanceof TVView) {
-            this.commandTarget.dispatchEvent(event);
-        } else {
-            this.commandTarget?.handleEvent?.(event);
-        }
-        if (control.closest("[data-tv-menu-root]")) {
-            const focusRemainsInMenu = Boolean(document.activeElement?.closest?.("[data-tv-menu-bar]"));
-            this.closeMenus({ restoreFocus: focusRemainsInMenu });
-        }
+    get commandTarget() { return this._commandTarget; }
+
+    set commandTarget(target) {
+        this._commandTarget = target;
+        if (this.menuView) { this.menuView.owner = target instanceof TVView ? target : null; }
     }
 
     refresh() {
-        this.menuRoots = Array.from(this.root.querySelectorAll("[data-tv-menu-root]"));
-        this.topLevelActions = Array.from(this.root.querySelectorAll(".tv-menu-items > .tv-menu-item"));
-        if (this.activeRoot && !this.activeRoot.isConnected) {
-            this.activeRoot = null;
-            this.activePopup = null;
-            this.previousFocus = null;
+        this.menuView = this.root.querySelector("[data-tv-menu-bar]")?._tvMenuView || null;
+        if (this.menuView) {
+            this.menuView.owner = this._commandTarget instanceof TVView ? this._commandTarget : null;
+            this.menuView.refresh();
         }
-        this.menuRoots.forEach((menuRoot) => this.bindMenuRoot(menuRoot));
-        this.root.querySelectorAll(".tv-menu-popup").forEach((popup) => {
-            popup.setAttribute("role", "menu");
-            this.menuItems(popup).forEach((item) => {
-                item.setAttribute("role", "menuitem");
-                item.tabIndex = -1;
-                if (item.dataset.tvKeyboardMenuItemBound !== "1") {
-                    item.dataset.tvKeyboardMenuItemBound = "1";
-                    item.addEventListener("mouseenter", () => this.markSelected(item, false));
-                }
-            });
-        });
-        this.root.querySelectorAll("[data-tv-submenu-toggle]").forEach((toggle) => this.bindSubmenu(toggle));
     }
 
-    getHelpCtx() {
-        const selected = this.root.querySelector(".tv-menu-popup-item.is-menu-selected");
-        const currentRoot = this.activeRoot?.querySelector("[data-tv-menu-toggle]") || this.activeRoot;
-        return elementHelpContext(selected) || elementHelpContext(currentRoot) || hcNoContext;
-    }
+    getHelpCtx() { return this.menuView?.getHelpCtx() || hcNoContext; }
 
-    bindMenuRoot(menuRoot) {
-        const toggle = menuRoot.querySelector("[data-tv-menu-toggle]");
-        if (!toggle || toggle.dataset.tvKeyboardMenuBound === "1") {
+    onCommand(nativeEvent) {
+        const control = nativeEvent.target?.closest?.("button");
+        if (!control || control.disabled || control.getAttribute("aria-disabled") === "true") { return; }
+        const menuItem = control._tvMenuItem;
+        if (menuItem instanceof TVMenuItem && this.menuView?.itemElements.get(menuItem) === control) {
+            nativeEvent.preventDefault();
+            this.menuView?.handleEvent(new TVEvent(evMouseDown, {
+                infoPtr: menuItem,
+                nativeEvent,
+            }));
             return;
         }
-        toggle.dataset.tvKeyboardMenuBound = "1";
-        toggle.addEventListener("click", (event) => {
-            event.preventDefault();
-            if (this.activeRoot === menuRoot) {
-                this.closeMenus({ restoreFocus: false });
-                toggle.focus();
-            } else {
-                this.openMenu(menuRoot, { focusFirst: false });
-            }
+        const statusItem = control._tvStatusItem;
+        if (!(statusItem instanceof TVStatusItem)) { return; }
+        nativeEvent.preventDefault();
+        const event = new TVEvent(evCommand, {
+            command: statusItem.command,
+            infoPtr: statusItem,
+            nativeEvent,
         });
-        menuRoot.addEventListener("mouseenter", () => {
-            if (this.activeRoot && this.activeRoot !== menuRoot) {
-                this.openMenu(menuRoot, { focusFirst: false });
-            }
-        });
-    }
-
-    bindSubmenu(toggle) {
-        if (toggle.dataset.tvKeyboardSubmenuBound === "1") {
-            return;
-        }
-        const submenuRoot = toggle.closest("[data-tv-submenu-root]");
-        const popup = this.directChild(submenuRoot, "[data-tv-submenu-popup]");
-        if (!submenuRoot || !popup) {
-            return;
-        }
-        toggle.dataset.tvKeyboardSubmenuBound = "1";
-        toggle.setAttribute("aria-haspopup", "true");
-        toggle.setAttribute("aria-expanded", "false");
-        toggle.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (popup.hidden) {
-                this.openSubmenu(toggle, { focusFirst: false });
-            } else {
-                this.closeSubmenu(popup, { focusToggle: false });
-            }
-        });
-        submenuRoot.addEventListener("mouseenter", () => {
-            this.openSubmenu(toggle, { focusFirst: false });
-        });
-        submenuRoot.addEventListener("mouseleave", (event) => {
-            const related = event.relatedTarget;
-            if (related && (popup.contains(related) || submenuRoot.contains(related))) {
-                return;
-            }
-            this.closeSubmenu(popup, { focusToggle: false });
-        });
-    }
-
-    directChild(root, selector) {
-        return root
-            ? Array.from(root.children).find((child) => child.matches?.(selector)) || null
-            : null;
-    }
-
-    menuItems(popup) {
-        if (!popup) {
-            return [];
-        }
-        return Array.from(popup.querySelectorAll(".tv-menu-popup-item")).filter((item) => (
-            item.closest(".tv-menu-popup") === popup
-            && !item.disabled
-            && item.getAttribute("aria-disabled") !== "true"
-            && !item.classList.contains("is-disabled")
-        ));
-    }
-
-    menuMnemonic(element) {
-        const hotkey = element ? element.querySelector(".tv-hotkey") : null;
-        return hotkey ? hotkey.textContent.trim().toLowerCase() : "";
-    }
-
-    markSelected(item, focus = true) {
-        if (!item) {
-            return;
-        }
-        this.root.querySelectorAll(".tv-menu-popup-item.is-menu-selected").forEach((current) => {
-            current.classList.remove("is-menu-selected");
-            current.tabIndex = -1;
-        });
-        item.classList.add("is-menu-selected");
-        item.tabIndex = 0;
-        this.activePopup = item.closest(".tv-menu-popup") || this.activePopup;
-        if (this.activePopup) {
-            this.lastSelection.set(this.activePopup, item);
-        }
-        if (focus) {
-            item.focus({ preventScroll: true });
-            item.scrollIntoView({ block: "nearest" });
-        }
-    }
-
-    selectByIndex(popup, index) {
-        const items = this.menuItems(popup);
-        if (!items.length) {
-            return null;
-        }
-        const normalized = (index + items.length) % items.length;
-        this.markSelected(items[normalized]);
-        return items[normalized];
-    }
-
-    moveSelection(delta) {
-        const popup = this.activePopup || this.activeRoot?.querySelector("[data-tv-menu-popup]");
-        const items = this.menuItems(popup);
-        if (!items.length) {
-            return;
-        }
-        const current = items.indexOf(document.activeElement);
-        this.selectByIndex(popup, current < 0 ? (delta > 0 ? 0 : items.length - 1) : current + delta);
-    }
-
-    openMenu(menuRoot, { focusFirst = true } = {}) {
-        const popup = menuRoot?.querySelector("[data-tv-menu-popup]");
-        const toggle = menuRoot?.querySelector("[data-tv-menu-toggle]");
-        if (!popup || !toggle) {
-            return;
-        }
-        const savedFocus = this.previousFocus
-            || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-        this.closeMenus({ restoreFocus: false, preservePreviousFocus: true });
-        this.previousFocus = savedFocus;
-        popup.hidden = false;
-        toggle.setAttribute("aria-expanded", "true");
-        toggle.classList.add("is-current");
-        this.activeRoot = menuRoot;
-        this.activePopup = popup;
-        requestAnimationFrame(() => {
-            fitMenuPopupToViewport(menuRoot, popup);
-            fillBorders(popup);
-            if (focusFirst) {
-                const remembered = this.lastSelection.get(popup);
-                if (remembered && this.menuItems(popup).includes(remembered)) {
-                    this.markSelected(remembered);
-                } else {
-                    this.selectByIndex(popup, 0);
-                }
-            }
-        });
-    }
-
-    openSubmenu(toggle, { focusFirst = true } = {}) {
-        const submenuRoot = toggle?.closest("[data-tv-submenu-root]");
-        const popup = this.directChild(submenuRoot, "[data-tv-submenu-popup]");
-        if (!submenuRoot || !popup) {
-            return false;
-        }
-        this.closeSubmenusOutsidePath(submenuRoot, popup);
-        popup.hidden = false;
-        toggle.classList.add("is-submenu-open");
-        toggle.setAttribute("aria-expanded", "true");
-        this.activePopup = popup;
-        requestAnimationFrame(() => {
-            fitMenuPopupToViewport(submenuRoot, popup);
-            fillBorders(popup);
-            if (focusFirst) {
-                const remembered = this.lastSelection.get(popup);
-                if (remembered && this.menuItems(popup).includes(remembered)) {
-                    this.markSelected(remembered);
-                } else {
-                    this.selectByIndex(popup, 0);
-                }
-            }
-        });
-        return true;
-    }
-
-    closeSubmenu(popup, { focusToggle = true } = {}) {
-        if (!popup) {
-            return;
-        }
-        const submenuRoot = popup.closest("[data-tv-submenu-root]");
-        const toggle = this.directChild(submenuRoot, "[data-tv-submenu-toggle]");
-        popup.querySelectorAll("[data-tv-submenu-popup]").forEach((child) => {
-            if (child !== popup) { this.closeSubmenu(child, { focusToggle: false }); }
-        });
-        popup.hidden = true;
-        resetMenuPopupLayout(popup);
-        if (toggle) {
-            toggle.classList.remove("is-submenu-open");
-            toggle.setAttribute("aria-expanded", "false");
-        }
-        this.activePopup = toggle?.closest(".tv-menu-popup") || null;
-        if (focusToggle && toggle) {
-            this.markSelected(toggle);
-        }
-    }
-
-    closeSubmenusOutsidePath(submenuRoot, activePopup) {
-        this.root.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
-            if (popup === activePopup || popup.contains(submenuRoot)) {
-                return;
-            }
-            this.closeSubmenu(popup, { focusToggle: false });
-        });
-    }
-
-    closeSubmenus() {
-        this.root.querySelectorAll("[data-tv-submenu-popup]").forEach((popup) => {
-            this.closeSubmenu(popup, { focusToggle: false });
-        });
-    }
-
-    closeMenus({ restoreFocus = true, preservePreviousFocus = false } = {}) {
-        const focusTarget = this.previousFocus;
-        this.closeSubmenus();
-        this.menuRoots.forEach((menuRoot) => {
-            const popup = menuRoot.querySelector("[data-tv-menu-popup]");
-            const toggle = menuRoot.querySelector("[data-tv-menu-toggle]");
-            if (popup) {
-                popup.hidden = true;
-                resetMenuPopupLayout(popup);
-            }
-            if (toggle) {
-                toggle.setAttribute("aria-expanded", "false");
-                toggle.classList.remove("is-current");
-            }
-        });
-        this.root.querySelectorAll(".tv-menu-popup-item.is-menu-selected").forEach((item) => {
-            item.classList.remove("is-menu-selected");
-            item.tabIndex = -1;
-        });
-        this.activeRoot = null;
-        this.activePopup = null;
-        if (!preservePreviousFocus) {
-            this.previousFocus = null;
-        }
-        if (restoreFocus && focusTarget?.isConnected && typeof focusTarget.focus === "function") {
-            focusTarget.focus({ preventScroll: true });
-        }
-    }
-
-    switchRoot(delta) {
-        if (!this.menuRoots.length) {
-            return;
-        }
-        const current = this.menuRoots.indexOf(this.activeRoot);
-        const index = current < 0 ? 0 : (current + delta + this.menuRoots.length) % this.menuRoots.length;
-        this.openMenu(this.menuRoots[index]);
-    }
-
-    activateMnemonic(key) {
-        const mnemonic = String(key || "").toLowerCase();
-        const item = this.menuItems(this.activePopup).find((candidate) => this.menuMnemonic(candidate) === mnemonic);
-        if (!item) {
-            return false;
-        }
-        this.markSelected(item);
-        if (item.matches("[data-tv-submenu-toggle]")) {
-            this.openSubmenu(item);
+        if (this._commandTarget instanceof TVView) {
+            this._commandTarget.dispatchEvent(event);
         } else {
-            item.click();
+            this._commandTarget?.handleEvent?.(event);
         }
-        return true;
     }
 
-    activateKeyCode(keyCode) {
-        if (!keyCode) { return false; }
-        const item = Array.from(this.root.querySelectorAll(`[data-tv-key-code="${keyCode}"]`))
-            .find((candidate) => !candidate.disabled && candidate.getAttribute("aria-disabled") !== "true");
-        if (!item) { return false; }
-        item.click();
-        if (this.activeRoot) { this.closeMenus(); }
-        return true;
+    onHover(nativeEvent) {
+        const element = nativeEvent.target?.closest?.("button");
+        if (!element?._tvMenuItem || this.menuView?.itemElements.get(element._tvMenuItem) !== element
+            || element.contains(nativeEvent.relatedTarget)) { return; }
+        this.menuView?.handleEvent(new TVEvent(evMouseMove, {
+            infoPtr: element._tvMenuItem || null,
+            nativeEvent,
+        }));
     }
 
-    onKeyDown(event) {
-        if (event.defaultPrevented) {
+    onKeyDown(nativeEvent) {
+        if (nativeEvent.defaultPrevented) { return; }
+        const event = new TVEvent(evKeyDown, { infoPtr: this._commandTarget, nativeEvent });
+        this.menuView?.handleEvent(event);
+        if (event.what === evNothing) {
+            nativeEvent.preventDefault();
+            nativeEvent.stopPropagation?.();
             return;
         }
-        if (this.activateKeyCode(getKeyCode(event))) {
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-        }
-        const plainF10 = event.key === "F10" && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-        if (plainF10) {
-            event.preventDefault();
-            if (this.activeRoot) {
-                this.closeMenus();
-            } else if (this.menuRoots.length) {
-                this.openMenu(this.menuRoots[0]);
-            }
-            return;
-        }
-        if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.length === 1) {
-            const root = this.menuRoots.find((candidate) => {
-                const toggle = candidate.querySelector("[data-tv-menu-toggle]");
-                return this.menuMnemonic(toggle) === event.key.toLowerCase();
+        const keyCode = getKeyCode(nativeEvent);
+        const statusLine = this.root.querySelector("[data-tv-status-line]")?._tvStatusLine;
+        const statusItem = keyCode && statusLine?.items.find((item) => (
+            item instanceof TVStatusItem && item.keyCode === keyCode && !item.disabled
+        ));
+        if (statusItem) {
+            nativeEvent.preventDefault();
+            const command = new TVEvent(evCommand, {
+                command: statusItem.command,
+                infoPtr: statusItem,
+                nativeEvent,
             });
-            if (root) {
-                event.preventDefault();
-                this.openMenu(root);
-                return;
-            }
-            const action = this.topLevelActions.find((candidate) => (
-                this.menuMnemonic(candidate) === event.key.toLowerCase()
-            ));
-            if (action) {
-                event.preventDefault();
-                this.closeMenus({ restoreFocus: false });
-                action.click();
-                return;
-            }
-        }
-        if (!this.activeRoot) {
-            if (this.onUnhandledKeyDown) {
-                this.onUnhandledKeyDown(event);
-            } else if (this.commandTarget instanceof TVView) {
-                this.commandTarget.dispatchEvent(new TVEvent(evKeyDown, {
-                    infoPtr: this.commandTarget,
-                    nativeEvent: event,
-                }));
+            if (this._commandTarget instanceof TVView) {
+                this._commandTarget.dispatchEvent(command);
             } else {
-                this.commandTarget?.handleEvent?.(new TVEvent(evKeyDown, {
-                    infoPtr: this.commandTarget,
-                    nativeEvent: event,
-                }));
+                this._commandTarget?.handleEvent?.(command);
             }
             return;
         }
-        if (event.key === "Escape") {
-            event.preventDefault();
-            if (this.activePopup?.matches("[data-tv-submenu-popup]")) {
-                this.closeSubmenu(this.activePopup);
-            } else {
-                this.closeMenus();
-            }
-            return;
-        }
-        if (event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey)) {
-            event.preventDefault();
-            this.moveSelection(1);
-            return;
-        }
-        if (event.key === "ArrowUp" || (event.key === "Tab" && event.shiftKey)) {
-            event.preventDefault();
-            this.moveSelection(-1);
-            return;
-        }
-        if (event.key === "Home" || event.key === "End") {
-            event.preventDefault();
-            const items = this.menuItems(this.activePopup);
-            this.selectByIndex(this.activePopup, event.key === "Home" ? 0 : items.length - 1);
-            return;
-        }
-        if (event.key === "ArrowRight") {
-            event.preventDefault();
-            const current = document.activeElement;
-            if (current?.matches?.("[data-tv-submenu-toggle]") && this.openSubmenu(current)) {
-                return;
-            }
-            this.switchRoot(1);
-            return;
-        }
-        if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            if (this.activePopup?.matches("[data-tv-submenu-popup]")) {
-                this.closeSubmenu(this.activePopup);
-            } else {
-                this.switchRoot(-1);
-            }
-            return;
-        }
-        if (event.key === "Enter" || event.key === " ") {
-            const current = document.activeElement;
-            if (this.menuItems(this.activePopup).includes(current)) {
-                event.preventDefault();
-                if (current.matches("[data-tv-submenu-toggle]")) {
-                    this.openSubmenu(current);
-                } else {
-                    current.click();
-                }
-            }
-            return;
-        }
-        if (!event.altKey && !event.ctrlKey && !event.metaKey && event.key.length === 1 && this.activateMnemonic(event.key)) {
-            event.preventDefault();
+        if (this.menuView?.activeRoot) { return; }
+        if (this.onUnhandledKeyDown) {
+            this.onUnhandledKeyDown(nativeEvent);
+        } else if (this._commandTarget instanceof TVView) {
+            this._commandTarget.dispatchEvent(event);
+        } else {
+            this._commandTarget?.handleEvent?.(event);
         }
     }
 
     destroy() {
-        this.closeMenus({ restoreFocus: false });
+        this.menuView?.closeMenus({ restoreFocus: false });
         document.removeEventListener("click", this.onDocumentClick);
         document.removeEventListener("click", this.onDocumentCommand);
+        document.removeEventListener("mouseover", this.onDocumentHover);
         document.removeEventListener("keydown", this.onDocumentKeyDown);
     }
 }
@@ -4052,8 +4369,8 @@ class TVCluster extends TVView {
         this.eventMask |= evBroadcast;
         this.type = "checkbox";
         this.itemClass = "tv-checkbox-item";
-        this.itemAttr = "data-tv-checkbox-index";
         this.markClass = "tv-checkbox-mark";
+        this.choiceElements = [];
     }
 
     draw() {
@@ -4067,7 +4384,7 @@ class TVCluster extends TVView {
                 disabled: Boolean(option.disabled),
             });
             const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
-            return `<label class="${className}" ${this.itemAttr}="${index}"><input ${inputAttrs}><span class="${this.markClass}" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
+            return `<label class="${className}"><input ${inputAttrs}><span class="${this.markClass}" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
         }).join("");
         const attrs = attrsToString(this._drawAttrs());
         const bounds = TVView._viewBoundsStyle(this);
@@ -4111,12 +4428,17 @@ class TVCluster extends TVView {
         Array.from(this.root.querySelectorAll(".tv-choice-input")).forEach((input, index) => {
             input.checked = this.mark(index);
             input.disabled = !this.buttonState(index) || Boolean(this.options[index]?.disabled);
+            input.parentElement?.classList.toggle("is-disabled", input.disabled);
             this.options[index].checked = input.checked;
         });
     }
 
     resolve(root) {
         super.resolve(root);
+        this.choiceElements = Array.from(this.root?.querySelectorAll(
+            this.type === "button" ? ".tv-multicheck-button" : ".tv-choice-input",
+        ) || []);
+        this.choiceElements.forEach((element, index) => { element._tvChoiceIndex = index; });
         this.options.forEach((option, index) => {
             if (option.checked) {
                 this.value = this.type === "radio" ? index : (this.value | (1 << index));
@@ -4130,14 +4452,18 @@ class TVCluster extends TVView {
         if (event.what !== evBroadcast || event.nativeEvent?.type !== "change") { return; }
         const input = event.nativeEvent.target;
         if (!this.root?.contains(input) || !input.matches?.(".tv-choice-input")) { return; }
-        const label = input.closest(`[${this.itemAttr}]`);
-        const index = Number.parseInt(label?.getAttribute(this.itemAttr) || "", 10);
+        const index = input._tvChoiceIndex;
         if (!Number.isInteger(index)) { return; }
+        if (!this.buttonState(index) || this.options[index]?.disabled) {
+            this.syncInputs();
+            return;
+        }
         this.movedTo(index);
         if (this.type === "radio") { this.value = index; }
         else if (input.checked) { this.value |= 1 << index; }
         else { this.value &= ~(1 << index); }
         this.syncInputs();
+        event.infoLong = index;
     }
 }
 
@@ -4153,7 +4479,6 @@ class TVRadioButtons extends TVCluster {
         this.type = "radio";
         this.viewId = `tv-radio-${++tvChoiceGroupId}`;
         this.itemClass = "tv-radio-item";
-        this.itemAttr = "data-tv-radio-index";
         this.markClass = "tv-radio-mark";
     }
 }
@@ -4163,7 +4488,6 @@ class TVMultiCheckBoxes extends TVCluster {
         super(bounds, options);
         this.type = "button";
         this.itemClass = "tv-multicheck-item";
-        this.itemAttr = "data-tv-multicheck-index";
         this.markClass = "tv-multicheck-mark";
         this.states = Array.isArray(states) && states.length > 1
             ? states.map(String)
@@ -4183,10 +4507,9 @@ class TVMultiCheckBoxes extends TVCluster {
                 disabled: Boolean(option.disabled),
                 role: "checkbox",
                 "aria-checked": ariaChecked,
-                "data-tv-multicheck-state": state,
             });
             const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
-            return `<label class="${className}" ${this.itemAttr}="${index}"><button ${attrs}><span class="${this.markClass}" aria-hidden="true">[${escapeHtml(this.states[state])}]</span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></button></label>`;
+            return `<label class="${className}"><button ${attrs}><span class="${this.markClass}" aria-hidden="true">[${escapeHtml(this.states[state])}]</span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></button></label>`;
         }).join("");
         const attrs = attrsToString(this._drawAttrs());
         const bounds = TVView._viewBoundsStyle(this);
@@ -4196,10 +4519,9 @@ class TVMultiCheckBoxes extends TVCluster {
 
     cycle(index, button = null) {
         if (!Number.isInteger(index) || index < 0 || index >= this.options.length) { return; }
-        const target = button || this._query(`[${this.itemAttr}="${index}"] [data-tv-multicheck-state]`);
+        const target = button || this.choiceElements[index];
         if (!target || target.disabled) { return; }
-        const state = (Number.parseInt(target.dataset.tvMulticheckState || "0", 10) + 1) % this.states.length;
-        target.dataset.tvMulticheckState = String(state);
+        const state = ((Number(this.options[index].state) || 0) + 1) % this.states.length;
         target.setAttribute("aria-checked", state === 0 ? "false" : (state === 1 ? "true" : "mixed"));
         const mark = target.querySelector(`.${this.markClass}`);
         if (mark) { mark.textContent = `[${this.states[state]}]`; }
@@ -4209,16 +4531,16 @@ class TVMultiCheckBoxes extends TVCluster {
 
     handleEvent(event) {
         if (event.what !== evMouseDown || event.nativeEvent?.type !== "click") { return; }
-        const button = event.nativeEvent.target.closest?.("[data-tv-multicheck-state]");
+        const button = event.nativeEvent.target.closest?.(".tv-multicheck-button");
         if (!button || button.disabled || !this.root?.contains(button)) { return; }
-        const item = button.closest(`[${this.itemAttr}]`);
-        const index = Number.parseInt(item?.getAttribute(this.itemAttr) || "", 10);
+        const index = button._tvChoiceIndex;
         const state = this.cycle(index, button);
         if (!Number.isInteger(state)) { return; }
         this.clearEvent(event);
         this.owner?.dispatchEvent(new TVEvent(evBroadcast, {
             command: "cluster-press",
             infoPtr: this,
+            infoLong: index,
             nativeEvent: event.nativeEvent,
         }));
     }
@@ -4254,111 +4576,17 @@ class TVButton extends TVView {
     }
 
     _drawParts() {
-        const data = this.commandData || {};
-        const plain = new Set([
-            "file-open-history", "change-dir-history", "find-history",
-            "file-open-scroll-left", "file-open-scroll-right",
-            "ascii-code", "calendar-prev", "calendar-next", "color-index",
-            "midi-track", "search-index", "mines-face", "ludo-player-mode", "ludo-piece",
-        ]);
-        const classes = [];
-        if (["file-open-history", "change-dir-history", "find-history"].includes(this.command)) {
-            classes.push("tv-file-open-history-button");
-            if (this.command === "change-dir-history") { classes.push("tv-change-dir-history-button"); }
-            if (this.command === "find-history") { classes.push("tv-find-history-button"); }
-        } else if (this.command === "ascii-code") {
-            classes.push("tv-ascii-cell");
-        } else if (["calendar-prev", "calendar-next"].includes(this.command)) {
-            classes.push("tv-calendar-arrow");
-        } else if (["file-open-scroll-left", "file-open-scroll-right"].includes(this.command)) {
-            classes.push("tv-file-open-scroll-button");
-        } else if (this.command === "color-index") {
-            classes.push("tv-color-cell");
-        } else if (this.command === "midi-track") {
-            classes.push("tv-midi-track");
-        } else if (this.command === "search-index") {
-            classes.push("tv-search-result");
-        } else if (this.command === "mines-face") {
-            classes.push("tv-mines-face");
-        } else if (this.command === "ludo-player-mode") {
-            classes.push("tv-ludo-player-toggle", `tv-ludo-${data.color || "red"}`);
-        } else if (this.command === "ludo-piece") {
-            classes.push(...String(data.classes || "").split(/\s+/).filter(Boolean));
-        } else if (this.command === "mastermind-color") {
-            classes.push("tv-mastermind-color", `tv-mastermind-color-${data.color ?? 0}`);
-        }
-        if (data.selected) { classes.push("is-selected"); }
-        const historyCommand = ["file-open-history", "change-dir-history", "find-history"].includes(this.command);
-        const labels = {
-            "file-open-scroll-left": displayCp437Char(17),
-            "file-open-scroll-right": displayCp437Char(16),
-            "calendar-prev": displayCp437Char(30),
-            "calendar-next": displayCp437Char(31),
-            "ludo-piece": "♟",
-        };
-        let labelMarkup = renderHotkeyMarkup(labels[this.command] ?? this.title);
-        if (historyCommand) {
-            labelMarkup = [
-                '<span class="tv-file-open-history-side" aria-hidden="true">▐</span>',
-                '<span class="tv-file-open-history-arrow" aria-hidden="true">↓</span>',
-                '<span class="tv-file-open-history-side" aria-hidden="true">▌</span>',
-            ].join("");
-        } else if (this.command === "ascii-code") {
-            labelMarkup = escapeHtml(displayCp437Char(this.value));
-        } else if (this.command === "color-index") {
-            const full = escapeHtml(displayCp437Char(219));
-            labelMarkup = data.selected
-                ? `${full}<span class="tv-color-cell-marker">${escapeHtml(displayCp437Char(8))}</span>${full}`
-                : full.repeat(3);
-        } else if (this.command === "midi-track") {
-            labelMarkup = [
-                `<span class="tv-midi-track-index">${escapeHtml(String(data.index + 1).padStart(2, "0"))}</span>`,
-                `<span class="tv-midi-track-title">${escapeHtml(data.title || "")}</span>`,
-                `<span class="tv-midi-track-credit">${escapeHtml(data.credit || "")}</span>`,
-            ].join("");
-        } else if (this.command === "search-index") {
-            labelMarkup = [
-                ["tv-search-result-title", data.title],
-                ["tv-search-result-meta", data.meta],
-                ["tv-search-result-preview", data.preview],
-            ].map(([className, text]) => `<span class="${className}">${escapeHtml(text || "")}</span>`).join("");
-        } else if (this.command === "ludo-piece") {
-            labelMarkup = '<span class="tv-ludo-piece-glyph">♟</span>';
-        }
-        const ariaLabels = {
-            "file-open-history": "History",
-            "change-dir-history": "Directory history",
-            "find-history": "Find history",
-            "calendar-prev": "Previous month",
-            "calendar-next": "Next month",
-        };
-        const tooltips = {
-            "midi-previous": "Previous track",
-            "midi-pause": "Pause",
-            "midi-next": "Next track",
-        };
         return {
-            dialog: !plain.has(this.command),
-            baseClass: this.command === "calc-key"
-                ? "tv-dialog-button tv-calc-button"
-                : "tv-dialog-button",
-            className: classes.join(" "),
-            style: this.command === "color-index" && data.color
-                ? `--tv-color-cell:${data.color}`
-                : "",
-            labelMarkup,
-            ariaLabel: ariaLabels[this.command]
-                || (this.command === "ascii-code" ? `ASCII ${this.value}` : "")
-                || (this.command === "calc-key" ? `Calculator key ${data.description || this.title}` : "")
-                || (this.command === "color-index" ? `Color ${this.value}` : "")
-                || (this.command === "ludo-player-mode" ? `${data.playerName || this.title} player mode` : "")
-                || (this.command === "ludo-piece" ? `${data.playerName || "Ludo"} piece ${Number(this.value) + 1}` : ""),
-            ariaExpanded: historyCommand || this.command === "midi-more" ? Boolean(data.expanded) : null,
-            ariaPressed: this.command === "color-index" ? Boolean(data.selected) : null,
-            tabIndex: ["file-open-scroll-left", "file-open-scroll-right"].includes(this.command)
-                ? -1
-                : (this.command === "color-index" ? (data.selected ? 0 : -1) : null),
-            tooltip: tooltips[this.command] || data.description || "",
+            dialog: true,
+            baseClass: "tv-dialog-button",
+            className: "",
+            style: "",
+            labelMarkup: renderHotkeyMarkup(this.title),
+            ariaLabel: "",
+            ariaExpanded: null,
+            ariaPressed: null,
+            tabIndex: null,
+            tooltip: "",
         };
     }
 
@@ -4430,8 +4658,14 @@ class TVButton extends TVView {
         return this;
     }
 
-    press() {
-        if (this.root && !this.root.disabled) { this.root.click(); }
+    press(nativeEvent = null) {
+        if (!this.command || this.disabled || this.root?.disabled) { return false; }
+        this.dispatchEvent(new TVEvent(evCommand, {
+            command: this.command,
+            infoPtr: this,
+            nativeEvent,
+        }));
+        return true;
     }
 
     setState(state, enable) {
@@ -4447,7 +4681,15 @@ class TVFrame extends TVView {
     constructor(bounds) {
         super(bounds);
         this.frameMode = 0;
+        this.titleCommands = new WeakMap();
     }
+
+    bindTitleControl(button, command) {
+        if (button) { this.titleCommands.set(button, command); }
+        return button;
+    }
+
+    titleCommand(button) { return button ? this.titleCommands.get(button) || "" : ""; }
 
     getTitleWidth() {
         return this.owner instanceof TVWindow ? Array.from(this.owner.getTitle()).length : 0;
@@ -4541,7 +4783,7 @@ class TVFrame extends TVView {
     }
 
     createTitleControl(command, glyph, title = "") {
-        return TVView._fromHTML(this.drawTitleControl(command, glyph, title));
+        return this.bindTitleControl(TVView._fromHTML(this.drawTitleControl(command, glyph, title)), command);
     }
 
     drawDialog(bodyMarkup = "", footerMarkup = "", bodyBorders = true) {
@@ -4610,38 +4852,52 @@ class TVWindow extends TVGroup {
         this.minSize = new TVPoint(16, 6);
         this.palette = new.target.palette || 0;
         this.frame = this.initFrame();
+        this.scrollbars = [];
+        this.editor = null;
+        this.findEditor = null;
         this.closeAction = null;
         this.zoomAction = null;
-        this.onWindowControlMouseDown = (event) => {
-            if (event.button !== 0 || !event.target.closest("[data-tv-command='window-close']")) { return; }
-            this.dispatchWindowControl(event);
-        };
         this.onWindowControlClick = (event) => this.dispatchWindowControl(event);
+        this.onWindowTitleDoubleClick = (event) => {
+            const titlebar = this.root.querySelector(".tv-border-top");
+            if ((this.flags & wfZoom) === 0 || event.target.closest?.("button, a")
+                || !titlebar || event.target.closest?.(".tv-border-top") !== titlebar) {
+                return;
+            }
+            event.preventDefault();
+            this.dispatchEvent(new TVEvent(evCommand, {
+                command: "window-zoom", infoPtr: this, nativeEvent: event,
+            }));
+        };
     }
 
     bindRoot(root) {
         if (this.root?.matches?.("[data-tv-window]")) {
-            this.root.removeEventListener("mousedown", this.onWindowControlMouseDown);
             this.root.removeEventListener("click", this.onWindowControlClick);
+            this.root.removeEventListener("dblclick", this.onWindowTitleDoubleClick);
         }
         super.bindRoot(root);
         if (this.root?.matches?.("[data-tv-window]")) {
-            this.root.addEventListener("mousedown", this.onWindowControlMouseDown);
+            this.closeControl = this.root.querySelector(".tv-close-control");
+            this.zoomControl = this.root.querySelector(".tv-zoom-control");
+            this.frame.bindTitleControl(this.closeControl, "window-close");
+            this.frame.bindTitleControl(this.zoomControl, "window-zoom");
             this.root.addEventListener("click", this.onWindowControlClick);
+            this.root.addEventListener("dblclick", this.onWindowTitleDoubleClick);
+        } else {
+            this.closeControl = null;
+            this.zoomControl = null;
         }
         return this;
     }
 
     dispatchWindowControl(nativeEvent) {
-        const control = nativeEvent.target?.closest?.("[data-tv-command]");
-        if (!control || !this.root?.contains(control)) { return; }
-        const command = control.dataset.tvCommand || "";
-        if (command !== "window-close" && command !== "window-zoom") { return; }
+        const control = nativeEvent.target?.closest?.("button, a");
+        const command = (control === this.closeControl || control === this.zoomControl)
+            ? this.frame.titleCommand(control) : "";
+        if (!command) { return; }
         nativeEvent.preventDefault();
         nativeEvent.stopPropagation();
-        if (nativeEvent.type === "mousedown" && command === "window-close") {
-            nativeEvent.stopImmediatePropagation();
-        }
         this.dispatchEvent(new TVEvent(evCommand, { command, infoPtr: this, nativeEvent }));
     }
 
@@ -4685,7 +4941,8 @@ class TVWindow extends TVGroup {
     close() { this.hide(); }
 
     zoom() {
-        this.root?.classList.toggle("is-maximized");
+        if (this.root?._tvResizer) { this.root._tvResizer.toggle(); }
+        else { this.root?.classList.toggle("is-maximized"); }
         return this;
     }
 
@@ -4801,6 +5058,7 @@ class TVDialog extends TVWindow {
         setElementHelpContext(this.dialog, this.helpCtx);
         this.titlebar = this._query(".tv-dialog-titlebar");
         this.closeButton = this._query(".tv-dialog-close-control");
+        this.frame.bindTitleControl(this.closeButton, "dialog-close");
         if (bounds.width) this.dialog.style.setProperty("--tv-dialog-width", `${bounds.width}ch`);
         if (bounds.height) this.dialog.style.setProperty("--tv-dialog-height", `${bounds.height}em`);
         this.hasPosition = false;
@@ -4815,10 +5073,6 @@ class TVDialog extends TVWindow {
         this.closeAction = () => this.close();
         this.dialog.tabIndex = -1;
         bindCloseButtons(this.overlay);
-        this.dialog.addEventListener("mousedown", (event) => {
-            if (event.button !== 0 || !event.target.closest("[data-tv-command='dialog-close']")) { return; }
-            this.dispatchDomEvent(evMouseDown, event);
-        });
         this.dialog.addEventListener("click", (event) => this.dispatchDomEvent(evMouseDown, event));
         this.dialog.addEventListener("contextmenu", (event) => this.dispatchDomEvent(evMouseDown, event));
         this.dialog.addEventListener("input", (event) => this.dispatchDomEvent(evBroadcast, event));
@@ -4833,12 +5087,17 @@ class TVDialog extends TVWindow {
     handleEvent(event) {
         super.handleEvent(event);
         if (event.what === evMouseDown && event.infoPtr === this) {
-            const control = event.nativeEvent?.target?.closest?.("[data-tv-command]");
-            if (control && this.dialog.contains(control)) {
+            if (event.nativeEvent?.target === this.overlay) {
+                event.what = evCommand;
+                event.command = "dialog-close";
+            }
+            const control = event.nativeEvent?.target?.closest?.("button");
+            const command = this.titlebar?.contains(control) ? this.frame.titleCommand(control) : "";
+            if (command) {
                 event.nativeEvent.preventDefault();
                 event.nativeEvent.stopPropagation();
                 event.what = evCommand;
-                event.command = control.dataset.tvCommand || "";
+                event.command = command;
             }
         }
         if (event.what === evCommand && event.command === "dialog-close") {
@@ -5008,7 +5267,9 @@ class TVDialog extends TVWindow {
         if (event.key === "Escape" && this.escapeCloses) {
             event.preventDefault();
             event.stopPropagation();
-            this.closeAction();
+            this.dispatchEvent(new TVEvent(evCommand, {
+                command: "dialog-close", infoPtr: this, nativeEvent: event,
+            }));
             return;
         }
         if (
@@ -5028,7 +5289,7 @@ class TVDialog extends TVWindow {
             if (defaultButton?.root && !defaultButton.root.disabled) {
                 event.preventDefault();
                 event.stopPropagation();
-                defaultButton.press();
+                defaultButton.press(event);
                 return;
             }
         }
@@ -5078,7 +5339,7 @@ class TVDialog extends TVWindow {
             this._commonCloseBound = true;
             this.overlay.addEventListener("click", (event) => {
                 if (event.target === this.overlay) {
-                    this.closeAction();
+                    this.dispatchDomEvent(evMouseDown, event);
                 }
             });
         }
@@ -5145,6 +5406,8 @@ class TVDialogManager {
         this.root = desktop.root;
         this.dialogs = new Map();
         this.windows = new Map();
+        this.managedWindows = new WeakSet();
+        this.managedDialogs = new WeakSet();
         this.windowCommands = new Map();
         this.stackOrder = [];
         this.baseZIndex = 10;
@@ -5169,8 +5432,8 @@ class TVDialogManager {
     registerWindow(name, element, commands = {}) {
         this.windows.set(name, element);
         this.windowCommands.set(name, { ...commands });
-        if (!element.dataset.tvWindowManaged) {
-            element.dataset.tvWindowManaged = "1";
+        if (!this.managedWindows.has(element)) {
+            this.managedWindows.add(element);
             element.addEventListener("mousedown", () => {
                 this.activateWindow(name);
             });
@@ -5259,11 +5522,8 @@ class TVDialogManager {
     }
 
     installDialogHooks(name, dialog) {
-        if (!dialog || !dialog.overlay || dialog.overlay.dataset.tvDialogManaged === "1") {
-            return;
-        }
-        dialog.overlay.dataset.tvDialogManaged = "1";
-        dialog.overlay.dataset.tvDialogName = name;
+        if (!dialog || !dialog.overlay || this.managedDialogs.has(dialog.overlay)) { return; }
+        this.managedDialogs.add(dialog.overlay);
         const focusTarget = dialog.dialog || dialog.overlay;
         focusTarget.addEventListener("mousedown", () => {
             if (dialog.isOpen()) {
@@ -5439,7 +5699,9 @@ class TVDialogManager {
         const dialog = this.dialogs.get(target);
         if (dialog && dialog.isOpen()) {
             if (command === TV_COMMANDS.CLOSE || command === TV_COMMANDS.CANCEL) {
-                dialog.closeAction();
+                dialog.dispatchEvent(new TVEvent(evCommand, {
+                    command: "dialog-close", infoPtr: dialog,
+                }));
                 return true;
             }
             if (typeof dialog.handleCommand === "function" && dialog.handleCommand(command)) {
@@ -5459,14 +5721,6 @@ class TVDialogManager {
         return names.find((name) => this.isOpen(name)) || "";
     }
 
-    bindOpeners(selector, name, { exclusive = false } = {}) {
-        document.querySelectorAll(selector).forEach((element) => {
-            element.addEventListener("click", (event) => {
-                event.preventDefault();
-                this.open(name, { exclusive });
-            });
-        });
-    }
 }
 
 function resolveHelpContext({ root = document, menuController = null, dialogManager = null } = {}) {
@@ -5585,13 +5839,13 @@ class TVMessageBox extends TVDialog {
         this.messageViews = [];
         this.buttonViews = [];
         this._resolve = null;
-        this.closeAction = () => this._dismiss(this._cancelCmd || this._defaultCmd || "cancel");
+        this.closeAction = () => this._dismiss(this._closeCmd || "cancel");
         this.bindDrag();
     }
 
     show({ type = 0, title, lines = [], buttons = TVMessageBox.MF_OK_BUTTON } = {}) {
         if (this._resolve) {
-            this._dismiss(this._cancelCmd || this._defaultCmd);
+            this._dismiss(this._closeCmd || "cancel");
         }
         const boxTitle = title !== undefined ? title : TVMessageBox.TITLES[type];
         this.title = String(boxTitle ?? "");
@@ -5633,6 +5887,7 @@ class TVMessageBox extends TVDialog {
         // Determine default and cancel commands
         this._defaultCmd = btnDefs.length > 0 ? btnDefs[0].cmd : null;
         this._cancelCmd = (buttons & TVMessageBox.MF_CANCEL_BUTTON) ? "cancel" : null;
+        this._closeCmd = this._cancelCmd || ((buttons & TVMessageBox.MF_NO_BUTTON) ? "no" : "cancel");
         // Show
         super.open();
         // Focus first button
@@ -5672,7 +5927,7 @@ class TVMessageBox extends TVDialog {
 
     destroy() {
         const resolve = this._resolve;
-        const command = this._cancelCmd || this._defaultCmd;
+        const command = this._closeCmd || "cancel";
         this._resolve = null;
         super.destroy();
         if (resolve) { resolve(command); }
@@ -6267,6 +6522,7 @@ Object.assign(TV, {
     TVPercentGauge,
     TVBarGauge,
     TVLabel,
+    TVPXPictureValidator,
     TVInputLine,
     TVListViewer,
     TVGroup,
@@ -6276,13 +6532,18 @@ Object.assign(TV, {
     TVIndicator,
     TVEditor,
     TVListBox,
+    TVGridView,
     TVOutline,
     TVScroller,
     TVMenu,
+    NewItem,
+    NewMenu,
     NewLine,
     NewSubMenu,
     TVMenuView,
     TVMenuItem,
+    TVSubMenu,
+    TVMenuBar,
     TVMenuBox,
     TVStatusItem,
     TVStatusDef,

@@ -22,6 +22,7 @@ const fs = require("node:fs");
 class FakeElement {
     constructor() {
         this.dataset = {};
+        this.attributes = new Map();
         this.style = { setProperty() {}, removeProperty() {} };
         this.classList = { add() {}, remove() {}, contains() { return false; }, toggle() {} };
         this.isConnected = true;
@@ -32,8 +33,12 @@ class FakeElement {
     remove() {}
     focus() { document.activeElement = this; }
     closest() { return null; }
+    contains() { return false; }
+    matches() { return false; }
     querySelector() { return null; }
     querySelectorAll() { return []; }
+    setAttribute(name, value) { this.attributes.set(name, String(value)); }
+    getAttribute(name) { return this.attributes.get(name) || null; }
     getBoundingClientRect() { return { width: 8, height: 16, top: 0, left: 0, right: 8 }; }
 }
 
@@ -59,17 +64,139 @@ global.getComputedStyle = () => ({ getPropertyValue() { return ""; } });
 eval(fs.readFileSync(process.argv[1], "utf8"));
 const TV = window.THelpViewerTV;
 
+const linkedSecond = TV.NewItem("~S~econd", "F4", TV.kbF3, "second", 20);
+const linkedFirst = TV.NewItem("~F~irst", "F3", TV.kbF3, "first", 10, linkedSecond);
+const linkedMenu = TV.NewMenu(linkedFirst);
+const linkedMarkup = new TV.TVMenuView(new TV.TVRect(), linkedMenu).draw();
+if (linkedMenu.items !== linkedFirst || linkedMenu.deflt !== linkedFirst
+    || linkedFirst.next !== linkedSecond || linkedMenu.entries().length !== 2
+    || linkedFirst.param !== "F3" || !linkedMarkup.includes('class="tv-menu-hotkey">F3')) {
+    throw new Error("source-shaped linked menu construction failed");
+}
+
+const fileItem = new TV.TVMenuItem("~O~pen HELP", "bundle-open");
+const fileButton = new FakeElement();
+fileButton.dataset.tvMenuItemId = fileItem._menuId;
+fileButton.dataset.tvCommand = "wrong-dom-command";
+const menuRoot = new FakeElement();
+fileButton.closest = (selector) => ({
+    button: fileButton,
+}[selector] || null);
+menuRoot.querySelectorAll = (selector) => selector === "[data-tv-menu-item-id]" ? [fileButton] : [];
+const menuView = new TV.TVMenuView(new TV.TVRect(), TV.NewMenu(fileItem)).bindRoot(menuRoot);
+const cachedMenu = new TV.TVMenuView(new TV.TVRect(), TV.NewMenu(fileItem));
+const cachedRoot = new FakeElement();
+const cachedToggle = new FakeElement();
+const cachedPopup = new FakeElement();
+cachedPopup.children = [];
+cachedPopup.hidden = true;
+cachedRoot.querySelector = () => { throw new Error("menu root was searched after binding"); };
+cachedMenu.root = new FakeElement();
+cachedMenu.menuRoots = [cachedRoot];
+cachedMenu.rootControls.set(cachedRoot, { toggle: cachedToggle, popup: cachedPopup });
+const originalFrame = global.requestAnimationFrame;
+global.requestAnimationFrame = () => 0;
+cachedMenu.openMenu(cachedRoot, { focusFirst: false });
+if (cachedMenu.activePopup !== cachedPopup || cachedPopup.hidden ||
+    cachedToggle.getAttribute("aria-expanded") !== "true") {
+    throw new Error("menu did not open from its retained control references");
+}
+const cachedSubmenuRoot = new FakeElement();
+const cachedSubmenuToggle = new FakeElement();
+const cachedSubmenuPopup = new FakeElement();
+cachedSubmenuPopup.children = [];
+cachedSubmenuPopup.hidden = true;
+cachedMenu.submenuControls.set(cachedSubmenuToggle, {
+    root: cachedSubmenuRoot, popup: cachedSubmenuPopup,
+});
+cachedMenu.submenuByPopup.set(cachedSubmenuPopup, {
+    root: cachedSubmenuRoot, toggle: cachedSubmenuToggle, parentPopup: cachedPopup,
+});
+if (!cachedMenu.openSubmenu(cachedSubmenuToggle, { focusFirst: false }) ||
+    cachedSubmenuPopup.hidden || cachedMenu.activePopup !== cachedSubmenuPopup) {
+    throw new Error("submenu did not open from its retained control references");
+}
+cachedMenu.closeSubmenu(cachedSubmenuPopup, { focusToggle: false });
+if (!cachedSubmenuPopup.hidden || cachedMenu.activePopup !== cachedPopup) {
+    throw new Error("submenu did not return to its retained parent popup");
+}
+cachedMenu.closeMenus({ restoreFocus: false });
+if (!cachedPopup.hidden || cachedToggle.getAttribute("aria-expanded") !== "false") {
+    throw new Error("menu did not close using its retained control references");
+}
+global.requestAnimationFrame = originalFrame;
+let dispatched = null;
+const app = new TV.TVView(new TV.TVRect());
+app.handleEvent = (event) => { dispatched = event; };
+menuView.owner = app;
+let menuMouseEvents = 0;
+const handleMenuEvent = menuView.handleEvent.bind(menuView);
+menuView.handleEvent = (event) => {
+    if (event.what === TV.evMouseDown) { menuMouseEvents += 1; }
+    handleMenuEvent(event);
+};
+const commandController = Object.create(TV.TVMenuController.prototype);
+commandController.menuView = menuView;
+commandController.commandTarget = app;
+commandController.onCommand({ target: fileButton, preventDefault() {} });
+if (fileButton._tvMenuItem !== fileItem || dispatched?.command !== "bundle-open"
+    || dispatched.infoPtr !== fileItem || menuMouseEvents !== 1) {
+    throw new Error("menu click did not pass through TVMenuView.handleEvent to the application");
+}
+
+const mouseSubmenu = TV.NewSubMenu("~N~ested", 0, TV.NewMenu(fileItem));
+const mouseToggle = new FakeElement();
+mouseToggle._tvMenuItem = mouseSubmenu;
+mouseToggle.matches = () => false;
+menuView.itemElements.set(mouseSubmenu, mouseToggle);
+const mousePopup = new FakeElement();
+mousePopup.hidden = true;
+mousePopup.matches = (selector) => selector === "[data-tv-submenu-popup]";
+const mouseRoot = new FakeElement();
+mouseRoot.children = [mousePopup];
+mouseToggle.closest = (selector) => ({
+    button: mouseToggle,
+    "[data-tv-submenu-root]": mouseRoot,
+}[selector] || null);
+let openedSubmenu = 0;
+menuView.openSubmenu = () => { openedSubmenu += 1; mousePopup.hidden = false; return true; };
+menuView.closeSubmenu = () => { throw new Error("click closed a submenu opened on hover"); };
+menuView.activeRoot = menuRoot;
+commandController.onHover({ target: mouseToggle, relatedTarget: null });
+commandController.onCommand({ target: mouseToggle, preventDefault() {} });
+if (openedSubmenu !== 2 || menuView.current !== mouseSubmenu || menuMouseEvents !== 2) {
+    throw new Error("submenu hover and click bypassed TVMenuView.handleEvent");
+}
+
+const statusItem = new TV.TVStatusItem("Open", TV.kbF3, "status-open", "sample");
+const statusButton = new FakeElement();
+statusButton.dataset.tvCommand = "wrong-dom-command";
+statusButton.closest = (selector) => selector === "button" ? statusButton : null;
+const statusRoot = new FakeElement();
+statusRoot.querySelectorAll = (selector) => selector === "button.tv-status-item" ? [statusButton] : [];
+const statusLine = new TV.TVStatusLine(new TV.TVRect(),
+    TV.NewStatusDef(0, 0xffff, [statusItem])).bindRoot(statusRoot);
+commandController.root = { querySelector(selector) {
+    return selector === "[data-tv-status-line]" ? statusRoot : null;
+} };
+commandController.onCommand({ target: statusButton, preventDefault() {} });
+if (statusButton._tvStatusItem !== statusItem || dispatched?.command !== "status-open"
+    || dispatched.infoPtr !== statusItem) {
+    throw new Error("status click did not dispatch its TVStatusItem");
+}
+
 const nestedSubmenu = TV.NewSubMenu(
     "Nested",
     0,
-    new TV.TVMenu([TV.NewLine()]),
+    TV.NewMenu(TV.NewLine()),
 );
 const nestedMenuMarkup = new TV.TVMenuBox(
     new TV.TVRect(),
-    new TV.TVMenu([nestedSubmenu]),
+    TV.NewMenu(nestedSubmenu),
 ).draw();
 if (!nestedMenuMarkup.includes('class="tv-submenu-root"')
-    || !nestedMenuMarkup.includes('class="tv-menu-popup-separator"')) {
+    || !nestedMenuMarkup.includes('class="tv-menu-popup-separator"')
+    || nestedMenuMarkup.includes('data-tv-menu-toggle')) {
     throw new Error("a separator inside a submenu erased the complete Contents item");
 }
 
@@ -86,30 +213,35 @@ function keyEvent(key, extra = {}) {
     };
 }
 
-const toggleA = { mnemonic: "x" };
-const toggleB = { mnemonic: "h" };
+const toggleA = { _tvMenuItem: new TV.TVSubMenu("~X~ system") };
+const toggleB = { _tvMenuItem: new TV.TVSubMenu("~H~elp") };
 const rootA = { id: "system", querySelector() { return toggleA; } };
 const rootB = { id: "help", querySelector() { return toggleB; } };
 const controller = Object.create(TV.TVMenuController.prototype);
-controller.menuRoots = [rootA, rootB];
-controller.topLevelActions = [];
-controller.activeRoot = null;
-controller.activePopup = null;
+controller.menuView = menuView;
+controller.root = { querySelectorAll() { return []; } };
 controller.onUnhandledKeyDown = null;
-controller.menuMnemonic = (element) => element.mnemonic || "";
+menuView.menuRoots = [rootA, rootB];
+menuView.rootControls = new Map([
+    [rootA, { toggle: toggleA, popup: toggleA }],
+    [rootB, { toggle: toggleB, popup: toggleB }],
+]);
+menuView.topLevelActions = [];
+menuView.activeRoot = null;
+menuView.activePopup = null;
 let opened = null;
 let closed = 0;
-controller.openMenu = (root) => { opened = root; controller.activeRoot = root; };
-controller.closeMenus = () => { closed += 1; controller.activeRoot = null; };
+menuView.openMenu = (root) => { opened = root; menuView.activeRoot = root; };
+menuView.closeMenus = () => { closed += 1; menuView.activeRoot = null; };
 
 const f10 = keyEvent("F10");
 controller.onKeyDown(f10);
 if (opened !== rootA || !f10.defaultPrevented) {
-    throw new Error("F10 did not open the first menu");
+    throw new Error("F10 did not open the first menu through TVMenuView");
 }
 const secondF10 = keyEvent("F10");
 controller.onKeyDown(secondF10);
-if (closed !== 1 || controller.activeRoot !== null) {
+if (closed !== 1 || menuView.activeRoot !== null) {
     throw new Error("F10 did not close an active menu");
 }
 
@@ -119,21 +251,21 @@ if (opened !== rootB || !altH.defaultPrevented) {
     throw new Error("Alt mnemonic did not open its top-level menu");
 }
 
-let directClicks = 0;
-const directAction = { mnemonic: "d", click() { directClicks += 1; } };
-controller.activeRoot = null;
-controller.topLevelActions = [directAction];
-controller.menuMnemonic = (element) => element.mnemonic || "";
+const directItem = new TV.TVMenuItem("~D~irect", "direct-command");
+const directAction = { _tvMenuItem: directItem };
+menuView.activeRoot = null;
+menuView.topLevelActions = [directAction];
 const altD = keyEvent("d", { altKey: true });
 controller.onKeyDown(altD);
-if (directClicks !== 1 || !altD.defaultPrevented) {
-    throw new Error("Alt mnemonic did not activate a direct menu-bar command");
+if (dispatched?.command !== "direct-command" || dispatched.infoPtr !== directItem
+    || !altD.defaultPrevented) {
+    throw new Error("Alt mnemonic did not dispatch a direct menu-bar command");
 }
-controller.topLevelActions = [];
-controller.activeRoot = rootB;
+menuView.topLevelActions = [];
+menuView.activeRoot = rootB;
 
 let move = 0;
-controller.moveSelection = (delta) => { move = delta; };
+menuView.moveSelection = (delta) => { move = delta; };
 const down = keyEvent("ArrowDown");
 controller.onKeyDown(down);
 if (move !== 1 || !down.defaultPrevented) {
@@ -146,61 +278,50 @@ if (move !== -1 || !up.defaultPrevented) {
 }
 
 let switched = 0;
-controller.activePopup = { matches() { return false; } };
-controller.switchRoot = (delta) => { switched = delta; };
+menuView.activePopup = toggleB;
+menuView.switchRoot = (delta) => { switched = delta; };
 controller.onKeyDown(keyEvent("ArrowRight"));
 if (switched !== 1) { throw new Error("ArrowRight did not switch the top-level menu"); }
 controller.onKeyDown(keyEvent("ArrowLeft"));
 if (switched !== -1) { throw new Error("ArrowLeft did not switch the top-level menu"); }
 
 const submenuPopup = { matches(selector) { return selector === "[data-tv-submenu-popup]"; } };
-controller.activePopup = submenuPopup;
+menuView.activePopup = submenuPopup;
 let closedSubmenu = null;
-controller.closeSubmenu = (popup) => { closedSubmenu = popup; };
+menuView.closeSubmenu = (popup) => { closedSubmenu = popup; };
 controller.onKeyDown(keyEvent("Escape"));
 if (closedSubmenu !== submenuPopup) {
     throw new Error("Escape did not return from a submenu");
 }
 
-let clicked = 0;
+let activated = null;
 const mnemonicItem = {
-    disabled: false,
-    getAttribute() { return null; },
-    classList: { contains() { return false; } },
-    closest() { return submenuPopup; },
+    _tvMenuItem: new TV.TVMenuItem("~O~pen", "open"),
     matches() { return false; },
-    click() { clicked += 1; },
 };
-controller.activePopup = submenuPopup;
-controller.menuItems = () => [mnemonicItem];
-controller.menuMnemonic = () => "o";
-controller.markSelected = () => {};
-if (!controller.activateMnemonic("o") || clicked !== 1) {
-    throw new Error("popup mnemonic did not activate its command");
+menuView.activePopup = submenuPopup;
+menuView.menuItems = () => [mnemonicItem];
+menuView.markSelected = () => {};
+menuView.activateItem = (item) => { activated = item; return true; };
+if (!menuView.activateMnemonic("o") || activated !== mnemonicItem._tvMenuItem) {
+    throw new Error("popup mnemonic did not activate its command through TVMenuView");
 }
 
 const foreignPopup = {};
 const enabled = {
-    disabled: false,
-    getAttribute() { return null; },
-    classList: { contains() { return false; } },
+    _tvMenuItem: new TV.TVMenuItem("Enabled", "enabled"),
     closest() { return submenuPopup; },
 };
 const disabled = {
-    disabled: true,
-    getAttribute() { return null; },
-    classList: { contains() { return false; } },
+    _tvMenuItem: new TV.TVMenuItem("Disabled", "disabled").setDisabled(),
     closest() { return submenuPopup; },
 };
 const nested = {
-    disabled: false,
-    getAttribute() { return null; },
-    classList: { contains() { return false; } },
+    _tvMenuItem: new TV.TVMenuItem("Nested", "nested"),
     closest() { return foreignPopup; },
 };
-submenuPopup.querySelectorAll = () => [enabled, disabled, nested];
-controller.menuItems = TV.TVMenuController.prototype.menuItems;
-const filtered = controller.menuItems(submenuPopup);
+menuView.popupItems.set(submenuPopup, [enabled, disabled]);
+const filtered = TV.TVMenuView.prototype.menuItems.call(menuView, submenuPopup);
 if (filtered.length !== 1 || filtered[0] !== enabled) {
     throw new Error("menu navigation included disabled or nested items");
 }
@@ -236,7 +357,14 @@ def test_shell_and_bundle_use_the_shared_menu_controller():
     assert "class TurboVisionMenus extends TVMenuController" in shell
     assert "new TVMenuController" in bundle
     assert "menuController.refresh()" in bundle
-    assert "activateKeyCode(getKeyCode(event))" in Path("www/assets/tv-core.js").read_text(encoding="utf-8")
+    assert "new TVMenuBar(new TVRect(), pageMenu(top))" in shell
+    assert "new TVMenuBar(new TVRect(), menuFromItems(topItems))" in bundle
+    assert "class TVMenuBar extends TVMenuView" not in shell
+    assert "renderMenuRoot" not in bundle
+    assert "new TVMenu([" not in shell + bundle
+    core = Path("www/assets/tv-core.js").read_text(encoding="utf-8")
+    assert "this.activateKeyCode(getKeyCode(key), key)" in core
+    assert "this.menuView?.handleEvent(new TVEvent(evMouseDown" in core
     assert "_handleMenuShortcut" not in bundle
     assert "_menuGlobalsBound" not in bundle
     assert ".tv-menu-popup-item.is-menu-selected" in css
@@ -330,13 +458,21 @@ function item(command) {
         },
         setAttribute(name, value) { attributes.set(name, value); },
         getAttribute(name) { return attributes.get(name); },
+        setDisabled(disabled) {
+            this.disabled = Boolean(disabled);
+            this.setAttribute("aria-disabled", this.disabled ? "true" : "false");
+            this.classList.toggle("is-disabled", this.disabled);
+        },
     };
 }
 const items = ["tile", "cascade", "list", "zoom", "next", "previous", "close"].map(item);
-global.document = {
-    querySelectorAll: (selector) => selector === "[data-tv-window-cmd]" ? items : [],
+const menuState = {
+    windowItems: new Map(items.map((entry) => [entry.dataset.tvWindowCmd, entry])),
+    findItem: item("find"),
+    findAgainItem: item("find-again"),
 };
 const app = Object.create(TestBundleApp.prototype);
+app.menuState = menuState;
 let windowCount = 0;
 let targetCount = 0;
 const enabledCommands = new Set();

@@ -14,17 +14,23 @@ const {
     DOS_COLORS,
     COLOR_GROUPS,
     TVWindow,
+    TVEvent,
     wfClose,
     wnNoNumber,
     TVDialog,
     TVView,
     TVRect,
     TVStaticText,
+    TVBarGauge,
+    TVPercentGauge,
     TVLabel,
+    TVPXPictureValidator,
     TVInputLine,
     TVGroup,
     TVListViewer,
     TVListBox,
+    TVGridView,
+    TVScrollBar,
     TVOutline,
     TVInfoBox,
     TVTerminal,
@@ -70,6 +76,106 @@ const {
     hcSystemInformation,
 } = TV_HELP_CONTEXTS;
 
+class TVFileScrollButton extends TVButton {
+    _drawParts() {
+        return { ...super._drawParts(), dialog: false, className: "tv-file-open-scroll-button", tabIndex: -1 };
+    }
+}
+
+class TVAsciiCellButton extends TVButton {
+    _drawParts() {
+        return {
+            ...super._drawParts(), dialog: false, className: "tv-ascii-cell",
+            labelMarkup: escapeHtml(displayCp437Char(this.value)), ariaLabel: `ASCII ${this.value}`,
+        };
+    }
+}
+
+class TVCalculatorButton extends TVButton {
+    _drawParts() {
+        return {
+            ...super._drawParts(), baseClass: "tv-dialog-button tv-calc-button",
+            ariaLabel: `Calculator key ${this.commandData.description || this.title}`,
+            tooltip: this.commandData.description || "",
+        };
+    }
+}
+
+class TVCalendarButton extends TVButton {
+    _drawParts() {
+        const labels = {
+            "calendar-prev": "Previous month", "calendar-next": "Next month", "calendar-today": "Today",
+        };
+        return {
+            ...super._drawParts(), dialog: false, className: "tv-calendar-arrow",
+            labelMarkup: renderHotkeyMarkup({
+                "calendar-prev": displayCp437Char(30),
+                "calendar-next": displayCp437Char(31),
+            }[this.command] || this.title),
+            ariaLabel: labels[this.command] || "",
+        };
+    }
+}
+
+class TVColorCellButton extends TVButton {
+    _drawParts() {
+        const data = this.commandData;
+        const full = escapeHtml(displayCp437Char(219));
+        return {
+            ...super._drawParts(), dialog: false,
+            className: `tv-color-cell${data.selected ? " is-selected" : ""}`,
+            style: data.color ? `--tv-color-cell:${data.color}` : "",
+            labelMarkup: data.selected
+                ? `${full}<span class="tv-color-cell-marker">${escapeHtml(displayCp437Char(8))}</span>${full}`
+                : full.repeat(3),
+            ariaLabel: `Color ${this.value}`, ariaPressed: Boolean(data.selected),
+            tabIndex: data.selected ? 0 : -1,
+        };
+    }
+}
+
+class TVMidiTrackButton extends TVButton {
+    _drawParts() {
+        const data = this.commandData;
+        return {
+            ...super._drawParts(), dialog: false,
+            className: `tv-midi-track${data.selected ? " is-selected" : ""}`,
+            labelMarkup: [
+                `<span class="tv-midi-track-index">${escapeHtml(String(data.index + 1).padStart(2, "0"))}</span>`,
+                `<span class="tv-midi-track-title">${escapeHtml(data.title || "")}</span>`,
+                `<span class="tv-midi-track-credit">${escapeHtml(data.credit || "")}</span>`,
+            ].join(""),
+        };
+    }
+}
+
+class TVMidiControlButton extends TVButton {
+    _drawParts() {
+        const tooltips = {
+            "midi-previous": "Previous track", "midi-pause": "Pause", "midi-next": "Next track",
+        };
+        return {
+            ...super._drawParts(),
+            ariaExpanded: this.command === "midi-more" ? Boolean(this.commandData.expanded) : null,
+            tooltip: tooltips[this.command] || "",
+        };
+    }
+}
+
+class TVSearchResultButton extends TVButton {
+    _drawParts() {
+        const data = this.commandData;
+        return {
+            ...super._drawParts(), dialog: false,
+            className: `tv-search-result${data.selected ? " is-selected" : ""}`,
+            labelMarkup: [
+                ["tv-search-result-title", data.title],
+                ["tv-search-result-meta", data.meta],
+            ].map(([className, value]) => `<span class="${className}">${escapeHtml(value || "")}</span>`).join(""),
+        };
+    }
+}
+
 class TVAboutDialog extends TVDialog {
     static viewName = "about";
 
@@ -101,6 +207,432 @@ class TVAboutDialog extends TVDialog {
             this.close();
             this.clearEvent(event);
         }
+    }
+}
+
+class TVLoginDialog extends TVDialog {
+    static viewName = "login";
+
+    constructor() {
+        const username = new TVInputLine(new TVRect(2, 2, 45, 3), 254);
+        const signIn = new TVButton(new TVRect(2, 5, 15, 7), "~S~ign In", "login-sign-in", bfDefault);
+        const register = new TVButton(new TVRect(16, 5, 29, 7), "~R~egister", "login-register", bfNormal);
+        const signOut = new TVButton(new TVRect(30, 5, 43, 7), "Sign ~O~ut", "login-sign-out", bfNormal);
+        const close = new TVButton(new TVRect(44, 5, 57, 7), "~C~lose", "login-close", bfNormal);
+        const status = new TVStaticText(new TVRect(2, 8, 56, 10), "Checking account status...");
+        super(new TVRect(0, 0, 60, 13), "Login / Passkey");
+        this.insert(new TVGroup(new TVRect(0, 0, 58, 11)).insertAll([
+            new TVLabel(new TVRect(2, 1, 25, 2), "~E~mail or username", username), username,
+            signIn, register, signOut, close, status,
+        ]));
+        this.username = username;
+        this.status = status;
+        this.actions = [signIn, register, signOut];
+        this.onRegister = null;
+        this.onSessionChange = null;
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    static decodeBase64Url(value) {
+        const text = String(value).replace(/-/g, "+").replace(/_/g, "/");
+        const bytes = atob(text.padEnd(Math.ceil(text.length / 4) * 4, "="));
+        return Uint8Array.from(bytes, (char) => char.charCodeAt(0));
+    }
+
+    static encodeBase64Url(value) {
+        const bytes = new Uint8Array(value || []);
+        let text = "";
+        bytes.forEach((byte) => { text += String.fromCharCode(byte); });
+        return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+
+    static async request(path, method = "GET", body) {
+        const response = await fetch(path, {
+            method,
+            credentials: "same-origin",
+            cache: "no-store",
+            ...(body === undefined ? {} : {
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            }),
+        });
+        const payload = await response.text();
+        let data;
+        try {
+            data = payload ? JSON.parse(payload) : {};
+        } catch {
+            throw new Error(`HTTP ${response.status}: invalid server response`);
+        }
+        if (!response.ok) { throw new Error(data.detail || `HTTP ${response.status}`); }
+        return data;
+    }
+
+    static async post(path, body = {}) {
+        return TVLoginDialog.request(path, "POST", body);
+    }
+
+    static credentialAnswer(credential, registering) {
+        const encode = TVLoginDialog.encodeBase64Url;
+        const response = {
+            clientDataJSON: encode(credential.response.clientDataJSON),
+            ...(registering
+                ? {
+                    attestationObject: encode(credential.response.attestationObject),
+                    transports: credential.response.getTransports?.() || [],
+                }
+                : {
+                    authenticatorData: encode(credential.response.authenticatorData),
+                    signature: encode(credential.response.signature),
+                    userHandle: credential.response.userHandle
+                        ? encode(credential.response.userHandle) : null,
+                }),
+        };
+        return {
+            id: credential.id,
+            rawId: encode(credential.rawId),
+            type: credential.type,
+            response,
+            clientExtensionResults: credential.getClientExtensionResults?.() || {},
+            authenticatorAttachment: credential.authenticatorAttachment || undefined,
+        };
+    }
+
+    open() {
+        super.open();
+        this.username.focus();
+        void this.refreshSession();
+    }
+
+    async refreshSession() {
+        try {
+            const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            this.updateSession(await response.json());
+        } catch {
+            this.status.setText("Account server is unavailable.");
+        }
+    }
+
+    updateSession(data) {
+        this.onSessionChange?.(data);
+        this.status.setText(!data.enabled
+            ? "Passkey login is not configured for this host."
+            : data.authenticated
+                ? `Signed in as ${data.user.display_name} (${data.user.username}).`
+                : "Sign in, or register with an invitation token.");
+    }
+
+    async passkey() {
+        const username = this.username.getData().trim();
+        if (!username) {
+            this.status.setText("Enter email or username.");
+            return;
+        }
+        if (!window.isSecureContext || !navigator.credentials?.create || !navigator.credentials?.get) {
+            this.status.setText("Passkeys require HTTPS or localhost and a compatible browser.");
+            return;
+        }
+        this.actions.forEach((button) => button.setState(sfDisabled, true));
+        try {
+            const prefix = "/api/auth/passkey/login";
+            const request = await TVLoginDialog.post(`${prefix}/options`, { username });
+            const options = request.options;
+            const decode = TVLoginDialog.decodeBase64Url;
+            options.challenge = decode(options.challenge);
+            options.allowCredentials = (options.allowCredentials || []).map(
+                (entry) => ({ ...entry, id: decode(entry.id) }),
+            );
+            const credential = await navigator.credentials.get({ publicKey: options });
+            if (!credential) { throw new Error("Passkey operation was cancelled."); }
+            await TVLoginDialog.post(`${prefix}/verify`, {
+                ceremony_id: request.ceremony_id,
+                credential: TVLoginDialog.credentialAnswer(credential, false),
+            });
+            await this.refreshSession();
+        } catch (error) {
+            this.status.setText(error?.message || "Passkey operation failed.");
+        } finally {
+            this.actions.forEach((button) => button.setState(sfDisabled, false));
+        }
+    }
+
+    async signOut() {
+        this.status.setText("Signing out...");
+        try {
+            await TVLoginDialog.post("/api/auth/logout");
+            await this.refreshSession();
+        } catch (error) {
+            this.status.setText(error?.message || "Sign out failed.");
+        }
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "login-sign-in") { void this.passkey(); }
+        else if (event.command === "login-register") { this.onRegister?.(); }
+        else if (event.command === "login-sign-out") { void this.signOut(); }
+        else if (event.command === "login-close") { this.close(); }
+        else { return; }
+        this.clearEvent(event);
+    }
+}
+
+class TVRegistrationDialog extends TVDialog {
+    static viewName = "registration";
+
+    constructor() {
+        const name = new TVInputLine(new TVRect(2, 2, 56, 3), 100);
+        const email = new TVInputLine(new TVRect(2, 5, 56, 6), 254);
+        const token = new TVInputLine(new TVRect(2, 8, 56, 9), 128)
+            .setValidator(new TVPXPictureValidator("!!!!!-!!!!!-!!!!!-!!!!!-!!!!!", true));
+        const register = new TVButton(new TVRect(13, 11, 28, 13), "~R~egister", "register-confirm", bfDefault);
+        const cancel = new TVButton(new TVRect(30, 11, 45, 13), "~C~ancel", "register-cancel", bfNormal);
+        const status = new TVStaticText(new TVRect(2, 14, 56, 16), "A registration token is valid for one hour.");
+        super(new TVRect(0, 0, 60, 19), "Register Passkey");
+        this.insert(new TVGroup(new TVRect(0, 0, 58, 17)).insertAll([
+            new TVLabel(new TVRect(2, 1, 30, 2), "~N~ame", name), name,
+            new TVLabel(new TVRect(2, 4, 30, 5), "~E~mail", email), email,
+            new TVLabel(new TVRect(2, 7, 30, 8), "Registration ~t~oken", token), token,
+            register, cancel, status,
+        ]));
+        this.name = name;
+        this.email = email;
+        this.token = token;
+        this.status = status;
+        this.registerButton = register;
+        this.onSessionChange = null;
+        this.onConfirmed = null;
+        this.messageBox = null;
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    open() {
+        super.open();
+        this.name.focus();
+    }
+
+    close() {
+        this.token.setData("");
+        super.close();
+    }
+
+    async registerPasskey() {
+        const name = this.name.getData().trim();
+        const email = this.email.getData().trim();
+        const token = this.token.getData().trim();
+        if (!name || !email || !token) {
+            this.status.setText("Enter name, email and registration token.");
+            return;
+        }
+        if (!this.token.valid()) {
+            this.status.setText("Use a token in XXXXX-XXXXX-XXXXX-XXXXX-XXXXX format.");
+            return;
+        }
+        if (!window.isSecureContext || !navigator.credentials?.create) {
+            this.status.setText("Passkeys require HTTPS or localhost and a compatible browser.");
+            return;
+        }
+        this.registerButton.setState(sfDisabled, true);
+        let stage = "Registration request";
+        try {
+            const prefix = "/api/auth/passkey/register";
+            const request = await TVLoginDialog.post(`${prefix}/options`, { name, email, token });
+            const options = request.options;
+            const decode = TVLoginDialog.decodeBase64Url;
+            options.challenge = decode(options.challenge);
+            options.user.id = decode(options.user.id);
+            options.excludeCredentials = (options.excludeCredentials || []).map(
+                (entry) => ({ ...entry, id: decode(entry.id) }),
+            );
+            if (options.rp?.id !== window.location.hostname) {
+                throw new Error(`Passkey domain ${options.rp?.id || "?"} does not match this site`);
+            }
+            stage = "Passkey creation";
+            const credential = await navigator.credentials.create({ publicKey: options });
+            if (!credential) { throw new Error("Passkey operation was cancelled."); }
+            stage = "Passkey verification";
+            const verified = await TVLoginDialog.post(`${prefix}/verify`, {
+                ceremony_id: request.ceremony_id,
+                credential: TVLoginDialog.credentialAnswer(credential, true),
+            });
+            if (!verified.authenticated) { throw new Error("Registration was not confirmed by the server."); }
+            this.token.setData("");
+            stage = "Session check";
+            const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
+            if (!response.ok) { throw new Error(`Session check returned HTTP ${response.status}`); }
+            const session = await response.json();
+            if (!session.authenticated || !session.user) {
+                throw new Error("Passkey was created, but the signed-in session is missing.");
+            }
+            this.onSessionChange?.(session);
+            if (!this.messageBox) {
+                this.messageBox = new TVMessageBox();
+                this.owner?.insert(this.messageBox);
+            }
+            await this.messageBox.show({
+                type: TVMessageBox.MF_INFORMATION,
+                lines: [`Registered and signed in as ${session.user.display_name}.`],
+            });
+            this.close();
+            this.onConfirmed?.();
+        } catch (error) {
+            const type = error?.name && error.name !== "Error" ? `${error.name}: ` : "";
+            const reason = `${type}${error?.message || "Registration failed."}`;
+            this.status.setText(`${stage} failed:\n${reason.length > 54 ? `${reason.slice(0, 53)}…` : reason}`);
+        } finally {
+            this.registerButton.setState(sfDisabled, false);
+        }
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "register-confirm") { void this.registerPasskey(); }
+        else if (event.command === "register-cancel") { this.close(); }
+        else { return; }
+        this.clearEvent(event);
+    }
+}
+
+class TVRegistrationTokenDialog extends TVDialog {
+    static viewName = "registration-token";
+
+    constructor() {
+        const token = new TVInputLine(new TVRect(2, 2, 71, 3), 128);
+        const generate = new TVButton(new TVRect(9, 4, 25, 6), "~G~enerate", "token-generate", bfDefault);
+        const remove = new TVButton(new TVRect(29, 4, 45, 6), "~D~elete", "token-delete", bfNormal)
+            .setState(sfDisabled, true);
+        const close = new TVButton(new TVRect(49, 4, 65, 6), "~C~lose", "token-close", bfNormal);
+        const tokens = new TVListBox(new TVRect(2, 8, 71, 16));
+        const status = new TVStaticText(new TVRect(2, 17, 71, 18), "Loading valid tokens...");
+        super(new TVRect(0, 0, 76, 21), "Registration Token");
+        this.insert(new TVGroup(new TVRect(0, 0, 74, 19)).insertAll([
+            new TVLabel(new TVRect(2, 1, 30, 2), "Token", token), token,
+            generate, remove, close,
+            new TVStaticText(new TVRect(2, 7, 71, 8), "Valid registration tokens"),
+            tokens, status,
+        ]));
+        this.token = token;
+        this.tokens = tokens;
+        this.status = status;
+        this.generateButton = generate;
+        this.deleteButton = remove;
+        this.confirmBox = null;
+        this.refreshVersion = 0;
+        this.tokens.bind({
+            onSelect: (item) => this.selectToken(item),
+            onActivate: (item) => {
+                this.selectToken(item);
+                if (item.token) { this.token.focus(); this.token.selectAll(); }
+            },
+        });
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    open() {
+        this.token.setData("");
+        super.open();
+        void this.refreshTokens();
+    }
+
+    close() {
+        this.refreshVersion += 1;
+        this.token.setData("");
+        this.tokens.newList([]);
+        this.deleteButton.setState(sfDisabled, true);
+        super.close();
+    }
+
+    selectToken(item) {
+        this.token.setData(item?.token || "");
+        this.deleteButton.setState(sfDisabled, !item);
+        if (item) {
+            this.status.setText(item.token
+                ? `Valid until ${new Date(item.expires_at * 1000).toLocaleString()}.`
+                : "Older token: value unavailable; it can still be deleted.");
+        }
+    }
+
+    async refreshTokens() {
+        const version = ++this.refreshVersion;
+        try {
+            const data = await TVLoginDialog.request("/api/auth/registration-tokens");
+            if (version !== this.refreshVersion || !this.isOpen()) { return false; }
+            const rows = data.tokens.map((item) => ({
+                ...item,
+                label: `${item.token || "[older token: value unavailable]"}  ${new Date(item.expires_at * 1000).toLocaleString()}`,
+            }));
+            this.tokens.newList(rows);
+            this.tokens.select(-1);
+            this.deleteButton.setState(sfDisabled, true);
+            this.status.setText(rows.length ? `${rows.length} valid token(s). Select one to view or delete.` : "No valid tokens.");
+            return true;
+        } catch (error) {
+            if (version === this.refreshVersion && this.isOpen()) {
+                this.status.setText(error?.message || "Could not load tokens.");
+            }
+            return false;
+        }
+    }
+
+    async generateToken() {
+        this.generateButton.setState(sfDisabled, true);
+        try {
+            const data = await TVLoginDialog.post("/api/auth/registration-tokens");
+            if (!this.isOpen()) { return; }
+            const listed = await this.refreshTokens();
+            if (!this.isOpen()) { return; }
+            this.token.setData(data.token);
+            this.token.focus();
+            this.token.selectAll();
+            this.status.setText(listed
+                ? "Token generated. Copy it or select it later from the list."
+                : "Token generated, but the list could not be refreshed.");
+        } catch (error) {
+            this.status.setText(error?.message || "Could not create token.");
+        } finally {
+            this.generateButton.setState(sfDisabled, false);
+        }
+    }
+
+    async deleteToken() {
+        const selected = this.tokens.selectedItem();
+        if (!selected) { return; }
+        if (!this.confirmBox) {
+            this.confirmBox = new TVMessageBox();
+            this.owner?.insert(this.confirmBox);
+        }
+        const answer = await this.confirmBox.show({
+            type: TVMessageBox.MF_CONFIRMATION,
+            lines: ["Delete the selected registration token?"],
+            buttons: TVMessageBox.MF_YES_BUTTON | TVMessageBox.MF_NO_BUTTON,
+        });
+        if (answer !== "yes" || !this.isOpen()) { return; }
+        this.deleteButton.setState(sfDisabled, true);
+        try {
+            await TVLoginDialog.request(`/api/auth/registration-tokens/${encodeURIComponent(selected.id)}`, "DELETE");
+            if (!this.isOpen()) { return; }
+            await this.refreshTokens();
+            this.token.setData("");
+            this.status.setText("Registration token deleted.");
+        } catch (error) {
+            this.status.setText(error?.message || "Could not delete token.");
+            this.deleteButton.setState(sfDisabled, false);
+        }
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "token-generate") { void this.generateToken(); }
+        else if (event.command === "token-delete") { void this.deleteToken(); }
+        else if (event.command === "token-close") { this.close(); }
+        else { return; }
+        this.clearEvent(event);
     }
 }
 
@@ -208,12 +740,13 @@ class TVViewGalleryDialog extends TVDialog {
             if (event.infoPtr === this.nameInput) {
                 this.setStatus(`Name: ${this.nameInput.getData() || "(empty)"}`);
             } else if (event.infoPtr === this.checks || event.infoPtr === this.radios) {
-                const input = event.nativeEvent.target.closest("input");
-                if (input) { this.setStatus(`${input.value}: ${input.checked ? "on" : "off"}`); }
+                const option = event.infoPtr.options[event.infoLong];
+                if (option) {
+                    const checked = event.infoPtr.mark(event.infoLong);
+                    this.setStatus(`${option.value}: ${checked ? "on" : "off"}`);
+                }
             } else if (event.infoPtr === this.multiChecks) {
-                const item = event.nativeEvent.target.closest("[data-tv-multicheck-index]");
-                const index = Number.parseInt(item?.dataset.tvMulticheckIndex || "", 10);
-                const option = this.multiChecks.options[index];
+                const option = this.multiChecks.options[event.infoLong];
                 if (option) { this.setStatus(`${option.value}: state ${option.state}`); }
             } else { return; }
             this.clearEvent(event);
@@ -336,6 +869,29 @@ class TVHistory extends TVButton {
         this.window = null;
     }
 
+    _drawParts() {
+        const parts = super._drawParts();
+        const classes = ["tv-file-open-history-button"];
+        if (this.command === "change-dir-history") { classes.push("tv-change-dir-history-button"); }
+        if (this.command === "find-history") { classes.push("tv-find-history-button"); }
+        return {
+            ...parts,
+            dialog: false,
+            className: classes.join(" "),
+            labelMarkup: [
+                '<span class="tv-file-open-history-side" aria-hidden="true">▐</span>',
+                '<span class="tv-file-open-history-arrow" aria-hidden="true">↓</span>',
+                '<span class="tv-file-open-history-side" aria-hidden="true">▌</span>',
+            ].join(""),
+            ariaLabel: {
+                "file-open-history": "History",
+                "change-dir-history": "Directory history",
+                "find-history": "Find history",
+            }[this.command],
+            ariaExpanded: Boolean(this.commandData.expanded),
+        };
+    }
+
     keys() { return this.store.keys(); }
     entries(items, keyFor) { return this.store.entries(items, keyFor); }
     remember(key) { this.store.remember(key); }
@@ -365,7 +921,7 @@ class TVHistoryWindow extends TVWindow {
         this.viewer = new TVHistoryViewer(new TVRect(
             0,
             0,
-            Math.max(0, bounds.width - 2),
+            Math.max(0, bounds.width - 1),
             Math.max(0, bounds.height - 2),
         ), this.historyId);
         this.insert(this.viewer);
@@ -374,6 +930,9 @@ class TVHistoryWindow extends TVWindow {
         this.items = () => [];
         this.onSelect = null;
         this.bound = false;
+        this.onOutsideMouseDown = (nativeEvent) => {
+            this.dispatchEvent(new TVEvent(evMouseDown, { infoPtr: this, nativeEvent }));
+        };
     }
 
     _semanticName() { return `${this.historyId}-history-popup`; }
@@ -384,11 +943,6 @@ class TVHistoryWindow extends TVWindow {
         this.onSelect = onSelect;
         if (this.bound) { return this; }
         this.bound = true;
-        document.addEventListener("mousedown", (event) => {
-            if (!this.isOpen()) { return; }
-            if (this.buttonView?.root?.contains(event.target) || this.root?.contains(event.target)) { return; }
-            this.hide();
-        });
         this.viewer.bind({
             onSelect: (item) => this.onSelect?.(item, false),
             onActivate: (item) => this.onSelect?.(item, true),
@@ -406,14 +960,12 @@ class TVHistoryWindow extends TVWindow {
     }
 
     isOpen() {
-        return Boolean(this.root && !this.root.hidden);
+        return Boolean(this.root && this.getState(sfVisible));
     }
 
     _setOpen(open) {
-        if (this.root) {
-            this.root.hidden = !open;
-            this.root.setAttribute("aria-hidden", open ? "false" : "true");
-        }
+        this.setState(sfVisible, open);
+        this.root?.setAttribute("aria-hidden", open ? "false" : "true");
         this.buttonView?.root?.setAttribute("aria-expanded", open ? "true" : "false");
         if (this.buttonView) { this.buttonView.commandData.expanded = open; }
     }
@@ -422,6 +974,7 @@ class TVHistoryWindow extends TVWindow {
         if (!this.root) { return false; }
         this.refresh();
         this._setOpen(true);
+        document.addEventListener("mousedown", this.onOutsideMouseDown);
         fillBorders(this.root);
         window.requestAnimationFrame(() => {
             this.viewer.updateScrollbar();
@@ -436,11 +989,21 @@ class TVHistoryWindow extends TVWindow {
     }
 
     hide({ restoreFocus = false } = {}) {
+        document.removeEventListener("mousedown", this.onOutsideMouseDown);
         this._setOpen(false);
         if (restoreFocus) { this.buttonView?.focus(); }
     }
 
     close() { this.hide({ restoreFocus: true }); }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evMouseDown || !event.nativeEvent || !this.isOpen()) { return; }
+        const target = event.nativeEvent?.target;
+        if (this.buttonView?.root?.contains(target) || this.root?.contains(target)) { return; }
+        this.hide();
+        this.clearEvent(event);
+    }
 
     handleEscape(event) {
         if (event.key !== "Escape" || !this.isOpen()) { return false; }
@@ -458,6 +1021,12 @@ class TVFileList extends TVListBox {
         super(bounds, numCols);
         this.rows = 8;
         this.onViewportChange = null;
+    }
+
+    bindRoot(root) {
+        super.bindRoot(root);
+        this.root?.style.setProperty("--tv-file-list-rows", String(this.rows));
+        return this;
     }
 
     select(index, options = {}) {
@@ -493,48 +1062,12 @@ class TVFileList extends TVListBox {
         }
     }
 
-    onKeyDown(event) {
-        const current = this.resolveIndex(event.target);
-        if (current < 0 || !this.items.length) { return; }
-        let next = current;
-        if (event.key === "ArrowDown") {
-            next = Math.min(this.items.length - 1, current + 1);
-        } else if (event.key === "ArrowUp") {
-            next = Math.max(0, current - 1);
-        } else if (event.key === "ArrowRight") {
-            next = Math.min(this.items.length - 1, current + this.rows);
-        } else if (event.key === "ArrowLeft") {
-            next = Math.max(0, current - this.rows);
-        } else if (event.key === "PageDown") {
-            next = Math.min(this.items.length - 1, current + this.rows * 2);
-        } else if (event.key === "PageUp") {
-            next = Math.max(0, current - this.rows * 2);
-        } else if (event.key === "Home") {
-            next = 0;
-        } else if (event.key === "End") {
-            next = this.items.length - 1;
-        } else if (event.key === "Enter") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.select(current);
-            this.activateHandler?.(this.items[current], current, event);
-            return;
-        } else if (event.key === " ") {
-            event.preventDefault();
-            event.stopPropagation();
-            this.select(current);
-            this.selectHandler?.(this.items[current], current, event);
-            return;
-        } else {
-            return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        this.select(next);
-        this.selectedElement()?.focus();
-        if (next !== current) {
-            this.selectHandler?.(this.items[next], next, event);
-        }
+    keyDestination(index, key) {
+        if (key === "ArrowRight") { return Math.min(this.items.length - 1, index + this.rows); }
+        if (key === "ArrowLeft") { return Math.max(0, index - this.rows); }
+        if (key === "PageDown") { return Math.min(this.items.length - 1, index + this.rows * 2); }
+        if (key === "PageUp") { return Math.max(0, index - this.rows * 2); }
+        return super.keyDestination(index, key);
     }
 }
 
@@ -549,9 +1082,9 @@ class TVFileOpenDialog extends TVDialog {
         const cancelButton = new TVButton(new TVRect(34, 5, 45, 7), "Cancel", "file-open-cancel", bfNormal);
         const historyButton = new TVHistory(new TVRect(30, 2, 33, 3), nameInput, "thelp:file-open-history");
         const fileList = new TVFileList(new TVRect(2, 5, 33, 13), 2);
-        const scrollLeftButton = new TVButton(new TVRect(2, 13, 3, 14), displayCp437Char(17), "file-open-scroll-left", bfNormal);
+        const scrollLeftButton = new TVFileScrollButton(new TVRect(2, 13, 3, 14), displayCp437Char(17), "file-open-scroll-left", bfNormal);
         const scrollTrack = new TVStaticText(new TVRect(3, 13, 32, 14), "");
-        const scrollRightButton = new TVButton(new TVRect(32, 13, 33, 14), displayCp437Char(16), "file-open-scroll-right", bfNormal);
+        const scrollRightButton = new TVFileScrollButton(new TVRect(32, 13, 33, 14), displayCp437Char(16), "file-open-scroll-right", bfNormal);
         const pathLabel = new TVStaticText(new TVRect(0, 15, 47, 16), "");
         const detailLabel = new TVStaticText(new TVRect(0, 16, 47, 17), "");
         const historyPopup = new TVHistoryWindow(new TVRect(0, 0, 32, 8), "file-open");
@@ -1120,7 +1653,7 @@ class TVAsciiTable extends TVGroup {
     constructor(bounds) {
         super(bounds);
         this.cells = Array.from({ length: 256 }, (_unused, code) => {
-            const button = new TVButton(new TVRect(), displayCp437Char(code), "ascii-code", bfNormal).setValue(code);
+            const button = new TVAsciiCellButton(new TVRect(), displayCp437Char(code), "ascii-code", bfNormal).setValue(code);
             button.setCommandData({ selected: code === 0 });
             return button;
         });
@@ -1251,7 +1784,7 @@ class TVCalculatorDialog extends TVDialog {
             PLUS: "+",
         };
         const buttons = buttonKeys.map(([key, label, aria], index) => (
-            new TVButton(new TVRect(
+            new TVCalculatorButton(new TVRect(
                 (index % 4) * 5,
                 Math.floor(index / 4) * 2,
                 (index % 4) * 5 + 5,
@@ -1512,9 +2045,9 @@ class TVCalendarDialog extends TVDialog {
     constructor() {
         const now = new Date();
         const captionView = new TVStaticText(new TVRect(0, 0, 19, 1), "");
-        const prevButton = new TVButton(new TVRect(19, 0, 22, 1), "<", "calendar-prev", bfNormal);
-        const nextButton = new TVButton(new TVRect(22, 0, 25, 1), ">", "calendar-next", bfNormal);
-        const todayButton = new TVButton(new TVRect(25, 0, 28, 1), "=", "calendar-today", bfNormal);
+        const prevButton = new TVCalendarButton(new TVRect(19, 0, 22, 1), "<", "calendar-prev", bfNormal);
+        const nextButton = new TVCalendarButton(new TVRect(22, 0, 25, 1), ">", "calendar-next", bfNormal);
+        const todayButton = new TVCalendarButton(new TVRect(25, 0, 28, 1), "=", "calendar-today", bfNormal);
         const gridView = new TVCalendarView(new TVRect(0, 2, 28, 8));
         const calendarMain = new TVGroup(new TVRect(0, 0, 28, 8)).insertAll([
             captionView,
@@ -1649,7 +2182,7 @@ class TVColorSelector extends TVGroup {
         const background = this.colorCount === 8;
         this.background = background;
         this.buttons = Array.from({ length: this.colorCount }, (_unused, index) => {
-            const button = new TVButton(new TVRect(), "", "color-index", bfNormal).setValue(index);
+            const button = new TVColorCellButton(new TVRect(), "", "color-index", bfNormal).setValue(index);
             button.setCommandData({ selected: index === 0, color: DOS_COLORS[index] });
             return button;
         });
@@ -2643,7 +3176,7 @@ class TVMidiTrackList extends TVListBox {
     static viewName = "midi-track-list";
 
     itemMarkup(track, index) {
-        return new TVButton(new TVRect(), "", "midi-track", bfNormal)
+        return new TVMidiTrackButton(new TVRect(), "", "midi-track", bfNormal)
             .setValue(index)
             .setCommandData({
                 listIndex: index,
@@ -2661,17 +3194,32 @@ class TVMidiDisplay extends TVGroup {
 
     constructor(bounds) {
         super(bounds);
+        this.trackLabelView = new TVStaticText(new TVRect(0, 0, 6, 1), "Track");
         this.trackNumberView = new TVStaticText(new TVRect(6, 0, 10, 1), "01");
         this.timeView = new TVStaticText(new TVRect(20, 0, 40, 1), "0:00 / 0:00");
         this.titleView = new TVStaticText(new TVRect(0, 1, 40, 2), "");
         this.statusView = new TVStaticText(new TVRect(0, 2, 40, 3), "Ready.");
         this.insertAll([
-            new TVStaticText(new TVRect(0, 0, 6, 1), "Track"),
+            this.trackLabelView,
             this.trackNumberView,
             this.timeView,
             this.titleView,
             this.statusView,
         ]);
+    }
+
+    resolve(root) {
+        super.resolve(root);
+        for (const [view, part] of [
+            [this.trackLabelView, "label"],
+            [this.trackNumberView, "number"],
+            [this.timeView, "time"],
+            [this.titleView, "title"],
+            [this.statusView, "status"],
+        ]) {
+            view.root?.setAttribute("data-tv-midi-part", part);
+        }
+        return this;
     }
 
     setTrack(track, number) {
@@ -2710,12 +3258,12 @@ class TVMidiPlayerDialog extends TVDialog {
     static viewName = "midi";
 
     constructor() {
-        const previousButton = new TVButton(new TVRect(1, 6, 7, 8), "◄◄", "midi-previous", bfNormal);
+        const previousButton = new TVMidiControlButton(new TVRect(1, 6, 7, 8), "◄◄", "midi-previous", bfNormal);
         const playButton = new TVButton(new TVRect(7, 6, 14, 8), "►", "midi-play", bfDefault);
-        const pauseButton = new TVButton(new TVRect(14, 6, 21, 8), "▌▌", "midi-pause", bfNormal);
+        const pauseButton = new TVMidiControlButton(new TVRect(14, 6, 21, 8), "▌▌", "midi-pause", bfNormal);
         const stopButton = new TVButton(new TVRect(21, 6, 27, 8), "■", "midi-stop", bfNormal);
-        const nextButton = new TVButton(new TVRect(27, 6, 33, 8), "►►", "midi-next", bfNormal);
-        const moreButton = new TVButton(new TVRect(33, 6, 41, 8), "~M~ore", "midi-more", bfNormal)
+        const nextButton = new TVMidiControlButton(new TVRect(27, 6, 33, 8), "►►", "midi-next", bfNormal);
+        const moreButton = new TVMidiControlButton(new TVRect(33, 6, 41, 8), "~M~ore", "midi-more", bfNormal)
             .setCommandData({ expanded: false });
         const sourceBounds = [
             new TVRect(0, 3, 20, 5),
@@ -2819,7 +3367,7 @@ class TVMidiPlayerDialog extends TVDialog {
         super.close();
     }
 
-    toggleAdvanced(expanded = this.advancedView.root.hidden) {
+    toggleAdvanced(expanded = !this.advancedView.getState(sfVisible)) {
         expanded = Boolean(expanded);
         this.trackListBox.setState(sfVisible, expanded);
         this.advancedView.setState(sfVisible, expanded);
@@ -2832,7 +3380,7 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 
     captureUrlState() {
-        return { expanded: !this.advancedView.root.hidden };
+        return { expanded: this.advancedView.getState(sfVisible) };
     }
 
     restoreUrlState(state) {
@@ -3023,6 +3571,176 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 }
 
+class TVGridDemoDialog extends TVDialog {
+    static viewName = "grid-demo";
+
+    constructor() {
+        super(new TVRect(0, 0, 66, 19), "Grid Viewer");
+        this.grid = new TVGridView(new TVRect(2, 2, 62, 13), [
+            { title: "Object", width: 20 },
+            { title: "Base", width: 18 },
+            { title: "Purpose", width: 38 },
+        ]);
+        this.headerButton = new TVButton(new TVRect(2, 15, 20, 17), "~H~ide headers", "grid-headers");
+        this.status = new TVStaticText(new TVRect(2, 14, 62, 15), "Arrow keys select a cell; both scrollbars are shared TVScrollBar views.");
+        this.insert(new TVGroup(new TVRect(0, 0, 64, 17)).insertAll([
+            new TVStaticText(new TVRect(2, 1, 62, 2), "TVGridView: selectable rows and columns"),
+            this.grid,
+            this.status,
+            this.headerButton,
+            new TVButton(new TVRect(23, 15, 33, 17), "~O~K", "grid-ok", bfDefault),
+        ]));
+        this.grid.setRows([
+            ["TVView", "—", "Position, drawing, state and events"],
+            ["TVGroup", "TVView", "Ownership and event propagation"],
+            ["TVWindow", "TVGroup", "Frame, move, grow, close and zoom"],
+            ["TVDialog", "TVWindow", "Modal dialog composition"],
+            ["TVListViewer", "TVView", "Selection and keyboard navigation"],
+            ["TVListBox", "TVListViewer", "Viewport and standard scrollbar"],
+            ["TVGridView", "TVListBox", "Cells, visible headers, two-axis scroll"],
+            ["TVTerminal", "TVView", "Streaming process output"],
+            ["TVScrollBar", "TVView", "Shared vertical/horizontal scroll engine"],
+            ["TVEditor", "TVView", "Text document viewport"],
+        ]);
+        this.grid.bind({ onSelect: (row, index) => {
+            this.status.setText(`Row ${index + 1}, column ${this.grid.selectedColumn + 1}: ${row[this.grid.selectedColumn]}`);
+        } });
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "grid-ok") { this.close(); }
+        else if (event.command === "grid-headers") {
+            this.grid.setHeadersVisible(!this.grid.headersVisible);
+            this.headerButton.setTitle(this.grid.headersVisible ? "~H~ide headers" : "~S~how headers");
+        }
+        else { return; }
+        this.clearEvent(event);
+    }
+}
+
+class TVServerTerminalDialog extends TVDialog {
+    static viewName = "server-terminal";
+
+    constructor() {
+        super(new TVRect(0, 0, 84, 27), "Server Terminal");
+        this.jobId = new TVInputLine(new TVRect(10, 1, 24, 2), 12);
+        this.key = new TVInputLine(new TVRect(35, 1, 79, 2), 64).setSecret();
+        this.input = new TVInputLine(new TVRect(10, 22, 68, 23), 2048);
+        this.sendButton = new TVButton(new TVRect(69, 21, 79, 23), "~S~end", "terminal-send");
+        this.status = new TVStaticText(new TVRect(27, 3, 79, 4), "Enter the ID and key printed by the server command.");
+        const terminal = new TVTerminal(new TVRect(2, 5, 80, 21), 200);
+        this.insert(new TVGroup(new TVRect(0, 0, 82, 25)).insertAll([
+            new TVLabel(new TVRect(2, 1, 10, 2), "Job ~I~D:", this.jobId),
+            this.jobId,
+            new TVLabel(new TVRect(27, 1, 35, 2), "~K~ey:", this.key),
+            this.key,
+            new TVButton(new TVRect(2, 3, 15, 5), "~C~onnect", "terminal-connect", bfDefault),
+            this.status,
+            terminal,
+            new TVLabel(new TVRect(2, 22, 10, 23), "~I~nput:", this.input),
+            this.input,
+            this.sendButton,
+            new TVButton(new TVRect(69, 23, 79, 25), "~C~lose", "terminal-close"),
+        ]));
+        this.terminal = terminal.bind(terminal.root);
+        this.input.setState(sfDisabled, true);
+        this.sendButton.setState(sfDisabled, true);
+        this.connection = null;
+        this.pollTimer = null;
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        if (event.command === "terminal-close") { this.close(); }
+        else if (event.command === "terminal-connect") { void this.connect(); }
+        else if (event.command === "terminal-send") { void this.send(); }
+        else { return; }
+        this.clearEvent(event);
+    }
+
+    close() {
+        this.disconnect();
+        this.key.setData("");
+        super.close();
+    }
+
+    disconnect() {
+        if (this.pollTimer) { clearTimeout(this.pollTimer); }
+        this.pollTimer = null;
+        this.connection = null;
+        this.input.setState(sfDisabled, true);
+        this.sendButton.setState(sfDisabled, true);
+    }
+
+    async connect() {
+        this.disconnect();
+        const id = this.jobId.getData().trim();
+        const key = this.key.getData().trim();
+        if (!/^[A-Za-z0-9_-]{12}$/.test(id) || !key) {
+            this.status.setText("Enter a valid job ID and access key.");
+            return;
+        }
+        this.connection = { id, key, offset: 0 };
+        this.terminal.clear();
+        await this.poll();
+    }
+
+    async poll() {
+        const connection = this.connection;
+        if (!connection || !this.isOpen()) { return; }
+        try {
+            const response = await fetch(`/api/terminal/jobs/${encodeURIComponent(connection.id)}?offset=${connection.offset}`, {
+                headers: { "X-THelp-Terminal-Key": connection.key }, cache: "no-store",
+            });
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            const result = await response.json();
+            if (this.connection !== connection) { return; }
+            connection.offset = result.offset;
+            if (result.output) {
+                this.terminal.appendChunk(result.output.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ""));
+            }
+            this.input.setState(sfDisabled, !result.running);
+            this.sendButton.setState(sfDisabled, !result.running);
+            this.status.setText(result.running
+                ? `${result.label}: running`
+                : `${result.label}: finished (exit ${result.exit_code}) — input locked`);
+            if (result.running || result.output?.length) {
+                this.pollTimer = setTimeout(() => { void this.poll(); }, 350);
+            }
+        } catch (error) {
+            if (this.connection !== connection) { return; }
+            this.status.setText(`Connection failed: ${String(error?.message || error)}`);
+            this.disconnect();
+        }
+    }
+
+    async send() {
+        const connection = this.connection;
+        const text = this.input.getData();
+        if (!connection || !text || this.input.disabled) { return; }
+        try {
+            const response = await fetch(`/api/terminal/jobs/${encodeURIComponent(connection.id)}/input`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-THelp-Terminal-Key": connection.key },
+                body: JSON.stringify({ text }),
+            });
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            this.input.setData("");
+            this.input.focus();
+        } catch (error) {
+            this.status.setText(`Input rejected: ${String(error?.message || error)}`);
+            if (String(error?.message).includes("409")) { this.input.setState(sfDisabled, true); }
+        }
+    }
+}
+
 function statisticsFlag(country) {
     const code = String(country || "").toUpperCase();
     if (!/^[A-Z]{2}$/.test(code)) { return "🌍"; }
@@ -3044,6 +3762,7 @@ class TVStatisticsDialog extends TVDialog {
         this.summary = new TVStaticText(new TVRect(1, 1, 75, 3), "Loading server statistics...");
         this.categories = new TVListBox(new TVRect(1, 4, 24, 20));
         this.details = new TVListBox(new TVRect(26, 4, 75, 20));
+        this.details.hScrollBar = new TVScrollBar(new TVRect());
         this.privacy = new TVStaticText(
             new TVRect(1, 20, 75, 21),
             "Aggregate counters only — no IP, cookie, visitor ID or raw user agent.",
@@ -3101,10 +3820,21 @@ class TVStatisticsDialog extends TVDialog {
         this.summary.setText("Loading server statistics...");
         this.categories.newList([]);
         this.details.newList([]);
+        let phase = "Server API";
         try {
-            const response = await fetch("/api/statistics/summary", { cache: "no-store" });
+            let response;
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+                try {
+                    response = await fetch("/api/statistics/summary", { cache: "no-store" });
+                    if (response.ok || response.status < 500 || attempt) { break; }
+                } catch (error) {
+                    if (attempt) { throw error; }
+                }
+                await new Promise((resolve) => setTimeout(resolve, 400));
+            }
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
             this.data = await response.json();
+            phase = "Statistics display";
             this.summary.setText([
                 `Visits ${Number(this.data.visits) || 0}  HELP ${Number(this.data.help_opens) || 0}  Docs ${Number(this.data.document_opens) || 0}  Topics ${Number(this.data.topic_views) || 0}`,
                 `Dialogs ${Number(this.data.dialog_opens) || 0}  Tools ${Number(this.data.tool_opens) || 0}  Search ${Number(this.data.searches) || 0}  Games ${Number(this.data.game_launches) || 0}/${Number(this.data.game_completions) || 0}`,
@@ -3136,8 +3866,9 @@ class TVStatisticsDialog extends TVDialog {
         } catch (error) {
             this.data = null;
             this.sections = [];
-            this.summary.setText(`Statistics are unavailable: ${String(error?.message || error)}`);
-            this.details.newList(["The server API could not be reached."]);
+            const reason = String(error?.message || error);
+            this.summary.setText(`${phase} unavailable: ${reason}`);
+            this.details.newList([`${phase}: ${reason}`, "Press Refresh to retry."]);
         }
     }
 }
@@ -3380,16 +4111,21 @@ class TVFindDialog extends TVDialog {
         const findInput = new TVInputLine(new TVRect(2, 2, 32, 3), 255).setData("");
         const findLabel = new TVLabel(new TVRect(1, 1, 20, 2), "~T~ext to find", findInput);
         const findButton = new TVButton(new TVRect(35, 1, 45, 3), "~F~ind", "find-confirm", bfDefault);
-        const cancelButton = new TVButton(new TVRect(35, 4, 45, 6), "Cancel", "find-cancel", bfNormal);
-        const findStatus = new TVStaticText(new TVRect(2, 5, 33, 7), "");
+        const cancelButton = new TVButton(new TVRect(35, 3, 45, 5), "Cancel", "find-cancel", bfNormal);
+        const findStatus = new TVStaticText(new TVRect(2, 7, 33, 9), "");
+        const scope = new TVRadioButtons(new TVRect(2, 4, 33, 6), [
+            { label: "Search ~a~ll HELP/Docs", value: "global" },
+            { label: "Find in ~a~ctive window", value: "local" },
+        ]);
         const historyButton = new TVHistory(new TVRect(32, 2, 35, 3), findInput, "thelp:find-history");
-        const historyPopup = new TVHistoryWindow(new TVRect(0, 0, 34, 8), "find");
+        const historyPopup = new TVHistoryWindow(new TVRect(0, 0, 34, 7), "find");
         const findMain = new TVGroup(new TVRect(0, 0, 47, 10)).insertAll([
             findLabel,
             findInput,
             historyButton,
             findButton,
             cancelButton,
+            scope,
             findStatus,
             historyPopup,
         ]);
@@ -3400,9 +4136,14 @@ class TVFindDialog extends TVDialog {
         this.history = historyButton;
         this.findHandler = null;
         this.findAgainHandler = null;
+        this.globalFindHandler = null;
         this.targetLabel = "active window";
+        this.globalAvailable = false;
+        this.availabilityChecked = false;
+        this.availabilitySerial = 0;
         this.input = findInput;
         this.statusView = findStatus;
+        this.scope = scope;
         this.findButton = findButton;
         this.cancelButton = cancelButton;
         this.historyButton = historyButton;
@@ -3442,30 +4183,87 @@ class TVFindDialog extends TVDialog {
             event.nativeEvent.preventDefault();
             this.performFind();
             this.clearEvent(event);
+        } else if (event.what === evBroadcast && event.infoPtr === this.scope) {
+            this.updateScopeStatus();
+            this.clearEvent(event);
         }
     }
 
-    configure({ find = null, findAgain = null, targetLabel = "active window" } = {}) {
+    updateScopeStatus() {
+        this.statusView.setText(this.scope.mark(0)
+            ? this.globalAvailable ? "Search across HELP files and Docs"
+                : this.availabilityChecked ? "Server search is unavailable." : "Checking server search..."
+            : this.findHandler ? `Find in ${this.targetLabel}` : "No active window for local Find.");
+    }
+
+    setAvailability(globalAvailable) {
+        this.globalAvailable = Boolean(globalAvailable && this.globalFindHandler);
+        const localAvailable = Boolean(this.findHandler);
+        this.scope.setButtonState(1, this.globalAvailable);
+        this.scope.setButtonState(2, localAvailable);
+        if ((this.scope.mark(0) && !this.globalAvailable) || (this.scope.mark(1) && !localAvailable)) {
+            this.scope.setData(localAvailable ? 1 : 0);
+        }
+        this.updateScopeStatus();
+    }
+
+    async checkGlobalAvailability() {
+        const serial = ++this.availabilitySerial;
+        try {
+            const response = await fetch("/api/search/status", { cache: "no-store" });
+            const data = response.ok ? await response.json() : null;
+            if (serial === this.availabilitySerial) {
+                this.availabilityChecked = true;
+                this.setAvailability(Boolean(data && ["ready", "building"].includes(data.state)));
+            }
+        } catch {
+            if (serial === this.availabilitySerial) {
+                this.availabilityChecked = true;
+                this.setAvailability(false);
+            }
+        }
+    }
+
+    configure({ find = null, findAgain = null, globalFind = null, targetLabel = "active window" } = {}) {
         this.findHandler = typeof find === "function" ? find : null;
         this.findAgainHandler = typeof findAgain === "function" ? findAgain : null;
+        this.globalFindHandler = typeof globalFind === "function" ? globalFind : null;
         this.targetLabel = String(targetLabel || "active window");
+        this.setAvailability(false);
         this.historyWindow.refresh();
     }
 
     open(initialQuery = "") {
         this.historyWindow.hide();
+        this.availabilityChecked = false;
+        this.scope.setData(this.findHandler ? 1 : 0);
+        this.setAvailability(false);
         if (initialQuery) { this.input.setData(initialQuery); }
-        this.statusView.setText(`Find in ${this.targetLabel}`);
         this.historyWindow.refresh();
         super.open();
+        void this.checkGlobalAvailability();
         this.input.focus();
         this.input.selectAll();
     }
 
     performFind() {
         const query = this.input.getData().trim();
-        if (!query || !this.findHandler) {
+        if (query && this.scope.mark(0) && this.globalAvailable && this.globalFindHandler) {
+            this.history.remember(query);
+            this.close();
+            this.globalFindHandler(query);
+            return true;
+        }
+        if (!query) {
             this.statusView.setText("Enter text to find.");
+            return false;
+        }
+        if (this.scope.mark(0) && !this.globalAvailable) {
+            this.statusView.setText("Server search is not available.");
+            return false;
+        }
+        if (!this.findHandler) {
+            this.statusView.setText("No active window. Select Search all HELP/Docs.");
             return false;
         }
         this.history.remember(query);
@@ -3512,19 +4310,57 @@ class TVSearchResultsList extends TVListBox {
         if (entry === this.messageView) {
             return entry.draw();
         }
-        const terms = entry.index_terms && entry.index_terms.length
-            ? `Index: ${entry.index_terms.slice(0, 4).join(", ")}`
-            : entry.title;
-        return new TVButton(new TVRect(), "", "search-index", bfNormal)
+        const source = entry.source_file || entry.file || "Current HELP file";
+        return new TVSearchResultButton(new TVRect(), "", "search-index", bfNormal)
             .setValue(index)
             .setCommandData({
                 listIndex: index,
                 selected: index === this.selectedIndex,
                 title: entry.title,
-                meta: terms,
-                preview: entry.preview || entry.text.slice(0, 180),
+                meta: source,
             })
             .draw();
+    }
+}
+
+class TVIndexProgressDialog extends TVDialog {
+    static viewName = "index-progress";
+
+    constructor() {
+        super(new TVRect(0, 0, 46, 10), "Building Global Index");
+        this.setState(sfModal, true);
+        this.summary = new TVStaticText(new TVRect(2, 1, 42, 2), "Preparing HELP files and Docs...");
+        this.file = new TVStaticText(new TVRect(2, 4, 42, 5), "");
+        this.bar = new TVBarGauge(new TVRect(2, 2, 42, 3), 100);
+        this.percent = new TVPercentGauge(new TVRect(19, 3, 26, 4), 100);
+        this.insert(new TVGroup(new TVRect(0, 0, 44, 8)).insertAll([
+            this.summary, this.bar, this.percent, this.file,
+            new TVButton(new TVRect(17, 5, 29, 7), "~H~ide", "index-hide", bfDefault),
+        ]));
+        this.onHide = null;
+        this.bindCommonClose(() => this.hideProgress());
+        this.bindDrag();
+    }
+
+    update(status) {
+        const percent = Math.max(0, Math.min(100, Number(status.percent) || 0));
+        this.summary.setText(`${status.processed || 0} / ${status.total || 0} files indexed`);
+        this.file.setText(String(status.file || "").slice(-40));
+        this.bar.updateView(percent);
+        this.percent.updateView(percent);
+    }
+
+    hideProgress() {
+        this.onHide?.();
+        this.close();
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && event.command === "index-hide") {
+            this.hideProgress();
+            this.clearEvent(event);
+        }
     }
 }
 
@@ -3533,15 +4369,22 @@ class TVSearchDialog extends TVDialog {
 
     constructor() {
         const searchInput = new TVInputLine(new TVRect(7, 1, 61, 2), 255);
-        const searchLabel = new TVLabel(new TVRect(1, 1, 7, 2), "Find:", searchInput);
-        const resultsBox = new TVSearchResultsList(new TVRect(1, 5, 61, 23));
+        const searchLabel = new TVLabel(new TVRect(1, 1, 7, 2), "~F~ind:", searchInput);
+        const scope = new TVRadioButtons(new TVRect(1, 3, 31, 5), [
+            { label: "Search ~a~ll HELP/Docs", value: "global" },
+            { label: "Find in ~a~ctive HELP file", value: "local" },
+        ]);
+        const resultsBox = new TVSearchResultsList(new TVRect(1, 6, 61, 23));
+        const sourceView = new TVStaticText(new TVRect(1, 23, 61, 24), "");
         const okButton = new TVButton(new TVRect(62, 1, 73, 3), '~O~K', "search-ok", bfDefault);
         const cancelButton = new TVButton(new TVRect(62, 4, 73, 6), '~C~ancel', "search-cancel", bfNormal);
         const searchMain = new TVGroup(new TVRect(0, 0, 74, 24)).insertAll([
             searchLabel,
             searchInput,
-            new TVStaticText(new TVRect(1, 3, 61, 4), "Enter text and choose a topic."),
+            scope,
+            new TVStaticText(new TVRect(32, 4, 61, 5), "Choose a topic."),
             resultsBox,
+            sourceView,
             okButton,
             cancelButton,
         ]);
@@ -3553,11 +4396,22 @@ class TVSearchDialog extends TVDialog {
             ? window.TV_SEARCH_INDEX
             : { topics: [] };
         this.input = searchInput;
+        this.scope = scope;
+        this.globalAvailable = false;
+        this.availabilityChecked = false;
+        this.availabilitySerial = 0;
         this.okButton = okButton;
         this.cancelButton = cancelButton;
         this.resultsBox = resultsBox;
+        this.sourceView = sourceView;
         this.matches = [];
         this.selectedIndex = -1;
+        this.searchSerial = 0;
+        this.searchTimer = null;
+        this.indexMonitorTimer = null;
+        this.indexMonitorSerial = 0;
+        this.indexProgress = null;
+        this.progressDismissed = false;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
         this.bind();
@@ -3582,6 +4436,9 @@ class TVSearchDialog extends TVDialog {
     handleEvent(event) {
         super.handleEvent(event);
         if (event.what === evBroadcast && event.infoPtr === this.input) {
+            this.renderResults(this.input.getData());
+            this.clearEvent(event);
+        } else if (event.what === evBroadcast && event.infoPtr === this.scope) {
             this.renderResults(this.input.getData());
             this.clearEvent(event);
         } else if (event.what === evCommand) {
@@ -3631,7 +4488,11 @@ class TVSearchDialog extends TVDialog {
     }
 
     open(initialQuery = "") {
+        this.availabilityChecked = false;
+        this.scope.setData(this.searchData.topics.length ? 1 : 0);
+        this.setAvailability(false);
         super.open();
+        void this.checkGlobalAvailability();
         if (typeof initialQuery === "string") {
             this.input.setData(initialQuery);
         }
@@ -3639,6 +4500,13 @@ class TVSearchDialog extends TVDialog {
         window.requestAnimationFrame(() => this.resultsBox.updateScrollbar());
         this.input.focus();
         this.input.selectAll();
+    }
+
+    close() {
+        clearTimeout(this.searchTimer);
+        this.searchSerial += 1;
+        this.scope.setData(0);
+        super.close();
     }
 
     moveSelection(delta) {
@@ -3664,13 +4532,127 @@ class TVSearchDialog extends TVDialog {
     updateSelectionUi() {
         this.resultsBox.select(this.selectedIndex);
         this.okButton.setState(sfDisabled, this.selectedIndex < 0);
+        const match = this.matches[this.selectedIndex];
+        const name = match?.help_name || (match?.kind === "doc" ? "Docs" : "");
+        this.sourceView.setText(name ? `Source: ${name}`.slice(0, 60) : "");
     }
 
     openSelected() {
         if (this.selectedIndex < 0 || this.selectedIndex >= this.matches.length) {
             return;
         }
-        window.location.href = this.matches[this.selectedIndex].href;
+        const match = this.matches[this.selectedIndex];
+        if (match.kind === "doc") {
+            window.location.href = `/?search_doc=${encodeURIComponent(match.file)}`;
+            return;
+        }
+        window.location.href = match.file
+            ? `/?file=${encodeURIComponent(match.file)}&topic=${encodeURIComponent(match.context_hex)}`
+            : match.href;
+    }
+
+    isGlobal() { return this.scope.mark(0) && this.globalAvailable; }
+
+    setAvailability(globalAvailable) {
+        this.globalAvailable = Boolean(globalAvailable);
+        const localAvailable = Boolean(this.searchData.topics.length);
+        this.scope.setButtonState(1, this.globalAvailable);
+        this.scope.setButtonState(2, localAvailable);
+        if ((this.scope.mark(0) && !this.globalAvailable) || (this.scope.mark(1) && !localAvailable)) {
+            this.scope.setData(localAvailable ? 1 : 0);
+        }
+        if (this.isOpen()) { this.renderResults(this.input.getData()); }
+    }
+
+    async checkGlobalAvailability() {
+        const serial = ++this.availabilitySerial;
+        try {
+            const response = await fetch("/api/search/status", { cache: "no-store" });
+            const status = response.ok ? await response.json() : null;
+            if (serial === this.availabilitySerial) {
+                this.availabilityChecked = true;
+                this.setAvailability(Boolean(status && ["ready", "building"].includes(status.state)));
+            }
+        } catch {
+            if (serial === this.availabilitySerial) {
+                this.availabilityChecked = true;
+                this.setAvailability(false);
+            }
+        }
+    }
+
+    setGlobal(enable) {
+        this.scope.setData(enable ? 0 : 1);
+        if (this.isOpen()) { this.renderResults(this.input.getData()); }
+    }
+
+    showIndexProgress(status) {
+        if (this.progressDismissed || !(this.owner instanceof TV.TVDesktop)) { return; }
+        if (!this.indexProgress || this.indexProgress.destroyed) {
+            this.indexProgress = new TVIndexProgressDialog();
+            this.indexProgress.onHide = () => { this.progressDismissed = true; };
+            this.owner.insert(this.indexProgress);
+        }
+        this.indexProgress.update(status);
+        if (!this.indexProgress.isOpen()) { this.indexProgress.open(); }
+    }
+
+    clearIndexProgress() {
+        this.indexProgress?.destroy();
+        this.indexProgress = null;
+        this.progressDismissed = false;
+    }
+
+    async monitorIndex() {
+        const serial = ++this.indexMonitorSerial;
+        if (this.indexMonitorTimer) { clearTimeout(this.indexMonitorTimer); }
+        this.indexMonitorTimer = null;
+        try {
+            const response = await fetch("/api/search/status", { cache: "no-store" });
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            const status = await response.json();
+            if (serial !== this.indexMonitorSerial) { return; }
+            if (status.state === "building") {
+                this.showIndexProgress(status);
+                this.indexMonitorTimer = setTimeout(() => { void this.monitorIndex(); }, 500);
+            } else {
+                const wasBuilding = Boolean(this.indexProgress);
+                this.clearIndexProgress();
+                if (wasBuilding && this.isOpen() && this.isGlobal()) {
+                    this.renderResults(this.input.getData());
+                }
+            }
+        } catch {
+            if (serial !== this.indexMonitorSerial) { return; }
+            this.clearIndexProgress();
+        }
+    }
+
+    async searchGlobal(query, serial) {
+        try {
+            const response = await fetch(`/api/search/global?q=${encodeURIComponent(query)}`, { cache: "no-store" });
+            if (serial !== this.searchSerial || !this.isGlobal()) { return; }
+            if (response.status === 202) {
+                this.resultsBox.setMessage("Building global index. Results will appear when ready.");
+                void this.monitorIndex();
+                return;
+            }
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            const data = await response.json();
+            if (serial !== this.searchSerial || !this.isGlobal()) { return; }
+            this.matches = Array.isArray(data.results) ? data.results : [];
+            if (!this.matches.length) {
+                this.resultsBox.setMessage(`No matches for "${query}" in HELP files or Docs.`);
+            } else {
+                this.resultsBox.setItems(this.matches, 0);
+                this.selectIndex(0);
+            }
+            this.resultsBox.updateScrollbar();
+        } catch (error) {
+            if (serial === this.searchSerial) {
+                this.resultsBox.setMessage(`Global search is unavailable: ${String(error?.message || error)}`);
+            }
+        }
     }
 
     renderResults(query) {
@@ -3679,7 +4661,28 @@ class TVSearchDialog extends TVDialog {
         }
         this.matches = [];
         this.selectedIndex = -1;
+        this.sourceView.setText("");
         this.okButton.setState(sfDisabled, true);
+        clearTimeout(this.searchTimer);
+        const serial = ++this.searchSerial;
+        const trimmed = query.trim();
+        if (!this.globalAvailable && !this.searchData.topics.length) {
+            this.resultsBox.setMessage(this.availabilityChecked
+                ? "No active HELP file or server search is available."
+                : "No active HELP file; checking server search availability.");
+            this.resultsBox.updateScrollbar();
+            return;
+        }
+        if (this.isGlobal()) {
+            if (!trimmed) {
+                this.resultsBox.setMessage("Type text to search HELP files and Docs.");
+            } else {
+                this.resultsBox.setMessage("Searching HELP files and Docs...");
+                this.searchTimer = setTimeout(() => { void this.searchGlobal(trimmed, serial); }, 180);
+            }
+            this.resultsBox.updateScrollbar();
+            return;
+        }
         if (!this.searchData.topics.length) {
             this.resultsBox.setMessage("Search index is not available for this help file.");
             this.resultsBox.updateScrollbar();
@@ -3687,7 +4690,6 @@ class TVSearchDialog extends TVDialog {
             return;
         }
 
-        const trimmed = query.trim();
         if (!trimmed) {
             this.resultsBox.setMessage("Type text to search across all generated topics.");
             this.resultsBox.updateScrollbar();
@@ -3753,6 +4755,9 @@ class TVSearchDialog extends TVDialog {
 
 Object.assign(TV, {
     TVAboutDialog,
+    TVLoginDialog,
+    TVRegistrationDialog,
+    TVRegistrationTokenDialog,
     TVViewGalleryDialog,
     TVHistory,
     TVHistoryViewer,
@@ -3769,6 +4774,8 @@ Object.assign(TV, {
     TVColorDisplay,
     TVColorsDialog,
     TVMidiPlayerDialog,
+    TVGridDemoDialog,
+    TVServerTerminalDialog,
     TVStatisticsDialog,
     TVSystemInformationDialog,
     TVFindDialog,

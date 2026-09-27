@@ -804,7 +804,6 @@ button.tv-status-item {
     color: var(--tv-current-title-fg, var(--tv-title-text));
 }
 
-.tv-close-control.is-frame-control-passive,
 .tv-zoom-control.is-frame-control-passive {
     position: relative;
     pointer-events: none;
@@ -813,18 +812,21 @@ button.tv-status-item {
     background: var(--tv-current-title-bg, var(--tv-window));
 }
 
-.tv-close-control.is-frame-control-passive > *,
 .tv-zoom-control.is-frame-control-passive > * {
     visibility: hidden;
 }
 
-.tv-close-control.is-frame-control-passive::after,
 .tv-zoom-control.is-frame-control-passive::after {
     position: absolute;
     inset: 0;
     color: var(--tv-current-frame);
     content: "───";
     text-align: center;
+}
+
+.tv-close-control.is-frame-control-passive {
+    color: var(--tv-current-frame);
+    background: var(--tv-current-title-bg, var(--tv-window));
 }
 
 .tv-close-control:hover,
@@ -1811,6 +1813,10 @@ button.tv-status-item {
     z-index: 1;
 }
 
+.tv-dialog-close-control.is-frame-control-passive {
+    cursor: pointer;
+}
+
 .tv-dialog-title-control:hover,
 .tv-dialog-title-control:focus-visible {
     background: var(--tv-current-title-bg) !important;
@@ -2067,28 +2073,28 @@ button.tv-status-item {
     white-space: pre;
 }
 
-[data-tv-midi-display] > .tv-static-text:nth-child(1) {
+[data-tv-midi-display] > [data-tv-midi-part="label"] {
     --tv-control-static-fg: #aaaaaa;
     color: #aaaaaa;
 }
 
-[data-tv-midi-display] > .tv-static-text:nth-child(2) {
+[data-tv-midi-display] > [data-tv-midi-part="number"] {
     --tv-control-static-fg: #ffff55;
     color: #ffff55;
 }
 
-[data-tv-midi-display] > .tv-static-text:nth-child(3) {
+[data-tv-midi-display] > [data-tv-midi-part="time"] {
     text-align: right;
     --tv-control-static-fg: #ffff55;
     color: #ffff55;
 }
 
-[data-tv-midi-display] > .tv-static-text:nth-child(4) {
+[data-tv-midi-display] > [data-tv-midi-part="title"] {
     --tv-control-static-fg: #ffffff;
     color: #ffffff;
 }
 
-[data-tv-midi-display] > .tv-static-text:nth-child(5) {
+[data-tv-midi-display] > [data-tv-midi-part="status"] {
     --tv-control-static-fg: #55ff55;
     background: #000000;
     color: #55ff55;
@@ -2425,8 +2431,7 @@ button.tv-status-item {
 }
 
 .tv-search-result-title,
-.tv-search-result-meta,
-.tv-search-result-preview {
+.tv-search-result-meta {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     word-break: break-word;
@@ -2469,6 +2474,7 @@ button.tv-status-item {
 .tv-vlist-viewer {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 1ch;
+    grid-template-rows: minmax(0, 1fr);
     min-width: 0;
     min-height: 0;
     overflow: hidden;
@@ -2479,6 +2485,20 @@ button.tv-status-item {
 .tv-vlist-viewer > .tv-scrollbar-y {
     grid-column: 2;
     grid-row: 1;
+}
+
+.tv-vlist-viewer > .tv-scrollbar-x {
+    display: none;
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.tv-vlist-viewer.is-h-scrollable {
+    grid-template-rows: minmax(0, 1fr) 1em;
+}
+
+.tv-vlist-viewer.is-h-scrollable > .tv-scrollbar-x {
+    display: flex;
 }
 
 .tv-vlist-viewport {
@@ -2501,6 +2521,10 @@ button.tv-status-item {
 .tv-vlist-viewport::-webkit-scrollbar {
     width: 0;
     height: 0;
+}
+
+.tv-vlist-viewer.has-h-scrollbar > .tv-vlist-viewport {
+    overflow-x: auto;
 }
 
 .tv-vlist-item {
@@ -2531,7 +2555,65 @@ button.tv-status-item {
     color: var(--tv-dialog-list-selected-fg);
 }
 
-[data-tv-list-box]:not(.is-inactive):focus-within .tv-vlist-item.is-selected {
+.tv-vlist-viewer.has-h-scrollbar .tv-vlist-item {
+    min-width: max-content;
+    overflow: visible;
+}
+
+.tv-vlist-viewer.has-h-scrollbar .tv-vlist-text {
+    width: max-content;
+    overflow: visible;
+}
+
+:is(.tv-list-viewer, .tv-vlist-viewer):not(.is-inactive):focus-within .tv-vlist-item.is-selected {
+    background: var(--tv-dialog-list-focused-bg);
+    color: var(--tv-dialog-list-focused-fg);
+}
+
+/* TVGridView shares TVListBox scrolling and selection, with fixed character columns. */
+.tv-grid-view > .tv-vlist-viewport {
+    display: block;
+}
+
+.tv-grid-header,
+.tv-grid-row {
+    display: grid;
+    width: max-content;
+    min-width: 100%;
+    height: 1em;
+    line-height: 1;
+    white-space: pre;
+}
+
+.tv-grid-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--tv-dialog-list-selected-bg);
+    color: var(--tv-dialog-list-selected-fg);
+}
+
+.tv-grid-view.headers-hidden .tv-grid-header {
+    display: none;
+}
+
+.tv-grid-view .tv-grid-row {
+    padding: 0;
+}
+
+.tv-grid-cell {
+    min-width: 0;
+    padding: 0 1ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tv-grid-cell.is-selected {
+    background: var(--tv-dialog-list-selected-bg);
+    color: var(--tv-dialog-list-selected-fg);
+}
+
+.tv-grid-view:not(.is-inactive):focus-within .tv-grid-cell.is-selected {
     background: var(--tv-dialog-list-focused-bg);
     color: var(--tv-dialog-list-focused-fg);
 }
@@ -2593,6 +2675,11 @@ button.tv-status-item {
     display: block;
     height: 1em;
     overflow: hidden;
+}
+
+.tv-server-terminal-window .tv-terminal {
+    background: #000000;
+    color: #aaaaaa;
 }
 
 .tv-file-open-history-button {
@@ -2660,7 +2747,7 @@ button.tv-status-item {
 }
 
 [data-tv-file-open-files] > .tv-vlist-viewport {
-    grid-template-rows: repeat(8, 1em);
+    grid-template-rows: repeat(var(--tv-file-list-rows), 1em);
     grid-auto-flow: column;
     grid-auto-columns: 15.5ch;
     overflow-x: auto;
@@ -2743,7 +2830,7 @@ button.tv-status-item {
 :is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-viewport {
     min-width: 0;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     background: var(--tv-palette-dialog-input-normal-bg);
     color: var(--tv-palette-dialog-input-normal-fg);
 }
@@ -2754,6 +2841,7 @@ button.tv-status-item {
 }
 
 :is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-vlist-viewer {
+    z-index: 1;
     background: var(--tv-palette-dialog-input-normal-bg);
     color: var(--tv-palette-dialog-input-normal-fg);
     --tv-owner-scroll-page-bg: var(--tv-palette-dialog-history-page-bg);
@@ -2837,7 +2925,7 @@ button.tv-status-item {
 }
 
 .tv-choice-input:checked + .tv-radio-mark::before {
-    content: "(·)";
+    content: "(•)";
 }
 
 .tv-checkbox-item:focus-within,

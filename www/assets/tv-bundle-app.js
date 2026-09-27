@@ -17,12 +17,17 @@ const {
     TVDesktop,
     TVProgram,
     TVAboutDialog,
+    TVLoginDialog,
+    TVRegistrationDialog,
+    TVRegistrationTokenDialog,
     TVPuzzleDialog,
     TVCalendarDialog,
     TVAsciiTableDialog,
     TVCalculatorDialog,
     TVColorsDialog,
     TVViewGalleryDialog,
+    TVGridDemoDialog,
+    TVServerTerminalDialog,
     TVFileOpenDialog,
     TVChangeDirectoryDialog,
     TVMidiPlayerDialog,
@@ -69,10 +74,10 @@ const {
     wnNoNumber,
     TVMenuItem,
     TVMenu,
+    TVMenuBar,
+    TVStatusItem,
     NewLine,
     NewSubMenu,
-    TVMenuView,
-    TVMenuBox,
     NewStatusKey,
     NewStatusDef,
     TVStatusLine,
@@ -2132,21 +2137,22 @@ function renderTopicContent(bundle, topic) {
 
 function destroyWindowWidgets(windowEl) {
     if (!windowEl) { return; }
-    if (windowEl._tvOutline) {
-        windowEl._tvOutline.destroy();
-        windowEl._tvOutline = null;
+    const windowView = windowEl._tvWindowView;
+    if (windowView?.outline) {
+        windowView.outline.destroy();
+        windowView.outline = null;
     }
-    if (windowEl._tvFindEditor) {
-        windowEl._tvFindEditor.destroy();
-        windowEl._tvFindEditor = null;
+    if (windowView?.findEditor) {
+        windowView.findEditor.destroy();
+        windowView.findEditor = null;
     }
-    if (windowEl._tvEditor) {
-        windowEl._tvEditor.destroy();
-        windowEl._tvEditor = null;
+    if (windowView?.editor) {
+        windowView.editor.destroy();
+        windowView.editor = null;
     }
-    const scrollbars = Array.isArray(windowEl._tvScrollbars) ? windowEl._tvScrollbars : [];
+    const scrollbars = windowView?.scrollbars || [];
     scrollbars.forEach((scrollbar) => scrollbar.destroy());
-    windowEl._tvScrollbars = [];
+    if (windowView) { windowView.scrollbars = []; }
     if (windowEl._tvResizer) {
         windowEl._tvResizer.destroy();
         windowEl._tvResizer = null;
@@ -2394,21 +2400,16 @@ class BundleWindowManager {
         }
         const key = String(target).slice(5);
         const windowEl = this.openWindows.get(key);
-        const bundle = windowEl?._tvBundle || null;
+        const bundle = windowEl?._tvWindowView?.bundle || null;
         if (!windowEl || !bundle) {
             return null;
         }
         this.currentBundle = bundle;
-        this.currentContextHex = windowEl.dataset.tvStateTopic || null;
-        this.currentLineNumber = this._normalizeLineNumber(windowEl.dataset.tvStateLine);
-        this.currentView = windowEl.dataset.tvStateView || "index";
-        this.currentTag = windowEl.dataset.tvStateTagKey && windowEl.dataset.tvStateTagValue
-            ? {
-                key: windowEl.dataset.tvStateTagKey,
-                value: windowEl.dataset.tvStateTagValue,
-                label: windowEl.dataset.tvStateTagLabel || windowEl.dataset.tvStateTagKey,
-            }
-            : null;
+        const helpWindow = windowEl._tvWindowView;
+        this.currentContextHex = helpWindow.currentTopic;
+        this.currentLineNumber = this._normalizeLineNumber(helpWindow.currentLine);
+        this.currentView = helpWindow.currentView;
+        this.currentTag = helpWindow.currentTag ? { ...helpWindow.currentTag } : null;
         return bundle;
     }
 
@@ -2416,34 +2417,26 @@ class BundleWindowManager {
         const renderStartedAt = performance.now();
         const key = bundleWindowKey(bundle);
         const applyStateData = (windowEl) => {
-            windowEl.dataset.tvStateType = "h";
-            windowEl.dataset.tvStateFile = bundle._catalogFile || "";
-            windowEl.dataset.tvStateView = this.currentView || "index";
-            windowEl.dataset.tvStateTopic = this.currentContextHex || "";
-            windowEl.dataset.tvStateLine = this.currentLineNumber ? String(this.currentLineNumber) : "";
-            if (this.currentTag) {
-                windowEl.dataset.tvStateTagKey = this.currentTag.key || "";
-                windowEl.dataset.tvStateTagValue = this.currentTag.value || "";
-                windowEl.dataset.tvStateTagLabel = this.currentTag.label || "";
-            } else {
-                delete windowEl.dataset.tvStateTagKey;
-                delete windowEl.dataset.tvStateTagValue;
-                delete windowEl.dataset.tvStateTagLabel;
-            }
+            const helpWindow = windowEl._tvWindowView;
+            helpWindow.onLink = (link) => { void this._handleTopicLink(windowEl, link); };
+            helpWindow.sourceFile = bundle._catalogFile || "";
+            helpWindow.currentView = this.currentView || "index";
+            helpWindow.currentTopic = this.currentContextHex || null;
+            helpWindow.currentLine = this.currentLineNumber || null;
+            helpWindow.currentTag = this.currentTag ? { ...this.currentTag } : null;
         };
         const existing = this.openWindows.get(key);
         if (existing) {
-            existing._tvBundle = bundle;
             const helpWindow = existing._tvWindowView;
             helpWindow.bundle = bundle;
             helpWindow.viewer.bundle = bundle;
-            if (existing._tvOutline) {
-                existing._tvOutline.destroy();
-                existing._tvOutline = null;
+            if (helpWindow.outline) {
+                helpWindow.outline.destroy();
+                helpWindow.outline = null;
             }
-            if (existing._tvFindEditor) {
-                existing._tvFindEditor.destroy();
-                existing._tvFindEditor = null;
+            if (helpWindow.findEditor) {
+                helpWindow.findEditor.destroy();
+                helpWindow.findEditor = null;
             }
             helpWindow.setContent(contentHTML);
             helpWindow.title = caption;
@@ -2452,7 +2445,6 @@ class BundleWindowManager {
                 captionEl.textContent = caption;
             }
             highlightCodeExamples(existing);
-            this._bindTopicLinks(existing, bundle);
             this._initContentsOutline(existing, bundle);
             applyStateData(existing);
             if (this.dialogManager) { this.dialogManager.activateWindow("help:" + key); }
@@ -2462,15 +2454,12 @@ class BundleWindowManager {
         }
 
         const windowEl = buildWindow(bundle, contentHTML, caption);
-        windowEl._tvBundle = bundle;
-        windowEl.dataset.tvWindowStorageKey = "help:" + key;
         this.desktop.appendChild(windowEl);
         bindCloseButtons(windowEl);
         this.openWindows.set(key, windowEl);
         applyStateData(windowEl);
         this._initWindowWidgets(windowEl);
         highlightCodeExamples(windowEl);
-        this._bindTopicLinks(windowEl, bundle);
         this._initContentsOutline(windowEl, bundle);
         windowEl._tvWindowView.closeAction = () => this.close(key);
         windowEl._tvWindowView.zoomAction = () => this.toggleZoom(windowEl);
@@ -2489,13 +2478,13 @@ class BundleWindowManager {
     _initWindowWidgets(windowEl) {
         const frames = Array.from(windowEl.querySelectorAll("[data-tv-scroll-frame]"))
             .filter((frame) => !frame.hasAttribute("data-tv-outline"));
-        windowEl._tvScrollbars = Array.from(
+        const windowView = windowEl._tvWindowView;
+        windowView.scrollbars = Array.from(
             frames,
             (frame) => new TVScrollBar(new TVRect()).bindRoot(frame),
         );
-        this.scrollbars.push(...windowEl._tvScrollbars);
-        const resizer = new TurboVisionWindowResizer(windowEl);
-        windowEl._tvResizer = resizer;
+        this.scrollbars.push(...windowView.scrollbars);
+        const resizer = new TurboVisionWindowResizer(windowEl, "help:" + bundleWindowKey(windowEl._tvWindowView.bundle));
         this.resizers.push(resizer);
     }
 
@@ -2508,98 +2497,92 @@ class BundleWindowManager {
             children: withKeys(Array.isArray(node.children) ? node.children : [], `${prefix}${index}/`),
         }));
         const outline = new TVContentsOutline(new TVRect()).bindRoot(root);
+        const windowView = windowEl._tvWindowView;
         outline.setScrollViewport(
             windowEl.querySelector(".tv-frame > .tv-scroll-shell > .tv-viewport"),
-            (windowEl._tvScrollbars || [])[0] || null,
+            windowView.scrollbars[0] || null,
         );
         outline.setTree(withKeys(bundle.contents), null, { expandAll: true });
         outline.bind({
-            onActivate: () => outline.selectedElement()?.querySelector("a")?.click(),
+            onActivate: (node) => {
+                const target = buildBundleTargetData(node);
+                if (Object.keys(target).length) { void this._openTopicTarget(windowEl, target); }
+            },
         });
-        windowEl._tvOutline = outline;
-        (windowEl._tvScrollbars || []).forEach((scrollbar) => scrollbar.refresh());
+        windowView.outline = outline;
+        windowView.scrollbars.forEach((scrollbar) => scrollbar.refresh());
     }
 
     _destroyWindowWidgets(windowEl) {
-        const scrollbars = Array.isArray(windowEl?._tvScrollbars) ? windowEl._tvScrollbars : [];
+        const scrollbars = windowEl?._tvWindowView?.scrollbars || [];
         const resizer = windowEl?._tvResizer || null;
         destroyWindowWidgets(windowEl);
         this.scrollbars = this.scrollbars.filter((widget) => !scrollbars.includes(widget));
         this.resizers = this.resizers.filter((widget) => widget !== resizer);
     }
 
-    _bindTopicLinks(windowEl, bundle) {
-        if (windowEl.dataset.tvBundleLinksBound === "1") { return; }
-        windowEl.dataset.tvBundleLinksBound = "1";
-        windowEl.addEventListener("click", async (event) => {
-            const navLink = event.target.closest("[data-tv-nav]");
-            if (navLink && windowEl.contains(navLink)) {
-                event.preventDefault();
-                const action = (navLink.getAttribute("data-tv-nav") || "").toLowerCase();
-                if (action === "back") {
-                    this.goBack();
-                } else if (action === "index") {
-                    this.showIndex(bundle);
-                } else if (action === "contents") {
-                    this.showContents(bundle);
-                }
-                recordStatisticsEvent({ event: "link", result: "internal" });
-                return;
-            }
+    async _handleTopicLink(windowEl, link) {
+        const currentBundle = windowEl._tvWindowView.bundle;
+        if (link.hasAttribute("data-tv-nav")) {
+            const action = (link.getAttribute("data-tv-nav") || "").toLowerCase();
+            if (action === "back") { this.goBack(); }
+            else if (action === "index") { this.showIndex(currentBundle); }
+            else if (action === "contents") { this.showContents(currentBundle); }
+            recordStatisticsEvent({ event: "link", result: "internal" });
+            return;
+        }
 
-            const letterLink = event.target.closest("a[data-letter]");
-            if (letterLink && windowEl.contains(letterLink)) {
-                event.preventDefault();
-                const letter = letterLink.getAttribute("data-letter");
-                const section = document.getElementById(`idx-${letter}`);
-                if (section) {
-                    section.scrollIntoView({ behavior: "smooth", block: "start" });
-                }
-                recordStatisticsEvent({ event: "link", result: section ? "internal" : "broken" });
-                return;
-            }
+        if (link.hasAttribute("data-letter")) {
+            const letter = link.getAttribute("data-letter");
+            const section = windowEl.querySelector(`#idx-${letter}`);
+            section?.scrollIntoView({ behavior: "smooth", block: "start" });
+            recordStatisticsEvent({ event: "link", result: section ? "internal" : "broken" });
+            return;
+        }
 
-            const tagLink = event.target.closest("[data-tv-topic-tag-key]");
-            if (tagLink && windowEl.contains(tagLink)) {
-                event.preventDefault();
-                this.showTag(
-                    bundle,
-                    tagLink.dataset.tvTopicTagKey,
-                    tagLink.dataset.tvTopicTagValue,
-                    tagLink.dataset.tvTopicTagLabel,
-                );
-                recordStatisticsEvent({ event: "link", result: "internal" });
-                return;
-            }
-
-            const link = event.target.closest(
-                "[data-tv-uhf-link], [data-tv-bundle-topic], [data-tv-topic-alias], [data-tv-source-file]"
+        if (link.hasAttribute("data-tv-topic-tag-key")) {
+            this.showTag(
+                currentBundle,
+                link.dataset.tvTopicTagKey,
+                link.dataset.tvTopicTagValue,
+                link.dataset.tvTopicTagLabel,
             );
-            if (!link || !windowEl.contains(link)) { return; }
+            recordStatisticsEvent({ event: "link", result: "internal" });
+            return;
+        }
 
-            event.preventDefault();
-            const sourceFile = link.dataset.tvSourceFile || "";
-            const lineNumber = this._normalizeLineNumber(link.dataset.tvTopicLine);
-            const topicRef = (link.dataset.tvBundleTopic || link.dataset.tvTopicAlias || "").trim();
-            try {
-                let opened = false;
-                if (sourceFile) {
-                    opened = await this.openSourceTopic(sourceFile, topicRef, lineNumber, bundle);
-                } else if (topicRef) {
-                    opened = this.showTopic(bundle, topicRef, lineNumber);
-                } else if (lineNumber) {
-                    this._pushHistory();
-                    this._focusTopicLine(windowEl, lineNumber);
-                    this.currentLineNumber = lineNumber;
-                    if (this.onNavigate) { this.onNavigate(""); }
-                    opened = true;
-                }
-                recordStatisticsEvent({ event: "link", result: opened ? "internal" : "broken" });
-            } catch (error) {
-                console.error("Failed to open linked topic", error);
-                recordStatisticsEvent({ event: "link", result: "broken" });
-            }
+        return this._openTopicTarget(windowEl, {
+            sourceFile: link.dataset.tvSourceFile,
+            bundleTopic: link.dataset.tvBundleTopic,
+            topicAlias: link.dataset.tvTopicAlias,
+            topicLine: link.dataset.tvTopicLine,
         });
+    }
+
+    async _openTopicTarget(windowEl, target) {
+        const currentBundle = windowEl._tvWindowView.bundle;
+        const sourceFile = target.sourceFile || "";
+        const lineNumber = this._normalizeLineNumber(target.topicLine);
+        const topicRef = (target.bundleTopic || target.topicAlias || "").trim();
+        try {
+            let opened = false;
+            if (sourceFile) {
+                opened = await this.openSourceTopic(sourceFile, topicRef, lineNumber, currentBundle);
+            } else if (topicRef) {
+                opened = this.showTopic(currentBundle, topicRef, lineNumber);
+            } else if (lineNumber) {
+                this._pushHistory();
+                this._focusTopicLine(windowEl, lineNumber);
+                this.currentLineNumber = lineNumber;
+                windowEl._tvWindowView.currentLine = lineNumber;
+                if (this.onNavigate) { this.onNavigate(""); }
+                opened = true;
+            }
+            recordStatisticsEvent({ event: "link", result: opened ? "internal" : "broken" });
+        } catch (error) {
+            console.error("Failed to open linked topic", error);
+            recordStatisticsEvent({ event: "link", result: "broken" });
+        }
     }
 
     toggleZoom(windowEl) {
@@ -2609,12 +2592,7 @@ class BundleWindowManager {
             if (!first) { return; }
             windowEl = first;
         }
-        const isMax = windowEl.classList.toggle("is-maximized");
-        const glyph = windowEl.querySelector("[data-tv-zoom-glyph]");
-        if (glyph) {
-            glyph.textContent = isMax ? "↓" : "↑";
-        }
-        fillBorders();
+        windowEl._tvWindowView?.zoom();
         fillDesktopPatterns();
     }
 
@@ -2655,6 +2633,14 @@ class BundleWindowManager {
         if (this.onNavigate) { this.onNavigate(""); }
     }
 
+    _placeWindow(element, left, top, cols, rows) {
+        if (element._tvResizer) {
+            element._tvResizer.place({ left, top, cols, rows });
+        } else {
+            applyWindowGeometry(element, [left, top, cols, rows, 0]);
+        }
+    }
+
     tile() {
         const all = this.dialogManager ? [...this.dialogManager.windows.values()] : [...this.openWindows.values()];
         if (all.length === 0) { return; }
@@ -2668,17 +2654,7 @@ class BundleWindowManager {
         all.forEach((el, i) => {
             const col = i % cols;
             const row = Math.floor(i / cols);
-            el.classList.remove("is-maximized");
-            el.style.setProperty("--tv-window-left", `${col * wCols * cell.width}px`);
-            el.style.setProperty("--tv-window-top", `${row * wRows * cell.height}px`);
-            el.style.setProperty("--tv-window-cols", String(wCols));
-            el.style.setProperty("--tv-window-rows", String(wRows));
-            const g = el.querySelector("[data-tv-zoom-glyph]");
-            if (g) { g.textContent = "↑"; }
-            if (el._tvResizer) {
-                el._tvResizer.restoreSnapshot = el._tvResizer.captureGeometry();
-                el._tvResizer.persistState();
-            }
+            this._placeWindow(el, col * wCols * cell.width, row * wRows * cell.height, wCols, wRows);
         });
         fillBorders();
         fillDesktopPatterns();
@@ -2695,17 +2671,7 @@ class BundleWindowManager {
         const baseRows = Math.floor(dh / cell.height * 0.75);
         const step = 2; // cells offset per window
         all.forEach((el, i) => {
-            el.classList.remove("is-maximized");
-            el.style.setProperty("--tv-window-left", `${i * step * cell.width}px`);
-            el.style.setProperty("--tv-window-top", `${i * step * cell.height}px`);
-            el.style.setProperty("--tv-window-cols", String(baseCols));
-            el.style.setProperty("--tv-window-rows", String(baseRows));
-            const g = el.querySelector("[data-tv-zoom-glyph]");
-            if (g) { g.textContent = "↑"; }
-            if (el._tvResizer) {
-                el._tvResizer.restoreSnapshot = el._tvResizer.captureGeometry();
-                el._tvResizer.persistState();
-            }
+            this._placeWindow(el, i * step * cell.width, i * step * cell.height, baseCols, baseRows);
         });
         fillBorders();
         fillDesktopPatterns();
@@ -2716,34 +2682,25 @@ class BundleWindowManager {
 
 // ── Catalog menu items ──────────────────────────────────────────────
 
+const menuActions = new WeakMap();
+
+function withMenuAction(item, action = {}) {
+    menuActions.set(item, action);
+    return item;
+}
+
+function menuFromItems(items) {
+    const linked = items.filter((item) => item instanceof TVMenuItem);
+    linked.forEach((item, index) => { item.next = linked[index + 1] || null; });
+    return new TVMenu(linked[0] || null);
+}
+
 function renderMenuPopupSeparator() {
     return NewLine();
 }
 
-function renderMenuPopup(items, parentMenu = null) {
-    return new TVMenuBox(new TVRect(), new TVMenu(items), parentMenu).draw();
-}
-
-function renderMenuSubmenu(labelMarkup, items) {
-    return NewSubMenu(labelMarkup, 0, new TVMenu(items));
-}
-
-function renderMenuRoot(labelMarkup, items, rootAttrs = {}) {
-    const rootMarkup = renderHtmlAttributes({
-        class: "tv-menu-root",
-        "data-tv-menu-root": "true",
-        ...rootAttrs,
-    });
-    const toggle = new TVMenuView(
-        new TVRect(),
-        new TVMenu([new TVMenuItem(labelMarkup, "menu-toggle")]),
-    ).draw("bar");
-    return [
-        `<div ${rootMarkup}>`,
-        toggle,
-        renderMenuPopup(items),
-        `</div>`,
-    ].join("");
+function renderMenuSubmenu(label, items, helpCtx = hcNoContext) {
+    return NewSubMenu(label, helpCtx, menuFromItems(items));
 }
 
 function splitGroupedMenuEntries(entries) {
@@ -2782,7 +2739,7 @@ function buildGroupedMenuItems(entries, renderItem) {
             items.push(renderMenuPopupSeparator());
         }
         items.push(renderMenuSubmenu(
-            escapeHtml(group),
+            group,
             groupEntries.map((entry) => renderItem(entry)),
         ));
         needSep = false;
@@ -2792,11 +2749,8 @@ function buildGroupedMenuItems(entries, renderItem) {
 }
 
 function catalogMenuEntryButton(entry) {
-    return new TVMenuItem(
-        escapeHtml(entry.menu_name || entry.name),
-        "bundle-open",
-        0,
-        hcNoContext,
+    return withMenuAction(
+        new TVMenuItem(entry.menu_name || entry.name, "bundle-open"),
         { value: entry.file, bundleLabel: bundleLoadingLabel(entry) },
     );
 }
@@ -2819,13 +2773,10 @@ function catalogTreeNode(map, ordered, key) {
 }
 
 function buildCatalogMenuItems(catalog) {
-    const openItem = new TVMenuItem(renderHotkeyMarkup("~O~pen..."), "file-open");
-    const changeDirectoryItem = new TVMenuItem(
-        renderHotkeyMarkup("~C~hange dir..."),
-        "dialog-open",
-        0,
-        hcNoContext,
-        "chdir",
+    const openItem = new TVMenuItem("~O~pen...", "file-open");
+    const changeDirectoryItem = withMenuAction(
+        new TVMenuItem("~C~hange dir...", "dialog-open"),
+        { value: "chdir" },
     );
     if (!catalog.length) { return [openItem, changeDirectoryItem]; }
 
@@ -2861,16 +2812,16 @@ function buildCatalogMenuItems(catalog) {
             productItems.push(renderMenuPopupSeparator());
         }
         productNode.versions.forEach((versionNode) => {
-            productItems.push(renderMenuSubmenu(escapeHtml(versionNode.key), versionNode.direct));
+            productItems.push(renderMenuSubmenu(versionNode.key, versionNode.direct));
         });
-        items.push(renderMenuSubmenu(escapeHtml(productNode.key), productItems));
+        items.push(renderMenuSubmenu(productNode.key, productItems));
     });
     return items;
 }
 
 function buildDocsMenuItems(docs) {
     return buildGroupedMenuItems(docs, (entry) =>
-        new TVMenuItem(escapeHtml(entry.name), "doc-open", 0, hcNoContext, entry.file)
+        withMenuAction(new TVMenuItem(entry.name, "doc-open"), { value: entry.file })
     );
 }
 
@@ -2885,37 +2836,31 @@ function buildBundleContentsMenuItems(nodes) {
         const childItems = buildBundleContentsMenuItems(node.children || []);
         const targetData = buildBundleTargetData(node);
         const hasTarget = Object.keys(targetData).length > 0;
-        const labelMarkup = renderBundleMenuLabel(label, node && node.hotkey);
+        const menuLabel = renderBundleMenuLabel(label, node && node.hotkey);
 
         if (childItems.length) {
             const subItems = [];
             if (hasTarget) {
-                subItems.push(new TVMenuItem(
-                    labelMarkup,
-                    "menu-link",
-                    0,
-                    hcNoContext,
-                    { value: true, ...targetData },
+                subItems.push(withMenuAction(
+                    new TVMenuItem(menuLabel, "menu-link"),
+                    targetData,
                 ));
                 subItems.push(renderMenuPopupSeparator());
             }
             subItems.push(...childItems);
-            items.push(renderMenuSubmenu(labelMarkup, subItems));
+            items.push(renderMenuSubmenu(menuLabel, subItems));
             return;
         }
 
         if (hasTarget) {
-            items.push(new TVMenuItem(
-                labelMarkup,
-                "menu-link",
-                0,
-                hcNoContext,
-                { value: true, ...targetData },
+            items.push(withMenuAction(
+                new TVMenuItem(menuLabel, "menu-link"),
+                targetData,
             ));
             return;
         }
 
-        items.push(`<div class="tv-menu-popup-item is-disabled">${escapeHtml(label)}</div>`);
+        items.push(new TVMenuItem(label).setDisabled());
     });
 
     return items;
@@ -2925,37 +2870,36 @@ function renderBundleMenuLabel(label, hotkey = "") {
     const cleanLabel = String(label || "");
     const cleanHotkey = String(hotkey || "").trim();
     if (!cleanHotkey) {
-        return escapeHtml(cleanLabel);
+        return cleanLabel;
     }
     const matchIndex = cleanLabel.toLowerCase().indexOf(cleanHotkey.toLowerCase());
     if (matchIndex < 0) {
-        return escapeHtml(cleanLabel);
+        return cleanLabel;
     }
     const markedLabel = cleanLabel.slice(0, matchIndex)
         + "~" + cleanLabel[matchIndex] + "~"
         + cleanLabel.slice(matchIndex + 1);
-    return renderHotkeyMarkup(markedLabel);
+    return markedLabel;
 }
 
-function buildBundleContentsMenuRoot(bundle) {
+function buildBundleContentsSubMenu(bundle) {
     const sourceFormat = bundleSourceFormat(bundle);
     const rawNodes = Array.isArray(bundle && bundle.contents) ? bundle.contents : [];
     const nodes = sourceFormat === "bw03"
         ? rawNodes.map((node) => ({ ...(node || {}), children: [] }))
         : rawNodes;
     if (!nodes.length) {
-        return "";
+        return null;
     }
 
     const items = buildBundleContentsMenuItems(nodes);
     if (!items.length) {
-        return "";
+        return null;
     }
 
-    return renderMenuRoot(
-        renderHotkeyMarkup(nodes.some((node) => node && node.hotkey) ? "~M~enu" : "~C~ontents"),
+    return renderMenuSubmenu(
+        nodes.some((node) => node && node.hotkey) ? "~M~enu" : "~C~ontents",
         items,
-        { "data-tv-bundle-menu-root": "true" },
     );
 }
 
@@ -3111,99 +3055,53 @@ function renderMarkdown(md) {
 
 // ── Menu bar for bundle page ────────────────────────────────────────
 
-function buildBundleMenuBar(catalog, activeBundle = null) {
+function buildBundleMenuBar(catalog, activeBundle = null, isAdmin = false) {
     const menuBar = document.querySelector("[data-tv-menu-bar]");
     if (!menuBar) { return; }
-
-    // ≡ system menu
-    const sysPopupItems = [
-        { type: "dialog", dialog: "calendar", label: "Ca~l~endar" },
-        { type: "dialog", dialog: "ascii", label: "Ascii ~T~able" },
-        { type: "dialog", dialog: "calc", label: "~C~alculator" },
-        { type: "dialog", dialog: "midi", label: "~M~IDI Player" },
-        { type: "dialog", dialog: "colors", label: "C~o~lors" },
-        { type: "dialog", dialog: "widgets", label: "~W~idget Gallery" },
-        { type: "dialog", dialog: "statistics", label: "S~t~atistics" },
-        { type: "dialog", dialog: "systeminfo", label: "System ~I~nformation" },
-        { type: "separator" },
-        { type: "submenu", label: "~S~creen saver", items: [
-            { type: "saver", mode: "stars", label: "~S~tars" },
-            { type: "saver", mode: "bounce", label: "~B~ounce" },
-            { type: "saver", mode: "clock", label: "Cloc~k~" },
-            { type: "saver", mode: "matrix", label: "~M~atrix" },
-        ] },
-        { type: "separator" },
-        { type: "theme", theme: "light", label: "~L~ight Theme" },
-        { type: "theme", theme: "dark", label: "~D~ark Theme" },
-        { type: "theme", theme: "auto", label: "A~u~to Theme" },
-    ];
-    const sysPopupMenu = new TVMenu(sysPopupItems.map((entry) => {
-            if (entry.type === "separator") {
-                return renderMenuPopupSeparator();
-            }
-            if (entry.type === "submenu") {
-                const subItems = entry.items.map((sub) => new TVMenuItem(
-                    renderHotkeyMarkup(sub.label),
-                    "saver-start",
-                    0,
-                    hcNoContext,
-                    sub.mode,
-                ));
-                return renderMenuSubmenu(renderHotkeyMarkup(entry.label), subItems);
-            }
-            const action = entry.type === "theme"
-                ? { command: "theme-set", value: entry.theme }
-                : entry.type === "saver"
-                    ? { command: "saver-start", value: entry.mode }
-                    : { command: "dialog-open", value: entry.dialog };
-            return new TVMenuItem(
-                renderHotkeyMarkup(entry.label),
-                action.command,
-                0,
-                hcNoContext,
-                action.value,
-            );
-        }));
-    const sysRootHTML = renderMenuRoot(renderHotkeyMarkup("~≡~"), sysPopupMenu.items, {
-        "data-tv-help-ctx": hcSystemMenu,
-    });
-
-    // File menu with catalog entries
-    const fileRootHTML = renderMenuRoot(renderHotkeyMarkup("Help ~F~iles"), buildCatalogMenuItems(catalog), {
-        "data-tv-help-ctx": hcHelpFiles,
-    });
-
-    // Docs menu with documentation markdown files
-    const docsItems = buildDocsMenuItems(docsCatalogData || []);
-    const docsRootHTML = renderMenuRoot(renderHotkeyMarkup("~D~ocs"), docsItems, {
-        "data-tv-help-ctx": hcDocuments,
-    });
-
-    const searchRootHTML = renderMenuRoot(
-        renderHotkeyMarkup("~S~earch"),
-        [
-            new TVMenuItem(
-                renderHotkeyMarkup("~F~ind") + '<span class="tv-menu-hotkey">Ctrl-F</span>',
-                "find",
-                kbCtrlF,
-            ),
-            new TVMenuItem(
-                renderHotkeyMarkup("Find ~A~gain") + '<span class="tv-menu-hotkey">Ctrl-L</span>',
-                "find-again",
-                kbCtrlL,
-            ),
-            new TVMenuItem(
-                renderHotkeyMarkup("Search ~T~opics") + '<span class="tv-menu-hotkey">F3</span>',
-                "dialog-open",
-                kbF3,
-                hcNoContext,
-                "search",
-            ),
-        ],
-        { "data-tv-help-ctx": hcSearch },
+    const dialogItem = (label, name) => withMenuAction(
+        new TVMenuItem(label, "dialog-open"),
+        { value: name },
     );
+    const saverItems = [
+        ["~S~tars", "stars"], ["~B~ounce", "bounce"],
+        ["Cloc~k~", "clock"], ["~M~atrix", "matrix"],
+        ["~P~rojector", "projector"],
+    ].map(([label, mode]) => withMenuAction(
+        new TVMenuItem(label, "saver-start"),
+        { value: mode },
+    ));
+    const systemItems = [
+        dialogItem("Ca~l~endar", "calendar"),
+        dialogItem("Ascii ~T~able", "ascii"),
+        dialogItem("~C~alculator", "calc"),
+        dialogItem("~M~IDI Player", "midi"),
+        dialogItem("C~o~lors", "colors"),
+        dialogItem("~W~idget Gallery", "widgets"),
+        dialogItem("~G~rid Viewer", "grid"),
+        dialogItem("Server ~T~erminal", "terminal"),
+        dialogItem("S~t~atistics", "statistics"),
+        dialogItem("System ~I~nformation", "systeminfo"),
+        NewLine(),
+        renderMenuSubmenu("~S~creen saver", saverItems, hcSystemMenu),
+        NewLine(),
+        ...[["~L~ight Theme", "light"], ["~D~ark Theme", "dark"], ["A~u~to Theme", "auto"]]
+            .map(([label, theme]) => withMenuAction(
+                new TVMenuItem(label, "theme-set"),
+                { value: theme },
+            )),
+    ];
 
-    // Windows menu (TV standard)
+    const findItem = new TVMenuItem("~F~ind", "find", kbCtrlF, hcNoContext, "Ctrl-F");
+    const findAgainItem = new TVMenuItem("Find ~A~gain", "find-again", kbCtrlL, hcNoContext, "Ctrl-L");
+    const searchItems = [
+        findItem,
+        findAgainItem,
+        withMenuAction(
+            new TVMenuItem("Search ~T~opics", "dialog-open", kbF3, hcNoContext, "F3"),
+            { value: "search" },
+        ),
+    ];
+
     const winPopupItems = [
         { cmd: "tile", label: "~T~ile", hotkey: "" },
         { cmd: "cascade", label: "C~a~scade", hotkey: "" },
@@ -3213,74 +3111,59 @@ function buildBundleMenuBar(catalog, activeBundle = null) {
         { cmd: "previous", label: "~P~revious", hotkey: "Shift-F6" },
         { cmd: "close", label: "~C~lose", hotkey: "Alt-F3" },
     ];
-    const winRootHTML = renderMenuRoot(
-        renderHotkeyMarkup("~W~indows"),
-        winPopupItems.map((entry) =>
+    const windowItems = new Map();
+    const windowsItems = winPopupItems.map((entry) => {
+        const item = withMenuAction(
             new TVMenuItem(
-                renderHotkeyMarkup(entry.label) +
-                    `<span class="tv-menu-hotkey">${escapeHtml(entry.hotkey)}</span>`,
+                entry.label,
                 "window-cmd",
                 ({ zoom: kbF5, next: kbF6, previous: kbShiftF6, close: kbAltF3, list: kbAlt0 })[entry.cmd] || 0,
                 hcNoContext,
-                entry.cmd,
-            )
-        ),
-        { "data-tv-help-ctx": hcWindows },
-    );
-
-    // Games menu
-    const gamesPopupItems = [
-        { type: "dialog", dialog: "breakout", label: "~B~reakOut" },
-        { type: "dialog", dialog: "hanoi", label: "Tower of ~H~anoi" },
-        { type: "dialog", dialog: "lines", label: "~L~ines" },
-        { type: "dialog", dialog: "ludo", label: "L~u~do" },
-        { type: "dialog", dialog: "mastermind", label: "M~a~stermind" },
-        { type: "dialog", dialog: "mines", label: "~M~ines" },
-        { type: "dialog", dialog: "puzzle", label: "~P~uzzle" },
-        { type: "dialog", dialog: "reversi", label: "~R~eversi" },
-        { type: "dialog", dialog: "snake", label: "S~n~ake" },
-        { type: "dialog", dialog: "sokoban", label: "~S~okoban" },
-        { type: "dialog", dialog: "tetris", label: "~T~etris" },
-        { type: "dialog", dialog: "tron", label: "Tr~o~n Light Cycles" },
-    ];
-    const gamesRootHTML = renderMenuRoot(
-        renderHotkeyMarkup("~G~ames"),
-        gamesPopupItems.map((entry) =>
-            new TVMenuItem(renderHotkeyMarkup(entry.label), "dialog-open", 0, hcNoContext, entry.dialog)
-        ),
-        { "data-tv-help-ctx": hcGames },
-    );
-
-    const helpRootHTML = renderMenuRoot(
-        renderHotkeyMarkup("~H~elp"),
-        [
-            new TVMenuItem(
-                renderHotkeyMarkup("~C~ontext Help") + '<span class="tv-menu-hotkey">F1</span>',
-                "context-help",
+                entry.hotkey,
             ),
-            new TVMenuItem(renderHotkeyMarkup("~I~ndex"), "context-help-index"),
-            renderMenuPopupSeparator(),
-            new TVMenuItem(renderHotkeyMarkup("~A~bout"), "dialog-open", 0, hcNoContext, "about"),
-        ],
-        { "data-tv-help-ctx": hcContextHelp },
-    );
+            { value: entry.cmd },
+        );
+        windowItems.set(entry.cmd, item);
+        return item;
+    });
 
-    const bundleContentsRootHTML = buildBundleContentsMenuRoot(activeBundle);
+    const gamesPopupItems = [
+        ["~B~reakOut", "breakout"], ["Tower of ~H~anoi", "hanoi"],
+        ["~L~ines", "lines"], ["L~u~do", "ludo"],
+        ["M~a~stermind", "mastermind"], ["~M~ines", "mines"],
+        ["~P~uzzle", "puzzle"], ["~R~eversi", "reversi"],
+        ["S~n~ake", "snake"], ["~S~okoban", "sokoban"],
+        ["~T~etris", "tetris"], ["Tr~o~n Light Cycles", "tron"],
+    ];
+    const helpItems = [
+        new TVMenuItem("~C~ontext Help", "context-help", kbF1, hcNoContext, "F1"),
+        new TVMenuItem("~I~ndex", "context-help-index"),
+        NewLine(),
+        dialogItem("~L~ogin / Passkey", "login"),
+        ...(isAdmin ? [dialogItem("~R~egistration Token", "registration-token")] : []),
+        dialogItem("~A~bout", "about"),
+    ];
+    const topItems = [
+        renderMenuSubmenu("~≡~", systemItems, hcSystemMenu),
+        renderMenuSubmenu("Help ~F~iles", buildCatalogMenuItems(catalog), hcHelpFiles),
+        renderMenuSubmenu("~D~ocs", buildDocsMenuItems(docsCatalogData || []), hcDocuments),
+        renderMenuSubmenu("~S~earch", searchItems, hcSearch),
+        renderMenuSubmenu(
+            "~G~ames",
+            gamesPopupItems.map(([label, name]) => dialogItem(label, name)),
+            hcGames,
+        ),
+        renderMenuSubmenu("~W~indows", windowsItems, hcWindows),
+        renderMenuSubmenu("~H~elp", helpItems, hcContextHelp),
+    ];
+    const contents = buildBundleContentsSubMenu(activeBundle);
+    if (contents) { topItems.push(contents); }
 
-    menuBar.innerHTML = [
-        `<nav class="tv-menu-items">`,
-        sysRootHTML,
-        fileRootHTML,
-        docsRootHTML,
-        searchRootHTML,
-        gamesRootHTML,
-        winRootHTML,
-        helpRootHTML,
-        bundleContentsRootHTML ? `<div class="tv-menu-separator" aria-hidden="true">│</div>` : ``,
-        bundleContentsRootHTML,
-        `</nav>`,
-        `<div class="tv-menu-clock" data-tv-clock>00:00:00</div>`,
-    ].join("");
+    const menuView = new TVMenuBar(new TVRect(), menuFromItems(topItems));
+    menuBar.innerHTML = menuView.draw()
+        + '<div class="tv-menu-clock" data-tv-clock>00:00:00</div>';
+    menuView.bindRoot(menuBar);
+    return { view: menuView, findItem, findAgainItem, windowItems };
 }
 
 // ── Bundle application ──────────────────────────────────────────────
@@ -3304,6 +3187,7 @@ class TVBundleApp extends TVProgram {
         this.errorMessageBox = null;
         this.localLinkHandler = null;
         this.statisticsTargets = new Map();
+        this.isAdmin = false;
     }
 
     handleEvent(event) {
@@ -3352,7 +3236,10 @@ class TVBundleApp extends TVProgram {
         }
         if (event.what !== TV.evCommand) { return; }
         const control = event.infoPtr;
-        const value = control?.getAttribute?.(`data-tv-${event.command}`) || "";
+        const action = control instanceof TVMenuItem ? (menuActions.get(control) || {}) : {};
+        const value = action.value ?? (control instanceof TVStatusItem
+            ? (control.param && typeof control.param === "object" ? control.param.value : control.param)
+            : "") ?? "";
         let handled = true;
         if (event.command === "context-help") {
             recordStatisticsEvent({ event: "tool_open", name: "context-help" });
@@ -3373,11 +3260,11 @@ class TVBundleApp extends TVProgram {
             this.dialogManager.applyActiveStates();
             fillBorders();
         } else if (event.command === "bundle-open") {
-            void this._openBundleFile(value, control?.dataset?.tvBundleLabel || "");
+            void this._openBundleFile(value, action.bundleLabel || "");
         } else if (event.command === "doc-open") {
             void this._openDocFile(value);
         } else if (event.command === "menu-link") {
-            void this._openMenuLink(control);
+            void this._openMenuLink(action);
         } else if (event.command === "window-cmd") {
             this._dispatchWindowCommand(value);
         } else if (event.command === "saver-start") {
@@ -3408,11 +3295,11 @@ class TVBundleApp extends TVProgram {
         if (handled) { this.clearEvent(event); }
     }
 
-    async _openMenuLink(control) {
-        if (!control || !this.windowManager?.currentBundle) { return; }
-        const sourceFile = control.dataset.tvSourceFile || "";
-        const lineNumber = this.windowManager._normalizeLineNumber(control.dataset.tvTopicLine);
-        const topicRef = (control.dataset.tvBundleTopic || control.dataset.tvTopicAlias || "").trim();
+    async _openMenuLink(action) {
+        if (!action || !this.windowManager?.currentBundle) { return; }
+        const sourceFile = action.sourceFile || "";
+        const lineNumber = this.windowManager._normalizeLineNumber(action.topicLine);
+        const topicRef = String(action.bundleTopic || action.topicAlias || "").trim();
         if (sourceFile) {
             await this.windowManager.openSourceTopic(
                 sourceFile,
@@ -3455,7 +3342,7 @@ class TVBundleApp extends TVProgram {
         const windowEl = this.dialogManager.windows.get(managerName);
         if (!windowEl?.isConnected) { return null; }
         if (managerName.startsWith("help:")) {
-            const bundle = windowEl._tvBundle || null;
+            const bundle = windowEl._tvWindowView?.bundle || null;
             const identity = statisticsHelpIdentity(bundle?._catalogFile || managerName.slice(5), bundle);
             if (!identity.helpName) { return null; }
             return {
@@ -3577,6 +3464,8 @@ class TVBundleApp extends TVProgram {
             if (activeBundle) {
                 this._updateSearchData(activeBundle);
                 this._syncBundleMenu();
+            } else if (this.searchDialog && !this.windowManager?.openWindows.size) {
+                this.searchDialog.searchData = { topics: [] };
             }
             this._updateWindowMenuState();
             this._updateStatusLine();
@@ -3594,6 +3483,13 @@ class TVBundleApp extends TVProgram {
 
         // Register standard dialogs
         this._registerDialog("about", () => new TVAboutDialog());
+        const loginDialog = this._registerDialog("login", () => new TVLoginDialog());
+        const registrationDialog = this._registerDialog("registration", () => new TVRegistrationDialog());
+        this._registerDialog("registration-token", () => new TVRegistrationTokenDialog());
+        loginDialog.onRegister = () => this.dialogManager.open("registration");
+        loginDialog.onSessionChange = (session) => this._setAuthSession(session);
+        registrationDialog.onSessionChange = (session) => loginDialog.updateSession(session);
+        registrationDialog.onConfirmed = () => loginDialog.close();
         this._registerDialog("puzzle", () => new TVPuzzleDialog());
         this._registerDialog("calendar", () => new TVCalendarDialog());
         this._registerDialog("ascii", () => new TVAsciiTableDialog());
@@ -3601,6 +3497,8 @@ class TVBundleApp extends TVProgram {
         this._registerDialog("midi", () => new TVMidiPlayerDialog());
         this._registerDialog("colors", () => new TVColorsDialog());
         this._registerDialog("widgets", () => new TVViewGalleryDialog());
+        this._registerDialog("grid", () => new TVGridDemoDialog());
+        this._registerDialog("terminal", () => new TVServerTerminalDialog());
         this._registerDialog("statistics", () => new TVStatisticsDialog());
         this._registerDialog("systeminfo", () => new TVSystemInformationDialog());
         this.fileOpenDialog = this._registerDialog("fileopen", () => new TVFileOpenDialog());
@@ -3638,9 +3536,10 @@ class TVBundleApp extends TVProgram {
 
         // Show a usable File/Open command immediately, then replace the menus
         // with their complete catalog-backed contents when loading finishes.
-        buildBundleMenuBar([], null);
+        this.menuState = buildBundleMenuBar([], null, this.isAdmin);
         fillBorders();
         this._bindMenus();
+        void this._refreshAuthSession();
         this._catalogReady = this._loadCatalog();
 
         // Layout
@@ -3690,10 +3589,12 @@ class TVBundleApp extends TVProgram {
         items.push(`<span class="tv-status-separator" aria-hidden="true">│</span>`);
         items.push(`<span class="tv-status-hint" data-tv-status-hint>${escapeHtml(statusHint)}</span>`);
         items.push(`<a class="tv-status-link" href="https://github.com/mariolacko/THelpViewer" target="_blank" rel="noopener">GitHub</a>`);
-        statusLine.innerHTML = new TVStatusLine(
+        const statusView = new TVStatusLine(
             new TVRect(),
             NewStatusDef(0, 0xffff, items),
-        ).draw();
+        );
+        statusLine.innerHTML = statusView.draw();
+        statusView.bindRoot(statusLine);
         this._bindStatusButtons();
     }
 
@@ -3713,15 +3614,16 @@ class TVBundleApp extends TVProgram {
         const windowEl = this.dialogManager.windows.get(target);
         if (!windowEl?.isConnected) { return ""; }
         if (target.startsWith("help:")) {
-            const bundle = windowEl._tvBundle;
-            const view = windowEl.dataset.tvStateView || "index";
+            const helpWindow = windowEl._tvWindowView;
+            const bundle = helpWindow.bundle;
+            const view = helpWindow.currentView;
             if (view === "topic" && bundle) {
-                const topic = findTopicByHex(bundle, windowEl.dataset.tvStateTopic || "");
+                const topic = findTopicByHex(bundle, helpWindow.currentTopic || "");
                 if (topic) { return bundleTopicTitle(bundle, topic); }
             }
             if (view === "tag") {
-                const label = windowEl.dataset.tvStateTagLabel || windowEl.dataset.tvStateTagKey || "Tag";
-                const value = windowEl.dataset.tvStateTagValue || "";
+                const label = helpWindow.currentTag?.label || helpWindow.currentTag?.key || "Tag";
+                const value = helpWindow.currentTag?.value || "";
                 return value ? `${label}: ${value}` : label;
             }
             return view === "contents" ? "Contents" : "Index";
@@ -3739,7 +3641,8 @@ class TVBundleApp extends TVProgram {
             activeWindow?.isConnected
             && (activeTarget.startsWith("help:") || activeTarget.startsWith("doc:"))
         );
-        const activeEditor = activeWindow?._tvEditor || activeWindow?._tvFindEditor || null;
+        const activeEditor = activeWindow?._tvWindowView?.editor
+            || activeWindow?._tvWindowView?.findEditor || null;
         const canFindAgain = canFind && Boolean(activeEditor?.lastQuery);
         const states = {
             tile: windowCount > 0,
@@ -3750,29 +3653,16 @@ class TVBundleApp extends TVProgram {
             previous: this.dialogManager.canDispatchCommand(TV_COMMANDS.PREVIOUS),
             close: this.dialogManager.canDispatchCommand(TV_COMMANDS.CLOSE),
         };
-        document.querySelectorAll("[data-tv-window-cmd]").forEach((item) => {
-            const enabled = Boolean(states[item.dataset.tvWindowCmd]);
-            item.disabled = !enabled;
-            item.setAttribute("aria-disabled", enabled ? "false" : "true");
-            item.classList.toggle("is-disabled", !enabled);
-            if (!enabled) {
-                item.classList.remove("is-menu-selected");
-                item.tabIndex = -1;
-            }
-        });
-        const setSearchCommandState = (selector, enabled) => {
-            document.querySelectorAll(selector).forEach((item) => {
-                item.disabled = !enabled;
-                item.setAttribute("aria-disabled", enabled ? "false" : "true");
-                item.classList.toggle("is-disabled", !enabled);
-                if (!enabled) {
-                    item.classList.remove("is-menu-selected");
-                    item.tabIndex = -1;
-                }
-            });
+        const menuState = this.menuState;
+        const updateMenuItem = (item, disabled) => {
+            item?.setDisabled(disabled);
+            menuState?.view?.updateItem(item);
         };
-        setSearchCommandState("[data-tv-find]", canFind);
-        setSearchCommandState("[data-tv-find-again]", canFindAgain);
+        menuState?.windowItems?.forEach((item, command) => {
+            updateMenuItem(item, !states[command]);
+        });
+        updateMenuItem(menuState?.findItem, false);
+        updateMenuItem(menuState?.findAgainItem, !canFindAgain);
     }
 
     _bindStatusButtons() {
@@ -3796,7 +3686,7 @@ class TVBundleApp extends TVProgram {
         if (this._restoringUrlState) { return; }
         const state = this._captureUrlState();
         const url = new URL(window.location.href);
-        url.search = "";
+        if (!url.searchParams.has("file") && !url.searchParams.has("doc")) { url.search = ""; }
         if (state) {
             url.hash = encodeUrlState(state);
         } else if (url.hash.replace(/^#/, "").startsWith(URL_STATE_PREFIX)) {
@@ -3823,29 +3713,30 @@ class TVBundleApp extends TVProgram {
 
         if (this.windowManager) {
             for (const [key, element] of this.windowManager.openWindows) {
-                const file = element.dataset.tvStateFile || "";
+                const helpWindow = element._tvWindowView;
+                const file = helpWindow?.sourceFile || "";
                 if (!file) { continue; }
                 const viewport = element.querySelector("[data-tv-viewport]");
                 const item = {
                     t: "h",
                     f: file,
-                    view: element.dataset.tvStateView || "index",
+                    view: helpWindow.currentView,
                     g: captureWindowGeometry(element),
                 };
-                const topic = element.dataset.tvStateTopic || "";
+                const topic = helpWindow.currentTopic || "";
                 if (topic) { item.topic = topic; }
                 const visibleLine = viewport
                     ? Array.from(element.querySelectorAll(".tv-topic-line[data-tv-line]"))
                         .find((line) => line.offsetTop + line.offsetHeight >= viewport.scrollTop)
                     : null;
-                const line = Number(visibleLine ? visibleLine.dataset.tvLine : element.dataset.tvStateLine);
+                const line = Number(visibleLine ? visibleLine.dataset.tvLine : helpWindow.currentLine);
                 if (Number.isInteger(line) && line > 0) { item.line = line; }
                 if (viewport) { item.s = [Math.round(viewport.scrollLeft), Math.round(viewport.scrollTop)]; }
-                if (element.dataset.tvStateTagKey && element.dataset.tvStateTagValue) {
+                if (helpWindow.currentTag?.key && helpWindow.currentTag?.value) {
                     item.tag = [
-                        element.dataset.tvStateTagKey,
-                        element.dataset.tvStateTagValue,
-                        element.dataset.tvStateTagLabel || element.dataset.tvStateTagKey,
+                        helpWindow.currentTag.key,
+                        helpWindow.currentTag.value,
+                        helpWindow.currentTag.label || helpWindow.currentTag.key,
                     ];
                 }
                 const selection = captureTextSelection(viewport);
@@ -3854,9 +3745,8 @@ class TVBundleApp extends TVProgram {
             }
         }
 
-        this.desktop.querySelectorAll(".tv-doc-window").forEach((element) => {
-            const file = element.dataset.tvStateFile || "";
-            if (!file) { return; }
+        this.docWindows.forEach((element, file) => {
+            if (!element.isConnected) { return; }
             const viewport = element.querySelector("[data-tv-viewport]");
             const item = {
                 t: "doc",
@@ -3866,7 +3756,7 @@ class TVBundleApp extends TVProgram {
             if (viewport) { item.s = [Math.round(viewport.scrollLeft), Math.round(viewport.scrollTop)]; }
             const selection = captureTextSelection(viewport);
             if (selection) { item.sel = selection; }
-            addWindow(element.dataset.tvManagerName || ("doc:" + file), item);
+            addWindow("doc:" + file, item);
         });
 
         this.dialogManager.dialogs.forEach((dialog, name) => {
@@ -3940,7 +3830,7 @@ class TVBundleApp extends TVProgram {
                     if (!response.ok) { continue; }
                     const windowEl = this._openDocWindow(entry.file, await response.text());
                     this._applyUrlWindowState(windowEl, item, false);
-                    targets.push(windowEl.dataset.tvManagerName || ("doc:" + entry.file));
+                    targets.push("doc:" + entry.file);
                     restored = true;
                 } else if (item.t === "dlg" && item.name) {
                     const dialog = this.dialogManager.open(item.name);
@@ -4138,7 +4028,7 @@ class TVBundleApp extends TVProgram {
         searchDialog.searchData = { topics: [] };
         // Override openSelected to navigate within bundle viewer
         const self = this;
-        searchDialog.openSelected = function () {
+        searchDialog.openSelected = async function () {
             if (this.selectedIndex < 0 || this.selectedIndex >= this.matches.length) {
                 if (this.input.getData().trim()) {
                     recordStatisticsEvent({ event: "search", scope: "topic", result: "no-results" });
@@ -4148,15 +4038,36 @@ class TVBundleApp extends TVProgram {
             const match = this.matches[this.selectedIndex];
             recordStatisticsEvent({ event: "search", scope: "topic", result: "found" });
             this.close();
-            if (self.windowManager && self.windowManager.currentBundle) {
-                self.windowManager.showTopic(self.windowManager.currentBundle, match.context_hex);
+            try {
+                if (match.kind === "doc") {
+                    await self._openDocFile(match.file);
+                    return;
+                }
+                const bundle = match.file
+                    ? await loadBundle(match.file)
+                    : self.windowManager?.currentBundle;
+                if (bundle) {
+                    self._updateSearchData(bundle);
+                    self.windowManager.showTopic(bundle, match.context_hex);
+                }
+            } catch (error) {
+                void self._showError("Search Error", `Cannot open ${match.file}.\n${error?.message || error}`);
             }
         };
+        void searchDialog.monitorIndex();
     }
 
     _updateSearchData(bundle) {
         if (this.searchDialog && bundle) {
-            this.searchDialog.searchData = { topics: buildUhfSearchIndex(bundle) };
+            const sourceFile = bundle.metadata?.source?.filename
+                || bundle.metadata?.catalog_source_files?.[0]
+                || bundle._catalogFile || "";
+            const helpName = bundle.metadata?.name || sourceFile;
+            this.searchDialog.searchData = {
+                topics: buildUhfSearchIndex(bundle).map((entry) => ({
+                    ...entry, source_file: sourceFile, help_name: helpName,
+                })),
+            };
         }
     }
 
@@ -4174,12 +4085,13 @@ class TVBundleApp extends TVProgram {
                 });
             }
         }
-        this.desktop.querySelectorAll(".tv-doc-window").forEach((el) => {
+        this.docWindows.forEach((el, file) => {
+            if (!el.isConnected) { return; }
             const caption = el.querySelector(".tv-window-caption");
             items.push({
                 label: caption ? caption.textContent : "Document",
                 type: "doc",
-                managerName: el.dataset.tvManagerName || "",
+                managerName: "doc:" + file,
                 element: el,
             });
         });
@@ -4295,7 +4207,7 @@ class TVBundleApp extends TVProgram {
                 this.fileOpenDialog?.setDirectory(directory);
             });
         }
-        buildBundleMenuBar(catalogData, null);
+        this.menuState = buildBundleMenuBar(catalogData, null, this.isAdmin);
         fillBorders();
         this._bindMenus();
         this._showWelcome();
@@ -4311,18 +4223,98 @@ class TVBundleApp extends TVProgram {
             return;
         }
         this._menuBundleKey = nextKey;
-        buildBundleMenuBar(catalogData, hasContentsMenu ? currentBundle : null);
+        this.menuState = buildBundleMenuBar(catalogData, hasContentsMenu ? currentBundle : null, this.isAdmin);
+        fillBorders();
+        this._bindMenus();
+    }
+
+    async _refreshAuthSession() {
+        try {
+            const response = await fetch("/api/auth/session", { cache: "no-store" });
+            if (response.ok) { this._setAuthSession(await response.json()); }
+        } catch { /* Local generated pages may have no account API. */ }
+    }
+
+    _setAuthSession(session) {
+        const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
+        if (nextAdmin === this.isAdmin) { return; }
+        this.isAdmin = nextAdmin;
+        const currentBundle = this.windowManager?.currentBundle || null;
+        this.menuState = buildBundleMenuBar(catalogData || [], currentBundle, this.isAdmin);
         fillBorders();
         this._bindMenus();
     }
 
     async _handleUrlState() {
         const hashState = decodeUrlState(window.location.hash);
-        if (hashState) { await this._restoreUrlState(hashState); }
+        if (hashState) {
+            await this._restoreUrlState(hashState);
+            document.getElementById("tv-public-fallback")?.remove();
+        }
         if (window.location.search) {
             const url = new URL(window.location.href);
-            url.search = "";
-            window.history.replaceState(null, "", url.toString());
+            const publicDoc = url.searchParams.get("doc");
+            const publicFile = publicDoc ? null : url.searchParams.get("file");
+            const file = publicFile || url.searchParams.get("search_file");
+            const topic = url.searchParams.get("topic") || url.searchParams.get("search_topic");
+            const doc = publicDoc || url.searchParams.get("search_doc");
+            const canOpenFile = publicFile || (catalogData || []).some((candidate) => candidate.file === file);
+            if (!hashState && file && (topic || publicFile) && canOpenFile) {
+                try {
+                    const bundle = await loadBundle(file);
+                    this.dialogManager.get("welcome")?.destroy();
+                    this._updateSearchData(bundle);
+                    if (topic) { this.windowManager.showTopic(bundle, topic); }
+                    else { this.windowManager.showDefault(bundle); }
+                    document.getElementById("tv-public-fallback")?.remove();
+                } catch (error) {
+                    void this._showError("Search Error", `Cannot open ${file}.\n${error?.message || error}`);
+                }
+            } else if (!hashState && doc && (docsCatalogData || []).some((item) => item.file === doc)) {
+                this.dialogManager.get("welcome")?.destroy();
+                await this._openDocFile(doc);
+                document.getElementById("tv-public-fallback")?.remove();
+            }
+            if (!publicFile && !publicDoc) {
+                url.search = "";
+                window.history.replaceState(null, "", url.toString());
+            }
+        }
+    }
+
+    _handleMarkdownLink(filename, link) {
+        let decodedHref;
+        try {
+            decodedHref = decodeURIComponent(link.getAttribute("href") || "");
+        } catch {
+            return false;
+        }
+        const hrefPath = decodedHref.split(/[?#]/, 1)[0];
+        if (!hrefPath.toLowerCase().endsWith(".md")) { return false; }
+        const baseDir = filename.includes("/") ? filename.replace(/[^/]+$/, "") : "";
+        const repositoryRelative = hrefPath.replace(/^\/?docs\//i, "");
+        const raw = repositoryRelative !== hrefPath ? repositoryRelative : baseDir + hrefPath;
+        const normalized = [];
+        for (const part of raw.split("/")) {
+            if (part === "..") { normalized.pop(); }
+            else if (part && part !== ".") { normalized.push(part); }
+        }
+        const resolved = normalized.join("/");
+        void this._openMarkdownDocument(resolved);
+        return true;
+    }
+
+    async _openMarkdownDocument(resolved) {
+        try {
+            const resp = await fetch(DOCS_DIR + encodeURI(resolved));
+            if (!resp.ok) { throw new Error(`HTTP ${resp.status}`); }
+            const md = await resp.text();
+            this._openDocWindow(resolved, md);
+            recordStatisticsEvent({ event: "link", result: "internal" });
+        } catch (error) {
+            recordStatisticsEvent({ event: "link", result: "broken" });
+            console.error(`Failed to load doc ${resolved}:`, error);
+            void this._showError("Document Error", `Cannot open ${resolved}.\n${error?.message || error}`);
         }
     }
 
@@ -4344,11 +4336,8 @@ class TVBundleApp extends TVProgram {
         windowView.setHelpCtx(hcDocumentViewer);
         const windowEl = TVView._fromHTML(windowView.draw(contentHTML));
         windowView.bindRoot(windowEl);
+        windowEl._tvWindowView = windowView;
         windowEl.classList.add("tv-doc-window");
-        windowEl.dataset.tvStateType = "doc";
-        windowEl.dataset.tvStateFile = filename;
-        windowEl.dataset.tvManagerName = managerName;
-        windowEl.dataset.tvWindowStorageKey = managerName;
         this.docWindows.set(docKey, windowEl);
         this.desktop.appendChild(windowEl);
         bindCloseButtons(windowEl);
@@ -4358,14 +4347,16 @@ class TVBundleApp extends TVProgram {
         indicator.root = TVView._fromHTML(indicator.draw());
         const horizontalScrollbar = windowEl.querySelector(".tv-bottom-bar > .tv-scrollbar-x");
         horizontalScrollbar?.before(indicator.root);
-        windowEl._tvEditor = new TVEditor(new TVRect(), null, null, indicator)
-            .bindRoot(windowEl.querySelector("[data-tv-doc-editor]"));
+        const editor = new TVEditor(new TVRect(), null, null, indicator);
+        editor.onLink = (link) => this._handleMarkdownLink(filename, link);
+        windowView.insert(editor);
+        windowView.editor = editor.bindRoot(windowEl.querySelector("[data-tv-doc-editor]"));
         const frames = windowEl.querySelectorAll("[data-tv-scroll-frame]");
-        windowEl._tvScrollbars = Array.from(
+        windowView.scrollbars = Array.from(
             frames,
             (frame) => new TVScrollBar(new TVRect()).bindRoot(frame),
         );
-        windowEl._tvResizer = new TurboVisionWindowResizer(windowEl);
+        new TurboVisionWindowResizer(windowEl, managerName);
 
         const closeWindow = () => {
             if (this.dialogManager) { this.dialogManager.unregisterWindow(managerName); }
@@ -4376,10 +4367,7 @@ class TVBundleApp extends TVProgram {
             fillDesktopPatterns();
         };
         const toggleWindowZoom = () => {
-            const isMax = windowEl.classList.toggle("is-maximized");
-            const glyph = windowEl.querySelector("[data-tv-zoom-glyph]");
-            if (glyph) { glyph.textContent = isMax ? "↓" : "↑"; }
-            fillBorders();
+            windowView.zoom();
             fillDesktopPatterns();
         };
         windowView.closeAction = closeWindow;
@@ -4392,50 +4380,6 @@ class TVBundleApp extends TVProgram {
                 [TV_COMMANDS.ZOOM]: toggleWindowZoom,
             });
         }
-
-        // Intercept Markdown links to open in-viewer instead of navigating.
-        // Root README files keep repository-relative "docs/..." links, while
-        // the public viewer already serves that directory at DOCS_DIR.
-        const self = this;
-        const baseDir = filename.includes("/") ? filename.replace(/[^/]+$/, "") : "";
-        windowEl.querySelectorAll("a[href]").forEach((link) => {
-            const href = link.getAttribute("href");
-            let decodedHref = "";
-            try {
-                decodedHref = decodeURIComponent(href || "");
-            } catch {
-                return;
-            }
-            const hrefPath = decodedHref.split(/[?#]/, 1)[0];
-            if (hrefPath && hrefPath.toLowerCase().endsWith(".md")) {
-                link.addEventListener("click", async (e) => {
-                    e.preventDefault();
-                    // Resolve relative path and normalize ../
-                    const repositoryRelative = hrefPath.replace(/^\/?docs\//i, "");
-                    const raw = repositoryRelative !== hrefPath
-                        ? repositoryRelative
-                        : baseDir + hrefPath;
-                    const parts = raw.split("/");
-                    const normalized = [];
-                    for (const p of parts) {
-                        if (p === "..") { normalized.pop(); }
-                        else if (p && p !== ".") { normalized.push(p); }
-                    }
-                    const resolved = normalized.join("/");
-                    try {
-                        const resp = await fetch(DOCS_DIR + encodeURI(resolved));
-                        if (!resp.ok) { throw new Error(`HTTP ${resp.status}`); }
-                        const md = await resp.text();
-                        self._openDocWindow(resolved, md);
-                        recordStatisticsEvent({ event: "link", result: "internal" });
-                    } catch (error) {
-                        recordStatisticsEvent({ event: "link", result: "broken" });
-                        console.error(`Failed to load doc ${resolved}:`, error);
-                        void self._showError("Document Error", `Cannot open ${resolved}.\n${error?.message || error}`);
-                    }
-                });
-            }
-        });
 
         fillBorders();
         fillDesktopPatterns();
@@ -4487,12 +4431,15 @@ class TVBundleApp extends TVProgram {
         }
         const windowEl = this.dialogManager.windows.get(managerName);
         if (!windowEl?.isConnected) { return null; }
-        let editor = windowEl._tvEditor || windowEl._tvFindEditor || null;
+        const windowView = windowEl._tvWindowView;
+        if (!windowView) { return null; }
+        let editor = windowView.editor || windowView.findEditor;
         if (!editor) {
             const viewport = windowEl.querySelector("[data-tv-viewport]");
             if (!viewport) { return null; }
             editor = new TVEditor(new TVRect()).setReadOnly(true).bindRoot(viewport);
-            windowEl._tvFindEditor = editor;
+            editor.owner = windowView;
+            windowView.findEditor = editor;
         }
         const caption = windowEl.querySelector(".tv-window-caption")?.textContent?.trim();
         return { managerName, windowEl, editor, caption: caption || "active window" };
@@ -4500,28 +4447,35 @@ class TVBundleApp extends TVProgram {
 
     _openFind() {
         const target = this._activeFindTarget() || this.lastFindTarget;
-        if (!target?.windowEl?.isConnected || !target.editor || !this.findDialog) { return false; }
-        this.lastFindTarget = target;
+        if (!this.findDialog) { return false; }
+        const localTarget = target?.windowEl?.isConnected && target.editor ? target : null;
+        if (localTarget) { this.lastFindTarget = localTarget; }
         this.findDialog.configure({
-            targetLabel: target.caption,
-            find: (query) => {
-                const found = target.editor.find(query, { fromStart: true });
+            targetLabel: localTarget?.caption || "active window",
+            globalFind: (query) => {
+                this.dialogManager.open("search");
+                this.searchDialog.setGlobal(true);
+                this.searchDialog.input.setData(query);
+                this.searchDialog.renderResults(query);
+            },
+            find: localTarget ? (query) => {
+                const found = localTarget.editor.find(query, { fromStart: true });
                 recordStatisticsEvent({
                     event: "search",
                     scope: "find",
                     result: found ? "found" : "no-results",
                 });
                 return found;
-            },
-            findAgain: () => {
-                const found = target.editor.findNext();
+            } : null,
+            findAgain: localTarget ? () => {
+                const found = localTarget.editor.findNext();
                 recordStatisticsEvent({
                     event: "search",
                     scope: "find-again",
                     result: found ? "found" : "no-results",
                 });
                 return found;
-            },
+            } : null,
         });
         this.dialogManager.open("find");
         return true;

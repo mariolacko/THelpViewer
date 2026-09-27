@@ -643,6 +643,43 @@ const {
     hcTron,
 } = TV_HELP_CONTEXTS;
 
+class TVMinesFaceButton extends TVButton {
+    _drawParts() {
+        return { ...super._drawParts(), dialog: false, className: "tv-mines-face" };
+    }
+}
+
+class TVLudoPlayerButton extends TVButton {
+    _drawParts() {
+        const data = this.commandData;
+        return {
+            ...super._drawParts(), dialog: false,
+            className: `tv-ludo-player-toggle tv-ludo-${data.color || "red"}`,
+            ariaLabel: `${data.playerName || this.title} player mode`,
+        };
+    }
+}
+
+class TVLudoPieceButton extends TVButton {
+    _drawParts() {
+        const data = this.commandData;
+        return {
+            ...super._drawParts(), dialog: false, className: data.classes || "",
+            labelMarkup: '<span class="tv-ludo-piece-glyph">♟</span>',
+            ariaLabel: `${data.playerName || "Ludo"} piece ${Number(this.value) + 1}`,
+        };
+    }
+}
+
+class TVMastermindColorButton extends TVButton {
+    _drawParts() {
+        return {
+            ...super._drawParts(),
+            className: `tv-mastermind-color tv-mastermind-color-${this.commandData.color ?? 0}`,
+        };
+    }
+}
+
 // ── Best score helpers ──────────────────────────────────────────────
 
 function loadBest(key) {
@@ -756,6 +793,9 @@ function hallOfFameConfig(game) {
 }
 
 function sortHallOfFame(game, entries) {
+    if (game === "sokoban") {
+        return entries.sort((left, right) => (right.level || 10) - (left.level || 10) || left.score - right.score);
+    }
     const config = hallOfFameConfig(game);
     return entries.sort((left, right) => config.lowerIsBetter
         ? left.score - right.score
@@ -772,6 +812,7 @@ function loadLocalHallOfFame(game) {
                     name: String(entry.name || "Player").slice(0, 15),
                     score: Number(entry.score),
                     note: String(entry.note || "").slice(0, 12),
+                    level: game === "sokoban" ? Number(entry.level) || 10 : 0,
                 }));
         }
     } catch { /* ignore invalid saved data */ }
@@ -793,6 +834,7 @@ function normalizeHallOfFameEntries(game, entries) {
             name: String(entry.name || "Player").slice(0, 15),
             score: Number(entry.score),
             note: String(entry.note || "").slice(0, 12),
+            level: game === "sokoban" ? Number(entry.level) || 10 : 0,
         }))).slice(0, HALL_OF_FAME_LIMIT);
 }
 
@@ -809,18 +851,21 @@ async function loadServerHallOfFame(game) {
     return entries;
 }
 
-function hallOfFameQualifies(game, score) {
+function hallOfFameQualifies(game, score, level = 0) {
     if (!Number.isFinite(score) || score <= 0) { return false; }
     const entries = loadHallOfFame(game);
     if (entries.length < HALL_OF_FAME_LIMIT) { return true; }
     const last = entries[entries.length - 1];
+    if (game === "sokoban") {
+        return level > last.level || (level === last.level && score < last.score);
+    }
     return hallOfFameConfig(game).lowerIsBetter ? score < last.score : score > last.score;
 }
 
-function saveLocalHallOfFameScore(game, score, name, note = "") {
+function saveLocalHallOfFameScore(game, score, name, note = "", level = 0) {
     if (!Number.isFinite(score) || score <= 0) { return false; }
     const entries = loadLocalHallOfFame(game);
-    entries.push({ name: String(name || "Player").slice(0, 15), score, note: String(note || "").slice(0, 12) });
+    entries.push({ name: String(name || "Player").slice(0, 15), score, note: String(note || "").slice(0, 12), level });
     const sorted = sortHallOfFame(game, entries).slice(0, HALL_OF_FAME_LIMIT);
     try {
         localStorage.setItem(HALL_OF_FAME_PREFIX + game, JSON.stringify(sorted));
@@ -830,12 +875,13 @@ function saveLocalHallOfFameScore(game, score, name, note = "") {
     }
 }
 
-async function saveHallOfFameScore(game, score, name, note = "") {
+async function saveHallOfFameScore(game, score, name, note = "", level = 0) {
     if (!Number.isFinite(score) || score <= 0) { return false; }
     const entry = {
         name: String(name || "Player").slice(0, 15),
         score,
         note: String(note || "").slice(0, 12),
+        level,
     };
     try {
         const response = await fetch(`/api/hall-of-fame/${encodeURIComponent(game)}`, {
@@ -848,20 +894,21 @@ async function saveHallOfFameScore(game, score, name, note = "") {
         serverHallOfFame.set(game, normalizeHallOfFameEntries(game, payload?.entries));
         return payload?.accepted !== false;
     } catch {
-        return saveLocalHallOfFameScore(game, score, name, note);
+        return saveLocalHallOfFameScore(game, score, name, note, level);
     }
 }
 
 function submitHallOfFameScore(ownerDialog, game, score, {
     name = "",
     note = "",
+    level = 0,
     onSaved = null,
 } = {}) {
-    if (!hallOfFameQualifies(game, score)) {
+    if (!hallOfFameQualifies(game, score, level)) {
         return false;
     }
     const save = (playerName) => {
-        void saveHallOfFameScore(game, score, playerName, note).then((saved) => {
+        void saveHallOfFameScore(game, score, playerName, note, level).then((saved) => {
             if (saved && onSaved) { onSaved(playerName); }
         });
     };
@@ -871,13 +918,14 @@ function submitHallOfFameScore(ownerDialog, game, score, {
         const config = hallOfFameConfig(game);
         showBestNamePrompt(ownerDialog, score, save, {
             heading: "Hall of Fame!",
-            scoreLabel: config.unit[0].toUpperCase() + config.unit.slice(1),
+            scoreLabel: game === "sokoban" ? `Moves, level ${level}` : config.unit[0].toUpperCase() + config.unit.slice(1),
         });
     }
     return true;
 }
 
 function formatHallOfFameScore(game, entry) {
+    if (game === "sokoban") { return `${entry.score} moves Lv.${entry.level || 10}`; }
     const config = hallOfFameConfig(game);
     const note = entry.note ? ` ${entry.note}` : "";
     return `${entry.score} ${config.unit}${note}`;
@@ -926,7 +974,7 @@ function hallOfFameRows(game, entries) {
         ))
         : [new TVStaticText(new TVRect(1, 3, 42, 4), "\x03No scores yet.")];
     return [
-        new TVHallRow(new TVRect(0, 1, 43, 2), "hall-header", "#", "Player", "Score"),
+        new TVHallRow(new TVRect(0, 1, 43, 2), "hall-header", "#", "Player", game === "sokoban" ? "Score / Level" : "Score"),
         ...rows,
     ];
 }
@@ -1814,7 +1862,7 @@ class TVMinesDialog extends TVGameDialog {
     constructor() {
         const GRID_W = MINES_COLS * 2;  // 18ch
         const remainingView = new TVStaticText(new TVRect(1, 0, 5, 1), String(MINES_COUNT));
-        const faceButton = new TVButton(new TVRect(9, 0, 11, 1), "☺", "mines-face", bfNormal);
+        const faceButton = new TVMinesFaceButton(new TVRect(9, 0, 11, 1), "☺", "mines-face", bfNormal);
         const timerView = new TVStaticText(new TVRect(15, 0, 19, 1), "0");
         const gridView = new TVMinesField(new TVRect(1, 1, 1 + GRID_W, 1 + MINES_ROWS));
         const minesMain = new TVGroup(new TVRect(0, 0, (0) + (GRID_W + 2), (0) + (MINES_ROWS + 1))).insertAll([
@@ -2433,44 +2481,92 @@ const SOKOBAN_LEVELS = [
         "  ###  " +
         "  #.#  " +
         "###$###" +
-        "#. @$.#" +
+        "#  @$.#" +
         "#######"
     },
     { w: 8, h: 6, map:
-        "  ####  " +
-        "###  #  " +
-        "#. $.#  " +
-        "### .###" +
-        "  #$ @.#" +
-        "  ######"
+        "########" +
+        "# .    #" +
+        "#  ##  #" +
+        "# $  $ #" +
+        "# @ .  #" +
+        "########"
     },
     { w: 9, h: 7, map:
-        "  #####  " +
-        "  # . #  " +
-        "  #$# #  " +
-        "###. $###" +
-        "#  .$  .#" +
-        "# @  $# #" +
+        "#########" +
+        "# .     #" +
+        "#  ##   #" +
+        "# $   $ #" +
+        "#   @ . #" +
+        "#   . $ #" +
         "#########"
     },
     { w: 7, h: 7, map:
         "#######" +
         "#     #" +
-        "# # # #" +
+        "#$# # #" +
         "#.$@$.#" +
-        "#.# #.#" +
-        "#  $  #" +
+        "#.# # #" +
+        "#     #" +
         "#######"
     },
     { w: 8, h: 8, map:
         "########" +
         "#      #" +
-        "# #$## #" +
+        "# #*## #" +
         "# . .$ #" +
         "#  $.  #" +
         "# ##$# #" +
         "#  @   #" +
         "########"
+    },
+    { w: 9, h: 7, map:
+        "#########" +
+        "# .  .  #" +
+        "#   #   #" +
+        "# $$  $ #" +
+        "#   @   #" +
+        "#   # . #" +
+        "#########"
+    },
+    { w: 9, h: 8, map:
+        "#########" +
+        "# .   . #" +
+        "#   #   #" +
+        "# $ # $ #" +
+        "#   @   #" +
+        "# $ # $ #" +
+        "# .   . #" +
+        "#########"
+    },
+    { w: 9, h: 7, map:
+        "#########" +
+        "# .  .  #" +
+        "#   #   #" +
+        "# $   $ #" +
+        "#   @   #" +
+        "#   $ . #" +
+        "#########"
+    },
+    { w: 9, h: 8, map:
+        "#########" +
+        "# .  #  #" +
+        "# $  # .#" +
+        "#    $  #" +
+        "## #    #" +
+        "#  @ $ .#" +
+        "#       #" +
+        "#########"
+    },
+    { w: 9, h: 8, map:
+        "#########" +
+        "# .   . #" +
+        "#  # #  #" +
+        "# $ $ $ #" +
+        "#   @   #" +
+        "#   $ . #" +
+        "#     . #" +
+        "#########"
     },
 ];
 const SOKOBAN_BEST_KEY = "tv-sokoban-best";
@@ -2529,6 +2625,8 @@ class TVSokobanDialog extends TVGameDialog {
         this.pushes = 0;
         this.history = [];
         this.solved = false;
+        this.completedMoves = Array(SOKOBAN_LEVELS.length).fill(null);
+        this.scoreSubmitted = false;
 
         this.bindCommonClose(() => this.close());
         this.bindDrag();
@@ -2555,7 +2653,11 @@ class TVSokobanDialog extends TVGameDialog {
         if (this.solved) {
             if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                this.changeLevel(1);
+                if (this.levelIndex === SOKOBAN_LEVELS.length - 1) {
+                    this.newGame();
+                } else {
+                    this.changeLevel(1);
+                }
             }
             return;
         }
@@ -2570,9 +2672,21 @@ class TVSokobanDialog extends TVGameDialog {
     }
 
     open() {
+        const wasOpen = this.isOpen();
         super.open();
-        this.loadLevel(this.levelIndex);
+        if (!wasOpen) { this.newGame(); }
         THelpViewerTV.fillBorders(this.dialog);
+    }
+
+    close() {
+        const previousLevels = this.completedMoves.slice(0, this.levelIndex);
+        const canRank = this.isOpen() && !this.scoreSubmitted
+            && previousLevels.every(Number.isInteger) && (this.moves > 0 || this.solved || previousLevels.length > 0);
+        const score = previousLevels.reduce((total, moves) => total + moves, 0) + this.moves;
+        const level = this.levelIndex + 1;
+        if (canRank) { this.scoreSubmitted = true; }
+        super.close();
+        if (canRank) { submitHallOfFameScore(this, "sokoban", score, { level }); }
     }
 
     changeLevel(dir) {
@@ -2580,6 +2694,12 @@ class TVSokobanDialog extends TVGameDialog {
         if (next >= 0 && next < SOKOBAN_LEVELS.length) {
             this.loadLevel(next);
         }
+    }
+
+    newGame() {
+        this.completedMoves.fill(null);
+        this.scoreSubmitted = false;
+        this.loadLevel(0);
     }
 
     loadLevel(index) {
@@ -2673,9 +2793,13 @@ class TVSokobanDialog extends TVGameDialog {
             }
         }
         this.solved = true;
-        submitHallOfFameScore(this, "sokoban", this.moves, {
-            note: `L${this.levelIndex + 1}`,
-        });
+        this.completedMoves[this.levelIndex] = this.moves;
+        if (!this.scoreSubmitted && this.completedMoves.every(Number.isInteger)) {
+            this.scoreSubmitted = true;
+            submitHallOfFameScore(this, "sokoban", this.completedMoves.reduce((sum, moves) => sum + moves, 0), {
+                level: SOKOBAN_LEVELS.length,
+            });
+        }
     }
 
     render() {
@@ -2715,8 +2839,10 @@ class TVSokobanDialog extends TVGameDialog {
             lines.push(cells.join(""));
         }
         if (this.solved) {
+            const prompt = this.levelIndex === SOKOBAN_LEVELS.length - 1
+                ? "Press Enter for new game" : "Press Enter for next level";
             this.fieldView._setHTML(lines.join("") +
-                `<div class="tv-sokoban-overlay-msg">SOLVED!<br><small>Moves: ${this.moves}</small><br><small>Press Enter</small></div>`);
+                `<div class="tv-sokoban-overlay-msg">SOLVED!<br><small>Moves: ${this.moves}</small><br><small>${prompt}</small></div>`);
         } else {
             this.fieldView._setHTML(lines.join(""));
         }
@@ -3319,7 +3445,7 @@ class TVLudoDialog extends TVGameDialog {
                 statusRow,
             ]);
         const playerButtons = LUDO_PLAYER_NAMES.map((name, player) => (
-            new TVButton(new TVRect(0, player + 1, 22, player + 2), name, "ludo-player-mode", bfNormal)
+            new TVLudoPlayerButton(new TVRect(0, player + 1, 22, player + 2), name, "ludo-player-mode", bfNormal)
                 .setValue(player)
                 .setCommandData({ color: LUDO_PLAYER_COLORS[player], playerName: name })
         ));
@@ -3763,7 +3889,7 @@ class TVLudoDialog extends TVGameDialog {
                 animation && player === animation.player && piece === animation.piece ? "is-moving" : "",
                 isCapturedFlash ? "is-captured" : "",
             ].filter(Boolean).join(" ");
-            return new TVButton(new TVRect(), "", "ludo-piece", bfNormal)
+            return new TVLudoPieceButton(new TVRect(), "", "ludo-piece", bfNormal)
                 .setValue(piece)
                 .setCommandData({ classes: pieceClasses, playerName: LUDO_PLAYER_NAMES[player] })
                 .setState(sfDisabled, !isLegal)
@@ -3805,7 +3931,7 @@ class TVMastermindDialog extends TVGameDialog {
         const paletteButtons = Array.from({ length: 6 }, (_, color) => {
             const x = 34 + (color % 3) * 6;
             const y = 2 + Math.floor(color / 3) * 2;
-            return new TVButton(new TVRect(x, y, x + 5, y + 2), String(color + 1), "mastermind-color", bfNormal)
+            return new TVMastermindColorButton(new TVRect(x, y, x + 5, y + 2), String(color + 1), "mastermind-color", bfNormal)
                 .setValue(color)
                 .setCommandData({ color });
         });
@@ -3821,7 +3947,7 @@ class TVMastermindDialog extends TVGameDialog {
                 newButton,
                 statusView,
             ]);
-        super(new TVRect(0, 0, 56, 20), "Mastermind");
+        super(new TVRect(0, 0, 56, 18), "Mastermind");
         this.setHelpCtx(hcMastermind);
         this.insert(body);
         installHallOfFame(this, "mastermind");
@@ -3962,7 +4088,7 @@ class TVTronDialog extends TVGameDialog {
                 pauseButton,
                 new TVStaticText(new TVRect(infoX, 16, infoX + 22, 18), "Avoid every trail.\nBoth move together."),
             ]);
-        super(new TVRect(0, 0, 88, 22), "Tron Light Cycles");
+        super(new TVRect(0, 0, 88, 23), "Tron Light Cycles");
         this.setHelpCtx(hcTron);
         this.insert(tronMain);
         installHallOfFame(this, "tron");
@@ -4125,18 +4251,18 @@ class TVHanoiDialog extends TVGameDialog {
 
     constructor() {
         const boardView = new TVHanoiBoard(new TVRect(1, 1, 55, 11));
-        const historyView = new TVHanoiHistory(new TVRect(57, 1, 77, 9));
-        const undoButton = new TVButton(new TVRect(57, 9, 69, 11), "~U~ndo", "hanoi-undo", bfNormal);
-        const newButton = new TVButton(new TVRect(57, 12, 69, 14), "~N~ew", "hanoi-new", bfDefault);
+        const historyView = new TVHanoiHistory(new TVRect(56, 1, 76, 9));
+        const undoButton = new TVButton(new TVRect(56, 9, 68, 11), "~U~ndo", "hanoi-undo", bfNormal);
+        const newButton = new TVButton(new TVRect(56, 12, 68, 14), "~N~ew", "hanoi-new", bfDefault);
         const statusView = new TVHanoiStatus(new TVRect(1, 12, 55, 14));
-        const hanoiMain = new TVGroup(new TVRect(0, 0, (0) + (79), (0) + (15))).insertAll([
+        const hanoiMain = new TVGroup(new TVRect(0, 0, 77, 15)).insertAll([
                 boardView,
                 historyView,
                 undoButton,
                 newButton,
                 statusView,
             ]);
-        super(new TVRect(0, 0, 83, 19), "Tower of Hanoi");
+        super(new TVRect(0, 0, 81, 19), "Tower of Hanoi");
         this.setHelpCtx(hcHanoi);
         this.insert(hanoiMain);
         installHallOfFame(this, "hanoi");

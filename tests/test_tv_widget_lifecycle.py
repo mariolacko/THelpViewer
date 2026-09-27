@@ -82,6 +82,8 @@ def test_application_commands_use_tvision_handle_event_flow():
     assert 'new TVMenuController({ commandTarget: this })' in bundle
     assert "this.menus.commandTarget = this" in shell
     assert "class TVApplication extends TVProgram" in shell and "handleEvent(event)" in shell
+    assert "new TVWindow(new TVRect(), document.title).bindRoot(hostWindow)" in shell
+    assert 'hostWindow.querySelector(".tv-close-control")?.click()' not in shell
     assert "bindActions()" not in shell
     assert "class TVGameDialog extends TVDialog" in games
     assert 'event.command === "hall-of-fame"' in games
@@ -105,7 +107,11 @@ class FakeTarget {
     constructor() {
         this.listeners = new Map();
         this.attributes = new Map();
-        this.style = { setProperty() {} };
+        const styleValues = new Map();
+        this.style = {
+            setProperty(name, value) { styleValues.set(name, String(value)); },
+            getPropertyValue(name) { return styleValues.get(name) || ""; },
+        };
         this.dataset = {};
         this.isConnected = true;
         this.clientWidth = 80;
@@ -160,7 +166,7 @@ windowTarget.dispatchEvent = () => {};
 global.window = windowTarget;
 global.document = new FakeTarget();
 global.CustomEvent = class {};
-global.getComputedStyle = () => ({ getPropertyValue() { return ""; } });
+global.getComputedStyle = (target) => target.style;
 global.measureCells = () => ({ width: 8, height: 16 });
 global.fillBorders = () => {};
 global.SCROLL_REPEAT_MS = 100;
@@ -255,10 +261,12 @@ const desktop = new FakeTarget();
 desktop.clientWidth = 800;
 desktop.clientHeight = 500;
 const windowElement = new FakeTarget();
+const zoomGlyph = { textContent: "↓" };
 windowElement.closest = () => desktop;
 windowElement.querySelector = (selector) => {
     if (selector === "[data-tv-move-handle]") { return moveHandle; }
     if (selector === "[data-tv-resize-handle]") { return resizeHandle; }
+    if (selector === "[data-tv-zoom-glyph]") { return zoomGlyph; }
     return null;
 };
 
@@ -270,12 +278,20 @@ resizer.setMoveFrame(true);
 if (!windowElement.classList.contains("is-moving")) {
     throw new Error("move frame state was not preserved");
 }
+windowElement.classList.add("is-maximized");
+resizer.place({ left: 16, top: 32, cols: 70, rows: 20 });
+if (windowElement.classList.contains("is-maximized") || zoomGlyph.textContent !== "↑"
+    || windowElement.style.getPropertyValue("--tv-window-cols") !== "70"
+    || resizer.restoreSnapshot.left !== 16 || resizer.restoreSnapshot.rows !== 20) {
+    throw new Error("window layout did not update resizer geometry and restore state");
+}
 resizer.setMoveFrame(false);
 if (windowElement.classList.contains("is-moving")) {
     throw new Error("move frame state was not cleared");
 }
 resizer.destroy();
 resizer.destroy();
+if (windowElement._tvResizer) { throw new Error("destroy left a stale resizer reference"); }
 if (resizeHandle.listeners.has("mousedown") || moveHandle.listeners.has("mousedown") || window.listeners.has("beforeunload")) {
     throw new Error("resizer left a listener behind");
 }
@@ -294,6 +310,16 @@ def test_dynamic_windows_destroy_widgets_before_removing_the_dom():
 
     assert "function destroyWindowWidgets(windowEl)" in source
     assert "scrollbars.forEach((scrollbar) => scrollbar.destroy())" in source
+    assert "const scrollbars = windowView?.scrollbars || []" in source
+    assert "windowView.outline = outline" in source
+    assert "const target = buildBundleTargetData(node)" in source
+    assert "void this._openTopicTarget(windowEl, target)" in source
+    assert "_tvOutline" not in source
+    assert "_tvScrollbars" not in source
+    assert "_tvEditor" not in source
+    assert "_tvFindEditor" not in source
+    assert "windowView.editor = editor.bindRoot" in source
+    assert "windowView.findEditor = editor" in source
     assert "windowEl._tvResizer.destroy()" in source
     assert "this._destroyWindowWidgets(existing);\n            existing._tvWindowView?.destroy();\n            existing.remove();" in source
     assert "this._destroyWindowWidgets(el);\n            el._tvWindowView?.destroy();\n            el.remove();" in source

@@ -42,7 +42,7 @@ def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
     assert "class TVMinesTimer" not in source
     assert '<div class="tv-hall-' not in hall
     assert 'fetch(`/api/hall-of-fame/${encodeURIComponent(game)}`' in helper
-    assert "return saveLocalHallOfFameScore(game, score, name, note);" in helper
+    assert "return saveLocalHallOfFameScore(game, score, name, note, level);" in helper
     assert "manager.register(`hall:${game}:${++bestNamePromptSequence}`, dlg)" in helper
     assert "class TVGameDialog extends TVDialog" in helper
     assert "this.frame.createTitleControl(" in helper

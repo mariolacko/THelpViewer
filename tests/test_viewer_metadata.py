@@ -2,6 +2,7 @@ from pathlib import Path
 
 from thelpviewer import __authors__, __version__
 from thelpviewer.converter.writers.bundle import _render_bundle_index_html
+from thelpviewer.server.config import load_config
 
 
 def test_checked_in_bundle_index_matches_generated_project_metadata():
@@ -10,6 +11,7 @@ def test_checked_in_bundle_index_matches_generated_project_metadata():
     assert Path("www/index.html").read_text(encoding="utf-8") == rendered
     assert f'data-tv-generator-version="{__version__}"' in rendered
     assert f'data-tv-authors="{__authors__}"' in rendered
+    assert 'google-site-verification' not in rendered
 
 
 def test_about_dialog_reads_generated_project_metadata():
@@ -23,3 +25,8 @@ def test_about_dialog_reads_generated_project_metadata():
     assert "body.dataset.tvGeneratorVersion" in source
     assert "body.dataset.tvAuthors" in source
     assert '"0.1.0"' not in source
+
+
+def test_google_verification_setting_comes_from_environment(monkeypatch):
+    monkeypatch.setenv("THELP_GOOGLE_SITE_VERIFICATION", "  verification-token  ")
+    assert load_config().google_site_verification == "verification-token"

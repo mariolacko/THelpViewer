@@ -37,7 +37,7 @@ def test_system_information_is_a_shared_tv_dialog_without_private_layout_css():
     assert "setHelpCtx(hcSystemInformation)" in system_info
     assert "class TVSystemInformationDialog" in dialogs
     assert "hcSystemInformation: 2270" in core
-    assert 'dialog: "systeminfo"' in bundle
+    assert 'dialogItem("System ~I~nformation", "systeminfo")' in bundle
     assert 'this._registerDialog("systeminfo"' in bundle
     assert 'this.registerDialog("systeminfo"' in shell
 
@@ -122,6 +122,7 @@ class FakeElement {
     remove() { this.isConnected = false; }
     focus() { document.activeElement = this; }
     click() { this.clicked += 1; }
+    contains(element) { return element === this; }
     closest(selector) {
         if (selector === "[hidden]") { return null; }
         return null;
@@ -188,7 +189,7 @@ const manager = desktop.dialogManager;
         instance.insert(defaultView);
         defaultView.bindRoot(defaultButton);
     desktop.insert(instance);
-    return { instance, overlay, dialogElement, first, second, defaultButton, closeButton };
+    return { instance, overlay, dialogElement, first, second, defaultButton, defaultView, closeButton };
 }
 
 function keyEvent(key, target, extra = {}) {
@@ -212,6 +213,19 @@ document.activeElement = launcher;
 const regular = buildDialog();
 regular.instance.open();
 if (document.activeElement !== regular.dialogElement) { throw new Error("dialog did not receive focus"); }
+const regularHandleEvent = regular.instance.handleEvent.bind(regular.instance);
+let acceptedCommands = 0;
+let escapedCommands = 0;
+regular.instance.handleEvent = (tvEvent) => {
+    if (tvEvent.what === TV.evCommand && tvEvent.command === "accept") {
+        if (tvEvent.infoPtr !== regular.defaultView) { throw new Error("default button lost its TVView source"); }
+        acceptedCommands += 1;
+        regular.instance.clearEvent(tvEvent);
+        return;
+    }
+    if (tvEvent.what === TV.evCommand && tvEvent.command === "dialog-close") { escapedCommands += 1; }
+    regularHandleEvent(tvEvent);
+};
 
 const contextual = buildDialog({ helpCtx: TV.TV_HELP_CONTEXTS.hcFind });
 if (contextual.overlay.getAttribute("data-tv-help-ctx") !== String(TV.TV_HELP_CONTEXTS.hcFind)
@@ -235,8 +249,8 @@ if (regular.dialogElement.classList.contains("is-dragging")) {
 
 const enter = keyEvent("Enter", regular.dialogElement);
 regular.instance.onDialogKeyDown(enter);
-if (regular.defaultButton.clicked !== 1 || !enter.defaultPrevented) {
-    throw new Error("Enter did not invoke the default button");
+if (acceptedCommands !== 1 || regular.defaultButton.clicked !== 0 || !enter.defaultPrevented) {
+    throw new Error("Enter did not dispatch the default button command");
 }
 
 document.activeElement = regular.second;
@@ -246,8 +260,8 @@ if (document.activeElement !== regular.first) { throw new Error("Tab did not wra
 
 const escape = keyEvent("Escape", regular.dialogElement);
 regular.instance.onDialogKeyDown(escape);
-if (!regular.overlay.hidden || document.activeElement !== launcher) {
-    throw new Error("Escape did not close and restore focus");
+if (!regular.overlay.hidden || document.activeElement !== launcher || escapedCommands !== 1) {
+    throw new Error("Escape did not dispatch Close and restore focus");
 }
 
 const calculatorLike = buildDialog({ escapeCloses: false });
@@ -287,15 +301,10 @@ const objectSectionsMarkup = frameMarkup("Object sections", false, [
         new TV.TVStaticText(new TV.TVRect(), "First"),
         new TV.TVStaticText(new TV.TVRect(), "Second"),
     ]);
-const semanticButtonMarkup = new TV.TVMenuView(new TV.TVRect(), new TV.TVMenu([
-        new TV.TVMenuItem(
-            TV.renderHotkeyMarkup("~A~bout"),
-            "dialog-open",
-            TV.kbF3,
-            TV.TV_HELP_CONTEXTS.hcSystemMenu,
-            { value: "about", sourceFile: "README.md" },
-        ),
-])).draw("bar");
+const menuItem = new TV.TVMenuItem(
+    "~A~bout", "dialog-open", TV.kbF3, TV.TV_HELP_CONTEXTS.hcSystemMenu, "F3",
+);
+const semanticButtonMarkup = new TV.TVMenuView(new TV.TVRect(), TV.NewMenu(menuItem)).draw("bar");
 if (!modalMarkup.includes('aria-modal="true"') || !modalMarkup.includes("is-modal")) {
     throw new Error("modal markup is incomplete");
 }
@@ -310,11 +319,13 @@ if (!objectSectionsMarkup.includes("First") || !objectSectionsMarkup.includes("S
     throw new Error("TVFrame did not render TV object sections");
 }
         if (!semanticButtonMarkup.includes("tv-menu-item")
-            || !semanticButtonMarkup.includes('data-tv-dialog-open="about"')
-            || !semanticButtonMarkup.includes('data-tv-source-file="README.md"')
-            || !semanticButtonMarkup.includes(`data-tv-key-code="${TV.kbF3}"`)
+            || !semanticButtonMarkup.includes('data-tv-command="dialog-open"')
+            || !semanticButtonMarkup.includes('class="tv-hotkey">A</span>bout')
+            || !semanticButtonMarkup.includes('class="tv-menu-hotkey">F3</span>')
+            || menuItem.keyCode !== TV.kbF3
+            || semanticButtonMarkup.includes("data-tv-key-code")
             || !semanticButtonMarkup.includes(`data-tv-help-ctx="${TV.TV_HELP_CONTEXTS.hcSystemMenu}"`)
-        || !semanticButtonMarkup.includes('aria-expanded="false"')) {
+            || semanticButtonMarkup.includes('aria-expanded=')) {
         throw new Error("TVMenuItem semantic properties did not reach the renderer");
 }
 const titlebarMarkup = modalMarkup.slice(
@@ -341,22 +352,41 @@ if (!manager.dispatchCommand(TV.TV_COMMANDS.CLOSE) || closeCalls !== 1) {
 
 const managedDialog = buildDialog();
 let dialogCloseCalls = 0;
+let managedCloseCommands = 0;
+const managedHandleEvent = managedDialog.instance.handleEvent.bind(managedDialog.instance);
+managedDialog.instance.handleEvent = (tvEvent) => {
+    if (tvEvent.what === TV.evCommand && tvEvent.command === "dialog-close") {
+        managedCloseCommands += 1;
+    }
+    managedHandleEvent(tvEvent);
+};
 managedDialog.instance.bindCommonClose(() => {
     dialogCloseCalls += 1;
     managedDialog.instance.close();
 });
 manager.register("managed-dialog", managedDialog.instance);
 managedDialog.instance.open();
+managedDialog.overlay.listeners.get("click")({ target: managedDialog.overlay, type: "click" });
+if (dialogCloseCalls !== 1 || !managedDialog.overlay.hidden) {
+    throw new Error("overlay click did not close through the dialog event path");
+}
+managedDialog.instance.open();
 if (managedDialog.closeButton.hidden) {
     throw new Error("active dialog close control is hidden");
 }
 TV.updateWindowFrameState(managedDialog.dialogElement, false, { dialog: true });
-if (!managedDialog.closeButton.hidden) {
-    throw new Error("inactive dialog close control is still drawn");
+if (managedDialog.closeButton.hidden
+    || !managedDialog.closeButton.classList.contains("is-frame-control-passive")
+    || managedDialog.closeButton.getAttribute("aria-disabled") !== null) {
+    throw new Error("inactive dialog close control is not visible and passive");
 }
 TV.updateWindowFrameState(managedDialog.dialogElement, true, { dialog: true });
-if (!manager.dispatchCommand(TV.TV_COMMANDS.CLOSE) || dialogCloseCalls !== 1) {
+if (!manager.dispatchCommand(TV.TV_COMMANDS.CLOSE) || dialogCloseCalls !== 2 || managedCloseCommands !== 1) {
     throw new Error("active dialog did not receive Close");
+}
+managedDialog.instance.open();
+if (!manager.dispatchCommand(TV.TV_COMMANDS.CANCEL) || dialogCloseCalls !== 3 || managedCloseCommands !== 2) {
+    throw new Error("active dialog did not receive Cancel through its command path");
 }
 managedDialog.instance.destroy();
 if (manager.get("managed-dialog") !== null || managedDialog.overlay.isConnected || managedDialog.instance.owner !== null) {

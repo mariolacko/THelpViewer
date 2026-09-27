@@ -426,7 +426,9 @@
       "title": "Sokoban",
       "content": [
         "Push every crate onto a goal. Arrow keys move the player.",
-        "Crates can be pushed but cannot be pulled, so plan each move."
+        "Crates can be pushed but cannot be pulled, so plan each move.",
+        "After solving a level, press Enter for the next one. On leaving",
+        "the game, Hall of Fame ranks the level reached first, then moves."
       ]
     },
     "2190": {

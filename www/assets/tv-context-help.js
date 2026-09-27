@@ -8,6 +8,9 @@ const {
     TVScroller,
     TVWindow,
     TVPoint,
+    TVEvent,
+    evMouseDown,
+    evCommand,
     wnNoNumber,
     normalizeHelpContext,
     TV_HELP_CONTEXTS,
@@ -74,12 +77,12 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcCalendar]: { title: "Calendar", text: "Browse months and years with the arrow controls. Date calculations use Gregorian leap-year rules." },
     [hcAsciiTable]: { title: "ASCII Table", text: "Shows character codes and glyphs using the configured DOS code page presentation." },
     [hcCalculator]: { title: "Calculator", text: "Use number and operation buttons or the keyboard. Escape is reserved by the calculator and does not close it." },
-    [hcScreenSaver]: { title: "Screen saver", text: "Choose a mode from the system menu. Input stops the saver and restores the previously focused control." },
+    [hcScreenSaver]: { title: "Screen saver", text: "Choose a mode, including DOS Navigator's Projector, from the system menu. Mouse or keyboard input stops the saver and restores the previously focused control." },
     [hcPuzzle]: { title: "Puzzle", text: "Move a tile next to the blank square with the mouse or arrow keys. Solve the shuffled 4 x 4 board in as few moves as possible." },
     [hcTetris]: { title: "Tetris", text: "New starts a game. Use Left/Right to move, Up to rotate, Down to drop faster and P to pause. Pentix toggles the extended pieces." },
     [hcMines]: { title: "Mines", text: "Reveal safe squares and mark suspected mines. The game pauses while its window is inactive." },
     [hcBreakOut]: { title: "BreakOut", text: "Move the paddle, keep the ball in play and clear the bricks. The game timer pauses while another window is active." },
-    [hcSokoban]: { title: "Sokoban", text: "Push every crate onto a goal. Arrow keys move the player; crates can be pushed but not pulled." },
+    [hcSokoban]: { title: "Sokoban", text: "Push every crate onto a goal. Arrow keys move the player; crates can be pushed but not pulled. Enter advances after a solved level. Hall of Fame ranks the level reached first, then total moves." },
     [hcLines]: { title: "Lines", text: "Move coloured balls to form scoring lines. Selecting and moving a ball consumes a turn unless a line is completed." },
     [hcReversi]: { title: "Reversi", text: "Place a disc that brackets one or more opposing discs. The player with the most discs when no move remains wins." },
     [hcLudo]: { title: "Ludo", text: "Roll the die and move a legal piece around the board. Bring all of your pieces home before the other players." },
@@ -91,7 +94,7 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcSystemInformation]: { title: "System Information", text: "Shows local application, browser, display, locale, storage and capability information plus server status and catalog counts. Opening it does not submit these details to statistics." },
 });
 
-const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20260926b";
+const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20260927e";
 let contextHelpBundlePromise = null;
 
 function loadContextHelpBundle() {
@@ -205,7 +208,31 @@ class TVHelpViewer extends TVScroller {
         super(bounds);
         this.bundle = bundle;
         this.content = String(content || "");
+        this.onContentClick = (nativeEvent) => {
+            this.dispatchEvent(new TVEvent(evMouseDown, { infoPtr: this, nativeEvent }));
+        };
         this.setHelpCtx(hcHelpViewer);
+    }
+
+    bindRoot(root) {
+        this.root?.removeEventListener("click", this.onContentClick);
+        super.bindRoot(root);
+        this.root?.addEventListener("click", this.onContentClick);
+        return this;
+    }
+
+    handleEvent(event) {
+        if (event.what !== evMouseDown || event.nativeEvent?.type !== "click") { return; }
+        const link = event.nativeEvent.target?.closest?.(
+            "[data-tv-nav], a[data-letter], [data-tv-topic-tag-key], "
+            + "[data-tv-uhf-link], [data-tv-bundle-topic], [data-tv-topic-alias], "
+            + "[data-tv-source-file], [data-tv-context-help-topic]"
+        );
+        if (!link || !this.root?.contains(link)) { return; }
+        event.nativeEvent.preventDefault();
+        event.what = evCommand;
+        event.command = "help-link";
+        event.infoPtr = link;
     }
 
     draw() {
@@ -231,6 +258,7 @@ class TVHelpViewer extends TVScroller {
     }
 
     destroy() {
+        this.root?.removeEventListener("click", this.onContentClick);
         super.destroy();
         this.viewport = null;
         this.bindRoot(null);
@@ -241,6 +269,13 @@ class TVHelpWindow extends TVWindow {
     constructor(bounds, bundle, title, number = wnNoNumber) {
         super(bounds, title, number);
         this.bundle = bundle;
+        this.sourceFile = bundle?._catalogFile || "";
+        this.currentView = "index";
+        this.currentTopic = null;
+        this.currentLine = null;
+        this.currentTag = null;
+        this.outline = null;
+        this.onLink = null;
         this.viewer = this.initViewer(this.getExtent(), bundle);
         this.insert(this.viewer);
         this.setHelpCtx(hcHelpViewer);
@@ -254,35 +289,21 @@ class TVHelpWindow extends TVWindow {
         this.viewer.setContent(content);
     }
 
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && event.command === "help-link" && this.onLink) {
+            this.onLink(event.infoPtr, event.nativeEvent);
+            this.clearEvent(event);
+        }
+    }
+
     destroy() {
         this.viewer.destroy();
         this.bindRoot(null);
     }
 }
 
-class TVContextHelpViewer extends TVHelpViewer {
-    constructor(bounds, bundle) {
-        super(bounds, bundle);
-        this.onTopicClick = (event) => {
-            const link = event.target?.closest?.("[data-tv-context-help-topic]");
-            if (!link || !this.root?.contains(link)) { return; }
-            event.preventDefault();
-            this.owner?.showTopic(link.dataset.tvContextHelpTopic, { remember: true });
-        };
-    }
-
-    bindRoot(root) {
-        this.root?.removeEventListener("click", this.onTopicClick);
-        super.bindRoot(root);
-        this.root?.addEventListener("click", this.onTopicClick);
-        return this;
-    }
-
-    destroy() {
-        this.root?.removeEventListener("click", this.onTopicClick);
-        super.destroy();
-    }
-}
+class TVContextHelpViewer extends TVHelpViewer {}
 
 class TVContextHelpWindow extends TVHelpWindow {
     static viewName = "context-help";
@@ -300,6 +321,15 @@ class TVContextHelpWindow extends TVHelpWindow {
 
     initViewer(bounds, bundle) {
         return new TVContextHelpViewer(bounds, bundle);
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && event.command === "help-link"
+            && event.infoPtr?.hasAttribute("data-tv-context-help-topic")) {
+            this.showTopic(event.infoPtr.dataset.tvContextHelpTopic, { remember: true });
+            this.clearEvent(event);
+        }
     }
 
     fallbackTopic(helpCtx) {

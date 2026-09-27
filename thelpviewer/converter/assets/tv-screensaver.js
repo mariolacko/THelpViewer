@@ -2,13 +2,13 @@
 (function () {
 "use strict";
 const TV = window.THelpViewerTV = window.THelpViewerTV || {};
-const { escapeHtml, displayCp437Char } = TV;
+const { TVView, TVRect, TVEvent, evMouseDown, evMouseMove, evKeyDown, escapeHtml } = TV;
 
 const SAVER_FPS = 15;
 
 // ── Base screen saver ───────────────────────────────────────────────
 
-class TVScreenSaver {
+class TVScreenSaver extends TVView {
     static _overlay = null;
     static _canvas = null;
     static _active = null;
@@ -22,13 +22,19 @@ class TVScreenSaver {
         const overlay = document.createElement("div");
         overlay.className = "tv-saver-overlay";
         overlay.hidden = true;
-        overlay.setAttribute("aria-label", "Screen saver — click or press any key to dismiss");
+        overlay.setAttribute("aria-label", "Screen saver — move the mouse, click or press any key to dismiss");
         const canvas = document.createElement("div");
         canvas.className = "tv-saver-canvas";
         overlay.appendChild(canvas);
         document.body.appendChild(overlay);
-        overlay.addEventListener("click", () => TVScreenSaver.stop());
-        overlay.addEventListener("keydown", () => TVScreenSaver.stop());
+        const forward = (what) => (nativeEvent) => {
+            TVScreenSaver._active?.dispatchEvent(new TVEvent(what, { nativeEvent }));
+        };
+        overlay.addEventListener("click", forward(evMouseDown));
+        overlay.addEventListener("mousedown", forward(evMouseDown));
+        overlay.addEventListener("mousemove", forward(evMouseMove));
+        overlay.addEventListener("touchstart", forward(evMouseDown));
+        overlay.addEventListener("keydown", forward(evKeyDown));
         TVScreenSaver._overlay = overlay;
         TVScreenSaver._canvas = canvas;
     }
@@ -71,7 +77,9 @@ class TVScreenSaver {
     }
 
     constructor() {
+        super(new TVRect());
         TVScreenSaver._ensureOverlay();
+        this.eventMask |= evMouseMove;
         this.overlay = TVScreenSaver._overlay;
         this.canvas = TVScreenSaver._canvas;
         this.running = false;
@@ -83,7 +91,7 @@ class TVScreenSaver {
             if (!this.running) { return; }
             this._measure();
             this.init();
-            this.tick();
+            this.update();
         };
     }
 
@@ -91,6 +99,7 @@ class TVScreenSaver {
         const previousFocus = TVScreenSaver._active?.previousFocus || document.activeElement;
         TVScreenSaver.stop();
         TVScreenSaver._active = this;
+        this.bindRoot(this.overlay);
         this.previousFocus = previousFocus instanceof HTMLElement ? previousFocus : null;
         this.overlay.hidden = false;
         this.overlay.tabIndex = 0;
@@ -98,9 +107,10 @@ class TVScreenSaver {
         this.running = true;
         this._measure();
         this.init();
+        this.update();
         window.addEventListener("resize", this._onResize, { passive: true });
         this.timerId = setInterval(() => {
-            if (this.running) { this.tick(); }
+            if (this.running) { this.update(); }
         }, 1000 / SAVER_FPS);
     }
 
@@ -113,6 +123,8 @@ class TVScreenSaver {
         }
         window.removeEventListener("resize", this._onResize);
         this.canvas.textContent = "";
+        this.overlay.style.background = "";
+        this.bindRoot(null);
         if (TVScreenSaver._active === this) {
             TVScreenSaver._active = null;
         }
@@ -125,12 +137,23 @@ class TVScreenSaver {
 
     _measure() {
         const cell = TV.measureCells ? TV.measureCells() : { width: 9, height: 16 };
+        this.cellWidth = cell.width;
+        this.cellHeight = cell.height;
         this.cols = Math.max(1, Math.floor(this.overlay.clientWidth / cell.width));
         this.rows = Math.max(1, Math.floor(this.overlay.clientHeight / cell.height));
     }
 
+    handleEvent(event) {
+        if (event.what === evMouseDown || event.what === evMouseMove || event.what === evKeyDown) {
+            event.nativeEvent?.preventDefault?.();
+            event.nativeEvent?.stopPropagation?.();
+            this.stop();
+            this.clearEvent(event);
+        }
+    }
+
     init() { }
-    tick() { }
+    update() { }
 }
 
 // ── Stars ────────────────────────────────────────────────────────────
@@ -157,7 +180,7 @@ class TVScreenSaverStars extends TVScreenSaver {
         };
     }
 
-    tick() {
+    update() {
         for (const s of this.stars) {
             s.y += s.speed;
             if (s.y >= this.rows) {
@@ -205,7 +228,7 @@ class TVScreenSaverBounce extends TVScreenSaver {
         this.color = 0;
     }
 
-    tick() {
+    update() {
         this.x += this.dx;
         this.y += this.dy;
         const maxX = this.cols - this.text.length;
@@ -244,7 +267,7 @@ const BIG_DIGITS = [
 const BIG_COLON = ["   ", " · ", " · ", "   "];
 
 class TVScreenSaverClock extends TVScreenSaver {
-    tick() {
+    update() {
         const now = new Date();
         const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
             .map((v) => String(v).padStart(2, "0")).join(":");
@@ -313,7 +336,7 @@ class TVScreenSaverMatrix extends TVScreenSaver {
         };
     }
 
-    tick() {
+    update() {
         for (const s of this.streams) {
             s.accum += s.speed;
             while (s.accum >= 1) {
@@ -379,6 +402,73 @@ class TVScreenSaverMatrix extends TVScreenSaver {
     }
 }
 
+// ── Projector ────────────────────────────────────────────────────────
+// Adapted from DOS Navigator 1.51's TProjector concept (RIT Research Labs).
+// A transparent canvas aperture reveals the live page in place of DOS's saved
+// text-mode screen buffer.
+
+class TVScreenSaverProjector extends TVScreenSaver {
+    init() {
+        this.canvas.textContent = "";
+        this.overlay.style.background = "transparent";
+        this.surface = document.createElement("canvas");
+        this.surface.width = this.overlay.clientWidth;
+        this.surface.height = this.overlay.clientHeight;
+        this.surface.style.width = "100%";
+        this.surface.style.height = "100%";
+        this.canvas.appendChild(this.surface);
+        this.context = this.surface.getContext("2d");
+        this.centerX = Math.floor(this.cols / 2);
+        this.centerY = Math.floor(this.rows / 2);
+        this.dx = 0;
+        this.dy = 0;
+        this.stepsRemaining = 0;
+        this.frame = 0;
+        this.draw();
+    }
+
+    update() {
+        if (++this.frame % 2 !== 0) { return; }
+        if (this.stepsRemaining <= 0) {
+            this.dx = Math.floor(Math.random() * 5) - 2;
+            this.dy = Math.floor(Math.random() * 5) - 2;
+            if (this.dx === 0 && this.dy === 0) { this.dx = 1; }
+            this.stepsRemaining = 5 + Math.floor(Math.random() * 12);
+        }
+        const nextX = this.centerX + this.dx;
+        const nextY = this.centerY + this.dy;
+        if (nextX < 0 || nextX >= this.cols) { this.dx = -this.dx; }
+        if (nextY < 0 || nextY >= this.rows) { this.dy = -this.dy; }
+        this.centerX = Math.max(0, Math.min(this.cols - 1, this.centerX + this.dx));
+        this.centerY = Math.max(0, Math.min(this.rows - 1, this.centerY + this.dy));
+        if (nextX !== this.centerX || nextY !== this.centerY) { this.stepsRemaining = 0; }
+        else { this.stepsRemaining--; }
+        this.draw();
+    }
+
+    draw() {
+        if (!this.context) { return; }
+        const ctx = this.context;
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, this.surface.width, this.surface.height);
+        const edgeDistance = Math.max(
+            Math.abs(this.centerX - this.cols / 2) / Math.max(1, this.cols / 2),
+            Math.abs(this.centerY - this.rows / 2) / Math.max(1, this.rows / 2),
+        );
+        const radius = Math.max(1, Math.min(4, Math.round(1 + 3 * edgeDistance)));
+        const aspect = Math.max(1, Math.round(this.cellHeight / this.cellWidth));
+        for (let y = -radius; y <= radius; y++) {
+            const halfWidth = Math.ceil(Math.sqrt(radius * radius - y * y) * aspect);
+            ctx.clearRect(
+                (this.centerX - halfWidth) * this.cellWidth,
+                (this.centerY + y) * this.cellHeight,
+                (2 * halfWidth + 1) * this.cellWidth,
+                this.cellHeight,
+            );
+        }
+    }
+}
+
 // ── Registry ─────────────────────────────────────────────────────────
 
 const SAVER_MODES = {
@@ -386,6 +476,7 @@ const SAVER_MODES = {
     bounce: TVScreenSaverBounce,
     clock: TVScreenSaverClock,
     matrix: TVScreenSaverMatrix,
+    projector: TVScreenSaverProjector,
 };
 
 TVScreenSaver.modes = SAVER_MODES;
@@ -396,5 +487,6 @@ Object.assign(TV, {
     TVScreenSaverBounce,
     TVScreenSaverClock,
     TVScreenSaverMatrix,
+    TVScreenSaverProjector,
 });
 })();

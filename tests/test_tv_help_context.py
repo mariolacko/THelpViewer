@@ -88,8 +88,11 @@ def test_context_help_is_a_complete_uhf_bundle():
     assert 'const CONTEXT_HELP_BUNDLE_FILE = "../assets/tv-context-help.json"' in app
     assert "loadBundle(CONTEXT_HELP_BUNDLE_FILE)" in app
     assert "this.windowManager.showTopic(bundle, helpCtx)" in app
-    assert 'new TVMenuItem(renderHotkeyMarkup("~I~ndex"), "context-help-index")' in app
-    assert 'dialog: "about"' not in app.split("const sysPopupItems = [", 1)[1].split("];", 1)[0]
+    assert 'new TVMenuItem("~I~ndex", "context-help-index")' in app
+    system_menu = app.split("const systemItems = [", 1)[1].split("];", 1)[0]
+    help_menu = app.split("const helpItems = [", 1)[1].split("];", 1)[0]
+    assert 'dialogItem("~A~bout", "about")' not in system_menu
+    assert 'dialogItem("~A~bout", "about")' in help_menu
     assert 'this._registerDialog("contexthelp"' not in app
 
 

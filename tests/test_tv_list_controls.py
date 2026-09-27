@@ -81,7 +81,14 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "attrs" not in static_text_signature
     assert "tag" not in static_text_signature
     assert "buttonKind" not in source
-    assert '? "tv-dialog-button tv-calc-button"' in source
+    assert 'baseClass: "tv-dialog-button"' in source
+    for specialized_command in (
+        "calc-key", "ascii-code", "calendar-prev", "color-index", "midi-track",
+        "search-index", "mines-face", "ludo-player-mode", "ludo-piece",
+        "mastermind-color", "file-open-scroll-left",
+    ):
+        assert f'"{specialized_command}"' not in button_class
+    assert 'class TVCalculatorButton extends TVButton' in Path("www/assets/tv-dialogs.js").read_text(encoding="utf-8")
     assert "this.presentation =" not in group_signature
     assert "this.viewName =" not in group_signature
     assert 'static _roleClassNames(role = "")' in source
@@ -248,12 +255,12 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
         "    height: 6em;",
     ):
         assert redundant_size not in css
-    assert "Math.max(0, bounds.width - 2)" in dialogs
+    assert "Math.max(0, bounds.width - 1)" in dialogs
     assert "Math.max(0, bounds.height - 2)" in dialogs
     assert "new TVAsciiTable(new TVRect())" in dialogs
     assert "this.insertAll([chart, report])" in dialogs
     games = Path("www/assets/tv-games.js").read_text(encoding="utf-8")
-    assert 'new TVButton(new TVRect(0, player + 1, 22, player + 2), name, "ludo-player-mode"' in games
+    assert 'new TVLudoPlayerButton(new TVRect(0, player + 1, 22, player + 2), name, "ludo-player-mode"' in games
     assert 'class="tv-snake-cell tv-snake-body"' not in games
     assert ".tv-snake-body {" not in css
     input_rule_start = css.index("\n.tv-input-line {")
@@ -291,6 +298,7 @@ class FakeElement {
         };
     }
     addEventListener(type, handler) { this.listeners.set(type, handler); }
+    removeEventListener(type) { this.listeners.delete(type); }
     setAttribute(name, value) { this.attributes.set(name, String(value)); }
     getAttribute(name) { return this.attributes.get(name) || null; }
     appendChild(child) { this.children.push(child); }
@@ -302,10 +310,22 @@ class FakeElement {
     getBoundingClientRect() { return { top: 0 }; }
 }
 
+const evNothing = 0;
+const evMouseDown = 1;
+const evKeyDown = 16;
+class TVEvent {
+    constructor(what, { infoPtr = null, nativeEvent = null } = {}) {
+        this.what = what;
+        this.infoPtr = infoPtr;
+        this.nativeEvent = nativeEvent;
+    }
+}
     class TVView {
         constructor() { this.root = null; }
         bindRoot(root) { this.root = root; return this; }
         _query(selector) { return this.root ? this.root.querySelector(selector) : null; }
+        dispatchEvent(event) { this.handleEvent(event); return event; }
+        clearEvent(event) { event.what = evNothing; }
 }
 
 class TVRect {}
@@ -392,8 +412,9 @@ list.bind({
     onActivate: (_item, index) => activated.push(index),
 });
 
-function event(key, target) {
+function event(type, target, key = "") {
     return {
+        type,
         key,
         target,
         prevented: false,
@@ -404,7 +425,7 @@ function event(key, target) {
 }
 
 const keydown = viewport.listeners.get("keydown");
-const pageDown = event("PageDown", items[1]);
+const pageDown = event("keydown", items[1], "PageDown");
 keydown(pageDown);
 if (list.selectedIndex !== 3 || global.focused !== items[3] || !pageDown.prevented || !pageDown.stopped) {
     throw new Error("PageDown did not move selection and roving focus");
@@ -422,14 +443,14 @@ if (list.scrollbarWidget.active || scrollbar.getAttribute("aria-disabled") !== "
 }
 list.setActive(true);
 
-keydown(event("Enter", items[3]));
+keydown(event("keydown", items[3], "Enter"));
 if (activated.join(",") !== "3") { throw new Error("Enter did not activate the selected row"); }
 
-viewport.listeners.get("click")({ target: items[2] });
+viewport.listeners.get("click")(event("click", items[2]));
 if (list.selectedIndex !== 2 || activated.length !== 1 || selected.at(-1) !== 2) {
     throw new Error("single click activated instead of selecting");
 }
-viewport.listeners.get("dblclick")({ target: items[2] });
+viewport.listeners.get("dblclick")(event("dblclick", items[2]));
 if (activated.join(",") !== "3,2") { throw new Error("double click did not activate"); }
 """
     result = subprocess.run(
@@ -459,6 +480,37 @@ def test_label_and_search_use_native_association_and_separate_activation():
     assert 'event.command === "search-ok"' in search
     assert 'this.input.addEventListener("input"' not in search
     assert 'document.addEventListener("keydown"' not in search
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for the picture validator test")
+def test_registration_token_picture_validator_formats_without_changing_old_tokens():
+    script = r"""
+const fs = require('node:fs');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+global.TVRect = class {};
+global.TVView = class { constructor() { this.root = null; } };
+global.evBroadcast = 0x0200;
+const start = source.indexOf('class TVPXPictureValidator');
+const end = source.indexOf('\nclass TVGroup extends', start);
+eval(source.slice(start, end)
+    + '\nglobalThis.Picture = TVPXPictureValidator; globalThis.Input = TVInputLine;');
+const input = new Input(new TVRect(), 128).setValidator(
+    new Picture('!!!!!-!!!!!-!!!!!-!!!!!-!!!!!', true));
+input.setData('abcdefghjklmnpqrstvwxyz234');
+if (input.getData() !== 'ABCDE-FGHJK-LMNPQ-RSTVW-XYZ23') {
+    throw new Error('Token picture formatting failed: ' + input.getData());
+}
+if (!input.valid()) { throw new Error('Formatted token was rejected'); }
+input.root = { value: 'abcdeF' };
+input.handleEvent({ what: evBroadcast, infoPtr: input, nativeEvent: { type: 'input' } });
+if (input.root.value !== 'ABCDE-F') { throw new Error('Typing did not fill the separator'); }
+input.root = null;
+const oldToken = 'legacy-enrollment-token_with-43-characters-123';
+input.setData(oldToken);
+if (input.valid()) { throw new Error('Legacy token format was accepted'); }
+"""
+    result = subprocess.run([NODE, "-e", script, str(CORE_PATHS[0])], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the choice control test")
