@@ -18,8 +18,9 @@
 
 ## v2.0
 
-- [ ] Web-triggered downloader from menu (SSE progress, DOS Navigator-style dual progress bar)
-- [ ] Web-triggered converter/rebuild from menu (SSE progress)
+- [ ] Extract CLI-independent downloader/converter job services with progress callbacks, cancellation, bounded working directories, and atomic publish; keep CLI commands as thin adapters
+- [ ] Web-triggered downloader from an authenticated menu/API (SSE progress, DOS Navigator-style dual progress bar)
+- [ ] Web-triggered converter/rebuild from an authenticated menu/API (SSE progress)
 - [ ] Python data model classes (THelpTopic, TParagraph, TCrossRef, THelpIndex)
 - [ ] Refactor readers/writers to use data model classes
 - [ ] Web API for help file browsing and editing

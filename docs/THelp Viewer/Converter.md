@@ -1,6 +1,6 @@
 # Converter
 
-> Updated: 2026-06-14
+> Updated: 2026-09-29
 
 Help file converter — reads binary and source help formats, exports to HTML, JSON bundles or Markdown.
 
@@ -29,7 +29,7 @@ python -m thelpviewer.converter TURBO.TPH output/ --dump-json
 
 | Option | Description |
 |--------|-------------|
-| `input` | Input `.hlp`/`.tph`/`.tch`/`*.t?h`/`.hlx`/`.hl6`/`.txt` file or directory tree |
+| `input` | Supported help file or directory tree, including HelpPC `.TXT` and FreeDOS `HHSTNDRD.ZIP` |
 | `output_dir` | Target directory for exported files |
 | `--encoding` | Display encoding: `auto`, `cp437`, `cp852`, `latin1`, `latin2`, `kamenicky` (default: `auto`) |
 | `--clean` | Delete target directory before exporting a directory tree |
@@ -54,23 +54,30 @@ deterministic order, including the matcher/detector function and reader class.
 
 ### 1. Format Detection
 
-When the converter loads a file, `exporter.py` builds its format registry from
-the manifest and then determines the format using file extension and
-magic-byte detection:
+When the converter loads a file, `exporter.py` builds its ordered format
+registry from the manifest. Handlers combine extension, magic-byte and/or
+structural checks. Representative checks are:
 
-| Priority | Check | Format |
-|----------|-------|--------|
-| 1 | Extension `.txt` + contains `.topic` | FBHF source text |
-| 2 | Extension `.hl6` | HLX source text (HL6 dialect) |
-| 3 | Extension `.hlx` + contains `.topic` | FBHF source text |
-| 4 | Extension `.hlx` | HLX source text |
-| 5 | First bytes = `$*$* &&&&$*$` (in first 200 bytes) | Borland THELP binary |
-| 6 | First 4 bytes = `FBHF` | TurboVision FBHF binary |
-| 7 | First bytes = `\x1a(c) Software602 HelpSystem` | M602 binary |
-| 8 | THELP signature in `.hlp`/`.tph`/`.tch`/`*.t?h` files | Borland THELP binary |
+| Check | Format |
+|-------|--------|
+| `.txt` with `.topic` directives | FBHF source text |
+| `.hl6` or recognized `.hlx` structure | HLX source or binary |
+| `.txt` with `@` title and `:` topic keys | HelpPC text database |
+| `HHSTNDRD.ZIP` containing `help/index.htm` | FreeDOS HTML Help |
+| `LN` + version word `0x0002` | Microsoft QuickHelp |
+| `NG`/`EH` header or `.ng` | Norton Guide |
+| `FBHF` magic | TurboVision FBHF binary |
+| THELP signature | Borland THELP binary |
+| `\x1a(c) Software602 HelpSystem` | M602 binary |
 
 Detection is deterministic — each file triggers exactly one reader.
 Unknown formats raise `ValueError`.
+
+The HelpPC matcher requires an `@` title followed by `:` topic keys, so
+unrelated `.TXT` files are not treated as HelpPC. The FreeDOS matcher requires
+the `HHSTNDRD.ZIP` filename and `help/index.htm` archive member. See the
+[HelpPC](../Formats/HelpPC%202.10.md) and
+[FreeDOS HTML Help](../Formats/FreeDOS%20HTML%20Help.md) format notes.
 
 ### 2. Data Model (`base.py`)
 
@@ -162,6 +169,8 @@ characters like ☺, ♥, ♦, ♣, ♠, •, ◘, etc.).
 | `m602.py` | Software602 M602 HelpSystem | `\x1a(c) Software602 HelpSystem` | Binary (XOR $FA encrypted) |
 | `hlx.py` | HLX/HL6 decompiled source text | `;SCREEN`/`;PAGE` directives | Text |
 | `fbhf.py` | TVHC-compatible `.txt` source | `.topic` directives | Text |
+| `helppc.py` | HelpPC 2.10 text databases | `@` title and `:` topic keys | Text |
+| `freedos_html.py` | FreeDOS HTML Help | `HHSTNDRD.ZIP` with `help/index.htm` | ZIP of HTML text |
 | `game_cheater.py` + `game_cheater_bundle.py` | Game-Cheater 9.02 Pc-Fand database, split into cheats, companies, internet addresses, help and information bundles | `CHEATDBS.000`, 111-byte records | Binary |
 | `scorpion_dat_reader.py` | Scorpion's Cheater DAT 15-23 | Allegro DAT signature | Binary |
 | `scorpion_legacy_reader.py` + `_v1x/_v3x/_v4x` | Scorpion's Cheater legacy families 1-14 | version-aware path + extension hints | Binary |
@@ -189,6 +198,14 @@ Each reader implements `read_bytes(data: bytes) → HelpDocument`.
 Tree exports preserve subdirectory structure from `sources/`. Bundle tree
 exports also generate a `helps/catalog.json` that the SPA viewer loads at
 startup.
+
+The Help Files menu uses `product_name` as its family level and `version` as
+the release level. A product's version-free `menu_label` in
+`help-database.json` can be shared across releases even when their download
+labels and physical source directories differ. For example, QuickBASIC 4.5
+and QuickBASIC Extended 7.1 both appear under `Microsoft QuickBASIC`, then
+under separate `4.5` and `7.1` entries. The catalog `file` path stays tied to
+the existing bundle location, not to the menu labels.
 
 Known files are deduplicated by CRC32. Product-level conversion rules cover
 corpora where a release consists of several related files without stable CRCs.

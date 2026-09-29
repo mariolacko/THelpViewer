@@ -1,6 +1,6 @@
 # Help File Format Documentation
 
-> Created: 2026-03-29 · Last updated: 2026-05-17
+> Created: 2026-03-29 · Last updated: 2026-09-29
 
 Index of supported help file binary and source formats.
 
@@ -19,6 +19,8 @@ Index of supported help file binary and source formats.
 ## Source Text Format
 
 - Help Source Text Format: [Formats/Help Source Text Format.md](Formats/Help%20Source%20Text%20Format.md) — HLX/TXT directive-based source for compilers and decompilers
+- HelpPC 2.10: [Formats/HelpPC 2.10.md](Formats/HelpPC%202.10.md) — keyed CP437 text databases and tilde links
+- FreeDOS HTML Help: [Formats/FreeDOS HTML Help.md](Formats/FreeDOS%20HTML%20Help.md) — HTML pages in `HHSTNDRD.ZIP`
 
 ## Experimental
 

@@ -2,7 +2,55 @@
 
 ## [Unreleased]
 
+### TVision
+- Kept the completed global-index gauge visible briefly at `100%`, so fast
+  rebuilds show a solid `█` bar instead of only the initial shaded track.
+- Changed the shared `TVBarGauge` to fill a shaded `░` track with solid `█`
+  cells, including the global-index and HELP-loading dialogs. MIDI playback
+  now uses the same TVision gauge instead of a separate CSS progress meter.
+
+### Downloader
+- Limited HelpPC archive extraction to the six converted `.TXT` databases;
+  its original `.DOC` and `.NDX` are no longer copied into `sources/`.
+- Removed the invented `Candidates/` layer: DOS reference sources and HELP
+  bundles now live directly under their product names. Renamed the opt-in
+  build group to `dos-reference` and kept group selection separate from paths.
+- Collected the QuickBASIC 4.5 Advisor and runtime-error `.HLP` files from
+  their original floppies, restoring the targets of 519 cross-file links in
+  `QB45QCK.HLP`; registered both files by CRC32.
+- Added verified Archive.org search queries for the MS-DOS 6.22 and
+  QuickBASIC 4.5 products. Search results use the same exact HELP-member
+  selection and product directory as pinned downloads, avoiding
+  duplicate or unintended default-build output.
+- Added `./thelp.sh build --with-dos-reference` to build the default HELP groups
+  and the four opt-in DOS reference products in one pass without discarding
+  unrelated opt-in bundles.
+- Added an opt-in `dos-reference` build group that converts the four downloaded
+  DOS reference products to UHF bundles and registers them in Help Files.
+  Corrected their CRC database product associations; the default public build
+  still excludes this group.
+- Added pinned downloads for MS-DOS 6.22 command help, QuickBASIC 4.5,
+  HelpPC 2.10, and English FreeDOS HTML Help. The downloader selects the exact
+  original files from archives under `sources/<Product>/`, outside the default
+  public build pending format and redistribution review.
+- Expanded Microsoft KWAJ/LZH single-file payloads from DOS installation disks,
+  so `HELP.HL_` is collected as a readable `HELP.HLP`.
+
 ### Formats
+- Matched HelpPC topic keys and `~key~` links after collapsing repeated
+  spaces, as specified by the original `HELPPC.DOC`, without changing their
+  displayed text.
+- Exported HelpPC's six original `.TXT` databases as six individually named
+  bundles, preserving links between them. Recovered QuickHelp links with a
+  misspelled source filename only when a sibling context matches uniquely.
+- Identified QuickC 2.50 `QA.HLP`/`taw080554` as an intact two-context
+  search-order stub and gave its catalog entry a descriptive title.
+- Added HelpPC 2.10 source conversion: six CP437 text databases export
+  1,006 topics with cross-database links, index and Contents.
+- Added a FreeDOS HTML Help importer for `HHSTNDRD.ZIP`, converting its 354
+  pages and relative links into one UHF bundle. Registered both formats and
+  the downloaded products in the CRC32 help database, while retaining their
+  exclusion from the default public build pending license review.
 - Preserved Microsoft Advisor's qualified QuickHelp links such as
   `OS2.h.overview`, `WIN.h.contents`, and `LAN.h.contents` as real external
   HELP links; optional databases that are not installed are no longer rendered
@@ -34,6 +82,16 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Grouped QuickBASIC 4.5 and Extended 7.1 under one Microsoft QuickBASIC
+  Help Files menu, with separate version branches and unchanged bundle URLs.
+  Archive.org downloads no longer append a release number already present in
+  the product directory name.
+- Opened Markdown Docs windows wide enough for 80 text/code columns after
+  their frame and padding, and rendered soft-wrapped source lines as one paragraph
+  instead of orphaning the last word on a separate line.
+- Added crawlable HELP/Docs links and a canonical URL to the server-rendered
+  homepage, included it in the sitemap index, and restored the public preview
+  image and favicon URLs used by search crawlers.
 - Closing a Yes/No `TVMessageBox` with [ ] or Escape now returns No, never the
   default Yes action; dismissing the registration-token deletion prompt keeps
   the token valid.

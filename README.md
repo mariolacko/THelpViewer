@@ -21,6 +21,8 @@ interactive web application with authentic DOS look and feel.
 | **Borland TDH/TFH runtime help** | Turbo Debugger 1.0/2.x, Turbo Profiler | `.TDH`, `.TFH` |
 | **Microsoft BW03** | Older CodeView DOS / OS2 help (`CV.HLP`, `CVP.HLP`) | `.HLP` |
 | **Microsoft QuickHelp (LN)** | QuickBASIC, QuickC, MASM 6, PWB, LINK | `.HLP` |
+| **HelpPC 2.10** | Six linked DOS text databases | `.TXT` |
+| **FreeDOS HTML Help** | HHSTNDRD HTML page collection | `HHSTNDRD.ZIP` |
 | **Norton Guide** | Norton Guides and Expert Help databases | `.NG` |
 | **TurboVision FBHF** | Turbo Vision apps (TP6, BP7), TVHC compiler | `.HLP` |
 | **Software602 M602** | M602 Manager (XOR $FA encrypted) | `.HLP` |
@@ -49,6 +51,9 @@ TDH 2.x, and TFH sample families.
 # 3. Serve locally through FastAPI
 ./thelp.sh serve start
 ```
+
+To include the four locally downloaded DOS reference products, use
+`./thelp.sh build --with-dos-reference` in place of the regular build command.
 
 Useful local server commands:
 
@@ -200,7 +205,11 @@ each other.
    Scorpions Cheater group remains opt-in and can be generated later with
    `./thelp.sh build group=scorpion`. The same grouped build path also works for
    other families such as `group=borland`, `group=microsoft`,
-   `group=norton-guides`, or `group=all`.
+   `group=norton-guides`, or `group=all`. The `dos-reference` group is opt-in;
+   `./thelp.sh build --with-dos-reference` builds it together with the default
+   groups, retains unrelated opt-in bundles, and adds eleven DOS reference
+   bundles from four products to the local Help Files catalog.
+   Review their redistribution terms before publishing the generated files.
 3. Each help file is parsed and rendered into a UHF 2.0 JSON payload containing
    structured topics, index entries, and metadata
 4. The JSON payload is gzip-compressed into a `.json.gz` bundle for web transport
@@ -298,6 +307,15 @@ without the server retain local search but cannot use the global API.
 
 ### Search-engine pages
 
+`thelpviewer/server/app.py` assembles the FastAPI app and shared services.
+`thelpviewer/server/public_pages.py` supplies the public-page `APIRouter` for
+viewer previews, `robots.txt` and sitemaps; the full-text index itself remains
+in `search_index.py`. These are separate from the JSON global-search API.
+
+The server-rendered homepage links to each public HELP-file overview and Doc;
+the TVision interface replaces that catalog after loading. The sitemap index
+also includes `/sitemaps/site.xml` for the homepage.
+
 The server exposes an overview of each HELP file at `/?file=<bundle-path>`
 with links to its non-empty topics. Each topic is server-rendered at
 `/?file=<bundle-path>&topic=<context>`. The page starts the
@@ -316,6 +334,11 @@ viewer JavaScript or understanding `#tv=...` fragments. Set
 `THELP_PUBLIC_BASE_URL=https://thelp.zdrojak.dev` on the public deployment so
 canonical and sitemap URLs use the HTTPS hostname. A sitemap advertises pages;
 it does not guarantee indexing by search engines.
+
+In Google Search Console, submit `sitemap.xml` under the
+`https://thelp.zdrojak.dev/` property and check its fetch/processing status.
+Requesting indexing of `/` alone does not submit the sitemap or request every
+HELP topic. Google may need days or weeks to crawl and select individual pages.
 
 `docker-compose.yml` already passes `THELP_PUBLIC_BASE_URL` through. On the
 public host, put `THELP_PUBLIC_BASE_URL=https://thelp.zdrojak.dev` in a `.env`
@@ -363,12 +386,14 @@ packages. If the package is missing, Passkey endpoints return JSON HTTP 503.
 
 ### Format Specifications
 
-- [Format index](docs/Formats.md) — overview and comparison of all binary formats
+- [Format index](docs/FORMATS.md) — overview and comparison of all binary formats
 - [Borland THELP](docs/Formats/Borland%20THELP.md) — TP4–7, Turbo C, TASM, Sidekick, Sprint
 - [Borland TDH/TFH runtime help](docs/Formats/Borland%20TDH.md) — Turbo Debugger 1.0/2.x, Turbo Profiler
 - [TurboVision FBHF](docs/Formats/TurboVision%20FBHF.md) — TP6, BP7 THelpFile (TVHC compiler)
 - [Software602](docs/Formats/Software602.md) — M602, Text602, Calc602 help families
 - [Help source text format](docs/Formats/Help%20Source%20Text%20Format.md) — HLX/TXT decompiled-source specification
+- [HelpPC 2.10](docs/Formats/HelpPC%202.10.md) — keyed DOS text databases
+- [FreeDOS HTML Help](docs/Formats/FreeDOS%20HTML%20Help.md) — HHSTNDRD HTML archive
 
 ### Viewer & Tools
 

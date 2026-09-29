@@ -163,7 +163,9 @@ Core widget hierarchy and infrastructure.
   Navigator `GAUGE.PAS`. They receive `cmUpdateGauge`, `cmResetGauge` and
   `cmAddGauge` as `evBroadcast` events. `TVGroup.broadcast()` distributes
   these commands through owned groups, so dialogs do not manipulate gauge DOM
-  or duplicate progress rendering.
+  or duplicate progress rendering. `TVBarGauge` draws a fixed-width `░` track
+  that fills with solid `█` cells, and is shared by global indexing, HELP
+  loading and MIDI playback.
 - **TVMenuItem** / **TVStatusItem** — Command descriptors drawn by
   `TVMenuView`/`TVMenuBox` and the status line, matching Turbo Vision's
   separation between `TButton`, `TMenuItem` and `TStatusItem`.
@@ -606,8 +608,8 @@ step. `/docs/<path>` remains the Markdown source loaded by the document window.
   optional external-source group.
 - The external-source area is a normal `TVGroup`. `TVMidiDisplay` remains a
   concrete group because it owns and updates the track, time, title and status
-  views; `TVMidiMeter` remains because it owns progress state. Neither exists
-  merely to pass a CSS role through the generic renderer.
+  views. Playback progress uses the shared `TVBarGauge`, not a separate
+  `TVMidiMeter` with CSS-drawn fill.
 - Opens at 44×10 cells: only the display, meter and a single row of normal
   two-line `TVButton` controls are visible, with one empty character row on
   each side of the meter. This follows the compact

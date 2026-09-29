@@ -1,6 +1,6 @@
 # Microsoft QuickHelp LN Format
 
-> Created: 2026-04-07 · Last updated: 2026-09-19
+> Created: 2026-04-07 · Last updated: 2026-09-29
 
 Used by: Microsoft QuickBasic 4.5, QuickC 2.0, MASM 6, PWB, LINK, later CodeView bundles, and compatible products.
 File extension: `.HLP` (LN binary database).
@@ -221,6 +221,13 @@ actions (§9). Cross-file references are resolved against sibling QuickHelp
 and the Microsoft Advisor variant `DATABASE.context` (for example
 `OS2.h.overview`) are preserved as external links even if that optional file
 or context is not currently available.
+If an explicit filename is absent but its context exists in exactly one
+sibling database, the converter uses that database. This repairs the original
+`QB45QCK.HLP` reference to `AB45ADVR.HLP!.erasex`: the actual file on the
+Advisor disk is `QB45ADVR.HLP`. Ambiguous contexts retain their original
+external target rather than guessing. A duplicated qualifier such as
+`qb45advr.hlp!qb45advr.hlp!.vupri` is reduced to its actual context only
+when both filenames agree.
 
 ---
 
@@ -307,6 +314,13 @@ working automatically when a matching bundle is later added to the catalog.
 A bare unresolved alias is searched across sibling `.HLP` files and becomes an
 external link only when exactly one file matches. Ambiguous bare aliases stay
 plain because the source format does not identify which database was intended.
+
+The QuickBASIC 4.5 distribution has `QB45QCK.HLP` on the Program disk,
+`QB45ADVR.HLP` on the Advisor disk, and `QB45ENER.HLP` on a Utilities disk.
+Converting only the first leaves hundreds of valid cross-file links without
+their targets. The tiny QuickC 2.50 `QA.HLP` (445 bytes, two contexts,
+including `taw080554`) explicitly says it is a null search-order context;
+it is an original placeholder, not a damaged help database.
 
 At display time, duplicate filenames such as `CV.HLP`, `PWB.HLP`, `LINK.HLP`,
 or `UTILERR.HLP` are resolved in this order:

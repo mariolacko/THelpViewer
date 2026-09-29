@@ -1,15 +1,15 @@
 # Downloader
 
-> Updated: 2026-06-14
+> Updated: 2026-09-29
 
 Automated downloader for DOS help-file sources.
 
 The downloader is split into three layers:
 
 1. `thelpviewer/help-database.json` defines **what** logical product families
-   we want, how each provider should find them, and which files are conversion
-   inputs.
-2. `winworld.py`, `archiveorg.py`, `olddos.py`, `github.py`, `davep_ng.py`, `cheater_cz.py`, `slunecnice.py` define **how**
+   we want, how each provider should find them, and which archive files to
+   collect. The converter separately detects supported inputs.
+2. `winworld.py`, `archiveorg.py`, `direct.py`, `olddos.py`, `github.py`, `davep_ng.py`, `cheater_cz.py`, `slunecnice.py` define **how**
    each concrete website is scraped and downloaded.
 3. `catalog.py` exposes typed manifest objects and `extractor.py` handles
    unpacking through `unar`/`lsar`, including
@@ -33,6 +33,12 @@ python3 -m thelpviewer.downloader --products tp tc ng qbx quickc masm scorpion g
 # Game-Cheater 9.02 only
 ./thelp.sh download game-cheater slunecnice
 
+# Four pinned DOS-era reference products
+python3 -m thelpviewer.downloader --source direct --products msdos622 qb45 helppc freedos-help
+
+# Convert the default groups and DOS reference products together for local Help Files
+./thelp.sh build --with-dos-reference
+
 # Preview only
 python3 -m thelpviewer.downloader --dry-run
 ```
@@ -45,7 +51,7 @@ configured product and skips anything already present in `downloads/` or
 
 | Option | Description |
 |--------|-------------|
-| `--source` | Sources to use: `winworld`, `archiveorg`, `olddos`, `github`, `davep_ng`, `cheater_cz`, `slunecnice` |
+| `--source` | Sources to use: `winworld`, `archiveorg`, `direct`, `olddos`, `github`, `davep_ng`, `cheater_cz`, `slunecnice` |
 | `--products` | Logical product families from `thelpviewer/help-database.json` |
 | positional selectors | Short form for sources/products, e.g. `python3 -m thelpviewer.downloader tp olddos` |
 | `--out-dir` | Target directory for extracted help files |
@@ -67,6 +73,11 @@ configured product and skips anything already present in `downloads/` or
 
 A product source may use a direct URL, provider-specific search query, slug,
 keywords, category ids, API URL, or any combination required by that provider.
+The `direct` provider uses `direct_urls` plus exact `archive_members` paths or
+names. This is the download selection, not the converter's input list: include
+the files needed for conversion and any required licence notices, but do not
+select unused companion files. It extracts nested disk images where needed and
+rejects missing or ambiguous matches instead of collecting unrelated files.
 Products with many releases keep these values once at family level. Known files
 remain independent `entries`; their family and release are derived from the
 configured `collection_prefixes`, or can be stated explicitly with `product`
@@ -95,6 +106,7 @@ module with a matcher/detector and reader class, then add a `converters` entry.
 |--------|------|----------------|
 | `winworld.py` | WinWorldPC | Product/version scraping, mirror selection |
 | `archiveorg.py` | Archive.org | Search API, metadata files, candidate file picking |
+| `direct.py` | Pinned archive URLs | Exact member selection from known archives |
 | `olddos.py` | old-dos.ru | Category pagination, detail-page download link lookup |
 | `github.py` | GitHub | Public repo directory listing via Contents API or direct repo path |
 | `davep_ng.py` | DaveP NG mirror | Plain `.ng` mirror download |
@@ -103,6 +115,9 @@ module with a matcher/detector and reader class, then add a `converters` entry.
 
 Each provider reads only its own source-specific config from the parsed JSON
 manifest. `catalog.py` contains no concrete product list.
+Archive.org release detection appends a version to a product's source
+directory only if its `label` does not already end in that version (for
+example, `Microsoft QuickBASIC Extended 7.1` stays a single `7.1`).
 
 `cheater_cz.py` is intentionally provider-specific: it keeps every DOS release in a
 separate version folder under `sources/Scorpions Cheater DOS/` and copies the raw
@@ -116,6 +131,46 @@ so adding a group does not require another shell `case` branch.
 `slunecnice.py` copies the eleven Game-Cheater database files into
 `sources/Game-Cheater/Game-Cheater 9.02/`. Build them with
 `./thelp.sh build --group=game-cheater`.
+
+The four pinned products are downloaded into `sources/<Product>/`, alongside
+the existing product directories.
+MS-DOS 6.22 and QuickBASIC 4.5 also have Archive.org `search_text` and
+verified, exact-identifier `query` entries, following the other Microsoft
+products. That provider extracts only the configured HELP member into the same
+product directory; the direct provider skips files already
+collected by search. HelpPC 2.10 and FreeDOS HTML Help keep their pinned direct
+sources: Archive.org search did not locate those exact releases (the HelpPC
+result is 2.0), while the FreeDOS package is indexed by its official ibiblio
+repository.
+The opt-in `dos-reference` build group converts them to eleven UHF bundles under
+their respective `helps/<Product>/` directories and updates `helps/catalog.json`,
+which supplies the Help Files menu. Use `./thelp.sh build --with-dos-reference` to include them in
+the same build as the default groups while preserving unrelated opt-in bundles.
+A normal default build does not select this group; rerun with the flag after a
+default rebuild if these local bundles
+are wanted. `./thelp.sh build --group dos-reference` still rebuilds only this
+group:
+
+| Product | Selected source | Current conversion status |
+|---------|-----------------|---------------------------|
+| `msdos622` | `HELP.HLP` expanded from MS-DOS 6.22 Disk 2 `HELP.HL_` | QuickHelp reader exports 428 topics; topic/link validation remains |
+| `qb45` | `QB45QCK.HLP`, `QB45ADVR.HLP`, `QB45ENER.HLP` from the Program, Advisor, and Utilities disks | Three UHF bundles, 990 topics total; QuickHelp cross-file links resolve |
+| `helppc` | Six `.TXT` databases | Six UHF bundles (`asm.json.gz` etc.), 1,006 topics total, with cross-file links |
+| `freedos-help` | English `HHSTNDRD.ZIP` plus license files | 354 HTML pages convert into one UHF bundle |
+
+The four Microsoft `.HLP` files, six HelpPC topic databases, and FreeDOS help
+ZIP are recorded by CRC32 and assigned to their products in
+`thelpviewer/help-database.json`. HelpPC's `HELPPC.DOC` and `.NDX` are not
+selected by the downloader because they are not conversion inputs. FreeDOS
+licence texts are retained as required companion files, not topic databases.
+These products are still outside the default public
+build; conversion support does not change redistribution rights.
+
+HelpPC's original documentation describes the distribution as shareware;
+Microsoft's files are proprietary. Downloading them for local inspection does
+not establish permission to publish converted content. The selected FreeDOS
+package states `Express+GNU Free Documentation License`; review its included
+`COPYING` and `FDL.TXT` before publication.
 
 ## Extraction
 
@@ -142,6 +197,9 @@ The extractor will:
 4. repeat up to a safe maximum depth
 5. collect final help files from the fully expanded tree
 
+Microsoft setup-disk `KWAJ` single-file compression (including LZH) is also
+expanded to final filenames such as `HELP.HLP` using `pylibmspack`.
+
 This replaces the old mix of `7z`, `zipfile`, and special-case RAR handling.
 
 ## Shared Helpers
@@ -155,7 +213,8 @@ This replaces the old mix of `7z`, `zipfile`, and special-case RAR handling.
 ## Requirements
 
 - Python 3.10+
-- `unar` and `lsar` on PATH
+- `unar` and `lsar`, or `7zz`, on PATH
+- Python dependencies from `requirements.txt` (including `pylibmspack` for KWAJ)
 
 Install:
 

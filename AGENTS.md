@@ -1,298 +1,84 @@
 # AGENTS.md
 
-This document defines global rules for AI coding agents working in this repository.
-
-Rules exist only to prevent real defects.
-
----
-
-## Rule 1 — Read Before Writing
-
-Before adding or changing code, read:
-- target file
-- direct callers
-- exports
-- nearby shared utilities
-
-Prevents:
-- duplicate helpers
-- broken exports
-- ignoring existing local patterns
-
----
-
-## Rule 2 — State Assumptions
-
-If behavior is ambiguous:
-- state assumptions first
-- ask instead of guessing when needed
-
-Prevents:
-- wrong API behavior
-- wrong UI flow
-- incorrect business logic
-
----
-
-## Rule 3 — Prefer The Smallest Working Change
-
-Solve problems with the least code necessary.
-
-Do not:
-- over-engineer
-- introduce abstractions for one-off logic
-- redesign architecture unnecessarily
-
-Prevents:
-- unnecessary complexity
-- large blast radius
-- harder future maintenance
-
----
-
-## Rule 4 — Make Surgical Edits
-
-Touch only files and lines required for the task.
-
-Do not:
-- reformat unrelated code
-- rename unrelated symbols
-- refactor unrelated logic
-
-Prevents:
-- noisy diffs
-- accidental regressions
-- overwritten user changes
-
----
-
-## Rule 5 — Reuse Existing Components First
-
-Check for existing shared components/utilities before creating new ones.
-
-Prevents:
-- duplicated UI
-- duplicated helpers
-- inconsistent behavior
-
----
-
-## Rule 6 — Follow Local Style
-
-Match the style already used in the repository.
-
-Do not introduce:
-- new frameworks
-- new styling systems
-- new architectural patterns
-without clear reason.
-
-Prevents:
-- mixed coding styles
-- dependency sprawl
-- inconsistent codebase structure
-
----
-
-## Rule 7 — Use Existing Design/System Tokens
-
-Use existing:
-- theme tokens
-- spacing rules
-- typography
-- colors
-- shared constants
-
-Avoid hardcoded values when equivalents exist.
-
-Prevents:
-- design drift
-- inconsistent UI
-- duplicated constants
-
----
-
-## Rule 8 — Expose Pattern Conflicts
-
-If multiple patterns exist:
-- choose the dominant/local pattern
-- explain conflicts clearly
-- do not invent hybrid patterns
-
-Prevents:
-- inconsistent implementations
-- mixed conventions
-- fragile code paths
-
----
-
-## Rule 9 — Define Done Before Iterating
-
-Before complex work:
-- define what success means
-- verify behavior before declaring completion
-
-Prevents:
-- incomplete fixes
-- fake completion
-- unverified behavior
-
----
-
-## Rule 10 — Test The Intent
-
-Tests should validate:
-- business behavior
-- user intent
-not implementation details only.
-
-Prevents:
-- meaningless tests
-- passing tests with broken behavior
-
----
-
-## Rule 11 — Fail Loudly
-
-Never present:
-- partial work
-- skipped steps
-- uncertain results as success.
-
-Clearly state:
-- what failed
-- what was not verified
-- what depends on external systems
-
-Prevents:
-- false confidence
-- silent failures
-- hidden risks
-
----
-
-## Rule 12 — Preserve Backwards Compatibility
-
-Do not break:
-- APIs
-- configs
-- environment variables
-- file structure
-unless explicitly instructed.
-
-Prevents:
-- integration breakage
-- deployment failures
-- upgrade regressions
-
----
-
-## Rule 13 — Compose Dialogs From TVision Objects
-
-Build individual dialog client areas from existing TVision JS objects such as
-`TVGroup`, `TVStaticText`, `TVLabel`, `TVInputLine`, `TVListViewer`,
-`TVOutline`, `TVCluster` and `TVButton`.
-
-Keep handwritten HTML/CSS at the shared primitive/rendering layer (`TVFrame`,
-`TVWindow`, `TVDialog`, scrollbars and basic static markup). Do not create a
-dialog-specific control when an existing shared TVision object can express the
-same role.
-
-Prevents:
-- duplicated dialog behaviour
-- HTML-only controls outside the TVision hierarchy
-- visual and keyboard drift between dialogs
-
----
-
-## Rule 14 — Record User-Visible Changes
-
-For every user-visible feature, behavior fix, or format-parser correction:
-- add a concise entry under `CHANGELOG.md` → `[Unreleased]`
-- update the relevant technical documentation when behavior or format
-  understanding changed
-
-Prevents:
-- completed fixes existing only in commit history or internal audit notes
-- release notes drifting away from shipped behavior
-
----
-
-## Rule 15 — Keep The Public TVision API Source-Like
-
-Use the original Turbo Vision object hierarchy, constructor order, method
-names, state masks and owner/event flow wherever the browser permits it.
-
-Do not add public TVision constructor parameters or generic setters for:
-- CSS class names
-- HTML tags
-- arbitrary HTML attributes
-- DOM selectors
-- renderer option bags
-
-Browser markup and accessibility attributes belong inside the drawing code of
-the concrete shared control. Game-specific board drawing may remain
-specialised, but game chrome must be composed from TVision objects.
-
-Prevents:
-- a second HTML/CSS object model leaking into the TVision API
-- every dialog inventing its own controls and event wiring
-- source comparison becoming meaningless despite similar visuals
-
----
-
-## Rule 15 — Use The Turbo Vision Event Model
-
-Concrete dialogs and games must retain references to the `TVView` children
-they create and implement `handleEvent()` for commands and input.
-
-Do not rediscover owned controls with dialog-wide `data-tv-*` selectors or add
-parallel click handlers when `TVEvent` owner propagation can express the
-interaction. DOM queries remain allowed inside shared renderer primitives that
-resolve their private substructure.
-
-Prevents:
-- DOM structure becoming the application object model
-- duplicate command paths and browser-specific behavior
-- controls drifting away from Turbo Vision ownership and event semantics
-
----
-
-## Rule 14 — Keep TVision Constructors Semantic
-
-Public TVision constructors describe Turbo Vision objects, not browser nodes.
-
-- `TVDialog` starts with `TVRect` bounds and a title.
-- `TVStaticText` must not accept an HTML tag or arbitrary DOM attributes.
-- `TVButton` is a dialog command button; menus and status lines use
-  `TVMenuItem` and `TVStatusItem`.
-- DOM classes, ARIA attributes and data attributes belong to shared view
-  drawing code, not individual dialog constructors.
-
-Prevents:
-- CSS/HTML details leaking into the object model
-- one control being overloaded for unrelated Turbo Vision roles
-- dialog-specific markup bypassing the shared renderer
-
-Concrete constructor rules:
-- `TVView(bounds)`, `TVGroup(bounds)`, `TVStaticText(bounds, text)`,
-  `TVLabel(bounds, text, link)`, `TVInputLine(bounds, maxLen)` and
-  `TVButton(bounds, title, command, flags)` are positional.
-- `TVListViewer(bounds, numCols)`, `TVEditor(bounds, hScrollBar, vScrollBar,
+Repository rules for coding agents. Prefer the smallest change that fixes the
+user's problem; these rules exist to prevent regressions, not to add process.
+
+## Before and after a change
+
+- Read the target file, its direct callers and exports, and nearby shared
+  utilities before editing. Reuse existing components, patterns, design tokens
+  and naming; explain conflicting patterns instead of inventing a hybrid.
+- State assumptions when behavior is ambiguous and ask when a choice would
+  materially change the result. Define what "done" means for complex work.
+- Make surgical edits. Do not reformat or refactor unrelated code, add a
+  framework for a one-off need, or overwrite existing user changes.
+- Preserve APIs, configuration, environment variables and file paths unless
+  the user explicitly requests a break. Check callers before changing them.
+- Test the intended behavior, not just implementation details. Verify the
+  result before reporting success; explicitly report failed or unverified work.
+- Record every user-visible feature or behavior fix under `CHANGELOG.md`'s
+  `[Unreleased]` section and update affected technical documentation.
+
+## Adding HELP files
+
+1. Inspect the existing product, source and bundle layout first. Put original
+   files in `sources/<Product>/` and generated UHF bundles in
+   `helps/<Product>/`; retain an existing release subdirectory when that
+   product already uses one. Never add a staging/build-group directory such as
+   `Candidates/` to these paths or to the Help Files menu.
+2. Register the product in `thelpviewer/help-database.json`: stable product
+   key, label, `build_group`, `collection_prefixes`, and downloader
+   `search_text`/`query`/URLs following comparable products. Add CRC32
+   `entries` for known source files with the correct product, title, encoding
+   and language. Do not invent metadata that has not been verified.
+3. `archive_members` is the downloader's exact extraction list, **not** the
+   converter's input list. Select the files needed for conversion and any
+   required licence notices; do not extract unused companion files. Explain
+   retained non-converted files in the downloader or format documentation.
+4. Reuse an existing reader when the format matches. For a new format, add a
+   reader and register it in the manifest. Write `docs/Formats/<Format>.md` as
+   a specification of the original format first: evidence, structure,
+   encoding, controls, links, limits and a small example. Separate confirmed
+   facts from converter behavior and unresolved observations.
+5. Build the affected group, rebuild `helps/catalog.json`, and verify the
+   source-to-bundle mapping, titles, topic counts, cross-file links and Help
+   Files menu. Test downloader selection and conversion with representative
+   files. Build groups select product roots; opt-in groups need explicit roots
+   so broad groups such as `microsoft` do not select or remove them.
+
+The Help Files menu groups catalog entries by `product_name`, then `version`.
+Releases of one product use the same version-free `menu_label`, with the
+release in `default_version` or inferred from `collection_prefixes`. Do not
+repeat the release in both menu levels. Keep existing bundle paths stable
+when only changing menu metadata, so saved HELP links keep working.
+
+## Turbo Vision JS
+
+- Match the original Turbo Vision hierarchy, constructor order, method names,
+  state masks, owner flow and `TVEvent` handling wherever the browser permits.
+  Concrete dialogs and games retain references to owned `TVView` children and
+  handle commands/input in `handleEvent()`. Do not rediscover owned controls
+  with dialog-wide `data-tv-*` selectors or parallel DOM click handlers.
+  Private DOM queries inside shared drawing primitives are permitted.
+- Compose dialog client areas from shared views (`TVGroup`, `TVStaticText`,
+  `TVLabel`, `TVInputLine`, `TVListViewer`, `TVOutline`, `TVCluster`, `TVButton`).
+  Keep handwritten HTML/CSS in shared frame/window/dialog/scrollbar drawing,
+  not in each dialog. Game chrome uses shared views; only the changing
+  playfield may stay specialised. Do not add a one-off dialog control when an
+  existing shared view fits.
+- Public constructors describe TVision objects, not browser nodes. Use
+  positional forms such as `TVView(bounds)`, `TVGroup(bounds)`,
+  `TVStaticText(bounds, text)`, `TVLabel(bounds, text, link)`,
+  `TVInputLine(bounds, maxLen)`, `TVButton(bounds, title, command, flags)`,
+  `TVListViewer(bounds, numCols)`, `TVEditor(bounds, hScrollBar, vScrollBar,
   indicator, bufSize)`, `TVScrollBar(bounds, options)`,
-  `TVWindow(bounds, title, number)` and `TVDesktop(bounds)` follow the same
-  rule; attach browser elements later through `bindRoot()`.
-- Construct dialogs without a desktop argument. Insert them through
-  `TVDesktop.insert()`; `TVDialogManager.register()` performs this step for
-  managed dialogs. Constructors must not query `.tv-desktop` or fall back to
-  `document.body`.
-- Compose groups through `insert()` / `insertAll()` and link labels to the
-  target object, never through caller-selected DOM ids.
-- Browser classes, generated ids, data hooks and accessibility attributes are
-  emitted by the owning `TVView` implementation. Do not reintroduce a
-  separate renderer service or parallel renderer state.
-- In games, compose frames, controls, labels, status/info areas and auxiliary
-  dialogs from shared TVision views. Game-specific markup is limited to the
-  changing playfield itself.
-- Do not restore `TVWidget`, `TVButtonStrip`, `TVMarkupList` or object-literal
-  compatibility constructors.
+  `TVWindow(bounds, title, number)`, `TVDialog(bounds, title)` and
+  `TVDesktop(bounds)`. Bind browser roots later with `bindRoot()`; insert
+  children with `insert()` / `insertAll()` and managed dialogs through
+  `TVDesktop.insert()` / `TVDialogManager.register()`.
+- Do not add public CSS class, HTML tag, arbitrary attribute, DOM selector or
+  renderer-option arguments. Classes, IDs, accessibility/data attributes and
+  markup belong in the owning shared view's drawing code. Link `TVLabel` to
+  its target object, not a caller-chosen DOM ID. Do not restore `TVWidget`,
+  `TVButtonStrip`, `TVMarkupList`, object-literal compatibility constructors
+  or a separate renderer service.
