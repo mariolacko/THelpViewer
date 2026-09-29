@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import json
-import re
 from contextlib import asynccontextmanager
-from html import escape
-from math import ceil
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -20,6 +17,7 @@ from .. import __version__
 from ..public_docs import is_public_doc_path, public_doc_sources
 from .accounts import AccountError, AccountStore, SESSION_LIFETIME
 from .config import AppConfig, load_config
+from .public_pages import create_public_router
 from .search_index import GlobalSearchIndex
 from .terminal import authorize_job, read_job, send_input
 from .statistics import (
@@ -48,9 +46,6 @@ from .statistics import (
     normalize_view_duration,
     parse_user_agent,
 )
-
-
-SITEMAP_TOPIC_PAGE_SIZE = 49_999
 
 
 class StatisticsEvent(BaseModel):
@@ -202,6 +197,17 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             )
         raise exc
 
+    @app.get("/assets/Thelp.png")
+    def site_image() -> FileResponse:
+        image = config.readme_path.parent / "Thelp.png"
+        if not image.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(image, media_type="image/png")
+
+    @app.get("/favicon.ico")
+    def favicon() -> RedirectResponse:
+        return RedirectResponse("/assets/thelp-icon.svg", status_code=307)
+
     app.mount(
         "/assets",
         StaticFiles(directory=config.assets_dir, check_dir=False),
@@ -213,26 +219,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         name="helps",
     )
 
-    def verified_html(page: str) -> str:
-        if not config.google_site_verification:
-            return page
-        if "</head>" not in page:
-            raise HTTPException(status_code=500, detail="Viewer HTML template is incomplete")
-        tag = (f'<meta name="google-site-verification" '
-               f'content="{escape(config.google_site_verification, quote=True)}" />\n')
-        return page.replace("</head>", tag + "</head>", 1)
-
-    @app.get("/")
-    async def index(request: Request, file: str = "", topic: str = "", doc: str = "") -> Response:
-        if doc:
-            return public_document(doc, request)
-        if file:
-            return public_topic(file, request, topic) if topic else public_file(file, request)
-        if topic or any(key in request.query_params for key in ("file", "topic", "doc")):
-            raise HTTPException(status_code=404)
-        if not config.index_path.is_file():
-            raise HTTPException(status_code=404)
-        return Response(verified_html(config.index_path.read_text(encoding="utf-8")), media_type="text/html")
+    app.include_router(create_public_router(
+        config, app.state.global_search, app.state.help_display_names,
+    ))
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -371,176 +360,6 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         response = JSONResponse({"authenticated": False}, headers={"Cache-Control": "no-store"})
         response.delete_cookie("thelp_session", path="/")
         return response
-
-    def public_base(request: Request) -> str:
-        if config.public_base_url:
-            return config.public_base_url
-        if request.headers.get("host", "").lower() == urlparse(config.auth_origin).netloc.lower():
-            return config.auth_origin
-        return str(request.base_url).rstrip("/")
-
-    def public_viewer_page(title: str, description: str, url: str, content: str) -> Response:
-        if not config.index_path.is_file():
-            raise HTTPException(status_code=404)
-        page = config.index_path.read_text(encoding="utf-8")
-        page, titles = re.subn(
-            r"<title>.*?</title>", lambda _: f"<title>{escape(title)}</title>", page, count=1, flags=re.S,
-        )
-        page, descriptions = re.subn(
-            r'<meta name="description" content="[^"]*">',
-            lambda _: f'<meta name="description" content="{escape(description, quote=True)}">',
-            page, count=1,
-        )
-        desktop = '<div class="tv-desktop" data-tv-bundle-desktop>'
-        if not titles or not descriptions or desktop not in page or "</head>" not in page:
-            raise HTTPException(status_code=500, detail="Viewer HTML template is incomplete")
-        page = page.replace("</head>", f'<link rel="canonical" href="{escape(url, quote=True)}"></head>', 1)
-        page = page.replace(desktop, desktop + f'<main id="tv-public-fallback">{content}</main>', 1)
-        return Response(verified_html(page), media_type="text/html")
-
-    @app.get("/robots.txt")
-    def robots(request: Request) -> Response:
-        return Response(
-            f"User-agent: *\nAllow: /\nSitemap: {public_base(request)}/sitemap.xml\n",
-            media_type="text/plain",
-        )
-
-    @app.get("/sitemap.xml")
-    def sitemap_index(request: Request) -> Response:
-        if app.state.global_search.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
-        base = public_base(request)
-        entries = "".join(
-            f"<sitemap><loc>{escape(base + '/sitemaps/file.xml?' + urlencode({'file': file_path, 'page': page}))}</loc></sitemap>"
-            for file_path, count in app.state.global_search.file_sitemap_counts()
-            for page in range(1, ceil(count / SITEMAP_TOPIC_PAGE_SIZE) + 1)
-        )
-        doc_count = len(app.state.global_search.document_paths())
-        entries += "".join(
-            f"<sitemap><loc>{escape(base + '/sitemaps/docs.xml?' + urlencode({'page': page}))}</loc></sitemap>"
-            for page in range(1, ceil(doc_count / 50_000) + 1)
-        )
-        return Response(
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-            f"{entries}</sitemapindex>",
-            media_type="application/xml",
-        )
-
-    @app.get("/sitemaps/file.xml")
-    def sitemap_file(request: Request, file: str = "", page: int = 1) -> Response:
-        if app.state.global_search.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
-        count = dict(app.state.global_search.file_sitemap_counts()).get(file)
-        if count is None or page < 1 or page > ceil(count / SITEMAP_TOPIC_PAGE_SIZE):
-            raise HTTPException(status_code=404)
-        base = public_base(request)
-        urls = [base + "/?" + urlencode({"file": file})] if page == 1 else []
-        urls.extend(
-            base + "/?" + urlencode({"file": file, "topic": context_id})
-            for context_id, _title, _help_name in app.state.global_search.file_topic_rows(
-                file, (page - 1) * SITEMAP_TOPIC_PAGE_SIZE, SITEMAP_TOPIC_PAGE_SIZE
-            )
-        )
-        entries = "".join(f"<url><loc>{escape(url)}</loc></url>" for url in urls)
-        return Response(
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-            f"{entries}</urlset>",
-            media_type="application/xml",
-        )
-
-    @app.get("/sitemaps/docs.xml")
-    def sitemap_docs(request: Request, page: int = 1) -> Response:
-        if app.state.global_search.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
-        paths = app.state.global_search.document_paths()
-        if page < 1 or page > ceil(len(paths) / 50_000):
-            raise HTTPException(status_code=404)
-        base = public_base(request)
-        entries = "".join(
-            f"<url><loc>{escape(base + '/?' + urlencode({'doc': doc_path}))}</loc></url>"
-            for doc_path in paths[(page - 1) * 50_000:page * 50_000]
-        )
-        return Response(
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-            f"{entries}</urlset>",
-            media_type="application/xml",
-        )
-
-    @app.get("/sitemap-{page}.xml")
-    def sitemap_topics(page: int, request: Request) -> Response:
-        if app.state.global_search.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
-        count = app.state.global_search.sitemap_count()
-        if page < 1 or page > ceil(count / 50_000):
-            raise HTTPException(status_code=404)
-        base = public_base(request)
-        entries = "".join(
-            f"<url><loc>{escape(base + '/?' + urlencode({'file': file_path, 'topic': context_id}))}</loc></url>"
-            for file_path, context_id in app.state.global_search.sitemap_rows((page - 1) * 50_000, 50_000)
-        )
-        return Response(
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-            f"{entries}</urlset>",
-            media_type="application/xml",
-        )
-
-    def public_topic(file_path: str, request: Request, topic: str = "") -> Response:
-        if len(file_path) > 512 or len(topic) > 64:
-            raise HTTPException(status_code=404)
-        if app.state.global_search.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
-        entry = app.state.global_search.topic(file_path, topic)
-        if entry is None or not entry["body"]:
-            raise HTTPException(status_code=404)
-        url = public_base(request) + "/?" + urlencode({"file": file_path, "topic": topic})
-        overview = "/?" + urlencode({"file": file_path})
-        title = f'{entry["title"]} — {entry["help_name"]}'
-        content = (
-            f'<nav><a href="/">THelpViewer</a></nav><h1>{escape(entry["title"])}</h1>'
-            f'<p><a href="{escape(overview, quote=True)}">{escape(entry["help_name"])}</a></p>'
-            f'<pre style="white-space:pre-wrap">{escape(entry["body"])}</pre>'
-        )
-        return public_viewer_page(title, entry["preview"], url, content)
-
-    def public_file(file_path: str, request: Request) -> Response:
-        if len(file_path) > 512:
-            raise HTTPException(status_code=404)
-        if app.state.global_search.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
-        topics = app.state.global_search.file_topic_rows(file_path)
-        if not topics:
-            raise HTTPException(status_code=404)
-        name = topics[0][2]
-        url = public_base(request) + "/?" + urlencode({"file": file_path})
-        links = "".join(
-            f'<li><a href="{escape("/?" + urlencode({"file": file_path, "topic": context_id}), quote=True)}">'
-            f'{escape(title)}</a></li>'
-            for context_id, title, _help_name in topics
-        )
-        content = (
-            f'<nav><a href="/">THelpViewer</a></nav><h1>{escape(name)}</h1>'
-            f'<p>{len(topics)} topics</p><ol>{links}</ol>'
-        )
-        return public_viewer_page(f"{name} — THelpViewer", f"Topics in {name}", url, content)
-
-    def public_document(doc_path: str, request: Request) -> Response:
-        if len(doc_path) > 512 or not is_public_doc_path(doc_path):
-            raise HTTPException(status_code=404)
-        if app.state.global_search.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
-        entry = app.state.global_search.document(doc_path)
-        if entry is None or not entry["body"]:
-            raise HTTPException(status_code=404)
-        url = public_base(request) + "/?" + urlencode({"doc": doc_path})
-        content = (
-            f'<nav><a href="/">THelpViewer</a></nav><h1>{escape(entry["title"])}</h1>'
-            f'<pre style="white-space:pre-wrap">{escape(entry["body"])}</pre>'
-        )
-        return public_viewer_page(f'{entry["title"]} — THelpViewer Docs', entry["preview"], url, content)
 
     @app.get("/api/terminal/jobs/{job_id}")
     def terminal_output(job_id: str, request: Request, offset: int = 0) -> dict[str, object]:

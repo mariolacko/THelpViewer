@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from thelpviewer import __authors__, __version__
-from thelpviewer.converter.writers.bundle import _render_bundle_index_html
+from thelpviewer.converter.writers.bundle import _render_bundle_index_html, _write_bundle_index
 from thelpviewer.server.config import load_config
 
 
@@ -12,6 +12,12 @@ def test_checked_in_bundle_index_matches_generated_project_metadata():
     assert f'data-tv-generator-version="{__version__}"' in rendered
     assert f'data-tv-authors="{__authors__}"' in rendered
     assert 'google-site-verification' not in rendered
+    assert 'href="assets/thelp-icon.svg"' in rendered
+
+
+def test_bundle_index_copies_public_preview_image(tmp_path):
+    _write_bundle_index(tmp_path)
+    assert (tmp_path / "assets" / "Thelp.png").read_bytes() == Path("Thelp.png").read_bytes()
 
 
 def test_about_dialog_reads_generated_project_metadata():

@@ -53,6 +53,13 @@ def test_global_search_builds_incrementally_and_removes_missing_help(tmp_path):
         assert 'google-site-verification' not in client.get("/").text
         status = _ready(client)
         assert status["percent"] == 100 and status["topics"] == 1
+        home = client.get("/")
+        assert '<main id="tv-public-fallback">' in home.text
+        assert 'href="/?file=first.json.gz"' in home.text
+        assert "The First HELP" in home.text
+        assert 'rel="canonical" href="https://help.example.test/"' in home.text
+        assert client.get("/assets/Thelp.png").headers["content-type"] == "image/png"
+        assert client.get("/favicon.ico", follow_redirects=False).headers["location"] == "/assets/thelp-icon.svg"
         database = tmp_path / "var" / "global-search.sqlite3"
         assert database.is_file() and first.is_file()
         matches = client.get("/api/search/global", params={"q": "turbo"}).json()["results"]
@@ -94,8 +101,13 @@ def test_global_search_builds_incrementally_and_removes_missing_help(tmp_path):
         assert "Sitemap: https://help.example.test/sitemap.xml" in client.get("/robots.txt").text
         sitemap_index = client.get("/sitemap.xml")
         assert sitemap_index.status_code == 200
+        assert "https://help.example.test/sitemaps/site.xml" in sitemap_index.text
         assert "sitemaps/file.xml?file=first.json.gz&amp;page=1" in sitemap_index.text
         ElementTree.fromstring(sitemap_index.text)
+        site_map = client.get("/sitemaps/site.xml")
+        assert site_map.status_code == 200
+        assert "https://help.example.test/</loc>" in site_map.text
+        ElementTree.fromstring(site_map.text)
         file_map = client.get("/sitemaps/file.xml", params={"file": "first.json.gz", "page": 1})
         assert file_map.status_code == 200
         assert "?file=first.json.gz</loc>" in file_map.text
@@ -163,6 +175,10 @@ def test_public_docs_share_search_index_and_have_crawlable_pages(tmp_path):
         assert client.get("/api/search/global", params={"q": "hidden"}).json()["results"] == []
         sitemap = client.get("/sitemap.xml")
         assert "sitemaps/docs.xml?page=1" in sitemap.text
+        home = client.get("/")
+        assert 'href="/?doc=Guide.md"' in home.text
+        assert 'href="/?doc=README.md"' in home.text
+        assert "Private Audit" not in home.text
         docs_map = client.get("/sitemaps/docs.xml")
         assert docs_map.status_code == 200
         assert "?doc=Guide.md" in docs_map.text
@@ -201,7 +217,7 @@ def test_public_docs_share_search_index_and_have_crawlable_pages(tmp_path):
 
 
 def test_file_sitemap_pages_keep_overview_on_first_page(tmp_path, monkeypatch):
-    monkeypatch.setattr(import_module("thelpviewer.server.app"), "SITEMAP_TOPIC_PAGE_SIZE", 2)
+    monkeypatch.setattr(import_module("thelpviewer.server.public_pages"), "SITEMAP_TOPIC_PAGE_SIZE", 2)
     helps = tmp_path / "helps"
     helps.mkdir()
     with gzip.open(helps / "many.json.gz", "wt", encoding="utf-8") as output:
