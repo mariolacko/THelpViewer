@@ -168,8 +168,8 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "class TVMidiExternalSource" not in dialogs
     assert "class TVMidiDisplay extends TVGroup" in dialogs
     assert "setTrack(track, number)" in dialogs
-    assert "class TVMidiMeter extends TVGroup" in dialogs
-    assert "setProgress(value)" in dialogs
+    assert "class TVMidiMeter" not in dialogs
+    assert "const meter = new TVBarGauge(new TVRect(1, 4, 41, 5), 100)" in dialogs
     assert "this.setSize(" not in dialogs
     assert "TVMarkupView" not in dialogs
     assert "class TVAsciiTable extends TVGroup" in dialogs
@@ -225,7 +225,7 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert ".tv-midi-external" not in css
     assert ".tv-midi-track-list" not in css
     assert "[data-tv-midi-display]" in css
-    assert "[data-tv-midi-meter]" in css
+    assert ".tv-midi-window [data-tv-bar-gauge]" in css
     for stale_selector in (
         ".tv-file-open-file-list",
         ".tv-file-open-history-listviewer",

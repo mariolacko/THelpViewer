@@ -1785,12 +1785,19 @@ class TVBarGauge extends TVPercentGauge {
 
     draw() {
         const width = Math.max(0, this.size.x);
-        const percentDone = this.solveForY(this.curValue, this.maxValue);
-        const fillSize = Math.min(width, Math.max(0, this.solveForX(percentDone, width)));
-        const text = "▓".repeat(fillSize) + "░".repeat(width - fillSize);
+        const maxValue = Math.max(0, this.maxValue);
+        const curValue = Math.min(maxValue, Math.max(0, this.curValue));
+        const fillSize = maxValue ? Math.floor((curValue / maxValue) * width) : 0;
+        const text = "█".repeat(fillSize) + "░".repeat(width - fillSize);
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
-        const attrs = attrsToString(this._drawAttrs({ "data-tv-bar-gauge": true }));
+        const attrs = attrsToString(this._drawAttrs({
+            "data-tv-bar-gauge": true,
+            role: "progressbar",
+            "aria-valuemin": 0,
+            "aria-valuemax": maxValue,
+            "aria-valuenow": curValue,
+        }));
         return `<div class="tv-gauge tv-bar-gauge"${style} ${attrs}>${escapeHtml(text)}</div>`;
     }
 }

@@ -791,9 +791,26 @@ async function run() {
             const style = getComputedStyle(element);
             return [style.backgroundColor, style.color];
         };
+        const ruler = document.createElement('span');
+        ruler.textContent = '0'.repeat(80);
+        ruler.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+        content.append(ruler);
+        const requiredWidth = ruler.getBoundingClientRect().width;
+        ruler.remove();
+        const contentStyle = getComputedStyle(content);
+        const textWidth = content.clientWidth - parseFloat(contentStyle.paddingLeft) - parseFloat(contentStyle.paddingRight);
+        const code = document.createElement('pre');
+        code.textContent = '0'.repeat(80);
+        content.append(code);
+        const codeStyle = getComputedStyle(code);
+        const codeWidth = code.clientWidth - parseFloat(codeStyle.paddingLeft) - parseFloat(codeStyle.paddingRight);
+        code.remove();
         return {
             viewport: pair(viewport),
             content: pair(content),
+            textColumnsFit: textWidth >= requiredWidth - 1,
+            codeColumnsFit: codeWidth >= requiredWidth - 1,
+            wrapMode: [contentStyle.overflowWrap, contentStyle.wordBreak],
             statusHint: document.querySelector('[data-tv-status-hint]')?.textContent.trim() || '',
             caption: doc.querySelector('.tv-window-caption')?.textContent.trim() || '',
         };
@@ -801,6 +818,10 @@ async function run() {
     const editorColors = ['rgb(0, 0, 170)', 'rgb(255, 255, 85)'];
     if (docColors.viewport.join() !== editorColors.join() || docColors.content.join() !== editorColors.join()) {
         throw new Error(`Documentation does not use the Editor palette: ${JSON.stringify(docColors)}`);
+    }
+    if (!docColors.textColumnsFit || !docColors.codeColumnsFit
+        || docColors.wrapMode.join() !== 'normal,normal') {
+        throw new Error(`Documentation does not fit 80 unbroken text columns: ${JSON.stringify(docColors)}`);
     }
     if (!docColors.caption
         || docColors.statusHint !== 'Markdown is displayed with the read-only Editor palette.') {
@@ -1086,12 +1107,30 @@ async function run() {
     })`, true);
     const indexProgress = await evaluate(`(() => {
         const dialog = document.querySelector('.tv-index-progress-window');
-        return { text: dialog?.textContent, percent: dialog?.querySelector('.tv-percent-gauge')?.textContent };
+        return {
+            text: dialog?.textContent,
+            percent: dialog?.querySelector('.tv-percent-gauge')?.textContent,
+            bar: dialog?.querySelector('[data-tv-bar-gauge]')?.textContent,
+        };
     })()`);
-    if (!indexProgress.text.includes('1 / 2') || !indexProgress.text.includes('37')) {
+    if (!indexProgress.text.includes('1 / 2') || !indexProgress.text.includes('37')
+        || !/^█{14}░{26}$/.test(indexProgress.bar)) {
         throw new Error(`Global index progress is incomplete: ${JSON.stringify(indexProgress)}`);
     }
     await evaluate(`window.__globalReady = true`);
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 3000;
+        const check = () => {
+            const progress = document.querySelector('.tv-index-progress-window');
+            if (progress?.querySelector('[data-tv-bar-gauge]')?.textContent === '█'.repeat(40)
+                && progress.querySelector('.tv-percent-gauge')?.textContent.includes('100')) {
+                resolve(true); return;
+            }
+            if (Date.now() > deadline) { reject(new Error('Completed global index bar was not solid')); return; }
+            setTimeout(check, 20);
+        };
+        check();
+    })`, true);
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 3000;
         const check = () => {
@@ -1132,7 +1171,7 @@ async function run() {
         window.fetch = (url, options = {}) => String(url).startsWith('/api/search/status')
             ? Promise.resolve(new Response(JSON.stringify(window.__globalReady
                 ? { state: 'ready', percent: 100, processed: 2, total: 2, topics: 2, file: '' }
-                : { state: 'building', percent: 37, processed: 1, total: 2, topics: 1, file: 'VISTA.NG' }),
+                : { state: 'building', percent: 0, processed: 0, total: 2, topics: 0, file: '' }),
                 { status: 200, headers: { 'Content-Type': 'application/json' } }))
             : window.__searchOriginalFetch(url, options);
         const dialog = document.querySelector('.tv-search-window').closest('.tv-dialog-overlay')._tvView;
@@ -1144,7 +1183,8 @@ async function run() {
         const check = () => {
             const progress = document.querySelector('.tv-index-progress-window');
             if (progress && !progress.closest('.tv-dialog-overlay').hidden
-                && progress.textContent.includes('1 / 2') && progress.textContent.includes('37')) {
+                && progress.textContent.includes('0 / 2')
+                && progress.querySelector('[data-tv-bar-gauge]')?.textContent === '░'.repeat(40)) {
                 resolve(true); return;
             }
             if (Date.now() > deadline) { reject(new Error('Startup index progress did not appear')); return; }
@@ -1153,6 +1193,18 @@ async function run() {
         check();
     })`, true);
     await evaluate(`window.__globalReady = true`);
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 3000;
+        const check = () => {
+            const progress = document.querySelector('.tv-index-progress-window');
+            if (progress?.querySelector('[data-tv-bar-gauge]')?.textContent === '█'.repeat(40)) {
+                resolve(true); return;
+            }
+            if (Date.now() > deadline) { reject(new Error('Startup index bar never filled')); return; }
+            setTimeout(check, 20);
+        };
+        check();
+    })`, true);
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 3000;
         const check = () => {
@@ -2622,10 +2674,9 @@ async function run() {
         const displayParts = Array.from(dialog?.querySelectorAll('[data-tv-midi-display] > .tv-static-text') || []);
         const displayPartNames = displayParts.map((element) => element.getAttribute('data-tv-midi-part'));
         const displayRect = dialog?.querySelector('[data-tv-midi-display]')?.getBoundingClientRect();
-        const meter = dialog?.querySelector('[data-tv-midi-meter]');
-        meter?._tvView?.setProgress(0.5);
+        dialog?.querySelector('[data-tv-bar-gauge]')?._tvView?.updateView(50);
+        const meter = dialog?.querySelector('[data-tv-bar-gauge]');
         const meterRect = meter?.getBoundingClientRect();
-        const meterFillWidth = Number.parseFloat(getComputedStyle(meter, '::before').width || '0');
         const controlRect = dialog?.querySelector('[data-tv-midi-previous]')?.getBoundingClientRect();
         const listRect = list?.getBoundingClientRect();
         return {
@@ -2649,8 +2700,8 @@ async function run() {
                 && Math.abs((meterRect.top - displayRect.bottom) - displayRect.height / 3) < 1
                 && Math.abs((controlRect.top - meterRect.bottom) - meterRect.height) < 1),
             meterOwned: Boolean(meter && meter.childElementCount === 0
-                && meter.style.getPropertyValue('--tv-midi-progress') === '50%'
-                && Math.abs(meterFillWidth - meterRect.width / 2) < 1),
+                && meter.textContent === '█'.repeat(20) + '░'.repeat(20)
+                && meter.getAttribute('aria-valuenow') === '50'),
             positions: {
                 display: displayRect ? [displayRect.top, displayRect.bottom] : null,
                 meter: meterRect ? [meterRect.top, meterRect.bottom] : null,
@@ -3615,6 +3666,17 @@ async function run() {
         if (Date.now() > indexDeadline) { throw new Error('Public index did not become ready'); }
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    await send('Page.navigate', { url: appUrl });
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            if (!document.getElementById('tv-public-fallback')
+                && document.querySelector('[data-tv-menu-bar]')) { resolve(true); return; }
+            if (Date.now() > deadline) { reject(new Error('Homepage catalog fallback remained over TVision')); return; }
+            setTimeout(check, 30);
+        };
+        check();
+    })`, true);
     await send('Page.navigate', { url: appUrl + '?doc=README.md' });
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 10000;

@@ -3237,23 +3237,6 @@ class TVMidiDisplay extends TVGroup {
     }
 }
 
-class TVMidiMeter extends TVGroup {
-    static viewName = "midi-meter";
-
-    constructor(bounds) {
-        super(bounds);
-        this.progress = 0;
-    }
-
-    setProgress(value) {
-        this.progress = Math.max(0, Math.min(1, Number(value) || 0));
-        if (this.root) {
-            this.root.style.setProperty("--tv-midi-progress", `${Math.round(this.progress * 100)}%`);
-        }
-        return this;
-    }
-}
-
 class TVMidiPlayerDialog extends TVDialog {
     static viewName = "midi";
 
@@ -3280,7 +3263,7 @@ class TVMidiPlayerDialog extends TVDialog {
         const midiUrlInput = new TVInputLine(new TVRect(5, 1, 31, 2), 255);
         const midiUrlLabel = new TVLabel(new TVRect(0, 1, 4, 2), "URL", midiUrlInput);
         const display = new TVMidiDisplay(new TVRect(1, 0, 41, 3));
-        const meter = new TVMidiMeter(new TVRect(1, 4, 41, 5));
+        const meter = new TVBarGauge(new TVRect(1, 4, 41, 5), 100);
         const loadUrlButton = new TVButton(new TVRect(32, 1, 40, 3), "~L~oad", "midi-load-url", bfNormal);
         const externalSource = new TVGroup(new TVRect(1, 16, 41, 23)).insertAll([
             midiUrlLabel,
@@ -3559,7 +3542,7 @@ class TVMidiPlayerDialog extends TVDialog {
 
     updateProgress(elapsed, duration, { status = true } = {}) {
         const ratio = duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0;
-        this.meter.setProgress(ratio);
+        this.meter.updateView(ratio * 100);
         this.displayView.setTime(elapsed, duration);
         if (status && duration > 0) {
             this.setStatus(`Playing ${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}.`);
@@ -4614,13 +4597,19 @@ class TVSearchDialog extends TVDialog {
             if (serial !== this.indexMonitorSerial) { return; }
             if (status.state === "building") {
                 this.showIndexProgress(status);
-                this.indexMonitorTimer = setTimeout(() => { void this.monitorIndex(); }, 500);
+                this.indexMonitorTimer = setTimeout(() => { void this.monitorIndex(); }, 250);
+            } else if (status.state === "ready" && this.indexProgress) {
+                this.indexProgress.update({ ...status, percent: 100 });
+                this.indexMonitorTimer = setTimeout(() => {
+                    if (serial !== this.indexMonitorSerial) { return; }
+                    this.indexMonitorTimer = null;
+                    this.clearIndexProgress();
+                    if (this.isOpen() && this.isGlobal()) {
+                        this.renderResults(this.input.getData());
+                    }
+                }, 600);
             } else {
-                const wasBuilding = Boolean(this.indexProgress);
                 this.clearIndexProgress();
-                if (wasBuilding && this.isOpen() && this.isGlobal()) {
-                    this.renderResults(this.input.getData());
-                }
             }
         } catch {
             if (serial !== this.indexMonitorSerial) { return; }

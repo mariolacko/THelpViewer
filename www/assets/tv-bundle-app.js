@@ -2913,6 +2913,7 @@ function renderMarkdown(md) {
     let inList = false;
     let listTag = "";
     let inTable = false;
+    let paragraphLines = [];
 
     function isSafeMarkdownHref(href) {
         const value = String(href || "").trim();
@@ -2941,6 +2942,11 @@ function renderMarkdown(md) {
     }
     function closeTable() {
         if (inTable) { html.push("</tbody></table>"); inTable = false; }
+    }
+    function closeParagraph() {
+        if (!paragraphLines.length) { return; }
+        html.push(`<p>${inlineMarkup(paragraphLines.join("\n")).replace(/ {2}\n/g, "<br>")}</p>`);
+        paragraphLines = [];
     }
 
     function isTableRow(line) { return line.trim().startsWith("|") && line.trim().endsWith("|"); }
@@ -2977,6 +2983,7 @@ function renderMarkdown(md) {
         const line = lines[i];
         // Fenced code block
         if (line.startsWith("```") ) {
+            closeParagraph();
             if (inCode) {
                 // End code block
                 html.push("<pre>" + codeLines.join("\n") + "</pre>");
@@ -2995,6 +3002,7 @@ function renderMarkdown(md) {
         }
         // Table: header row followed by separator row
         if (!inTable && isTableRow(line) && i + 1 < lines.length && isSepRow(lines[i + 1])) {
+            closeParagraph();
             closeList();
             html.push("<table>");
             html.push("<thead>" + parseRow(line, "th") + "</thead>");
@@ -3008,20 +3016,22 @@ function renderMarkdown(md) {
             closeTable();
         }
         // Blank → close list, add empty paragraph for spacing
-        if (!line.trim()) { closeList(); html.push("<p></p>"); continue; }
+        if (!line.trim()) { closeParagraph(); closeList(); html.push("<p></p>"); continue; }
         // Headings
         const hMatch = line.match(/^(#{1,6})\s+(.*)/);
         if (hMatch) {
+            closeParagraph();
             closeList();
             const level = hMatch[1].length;
             html.push(`<h${level}>${inlineMarkup(hMatch[2])}</h${level}>`);
             continue;
         }
         // Horizontal rule
-        if (/^[-*_]{3,}\s*$/.test(line)) { closeList(); html.push("<hr>"); continue; }
+        if (/^[-*_]{3,}\s*$/.test(line)) { closeParagraph(); closeList(); html.push("<hr>"); continue; }
         // Unordered list
         const ulMatch = line.match(/^(\s*)[-*+]\s+(.*)/);
         if (ulMatch) {
+            closeParagraph();
             if (!inList || listTag !== "ul") { closeList(); html.push("<ul>"); inList = true; listTag = "ul"; }
             html.push(`<li>${inlineMarkup(ulMatch[2])}</li>`);
             continue;
@@ -3029,6 +3039,7 @@ function renderMarkdown(md) {
         // Ordered list
         const olMatch = line.match(/^(\s*)\d+\.\s+(.*)/);
         if (olMatch) {
+            closeParagraph();
             if (!inList || listTag !== "ol") { closeList(); html.push("<ol>"); inList = true; listTag = "ol"; }
             html.push(`<li>${inlineMarkup(olMatch[2])}</li>`);
             continue;
@@ -3041,13 +3052,14 @@ function renderMarkdown(md) {
                 continue;
             }
         }
-        // Regular paragraph line
+        // A physical Markdown line break is a space inside the same paragraph.
         closeList();
-        html.push(`<p>${inlineMarkup(line)}</p>`);
+        paragraphLines.push(line);
     }
     if (inCode && codeLines) {
         html.push("<pre>" + codeLines.join("\n") + "</pre>");
     }
+    closeParagraph();
     closeList();
     closeTable();
     return html.join("");
@@ -4212,6 +4224,9 @@ class TVBundleApp extends TVProgram {
         this._bindMenus();
         this._showWelcome();
         await this._handleUrlState();
+        if (!window.location.search && catalogData.length) {
+            document.getElementById("tv-public-fallback")?.remove();
+        }
     }
 
     _syncBundleMenu() {
@@ -4330,7 +4345,7 @@ class TVBundleApp extends TVProgram {
         const htmlContent = renderMarkdown(markdownText);
         const title = filename.replace(/\.md$/i, "").replace(/_/g, " ");
         const contentHTML = `<div class="tv-document tv-doc-document" data-tv-doc-editor>${htmlContent}</div>`;
-        const w = { cols: 78, rows: 24, min_cols: 40, min_rows: 8 };
+        const w = { cols: 86, rows: 24, min_cols: 40, min_rows: 8 }; // 80 code columns + frame and both document/code padding
         const windowView = new TVWindow(new TVRect(0, 0, w.cols, w.rows), title, wnNoNumber);
         windowView.minSize = new TVPoint(w.min_cols, w.min_rows);
         windowView.setHelpCtx(hcDocumentViewer);

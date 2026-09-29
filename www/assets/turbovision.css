@@ -1214,8 +1214,8 @@ button.tv-status-item {
     background: var(--tv-owner-content-bg);
     color: var(--tv-owner-content-fg);
     white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: normal;
+    word-break: normal;
 }
 .tv-doc-document h1,
 .tv-doc-document h2,
@@ -2100,18 +2100,9 @@ button.tv-status-item {
     color: #55ff55;
 }
 
-[data-tv-midi-meter] {
+.tv-midi-window [data-tv-bar-gauge] {
     background: #000000;
-    color: #aaaaaa;
-    overflow: hidden;
-}
-
-[data-tv-midi-meter]::before {
-    content: "";
-    display: block;
-    width: var(--tv-midi-progress, 0%);
-    height: 1em;
-    background: #00aaaa;
+    color: #00aaaa;
 }
 
 .tv-game-hall-control {

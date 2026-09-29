@@ -47,7 +47,7 @@ class TVView {
     _drawAttrs(attrs) { return attrs; }
     static _viewBoundsStyle() { return ""; }
 }
-const attrsToString = () => "";
+const attrsToString = (attrs) => Object.entries(attrs).map(([key, value]) => `${key}="${value}"`).join(" ");
 const escapeHtml = (value) => String(value);
 eval(source.slice(start, end) + "\nglobalThis.PercentGauge = TVPercentGauge; globalThis.BarGauge = TVBarGauge;");
 
@@ -60,9 +60,15 @@ percent.handleEvent({ what: evBroadcast, command: cmResetGauge, infoLong: 300 })
 if (percent.maxValue !== 300 || percent.curValue !== 0) throw new Error("reset failed");
 
 const bar = new BarGauge(new TVRect(0, 0, 10, 1), 100);
+if (!bar.draw().includes("░░░░░░░░░░")) throw new Error("empty track is not shaded");
 bar.updateView(40);
 const markup = bar.draw();
-if (!markup.includes("▓▓▓▓░░░░░░")) throw new Error(`unexpected bar: ${markup}`);
+if (!markup.includes("████░░░░░░")) throw new Error(`unexpected bar: ${markup}`);
+if (!markup.includes('role="progressbar"') || !markup.includes('aria-valuenow="40"')) {
+    throw new Error(`progress semantics missing: ${markup}`);
+}
+bar.updateView(100);
+if (!bar.draw().includes("██████████")) throw new Error("completed track is not solid");
 '''
     result = subprocess.run(
         [NODE, "-e", script, str(CORE_PATHS[0])],

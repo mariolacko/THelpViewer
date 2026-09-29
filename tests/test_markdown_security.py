@@ -97,3 +97,36 @@ process.stdout.write(JSON.stringify({ escaped, inlineCode }));
     assert "<td>x | y</td>" in rendered["escaped"]
     assert rendered["inlineCode"].count("<td>") == 2
     assert "<td><code>x | y</code></td>" in rendered["inlineCode"]
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for the browser asset regression test")
+def test_markdown_soft_wrapped_lines_form_one_paragraph_and_keep_links():
+    asset_paths = (
+        Path("www/assets/tv-bundle-app.js"),
+        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+    )
+    assert asset_paths[0].read_bytes() == asset_paths[1].read_bytes()
+
+    script = r"""
+const fs = require("node:fs");
+const source = fs.readFileSync(process.argv[1], "utf8");
+const start = source.indexOf("function renderMarkdown(md)");
+const end = source.indexOf("\n// ── Menu bar for bundle page", start);
+eval(source.slice(start, end));
+const soft = renderMarkdown("First source line\ncontinues here.\n\nNext paragraph.");
+const link = renderMarkdown("[HelpPC format\nreference](https://example.test/help)");
+const hard = renderMarkdown("First line  \nsecond line");
+process.stdout.write(JSON.stringify({ soft, link, hard }));
+"""
+    result = subprocess.run(
+        [NODE, "-e", script, str(asset_paths[0])],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = json.loads(result.stdout)
+
+    assert rendered["soft"].startswith("<p>First source line\ncontinues here.</p>")
+    assert "<p>Next paragraph.</p>" in rendered["soft"]
+    assert '<a href="https://example.test/help"' in rendered["link"]
+    assert "First line<br>second line" in rendered["hard"]
