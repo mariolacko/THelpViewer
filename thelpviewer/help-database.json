@@ -13,6 +13,11 @@
       "runner": "thelpviewer.downloader.archiveorg"
     },
     {
+      "key": "direct",
+      "description": "Pinned archives (exact source files)",
+      "runner": "thelpviewer.downloader.direct"
+    },
+    {
       "key": "olddos",
       "description": "old-dos.ru (category listing + detail page)",
       "runner": "thelpviewer.downloader.olddos"
@@ -91,6 +96,22 @@
       "matcher_args": "data",
       "reader": "thelpviewer.converter.readers.ng:NGReader",
       "reader_init": "path"
+    },
+    {
+      "name": "helppc",
+      "source_kind": "source",
+      "extensions": [".txt"],
+      "matcher": "thelpviewer.converter.readers.helppc:is_helppc_source",
+      "matcher_args": "data",
+      "reader": "thelpviewer.converter.readers.helppc:HelpPCReader"
+    },
+    {
+      "name": "freedos-html",
+      "source_kind": "compiled",
+      "extensions": [".zip"],
+      "matcher": "thelpviewer.converter.readers.freedos_html:is_freedos_html_archive",
+      "matcher_args": "path_data",
+      "reader": "thelpviewer.converter.readers.freedos_html:FreeDOSHtmlReader"
     },
     {
       "name": "bw03",
@@ -513,6 +534,8 @@
     {
       "key": "qbx",
       "label": "Microsoft QuickBASIC Extended 7.1",
+      "menu_label": "Microsoft QuickBASIC",
+      "default_version": "7.1",
       "build_group": "microsoft",
       "collection_prefixes": [
         "Microsoft QuickBASIC Extended"
@@ -533,6 +556,101 @@
           "direct_urls": [
             "https://archive.org/details/qb71zip",
             "https://archive.org/details/microsoft-basic-professional-development-system-7.1-5.25"
+          ]
+        }
+      }
+    },
+    {
+      "key": "msdos622",
+      "label": "Microsoft MS-DOS 6.22",
+      "build_group": "dos-reference",
+      "collection_prefixes": ["Microsoft MS-DOS 6.22"],
+      "sources": {
+        "archiveorg": {
+          "search_text": "Microsoft MS-DOS 6.22 English installation disks",
+          "query": "identifier:en_msdos622.zip AND mediatype:software",
+          "keywords": ["ms-dos 6.22"],
+          "direct_urls": ["https://archive.org/details/en_msdos622.zip"],
+          "archive_members": ["HELP.HLP"]
+        },
+        "direct": {
+          "search_text": "MS-DOS 6.22 command reference",
+          "direct_urls": [
+            "https://archive.org/download/en_msdos622.zip/en_msdos622.zip"
+          ],
+          "archive_members": [
+            "HELP.HLP"
+          ]
+        }
+      }
+    },
+    {
+      "key": "qb45",
+      "label": "Microsoft QuickBASIC 4.5",
+      "menu_label": "Microsoft QuickBASIC",
+      "default_version": "4.5",
+      "build_group": "dos-reference",
+      "collection_prefixes": ["Microsoft QuickBASIC 4.5"],
+      "sources": {
+        "archiveorg": {
+          "search_text": "Microsoft QuickBASIC 4.5 IBM PC floppy images",
+          "query": "identifier:003495-MicrosoftQuickbasic45 AND mediatype:software",
+          "keywords": ["quickbasic 4.5"],
+          "direct_urls": ["https://archive.org/details/003495-MicrosoftQuickbasic45"],
+          "archive_members": ["QB45QCK.HLP", "QB45ADVR.HLP", "QB45ENER.HLP"]
+        },
+        "direct": {
+          "search_text": "QuickBASIC 4.5 Advisor",
+          "direct_urls": [
+            "https://archive.org/download/003495-MicrosoftQuickbasic45/003495_microsoft_quickbasic.7z"
+          ],
+          "archive_members": [
+            "QB45QCK.HLP",
+            "QB45ADVR.HLP",
+            "QB45ENER.HLP"
+          ]
+        }
+      }
+    },
+    {
+      "key": "helppc",
+      "label": "HelpPC 2.10",
+      "build_group": "dos-reference",
+      "collection_prefixes": ["HelpPC 2.10"],
+      "conversion": {"use_database_entries": true},
+      "sources": {
+        "direct": {
+          "search_text": "HelpPC 2.10 original Simtel distribution",
+          "direct_urls": [
+            "https://ftp.zx.net.nz/pub/archive/simtel.net/pub/simtelnet/msdos/info/helppc21.zip"
+          ],
+          "archive_members": [
+            "ASM.TXT",
+            "C.TXT",
+            "HARDWARE.TXT",
+            "INTERRUP.TXT",
+            "MISC.TXT",
+            "TABLES.TXT"
+          ]
+        }
+      }
+    },
+    {
+      "key": "freedos-help",
+      "label": "FreeDOS HTML Help 1.1.1a",
+      "build_group": "dos-reference",
+      "collection_prefixes": ["FreeDOS HTML Help 1.1.1a"],
+      "conversion": {"use_database_entries": true},
+      "sources": {
+        "direct": {
+          "search_text": "FreeDOS HTML Help English 1.1.1a",
+          "direct_urls": [
+            "https://ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/latest/base/htmlhelp/20251203.4/htmlhelp.zip"
+          ],
+          "archive_members": [
+            "HELP/EN/HHSTNDRD/HHSTNDRD.ZIP",
+            "HELP/FDL.TXT",
+            "DOC/HELP/COPYING"
           ]
         }
       }
@@ -794,9 +912,28 @@
         "gamecheater",
         "gc"
       ]
+    },
+    {
+      "key": "dos-reference",
+      "label": "DOS reference help",
+      "source_root_prefixes": ["Microsoft MS-DOS 6.22", "Microsoft QuickBASIC 4.5", "HelpPC 2.10", "FreeDOS HTML Help 1.1.1a"],
+      "help_dir_prefixes": ["Microsoft MS-DOS 6.22", "Microsoft QuickBASIC 4.5", "HelpPC 2.10", "FreeDOS HTML Help 1.1.1a"],
+      "include_by_default": false,
+      "aliases": ["dos-reference"]
     }
   ],
   "entries": [
+    {"crc32": "D6DD5DAA", "filenames": ["HELP.HLP"], "title": "MS-DOS 6.22 Help", "collection": "Microsoft MS-DOS 6.22", "text_encoding": "cp437", "language": "en", "product": "msdos622"},
+    {"crc32": "FD08053B", "filenames": ["QB45QCK.HLP"], "title": "QuickBASIC 4.5 Advisor", "collection": "Microsoft QuickBASIC 4.5", "text_encoding": "cp437", "language": "en", "product": "qb45"},
+    {"crc32": "5695C005", "filenames": ["QB45ADVR.HLP"], "title": "QuickBASIC 4.5 Advisor Reference", "collection": "Microsoft QuickBASIC 4.5", "text_encoding": "cp437", "language": "en", "product": "qb45"},
+    {"crc32": "3EC450F4", "filenames": ["QB45ENER.HLP"], "title": "QuickBASIC 4.5 Runtime Errors", "collection": "Microsoft QuickBASIC 4.5", "text_encoding": "cp437", "language": "en", "product": "qb45"},
+    {"crc32": "6B1B3FB7", "filenames": ["ASM.TXT"], "title": "HelpPC Assembler Programming Topics", "collection": "HelpPC 2.10", "text_encoding": "cp437", "language": "en", "product": "helppc"},
+    {"crc32": "0E21B5FB", "filenames": ["C.TXT"], "title": "HelpPC C Programming Topics", "collection": "HelpPC 2.10", "text_encoding": "cp437", "language": "en", "product": "helppc"},
+    {"crc32": "4AA25C65", "filenames": ["HARDWARE.TXT"], "title": "HelpPC Hardware Topics", "collection": "HelpPC 2.10", "text_encoding": "cp437", "language": "en", "product": "helppc"},
+    {"crc32": "0E038E1B", "filenames": ["INTERRUP.TXT"], "title": "HelpPC Interrupt Topics", "collection": "HelpPC 2.10", "text_encoding": "cp437", "language": "en", "product": "helppc"},
+    {"crc32": "F7B1BD0B", "filenames": ["MISC.TXT"], "title": "HelpPC Miscellaneous Topics", "collection": "HelpPC 2.10", "text_encoding": "cp437", "language": "en", "product": "helppc"},
+    {"crc32": "96D09BA1", "filenames": ["TABLES.TXT"], "title": "HelpPC Tables", "collection": "HelpPC 2.10", "text_encoding": "cp437", "language": "en", "product": "helppc"},
+    {"crc32": "3F1A2C97", "filenames": ["HHSTNDRD.ZIP"], "title": "FreeDOS HTML Help 1.1.1a", "collection": "FreeDOS HTML Help 1.1.1a", "text_encoding": "utf-8", "language": "en", "product": "freedos-help"},
     {
       "crc32": "03F6A215",
       "filenames": [
@@ -1152,7 +1289,7 @@
       "filenames": [
         "QA.HLP"
       ],
-      "title": "taw080554",
+      "title": "QuickC Advisor Search Stub",
       "collection": "Microsoft QuickC, C, and C++ 2.50",
       "text_encoding": "cp437",
       "language": "en"

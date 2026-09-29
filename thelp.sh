@@ -4,6 +4,7 @@
 # Usage:
 #   ./thelp.sh download             Download help files from the internet
 #   ./thelp.sh build                Build UHF 2.0 .json.gz bundles
+#   ./thelp.sh build --with-dos-reference  Build default groups plus DOS reference help
 #   ./thelp.sh catalog              Rebuild helps/catalog.json from existing bundles
 #   ./thelp.sh serve start          Start FastAPI server in background (port 5448)
 #   ./thelp.sh serve stop           Stop local FastAPI server
@@ -94,6 +95,7 @@ do_all=false
 PORT="${THELP_PORT:-5448}"
 download_args=()
 build_groups=()
+with_dos_reference=false
 
 catalog_build_group_values() {
     local mode="${1:-all}"
@@ -104,26 +106,6 @@ import sys
 default_only = len(sys.argv) > 1 and sys.argv[1] == "default"
 for key in all_build_groups(default_only=default_only):
     print(key)
-PY
-}
-
-catalog_group_source_prefixes() {
-    "${PYTHON_BIN}" - "$@" <<'PY'
-from thelpviewer.downloader.catalog import build_source_root_prefixes_for_groups
-import sys
-
-for root in build_source_root_prefixes_for_groups(list(sys.argv[1:]) or None):
-    print(root)
-PY
-}
-
-catalog_group_help_prefixes() {
-    "${PYTHON_BIN}" - "$@" <<'PY'
-from thelpviewer.downloader.catalog import build_help_prefixes_for_groups
-import sys
-
-for prefix in build_help_prefixes_for_groups(list(sys.argv[1:]) or None):
-    print(prefix)
 PY
 }
 
@@ -157,6 +139,9 @@ selected_build_groups() {
     else
         requested=("${build_groups[@]}")
     fi
+    if $with_dos_reference; then
+        requested+=("dos-reference")
+    fi
 
     for group in "${requested[@]}"; do
         if [ "${group}" = "all" ]; then
@@ -179,21 +164,17 @@ selected_build_groups() {
 }
 
 selected_build_source_roots() {
-    local -a prefixes=()
-    local root
-    local dir_name
-    local prefix
+    "${PYTHON_BIN}" - "${SOURCES_DIR}" "$@" <<'PY'
+from pathlib import Path
+import sys
+from thelpviewer.downloader.catalog import build_group_for_source_root
 
-    mapfile -t prefixes < <(catalog_group_source_prefixes "$@")
-    while IFS= read -r -d '' root; do
-        dir_name="$(basename "$root")"
-        for prefix in "${prefixes[@]}"; do
-            if [[ "$dir_name" == "$prefix"* ]]; then
-                printf '%s\n' "$root"
-                break
-            fi
-        done
-    done < <(find "${SOURCES_DIR}" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+source_dir = Path(sys.argv[1])
+selected = set(sys.argv[2:])
+for root in sorted(source_dir.iterdir()):
+    if root.is_dir() and build_group_for_source_root(root.name) in selected:
+        print(root)
+PY
 }
 
 remove_group_outputs() {
@@ -201,22 +182,21 @@ remove_group_outputs() {
     shift
     [ -d "$target_dir" ] || return 0
 
-    local -a help_prefixes=()
-    local prefix
-    mapfile -t help_prefixes < <(catalog_group_help_prefixes "$@")
-    [ ${#help_prefixes[@]} -gt 0 ] || return 0
-
     local path
     while IFS= read -r -d '' path; do
-        local dir_name
-        dir_name="$(basename "$path")"
-        for prefix in "${help_prefixes[@]}"; do
-            if [[ "$dir_name" == "$prefix"* ]]; then
-                rm -rf "$path"
-                break
-            fi
-        done
-    done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -type d -print0)
+        rm -rf "$path"
+    done < <("${PYTHON_BIN}" - "$target_dir" "$@" <<'PY'
+from pathlib import Path
+import sys
+from thelpviewer.downloader.catalog import build_group_for_help_root
+
+help_dir = Path(sys.argv[1])
+selected = set(sys.argv[2:])
+for root in help_dir.iterdir():
+    if root.is_dir() and build_group_for_help_root(root.name) in selected:
+        sys.stdout.buffer.write(str(root).encode() + b"\0")
+PY
+    )
 }
 
 has_download_data() {
@@ -429,6 +409,7 @@ while [ $i -lt $# ]; do
                 build_groups+=("${normalized_group}")
             done
             ;;
+        --with-dos-reference) with_dos_reference=true ;;
         start)    do_start=true ;;
         stop)     do_stop=true ;;
         restart)  do_restart=true ;;
@@ -460,6 +441,11 @@ if $needs_input_data && ! $do_download && ! has_source_data; then
     do_download=true
 fi
 
+if $with_dos_reference && ! $do_build; then
+    echo "[thelp] --with-dos-reference requires build or all."
+    exit 1
+fi
+
 # No args → show help
 if ! $do_download && ! $do_build && ! $do_catalog && ! $do_serve && ! $do_serve_stop && ! $do_serve_status && ! $do_serve_restart && ! $do_update && ! $do_start && ! $do_stop && ! $do_restart; then
     echo "THelpViewer"
@@ -484,12 +470,14 @@ if ! $do_download && ! $do_build && ! $do_catalog && ! $do_serve && ! $do_serve_
     echo ""
     echo "Build groups (use with build): $(build_group_list_text)"
     echo "Default build groups: $(printf '%s' "${DEFAULT_BUILD_GROUPS[*]}" | tr ' ' ',')"
+    echo "Use --with-dos-reference to add DOS reference help to a build."
     echo ""
     echo "Examples:"
     echo "  ./thelp.sh all                     # Everything from scratch"
     echo "  ./thelp.sh build serve start       # Build and start local server"
     echo "  ./thelp.sh build --group borland   # Generate only Borland bundles"
     echo "  ./thelp.sh build --group scorpion  # Add Scorpions bundles on demand"
+    echo "  ./thelp.sh build --with-dos-reference # Build defaults and DOS reference help together"
     echo "  ./thelp.sh build --group borland,microsoft  # Generate selected groups"
     echo "  ./thelp.sh build --group all       # Build all groups including Scorpions"
     echo "  ./thelp.sh serve start 5450        # Start local server on port 5450"
@@ -546,7 +534,7 @@ if $do_build; then
     build_backup_dir="${HELPS_DIR}.prev.$$"
     rm -rf "${build_backup_dir}"
 
-    if [ ${#build_groups[@]} -gt 0 ] && [ -d "${HELPS_DIR}" ]; then
+    if { [ ${#build_groups[@]} -gt 0 ] || $with_dos_reference; } && [ -d "${HELPS_DIR}" ]; then
         cp -a "${HELPS_DIR}/." "${build_tmp_dir}/"
         remove_group_outputs "${build_tmp_dir}" "${active_build_groups[@]}"
     fi

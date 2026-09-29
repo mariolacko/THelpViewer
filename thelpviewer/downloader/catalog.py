@@ -80,6 +80,26 @@ def build_help_prefixes_for_groups(selected_keys: list[str] | None = None) -> li
     return prefixes
 
 
+def _build_group_for_root(name: str, prefix_field: str) -> str | None:
+    """Use the most specific manifest prefix when build groups overlap."""
+    owner: str | None = None
+    longest = 0
+    for group in _MANIFEST.build_groups:
+        for prefix in getattr(group, prefix_field):
+            if name.startswith(prefix) and len(prefix) > longest:
+                owner = group.key
+                longest = len(prefix)
+    return owner
+
+
+def build_group_for_source_root(name: str) -> str | None:
+    return _build_group_for_root(name, "source_root_prefixes")
+
+
+def build_group_for_help_root(name: str) -> str | None:
+    return _build_group_for_root(name, "help_dir_prefixes")
+
+
 def product_spec(key: str) -> ProductSpec:
     """Return one product spec or raise ``KeyError``."""
     return PRODUCTS[key]
@@ -115,6 +135,8 @@ __all__ = [
     "all_products",
     "all_sources",
     "build_group_spec",
+    "build_group_for_help_root",
+    "build_group_for_source_root",
     "build_help_prefixes_for_groups",
     "build_source_root_prefixes_for_groups",
     "normalize_build_group",

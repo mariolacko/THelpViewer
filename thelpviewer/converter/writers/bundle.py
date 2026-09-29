@@ -91,17 +91,25 @@ def _product_metadata_for_group(group_name: str) -> tuple[str, str, str]:
     if not normalized:
         return "", "", ""
     manifest = load_help_manifest()
+    matches: list[tuple[int, int, ProductSpec, str]] = []
     for product in manifest.products:
         prefixes = (
-            (product.menu_label,) if product.menu_label else ()
-        ) + product.collection_prefixes + (product.label,)
-        for prefix in prefixes:
+            [(prefix, 2) for prefix in product.collection_prefixes]
+            + [(product.label, 1)]
+            + ([(product.menu_label, 0)] if product.menu_label else [])
+        )
+        for prefix, priority in prefixes:
             clean_prefix = prefix.strip()
             if not clean_prefix:
                 continue
             if normalized.casefold().startswith(clean_prefix.casefold()):
-                version = normalized[len(clean_prefix) :].strip(" -/")
-                return product.key, _product_menu_label(product), version or product.default_version
+                remainder = normalized[len(clean_prefix) :]
+                if remainder and remainder[0] not in " -/":
+                    continue
+                matches.append((len(clean_prefix), priority, product, remainder.strip(" -/")))
+    if matches:
+        _, _, product, version = max(matches, key=lambda match: (match[0], match[1]))
+        return product.key, _product_menu_label(product), version or product.default_version
     return "", "", ""
 
 
@@ -543,7 +551,7 @@ def export_bundle_tree(
                 group.source_paths[0],
                 source_root=source_root,
                 helps_dir=helps_dir,
-                database_entry=None,
+                database_entry=lookup_help_database_entry(group.source_paths[0], help_database),
             )
             results.append(
                 _export_bundle_source_group(
@@ -677,6 +685,11 @@ def _write_bundle_index(target_dir: Path) -> None:
         dest = Path(target_dir) / SITE_ASSET_DIR_NAME / "tv-bundle-app.js"
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(bundle_app_js, dest)
+    site_image = Path(__file__).resolve().parents[3] / "Thelp.png"
+    if site_image.is_file():
+        dest = Path(target_dir) / SITE_ASSET_DIR_NAME / "Thelp.png"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(site_image, dest)
 
     index_html = _render_bundle_index_html()
     (target_dir / "index.html").write_text(index_html, encoding="utf-8")
@@ -704,6 +717,7 @@ def _render_bundle_index_html() -> str:
 <meta name="twitter:image" content="{SITE_ASSET_DIR_NAME}/Thelp.png">
 <meta name="theme-color" content="#000080">
 <meta name="GENERATOR" content="THelp Viewer Converter {GENERATOR_VERSION}">
+<link rel="icon" type="image/svg+xml" href="{SITE_ASSET_DIR_NAME}/thelp-icon.svg">
 <link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20260927n">
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20260927t"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20260927l"></script>

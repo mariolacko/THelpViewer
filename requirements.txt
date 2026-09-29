@@ -3,3 +3,4 @@ uvicorn
 capstone
 webauthn>=2.2,<3
 cryptography>=42
+pylibmspack>=0.4,<0.5

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .catalog import ProductSpec, SourceQuery, products_for_source
 from .collector import HELP_EXTENSIONS, detect_language, is_winhelp
-from .extractor import ExtractorTools, collect_from_archive
+from .extractor import ExtractorTools, collect_archive_members, collect_from_archive
 from .http import download_file, fetch_json
 
 
@@ -224,7 +224,7 @@ def process_item(
 
     lang_code = detect_language(title)
     version = _detect_version(title, identifier)
-    version_suffix = f" {version}" if version else ""
+    version_suffix = f" {version}" if version and not product.label.casefold().endswith(f" {version}".casefold()) else ""
     base_label = f"{product.label}{version_suffix}".strip()
     collected: list[Path] = []
 
@@ -264,13 +264,22 @@ def process_item(
             failed.append(f"{identifier}/{filename}: {exc}")
             continue
 
-        result = collect_from_archive(
-            archive_path,
-            base_label,
-            sources_dir,
-            extractor,
-            lang_code=lang_code,
-        )
+        if source_query.archive_members:
+            result = collect_archive_members(
+                archive_path,
+                source_query.archive_members,
+                product.collection_prefixes[0] if product.collection_prefixes else base_label,
+                sources_dir,
+                extractor,
+            )
+        else:
+            result = collect_from_archive(
+                archive_path,
+                base_label,
+                sources_dir,
+                extractor,
+                lang_code=lang_code,
+            )
         collected.extend(result)
         if not result:
             print("    No help files found.")
@@ -295,6 +304,11 @@ def run(
             continue
 
         print(f"[archive.org] {product.label}")
+        if source_query.archive_members and product.collection_prefixes and not dry_run:
+            target_dir = sources_dir / product.collection_prefixes[0]
+            if all((target_dir / Path(member).name.upper()).is_file() for member in source_query.archive_members):
+                print("  [skipped] All selected files already exist")
+                continue
         print(f"  Search: {source_query.search_text}")
         direct_items: list[dict] = []
         for url in source_query.direct_urls:

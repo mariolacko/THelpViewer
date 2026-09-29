@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fnmatch import fnmatch
 import json
 from pathlib import Path
 import re
@@ -40,6 +41,7 @@ class ArchiveProbe:
 
 SZDD_SIGNATURE = b"SZDD\x88\xF0\x27\x33"
 QBASIC_SZ_SIGNATURE = b"SZ \x88\xF0\x27\x33\xD1"
+KWAJ_SIGNATURE = b"KWAJ\x88\xF0\x27\xD1"
 ZIP_LOCAL_FILE_HEADER = b"PK\x03\x04"
 BORLAND_SPLIT_PART_RE = re.compile(r"^(?P<stem>.+)\.C(?P<series>[A-Z])(?P<part>\d+)$", re.I)
 
@@ -374,6 +376,7 @@ def _looks_like_single_file_payload(path: Path, head: bytes) -> bool:
     return (
         head.startswith(SZDD_SIGNATURE)
         or head.startswith(QBASIC_SZ_SIGNATURE)
+        or head.startswith(KWAJ_SIGNATURE)
         or upper.endswith(".HL$")
         or upper.endswith(".HL_")
         or upper.endswith("_")
@@ -471,10 +474,17 @@ def expand_single_file_payloads(work_dir: Path, tools: ExtractorTools) -> None:
         if dest.exists():
             continue
         try:
-            data = _extract_single_file_payload_with_unar(path, tools)
-            if data is None:
-                data = _decompress_sz_payload(path.read_bytes())
-        except Exception:
+            if head.startswith(KWAJ_SIGNATURE):
+                from pylibmspack import KwajFile
+
+                data = KwajFile(str(path)).read(max_size=64 * 1024 * 1024)
+            else:
+                data = _extract_single_file_payload_with_unar(path, tools)
+                if data is None:
+                    data = _decompress_sz_payload(path.read_bytes())
+        except Exception as exc:
+            if head.startswith(KWAJ_SIGNATURE):
+                print(f"    [expand error] {path.name}: {exc}")
             continue
         dest.write_bytes(data)
 
@@ -501,3 +511,48 @@ def collect_from_archive(
         if not files:
             return []
         return copy_help_files(files, target_dir, sources_dir)
+
+
+def collect_archive_members(
+    archive: Path,
+    members: tuple[str, ...],
+    label: str,
+    sources_dir: Path,
+    tools: ExtractorTools,
+) -> list[Path]:
+    """Collect only configured files from an archive, including disk images."""
+    if not members:
+        raise ValueError("No archive members configured")
+
+    with tempfile.TemporaryDirectory(prefix="dlmembers_") as tmp:
+        work_dir = Path(tmp)
+        if not extract_file(archive, work_dir, tools):
+            raise ValueError(f"Cannot extract {archive.name}")
+
+        def find_members() -> tuple[list[Path], list[str]]:
+            files = sorted(path for path in work_dir.rglob("*") if path.is_file())
+            selected: list[Path] = []
+            missing: list[str] = []
+            for pattern in members:
+                needle = pattern.casefold().replace("\\", "/")
+                matches = [
+                    path for path in files
+                    if fnmatch(
+                        (path.relative_to(work_dir).as_posix() if "/" in needle else path.name).casefold(),
+                        needle,
+                    )
+                ]
+                if len(matches) != 1:
+                    missing.append(pattern if not matches else f"{pattern} (ambiguous)")
+                elif matches[0] not in selected:
+                    selected.append(matches[0])
+            return selected, missing
+
+        selected, missing = find_members()
+        if missing:
+            extract_nested(work_dir, tools)
+            expand_single_file_payloads(work_dir, tools)
+            selected, missing = find_members()
+        if missing:
+            raise ValueError(f"Missing archive members: {', '.join(missing)}")
+        return copy_help_files(selected, sources_dir / label, sources_dir)

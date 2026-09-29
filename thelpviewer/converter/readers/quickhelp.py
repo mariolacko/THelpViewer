@@ -263,6 +263,10 @@ def _resolve_external_quickhelp_target(
         explicit_file, target_context = target_context.split("!", 1)
         explicit_file = explicit_file.strip() or None
         target_context = target_context.strip()
+        if explicit_file is not None:
+            repeated_file, separator, remainder = target_context.partition("!")
+            if separator and repeated_file.casefold() == explicit_file.casefold():
+                target_context = remainder.strip()
     elif target_context.count(".") >= 2:
         # Microsoft Advisor also emits qualified references as
         # `database.context` (for example `OS2.h.overview`) instead of the
@@ -275,11 +279,17 @@ def _resolve_external_quickhelp_target(
     if not target_context:
         return None
 
+    resolved: Path | None = None
     if explicit_file is not None:
         candidates = []
         resolved = _find_quickhelp_sibling_file(source_path, explicit_file)
         if resolved is not None:
             candidates.append(resolved)
+        else:
+            # Some shipped databases contain a misspelled filename in an
+            # otherwise valid qualified link (QB45QCK's AB45ADVR example).
+            # Recover it only when its context is unique among siblings.
+            candidates = sorted(source_path.parent.glob("*.HLP"))
     else:
         candidates = sorted(source_path.parent.glob("*.HLP"))
 
@@ -310,11 +320,11 @@ def _resolve_external_quickhelp_target(
                 context_alias=target_context,
             )
         )
-        if explicit_file is not None:
+        if resolved is not None:
             break
 
     if explicit_file is not None:
-        if matches:
+        if len({(match.source_file.casefold(), match.topic_id) for match in matches}) == 1:
             return matches[0]
         fallback_file = Path(explicit_file).name.strip()
         if fallback_file:

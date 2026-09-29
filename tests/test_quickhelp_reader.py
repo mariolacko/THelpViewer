@@ -101,3 +101,27 @@ def test_qualified_missing_quickhelp_targets_remain_real_links():
     assert "[link:file=OS2.HLP,alias=h.contents]OS/2 API[/link]" in content
     assert "[link:file=WIN.HLP,alias=h.contents]Windows API[/link]" in content
     assert "[link:file=LAN.HLP,alias=h.contents]Network API[/link]" in content
+
+
+def test_quickbasic_advisor_links_resolve_across_original_disks():
+    root = Path("sources/Microsoft QuickBASIC 4.5")
+    if not (root / "QB45ADVR.HLP").is_file():
+        return
+    quick = load_document(root / "QB45QCK.HLP")
+    advisor = load_document(root / "QB45ADVR.HLP")
+    quick_content = "\n".join(line for topic in quick.topics for line in topic.uhf_content)
+    advisor_content = "\n".join(line for topic in advisor.topics for line in topic.uhf_content)
+
+    assert "[link:file=QB45ADVR.HLP,topic=185,alias=.erasex]Example►[/link]" in quick_content
+    assert "[link:file=QB45ADVR.HLP,topic=88,alias=.vupri]VIEW PRINT statement►[/link]" in quick_content
+    assert "[link:file=QB45ADVR.HLP,topic=" in quick_content
+    assert "[link:file=QB45QCK.HLP,topic=" in advisor_content
+
+
+def test_quickc_250_qa_file_is_an_intact_search_stub():
+    path = Path("sources/Microsoft QuickC, C, and C++ 2.50/QA.HLP")
+    doc = load_document(path)
+
+    assert len(doc.topics) == 2
+    assert "taw080554" in doc.topics[0].alias_strings
+    assert "Null context for help file search order" in doc.topics[0].uhf_content[0]

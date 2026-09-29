@@ -56,6 +56,7 @@ class SourceQuery:
     api_url: str | None = None
     raw_base_url: str | None = None
     direct_urls: tuple[str, ...] = ()
+    archive_members: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +237,7 @@ def _parse_source_query(value: object) -> SourceQuery:
         api_url=item.get("api_url") if isinstance(item.get("api_url"), str) else None,
         raw_base_url=item.get("raw_base_url") if isinstance(item.get("raw_base_url"), str) else None,
         direct_urls=_string_tuple(item.get("direct_urls")),
+        archive_members=_string_tuple(item.get("archive_members")),
     )
 
 

@@ -5,6 +5,8 @@ from thelpviewer.downloader.catalog import (
     all_build_groups,
     all_products,
     build_help_prefixes_for_groups,
+    build_group_for_help_root,
+    build_group_for_source_root,
     build_source_root_prefixes_for_groups,
     normalize_build_group,
     product_spec,
@@ -27,6 +29,7 @@ def test_build_groups_and_scorpion_direct_url():
         "software602",
         "scorpion",
         "game-cheater",
+        "dos-reference",
     ]
     assert build_source_root_prefixes_for_groups(["scorpion"]) == ["Scorpions Cheater DOS"]
     assert build_help_prefixes_for_groups(["scorpion"]) == ["Scorpions Cheater"]
@@ -35,6 +38,17 @@ def test_build_groups_and_scorpion_direct_url():
     )
     assert build_source_root_prefixes_for_groups(["game-cheater"]) == ["Game-Cheater"]
     assert build_help_prefixes_for_groups(["game-cheater"]) == ["Game-Cheater 9.02"]
+    reference_roots = [
+        "Microsoft MS-DOS 6.22", "Microsoft QuickBASIC 4.5",
+        "HelpPC 2.10", "FreeDOS HTML Help 1.1.1a",
+    ]
+    assert build_source_root_prefixes_for_groups(["dos-reference"]) == reference_roots
+    assert build_help_prefixes_for_groups(["dos-reference"]) == reference_roots
+    assert normalize_build_group("dos-reference") == "dos-reference"
+    assert build_group_for_source_root("Microsoft MS-DOS 6.22") == "dos-reference"
+    assert build_group_for_help_root("Microsoft MS-DOS 6.22") == "dos-reference"
+    assert build_group_for_source_root("Microsoft QuickBASIC Extended 7.1") == "microsoft"
+    assert build_group_for_help_root("Microsoft QuickBASIC Extended 7.1") == "microsoft"
     assert product_spec("game-cheater").sources["slunecnice"].direct_urls == (
         "https://www.slunecnice.cz/sw/game-cheater/",
     )
@@ -53,6 +67,7 @@ def test_manifest_drives_sources_products_and_conversion_files():
     ]
     assert manifest.converters[0].reader == "thelpviewer.converter.readers.fbhf:FBHFSourceReader"
     assert SOURCE_RUNNERS["cheater_cz"] == "thelpviewer.downloader.cheater_cz"
+    assert SOURCE_RUNNERS["direct"] == "thelpviewer.downloader.direct"
     assert "software602" in all_products()
     assert normalize_build_group("ms") == "microsoft"
     assert normalize_build_group("gamecheater") == "game-cheater"
@@ -88,6 +103,36 @@ def test_manifest_drives_sources_products_and_conversion_files():
     assert turbo_pascal_entries
     assert {entry.product_key for entry in turbo_pascal_entries} == {"tp"}
     assert any(entry.version == "7.1" for entry in turbo_pascal_entries)
+
+
+def test_pinned_dos_sources_select_only_the_intended_files():
+    assert product_spec("msdos622").sources["direct"].archive_members == ("HELP.HLP",)
+    assert product_spec("qb45").sources["direct"].archive_members == (
+        "QB45QCK.HLP", "QB45ADVR.HLP", "QB45ENER.HLP",
+    )
+    assert product_spec("msdos622").sources["archiveorg"].query == (
+        "identifier:en_msdos622.zip AND mediatype:software"
+    )
+    assert product_spec("qb45").sources["archiveorg"].query == (
+        "identifier:003495-MicrosoftQuickbasic45 AND mediatype:software"
+    )
+    for key in ("msdos622", "qb45"):
+        product = product_spec(key)
+        assert product.sources["archiveorg"].archive_members == product.sources["direct"].archive_members
+        assert product.collection_prefixes[0] == product.label
+    assert product_spec("helppc").sources["direct"].archive_members == (
+        "ASM.TXT", "C.TXT", "HARDWARE.TXT", "INTERRUP.TXT",
+        "MISC.TXT", "TABLES.TXT",
+    )
+    assert product_spec("freedos-help").sources["direct"].archive_members == (
+        "HELP/EN/HHSTNDRD/HHSTNDRD.ZIP",
+        "HELP/FDL.TXT",
+        "DOC/HELP/COPYING",
+    )
+    for key in ("msdos622", "qb45", "helppc", "freedos-help"):
+        assert product_spec(key).build_group == "dos-reference"
+    assert "archiveorg" not in product_spec("helppc").sources
+    assert "archiveorg" not in product_spec("freedos-help").sources
 
 
 def test_manifest_parses_optional_conversion_crc32(tmp_path):
