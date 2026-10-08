@@ -133,38 +133,39 @@ def _keyword_expand(compact: bytes, outlen: int, keywords: list[bytes]) -> bytes
     while len(out) < outlen and i < len(compact):
         b = compact[i]
         i += 1
-        if b < 0x10 or b > 0x1A:
-            # Value byte: copy as-is
-            out.append(b)
-        elif b == 0x1A:
-            # Escape: next byte is literal
-            if i < len(compact):
-                out.append(compact[i])
-                i += 1
-        elif b == 0x19:
-            # Repeat: repeat_byte × repeat_count
-            if i + 1 < len(compact):
-                repeat_byte = compact[i]
-                i += 1
-                repeat_count = compact[i]
-                i += 1
-                out.extend(bytes([repeat_byte]) * repeat_count)
-        elif b == 0x18:
-            # Space run
-            if i < len(compact):
-                space_count = compact[i]
-                i += 1
-                out.extend(b" " * space_count)
-        else:
-            # Dictionary lookup (0x10–0x17): 10-bit index
-            if i < len(compact):
-                lo = compact[i]
-                i += 1
-                idx = ((b & 3) << 8) | lo
-                if idx < len(keywords):
-                    out.extend(keywords[idx])
-                if b & 4:  # Append-Space bit
-                    out.append(0x20)
+        match b:
+            case _ if b < 0x10 or b > 0x1A:
+                # Value byte: copy as-is
+                out.append(b)
+            case 0x1A:
+                # Escape: next byte is literal
+                if i < len(compact):
+                    out.append(compact[i])
+                    i += 1
+            case 0x19:
+                # Repeat: repeat_byte × repeat_count
+                if i + 1 < len(compact):
+                    repeat_byte = compact[i]
+                    i += 1
+                    repeat_count = compact[i]
+                    i += 1
+                    out.extend(bytes([repeat_byte]) * repeat_count)
+            case 0x18:
+                # Space run
+                if i < len(compact):
+                    space_count = compact[i]
+                    i += 1
+                    out.extend(b" " * space_count)
+            case _:
+                # Dictionary lookup (0x10–0x17): 10-bit index
+                if i < len(compact):
+                    lo = compact[i]
+                    i += 1
+                    idx = ((b & 3) << 8) | lo
+                    if idx < len(keywords):
+                        out.extend(keywords[idx])
+                    if b & 4:  # Append-Space bit
+                        out.append(0x20)
     return bytes(out)
 
 
@@ -349,12 +350,13 @@ def _decode_quickhelp_visible_text(text_data: bytes) -> str:
     """Decode one display line, keeping QuickHelp tab markers visible."""
     pieces: list[str] = []
     for value in text_data:
-        if value == 0x11:
-            pieces.append(QH_MARKER_OPEN)
-        elif value == 0x10:
-            pieces.append(QH_MARKER_CLOSE)
-        else:
-            pieces.append(bytes((value,)).decode("cp437", errors="replace"))
+        match value:
+            case 0x11:
+                pieces.append(QH_MARKER_OPEN)
+            case 0x10:
+                pieces.append(QH_MARKER_CLOSE)
+            case _:
+                pieces.append(bytes((value,)).decode("cp437", errors="replace"))
     return "".join(pieces)
 
 
@@ -421,13 +423,11 @@ def _quickhelp_marker_nav_links(
 
         label = text_data[label_start:label_end].decode("cp437", errors="replace")
         normalized = " ".join(label.split()).casefold()
-        action: str | None = None
-        if normalized == "contents":
-            action = "contents"
-        elif normalized == "index":
-            action = "index"
-        elif normalized == "back":
-            action = "back"
+        match normalized:
+            case "contents" | "index" | "back":
+                action = normalized
+            case _:
+                action = None
 
         if action is not None:
             target_context = nav_action_context(action)
@@ -499,19 +499,20 @@ def _decompile_topic(
             if len(text_data) >= 2:
                 cmd_char = text_data[1:2]
                 param = text_data[2:].decode("latin-1", errors="replace").strip()
-                if cmd_char == b"n":
-                    names.append(param)
-                elif cmd_char == b"l":
-                    try:
-                        topic_options.frozen_rows = max(0, int(param.split()[0]))
-                    except (IndexError, ValueError):
-                        pass
-                elif cmd_char == b"c" and param:
-                    topic_options.category_param = param
-                elif cmd_char == b"i":
-                    topic_options.is_list = True
-                elif cmd_char == b"g":
-                    topic_options.is_popup = True
+                match cmd_char:
+                    case b"n":
+                        names.append(param)
+                    case b"l":
+                        try:
+                            topic_options.frozen_rows = max(0, int(param.split()[0]))
+                        except (IndexError, ValueError):
+                            pass
+                    case b"c" if param:
+                        topic_options.category_param = param
+                    case b"i":
+                        topic_options.is_list = True
+                    case b"g":
+                        topic_options.is_popup = True
             # Command lines are not displayed; skip to next
             continue
 

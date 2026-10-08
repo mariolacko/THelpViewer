@@ -63,50 +63,52 @@ class _PageParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = dict(attrs)
-        if tag in ("script", "style"):
-            self.skip += 1
-        elif tag == "head":
-            self.in_head = True
-        elif tag == "title":
-            self.in_title = True
-        elif tag == "pre":
-            self._newline()
-            self.in_pre = True
-        elif tag in ("h1", "h2", "h3", "p", "div", "tr", "li", "hr", "br") and not self.in_head:
-            self._newline()
-            if tag == "li":
-                self.line = "• "
-            elif tag in ("h1", "h2", "h3"):
-                self.line = "[b]"
-        elif tag in ("td", "th") and self.line.strip():
-            self.line += "  |  "
-        elif tag == "a" and not self.in_head:
-            target = _resolve_link(self.source, values.get("href") or "", self.ids)
-            if target is not None:
-                self.line += f"[link:topic={target}]"
-                self.link_open = True
-        elif tag in ("b", "strong") and not self.in_head:
-            self.line += "[b]"
+        match tag:
+            case "script" | "style":
+                self.skip += 1
+            case "head":
+                self.in_head = True
+            case "title":
+                self.in_title = True
+            case "pre":
+                self._newline()
+                self.in_pre = True
+            case "h1" | "h2" | "h3" | "p" | "div" | "tr" | "li" | "hr" | "br" if not self.in_head:
+                self._newline()
+                if tag == "li":
+                    self.line = "• "
+                elif tag in ("h1", "h2", "h3"):
+                    self.line = "[b]"
+            case "td" | "th" if self.line.strip():
+                self.line += "  |  "
+            case "a" if not self.in_head:
+                target = _resolve_link(self.source, values.get("href") or "", self.ids)
+                if target is not None:
+                    self.line += f"[link:topic={target}]"
+                    self.link_open = True
+            case "b" | "strong" if not self.in_head:
+                self.line += "[b]"
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in ("script", "style"):
-            self.skip = max(0, self.skip - 1)
-        elif tag == "head":
-            self.in_head = False
-        elif tag == "title":
-            self.in_title = False
-        elif tag == "pre":
-            self._newline()
-            self.in_pre = False
-        elif tag in ("h1", "h2", "h3", "p", "div", "tr", "li") and not self.in_head:
-            if tag in ("h1", "h2", "h3"):
+        match tag:
+            case "script" | "style":
+                self.skip = max(0, self.skip - 1)
+            case "head":
+                self.in_head = False
+            case "title":
+                self.in_title = False
+            case "pre":
+                self._newline()
+                self.in_pre = False
+            case "h1" | "h2" | "h3" | "p" | "div" | "tr" | "li" if not self.in_head:
+                if tag in ("h1", "h2", "h3"):
+                    self.line += "[/b]"
+                self._newline()
+            case "a" if self.link_open:
+                self.line += "[/link]"
+                self.link_open = False
+            case "b" | "strong" if not self.in_head:
                 self.line += "[/b]"
-            self._newline()
-        elif tag == "a" and self.link_open:
-            self.line += "[/link]"
-            self.link_open = False
-        elif tag in ("b", "strong") and not self.in_head:
-            self.line += "[/b]"
 
     def handle_data(self, data: str) -> None:
         if self.skip:

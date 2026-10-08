@@ -223,23 +223,25 @@ class HelpJsonRenderer:
 
         for key in TRANSPORT_METADATA_STRUCT_KEYS:
             value = meta.get(key)
-            if isinstance(value, list):
-                payload[key] = [dict(item) if isinstance(item, dict) else item for item in value]
-                emitted_metadata_keys.add(key)
-            elif isinstance(value, dict):
-                payload[key] = dict(value)
-                emitted_metadata_keys.add(key)
+            match value:
+                case list():
+                    payload[key] = [dict(item) if isinstance(item, dict) else item for item in value]
+                    emitted_metadata_keys.add(key)
+                case dict():
+                    payload[key] = dict(value)
+                    emitted_metadata_keys.add(key)
 
         for key in _extra_transport_metadata_keys(meta):
             if key in emitted_metadata_keys:
                 continue
             value = meta.get(key)
-            if isinstance(value, (str, int, float, bool)):
-                payload[key] = value
-            elif isinstance(value, list):
-                payload[key] = [dict(item) if isinstance(item, dict) else item for item in value]
-            elif isinstance(value, dict):
-                payload[key] = dict(value)
+            match value:
+                case str() | int() | float() | bool():
+                    payload[key] = value
+                case list():
+                    payload[key] = [dict(item) if isinstance(item, dict) else item for item in value]
+                case dict():
+                    payload[key] = dict(value)
 
         return payload
 
@@ -271,14 +273,15 @@ class HelpJsonRenderer:
 
             raw_colors = raw_palette.get("colors")
             colors: dict[str, str] = {}
-            if isinstance(raw_colors, dict):
-                for key, value in raw_colors.items():
-                    if isinstance(value, str) and value.strip():
-                        colors[str(key)] = value.strip()
-            elif isinstance(raw_colors, list):
-                for index, value in enumerate(raw_colors):
-                    if isinstance(value, str) and value.strip():
-                        colors[str(index)] = value.strip()
+            match raw_colors:
+                case dict():
+                    for key, value in raw_colors.items():
+                        if isinstance(value, str) and value.strip():
+                            colors[str(key)] = value.strip()
+                case list():
+                    for index, value in enumerate(raw_colors):
+                        if isinstance(value, str) and value.strip():
+                            colors[str(index)] = value.strip()
             if colors:
                 merged["colors"] = colors
 

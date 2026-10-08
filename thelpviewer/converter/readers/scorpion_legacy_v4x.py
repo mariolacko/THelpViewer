@@ -544,17 +544,18 @@ def _append_sco_probe_details(document: HelpDocument, data: bytes) -> HelpDocume
         for candidate in probe_candidates:
             detail = f": {candidate['detail']}" if candidate.get("detail") else ""
             source = str(candidate.get("source_kind") or "unknown")
-            if source == "header-word-scale":
-                source += (
-                    f" word#{int(candidate['header_word_index'])}={int(candidate['header_word_value'])}"
-                    f" * {int(candidate['header_scale'])}"
-                )
-            elif source == "header-word-x2-block":
-                source += (
-                    f" word#{int(candidate['header_word_index'])}={int(candidate['header_word_value'])}"
-                    f" -> [0x{int(candidate['block_start']):03X}, 0x{int(candidate['block_end']):03X})"
-                    f" skip {int(candidate.get('block_skip') or 0)}"
-                )
+            match source:
+                case "header-word-scale":
+                    source += (
+                        f" word#{int(candidate['header_word_index'])}={int(candidate['header_word_value'])}"
+                        f" * {int(candidate['header_scale'])}"
+                    )
+                case "header-word-x2-block":
+                    source += (
+                        f" word#{int(candidate['header_word_index'])}={int(candidate['header_word_value'])}"
+                        f" -> [0x{int(candidate['block_start']):03X}, 0x{int(candidate['block_end']):03X})"
+                        f" skip {int(candidate.get('block_skip') or 0)}"
+                    )
             extra_lines.append(
                 f"0x{int(candidate['start_offset']):03X} -> score {float(candidate['printable_ratio']):.3f}, "
                 f"quality {float(candidate['quality_score']):.3f}, out {int(candidate['output_length'])} B, "

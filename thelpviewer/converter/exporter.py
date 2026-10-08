@@ -88,12 +88,13 @@ def _load_converter_spec_document(spec: ConverterSpec, path: Path, data: bytes) 
         return _call_manifest_target(spec.loader, "path_data", path, data)
 
     reader_cls = _resolve_dotted_path(spec.reader)
-    if spec.reader_init == "path":
-        reader = reader_cls(path)
-    elif spec.reader_init == "none":
-        reader = reader_cls()
-    else:
-        reader = reader_cls(source_name=path.name, source_path=path)
+    match spec.reader_init:
+        case "path":
+            reader = reader_cls(path)
+        case "none":
+            reader = reader_cls()
+        case _:
+            reader = reader_cls(source_name=path.name, source_path=path)
     return reader.read_bytes(data)
 
 

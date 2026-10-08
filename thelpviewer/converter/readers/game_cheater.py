@@ -156,30 +156,33 @@ def _decode_text_block_bytes(data: bytes) -> DecodedTextBlock:
     index = 0
     while index < len(data):
         value = data[index]
-        if value == 0x0D:
-            append_newline()
-            if index + 1 < len(data) and data[index + 1] == 0x0A:
-                index += 1
-        elif value == 0x0A:
-            append_newline()
-        elif value in PC_FAND_STYLE_CONTROLS:
-            flush_text()
-            tag = UHF_STYLE_TAGS.get(value)
-            if tag is not None:
-                if tag in active_tags:
-                    position = active_tags.index(tag)
-                    nested_tags = active_tags[position + 1 :]
-                    for active_tag in reversed(nested_tags):
-                        uhf_parts.append(f"[/{active_tag}]")
-                    uhf_parts.append(f"[/{tag}]")
-                    active_tags.remove(tag)
-                    for active_tag in nested_tags:
-                        uhf_parts.append(f"[{active_tag}]")
-                else:
-                    uhf_parts.append(f"[{tag}]")
-                    active_tags.append(tag)
-        elif value != 0x00:
-            text_buffer.append(value)
+        match value:
+            case 0x0D:
+                append_newline()
+                if index + 1 < len(data) and data[index + 1] == 0x0A:
+                    index += 1
+            case 0x0A:
+                append_newline()
+            case _ if value in PC_FAND_STYLE_CONTROLS:
+                flush_text()
+                tag = UHF_STYLE_TAGS.get(value)
+                if tag is not None:
+                    if tag in active_tags:
+                        position = active_tags.index(tag)
+                        nested_tags = active_tags[position + 1 :]
+                        for active_tag in reversed(nested_tags):
+                            uhf_parts.append(f"[/{active_tag}]")
+                        uhf_parts.append(f"[/{tag}]")
+                        active_tags.remove(tag)
+                        for active_tag in nested_tags:
+                            uhf_parts.append(f"[{active_tag}]")
+                    else:
+                        uhf_parts.append(f"[{tag}]")
+                        active_tags.append(tag)
+            case 0x00:
+                pass
+            case _:
+                text_buffer.append(value)
         index += 1
 
     flush_text()

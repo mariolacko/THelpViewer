@@ -939,12 +939,13 @@ class TdhHelpReader(HelpReaderBase):
     def read_bytes(self, data: bytes) -> HelpDocument:
         """Read a TDH/TFH file into a decoded runtime-help document."""
         source_suffix = self.source_path.suffix.casefold() if self.source_path else ""
-        if source_suffix == ".tfh":
-            probe = probe_tfh_binary(data)
-        elif source_suffix == ".tdh":
-            probe = probe_tdh_binary(data)
-        else:
-            probe = probe_tdh_binary(data) or probe_tfh_binary(data)
+        match source_suffix:
+            case ".tfh":
+                probe = probe_tfh_binary(data)
+            case ".tdh":
+                probe = probe_tdh_binary(data)
+            case _:
+                probe = probe_tdh_binary(data) or probe_tfh_binary(data)
         if probe is None:
             raise ValueError("Unsupported Borland runtime help format")
 

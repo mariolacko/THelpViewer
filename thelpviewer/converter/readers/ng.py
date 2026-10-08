@@ -213,43 +213,44 @@ class NGReader(HelpReaderBase):
 
             entry = _decrypt(data[offset:record_end])
 
-            if eid == 2:
-                topic, child_offsets, title, prompt_labels = self._build_menu_topic(
-                    entry,
-                    offset,
-                    is_help_contents=(offset == root_offset),
-                )
-                if topic is not None:
-                    topics_by_offset[offset] = topic
-                    topic_order.append(offset)
-                    record_kind[offset] = "menu"
-                    menu_specs[offset] = (child_offsets, title, prompt_labels)
-                    for child_offset, label in zip(child_offsets, prompt_labels):
-                        cleaned = self._clean_label(label)
-                        if child_offset not in (0, _NO_PTR) and self._is_usable_label(cleaned):
-                            direct_child_labels.setdefault(child_offset, cleaned)
-            elif eid == 0:
-                topic, _child_offsets, child_labels, parent_line = self._build_short_topic(
-                    entry,
-                    offset,
-                    is_help_contents=(offset == root_offset),
-                )
-                if topic is not None:
-                    topics_by_offset[offset] = topic
-                    topic_order.append(offset)
-                    record_kind[offset] = "short"
-                    parent_line_by_topic[offset] = parent_line
-                    for child_offset, label in child_labels:
-                        cleaned = self._clean_label(label)
-                        if child_offset not in (0, _NO_PTR) and self._is_usable_label(cleaned):
-                            direct_child_labels.setdefault(child_offset, cleaned)
-            else:
-                topic, _related_offsets, parent_line = self._build_long_topic(entry, offset)
-                if topic is not None:
-                    topics_by_offset[offset] = topic
-                    topic_order.append(offset)
-                    record_kind[offset] = "long"
-                    parent_line_by_topic[offset] = parent_line
+            match eid:
+                case 2:
+                    topic, child_offsets, title, prompt_labels = self._build_menu_topic(
+                        entry,
+                        offset,
+                        is_help_contents=(offset == root_offset),
+                    )
+                    if topic is not None:
+                        topics_by_offset[offset] = topic
+                        topic_order.append(offset)
+                        record_kind[offset] = "menu"
+                        menu_specs[offset] = (child_offsets, title, prompt_labels)
+                        for child_offset, label in zip(child_offsets, prompt_labels):
+                            cleaned = self._clean_label(label)
+                            if child_offset not in (0, _NO_PTR) and self._is_usable_label(cleaned):
+                                direct_child_labels.setdefault(child_offset, cleaned)
+                case 0:
+                    topic, _child_offsets, child_labels, parent_line = self._build_short_topic(
+                        entry,
+                        offset,
+                        is_help_contents=(offset == root_offset),
+                    )
+                    if topic is not None:
+                        topics_by_offset[offset] = topic
+                        topic_order.append(offset)
+                        record_kind[offset] = "short"
+                        parent_line_by_topic[offset] = parent_line
+                        for child_offset, label in child_labels:
+                            cleaned = self._clean_label(label)
+                            if child_offset not in (0, _NO_PTR) and self._is_usable_label(cleaned):
+                                direct_child_labels.setdefault(child_offset, cleaned)
+                case _:
+                    topic, _related_offsets, parent_line = self._build_long_topic(entry, offset)
+                    if topic is not None:
+                        topics_by_offset[offset] = topic
+                        topic_order.append(offset)
+                        record_kind[offset] = "long"
+                        parent_line_by_topic[offset] = parent_line
 
             offset = record_end
             record_index += 1
