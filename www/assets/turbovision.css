@@ -529,6 +529,7 @@ button.tv-status-item {
 .tv-submenu-toggle,
 .tv-menu-popup-item {
     display: block;
+    box-sizing: border-box;
     width: 100%;
     min-height: 1em;
     padding: 0 2ch 0 1ch;
@@ -2067,6 +2068,21 @@ button.tv-status-item {
     color: #00aaaa;
 }
 
+.tv-image {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    color: #aaaaaa;
+    background: #000000;
+    border: 1px solid var(--tv-current-frame);
+}
+
+.tv-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
 [data-tv-midi-display] > .tv-static-text {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2103,6 +2119,7 @@ button.tv-status-item {
 .tv-midi-window [data-tv-bar-gauge] {
     background: #000000;
     color: #00aaaa;
+    cursor: pointer;
 }
 
 .tv-game-hall-control {
@@ -2151,7 +2168,7 @@ button.tv-status-item {
 
 .tv-midi-track {
     display: grid;
-    grid-template-columns: 4ch minmax(0, 1fr) 16ch;
+    grid-template-columns: 4ch minmax(0, 1fr) 16ch 3ch;
     align-items: center;
     min-width: 0;
     min-height: 1em;
@@ -2178,6 +2195,11 @@ button.tv-status-item {
     white-space: pre;
 }
 
+.tv-midi-track-availability {
+    text-align: center;
+    white-space: pre;
+}
+
 .tv-midi-track-title,
 .tv-midi-track-credit {
     min-width: 0;
@@ -2187,7 +2209,7 @@ button.tv-status-item {
 }
 
 .tv-midi-track-credit {
-    text-align: right;
+    text-align: left;
     opacity: 0.8;
 }
 
@@ -2793,7 +2815,7 @@ button.tv-status-item {
     text-overflow: clip;
 }
 
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) {
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) {
     position: absolute;
     z-index: 4;
     left: 1ch;
@@ -2813,12 +2835,12 @@ button.tv-status-item {
     box-shadow: 1ch 0.5em 0 var(--tv-shadow-soft);
 }
 
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-shell {
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-shell {
     background: var(--tv-palette-dialog-input-normal-bg);
 }
 
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-frame,
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-viewport {
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-frame,
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-viewport {
     min-width: 0;
     min-height: 0;
     overflow: visible;
@@ -2826,12 +2848,12 @@ button.tv-status-item {
     color: var(--tv-palette-dialog-input-normal-fg);
 }
 
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-close-control {
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-close-control {
     background: var(--tv-palette-dialog-input-normal-bg);
     color: var(--tv-palette-dialog-input-normal-fg);
 }
 
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-vlist-viewer {
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer {
     z-index: 1;
     background: var(--tv-palette-dialog-input-normal-bg);
     color: var(--tv-palette-dialog-input-normal-fg);
@@ -2841,22 +2863,27 @@ button.tv-status-item {
     --tv-owner-scroll-controls-fg: var(--tv-palette-dialog-history-sides-fg);
 }
 
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-vlist-viewer > .tv-vlist-viewport {
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer > .tv-vlist-viewport {
     overflow: hidden;
     background: var(--tv-palette-dialog-input-normal-bg);
     color: var(--tv-palette-dialog-input-normal-fg);
 }
 
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-vlist-viewer .tv-vlist-item {
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer .tv-vlist-item {
     padding-right: 0;
     background: var(--tv-palette-dialog-input-normal-bg);
     color: var(--tv-palette-dialog-input-normal-fg);
 }
 
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-vlist-viewer .tv-vlist-item.is-selected,
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup]) .tv-vlist-viewer > .tv-vlist-viewport:focus-within .tv-vlist-item.is-selected {
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer .tv-vlist-item.is-selected,
+:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer > .tv-vlist-viewport:focus-within .tv-vlist-item.is-selected {
     background: var(--tv-palette-dialog-input-selected-bg);
     color: var(--tv-palette-dialog-input-selected-fg);
+}
+
+[data-tv-midi-filter-history-popup] {
+    left: 8ch;
+    top: -5em;
 }
 
 [data-tv-change-dir-cancel] + .tv-static-text {

@@ -148,8 +148,9 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "this.window.toggle()" in dialogs
     assert "this.buttonView?.setState(sfDisabled, false)" in dialogs
     assert "if (!items.length) { return false; }" not in dialogs
-    assert dialogs.count("new TVHistoryWindow(new TVRect(") == 3
-    assert dialogs.count("new TVHistory(new TVRect(") == 3
+    assert dialogs.count("new TVHistoryWindow(new TVRect(") == 4
+    assert '"thelp:midi-filter-history"' in dialogs
+    assert dialogs.count("new TVHistory(new TVRect(") == 4
     assert "this.insert(fileOpenMain)" in dialogs
     assert "this.insert(changeDirectoryMain)" in dialogs
     assert "this.insert(findMain)" in dialogs
@@ -162,14 +163,16 @@ def test_turbo_vision_component_hierarchy_and_single_scroll_engine():
     assert "_rootClass" not in dialogs
     assert "_viewportClass" not in dialogs
     assert "this.mainView.changeBounds(new TVRect(" in dialogs
-    assert "this.locate(new TVRect(0, 0, 44," in dialogs
+    assert "this.locate(new TVRect(0, 0, 55," in dialogs
+    assert "class TVImage extends TVView" in source
+    assert "const cover = new TVImage(new TVRect(1, 0, 11, 5))" in dialogs
     assert "midi-close-button" not in dialogs
     assert 'static role = "midi-' not in dialogs
     assert "class TVMidiExternalSource" not in dialogs
     assert "class TVMidiDisplay extends TVGroup" in dialogs
     assert "setTrack(track, number)" in dialogs
     assert "class TVMidiMeter" not in dialogs
-    assert "const meter = new TVBarGauge(new TVRect(1, 4, 41, 5), 100)" in dialogs
+    assert "const meter = new TVBarGauge(new TVRect(12, 4, 52, 5), 100)" in dialogs
     assert "this.setSize(" not in dialogs
     assert "TVMarkupView" not in dialogs
     assert "class TVAsciiTable extends TVGroup" in dialogs

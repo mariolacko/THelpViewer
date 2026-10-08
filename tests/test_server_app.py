@@ -1,11 +1,32 @@
 import sqlite3
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from thelpviewer import __version__
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import AppConfig
 from thelpviewer.server.statistics import StatisticsStore
+from thelpviewer.server.routes.statistics import create_statistics_router
+
+
+def test_statistics_event_dispatch_keeps_help_alias_and_rejects_unknown(tmp_path):
+    app = FastAPI()
+    app.include_router(create_statistics_router(StatisticsStore(tmp_path / "statistics.sqlite3"), {}))
+    client = TestClient(app)
+
+    assert client.post(
+        "/api/statistics/events", json={"event": "help_open", "help_file": "VISTA.NG"}
+    ).status_code == 204
+    assert client.post(
+        "/api/statistics/events", json={"event": "help_open", "help_file": ""}
+    ).status_code == 422
+    assert client.post(
+        "/api/statistics/events", json={"event": "unknown"}
+    ).status_code == 422
+    assert client.get("/api/statistics/summary").json()["help_file"] == [
+        {"value": "VISTA.NG", "count": 1}
+    ]
 
 
 def test_statistics_store_uses_bind_mount_safe_journal_mode(tmp_path):
@@ -16,6 +37,30 @@ def test_statistics_store_uses_bind_mount_safe_journal_mode(tmp_path):
 
     with sqlite3.connect(database) as connection:
         assert connection.execute("PRAGMA journal_mode").fetchone() == ("delete",)
+
+
+def test_midi_playback_statistics_count_plays_and_actual_minutes(tmp_path):
+    app = FastAPI()
+    app.include_router(create_statistics_router(StatisticsStore(tmp_path / "statistics.sqlite3"), {}))
+    client = TestClient(app)
+    for track_id, duration in (("a" * 16, 90_000), ("a" * 16, 30_000), ("b" * 16, 60_000)):
+        response = client.post("/api/statistics/events", json={
+            "event": "midi_play", "scope": "karlsitretro-dos-d", "topic": track_id,
+            "game": "Doom", "name": "At Doom's Gate" if track_id[0] == "a" else "E1M2",
+            "duration_ms": duration,
+        })
+        assert response.status_code == 204
+    assert client.post("/api/statistics/events", json={
+        "event": "midi_play", "scope": "invalid source", "topic": "a" * 16,
+        "game": "Doom", "name": "At Doom's Gate", "duration_ms": 90_000,
+    }).status_code == 422
+    summary = client.get("/api/statistics/summary").json()
+    assert summary["midi_plays"] == 3
+    assert summary["midi_minutes"] == 3.0
+    assert summary["midi_tracks"] == [
+        {"value": "Doom — At Doom's Gate", "count": 2, "minutes": 2.0},
+        {"value": "Doom — E1M2", "count": 1, "minutes": 1.0},
+    ]
 
 
 def test_sokoban_hall_of_fame_adds_levels_to_existing_database(tmp_path):
@@ -108,6 +153,50 @@ def test_docs_route_rejects_encoded_parent_traversal(tmp_path):
     catalog = client.get("/docs/catalog.json")
     assert catalog.status_code == 200
     assert catalog.json() == [{"file": "inside.md", "name": "inside"}]
+
+
+def test_soundfont_uses_brotli_and_versioned_cache_with_raw_fallback(tmp_path):
+    web_dir = tmp_path / "www"
+    assets_dir = web_dir / "assets"
+    soundfont_dir = assets_dir / "midi" / "synth"
+    soundfont_dir.mkdir(parents=True)
+    soundfont_dir.joinpath("FluidR3Mono_GM.sf3").write_bytes(b"font-data")
+    soundfont_dir.joinpath("FluidR3Mono_GM.sf3.br").write_bytes(bytes.fromhex("0f0480666f6e742d6461746103"))
+    config = AppConfig(
+        host="127.0.0.1", port=5448, web_dir=web_dir, index_path=web_dir / "index.html",
+        assets_dir=assets_dir, helps_dir=tmp_path / "helps", docs_dir=tmp_path / "docs",
+        readme_path=tmp_path / "README.md", changelog_path=tmp_path / "CHANGELOG.md",
+        state_dir=tmp_path / "var", virtual_docs=(),
+    )
+    client = TestClient(create_app(config))
+    url = "/assets/midi/synth/FluidR3Mono_GM.sf3?v=test-version"
+
+    compressed = client.get(url, headers={"accept-encoding": "gzip, br;q=0.5"})
+    assert compressed.status_code == 200
+    assert compressed.headers["content-encoding"] == "br"
+    assert compressed.headers["vary"] == "Accept-Encoding"
+    assert compressed.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert compressed.headers["content-type"] == "application/octet-stream"
+    assert int(compressed.headers["content-length"]) == 13
+    assert client.get(url.split("?", 1)[0], headers={
+        "accept-encoding": "br",
+    }).headers["cache-control"] == "no-cache"
+
+    uncompressed = client.get(url, headers={"accept-encoding": "br;q=0"})
+    assert uncompressed.status_code == 200
+    assert uncompressed.content == b"font-data"
+    assert "content-encoding" not in uncompressed.headers
+    assert uncompressed.headers["vary"] == "Accept-Encoding"
+    assert uncompressed.headers["etag"] != compressed.headers["etag"]
+    assert client.get(url, headers={
+        "accept-encoding": "br", "if-none-match": compressed.headers["etag"],
+    }).status_code == 304
+
+    soundfont_dir.joinpath("FluidR3Mono_GM.sf3.br").unlink()
+    fallback = client.get(url, headers={"accept-encoding": "br"})
+    assert fallback.status_code == 200
+    assert fallback.content == b"font-data"
+    assert "content-encoding" not in fallback.headers
 
 
 def test_browser_404_redirects_to_viewer_message_while_api_keeps_json(tmp_path):

@@ -10,9 +10,9 @@ from urllib.parse import urlencode, urlparse
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
-from ..public_docs import is_public_doc_path
-from .config import AppConfig
-from .search_index import GlobalSearchIndex
+from ...public_docs import is_public_doc_path
+from ..config import AppConfig
+from ..search_index import GlobalSearchIndex
 
 
 SITEMAP_TOPIC_PAGE_SIZE = 49_999

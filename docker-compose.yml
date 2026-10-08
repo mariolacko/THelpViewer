@@ -12,6 +12,7 @@ services:
       THELP_README_PATH: "/app/README.md"
       THELP_CHANGELOG_PATH: "/app/CHANGELOG.md"
       THELP_STATE_DIR: "/app/var"
+      THELP_MIDI_SOURCES_PATH: "${THELP_MIDI_SOURCES_PATH:-/app/thelpviewer/midi-sources.json}"
       # Set on the public host in .env; leave empty for local request URLs.
       THELP_PUBLIC_BASE_URL: "${THELP_PUBLIC_BASE_URL:-}"
       THELP_GOOGLE_SITE_VERIFICATION: "${THELP_GOOGLE_SITE_VERIFICATION:-}"

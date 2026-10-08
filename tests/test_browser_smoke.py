@@ -63,6 +63,8 @@ def test_real_browser_menu_focus_and_dynamic_command_state():
         app_port = _free_port()
         app_url = f"http://127.0.0.1:{app_port}/"
         server_state_directory = tempfile.TemporaryDirectory(prefix="thelpviewer-server-state-")
+        midi_sources_path = Path(server_state_directory.name) / "midi-sources.json"
+        midi_sources_path.write_text('{"sources": []}', encoding="utf-8")
         server = subprocess.Popen(
             [
                 sys.executable,
@@ -83,6 +85,7 @@ def test_real_browser_menu_focus_and_dynamic_command_state():
                 **os.environ,
                 "THELP_STATE_DIR": server_state_directory.name,
                 "THELP_STATISTICS_PATH": str(Path(server_state_directory.name) / "statistics.sqlite3"),
+                "THELP_MIDI_SOURCES_PATH": str(midi_sources_path),
             },
         )
     try:
@@ -95,6 +98,7 @@ def test_real_browser_menu_focus_and_dynamic_command_state():
                     "--no-sandbox",
                     "--disable-gpu",
                     "--disable-dev-shm-usage",
+                    "--autoplay-policy=no-user-gesture-required",
                     "--no-first-run",
                     "--no-default-browser-check",
                     "--remote-debugging-port=0",
@@ -1107,14 +1111,25 @@ async function run() {
     })`, true);
     const indexProgress = await evaluate(`(() => {
         const dialog = document.querySelector('.tv-index-progress-window');
+        const view = dialog?.closest('.tv-dialog-overlay')?._tvView;
+        const button = dialog?.querySelector('button[data-tv-command="index-hide"]');
+        const file = view?.file.root;
+        const client = dialog?.querySelector('.tv-dialog-client');
         return {
             text: dialog?.textContent,
             percent: dialog?.querySelector('.tv-percent-gauge')?.textContent,
             bar: dialog?.querySelector('[data-tv-bar-gauge]')?.textContent,
+            buttonRowsBelowFile: button && file
+                ? (button.getBoundingClientRect().top - file.getBoundingClientRect().top)
+                    / parseFloat(getComputedStyle(file).fontSize) : null,
+            buttonInsideFrame: button && client
+                ? button.getBoundingClientRect().bottom <= client.getBoundingClientRect().bottom + 1 : false,
         };
     })()`);
     if (!indexProgress.text.includes('1 / 2') || !indexProgress.text.includes('37')
-        || !/^█{14}░{26}$/.test(indexProgress.bar)) {
+        || !/^█{14}░{26}$/.test(indexProgress.bar)
+        || Math.abs(indexProgress.buttonRowsBelowFile - 2) > 0.1
+        || !indexProgress.buttonInsideFrame) {
         throw new Error(`Global index progress is incomplete: ${JSON.stringify(indexProgress)}`);
     }
     await evaluate(`window.__globalReady = true`);
@@ -1844,6 +1859,69 @@ async function run() {
     })()`);
     if (!gridScroll.overflow || gridScroll.position <= 0 || !gridScroll.visible) {
         throw new Error(`TVGridView horizontal scrolling failed: ${JSON.stringify(gridScroll)}`);
+    }
+    const gridHorizontalPoint = await evaluate(`(() => {
+        const track = document.querySelector('.tv-grid-demo-window .tv-grid-view .tv-scrollbar-x .tv-scroll-track');
+        const rect = track?.getBoundingClientRect();
+        return rect ? { x: rect.left + rect.width * 0.9, y: rect.top + rect.height / 2 } : null;
+    })()`);
+    if (!gridHorizontalPoint) { throw new Error('TVGridView horizontal scrollbar track is missing'); }
+    await clickPoint(gridHorizontalPoint);
+    const gridHorizontalAfter = await evaluate(`document.querySelector('.tv-grid-demo-window .tv-grid-view .tv-vlist-viewport')?.scrollLeft`);
+    if (gridHorizontalAfter <= gridScroll.position) {
+        throw new Error(`TVGridView horizontal scrollbar track click failed: ${JSON.stringify({ gridHorizontalPoint, gridHorizontalAfter })}`);
+    }
+    const gridVerticalPoint = await evaluate(`(() => {
+        const view = document.querySelector('.tv-grid-demo-window .tv-grid-view');
+        const list = view?._tvListViewer;
+        list?.setRows(Array.from({ length: 40 }, (_, index) => [
+            'View ' + index, 'TVView', 'Scrollbar pointer test',
+        ]));
+        const arrow = view?.querySelector('.tv-scrollbar-y .tv-scroll-arrow-forward');
+        const rect = arrow?.getBoundingClientRect();
+        const metrics = list?.scrollbarWidget?.axisMetrics('y');
+        return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2,
+            before: list?.viewport?.scrollTop, active: list?.scrollbarWidget?.active,
+            maxScroll: metrics?.maxScroll, trackSize: metrics?.trackSize,
+            hit: document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.className,
+        } : null;
+    })()`);
+    if (!gridVerticalPoint) { throw new Error('TVGridView vertical scrollbar arrow is missing'); }
+    await clickPoint(gridVerticalPoint);
+    const gridVerticalAfter = await evaluate(`document.querySelector('.tv-grid-demo-window .tv-grid-view .tv-vlist-viewport')?.scrollTop`);
+    if (gridVerticalAfter <= gridVerticalPoint.before) {
+        throw new Error(`TVGridView vertical scrollbar click failed: ${JSON.stringify({ gridVerticalPoint, gridVerticalAfter })}`);
+    }
+    const gridTrackPoint = await evaluate(`(() => {
+        const view = document.querySelector('.tv-grid-demo-window .tv-grid-view');
+        const track = view?.querySelector('.tv-scrollbar-y .tv-scroll-track');
+        const rect = track?.getBoundingClientRect();
+        return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height * 0.65 } : null;
+    })()`);
+    if (!gridTrackPoint) { throw new Error('TVGridView scrollbar track is missing'); }
+    await clickPoint(gridTrackPoint);
+    const gridTrackAfter = await evaluate(`document.querySelector('.tv-grid-demo-window .tv-grid-view .tv-vlist-viewport')?.scrollTop`);
+    if (gridTrackAfter <= gridVerticalAfter) {
+        throw new Error(`TVGridView scrollbar track click failed: ${JSON.stringify({ gridTrackPoint, gridVerticalAfter, gridTrackAfter })}`);
+    }
+    const gridThumbPoint = await evaluate(`(() => {
+        const thumb = document.querySelector('.tv-grid-demo-window .tv-grid-view .tv-scrollbar-y .tv-thumb-cell');
+        const rect = thumb?.getBoundingClientRect();
+        return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+    })()`);
+    if (!gridThumbPoint) { throw new Error('TVGridView scrollbar thumb is missing'); }
+    await send('Input.dispatchMouseEvent', {
+        type: 'mousePressed', x: gridThumbPoint.x, y: gridThumbPoint.y, button: 'left', clickCount: 1,
+    });
+    await send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved', x: gridThumbPoint.x, y: gridThumbPoint.y + 20, button: 'left', buttons: 1,
+    });
+    await send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased', x: gridThumbPoint.x, y: gridThumbPoint.y + 20, button: 'left', clickCount: 1,
+    });
+    const gridThumbAfter = await evaluate(`document.querySelector('.tv-grid-demo-window .tv-grid-view .tv-vlist-viewport')?.scrollTop`);
+    if (gridThumbAfter <= gridTrackAfter) {
+        throw new Error(`TVGridView scrollbar thumb drag failed: ${JSON.stringify({ gridTrackAfter, gridThumbAfter })}`);
     }
     await evaluate(`document.querySelector('.tv-grid-demo-window .tv-grid-row.is-selected')?.focus()`);
     await key('ArrowRight', 'ArrowRight', 0, true);
@@ -2674,13 +2752,17 @@ async function run() {
         const displayParts = Array.from(dialog?.querySelectorAll('[data-tv-midi-display] > .tv-static-text') || []);
         const displayPartNames = displayParts.map((element) => element.getAttribute('data-tv-midi-part'));
         const displayRect = dialog?.querySelector('[data-tv-midi-display]')?.getBoundingClientRect();
+        const coverRect = dialog?.querySelector('.tv-image')?.getBoundingClientRect();
         dialog?.querySelector('[data-tv-bar-gauge]')?._tvView?.updateView(50);
         const meter = dialog?.querySelector('[data-tv-bar-gauge]');
         const meterRect = meter?.getBoundingClientRect();
         const controlRect = dialog?.querySelector('[data-tv-midi-previous]')?.getBoundingClientRect();
+        const controls = ['midi-previous', 'midi-play', 'midi-pause', 'midi-stop', 'midi-next', 'midi-more']
+            .map((command) => dialog?.querySelector('[data-tv-command="' + command + '"]')?.getBoundingClientRect());
         const listRect = list?.getBoundingClientRect();
         return {
             open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
+            synthPreloadStarted: Boolean(dialog?.closest('.tv-dialog-overlay')._tvView?.synth?.constructor.assetsPromise),
             advancedHidden: Boolean(advanced?.hidden),
             trackListHidden: Boolean(list?.hidden && getComputedStyle(list).display === 'none'),
             moreCollapsed: dialog?.querySelector('[data-tv-midi-more]')?.getAttribute('aria-expanded') === 'false',
@@ -2694,11 +2776,16 @@ async function run() {
                     && style.color !== style.backgroundColor;
             }),
             displayPartNames,
+            coverBeforeDisplay: Boolean(coverRect && displayRect
+                && coverRect.width > 0 && coverRect.height > 0 && coverRect.right < displayRect.left),
             verticalOrder: Boolean(displayRect && meterRect && controlRect
                 && displayRect.top < meterRect.top && meterRect.top < controlRect.top),
             separatedRows: Boolean(displayRect && meterRect && controlRect
                 && Math.abs((meterRect.top - displayRect.bottom) - displayRect.height / 3) < 1
                 && Math.abs((controlRect.top - meterRect.bottom) - meterRect.height) < 1),
+            controlGaps: Boolean(meterRect && controls.every(Boolean)
+                && controls.slice(1).every((control, index) =>
+                    Math.abs((control.left - controls[index].right) - meterRect.width / 40) < 1)),
             meterOwned: Boolean(meter && meter.childElementCount === 0
                 && meter.textContent === '█'.repeat(20) + '░'.repeat(20)
                 && meter.getAttribute('aria-valuenow') === '50'),
@@ -2711,11 +2798,13 @@ async function run() {
         };
     })()`);
     if (
-        !midiCompact.open || !midiCompact.advancedHidden || !midiCompact.trackListHidden
+        !midiCompact.open || !midiCompact.synthPreloadStarted
+        || !midiCompact.advancedHidden || !midiCompact.trackListHidden
         || !midiCompact.moreCollapsed
         || !midiCompact.sharedScrollbar || !midiCompact.displayTextVisible
         || midiCompact.displayPartNames.join() !== 'label,number,time,title,status'
-        || !midiCompact.verticalOrder || !midiCompact.separatedRows || !midiCompact.meterOwned
+        || !midiCompact.coverBeforeDisplay || !midiCompact.verticalOrder
+        || !midiCompact.separatedRows || !midiCompact.controlGaps || !midiCompact.meterOwned
     ) {
         throw new Error(`MIDI compact mode is incomplete: ${JSON.stringify(midiCompact)}`);
     }
@@ -2744,7 +2833,8 @@ async function run() {
             mainRect: rect(main),
                 advancedRect: rect(advanced),
                 urlRect: rect(urlInput),
-                advancedClipped: Array.from(advanced?.children || []).some((element) => {
+            advancedClipped: Array.from(advanced?.children || []).filter((element) =>
+                !element.hidden && !element.matches('[data-tv-midi-filter-history-popup]')).some((element) => {
                     const child = element.getBoundingClientRect();
                     const parent = advanced.getBoundingClientRect();
                     return child.left < parent.left - 0.5 || child.top < parent.top - 0.5
@@ -2773,6 +2863,354 @@ async function run() {
         || midiExpanded.bodyClient.scrollHeight !== midiExpanded.bodyClient.height
     ) {
         throw new Error(`MIDI expanded frame was not redrawn: ${JSON.stringify({ midiCompact, midiExpanded })}`);
+    }
+    const midiHistory = await evaluate(`(() => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'CD/MIDI Player');
+        const player = dialog.closest('.tv-dialog-overlay')._tvView;
+        player.filterInput.setData('Doom');
+        player.rememberFilter();
+        player.filterInput.setData('');
+        player.filterHistory.root.click();
+        const popup = player.historyWindow.root;
+        const popupRect = popup.getBoundingClientRect();
+        const inputRect = player.filterInput.root.getBoundingClientRect();
+        const dialogRect = dialog.getBoundingClientRect();
+        const opened = player.historyWindow.isOpen()
+            && popup.textContent.includes('Doom')
+            && popupRect.top >= dialogRect.top && popupRect.bottom <= inputRect.top + 1
+            && popupRect.left >= dialogRect.left && popupRect.right <= dialogRect.right;
+        player.historyWindow.onSelect({ value: 'Doom' }, false);
+        const selected = player.filterInput.getData() === 'Doom';
+        const closed = !player.historyWindow.isOpen();
+        player.filterInput.setData('');
+        player.applyFilter();
+        return { opened, selected, closed };
+    })()`);
+    if (!midiHistory.opened || !midiHistory.selected || !midiHistory.closed) {
+        throw new Error(`MIDI filter history failed: ${JSON.stringify(midiHistory)}`);
+    }
+    const midiCatalogControls = await evaluate(`(async () => {
+        const dialog = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'CD/MIDI Player'
+        );
+        const player = dialog.closest('.tv-dialog-overlay')._tvView;
+        while (player.catalogPending) { await new Promise((resolve) => setTimeout(resolve, 25)); }
+        if (player.catalogTimer) { clearTimeout(player.catalogTimer); player.catalogTimer = null; }
+        const fetchBeforeRetry = window.fetch;
+        const timeoutBeforeRetry = window.setTimeout;
+        let catalogAttempts = 0;
+        let catalogRetryScheduled = false;
+        window.setTimeout = (callback, delay, ...args) => {
+            if (delay === 3000) {
+                catalogRetryScheduled = true;
+                return timeoutBeforeRetry(callback, 20, ...args);
+            }
+            return timeoutBeforeRetry(callback, delay, ...args);
+        };
+        window.fetch = async (url, options) => {
+            if (String(url) === '/api/midi/catalog') {
+                catalogAttempts += 1;
+                return catalogAttempts === 1 ? new Response('', { status: 500 })
+                    : new Response(JSON.stringify({ state: 'ready', downloaded: player.allTracks.length,
+                        total: player.allTracks.length, tracks: player.allTracks }),
+                        { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            return fetchBeforeRetry(url, options);
+        };
+        try {
+            await player.refreshCatalog();
+            await new Promise((resolve) => timeoutBeforeRetry(resolve, 100));
+        } finally {
+            window.fetch = fetchBeforeRetry;
+            window.setTimeout = timeoutBeforeRetry;
+        }
+        const catalogRecovered = catalogRetryScheduled && catalogAttempts === 2
+            && player.lastCatalog?.state === 'ready' && !player.catalogTimer;
+        const playbackEvents = [];
+        const playbackEventHandler = player.onPlaybackEvent;
+        player.onPlaybackEvent = (event) => playbackEvents.push(event);
+        player.playbackStats = { track: { id: 'aaaaaaaaaaaaaaaa', source_id: 'karlsitretro-dos-d',
+            game: 'Doom', title: 'At Doom Gate' }, durationMs: 60_000,
+            activeSince: performance.now() - 30_000 };
+        player.pausePlaybackStats();
+        const pausedStatsTime = player.playbackStats.durationMs;
+        player.playbackStats.activeSince = performance.now() - 10_000;
+        player.finishPlaybackStats();
+        player.onPlaybackEvent = playbackEventHandler;
+        const playbackStatistics = playbackEvents.length === 1
+            && playbackEvents[0].event === 'midi_play'
+            && playbackEvents[0].duration_ms >= 99_000
+            && playbackEvents[0].duration_ms < 102_000
+            && pausedStatsTime >= 89_000 && pausedStatsTime < 91_000;
+        const soundFont = await player.synth.constructor.loadAssets();
+        const soundFontLoaded = soundFont.byteLength > 1000000 && Boolean(window.JSSynth?.Synthesizer);
+        const demoSequence = await player.loadTrack({ file: '/assets/midi/modern-neon-grid.mid' });
+        const audioStarted = await player.synth.play(demoSequence,
+            (elapsed, duration) => player.updateProgress(elapsed, duration), () => {});
+        const loadTiming = player.synth.loadingTimes;
+        const soundFontTimingRecorded = loadTiming.soundfontBytes === soundFont.byteLength
+            && loadTiming.scriptsMs > 0 && loadTiming.soundfontFetchMs > 0
+            && loadTiming.synthInitMs > 0 && loadTiming.soundfontLoadMs > 0;
+        const progressStart = Number(player.meter.root?.getAttribute('aria-valuenow'));
+        await new Promise((resolve) => setTimeout(resolve, 1600));
+        const soundFontPlaying = audioStarted && player.synth.synth.getPlayerCurrentTick() > 0;
+        const liveProgress = Number(player.meter.root?.getAttribute('aria-valuenow'));
+        const progressRendered = liveProgress > progressStart && liveProgress < 100
+            && player.synth.totalTicks === demoSequence.maxTick
+            && player.meter.root?.textContent.includes('█');
+        const progressTicks = [player.synth.synth.getPlayerCurrentTick(), player.synth.totalTicks];
+        await player.synth.seekTo(0.5);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const soundFontSeeked = player.synth.synth.getPlayerCurrentTick() >= player.synth.totalTicks * 0.45;
+        const demoTrack = { id: 'demo', item_id: 'demo', source_id: 'local',
+            title: 'Neon Grid', game: 'THelpViewer', credit: 'Original demo', sequencer: '',
+            available: true, file: '/assets/midi/modern-neon-grid.mid', cover: '' };
+        player.allTracks = [demoTrack];
+        player.applyFilter();
+        player.activeTrackFile = demoTrack.file;
+        player.isPlaying = true;
+        player.pausePlayback();
+        const pausedPosition = player.pausedPosition;
+        const pauseHeld = pausedPosition?.ratio > 0.4
+            && Number(player.meter.root?.getAttribute('aria-valuenow')) > 40
+            && player.displayView.timeView.root?.textContent !== '0:00 / 0:00';
+        await player.playSelected();
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const resumeTicks = [player.synth.synth.getPlayerCurrentTick(), player.synth.totalTicks];
+        const resumedFromPause = player.isPlaying && !player.pausedPosition
+            && player.synth.synth.getPlayerCurrentTick() >= player.synth.totalTicks * 0.4;
+        player.stopPlayback();
+        player.allTracks = Array.from({ length: 40 }, (_, index) => ({
+            ...demoTrack, id: 'demo-' + index, title: 'Neon Grid ' + index,
+        }));
+        player.applyFilter();
+        const midiTrack = player.trackListBox.root.querySelector('.tv-scrollbar-y .tv-scroll-track');
+        const midiTrackRect = midiTrack.getBoundingClientRect();
+        midiTrack.dispatchEvent(new MouseEvent('mousedown', {
+            bubbles: true, clientX: midiTrackRect.left + midiTrackRect.width / 2,
+            clientY: midiTrackRect.top + midiTrackRect.height * 0.7,
+        }));
+        const midiTrackScrollbarClicks = player.trackListBox.viewport.scrollTop > 0;
+        player.trackListBox.select(20);
+        const selectionObserver = new MutationObserver(() => {});
+        selectionObserver.observe(player.trackListBox.viewport, {
+            subtree: true, attributes: true,
+            attributeFilter: ['role', 'class', 'aria-selected', 'tabindex'],
+        });
+        player.trackListBox.select(21);
+        const selectionMutations = selectionObserver.takeRecords().length;
+        selectionObserver.disconnect();
+        const incrementalSelection = selectionMutations <= 12
+            && player.trackListBox.selectedElement()?.getAttribute('aria-selected') === 'true'
+            && player.trackListBox.viewport.querySelector('[data-tv-list-index="20"]')?.getAttribute('aria-selected') === 'false';
+        const pointerRows = Array.from(player.trackListBox.viewport.querySelectorAll('[data-tv-list-index]'));
+        const targetRow = pointerRows[30];
+        targetRow.scrollIntoView({ block: 'nearest' });
+        const targetRect = targetRow.getBoundingClientRect();
+        let rowRectReads = 0;
+        const originalRowRects = pointerRows.map((row) => row.getBoundingClientRect);
+        pointerRows.forEach((row, index) => {
+            row.getBoundingClientRect = function () {
+                rowRectReads += 1;
+                return originalRowRects[index].call(this);
+            };
+        });
+        const playTrackBeforePointerTest = player.playTrack;
+        player.playTrack = async () => {};
+        targetRow.querySelector('.tv-midi-track-title').dispatchEvent(new MouseEvent('click', {
+            bubbles: true, clientX: targetRect.left + 8, clientY: targetRect.top + targetRect.height / 2,
+        }));
+        player.playTrack = playTrackBeforePointerTest;
+        pointerRows.forEach((row, index) => { row.getBoundingClientRect = originalRowRects[index]; });
+        const directPointerHit = player.selectedIndex === 30 && rowRectReads <= 2;
+        const liveTracks = (await (await fetch('/api/midi/catalog')).json()).tracks || [];
+        player.allTracks = liveTracks;
+        player.applyFilter();
+        let highIndexPlaying = true;
+        if (liveTracks.length > 1000 && liveTracks[1000].available) {
+            player.trackListBox.scrollViewport.querySelector('[data-tv-list-index="1000"]')?.click();
+            const highIndexSelected = player.selectedIndex === 1000;
+            await player.playSelected();
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            highIndexPlaying = highIndexSelected && player.selectedIndex === 1000 && player.isPlaying
+                && player.synth.synth.getPlayerCurrentTick() > 0;
+            player.stopPlayback();
+        }
+        player.allTracks = [
+            { id: '1111111111111111', item_id: '1111111111111111', source_id: 'direct',
+              title: 'E1M1', game: 'Doom', credit: 'Doom', sequencer: '', available: false, file: '', cover: '' },
+            { id: '2222222222222222', item_id: '2222222222222222', source_id: 'direct',
+              title: 'Desert', game: 'Dune', credit: 'Dune', sequencer: '', available: true,
+              file: '/api/midi/files/direct/dune.mid', cover: '' },
+        ];
+        player.applyFilter();
+        const rows = Array.from(dialog.querySelectorAll('.tv-midi-track'));
+        const gameStartsAligned = rows.length === 2
+            && Math.abs(rows[0].querySelector('.tv-midi-track-credit').getBoundingClientRect().x
+                - rows[1].querySelector('.tv-midi-track-credit').getBoundingClientRect().x) < 1;
+        const cloud = rows[0]?.querySelector('.tv-midi-track-availability')?.textContent === '☁';
+        const cloudAtEnd = rows[0]?.lastElementChild?.classList.contains('tv-midi-track-availability');
+        const originalPlayTrack = player.playTrack;
+        const originalPrioritizeTrack = player.prioritizeTrack;
+        let clickedTrackId = '';
+        let pendingStoppedOldTrack = false;
+        player.playTrack = async (track) => { clickedTrackId = track.id; };
+        player.prioritizeTrack = async (track) => {
+            pendingStoppedOldTrack = track.id === '1111111111111111'
+                && !player.isPlaying && player.activeTrackFile === null;
+        };
+        rows[1].click();
+        const clickStartsTrack = player.selectedIndex === 1
+            && clickedTrackId === '2222222222222222';
+        rows[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+        const arrowOnlySelects = player.selectedIndex === 0
+            && clickedTrackId === '2222222222222222';
+        player.activeTrackFile = '/assets/midi/modern-neon-grid.mid';
+        player.isPlaying = true;
+        rows[0].click();
+        player.playTrack = originalPlayTrack;
+        player.prioritizeTrack = originalPrioritizeTrack;
+        player.selectTrack(1);
+        player.tracks[1].cover = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E';
+        player.updateDisplay();
+        const cover = dialog.querySelector('.tv-image img');
+        const coverVisible = Boolean(cover && !cover.hidden && cover.getAttribute('src') === player.tracks[1].cover);
+        player.selectTrack(0);
+        const meter = dialog.querySelector('[data-tv-bar-gauge]');
+        const meterBounds = meter.getBoundingClientRect();
+        const seekTicks = [];
+        const fakeSynth = {
+            resetPlayer: async () => {}, addSMFDataToPlayer: async () => {}, playPlayer: async () => {},
+            getPlayerTotalTicks: () => 0, getPlayerCurrentTick: () => 100,
+            isPlayerPlaying: () => true, seekPlayer: (tick) => seekTicks.push(tick), stopPlayer: () => {},
+        };
+        player.synth.synth = fakeSynth;
+        player.synth.ensureContext = async () => fakeSynth;
+        await player.synth.play({ duration: 100, maxTick: 1200, data: new ArrayBuffer(4) }, () => {}, () => {}, 50);
+        const seeksFromOffset = seekTicks[0] === 600;
+        player.synth.stop(false);
+        let seekRatio = -1;
+        player.synth.sequence = { duration: 100, notes: [] };
+        player.synth.seekTo = async (ratio) => { seekRatio = ratio; };
+        meter.dispatchEvent(new MouseEvent('click', {
+            bubbles: true, clientX: meterBounds.left + meterBounds.width * 0.75,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        player.synth.sequence = null;
+        const seeksToClick = Math.abs(seekRatio - 0.75) < 0.02;
+        player.filterInput.root.value = 'doom';
+        player.filterInput.root.dispatchEvent(new Event('input', { bubbles: true }));
+        const filtered = player.tracks.length === 1 && player.tracks[0].game === 'Doom';
+        const originalFetch = window.fetch;
+        let priorityUrl = '';
+        window.fetch = async (url, options) => {
+            if (String(url).startsWith('/api/midi/priority/')) {
+                priorityUrl = String(url);
+                return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            return originalFetch(url, options);
+        };
+        try { await player.playSelected(); } finally { window.fetch = originalFetch; }
+        if (player.catalogTimer) { clearTimeout(player.catalogTimer); player.catalogTimer = null; }
+        let resumedId = '';
+        player.playTrack = async (track) => { resumedId = track.id; };
+        window.fetch = async (url, options) => {
+            if (String(url) === '/api/midi/catalog') {
+                return new Response(JSON.stringify({ state: 'ready', downloaded: 2, total: 2,
+                    tracks: player.allTracks.map((track) => track.id === '1111111111111111'
+                        ? { ...track, available: true, file: '/api/midi/files/direct/doom.mid' } : track),
+                }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }
+            return originalFetch(url, options);
+        };
+        try { await player.refreshCatalog(); } finally { window.fetch = originalFetch; }
+        const advancedWidth = player.advancedView.root.getBoundingClientRect().width;
+        const randomFullWidth = Math.abs(player.randomNext.root.getBoundingClientRect().width - advancedWidth) < 1;
+        const downloadButtonRemoved = !player.downloadsButton
+            && !player.advancedView.root.textContent.includes('Downloads');
+        player.showDownloadProgress({ state: 'downloading', downloaded: 1, total: 2, current: 'Doom' });
+        const downloadOverlay = player.downloadProgress?.overlay;
+        const downloadOpensOnStatus = Boolean(downloadOverlay && !downloadOverlay.hidden);
+        player.downloadProgress?.hideProgress();
+        const hiddenWithoutStopping = Boolean(downloadOverlay?.hidden && player.downloadDismissed);
+        player.showDownloadProgress({ state: 'downloading', downloaded: 1, total: 2, current: 'Doom' });
+        const staysHiddenAfterHide = Boolean(downloadOverlay?.hidden);
+        player.downloadDismissed = false;
+        player.showDownloadProgress({ state: 'downloading', downloaded: 1, total: 2, current: 'Doom' });
+        const progress = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
+            element.querySelector('.tv-dialog-title-text')?.textContent === 'Downloading Game MIDI'
+        );
+        const progressVisible = Boolean(progress && !progress.closest('.tv-dialog-overlay').hidden
+            && progress.querySelector('[data-tv-bar-gauge]')?.textContent.includes('█'));
+        player.clearDownloadProgress();
+        player.filterInput.root.value = '';
+        player.filterInput.root.dispatchEvent(new Event('input', { bubbles: true }));
+        player.allTracks.push({ id: '3333333333333333', item_id: '3333333333333333',
+            source_id: 'direct', title: 'Quake', game: 'Quake', credit: 'Quake', sequencer: '',
+            available: true, file: '/api/midi/files/direct/quake.mid', cover: '' });
+        player.applyFilter();
+        const queued = [];
+        player.playTrack = async (track) => { queued.push(track.id); };
+        player.selectTrack(0);
+        player.randomNext.setData(0);
+        player.nextTrack(true);
+        const sequentialNext = player.selectedIndex === 1 && queued.at(-1) === '2222222222222222';
+        player.selectTrack(0);
+        player.randomNext.setData(1);
+        const originalRandom = Math.random;
+        Math.random = () => 0.99;
+        try { player.nextTrack(true); } finally { Math.random = originalRandom; }
+        const randomNext = player.selectedIndex === 2 && queued.at(-1) === '3333333333333333'
+            && player.randomNext.root?.querySelector('input')?.checked;
+        player.selectTrack(0);
+        player.randomNext.setData(0);
+        player.loadTrack = async () => ({ duration: 10, data: new ArrayBuffer(4) });
+        player.synth.play = async (_sequence, _onProgress, onDone) => {
+            setTimeout(onDone, 0);
+            return true;
+        };
+        await Object.getPrototypeOf(player).playTrack.call(player, player.tracks[0], '01');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        const automaticNext = player.selectedIndex === 1 && queued.at(-1) === '2222222222222222';
+        return { catalogRecovered, playbackStatistics, soundFontLoaded, soundFontTimingRecorded,
+            soundFontPlaying,
+            progressRendered, liveProgress, progressTicks,
+            pauseHeld, resumedFromPause, resumeTicks, pausedPosition,
+            soundFontSeeked, highIndexPlaying, midiTrackScrollbarClicks,
+            incrementalSelection, directPointerHit,
+            gameStartsAligned, cloud, cloudAtEnd, clickStartsTrack, arrowOnlySelects,
+            pendingStoppedOldTrack,
+            coverVisible, seeksToClick, seeksFromOffset,
+            filtered, priorityUrl, resumedId, sequentialNext, randomNext, automaticNext,
+            downloadButtonRemoved, randomFullWidth, downloadOpensOnStatus,
+            hiddenWithoutStopping, staysHiddenAfterHide, progressVisible };
+    })()`, true);
+    if (!midiCatalogControls.catalogRecovered || !midiCatalogControls.playbackStatistics
+        || !midiCatalogControls.soundFontLoaded || !midiCatalogControls.soundFontTimingRecorded
+        || !midiCatalogControls.soundFontPlaying
+        || !midiCatalogControls.progressRendered
+        || !midiCatalogControls.pauseHeld || !midiCatalogControls.resumedFromPause
+        || !midiCatalogControls.soundFontSeeked
+        || !midiCatalogControls.highIndexPlaying
+        || !midiCatalogControls.midiTrackScrollbarClicks
+        || !midiCatalogControls.incrementalSelection
+        || !midiCatalogControls.directPointerHit
+        || !midiCatalogControls.gameStartsAligned || !midiCatalogControls.cloud
+        || !midiCatalogControls.cloudAtEnd || !midiCatalogControls.clickStartsTrack
+        || !midiCatalogControls.arrowOnlySelects || !midiCatalogControls.pendingStoppedOldTrack
+        || !midiCatalogControls.coverVisible
+        || !midiCatalogControls.seeksToClick || !midiCatalogControls.seeksFromOffset
+        || !midiCatalogControls.filtered
+        || midiCatalogControls.priorityUrl !== '/api/midi/priority/direct/1111111111111111'
+        || midiCatalogControls.resumedId !== '1111111111111111'
+        || !midiCatalogControls.sequentialNext || !midiCatalogControls.randomNext
+        || !midiCatalogControls.automaticNext
+        || !midiCatalogControls.downloadButtonRemoved || !midiCatalogControls.randomFullWidth
+        || !midiCatalogControls.downloadOpensOnStatus || !midiCatalogControls.hiddenWithoutStopping
+        || !midiCatalogControls.staysHiddenAfterHide
+        || !midiCatalogControls.progressVisible) {
+        throw new Error(`MIDI catalog controls failed: ${JSON.stringify(midiCatalogControls)}`);
     }
     await key("Escape", "Escape", 0, true);
 
@@ -3677,6 +4115,37 @@ async function run() {
         };
         check();
     })`, true);
+    const crawlableCatalog = await evaluate(`(async () => {
+        const catalog = await (await fetch('helps/catalog.json')).json();
+        const docs = await (await fetch('docs/catalog.json')).json();
+        const menu = document.querySelector('[data-tv-menu-bar]');
+        const links = Array.from(menu.querySelectorAll('a[href]')).map((link) => new URL(link.href));
+        return {
+            helps: catalog.every((entry) => links.some((url) => url.searchParams.get('file') === entry.file)),
+            docs: docs.every((entry) => links.some((url) => url.searchParams.get('doc') === entry.file)),
+            count: links.length,
+        };
+    })()`, true);
+    if (!crawlableCatalog.helps || !crawlableCatalog.docs || !crawlableCatalog.count) {
+        throw new Error('Rendered homepage lost catalog links: ' + JSON.stringify(crawlableCatalog));
+    }
+    await evaluate(`(() => {
+        window.__crawlSamePage = true;
+        const item = __tvMenuItem('bundle-open', 'VISTA.NG');
+        const links = Array.from(document.querySelectorAll('[data-tv-menu-bar] a[href]'));
+        const vista = item || links.find((link) => new URL(link.href).searchParams.get('file') === 'Norton Guides/vista.json.gz');
+        if (!vista) { throw new Error('VISTA catalog link missing'); }
+        vista.click();
+    })()`);
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            if (window.__crawlSamePage && document.querySelector('[data-tv-bundle-window]')) { resolve(true); return; }
+            if (Date.now() > deadline) { reject(new Error('Catalog anchor did not open via TVEvent on the same page')); return; }
+            setTimeout(check, 30);
+        };
+        check();
+    })`, true);
     await send('Page.navigate', { url: appUrl + '?doc=README.md' });
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 10000;
@@ -3725,6 +4194,26 @@ async function run() {
         };
         check();
     })`, true);
+    const crawlableTopics = await evaluate(`(() => {
+        const help = document.querySelector('[data-tv-bundle-window]');
+        const index = document.querySelector('[data-tv-command="bundle-index"]');
+        index?.click();
+        return Array.from(help.querySelectorAll('a[data-tv-bundle-topic]')).filter((link) => {
+            const url = new URL(link.href);
+            return url.searchParams.get('file') === 'Norton Guides/vista.json.gz' && url.searchParams.has('topic');
+        }).length;
+    })()`);
+    if (!crawlableTopics) { throw new Error('Rendered HELP overview lost public topic URLs'); }
+    const topicAnchorNavigation = await evaluate(`(async () => {
+        const help = document.querySelector('[data-tv-bundle-window]');
+        const link = help.querySelector('a[data-tv-bundle-topic][href*="topic="]');
+        const target = link.dataset.tvBundleTopic;
+        window.__crawlSamePage = true;
+        link.click();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return window.__crawlSamePage && help.isConnected && help._tvWindowView.currentTopic === target;
+    })()`, true);
+    if (!topicAnchorNavigation) { throw new Error('Real topic anchor did not navigate through TVEvent'); }
     socket.close();
 }
 

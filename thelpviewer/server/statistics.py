@@ -274,6 +274,25 @@ def normalize_error(value: object) -> str:
     return candidate if re.fullmatch(r"[A-Za-z0-9_.: -]+", candidate) else "Other"
 
 
+def normalize_midi_play(
+    source: object, track: object, game: object, title: object, duration_ms: object,
+) -> tuple[str, str, str, str, int] | None:
+    source_id = _limited(source, 64)
+    track_id = _limited(track, 180)
+    game_name = _limited(game, 100)
+    track_title = _limited(title, 100)
+    try:
+        milliseconds = float(duration_ms)
+    except (TypeError, ValueError):
+        return None
+    if (not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", source_id)
+            or not re.fullmatch(r"[0-9a-f]{16}(?::.{1,163})?", track_id)
+            or not game_name or not track_title or not math.isfinite(milliseconds)
+            or not 0 <= milliseconds <= 86_400_000):
+        return None
+    return source_id, track_id, game_name, track_title, round(milliseconds)
+
+
 def parse_user_agent(value: object) -> tuple[str, str, str]:
     user_agent = _limited(value, 500).casefold()
     if "android" in user_agent:
@@ -349,6 +368,14 @@ class StatisticsStore:
         connection.execute(
             "CREATE INDEX IF NOT EXISTS hall_of_fame_game_score ON hall_of_fame(game, score)"
         )
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS midi_playback (
+                day TEXT NOT NULL, source_id TEXT NOT NULL, track_id TEXT NOT NULL,
+                game TEXT NOT NULL, title TEXT NOT NULL,
+                plays INTEGER NOT NULL DEFAULT 0, duration_ms INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (day, source_id, track_id)
+            )"""
+        )
         if "level" not in {column[1] for column in connection.execute("PRAGMA table_info(hall_of_fame)")}:
             try:
                 connection.execute("ALTER TABLE hall_of_fame ADD COLUMN level INTEGER NOT NULL DEFAULT 0")
@@ -368,6 +395,18 @@ class StatisticsStore:
                 rows,
             )
 
+    def add_midi_play(self, source_id: str, track_id: str, game: str, title: str, duration_ms: int) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO midi_playback
+                (day, source_id, track_id, game, title, plays, duration_ms)
+                VALUES (?, ?, ?, ?, ?, 1, ?)
+                ON CONFLICT(day, source_id, track_id) DO UPDATE SET
+                    plays = plays + 1, duration_ms = duration_ms + excluded.duration_ms,
+                    game = excluded.game, title = excluded.title""",
+                (_day(), source_id, track_id, game, title, duration_ms),
+            )
+
     def summary(self, limit: int = 10) -> dict[str, object]:
         safe_limit = min(25, max(1, int(limit)))
         result: dict[str, object] = {"visits": 0}
@@ -381,6 +420,21 @@ class StatisticsStore:
             result["hall_of_fame_scores"] = int(
                 connection.execute("SELECT COUNT(*) FROM hall_of_fame").fetchone()[0]
             )
+            midi_plays, midi_duration = connection.execute(
+                "SELECT COALESCE(SUM(plays), 0), COALESCE(SUM(duration_ms), 0) FROM midi_playback"
+            ).fetchone()
+            result["midi_plays"] = int(midi_plays)
+            result["midi_minutes"] = round(midi_duration / 60_000, 1)
+            result["midi_tracks"] = [
+                {"value": f"{game} — {title}", "count": int(plays),
+                 "minutes": round(duration / 60_000, 1)}
+                for game, title, plays, duration in connection.execute(
+                    """SELECT game, title, SUM(plays), SUM(duration_ms) FROM midi_playback
+                    GROUP BY source_id, track_id ORDER BY SUM(plays) DESC,
+                    SUM(duration_ms) DESC, game, title LIMIT ?""",
+                    (safe_limit,),
+                ).fetchall()
+            ]
             result["daily"] = [
                 {"value": day, "count": int(count)}
                 for day, count in connection.execute(

@@ -217,7 +217,7 @@ def test_public_docs_share_search_index_and_have_crawlable_pages(tmp_path):
 
 
 def test_file_sitemap_pages_keep_overview_on_first_page(tmp_path, monkeypatch):
-    monkeypatch.setattr(import_module("thelpviewer.server.public_pages"), "SITEMAP_TOPIC_PAGE_SIZE", 2)
+    monkeypatch.setattr(import_module("thelpviewer.server.routes.public_pages"), "SITEMAP_TOPIC_PAGE_SIZE", 2)
     helps = tmp_path / "helps"
     helps.mkdir()
     with gzip.open(helps / "many.json.gz", "wt", encoding="utf-8") as output:

@@ -36,6 +36,7 @@ class AppConfig:
     public_base_url: str = ""
     auth_origin: str = ""
     google_site_verification: str = ""
+    midi_sources_path: Path | None = None
 
 
 def _resolve_virtual_doc_disk_path(disk_path: str, root: Path, readme_path: Path, changelog_path: Path) -> Path:
@@ -84,4 +85,7 @@ def load_config() -> AppConfig:
         public_base_url=os.environ.get("THELP_PUBLIC_BASE_URL", "").rstrip("/"),
         auth_origin=os.environ.get("THELP_AUTH_ORIGIN", f"http://localhost:{os.environ.get('THELP_PORT', '5448')}").rstrip("/"),
         google_site_verification=os.environ.get("THELP_GOOGLE_SITE_VERIFICATION", "").strip(),
+        midi_sources_path=Path(os.environ.get(
+            "THELP_MIDI_SOURCES_PATH", root / "thelpviewer" / "midi-sources.json"
+        )),
     )

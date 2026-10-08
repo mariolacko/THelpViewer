@@ -2,7 +2,79 @@
 
 ## [Unreleased]
 
+### Server
+- Renamed the MIDI source manifest's URL list to `pages`, updating source
+  loading, validation and documentation. Source IDs, download paths and
+  previously downloaded tracks remain unchanged.
+- Serve the MIDI SoundFont as precompressed Brotli when supported, with an
+  uncompressed fallback and immutable caching for its versioned URL.
+- Temporarily disabled VGMusic in the MIDI source manifest and removed its
+  local tracks and catalog rows; disabled sources are hidden from MIDI APIs.
+- Added aggregate per-track MIDI play counts and listened minutes to server
+  statistics, excluding time spent paused.
+- Expanded Karl's DOS MIDI source from its D page to every available numbered
+  and lettered catalog page. All MIDI sources now configure `pages` as a
+  plain URL list, and redundant extraction defaults were removed. Existing D
+  downloads retain their source ID.
+- Added configurable HTML MIDI sources, background/resumable MIDI and ZIP
+  downloads into `var/midi`, per-track SQLite metadata and cover references,
+  and local MIDI APIs. New HTML sources can use JSON-configured CSS selectors
+  when the table/link/heading extraction layouts do not fit.
+- Added pending MIDI entries to the catalog and a priority endpoint, so playing
+  an undownloaded track moves its source ahead of the normal download order.
+- Switched statistics event dispatch to Python `match/case` while keeping
+  legacy HELP-open aliases and invalid-event responses unchanged.
+- Moved Passkey login, registration, token and session endpoints into an auth
+  router and grouped HTTP routers under `server/routes/`, preserving their URLs
+  and cookie/origin rules.
+- Moved statistics event validation, summary and Hall of Fame API routes out
+  of `app.py` into a dedicated router without changing endpoints or storage.
+
 ### TVision
+- HELP Files and Docs menu entries now retain real public URLs after the
+  server-rendered catalog is replaced. HELP indexes, Contents outlines, inline
+  links and `<more>` links also expose file/topic URLs while ordinary clicks
+  continue through `TVEvent` without reloading the viewer. Browser-modified
+  clicks can open those links in another tab, and public topic URLs preserve
+  their optional target line.
+- Removed the Downloads button from the CD/MIDI Player's More panel, widened
+  its Filter input, and made Random next track span the full panel width.
+  Background downloads and their automatic progress dialog remain unchanged.
+- Version the SoundFont URL and record MIDI script, download, SoundFont-load
+  and Play-to-ready timings so first-play delays can be diagnosed.
+- Reduced the first MIDI playlist click's work: shared list selection now
+  updates only changed rows after the initial render, and the player avoids
+  reselecting the same row. `TVListBox` now resolves the clicked row from the
+  event target before falling back to per-row geometry checks. The player
+  starts loading its SoundFont when opened instead of waiting for first Play.
+- Fixed clicks on the shared vertical and horizontal scrollbar tracks: the
+  position calculation now reads the track from `axisMetrics().axis`, so lists
+  and document windows can jump to the clicked position again.
+- A single click on a different MIDI playlist row now starts that track, rather
+  than changing only its title and cover. Choosing a pending download stops the
+  old audio while it waits; arrow-key navigation still only changes selection.
+- Added the shared `TVHistory` dropdown to the MIDI Filter and a MIDI playback
+  category to Server Statistics.
+- Retry the MIDI catalog automatically after a temporary server/API failure,
+  so an open player recovers after the server restarts.
+- Fixed MIDI Pause/Play to resume the current position without resetting the
+  progress gauge, and separated adjacent transport buttons by one character.
+- Fixed the MIDI playback gauge jumping to 100% when FluidSynth initially
+  reports zero total ticks; it now uses the parsed MIDI file's final tick.
+- Removed the legacy Commons/ToBeFree MIDI preset buttons, replaced oscillator
+  tones with FluidSynth and a General MIDI SoundFont, and added automatic
+  next-track playback with a Random next track checkbox under More. Large MIDI
+  files now play through the synthesizer rather than scheduling every note as
+  a separate browser oscillator; audio is resumed on the Play gesture for Safari.
+- Made the MIDI playback gauge seek to the clicked position, moved the
+  pending-download cloud to the end of each playlist row, and fixed `TVImage`
+  binding so available game covers actually appear.
+- Replaced the MIDI Player's hardcoded demo playlist with the server catalog
+  and added a shared `TVImage` view for source-provided cover art.
+- Widened the MIDI transport controls, aligned game names in the playlist, and
+  marked pending tracks with a cloud. Added a hideable Download progress dialog
+  using shared gauges and replaced the URL field with a game/track filter.
+- Moved the Building Global Index dialog's Hide button down one text row.
 - Kept the completed global-index gauge visible briefly at `100%`, so fast
   rebuilds show a solid `█` bar instead of only the initial shaded track.
 - Changed the shared `TVBarGauge` to fill a shaded `░` track with solid `█`
@@ -37,6 +109,9 @@
   so `HELP.HL_` is collected as a readable `HELP.HLP`.
 
 ### Formats
+- Replaced value and type dispatch chains in HELP readers and bundle export
+  with Python `match/case`; conditional range and parser-state checks remain
+  `if/elif` where that form expresses their behavior more clearly.
 - Matched HelpPC topic keys and `~key~` links after collapsing repeated
   spaces, as specified by the original `HELPPC.DOC`, without changing their
   displayed text.
@@ -82,6 +157,8 @@
   instead of relying only on file-side inference
 
 ### Viewer & UI
+- Kept the HELP viewer and generated TVision pages running when the optional
+  screen-saver script fails to load; its menu actions then become harmless no-ops.
 - Grouped QuickBASIC 4.5 and Extended 7.1 under one Microsoft QuickBASIC
   Help Files menu, with separate version branches and unchanged bundle URLs.
   Archive.org downloads no longer append a release number already present in

@@ -102,6 +102,75 @@ files that have been offloaded to cloud storage, so Docker can read them through
 the bind mount. No second copy is created. If macOS offloads them again later,
 use `./thelp.sh docker start` to make them locally available again.
 
+### Game MIDI library
+
+On server startup, the MIDI downloader indexes the HTML pages configured in
+[`thelpviewer/midi-sources.json`](thelpviewer/midi-sources.json) and downloads
+missing MIDI tracks in the background into `var/midi/`. It resumes after a
+restart without fetching existing valid tracks again. The player reads the
+SQLite catalog at `var/midi/library.sqlite3` through `/api/midi/catalog` and
+plays local files through `/api/midi/files/...`; the previous bundled demo
+tracks are no longer its playlist. ZIP sources are unpacked selectively: only
+valid `.mid`/`.midi` tracks and a configured cover image are retained.
+SQLite stores one `midi_tracks` row per playable file, with game/title/source
+metadata and its optional `midi_covers` image reference; `midi_index` retains
+the original source links needed to resume ZIP downloads.
+The catalog total counts individual MIDI files inside those ZIPs, not distinct
+games or unique compositions; separate entries can contain identical MIDI data.
+The player lists both ready and pending items. A cloud marks a pending item;
+pressing Play or activating its row queues that source link ahead of the
+background order and starts playback when it arrives. The cloud icon is at the
+far right of each row. If the catalog API is temporarily unavailable, an open
+player retries it automatically every three seconds. Clicking the playback
+gauge seeks within
+the playing track. Source-provided covers appear in the player when available.
+FluidSynth and the bundled FluidR3Mono General MIDI SoundFont reproduce the
+file's instruments and percussion. The player starts fetching the SoundFont
+when opened so the first Play click does not initiate that large download.
+Pause preserves the current position and
+Play resumes it; the transport buttons have a one-character gap. Playback
+continues with the next track when
+one ends; the Random next track checkbox under More switches to shuffle mode.
+The Download progress dialog uses the shared Turbo Vision gauges and can be hidden without stopping
+the server download; the Downloads button reopens it. More expands the playlist
+and its Filter input, which matches game, track title, or sequencer. The old
+free-form MIDI URL input and external Commons/ToBeFree presets are removed.
+The Filter's history arrow reuses the standard Turbo Vision history popup;
+press Enter, start a track, or close the player to remember the current filter.
+
+Each JSON source declares `pages` as a nonempty list of HTTPS URLs,
+plus `allowed_hosts`, an `extract` rule, and an optional `cover` rule. A
+single-page source retains its configured ID. For multiple pages, each page is
+indexed as a separate resumable source; its suffix is derived from the URL
+path/query after the common path stem. This keeps Karl's existing `-d` ID and
+already downloaded tracks. Supported extraction modes are
+`table_rows` (game-header table with MIDI links), `anchors` (simple link list),
+`download_then_heading` (ZIP Download link followed by a game heading), and
+`selectors` (one block per track, with CSS selectors for its fields). For
+`selectors`, set `item_selector` and optionally `link_selector`,
+`game_selector`, `title_selector`, `sequencer_selector`, and field-specific
+`*_attr` when the value comes from an HTML attribute.
+The optional `href_pattern` filters link URLs; it does not parse the entire
+HTML page. Omit extraction fields that match the parser defaults. A single
+regex over HTML is deliberately not used because nesting and attribute order
+can change. Row class/cell numbers, heading tag/prefix and download link text
+are source-specific JSON settings when needed. An optional
+`THELP_MIDI_SOURCES_PATH` points to another source JSON file; add or edit a
+source and restart the server. `/api/midi/catalog` reports download progress
+and any errors. Karl's available numbered and lettered DOS pages are enabled;
+VGMusic is retained in the manifest with `"enabled": false` and is not shown
+or downloaded. Karl's ZIP cover images populate the MIDI Player's `TVImage`
+when present. The JSON rules
+cover these four HTML layouts; unusual sites may
+still need a new mode. Automatic external cover search is not
+enabled: source-provided images are used only when they can be associated with
+the downloaded game, avoiding incorrect matches to similarly named releases.
+
+These source sites contain game compositions and arrangements that may still
+be copyrighted. Source URLs, game names and sequencer attribution are retained
+in SQLite. Before using the automatic downloader on a public deployment,
+review the source's terms and your rights to redistribute its MIDI and art.
+
 ## Project Structure
 
 ```
@@ -123,9 +192,16 @@ THelpViewer/
 │   │   └── *.py            ←     one provider per website
 │   ├── help_database.py    ←   shared manifest loader and validation
 │   ├── server/             ←   FastAPI app
-│       ├── app.py          ←     routes and static mounts
-│       ├── config.py       ←     env-based runtime configuration
-│       └── __init__.py
+│   │   ├── app.py          ←     app setup, shared services and static mounts
+│   │   ├── config.py       ←     env-based runtime configuration
+│   │   ├── accounts.py     ←     Passkey accounts, tokens and sessions
+│   │   ├── statistics.py   ←     aggregate counters and Hall of Fame storage
+│   │   ├── search_index.py ←     global HELP and Docs search index
+│   │   ├── routes/         ←     HTTP endpoints grouped by responsibility
+│   │   │   ├── auth.py     ←       login, registration and tokens
+│   │   │   ├── public_pages.py ← crawlable pages and sitemaps
+│   │   │   └── statistics.py ← statistics and Hall of Fame API
+│   │   └── __init__.py
 │   └── help-database.json  ←   products, download sources, build groups, conversion files, CRC metadata
 ├── downloads/              ← Cached downloaded archives and disk images
 ├── sources/                ← Source help files organized by product group
@@ -133,7 +209,7 @@ THelpViewer/
 │   ├── Borland Turbo C 2.01/     ← e.g. TCHELP.TCH
 │   └── …
 ├── helps/                  ← Generated UHF 2.0 `.json.gz` bundles + catalog.json
-├── var/                    ← Future mutable server-side state
+├── var/                    ← Mutable server-side state, including MIDI catalog and tracks
 ├── docs/                   ← Documentation
 │   ├── Formats.md          ←   binary format index
 │   ├── Formats/            ←   detailed format specifications
@@ -257,6 +333,8 @@ dialog and are not submitted as statistics merely by opening it.
 The System menu's **Statistics** window reads aggregate counters from
 `var/statistics.sqlite3`. The location can be changed with
 `THELP_STATISTICS_PATH`; `THELP_STATE_DIR` changes the default state directory.
+`app.py` creates the store; `server/routes/statistics.py` registers the statistics
+and Hall of Fame endpoints without changing their URLs or response formats.
 SQLite uses its rollback journal so the database also works when `var/` is a
 Docker Desktop bind mount.
 The server records daily visits, referrer hosts, proxy-supplied country codes,
@@ -265,6 +343,9 @@ families, language, time zone, theme and orientation/pointer/accessibility
 preferences. Usage counters cover HELP/Docs/topic and dialog opens, searches
 as found/no-results without the entered text, internal/external/broken links,
 game outcomes with duration intervals and coarse client-error categories.
+MIDI statistics aggregate completed/ended plays and actually played minutes
+per track and day; paused time is excluded. The Statistics dialog shows the
+total and top tracks under MIDI playback. No listener identity is stored.
 The viewer also measures active time for each HELP file, Markdown document,
 dialog and game: switching to another window or hiding the browser tab pauses
 that target, and returning resumes it.
@@ -272,7 +353,7 @@ Performance counters group TTFB, page load, LCP, CLS, INP and HELP
 download/decompression/render times into intervals. Active visit time is also
 stored only as an interval. The server deliberately does not store IP
 addresses, cookies, persistent visitor identifiers, full referrer URLs, raw
-user-agent strings, search text, exact timings or individual visit rows. HELP
+user-agent strings, search text, individual playback intervals or individual visit rows. HELP
 statistics show the catalog's long display name rather than its source
 filename.
 
@@ -308,13 +389,22 @@ without the server retain local search but cannot use the global API.
 ### Search-engine pages
 
 `thelpviewer/server/app.py` assembles the FastAPI app and shared services.
-`thelpviewer/server/public_pages.py` supplies the public-page `APIRouter` for
+`thelpviewer/server/routes/public_pages.py` supplies the public-page `APIRouter` for
 viewer previews, `robots.txt` and sitemaps; the full-text index itself remains
 in `search_index.py`. These are separate from the JSON global-search API.
 
 The server-rendered homepage links to each public HELP-file overview and Doc;
-the TVision interface replaces that catalog after loading. The sitemap index
-also includes `/sitemaps/site.xml` for the homepage.
+the TVision interface replaces that catalog after loading, but its Help Files
+and Docs menu entries retain real `<a href>` URLs to the same pages. HELP
+indexes, Contents trees and topic links similarly expose `?file=...&topic=...`
+addresses after rendering. Ordinary clicks still dispatch `TVEvent` commands
+and open the existing viewer windows without a page reload; browser-modified
+clicks use the real link destination. Local aliases resolve to the actual topic
+ID, and cross-file links use the existing source-file/catalog resolver. If an
+external alias cannot be resolved before its bundle is loaded, its browser
+fallback points to that HELP file's overview; TVEvent retains the original
+target. No extra HTML landing page is introduced. The sitemap index also
+includes `/sitemaps/site.xml` for the homepage.
 
 The server exposes an overview of each HELP file at `/?file=<bundle-path>`
 with links to its non-empty topics. Each topic is server-rendered at

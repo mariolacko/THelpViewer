@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+beautifulsoup4>=4.12,<5
 capstone
 webauthn>=2.2,<3
 cryptography>=42

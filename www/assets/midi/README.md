@@ -1,33 +1,19 @@
 # MIDI Samples
 
-These files are bundled as demo tracks for the TurboVision MIDI player.
+These legacy demo files remain bundled for direct file links and existing
+links. The MIDI Player playlist now comes from the server's game-MIDI catalog
+in `var/midi/library.sqlite3`; see the Game MIDI library section in the root
+README.
 
-The player does not depend on native browser MIDI playback. It parses Standard MIDI
-Files in JavaScript and schedules notes through Web Audio.
-
-External URL and source-page playback:
-
-The MIDI dialog can also fetch a direct external `.mid` or `.midi` URL. It can
-also read an external HTML source page and use the first linked `.mid` or `.midi`
-file when the page allows browser CORS.
-
-Browser security requires the remote server to allow CORS. If a source page does
-not send CORS headers, use the direct MIDI download URL from the same page or
-download the file and play it from the local bundle instead.
-
-Modern hit MIDI files exist on sites such as BitMidi, Nonstop2k, and MIDI Hits,
-but current pop songs are copyrighted. Do not add them as bundled presets unless
-the source page grants a clear redistribution license.
-
-Built-in external presets are not bundled files:
-
-| Preset | Direct URL | Source page |
-| --- | --- | --- |
-| Wikimedia - Au clair de la lune | `https://upload.wikimedia.org/wikipedia/commons/e/e6/Au_clair_de_le_lune_chant_et_piano.midi` | `https://commons.wikimedia.org/wiki/File:Au_clair_de_le_lune_chant_et_piano.midi` |
-| Wikimedia - Saint-Saens Op. 166 | `https://upload.wikimedia.org/wikipedia/commons/5/55/Saint-saens_sonate_hautbois_op166_1er_mouvement_piano.midi` | `https://commons.wikimedia.org/wiki/File:Saint-saens_sonate_hautbois_op166_1er_mouvement_piano.midi` |
-| ToBeFree - 03 May 2020 | `https://upload.wikimedia.org/wikipedia/commons/c/c3/03may2020-tobefree-generated.mid` | `https://commons.wikimedia.org/wiki/File:03may2020-tobefree-generated.mid` |
-| ToBeFree - Friendship | `https://upload.wikimedia.org/wikipedia/commons/2/26/Friendship-tobefree-generated.mid` | `https://commons.wikimedia.org/wiki/File:Friendship-tobefree-generated.mid` |
-| ToBeFree - Infinite Adventures | `https://upload.wikimedia.org/wikipedia/commons/5/57/Infiniteadventurestheme-tobefree-generated.mid` | `https://commons.wikimedia.org/wiki/File:Infiniteadventurestheme-tobefree-generated.mid` |
+The player uses the bundled FluidSynth-based synthesizer and FluidR3Mono
+General MIDI SoundFont in [`synth/`](synth/README.md). It plays the instruments
+and percussion assigned in each MIDI file rather than one oscillator sound.
+The playback gauge supports click-to-seek. At the end of a track, the player
+starts the next track; the `Random next track` checkbox under More changes
+that to a random selection. MIDI downloads continue in the background, with
+an automatic progress dialog rather than a Downloads button in the player.
+The old Commons and ToBeFree external presets were
+removed from the dialog.
 
 To verify the downloaded files:
 

@@ -652,7 +652,7 @@ class TVApplication extends TVProgram {
         } else if (event.command === "context-help") {
             this.helpController?.request();
         } else if (event.command === "saver-start") {
-            const Saver = TVScreenSaver.modes[value];
+            const Saver = TVScreenSaver?.modes?.[value];
             if (Saver) { new Saver().start(); }
         } else if (event.command === "page-open") {
             window.location.href = value;
@@ -812,7 +812,7 @@ class TVApplication extends TVProgram {
             onHelp: (helpCtx) => this.contextHelpWindow?.openContext(helpCtx),
         });
         this.dialogManager.applyActiveStates();
-        TVScreenSaver.installIdleStart();
+        if (TVScreenSaver) { TVScreenSaver.installIdleStart(); }
         if (this.errors.length) {
             window.THelpViewerTVInitErrors = this.errors;
         }

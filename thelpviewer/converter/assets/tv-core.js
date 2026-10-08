@@ -1725,6 +1725,40 @@ class TVStaticText extends TVView {
 
 }
 
+class TVImage extends TVView {
+    constructor(bounds) {
+        if (!(bounds instanceof TVRect)) {
+            throw new TypeError("TVImage expects TVRect bounds");
+        }
+        super(bounds);
+        this.src = "";
+        this.alt = "";
+    }
+
+    draw() {
+        const bounds = TVView._viewBoundsStyle(this);
+        const attrs = attrsToString(this._drawAttrs());
+        return `<div class="tv-image"${bounds ? ` style="${escapeHtml(bounds)}"` : ""} ${attrs}>`
+            + `<img alt="${escapeHtml(this.alt)}"${this.src ? ` src="${escapeHtml(this.src)}"` : ""}${this.src ? "" : " hidden"}>`
+            + `<span${this.src ? " hidden" : ""}>No cover</span></div>`;
+    }
+
+    setImage(src, alt = "") {
+        this.src = String(src || "");
+        this.alt = String(alt || "");
+        const picture = this.root?.querySelector("img");
+        const placeholder = this.root?.querySelector("span");
+        if (picture) {
+            picture.hidden = !this.src;
+            picture.alt = this.alt;
+            if (this.src) { picture.src = this.src; }
+            else { picture.removeAttribute("src"); }
+        }
+        if (placeholder) { placeholder.hidden = Boolean(this.src); }
+        return this;
+    }
+}
+
 class TVPercentGauge extends TVView {
     static viewName = "percent-gauge";
 
@@ -2578,6 +2612,8 @@ class TVListViewer extends TVView {
         this.selectedIndex = -1;
         this.selectHandler = null;
         this.activateHandler = null;
+        this.selectionUiRoot = null;
+        this.selectionUiIndex = null;
     }
 
     draw() {
@@ -2630,6 +2666,8 @@ class TVListViewer extends TVView {
         this.items = Array.isArray(items) ? [...items] : [];
         this.range = this.items.length;
         const itemsRoot = this.itemsRoot();
+        this.selectionUiRoot = null;
+        this.selectionUiIndex = null;
         if (itemsRoot) {
             itemsRoot.innerHTML = this.items.map((item, index) => this.itemMarkup(item, index)).join("");
         }
@@ -2701,15 +2739,25 @@ class TVListViewer extends TVView {
         if (!itemsRoot) {
             return;
         }
-        const elements = Array.from(itemsRoot.querySelectorAll(this.itemSelector()));
-        elements.forEach((element, index) => {
+        const updateItem = (element, index) => {
+            if (!element) { return; }
             const value = Number.parseInt(element.dataset.tvListIndex || "", 10);
             const selected = value === this.selectedIndex;
             element.setAttribute("role", "option");
             element.classList.toggle("is-selected", selected);
             element.setAttribute("aria-selected", selected ? "true" : "false");
             element.tabIndex = selected || (this.selectedIndex < 0 && index === 0) ? 0 : -1;
-        });
+        };
+        if (this.selectionUiRoot !== itemsRoot || this.selectionUiIndex === null) {
+            itemsRoot.querySelectorAll(this.itemSelector()).forEach(updateItem);
+        } else if (this.selectionUiIndex !== this.selectedIndex) {
+            for (const index of new Set([this.selectionUiIndex, this.selectedIndex, 0])) {
+                if (index < 0) { continue; }
+                updateItem(itemsRoot.querySelector(`${this.itemSelector()}[data-tv-list-index="${index}"]`), index);
+            }
+        }
+        this.selectionUiRoot = itemsRoot;
+        this.selectionUiIndex = this.selectedIndex;
         if (scroll) {
             this.ensureSelectionVisible();
         }
@@ -2870,6 +2918,8 @@ class TVListBox extends TVListViewer {
     }
 
     resolvePointerIndex(event) {
+        const targetIndex = this.resolveIndex(event?.target);
+        if (targetIndex >= 0) { return targetIndex; }
         if (event && (event.clientX !== 0 || event.clientY !== 0) && this.viewport) {
             const element = Array.from(this.viewport.querySelectorAll(this.itemSelector())).find((item) => {
                 const rect = item.getBoundingClientRect();
@@ -2880,7 +2930,7 @@ class TVListBox extends TVListViewer {
                 return this.resolveIndex(element);
             }
         }
-        return this.resolveIndex(event?.target);
+        return -1;
     }
 
     pointerIndex(event) { return this.resolvePointerIndex(event); }
@@ -3767,8 +3817,10 @@ class TVMenuView extends TVView {
                 + '</div>';
         }
         const isMenuBar = view === "bar";
+        const href = item.getUrl();
+        const tag = href ? "a" : "button";
         const attrs = attrsToString({
-            type: "button",
+            ...(href ? { href } : { type: "button" }),
             ...(item.helpCtx !== hcNoContext ? { "data-tv-help-ctx": item.helpCtx } : {}),
             "data-tv-menu-item-id": item._menuId,
             ...TVView._controlAttrs({
@@ -3781,7 +3833,7 @@ class TVMenuView extends TVView {
         const shortcut = item.param
             ? `<span class="tv-menu-hotkey">${escapeHtml(item.param)}</span>`
             : "";
-        return `<button class="${className}" ${attrs}>${renderHotkeyMarkup(item.name)}${shortcut}</button>`;
+        return `<${tag} class="${className}" ${attrs}>${renderHotkeyMarkup(item.name)}${shortcut}</${tag}>`;
     }
 
     renderItems(view = "popup") {
@@ -3816,6 +3868,9 @@ class TVMenuItem {
         this.separator = false;
         this.disabled = false;
     }
+
+    // Browser navigation fallback; ordinary TVision commands remain buttons.
+    getUrl() { return ""; }
 
     append(item) {
         if (!(item instanceof TVMenuItem)) {
@@ -4278,10 +4333,15 @@ class TVMenuController {
     getHelpCtx() { return this.menuView?.getHelpCtx() || hcNoContext; }
 
     onCommand(nativeEvent) {
-        const control = nativeEvent.target?.closest?.("button");
-        if (!control || control.disabled || control.getAttribute("aria-disabled") === "true") { return; }
+        const control = nativeEvent.target?.closest?.("button, a");
+        if (!control) { return; }
+        if (control.disabled || control.getAttribute("aria-disabled") === "true") {
+            if (control._tvMenuItem) { nativeEvent.preventDefault(); }
+            return;
+        }
         const menuItem = control._tvMenuItem;
         if (menuItem instanceof TVMenuItem && this.menuView?.itemElements.get(menuItem) === control) {
+            if (control.tagName === "A" && (nativeEvent.ctrlKey || nativeEvent.metaKey || nativeEvent.shiftKey)) { return; }
             nativeEvent.preventDefault();
             this.menuView?.handleEvent(new TVEvent(evMouseDown, {
                 infoPtr: menuItem,
@@ -4305,7 +4365,7 @@ class TVMenuController {
     }
 
     onHover(nativeEvent) {
-        const element = nativeEvent.target?.closest?.("button");
+        const element = nativeEvent.target?.closest?.("button, a");
         if (!element?._tvMenuItem || this.menuView?.itemElements.get(element._tvMenuItem) !== element
             || element.contains(nativeEvent.relatedTarget)) { return; }
         this.menuView?.handleEvent(new TVEvent(evMouseMove, {
@@ -6160,7 +6220,7 @@ class TVScrollBar extends TVView {
         }
 
         const coordinate = axis === "y" ? event.clientY : event.clientX;
-        const rect = details.track.getBoundingClientRect();
+        const rect = details.axis.track.getBoundingClientRect();
         const relative = (axis === "y" ? coordinate - rect.top : coordinate - rect.left) - details.thumbPx / 2;
         const ratio = details.freeTrackPx > 0 ? this.clamp(relative / details.freeTrackPx, 0, 1) : 0;
         this.setScrollPosition(axis, ratio * details.maxScroll);
@@ -6526,6 +6586,7 @@ Object.assign(TV, {
     TVRect,
     TVView,
     TVStaticText,
+    TVImage,
     TVPercentGauge,
     TVBarGauge,
     TVLabel,

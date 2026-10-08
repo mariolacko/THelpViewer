@@ -1424,7 +1424,29 @@ function parseUhfLinkTargetSpec(rawTarget) {
     return recognized ? target : null;
 }
 
-function parseUhfTag(tagBody, bundle) {
+function viewerUrl(params) {
+    return `${window.location.pathname}?${new URLSearchParams(params)}`;
+}
+
+function bundleTargetUrl(bundle, target, currentTopic = null) {
+    const entry = target.sourceFile ? findCatalogEntryBySourceFile(target.sourceFile, bundle) : null;
+    if (target.sourceFile && !entry) { return "#"; }
+    const file = entry?.file || bundle?._catalogFile;
+    // Application context help is not part of the public HELP catalog.
+    if (!file || file === CONTEXT_HELP_BUNDLE_FILE) { return "#"; }
+    const destination = file === bundle?._catalogFile ? bundle : bundleCache.get(file);
+    const ref = target.bundleTopic ?? target.topicAlias ?? (target.sourceFile ? null : currentTopic?.id);
+    const topic = destination ? normalizeTopicRef(destination, ref)
+        : (/^-?\d+$/.test(String(ref ?? "")) ? String(Number(ref)) : null);
+    const params = { file };
+    if (topic) {
+        params.topic = topic;
+        if (Number(target.topicLine) > 0) { params.line = String(target.topicLine); }
+    }
+    return viewerUrl(params);
+}
+
+function parseUhfTag(tagBody, bundle, topic = null) {
     const lowered = tagBody.toLowerCase();
     if (lowered === "b") { return { name: "b", open: "<b>", close: "</b>", raw: tagBody }; }
     if (lowered === "i") { return { name: "i", open: "<i>", close: "</i>", raw: tagBody }; }
@@ -1437,7 +1459,13 @@ function parseUhfTag(tagBody, bundle) {
         if (!linkTarget) {
             return null;
         }
-        const attrs = ['href="#"', 'data-tv-uhf-link="1"'];
+        const href = bundleTargetUrl(bundle, {
+            sourceFile: linkTarget.file,
+            bundleTopic: linkTarget.topic,
+            topicAlias: linkTarget.alias,
+            topicLine: linkTarget.line,
+        }, topic);
+        const attrs = [`href="${escapeHtml(href)}"`, 'data-tv-uhf-link="1"'];
         if (linkTarget.file) {
             attrs.push(`data-tv-source-file="${escapeHtml(linkTarget.file)}"`);
         }
@@ -1460,9 +1488,11 @@ function parseUhfTag(tagBody, bundle) {
 
     match = tagBody.match(/^nav:(back|contents|index)$/i);
     if (match) {
+        const action = match[1].toLowerCase();
+        const href = action === "back" ? "#" : bundleTargetUrl(bundle, {});
         return {
             name: "nav",
-            open: `<a href="#" data-tv-nav="${escapeHtml(match[1].toLowerCase())}">`,
+            open: `<a href="${escapeHtml(href)}" data-tv-nav="${action}">`,
             close: "</a>",
             raw: tagBody,
         };
@@ -1528,7 +1558,7 @@ function parseUhfTag(tagBody, bundle) {
     return null;
 }
 
-function renderUhfInline(text, bundle) {
+function renderUhfInline(text, bundle, topic = null) {
     const root = { name: null, open: "", close: "", raw: "", children: [] };
     const stack = [root];
 
@@ -1568,7 +1598,7 @@ function renderUhfInline(text, bundle) {
             index = close + 1;
             continue;
         }
-        const descriptor = parseUhfTag(tagBody, bundle);
+        const descriptor = parseUhfTag(tagBody, bundle, topic);
         if (!descriptor) {
             append(escapeHtml(text.slice(open, close + 1)));
             index = close + 1;
@@ -1628,7 +1658,7 @@ function renderUhfTopicLines(topic, bundle) {
             lineNumber += 1;
             lines.push(wrapTopicLineMarkup(
                 lineNumber,
-                `<a href="#" data-tv-bundle-topic="${escapeHtml(downTarget)}">&lt;more&gt;</a>`,
+                `<a href="${escapeHtml(bundleTargetUrl(bundle, { bundleTopic: downTarget }))}" data-tv-bundle-topic="${escapeHtml(downTarget)}">&lt;more&gt;</a>`,
             ));
             return;
         }
@@ -1645,14 +1675,14 @@ function renderUhfTopicLines(topic, bundle) {
                 lines.push(
                     wrapTopicLineMarkup(
                         lineNumber,
-                        `<span class="code-example">${renderUhfInline(raw, bundle)}</span>`
+                        `<span class="code-example">${renderUhfInline(raw, bundle, topic)}</span>`
                     )
                 );
             }
             return;
         }
         lineNumber += 1;
-        lines.push(wrapTopicLineMarkup(lineNumber, renderUhfInline(raw, bundle)));
+        lines.push(wrapTopicLineMarkup(lineNumber, renderUhfInline(raw, bundle, topic)));
     });
 
     return lines;
@@ -1975,13 +2005,13 @@ function renderBundleIndex(bundle) {
     const groups = Array.isArray(bundle.index) ? bundle.index : [];
     const byLetter = new Map(groups.map((group) => [String(group.group || ""), group]));
     if (byLetter.has("#")) {
-        sections.push(renderIndexSection("#", "#", byLetter.get("#").entries || []));
+        sections.push(renderIndexSection("#", "#", byLetter.get("#").entries || [], bundle));
     }
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((letter) => {
         const group = byLetter.get(letter);
         if (group && Array.isArray(group.entries) && group.entries.length) {
-            navItems.push(`<a class="tv-index-jump" href="#" data-letter="${letter}">${letter}</a>`);
-            sections.push(renderIndexSection(letter, letter, group.entries));
+            navItems.push(`<a class="tv-index-jump" href="#idx-${letter}" data-letter="${letter}">${letter}</a>`);
+            sections.push(renderIndexSection(letter, letter, group.entries, bundle));
         } else {
             navItems.push(`<span class="tv-index-jump is-empty">${letter}</span>`);
         }
@@ -1998,14 +2028,14 @@ function renderBundleIndex(bundle) {
     ].join("\n");
 }
 
-function renderIndexSection(anchor, label, entries) {
+function renderIndexSection(anchor, label, entries, bundle) {
     const items = entries.map((entry) => {
         if (entry == null || entry.topic_id == null) {
             const targetData = buildBundleTargetData(entry || {});
             if (!Object.keys(targetData).length) {
                 return `<div class="tv-index-entry"><span>${escapeHtml(entry && entry.label ? entry.label : "")}</span></div>`;
             }
-            return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...TVView._controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label || "")}</a></div>`;
+            return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: bundleTargetUrl(bundle, targetData), ...TVView._controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label || "")}</a></div>`;
         }
         const targetData = buildBundleTargetData({
             topic_id: entry.topic_id,
@@ -2013,7 +2043,7 @@ function renderIndexSection(anchor, label, entries) {
             alias: entry.alias,
             line: entry.line,
         });
-        return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: "#", ...TVView._controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label)}</a></div>`;
+        return `<div class="tv-index-entry"><a ${renderHtmlAttributes({ href: bundleTargetUrl(bundle, targetData), ...TVView._controlAttrs({ commandData: targetData }) })}>${escapeHtml(entry.label)}</a></div>`;
     });
     return [
         `<section class="tv-index-section" id="idx-${escapeHtml(anchor)}">`,
@@ -2040,7 +2070,7 @@ class TVContentsOutline extends TVOutline {
         const label = escapeHtml(String(node?.label || ""));
         const targetData = buildBundleTargetData(node);
         return Object.keys(targetData).length
-            ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...TVView._controlAttrs({ commandData: targetData }) })}>${label}</a>`
+            ? `<a ${renderHtmlAttributes({ href: bundleTargetUrl(this.bundle, targetData), "data-tv-uhf-link": "1", ...TVView._controlAttrs({ commandData: targetData }) })}>${label}</a>`
             : label;
     }
 }
@@ -2063,7 +2093,7 @@ function renderBundleTagTopics(bundle, key, value, label) {
     ));
     const entries = topics.map((topic) => {
         const attrs = renderHtmlAttributes({
-            href: "#",
+            href: bundleTargetUrl(bundle, { bundleTopic: topic.id }),
             "data-tv-bundle-topic": topic.id,
         });
         return `<div class="tv-index-entry"><a ${attrs}>${escapeHtml(bundleTopicTitle(bundle, topic))}</a></div>`;
@@ -2102,15 +2132,15 @@ function renderHtmlAttributes(attrs) {
         .join(" ");
 }
 
-function renderContentsNodes(nodes) {
+function renderContentsNodes(nodes, bundle) {
     return nodes.map((node) => {
         const label = escapeHtml(String(node.label || ""));
         const targetData = buildBundleTargetData(node);
         const labelHTML = Object.keys(targetData).length
-            ? `<a ${renderHtmlAttributes({ href: "#", "data-tv-uhf-link": "1", ...TVView._controlAttrs({ commandData: targetData }) })}>${label}</a>`
+            ? `<a ${renderHtmlAttributes({ href: bundleTargetUrl(bundle, targetData), "data-tv-uhf-link": "1", ...TVView._controlAttrs({ commandData: targetData }) })}>${label}</a>`
             : label;
         const children = Array.isArray(node.children) && node.children.length
-            ? `<div class="tv-contents-children">${renderContentsNodes(node.children)}</div>`
+            ? `<div class="tv-contents-children">${renderContentsNodes(node.children, bundle)}</div>`
             : "";
         return [
             `<div class="tv-contents-node">`,
@@ -2497,6 +2527,7 @@ class BundleWindowManager {
             children: withKeys(Array.isArray(node.children) ? node.children : [], `${prefix}${index}/`),
         }));
         const outline = new TVContentsOutline(new TVRect()).bindRoot(root);
+        outline.bundle = bundle;
         const windowView = windowEl._tvWindowView;
         outline.setScrollViewport(
             windowEl.querySelector(".tv-frame > .tv-scroll-shell > .tv-viewport"),
@@ -2684,6 +2715,16 @@ class BundleWindowManager {
 
 const menuActions = new WeakMap();
 
+class TVBundleMenuItem extends TVMenuItem {
+    getUrl() {
+        const action = menuActions.get(this) || {};
+        if (this.command === "bundle-open") { return viewerUrl({ file: action.value }); }
+        if (this.command === "doc-open") { return viewerUrl({ doc: action.value }); }
+        if (this.command === "menu-link") { return bundleTargetUrl(action.bundle, action); }
+        return "";
+    }
+}
+
 function withMenuAction(item, action = {}) {
     menuActions.set(item, action);
     return item;
@@ -2750,7 +2791,7 @@ function buildGroupedMenuItems(entries, renderItem) {
 
 function catalogMenuEntryButton(entry) {
     return withMenuAction(
-        new TVMenuItem(entry.menu_name || entry.name, "bundle-open"),
+        new TVBundleMenuItem(entry.menu_name || entry.name, "bundle-open"),
         { value: entry.file, bundleLabel: bundleLoadingLabel(entry) },
     );
 }
@@ -2821,11 +2862,11 @@ function buildCatalogMenuItems(catalog) {
 
 function buildDocsMenuItems(docs) {
     return buildGroupedMenuItems(docs, (entry) =>
-        withMenuAction(new TVMenuItem(entry.name, "doc-open"), { value: entry.file })
+        withMenuAction(new TVBundleMenuItem(entry.name, "doc-open"), { value: entry.file })
     );
 }
 
-function buildBundleContentsMenuItems(nodes) {
+function buildBundleContentsMenuItems(nodes, bundle) {
     if (!Array.isArray(nodes)) { return []; }
     const items = [];
 
@@ -2833,7 +2874,7 @@ function buildBundleContentsMenuItems(nodes) {
         const label = String((node && node.label) || "").trim();
         if (!label) { return; }
 
-        const childItems = buildBundleContentsMenuItems(node.children || []);
+        const childItems = buildBundleContentsMenuItems(node.children || [], bundle);
         const targetData = buildBundleTargetData(node);
         const hasTarget = Object.keys(targetData).length > 0;
         const menuLabel = renderBundleMenuLabel(label, node && node.hotkey);
@@ -2842,8 +2883,8 @@ function buildBundleContentsMenuItems(nodes) {
             const subItems = [];
             if (hasTarget) {
                 subItems.push(withMenuAction(
-                    new TVMenuItem(menuLabel, "menu-link"),
-                    targetData,
+                    new TVBundleMenuItem(menuLabel, "menu-link"),
+                    { ...targetData, bundle },
                 ));
                 subItems.push(renderMenuPopupSeparator());
             }
@@ -2854,8 +2895,8 @@ function buildBundleContentsMenuItems(nodes) {
 
         if (hasTarget) {
             items.push(withMenuAction(
-                new TVMenuItem(menuLabel, "menu-link"),
-                targetData,
+                new TVBundleMenuItem(menuLabel, "menu-link"),
+                { ...targetData, bundle },
             ));
             return;
         }
@@ -2892,7 +2933,7 @@ function buildBundleContentsSubMenu(bundle) {
         return null;
     }
 
-    const items = buildBundleContentsMenuItems(nodes);
+    const items = buildBundleContentsMenuItems(nodes, bundle);
     if (!items.length) {
         return null;
     }
@@ -3280,7 +3321,7 @@ class TVBundleApp extends TVProgram {
         } else if (event.command === "window-cmd") {
             this._dispatchWindowCommand(value);
         } else if (event.command === "saver-start") {
-            const saver = TVScreenSaver.modes[value];
+            const saver = TVScreenSaver?.modes?.[value];
             if (saver) {
                 recordStatisticsEvent({ event: "tool_open", name: `screen-saver-${value}` });
                 new saver().start();
@@ -3450,6 +3491,7 @@ class TVBundleApp extends TVProgram {
     }
 
     _finishStatisticsTargets() {
+        this.midiDialog?.finishPlaybackStats(true);
         const now = performance.now();
         Array.from(this.statisticsTargets.keys()).forEach((managerName) => {
             this._finishStatisticsTarget(managerName, true, now);
@@ -3506,7 +3548,8 @@ class TVBundleApp extends TVProgram {
         this._registerDialog("calendar", () => new TVCalendarDialog());
         this._registerDialog("ascii", () => new TVAsciiTableDialog());
         this._registerDialog("calc", () => new TVCalculatorDialog());
-        this._registerDialog("midi", () => new TVMidiPlayerDialog());
+        this.midiDialog = this._registerDialog("midi", () => new TVMidiPlayerDialog());
+        if (this.midiDialog) { this.midiDialog.onPlaybackEvent = recordStatisticsEvent; }
         this._registerDialog("colors", () => new TVColorsDialog());
         this._registerDialog("widgets", () => new TVViewGalleryDialog());
         this._registerDialog("grid", () => new TVGridDemoDialog());
@@ -4272,6 +4315,7 @@ class TVBundleApp extends TVProgram {
             const publicFile = publicDoc ? null : url.searchParams.get("file");
             const file = publicFile || url.searchParams.get("search_file");
             const topic = url.searchParams.get("topic") || url.searchParams.get("search_topic");
+            const line = url.searchParams.get("line");
             const doc = publicDoc || url.searchParams.get("search_doc");
             const canOpenFile = publicFile || (catalogData || []).some((candidate) => candidate.file === file);
             if (!hashState && file && (topic || publicFile) && canOpenFile) {
@@ -4279,7 +4323,7 @@ class TVBundleApp extends TVProgram {
                     const bundle = await loadBundle(file);
                     this.dialogManager.get("welcome")?.destroy();
                     this._updateSearchData(bundle);
-                    if (topic) { this.windowManager.showTopic(bundle, topic); }
+                    if (topic) { this.windowManager.showTopic(bundle, topic, line); }
                     else { this.windowManager.showDefault(bundle); }
                     document.getElementById("tv-public-fallback")?.remove();
                 } catch (error) {
@@ -4547,7 +4591,7 @@ class TVBundleApp extends TVProgram {
             this.menuController.commandTarget = this;
             this.menuController.refresh();
         }
-        TVScreenSaver.installIdleStart();
+        if (TVScreenSaver) { TVScreenSaver.installIdleStart(); }
         this._updateWindowMenuState();
     }
 }

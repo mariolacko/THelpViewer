@@ -21,6 +21,7 @@ const {
     TVView,
     TVRect,
     TVStaticText,
+    TVImage,
     TVBarGauge,
     TVPercentGauge,
     TVLabel,
@@ -140,10 +141,12 @@ class TVMidiTrackButton extends TVButton {
         return {
             ...super._drawParts(), dialog: false,
             className: `tv-midi-track${data.selected ? " is-selected" : ""}`,
+            ariaLabel: `${data.title || "MIDI track"}, ${data.credit || ""}, ${data.available ? "downloaded" : "not downloaded"}`,
             labelMarkup: [
                 `<span class="tv-midi-track-index">${escapeHtml(String(data.index + 1).padStart(2, "0"))}</span>`,
                 `<span class="tv-midi-track-title">${escapeHtml(data.title || "")}</span>`,
                 `<span class="tv-midi-track-credit">${escapeHtml(data.credit || "")}</span>`,
+                `<span class="tv-midi-track-availability" aria-hidden="true">${data.available ? " " : "☁"}</span>`,
             ].join(""),
         };
     }
@@ -859,6 +862,8 @@ class TVHistory extends TVButton {
             ? "file-open-history"
             : normalizedId.includes("directory")
                 ? "change-dir-history"
+                : normalizedId.includes("midi-filter")
+                    ? "midi-filter-history"
                 : "find-history";
         super(bounds, "", command, bfNormal);
         this.link = link;
@@ -887,6 +892,7 @@ class TVHistory extends TVButton {
                 "file-open-history": "History",
                 "change-dir-history": "Directory history",
                 "find-history": "Find history",
+                "midi-filter-history": "Filter history",
             }[this.command],
             ariaExpanded: Boolean(this.commandData.expanded),
         };
@@ -2488,285 +2494,6 @@ class TVColorsDialog extends TVDialog {
     }
 }
 
-const TV_MIDI_LIBRARY = Object.freeze([
-    {
-        title: "THelpViewer - Neon Grid",
-        file: "assets/midi/modern-neon-grid.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "THelpViewer - Byte Runner",
-        file: "assets/midi/modern-byte-runner.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "THelpViewer - Soft Circuit",
-        file: "assets/midi/modern-soft-circuit.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "THelpViewer - Terminal Drift",
-        file: "assets/midi/modern-terminal-drift.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "THelpViewer - Night Cache",
-        file: "assets/midi/modern-night-cache.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "THelpViewer - Pixel Rain",
-        file: "assets/midi/modern-pixel-rain.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "THelpViewer - Vector Sunrise",
-        file: "assets/midi/modern-vector-sunrise.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "THelpViewer - Copper Lanes",
-        file: "assets/midi/modern-copper-lanes.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "THelpViewer - Glass Towers",
-        file: "assets/midi/modern-glass-towers.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "THelpViewer - Data Stream",
-        file: "assets/midi/modern-data-stream.mid",
-        credit: "Original demo",
-    },
-    {
-        title: "Komiku - Disco Challenge",
-        file: "assets/midi/oga-komiku-disco-challenge.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - Pop City",
-        file: "assets/midi/oga-komiku-pop-city.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - The Big Dancefloor",
-        file: "assets/midi/oga-komiku-big-dancefloor.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - Everything Is Groovy",
-        file: "assets/midi/oga-komiku-everything-is-groovy.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - Road 1 Chill",
-        file: "assets/midi/oga-komiku-road-1-chill.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - Road 1 Fight",
-        file: "assets/midi/oga-komiku-road-1-fight.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - Road 2 Chill",
-        file: "assets/midi/oga-komiku-road-2-chill.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - Road 3 Fight",
-        file: "assets/midi/oga-komiku-road-3-fight.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - Road 4 Fight",
-        file: "assets/midi/oga-komiku-road-4-fight.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - We Have to Dance Together",
-        file: "assets/midi/oga-komiku-we-have-to-dance-together.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - Dropda Basstion",
-        file: "assets/midi/oga-komiku-dropda-basstion.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Komiku - The Test",
-        file: "assets/midi/oga-komiku-the-test.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Roppy Chop Studios - Broken Arm",
-        file: "assets/midi/oga-roppy-broken-arm.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Roppy Chop Studios - Casual Afternoon",
-        file: "assets/midi/oga-roppy-casual-afternoon.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Roppy Chop Studios - Icy Garden",
-        file: "assets/midi/oga-roppy-icy-garden.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Roppy Chop Studios - Journey Forgotten",
-        file: "assets/midi/oga-roppy-journey-forgotten.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Roppy Chop Studios - No One",
-        file: "assets/midi/oga-roppy-no-one.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Roppy Chop Studios - Standardized Anxiety",
-        file: "assets/midi/oga-roppy-standardized-anxiety.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Roppy Chop Studios - Without Time",
-        file: "assets/midi/oga-roppy-without-time.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "nene - Long Away Home",
-        file: "assets/midi/oga-nene-long-away-home.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "Tozan - Stringsvop",
-        file: "assets/midi/oga-tozan-stringsvop.mid",
-        credit: "OpenGameArt CC0",
-    },
-    {
-        title: "F. Abt - Vocalise No. 1",
-        file: "assets/midi/vocalise-1.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "F. Abt - When the Swallows Homeward Fly",
-        file: "assets/midi/when-the-swallows-homeward-fly.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "J. Andre - Sonatine Op. 34 No. 1",
-        file: "assets/midi/andre-sonatine-op34-1.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "A. Adam - Giselle",
-        file: "assets/midi/giselle.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "A. Adam - Minuit Chretiens",
-        file: "assets/midi/minuit-chretiens.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "S. Adams - The Blue Mountains",
-        file: "assets/midi/blue-mountains.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "I. Albeniz - Rumores de la Caleta",
-        file: "assets/midi/rumores-de-la-caleta.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "C. V. Alkan - Op. 31 No. 1",
-        file: "assets/midi/alkan-op31-1.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "C. V. Alkan - Op. 31 No. 2",
-        file: "assets/midi/alkan-op31-2.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "C. V. Alkan - Toccatina",
-        file: "assets/midi/alkan-toccatina.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "C. P. E. Bach - Rondo",
-        file: "assets/midi/cpe-bach-rondo.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "J. S. Bach - BWV 259",
-        file: "assets/midi/bach-bwv-259.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "J. S. Bach - BWV 269",
-        file: "assets/midi/bach-bwv-269.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "J. S. Bach - BWV 347",
-        file: "assets/midi/bach-bwv-347.mid",
-        credit: "Mutopia Project",
-    },
-    {
-        title: "J. S. Bach - Anna Magdalena 20a",
-        file: "assets/midi/bach-anna-magdalena-20a.mid",
-        credit: "Mutopia Project",
-    },
-    ...Array.from({ length: 15 }, (_unused, index) => {
-        const number = index + 1;
-        return {
-            title: `J. S. Bach - Invention No. ${number}`,
-            file: `assets/midi/bach-invention-${String(number).padStart(2, "0")}.mid`,
-            credit: "Mutopia Project",
-        };
-    }),
-]);
-
-const TV_MIDI_EXTERNAL_SOURCES = Object.freeze([
-    {
-        label: "Commons CC0",
-        title: "Wikimedia - Au clair de la lune",
-        file: "https://upload.wikimedia.org/wikipedia/commons/e/e6/Au_clair_de_le_lune_chant_et_piano.midi",
-        credit: "Wikimedia Commons CC0",
-        external: true,
-    },
-    {
-        label: "Commons PD",
-        title: "Wikimedia - Saint-Saens Op. 166",
-        file: "https://upload.wikimedia.org/wikipedia/commons/5/55/Saint-saens_sonate_hautbois_op166_1er_mouvement_piano.midi",
-        credit: "Wikimedia Commons PD/CC0",
-        external: true,
-    },
-    {
-        label: "ToBeFree 1",
-        title: "ToBeFree - 03 May 2020",
-        file: "https://upload.wikimedia.org/wikipedia/commons/c/c3/03may2020-tobefree-generated.mid",
-        credit: "Wikimedia Commons CC BY-SA 4.0",
-        external: true,
-    },
-    {
-        label: "ToBeFree 2",
-        title: "ToBeFree - Friendship",
-        file: "https://upload.wikimedia.org/wikipedia/commons/2/26/Friendship-tobefree-generated.mid",
-        credit: "Wikimedia Commons CC BY-SA 4.0",
-        external: true,
-    },
-    {
-        label: "ToBeFree 3",
-        title: "ToBeFree - Infinite Adventures",
-        file: "https://upload.wikimedia.org/wikipedia/commons/5/57/Infiniteadventurestheme-tobefree-generated.mid",
-        credit: "Wikimedia Commons CC BY-SA 4.0",
-        external: true,
-    },
-]);
-
 const MIDI_DEFAULT_TEMPO_US = 500000;
 
 function midiReadString(view, state, length) {
@@ -2986,10 +2713,6 @@ function parseMidiFile(arrayBuffer) {
     };
 }
 
-function midiNoteFrequency(note) {
-    return 440 * Math.pow(2, (note - 69) / 12);
-}
-
 function formatMidiTime(seconds) {
     const safeSeconds = Math.max(0, Math.floor(seconds || 0));
     const minutes = Math.floor(safeSeconds / 60);
@@ -2997,78 +2720,57 @@ function formatMidiTime(seconds) {
     return `${minutes}:${rest}`;
 }
 
-function normalizeMidiUrl(value) {
-    const trimmed = String(value || "").trim();
-    if (!trimmed) {
-        throw new Error("Enter a MIDI URL first.");
-    }
-    const url = new URL(trimmed, window.location.href);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-        throw new Error("Only HTTP and HTTPS MIDI URLs are supported.");
-    }
-    if (window.location.protocol === "https:" && url.protocol !== "https:") {
-        throw new Error("Use an HTTPS MIDI URL on an HTTPS page.");
-    }
-    return url.href;
-}
-
-function titleFromMidiUrl(url) {
-    try {
-        const parsed = new URL(url);
-        const filename = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || "");
-        const title = filename.replace(/\.(midi?|kar)$/i, "").replace(/[_-]+/g, " ").trim();
-        return title || parsed.hostname || "External MIDI";
-    } catch {
-        return "External MIDI";
-    }
-}
-
-function looksLikeMidiUrl(url) {
-    try {
-        return /\.(mid|midi)(?:$|[?#])/i.test(new URL(url, window.location.href).href);
-    } catch {
-        return false;
-    }
-}
-
-function extractMidiUrlFromHtml(html, baseUrl) {
-    const candidates = [];
-    const attrPattern = /\b(?:href|src)=["']([^"']+\.(?:mid|midi)(?:[?#][^"']*)?)["']/gi;
-    let match = attrPattern.exec(html);
-    while (match) {
-        candidates.push(match[1]);
-        match = attrPattern.exec(html);
-    }
-    const barePattern = /https?:\/\/[^\s"'<>]+?\.(?:mid|midi)(?:[?#][^\s"'<>]*)?/gi;
-    match = barePattern.exec(html);
-    while (match) {
-        candidates.push(match[0]);
-        match = barePattern.exec(html);
-    }
-    for (const candidate of candidates) {
-        try {
-            const url = new URL(candidate, baseUrl).href;
-            if (looksLikeMidiUrl(url)) {
-                return url;
-            }
-        } catch {
-            continue;
-        }
-    }
-    return "";
-}
-
 class TVMidiSynth {
     constructor() {
         this.context = null;
-        this.master = null;
-        this.nodes = [];
+        this.synth = null;
+        this.audioNode = null;
+        this.initPromise = null;
         this.progressTimer = null;
-        this.finishTimer = null;
-        this.startedAt = 0;
+        this.totalTicks = 0;
+        this.generation = 0;
         this.sequence = null;
+        this.paused = false;
         this.onProgress = null;
         this.onDone = null;
+        this.loadingTimes = {};
+    }
+
+    static loadScript(url) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = url;
+            script.onload = resolve;
+            script.onerror = () => reject(new Error(`Cannot load MIDI synthesizer: ${url}`));
+            document.head.appendChild(script);
+        });
+    }
+
+    static loadAssets() {
+        if (!this.assetsPromise) {
+            this.assetsPromise = (async () => {
+                const base = "/assets/midi/synth/";
+                const scriptsStarted = performance.now();
+                await this.loadScript(`${base}libfluidsynth-2.4.6-with-libsndfile.js`);
+                await this.loadScript(`${base}js-synthesizer.min.js`);
+                await window.JSSynth.waitForReady();
+                const scriptsMs = performance.now() - scriptsStarted;
+                const soundfontStarted = performance.now();
+                const response = await fetch(`${base}FluidR3Mono_GM.sf3?v=2aacd036d705`);
+                if (!response.ok) { throw new Error(`Cannot load MIDI SoundFont (HTTP ${response.status}).`); }
+                const soundFont = await response.arrayBuffer();
+                this.assetTiming = {
+                    scriptsMs,
+                    soundfontFetchMs: performance.now() - soundfontStarted,
+                    soundfontBytes: soundFont.byteLength,
+                };
+                return soundFont;
+            })().catch((error) => {
+                this.assetsPromise = null;
+                throw error;
+            });
+        }
+        return this.assetsPromise;
     }
 
     async ensureContext() {
@@ -3078,64 +2780,79 @@ class TVMidiSynth {
         }
         if (!this.context) {
             this.context = new AudioContextCtor();
-            this.master = this.context.createGain();
-            this.master.gain.value = 0.72;
-            this.master.connect(this.context.destination);
         }
         if (this.context.state === "suspended") {
             await this.context.resume();
         }
-        return this.context;
+        if (!this.initPromise) {
+            this.initPromise = (async () => {
+                const soundFont = await TVMidiSynth.loadAssets();
+                const synthStarted = performance.now();
+                const synth = new window.JSSynth.Synthesizer();
+                synth.init(this.context.sampleRate);
+                const audioNode = synth.createAudioNode(this.context, 4096);
+                audioNode.connect(this.context.destination);
+                try {
+                    const soundfontStarted = performance.now();
+                    await synth.loadSFont(soundFont);
+                    this.loadingTimes = {
+                        ...TVMidiSynth.assetTiming,
+                        synthInitMs: performance.now() - synthStarted,
+                        soundfontLoadMs: performance.now() - soundfontStarted,
+                    };
+                } catch (error) {
+                    audioNode.disconnect();
+                    synth.close();
+                    throw error;
+                }
+                this.synth = synth;
+                this.audioNode = audioNode;
+                return synth;
+            })().catch((error) => {
+                this.initPromise = null;
+                throw error;
+            });
+        }
+        return this.initPromise;
     }
 
-    async play(sequence, onProgress, onDone) {
+    async play(sequence, onProgress, onDone, offset = 0) {
         this.stop(false);
-        const context = await this.ensureContext();
+        const generation = this.generation;
+        const synth = await this.ensureContext();
+        if (generation !== this.generation) { return false; }
+        await synth.resetPlayer();
+        await synth.addSMFDataToPlayer(sequence.data);
+        if (generation !== this.generation) { return false; }
+        await synth.playPlayer();
+        // FluidSynth can report zero total ticks just after playback starts.
+        // The parser has already read the final tick from every MIDI track.
+        this.totalTicks = Math.max(1, sequence.maxTick || synth.getPlayerTotalTicks());
+        if (offset > 0) {
+            const ratio = Math.min(1, offset / sequence.duration);
+            synth.seekPlayer(Math.min(this.totalTicks - 1, Math.floor(this.totalTicks * ratio)));
+        }
         this.sequence = sequence;
         this.onProgress = onProgress;
         this.onDone = onDone;
-        this.startedAt = context.currentTime + 0.08;
-        this.schedule(sequence);
-        this.progressTimer = window.setInterval(() => this.reportProgress(), 120);
-        this.finishTimer = window.setTimeout(() => this.finish(), Math.max(250, (sequence.duration + 0.25) * 1000));
+        this.progressTimer = window.setInterval(() => this.reportProgress(), 150);
         this.reportProgress();
+        return true;
     }
 
-    schedule(sequence) {
-        const context = this.context;
-        if (!context || !this.master) {
-            return;
-        }
-        for (const note of sequence.notes) {
-            const start = this.startedAt + note.time;
-            const end = start + note.duration;
-            const releaseEnd = end + 0.06;
-            if (releaseEnd <= context.currentTime) {
-                continue;
-            }
-            const oscillator = context.createOscillator();
-            const gain = context.createGain();
-            oscillator.type = note.channel === 9 ? "square" : (note.channel % 2 ? "triangle" : "sine");
-            oscillator.frequency.setValueAtTime(midiNoteFrequency(note.midi), start);
-            const peak = Math.min(0.09, 0.025 + (note.velocity / 127) * 0.055);
-            gain.gain.setValueAtTime(0.0001, start);
-            gain.gain.linearRampToValueAtTime(peak, start + 0.012);
-            gain.gain.setValueAtTime(peak * 0.78, Math.max(start + 0.02, end - 0.04));
-            gain.gain.exponentialRampToValueAtTime(0.0001, releaseEnd);
-            oscillator.connect(gain);
-            gain.connect(this.master);
-            oscillator.start(start);
-            oscillator.stop(releaseEnd);
-            this.nodes.push({ oscillator, gain });
-        }
+    async seekTo(ratio) {
+        if (!this.sequence) { return false; }
+        const tick = Math.floor(this.totalTicks * Math.max(0, Math.min(1, ratio)));
+        this.synth.seekPlayer(Math.min(this.totalTicks - 1, tick));
+        this.reportProgress();
+        return true;
     }
 
     reportProgress() {
-        if (!this.context || !this.sequence || !this.onProgress) {
-            return;
-        }
-        const elapsed = Math.max(0, this.context.currentTime - this.startedAt);
-        this.onProgress(Math.min(elapsed, this.sequence.duration), this.sequence.duration);
+        if (!this.synth || !this.sequence || this.paused) { return; }
+        const ratio = Math.max(0, Math.min(1, this.synth.getPlayerCurrentTick() / this.totalTicks));
+        this.onProgress?.(ratio * this.sequence.duration, this.sequence.duration);
+        if (!this.synth.isPlayerPlaying()) { this.finish(); }
     }
 
     finish() {
@@ -3147,23 +2864,40 @@ class TVMidiSynth {
         }
     }
 
-    stop(report = true) {
+    pause() {
+        if (!this.sequence) { return null; }
+        const ratio = Math.max(0, Math.min(1, this.synth.getPlayerCurrentTick() / this.totalTicks));
+        const position = { ratio, elapsed: ratio * this.sequence.duration, duration: this.sequence.duration };
         if (this.progressTimer !== null) {
             window.clearInterval(this.progressTimer);
             this.progressTimer = null;
         }
-        if (this.finishTimer !== null) {
-            window.clearTimeout(this.finishTimer);
-            this.finishTimer = null;
+        this.synth.stopPlayer();
+        this.paused = true;
+        return position;
+    }
+
+    async resume() {
+        if (!this.paused || !this.sequence) { return false; }
+        const synth = await this.ensureContext();
+        await synth.playPlayer();
+        this.paused = false;
+        this.progressTimer = window.setInterval(() => this.reportProgress(), 150);
+        this.reportProgress();
+        return true;
+    }
+
+    stop(report = true) {
+        this.generation += 1;
+        this.paused = false;
+        if (this.progressTimer !== null) {
+            window.clearInterval(this.progressTimer);
+            this.progressTimer = null;
         }
-        for (const node of this.nodes) {
-            try { node.oscillator.stop(); } catch { /* already stopped */ }
-            try { node.oscillator.disconnect(); } catch { /* already disconnected */ }
-            try { node.gain.disconnect(); } catch { /* already disconnected */ }
-        }
-        this.nodes = [];
+        this.synth?.stopPlayer();
         const progress = this.onProgress;
         this.sequence = null;
+        this.totalTicks = 0;
         this.onProgress = null;
         this.onDone = null;
         if (report && progress) {
@@ -3184,6 +2918,7 @@ class TVMidiTrackList extends TVListBox {
                 index,
                 title: track.title,
                 credit: track.credit,
+                available: track.available,
             })
             .draw();
     }
@@ -3241,40 +2976,35 @@ class TVMidiPlayerDialog extends TVDialog {
     static viewName = "midi";
 
     constructor() {
-        const previousButton = new TVMidiControlButton(new TVRect(1, 6, 7, 8), "◄◄", "midi-previous", bfNormal);
-        const playButton = new TVButton(new TVRect(7, 6, 14, 8), "►", "midi-play", bfDefault);
-        const pauseButton = new TVMidiControlButton(new TVRect(14, 6, 21, 8), "▌▌", "midi-pause", bfNormal);
-        const stopButton = new TVButton(new TVRect(21, 6, 27, 8), "■", "midi-stop", bfNormal);
-        const nextButton = new TVMidiControlButton(new TVRect(27, 6, 33, 8), "►►", "midi-next", bfNormal);
-        const moreButton = new TVMidiControlButton(new TVRect(33, 6, 41, 8), "~M~ore", "midi-more", bfNormal)
+        const previousButton = new TVMidiControlButton(new TVRect(1, 6, 9, 8), "◄◄", "midi-previous", bfNormal);
+        const playButton = new TVButton(new TVRect(10, 6, 17, 8), "►", "midi-play", bfDefault);
+        const pauseButton = new TVMidiControlButton(new TVRect(18, 6, 25, 8), "▌▌", "midi-pause", bfNormal);
+        const stopButton = new TVButton(new TVRect(26, 6, 33, 8), "■", "midi-stop", bfNormal);
+        const nextButton = new TVMidiControlButton(new TVRect(34, 6, 41, 8), "►►", "midi-next", bfNormal);
+        const moreButton = new TVMidiControlButton(new TVRect(42, 6, 52, 8), "~M~ore", "midi-more", bfNormal)
             .setCommandData({ expanded: false });
-        const sourceBounds = [
-            new TVRect(0, 3, 20, 5),
-            new TVRect(20, 3, 40, 5),
-            new TVRect(0, 5, 13, 7),
-            new TVRect(13, 5, 26, 7),
-            new TVRect(26, 5, 40, 7),
-        ];
-        const sourceButtons = TV_MIDI_EXTERNAL_SOURCES.map((source, index) => (
-            new TVButton(sourceBounds[index], source.label, "midi-source", bfNormal)
-                .setValue(index)
-                .setCommandData({ description: `${source.title} (${source.credit})` })
-        ));
-        const midiUrlInput = new TVInputLine(new TVRect(5, 1, 31, 2), 255);
-        const midiUrlLabel = new TVLabel(new TVRect(0, 1, 4, 2), "URL", midiUrlInput);
-        const display = new TVMidiDisplay(new TVRect(1, 0, 41, 3));
-        const meter = new TVBarGauge(new TVRect(1, 4, 41, 5), 100);
-        const loadUrlButton = new TVButton(new TVRect(32, 1, 40, 3), "~L~oad", "midi-load-url", bfNormal);
-        const externalSource = new TVGroup(new TVRect(1, 16, 41, 23)).insertAll([
-            midiUrlLabel,
-            midiUrlInput,
-            loadUrlButton,
-            ...sourceButtons,
+        const filterInput = new TVInputLine(new TVRect(8, 1, 48, 2), 255);
+        const filterLabel = new TVLabel(new TVRect(0, 1, 8, 2), "~F~ilter:", filterInput);
+        const filterHistory = new TVHistory(new TVRect(48, 1, 51, 2), filterInput, "thelp:midi-filter-history");
+        const filterHistoryPopup = new TVHistoryWindow(new TVRect(0, 0, 32, 6), "midi-filter");
+        const randomNext = new TVCheckBoxes(new TVRect(0, 3, 51, 4), [
+            { label: "~R~andom next track" },
         ]);
-        externalSource.setState(sfVisible, false);
-        const trackList = new TVMidiTrackList(new TVRect(1, 8, 41, 16));
+        const cover = new TVImage(new TVRect(1, 0, 11, 5));
+        const display = new TVMidiDisplay(new TVRect(12, 0, 52, 3));
+        const meter = new TVBarGauge(new TVRect(12, 4, 52, 5), 100);
+        const advanced = new TVGroup(new TVRect(1, 16, 52, 21)).insertAll([
+            filterLabel,
+            filterInput,
+            filterHistory,
+            randomNext,
+            filterHistoryPopup,
+        ]);
+        advanced.setState(sfVisible, false);
+        const trackList = new TVMidiTrackList(new TVRect(1, 8, 52, 16));
         trackList.setState(sfVisible, false);
-        const main = new TVGroup(new TVRect(0, 0, 42, 8)).insertAll([
+        const main = new TVGroup(new TVRect(0, 0, 53, 8)).insertAll([
+            cover,
             display,
             meter,
             previousButton,
@@ -3284,17 +3014,32 @@ class TVMidiPlayerDialog extends TVDialog {
             nextButton,
             moreButton,
             trackList,
-            externalSource,
+            advanced,
         ]);
-        super(new TVRect(0, 0, 44, 10), "CD/MIDI Player");
+        super(new TVRect(0, 0, 55, 10), "CD/MIDI Player");
         this.setHelpCtx(hcMidiPlayer);
         this.insert(main);
-        this.selectedIndex = 0;
+        this.selectedIndex = -1;
+        this.tracks = [];
+        this.allTracks = [];
+        this.pendingPlay = null;
+        this.catalogTimer = null;
+        this.catalogPending = false;
+        this.lastCatalog = null;
+        this.downloadProgress = null;
+        this.downloadDismissed = false;
+        this.downloadCloseTimer = null;
         this.cache = new Map();
         this.loadSerial = 0;
         this.isPlaying = false;
+        this.isLoading = false;
+        this.activeTrackFile = null;
+        this.pausedPosition = null;
+        this.playbackStats = null;
+        this.onPlaybackEvent = null;
         this.synth = new TVMidiSynth();
         this.displayView = display;
+        this.coverView = cover;
         this.meter = meter;
         this.previousButton = previousButton;
         this.playButton = playButton;
@@ -3303,241 +3048,437 @@ class TVMidiPlayerDialog extends TVDialog {
         this.nextButton = nextButton;
         this.moreButton = moreButton;
         this.mainView = main;
-        this.advancedView = externalSource;
-        this.urlInput = midiUrlInput;
-        this.loadUrlButton = loadUrlButton;
-        this.sourceButtons = sourceButtons;
+        this.advancedView = advanced;
+        this.filterInput = filterInput;
+        this.filterHistory = filterHistory;
+        this.filterHistoryPopup = filterHistoryPopup;
+        this.historyWindow = filterHistory.bindWindow(
+            filterHistoryPopup,
+            () => filterHistory.keys().map((value) => ({ historyKey: value, value })),
+            (item) => {
+                this.filterInput.setData(item.value);
+                this.applyFilter();
+                this.historyWindow.hide();
+                this.filterInput.focus();
+            },
+        );
+        this.randomNext = randomNext;
         this.trackListBox = trackList;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
         this.bind();
-        this.trackListBox.setItems(TV_MIDI_LIBRARY, this.selectedIndex);
+        this.trackListBox.setItems([], -1);
         this.updateDisplay();
     }
 
     bind() {
         this.trackListBox.bind({
-            onSelect: (_track, index) => this.selectTrack(index),
-            onActivate: (_track, index) => {
+            onSelect: (_track, index, nativeEvent) => {
                 this.selectTrack(index);
-                this.playSelected();
+                if (nativeEvent?.type === "click") { void this.playSelected(); }
+            },
+            onActivate: (_track, index, nativeEvent) => {
+                if (nativeEvent?.type === "dblclick") { return; }
+                this.selectTrack(index);
+                void this.playSelected();
             },
         });
     }
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what === evCommand) {
+        if (event.what === evKeyDown && this.historyWindow.handleEscape(event.nativeEvent)) {
+            this.clearEvent(event);
+            return;
+        }
+        if (event.what === evMouseDown && event.infoPtr === this.meter
+                && event.nativeEvent?.type === "click") {
+            const bounds = this.meter.root?.getBoundingClientRect();
+            if (bounds?.width && this.synth.sequence) {
+                const ratio = Math.max(0, Math.min(1, (event.nativeEvent.clientX - bounds.left) / bounds.width));
+                void this.seekTo(ratio);
+            }
+            this.clearEvent(event);
+        } else if (event.what === evCommand) {
             if (event.command === "midi-previous") { this.previousTrack(); }
             else if (event.command === "midi-play") { void this.playSelected(); }
             else if (event.command === "midi-pause") { this.pausePlayback(); }
             else if (event.command === "midi-stop") { this.stopPlayback(); }
             else if (event.command === "midi-next") { this.nextTrack(); }
             else if (event.command === "midi-more") { this.toggleAdvanced(); }
-            else if (event.command === "midi-load-url") { this.playExternalUrl(); }
-            else if (event.command === "midi-source") { this.playExternalPreset(Number(event.infoPtr.value)); }
             else { return; }
             this.clearEvent(event);
-        } else if (event.what === evKeyDown && event.infoPtr === this.urlInput && event.nativeEvent.key === "Enter") {
-            event.nativeEvent.preventDefault();
-            this.playExternalUrl();
+        } else if (event.what === evBroadcast && event.infoPtr === this.filterInput
+                && event.nativeEvent?.type === "input") {
+            this.applyFilter();
+            this.clearEvent(event);
+        } else if (event.what === evKeyDown && event.infoPtr === this.filterInput
+                && event.nativeEvent?.key === "Enter") {
+            this.rememberFilter();
             this.clearEvent(event);
         }
     }
 
+    rememberFilter() {
+        this.filterHistory.remember(this.filterInput.getData().trim());
+        this.historyWindow.refresh();
+    }
+
     close() {
+        this.rememberFilter();
+        this.historyWindow.hide();
+        if (this.catalogTimer) { clearTimeout(this.catalogTimer); }
+        this.catalogTimer = null;
+        this.pendingPlay = null;
+        this.clearDownloadProgress();
         this.stopPlayback();
         super.close();
+    }
+
+    open() {
+        this.historyWindow.hide();
+        this.downloadDismissed = false;
+        super.open();
+        // Start fetching the large SoundFont while the player is being browsed.
+        // Playback still resumes Web Audio from the user's Play/click gesture.
+        void TVMidiSynth.loadAssets().catch((error) => {
+            if (this.isOpen()) { this.setStatus(`MIDI synthesizer preload failed: ${error.message}`); }
+        });
+        void this.refreshCatalog();
+    }
+
+    applyFilter() {
+        const selectedId = this.selectedTrack()?.id;
+        const query = this.filterInput.getData().trim().toLocaleLowerCase();
+        this.tracks = this.allTracks.filter((track) => !query || [
+            track.game, track.title, track.sequencer,
+        ].some((value) => String(value || "").toLocaleLowerCase().includes(query)));
+        const remembered = this.tracks.findIndex((track) => track.id === selectedId);
+        this.selectedIndex = remembered >= 0 ? remembered : (this.tracks.length ? 0 : -1);
+        const scrollTop = this.trackListBox.scrollViewport?.scrollTop || 0;
+        this.trackListBox.setItems(this.tracks, this.selectedIndex);
+        if (this.trackListBox.scrollViewport) { this.trackListBox.scrollViewport.scrollTop = scrollTop; }
+        if (!this.isPlaying) {
+            if (!this.pausedPosition || this.pausedPosition.file !== this.selectedTrack()?.file) {
+                this.pausedPosition = null;
+                this.updateDisplay();
+            }
+        }
+    }
+
+    showDownloadProgress(status) {
+        if (this.downloadDismissed || !(this.owner instanceof TV.TVDesktop)) { return; }
+        if (this.downloadCloseTimer) { clearTimeout(this.downloadCloseTimer); this.downloadCloseTimer = null; }
+        if (!this.downloadProgress || this.downloadProgress.destroyed) {
+            this.downloadProgress = new TVMidiDownloadProgressDialog();
+            this.downloadProgress.onHide = () => { this.downloadDismissed = true; };
+            this.owner.insert(this.downloadProgress);
+        }
+        this.downloadProgress.update(status);
+        if (!this.downloadProgress.isOpen()) { this.downloadProgress.open(); }
+    }
+
+    clearDownloadProgress() {
+        if (this.downloadCloseTimer) { clearTimeout(this.downloadCloseTimer); }
+        this.downloadCloseTimer = null;
+        this.downloadProgress?.destroy();
+        this.downloadProgress = null;
+    }
+
+    async refreshCatalog() {
+        if (!this.isOpen() || this.catalogPending) { return; }
+        this.catalogPending = true;
+        try {
+            const response = await fetch("/api/midi/catalog", { cache: "no-store" });
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            const catalog = await response.json();
+            if (!this.isOpen()) { return; }
+            this.lastCatalog = catalog;
+            const tracks = Array.isArray(catalog.tracks) ? catalog.tracks : [];
+            if (tracks.length !== this.allTracks.length || tracks.some((track, index) =>
+                track.id !== this.allTracks[index]?.id || track.available !== this.allTracks[index]?.available
+                || track.cover !== this.allTracks[index]?.cover)) {
+                this.allTracks = tracks;
+                this.applyFilter();
+            }
+            if (!this.isPlaying && !this.pausedPosition) {
+                if (catalog.state === "downloading") {
+                    this.setStatus(`Downloading game MIDI: ${catalog.downloaded}/${catalog.total}...`);
+                } else if (catalog.state === "error" || catalog.state === "partial") {
+                    this.setStatus(catalog.errors?.[0] || "Some MIDI downloads failed; restart to retry.");
+                } else {
+                    this.setStatus(tracks.length ? `${catalog.downloaded} game MIDI tracks ready.` : "No game MIDI tracks available.");
+                }
+            }
+            if (catalog.state === "downloading") {
+                this.showDownloadProgress(catalog);
+            } else if (this.downloadProgress && !this.downloadCloseTimer) {
+                this.downloadProgress.update(catalog);
+                this.downloadCloseTimer = setTimeout(() => { this.clearDownloadProgress(); }, 650);
+            }
+            if (this.pendingPlay) {
+                const wanted = this.pendingPlay;
+                const ready = tracks.find((track) => track.id === wanted.id && track.available)
+                    || tracks.find((track) => track.item_id === wanted.itemId && track.available);
+                if (ready) {
+                    this.pendingPlay = null;
+                    const index = this.tracks.findIndex((track) => track.id === ready.id);
+                    if (index >= 0) { this.selectTrack(index); }
+                    void this.playTrack(ready, index >= 0 ? String(index + 1).padStart(2, "0") : "--");
+                }
+            }
+            if (catalog.state === "downloading") {
+                this.catalogTimer = setTimeout(() => { void this.refreshCatalog(); }, this.pendingPlay ? 1000 : 3000);
+            }
+        } catch (error) {
+            if (this.isOpen()) {
+                this.setStatus(`MIDI catalog unavailable: ${error.message}`);
+                this.catalogTimer = setTimeout(() => {
+                    this.catalogTimer = null;
+                    void this.refreshCatalog();
+                }, 3000);
+            }
+        } finally {
+            this.catalogPending = false;
+        }
     }
 
     toggleAdvanced(expanded = !this.advancedView.getState(sfVisible)) {
         expanded = Boolean(expanded);
         this.trackListBox.setState(sfVisible, expanded);
         this.advancedView.setState(sfVisible, expanded);
-        this.mainView.changeBounds(new TVRect(0, 0, 42, expanded ? 23 : 8));
+        this.mainView.changeBounds(new TVRect(0, 0, 53, expanded ? 21 : 8));
         this.moreButton.commandData.expanded = expanded;
         this.moreButton.root?.setAttribute("aria-expanded", expanded ? "true" : "false");
         this.moreButton.setTitle(expanded ? "~L~ess" : "~M~ore");
-        this.locate(new TVRect(0, 0, 44, expanded ? 25 : 10));
+        this.locate(new TVRect(0, 0, 55, expanded ? 23 : 10));
         this.trackListBox.updateScrollbar();
     }
 
     captureUrlState() {
-        return { expanded: this.advancedView.getState(sfVisible) };
+        return { expanded: this.advancedView.getState(sfVisible), random: Boolean(this.randomNext.getData() & 1) };
     }
 
     restoreUrlState(state) {
         this.toggleAdvanced(Boolean(state?.expanded));
+        this.randomNext.setData(state?.random ? 1 : 0);
     }
 
     selectTrack(index) {
-        if (!Number.isInteger(index) || index < 0 || index >= TV_MIDI_LIBRARY.length) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.tracks.length) {
             return;
         }
+        if (this.pausedPosition?.file !== this.tracks[index].file) { this.pausedPosition = null; }
         this.selectedIndex = index;
-        this.trackListBox.select(index);
-        this.updateDisplay();
+        if (this.trackListBox.selectedIndex !== index) { this.trackListBox.select(index); }
+        if (!this.pausedPosition) { this.updateDisplay(); }
     }
 
     previousTrack() {
-        const nextIndex = (this.selectedIndex - 1 + TV_MIDI_LIBRARY.length) % TV_MIDI_LIBRARY.length;
+        if (!this.tracks.length) { return; }
+        const nextIndex = (this.selectedIndex - 1 + this.tracks.length) % this.tracks.length;
         this.selectTrack(nextIndex);
-        if (this.isPlaying) {
+        if (this.isPlaying || this.isLoading) {
             this.playSelected();
         }
     }
 
-    nextTrack() {
-        const nextIndex = (this.selectedIndex + 1) % TV_MIDI_LIBRARY.length;
+    nextTrack(autoplay = this.isPlaying || this.isLoading) {
+        if (!this.tracks.length) { return; }
+        const nextIndex = this.randomNext.getData() & 1 && this.tracks.length > 1
+            ? (this.selectedIndex + 1 + Math.floor(Math.random() * (this.tracks.length - 1))) % this.tracks.length
+            : (this.selectedIndex + 1) % this.tracks.length;
         this.selectTrack(nextIndex);
-        if (this.isPlaying) {
-            this.playSelected();
-        }
+        if (autoplay) { void this.playSelected(); }
     }
 
     selectedTrack() {
-        return TV_MIDI_LIBRARY[this.selectedIndex] || TV_MIDI_LIBRARY[0];
+        return this.tracks[this.selectedIndex] || null;
     }
 
     updateDisplay() {
         const track = this.selectedTrack();
-        this.updateTrackDisplay(track, String(this.selectedIndex + 1).padStart(2, "0"));
+        this.updateTrackDisplay(track || { title: "Waiting for game MIDI catalog..." },
+            track ? String(this.selectedIndex + 1).padStart(2, "0") : "--");
         this.updateProgress(0, 0, { status: false });
     }
 
     updateTrackDisplay(track, number) {
-        this.displayView.setTrack(track, number);
+        this.displayView.setTrack({
+            ...track,
+            title: track.game ? `${track.game}: ${track.title}` : track.title,
+        }, number);
+        this.coverView.setImage(track.cover || "", track.game ? `${track.game} cover` : "");
     }
 
     async loadTrack(track) {
         if (this.cache.has(track.file)) {
             return this.cache.get(track.file);
         }
-        let response;
-        try {
-            response = await fetch(track.file);
-        } catch (error) {
-            if (track.external) {
-                throw new Error("Cannot load external source. The server may block browser CORS.");
-            }
-            throw error;
-        }
+        const response = await fetch(track.file);
         if (!response.ok) {
             throw new Error(`Cannot load ${track.file} (${response.status}).`);
         }
-        const contentType = response.headers.get("content-type") || "";
-        if (track.external && !looksLikeMidiUrl(response.url || track.file) && !/midi|audio\/|octet-stream/i.test(contentType)) {
-            let midiUrl = "";
-            try {
-                midiUrl = extractMidiUrlFromHtml(await response.text(), response.url || track.file);
-            } catch {
-                throw new Error("Cannot read external page. The server may block browser CORS.");
-            }
-            if (!midiUrl) {
-                throw new Error("No MIDI download link found on the external page.");
-            }
-            let midiResponse;
-            try {
-                midiResponse = await fetch(midiUrl);
-            } catch {
-                throw new Error("Cannot load MIDI link from external page. The server may block browser CORS.");
-            }
-            if (!midiResponse.ok) {
-                throw new Error(`Cannot load ${midiUrl} (${midiResponse.status}).`);
-            }
-            response = midiResponse;
-        }
-        let sequence;
-        try {
-            sequence = parseMidiFile(await response.arrayBuffer());
-        } catch (error) {
-            if (track.external) {
-                throw new Error(`External source is not a playable MIDI file: ${error.message}`);
-            }
-            throw error;
-        }
+        const data = await response.arrayBuffer();
+        const sequence = { ...parseMidiFile(data), data };
         this.cache.set(track.file, sequence);
+        if (this.cache.size > 24) { this.cache.delete(this.cache.keys().next().value); }
         return sequence;
     }
 
     async playSelected() {
+        this.rememberFilter();
         const track = this.selectedTrack();
-        this.trackListBox.select(this.selectedIndex);
-        await this.playTrack(track, String(this.selectedIndex + 1).padStart(2, "0"));
+        if (!track) { this.setStatus("No game MIDI track is available yet."); return; }
+        this.pendingPlay = null;
+        if (this.trackListBox.selectedIndex !== this.selectedIndex) {
+            this.trackListBox.select(this.selectedIndex);
+        }
+        if (!track.available) {
+            this.stopPlayback();
+            await this.prioritizeTrack(track);
+            return;
+        }
+        if (this.pausedPosition?.file === track.file && this.synth.sequence) {
+            await this.resumePlayback();
+        } else {
+            await this.playTrack(track, String(this.selectedIndex + 1).padStart(2, "0"));
+        }
     }
 
-    playExternalUrl() {
-        let file;
+    async prioritizeTrack(track) {
+        this.pendingPlay = { id: track.id, itemId: track.item_id };
+        this.setStatus(`Downloading ${track.title} first...`);
+        this.downloadDismissed = false;
         try {
-            file = normalizeMidiUrl(this.urlInput.getData());
+            const response = await fetch(`/api/midi/priority/${encodeURIComponent(track.source_id)}/${encodeURIComponent(track.item_id)}`, {
+                method: "POST",
+            });
+            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
         } catch (error) {
-            this.setStatus(error && error.message ? error.message : "Invalid MIDI URL.");
+            this.pendingPlay = null;
+            this.setStatus(`Cannot queue MIDI download: ${error.message}`);
             return;
         }
-        this.playExternalTrack({
-            title: titleFromMidiUrl(file),
-            file,
-            credit: "External URL",
-            external: true,
-        });
-    }
-
-    playExternalPreset(index) {
-        const source = TV_MIDI_EXTERNAL_SOURCES[index];
-        if (!source) {
-            return;
-        }
-        this.urlInput.setData(source.file);
-        this.playExternalTrack(source);
-    }
-
-    playExternalTrack(track) {
-        this.trackListBox.select(-1);
-        this.playTrack(track, "URL");
+        if (this.catalogTimer) { clearTimeout(this.catalogTimer); }
+        this.catalogTimer = setTimeout(() => { void this.refreshCatalog(); }, 300);
     }
 
     async playTrack(track, number) {
+        const playStarted = performance.now();
         const serial = ++this.loadSerial;
+        this.finishPlaybackStats();
+        this.synth.stop(false);
+        this.isPlaying = false;
+        this.isLoading = true;
+        this.pausedPosition = null;
+        this.activeTrackFile = track.file;
         this.updateTrackDisplay(track, number);
-        this.setStatus(`Loading ${track.title}...`);
+        this.setStatus(`Loading ${track.title} and SoundFont...`);
         this.updateProgress(0, 0, { status: false });
         this.playButton.setState(sfDisabled, true);
         try {
-            const sequence = await this.loadTrack(track);
+            // Resume audio synchronously with the Play gesture, before the MIDI fetch.
+            const [sequence] = await Promise.all([this.loadTrack(track), this.synth.ensureContext()]);
             if (serial !== this.loadSerial) {
                 return;
             }
-            await this.synth.play(
+            const started = await this.synth.play(
                 sequence,
                 (elapsed, duration) => this.updateProgress(elapsed, duration),
                 () => {
+                    if (serial !== this.loadSerial) { return; }
+                    this.finishPlaybackStats();
                     this.isPlaying = false;
-                    this.setStatus(`Finished ${track.title}.`);
+                    this.nextTrack(true);
                 },
             );
+            if (!started || serial !== this.loadSerial) { return; }
+            this.synth.loadingTimes.playReadyMs = performance.now() - playStarted;
             this.isPlaying = true;
+            this.playbackStats = {
+                track, durationMs: 0, activeSince: performance.now(),
+            };
             this.setStatus(`Playing ${track.title} (${formatMidiTime(sequence.duration)}).`);
         } catch (error) {
+            if (serial !== this.loadSerial) { return; }
             this.isPlaying = false;
             this.setStatus(error && error.message ? error.message : "MIDI playback failed.");
         } finally {
-            this.playButton.setState(sfDisabled, false);
+            if (serial === this.loadSerial) {
+                this.isLoading = false;
+                this.playButton.setState(sfDisabled, false);
+            }
+        }
+    }
+
+    async resumePlayback() {
+        const serial = this.loadSerial;
+        this.isLoading = true;
+        this.playButton.setState(sfDisabled, true);
+        try {
+            const resumed = await this.synth.resume();
+            if (!resumed || serial !== this.loadSerial) { return; }
+            this.pausedPosition = null;
+            this.isPlaying = true;
+            if (this.playbackStats) { this.playbackStats.activeSince = performance.now(); }
+            this.setStatus(`Playing ${this.selectedTrack()?.title || "MIDI"}.`);
+        } catch (error) {
+            if (serial === this.loadSerial) { this.stopPlayback(error?.message || "MIDI resume failed."); }
+        } finally {
+            if (serial === this.loadSerial) {
+                this.isLoading = false;
+                this.playButton.setState(sfDisabled, false);
+            }
         }
     }
 
     pausePlayback() {
-        this.loadSerial += 1;
+        this.pausePlaybackStats();
         this.isPlaying = false;
-        this.synth.stop();
+        this.isLoading = false;
+        const paused = this.synth.pause();
+        if (paused) {
+            this.pausedPosition = { ...paused, file: this.activeTrackFile };
+            this.updateProgress(paused.elapsed, paused.duration, { status: false });
+        } else {
+            this.loadSerial += 1;
+            this.synth.stop(false);
+        }
+        this.playButton.setState(sfDisabled, false);
         this.setStatus("Paused.");
     }
 
     stopPlayback(message = "Stopped.") {
+        this.finishPlaybackStats();
         this.loadSerial += 1;
         this.isPlaying = false;
+        this.isLoading = false;
+        this.pausedPosition = null;
+        this.activeTrackFile = null;
         this.synth.stop();
+        this.playButton.setState(sfDisabled, false);
         this.updateProgress(0, 0, { status: false });
         this.setStatus(message);
+    }
+
+    pausePlaybackStats() {
+        const stats = this.playbackStats;
+        if (stats?.activeSince != null) {
+            stats.durationMs += Math.max(0, performance.now() - stats.activeSince);
+            stats.activeSince = null;
+        }
+    }
+
+    finishPlaybackStats(beacon = false) {
+        if (!this.playbackStats) { return; }
+        this.pausePlaybackStats();
+        const { track, durationMs } = this.playbackStats;
+        this.playbackStats = null;
+        this.onPlaybackEvent?.({
+            event: "midi_play", scope: track.source_id, topic: track.id,
+            game: track.game, name: track.title, duration_ms: durationMs,
+        }, { beacon });
     }
 
     updateProgress(elapsed, duration, { status = true } = {}) {
@@ -3546,6 +3487,17 @@ class TVMidiPlayerDialog extends TVDialog {
         this.displayView.setTime(elapsed, duration);
         if (status && duration > 0) {
             this.setStatus(`Playing ${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}.`);
+        }
+    }
+
+    async seekTo(ratio) {
+        const sequence = this.synth.sequence;
+        if (!sequence) { return; }
+        try {
+            await this.synth.seekTo(ratio);
+            this.updateProgress(sequence.duration * ratio, sequence.duration);
+        } catch (error) {
+            this.stopPlayback(error?.message || "MIDI seek failed.");
         }
     }
 
@@ -3785,6 +3737,13 @@ class TVStatisticsDialog extends TVDialog {
 
     sectionRows(key) {
         const rows = Array.isArray(this.data?.[key]) ? this.data[key] : [];
+        if (key === "midi_tracks") {
+            return [
+                `Total: ${Number(this.data?.midi_plays) || 0} plays · ${Number(this.data?.midi_minutes) || 0} min`,
+                ...rows.map((row, index) =>
+                    `${String(index + 1).padStart(2, " ")}. ${row.value}  ${Number(row.count) || 0}× · ${Number(row.minutes) || 0} min`),
+            ];
+        }
         if (!rows.length) { return ["No data yet."]; }
         return rows.map((row, index) => {
             let value = String(row?.value || "Unknown");
@@ -3829,6 +3788,7 @@ class TVStatisticsDialog extends TVDialog {
                 ["▣ Active time", "active_duration"], ["📖 HELP time", "help_duration"],
                 ["📄 Document time", "document_duration"], ["▤ Dialogs", "dialog"],
                 ["⌛ Dialog time", "dialog_duration"],
+                ["♫ MIDI playback", "midi_tracks"],
                 ["⚒ Tools", "tool"], ["⌕ Searches", "search"], ["↗ Links", "link"],
                 ["🎮 Games", "game"], ["🏁 Game results", "game_outcome"],
                 ["⏱ Game time", "game_duration"], ["🖥 Screens", "resolution"],
@@ -4309,16 +4269,16 @@ class TVSearchResultsList extends TVListBox {
 class TVIndexProgressDialog extends TVDialog {
     static viewName = "index-progress";
 
-    constructor() {
-        super(new TVRect(0, 0, 46, 10), "Building Global Index");
+    constructor(title = "Building Global Index", initialSummary = "Preparing HELP files and Docs...") {
+        super(new TVRect(0, 0, 46, 10), title);
         this.setState(sfModal, true);
-        this.summary = new TVStaticText(new TVRect(2, 1, 42, 2), "Preparing HELP files and Docs...");
+        this.summary = new TVStaticText(new TVRect(2, 1, 42, 2), initialSummary);
         this.file = new TVStaticText(new TVRect(2, 4, 42, 5), "");
         this.bar = new TVBarGauge(new TVRect(2, 2, 42, 3), 100);
         this.percent = new TVPercentGauge(new TVRect(19, 3, 26, 4), 100);
         this.insert(new TVGroup(new TVRect(0, 0, 44, 8)).insertAll([
             this.summary, this.bar, this.percent, this.file,
-            new TVButton(new TVRect(17, 5, 29, 7), "~H~ide", "index-hide", bfDefault),
+            new TVButton(new TVRect(17, 6, 29, 8), "~H~ide", "index-hide", bfDefault),
         ]));
         this.onHide = null;
         this.bindCommonClose(() => this.hideProgress());
@@ -4344,6 +4304,25 @@ class TVIndexProgressDialog extends TVDialog {
             this.hideProgress();
             this.clearEvent(event);
         }
+    }
+}
+
+class TVMidiDownloadProgressDialog extends TVIndexProgressDialog {
+    static viewName = "midi-download-progress";
+
+    constructor() {
+        super("Downloading Game MIDI", "Preparing game MIDI files...");
+    }
+
+    update(status) {
+        const downloaded = Number(status.downloaded) || 0;
+        const total = Number(status.total) || 0;
+        const percent = status.state === "ready" ? 100
+            : total ? Math.max(0, Math.min(100, Math.floor(100 * downloaded / total))) : 0;
+        this.summary.setText(`${downloaded} / ${total} MIDI tracks ready`);
+        this.file.setText(String(status.current || "").slice(-40));
+        this.bar.updateView(percent);
+        this.percent.updateView(percent);
     }
 }
 

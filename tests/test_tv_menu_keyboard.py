@@ -80,7 +80,7 @@ fileButton.dataset.tvMenuItemId = fileItem._menuId;
 fileButton.dataset.tvCommand = "wrong-dom-command";
 const menuRoot = new FakeElement();
 fileButton.closest = (selector) => ({
-    button: fileButton,
+    "button, a": fileButton,
 }[selector] || null);
 menuRoot.querySelectorAll = (selector) => selector === "[data-tv-menu-item-id]" ? [fileButton] : [];
 const menuView = new TV.TVMenuView(new TV.TVRect(), TV.NewMenu(fileItem)).bindRoot(menuRoot);
@@ -144,6 +144,29 @@ if (fileButton._tvMenuItem !== fileItem || dispatched?.command !== "bundle-open"
     throw new Error("menu click did not pass through TVMenuView.handleEvent to the application");
 }
 
+class LinkedItem extends TV.TVMenuItem {
+    getUrl() { return '/?file=sample.json.gz&topic=7'; }
+}
+const linkedItem = new LinkedItem('Topic', 'bundle-open');
+const linkMarkup = new TV.TVMenuView(new TV.TVRect(), TV.NewMenu(linkedItem)).draw();
+if (!linkMarkup.includes('<a class="tv-menu-popup-item"')
+    || !linkMarkup.includes('href="/?file=sample.json.gz&amp;topic=7"')) {
+    throw new Error('menu navigation fallback did not render a real anchor');
+}
+fileButton.tagName = 'A';
+let defaultPrevented = false;
+commandController.onCommand({ target: fileButton, ctrlKey: true,
+    preventDefault() { defaultPrevented = true; } });
+if (defaultPrevented || menuMouseEvents !== 1) {
+    throw new Error('Ctrl-click should use the browser link fallback');
+}
+commandController.onCommand({ target: fileButton,
+    preventDefault() { defaultPrevented = true; } });
+if (!defaultPrevented || menuMouseEvents !== 2) {
+    throw new Error('ordinary anchor click bypassed TVEvent');
+}
+menuMouseEvents = 1;
+
 const mouseSubmenu = TV.NewSubMenu("~N~ested", 0, TV.NewMenu(fileItem));
 const mouseToggle = new FakeElement();
 mouseToggle._tvMenuItem = mouseSubmenu;
@@ -155,7 +178,7 @@ mousePopup.matches = (selector) => selector === "[data-tv-submenu-popup]";
 const mouseRoot = new FakeElement();
 mouseRoot.children = [mousePopup];
 mouseToggle.closest = (selector) => ({
-    button: mouseToggle,
+    "button, a": mouseToggle,
     "[data-tv-submenu-root]": mouseRoot,
 }[selector] || null);
 let openedSubmenu = 0;
@@ -171,7 +194,7 @@ if (openedSubmenu !== 2 || menuView.current !== mouseSubmenu || menuMouseEvents 
 const statusItem = new TV.TVStatusItem("Open", TV.kbF3, "status-open", "sample");
 const statusButton = new FakeElement();
 statusButton.dataset.tvCommand = "wrong-dom-command";
-statusButton.closest = (selector) => selector === "button" ? statusButton : null;
+statusButton.closest = (selector) => selector === "button, a" ? statusButton : null;
 const statusRoot = new FakeElement();
 statusRoot.querySelectorAll = (selector) => selector === "button.tv-status-item" ? [statusButton] : [];
 const statusLine = new TV.TVStatusLine(new TV.TVRect(),

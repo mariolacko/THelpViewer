@@ -229,6 +229,8 @@ class TVHelpViewer extends TVScroller {
             + "[data-tv-source-file], [data-tv-context-help-topic]"
         );
         if (!link || !this.root?.contains(link)) { return; }
+        if (link.tagName === "A" && !String(link.getAttribute("href") || "").startsWith("#")
+            && (event.nativeEvent.ctrlKey || event.nativeEvent.metaKey || event.nativeEvent.shiftKey)) { return; }
         event.nativeEvent.preventDefault();
         event.what = evCommand;
         event.command = "help-link";

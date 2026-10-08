@@ -1,0 +1,58 @@
+{
+  "sources": [
+    {
+      "id": "vgmusic-dos-windows",
+      "name": "VGMusic — DOS & Windows",
+      "enabled": false,
+      "pages": ["https://www.vgmusic.com/music/computer/microsoft/windows/"],
+      "allowed_hosts": ["www.vgmusic.com"],
+      "extract": {
+        "mode": "table_rows",
+        "group_row_class": "gameheader",
+        "author_cell": 2
+      },
+      "request_delay_seconds": 1.5,
+      "rights_note": "Game compositions and MIDI arrangements may be copyrighted; retain game and sequencer attribution."
+    },
+    {
+      "id": "karlsitretro-dos",
+      "name": "Karl's IT Retro — DOS",
+      "pages": [
+        "https://www.karlsitretro.com/game-midi-dos/",
+        "https://www.karlsitretro.com/game_midi_dos_a/",
+        "https://www.karlsitretro.com/game-midi-dos-b/",
+        "https://www.karlsitretro.com/game-midi-dos-c/",
+        "https://www.karlsitretro.com/game-midi-dos-d/",
+        "https://www.karlsitretro.com/game-midi-dos-e/",
+        "https://www.karlsitretro.com/game-midi-dos-f/",
+        "https://www.karlsitretro.com/game-midi-dos-g/",
+        "https://www.karlsitretro.com/game-midi-dos-h/",
+        "https://www.karlsitretro.com/game-midi-dos-i/",
+        "https://www.karlsitretro.com/game-midi-dos-j/",
+        "https://www.karlsitretro.com/game-midi-dos-k/",
+        "https://www.karlsitretro.com/game-midi-dos-l/",
+        "https://www.karlsitretro.com/game-midi-dos-m/",
+        "https://www.karlsitretro.com/game-midi-dos-n/",
+        "https://www.karlsitretro.com/game-midi-dos-p/",
+        "https://www.karlsitretro.com/game-midi-dos-q/",
+        "https://www.karlsitretro.com/game-midi-dos-r/",
+        "https://www.karlsitretro.com/game-midi-dos-s/",
+        "https://www.karlsitretro.com/game-midi-dos-t/",
+        "https://www.karlsitretro.com/game-midi-dos-u/",
+        "https://www.karlsitretro.com/game-midi-dos-v/",
+        "https://www.karlsitretro.com/game-midi-dos-w/",
+        "https://www.karlsitretro.com/game-midi-dos-x/",
+        "https://www.karlsitretro.com/game-midi-dos-z/"
+      ],
+      "allowed_hosts": ["www.karlsitretro.com"],
+      "extract": {
+        "mode": "download_then_heading",
+        "game_heading_tag": "h5",
+        "href_pattern": "\\.zip$"
+      },
+      "request_delay_seconds": 1.5,
+      "cover": {"mode": "zip_image", "extensions": [".jpg", ".jpeg", ".png"]},
+      "rights_note": "Contains commercial game compositions and original game rips; public redistribution may require permission."
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # THelp Viewer — Bundle Transport
 
-> Updated: 2026-04-08
+> Updated: 2026-10-05
 
 THelpViewer stores each converted help file as a gzip-compressed UHF 2.0
 payload:
@@ -66,3 +66,27 @@ Measured on the current generated payloads:
 - `catalog.json` stays uncompressed so the viewer can build menus immediately.
 - Topic ids inside the payload remain numeric fields; only JSON object keys are
   strings, as documented in [../UHF2.md](../UHF2.md).
+
+## 5. Public navigation URLs
+
+Menu entries for HELP files and Docs expose `?file=<bundle-path>` and
+`?doc=<document-path>` URLs. Index entries, Contents nodes and inline UHF links
+expose `?file=<bundle-path>&topic=<id>`; an optional `line=<n>` restores the
+target text line. Values are encoded with `URLSearchParams`, including literal
+`+` characters in product names. The current viewer pathname is retained, so
+exported `index.html` bundles also support these links.
+
+These are browser fallbacks for existing TVision commands, not a second
+navigation system: ordinary clicks still pass through `TVEvent`. The menu's
+shared drawing primitive emits anchors for navigation entries and buttons for
+application actions, keeping the original positional constructors. Modified
+clicks retain the browser's new-tab/window behavior.
+
+Topic aliases in loaded bundles resolve to their real IDs. External original
+filenames resolve through the existing catalog, with preference for the current
+product collection. If a target bundle is not loaded and the link uses a string
+alias rather than a numeric topic ID, its public fallback is the file overview;
+the TVEvent target retains that alias. Missing source files and application-only
+context help do not receive invented public URLs. The initial server text is
+replaced by the corresponding viewer content; catalog links remain available
+in the rendered menus rather than as duplicate hidden HTML.

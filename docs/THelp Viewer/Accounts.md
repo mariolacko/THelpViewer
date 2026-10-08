@@ -6,6 +6,10 @@ remain public. The Login / Passkey dialog in the Help menu is a real WebAuthn
 client, but signing in does **not yet** grant access to Server Terminal jobs;
 their existing ID/key mechanism is separate until that workflow is redesigned.
 
+`thelpviewer/server/accounts.py` owns account storage and Passkey ceremonies;
+`thelpviewer/server/routes/auth.py` owns the HTTP endpoints, origin checks and
+session cookie. `app.py` only creates the store and registers the router.
+
 The account database is `THELP_STATE_DIR/accounts.sqlite3`, separate from the
 global HELP index and visitor statistics. On the first server start with no
 accounts, the server creates a one-hour first-admin token and prints it to its

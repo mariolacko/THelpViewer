@@ -45,6 +45,9 @@ Core widget hierarchy and infrastructure.
   Turbo Vision's `(x1, y1, x2, y2)` rectangle convention.
 - **TVStaticText** — `constructor(bounds, text)`. `getText()`, `setText()` and
   `draw()` mirror the basic `TStaticText` contract.
+- **TVImage** — `constructor(bounds)`, `setImage(src, alt)`. A shared bounded
+  view for optional bitmap art; bounds still use `TVRect` character cells.
+  The MIDI Player uses it for source-provided game/soundtrack cover images.
 - **TVLabel** — `constructor(bounds, text, link)`. The third argument is the
   target `TVInputLine` object; the browser renderer creates any native id/for
   pair internally. As in DOS Navigator's `TLabel`, `~F~` marks a mnemonic:
@@ -499,6 +502,38 @@ Open a File derives its two-column grid row count from `TVFileList.rows` and
 keeps arrow/Page navigation in `keyDestination()` on the shared
 `TVListViewer.handleEvent()` path. The MIDI display marks its five owned text
 views by semantic part so its palette does not depend on child order.
+The MIDI playlist is a `TVListBox` containing ready and cloud-marked pending
+items, with the cloud at the row's right edge. Its Filter is a `TVLabel` linked
+to a `TVInputLine`; input broadcasts
+filter game and track text. A single playlist click switches playback;
+arrow-key navigation changes selection without starting audio, while Enter
+plays the selected row. Choosing a pending item stops the previous track,
+queues the download through the server and uses the existing progress-dialog/
+gauge views for download progress.
+After the initial list render, `TVListViewer` updates only the old and new
+selection rows instead of revisiting the full catalog on every click.
+`TVListBox` resolves a row from the event target first; geometry scanning is
+only a fallback when the target is outside a row.
+The Filter uses the shared `TVHistory`/`TVHistoryWindow` popup; selecting a
+stored filter updates the list without starting a track.
+The MIDI `TVBarGauge` dispatches its click through `TVEvent` to seek in the
+active sequence. Its total MIDI tick count comes from `parseMidiFile()`, since
+FluidSynth can report zero total ticks immediately after starting playback.
+The shared `TVScrollBar` handles arrow, track and thumb pointer input for both
+axes. A track click calculates its target from the axis's track element and
+scrolls the owned viewport directly.
+`TVImage` binds its drawn root like other shared views, so
+`setImage()` updates the visible game cover.
+Under More, a shared `TVCheckBoxes` control selects sequential (default) or
+random next-track playback. The audio engine remains inside `TVMidiSynth`, but
+uses FluidSynth with a General MIDI SoundFont instead of per-note oscillators;
+the dialog still owns the transport commands and reacts to completion. The
+SoundFont fetch starts when the player opens, before the first track click. Pause
+stops the active FluidSynth player without clearing its position, and Play
+resumes the same sequence; Stop resets it. Adjacent transport buttons are
+separated by one text cell. The dialog reports one aggregate playback event
+when a track ends or is stopped, accumulating only active play time across
+Pause/Play cycles.
 
 The shared `TVHelpViewer`/`TVHelpWindow`, THelpViewer's own UHF loading and the
 generated-page `TVContextHelpWindow` live in `tv-context-help.js`; they are not
@@ -717,7 +752,9 @@ boundary.
 - `TVScreenSaver.installIdleStart()` — Install the shared five-minute idle trigger once per page
 
 Both the generated-page shell and bundle application install the same idle
-trigger. Active modes remeasure and reinitialize after a browser resize.
+trigger when the screen-saver asset is available. If that optional asset fails
+to load, both applications continue without idle or menu-launched savers.
+Active modes remeasure and reinitialize after a browser resize.
 
 Mode descriptions:
 - **stars** — Falling star characters with random colors
