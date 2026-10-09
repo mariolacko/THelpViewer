@@ -80,6 +80,9 @@ Port 5448 = `0x5448` = ASCII "TH" (THelp).
 
 That downloads missing source archives, builds `helps/`, and starts the
 FastAPI server in Docker on http://localhost:5448.
+Python bytecode caching remains enabled, with `PYTHONPYCACHEPREFIX` pointing to
+`/tmp/thelp-python-cache` inside the container instead of the source tree.
+It is reused on container restart and regenerated on container recreation.
 
 If bundles already exist, plain Docker startup is enough:
 
@@ -94,13 +97,54 @@ Useful Docker commands:
 ./thelp.sh docker restart
 ```
 
-The container image is intentionally minimal: it installs Python deps only and
+The container image installs Python dependencies and 7-Zip for disk-image
+extraction, and
 docker-compose bind-mounts the whole repository into `/app`, so JS/CSS/docs/help
 data are never copied into the image. Docker startup reads HELP files at their
 original paths before mounting the repository. On macOS this also downloads
 files that have been offloaded to cloud storage, so Docker can read them through
 the bind mount. No second copy is created. If macOS offloads them again later,
 use `./thelp.sh docker start` to make them locally available again.
+
+### DOS Prompt
+
+Open **≡ → DOS Prompt** for a real WASM DOSBox inside a standard `TVWindow`.
+Its contextual top menu provides Pause/Resume, Restart, Save C to cloud,
+Mount CD/Floppy, Eject and Fullscreen. Ctrl+Alt+M returns keyboard focus to
+that menu. The emulator pauses when its window is inactive or the tab is hidden.
+Fullscreen displays only DOS without the TVision frame/menu or browser chrome;
+Esc returns to the window, while Ctrl+Alt+M also opens its control menu.
+
+On first use, the server prepares `var/dos/base/c/` from
+[`thelpviewer/dos-prompt.json`](thelpviewer/dos-prompt.json). The default source
+includes FreeDOS EDIT, Volkov Commander and DOS games. Run `EDIT`, `VC` or
+`TYPE C:\SOFTWARE.TXT` for game launch commands. Initialization shows a shared
+progress dialog. Additional trusted
+software sources use HTTPS, an allowed-host list,
+a required SHA-256 and ZIP or IMG extraction. `THELP_DOS_CONFIG_PATH` can select
+another manifest. The shared disk is created only once: later restarts do not
+reinstall software or change the disk from an edited source list. Runtime
+memory/cycles changes still take effect after restarting the server. Use
+`python -m thelpviewer.tools.install_dos_sources` to explicitly add configured
+software to an existing disk, then restart the server.
+
+Sign in through the existing Passkey dialog to keep a private C-drive overlay
+on the server as regular files with SQLite deletion/revision metadata.
+Only files DOS actually reads are downloaded, in gzip-capable 64 KiB chunks;
+workers are required by default, with no automatic full-disk fallback.
+Admins can configure the default 128 MiB private-only quota through
+**User name → Configuration → Server Configuration**. Changes never modify the shared base. Saves run every minute
+while active, and before closing or restarting DOS. Before closing the browser
+tab, explicitly choose **Save C to cloud**: a tab close/crash cannot guarantee
+a final upload. Guests can try DOS but cannot save or mount private media.
+This stores files (configuration and savegames), not a running CPU/RAM snapshot.
+
+Mounting/ejecting media restarts DOS after confirmation. The first version
+supports one image at a time, ISO9660 CD images up to 128 MiB and raw floppy
+images up to 16 MiB; writes inside a floppy image are temporary. DOSBox's native
+secure mode blocks interactive MOUNT/IMGMOUNT/BOOT commands; the browser does
+not execute these as host/server commands. See
+[DOS Prompt](docs/THelp%20Viewer/DOS%20Prompt.md) for storage, APIs and limits.
 
 ### Game MIDI library
 
@@ -450,11 +494,13 @@ On first startup with an empty accounts database, the server prints a one-hour
 bootstrap token in the Docker logs. Find it with
 `docker compose logs viewer | grep 'first administrator registration token' | tail -n 1`;
 `docker compose logs --tail` may omit the startup line after later requests.
-If an account already exists, no bootstrap token is printed. In Help → Login / Passkey → Register, enter
+If an account already exists, no bootstrap token is printed. In Login → Register, enter
 your name, email and token to create the first administrator Passkey. Signed-in
-admins gain a Registration Token menu item to issue one-hour, single-use tokens
+admins gain User name → Registration Token to issue one-hour, single-use tokens
 for other users, review still-valid tokens and revoke selected tokens. The
-Login dialog handles sign-in and sign-out.
+Login appears on the right of the menu bar. After sign-in it becomes the user's
+display name with Account, Configuration and Sign Out. Colors currently
+remain browser-local; server configuration and tokens are admin-only.
 The local origin defaults to `http://localhost:5448`. On the public host, set
 `THELP_AUTH_ORIGIN=https://thelp.zdrojak.dev` in the same `.env` file as
 `THELP_PUBLIC_BASE_URL`; the latter only configures public links and does not
@@ -465,6 +511,21 @@ environment variables), then check that `/api/auth/session` returns
 connection. See [Accounts](docs/THelp%20Viewer/Accounts.md) for setup and the
 current security limitations. Login does not yet replace the Server Terminal
 ID/key mechanism.
+
+For local VS Code testing without Passkey support, use
+`docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build --force-recreate viewer`.
+This opt-in mode binds only `127.0.0.1`, signs in as Local Administrator and
+uses separate development accounts/sessions. Never expose it publicly. Normal
+`docker-compose.yml` keeps Passkey authentication enabled and auto-login off;
+see [Accounts](docs/THelp%20Viewer/Accounts.md#local-development-without-passkeys).
+
+In local development mode, Account → Configuration also offers **Rebuild DOS C**
+and **Rebuild MIDI**, with confirmation and a shared progress dialog. They are
+not enabled on production. Previous data moves to `var/backups/` for recovery:
+DOS rebuild retains private overlays/source archives; MIDI rebuild stops the
+existing downloader before replacing tracks, covers and catalog and downloading
+the configured sources again. Keep backups deliberately; repeated rebuilds use
+disk space. The built-in Help Contents/Index documents these tools and accounts.
 
 Passkey registration also requires the `webauthn` Python package in the Docker
 image. After updating the project or `requirements.txt`, use

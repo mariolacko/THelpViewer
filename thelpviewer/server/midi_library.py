@@ -11,7 +11,6 @@ import re
 import sqlite3
 import tempfile
 import threading
-import time
 import zipfile
 from collections import deque
 from html.parser import HTMLParser
@@ -20,6 +19,7 @@ from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from bs4 import BeautifulSoup
+from .rebuild import archive_rebuild_directory
 
 
 MAX_HTML_BYTES = 4 * 1024 * 1024
@@ -191,7 +191,58 @@ class MidiLibrary:
         self._worker: threading.Thread | None = None
         self._priority: deque[tuple[str, str]] = deque()
         self._priority_set: set[tuple[str, str]] = set()
+        self._stop = threading.Event()
+        self._resetting = self._rebuilding = False
+        self._processed = self._total = 0
+        self._phase = ""
+        self._backup = ""
         self._load_catalog()
+
+    def rebuild(self) -> None:
+        """Stop the old writer before replacing catalog, tracks and covers."""
+        with self._lock:
+            if self._rebuilding:
+                raise ValueError("MIDI rebuild is already running")
+            old_worker = self._worker
+            self._resetting = self._rebuilding = True
+            self._stop.set()
+            self._phase = "Stopping downloader"
+            self._backup = ""
+            self._worker = threading.Thread(target=self._run_rebuild, args=(old_worker,),
+                                            name="thelp-midi-rebuild", daemon=True)
+            self._worker.start()
+
+    def _run_rebuild(self, old_worker: threading.Thread | None) -> None:
+        try:
+            if old_worker and old_worker.is_alive():
+                old_worker.join()
+            with self._lock:
+                self._backup = archive_rebuild_directory(self.root, self.root.parent / "backups", "midi")
+                self._items, self._covers, self._errors = [], {}, []
+                self._priority.clear()
+                self._priority_set.clear()
+                self._processed = self._total = 0
+                self._load_catalog()
+                self._stop.clear()
+                self._resetting = False
+            self.run_once()
+        except (OSError, ValueError, sqlite3.Error) as error:
+            self._state = "error"
+            self._errors = [str(error)]
+        finally:
+            self._resetting = self._rebuilding = False
+
+    def rebuild_status(self) -> dict[str, object]:
+        state = "building" if self._rebuilding else self._state
+        if state == "downloading":
+            state = "building"
+        percent = 100 if state == "ready" else min(99, int(100 * self._processed / max(1, self._total)))
+        if self._resetting:
+            percent = 0
+        return {"state": state, "phase": "Stopping downloader" if self._resetting else self._phase,
+                "processed": self._processed, "total": self._total, "percent": percent,
+                "file": self._current, "error": self._errors[0] if self._errors and state in {"error", "partial"} else "",
+                "backup": self._backup, "rebuilding": self._rebuilding}
 
     def _load_catalog(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -372,10 +423,13 @@ class MidiLibrary:
         if not filename:
             return False
         path = self.root / source_id / filename
-        if not path.is_file() or path.is_symlink() or path.stat().st_size > MAX_MIDI_BYTES:
+        try:
+            if not path.is_file() or path.is_symlink() or path.stat().st_size > MAX_MIDI_BYTES:
+                return False
+            with path.open("rb") as stream:
+                return stream.read(4) == b"MThd"
+        except OSError:
             return False
-        with path.open("rb") as stream:
-            return stream.read(4) == b"MThd"
 
     def _write_midi(self, source_id: str, filename: str, data: bytes) -> None:
         if not data.startswith(b"MThd") or len(data) > MAX_MIDI_BYTES:
@@ -441,11 +495,11 @@ class MidiLibrary:
                 self._errors.append(f"{item['title']}: {exc}")
         else:
             if sleep and downloaded:
-                time.sleep(max(0.0, min(float(source.get("request_delay_seconds", 1.5)), 10.0)))
+                self._stop.wait(max(0.0, min(float(source.get("request_delay_seconds", 1.5)), 10.0)))
 
     def prioritize(self, source_id: str, item_id: str) -> bool:
         """Move a catalog item ahead of the normal download order."""
-        if not SOURCE_ID_RE.fullmatch(source_id) or not re.fullmatch(r"[0-9a-f]{16}", item_id):
+        if self._resetting or not SOURCE_ID_RE.fullmatch(source_id) or not re.fullmatch(r"[0-9a-f]{16}", item_id):
             return False
         if source_id not in {str(source["id"]) for source in self._sources()}:
             return False
@@ -475,12 +529,17 @@ class MidiLibrary:
             self.root.mkdir(parents=True, exist_ok=True)
             self._errors = []
             self._state = "downloading"
-            for source in sources:
+            self._phase = "Indexing sources"
+            self._processed, self._total = 0, len(sources)
+            for index, source in enumerate(sources):
+                if self._stop.is_set():
+                    return
                 source_id = str(source["id"])
                 if not any(item.get("source_id") == source_id for item in self._items):
                     self._current = f"Indexing {source['name']}"
                     self._items.extend(self._index_source(source))
                     self._save_catalog()
+                self._processed = index + 1
             grouped = [
                 [(source, item) for item in self._items if item.get("source_id") == source["id"]]
                 for source in sources
@@ -488,17 +547,24 @@ class MidiLibrary:
             indexed = {(str(source["id"]), str(item["id"])): (source, item)
                        for group in grouped for source, item in group}
             processed: set[tuple[str, str]] = set()
+            self._phase = "Downloading MIDI"
+            self._processed, self._total = 0, len(indexed)
 
             def drain_priority() -> None:
                 while key := self._next_priority():
+                    if self._stop.is_set():
+                        return
                     pair = indexed.get(key)
                     if pair is None:
                         continue
                     self._download_pair(*pair, sleep)
                     processed.add(key)
+                    self._processed = len(processed)
 
             for batch in itertools.zip_longest(*grouped):
                 for pair in batch:
+                    if self._stop.is_set():
+                        return
                     drain_priority()
                     if pair is None:
                         continue
@@ -507,6 +573,7 @@ class MidiLibrary:
                     if key not in processed:
                         self._download_pair(source, item, sleep)
                         processed.add(key)
+                        self._processed = len(processed)
             drain_priority()
             self._state = "partial" if self._errors else "ready"
         except (OSError, ValueError, KeyError, TypeError, re.error) as exc:
@@ -517,12 +584,17 @@ class MidiLibrary:
             self._current = ""
 
     def start(self) -> None:
-        if self.sources_path is None or (self._worker and self._worker.is_alive()):
-            return
-        self._worker = threading.Thread(target=self.run_once, name="thelp-midi-download", daemon=True)
-        self._worker.start()
+        with self._lock:
+            if self.sources_path is None or self._resetting or (self._worker and self._worker.is_alive()):
+                return
+            self._stop.clear()
+            self._worker = threading.Thread(target=self.run_once, name="thelp-midi-download", daemon=True)
+            self._worker.start()
 
     def catalog(self) -> dict[str, object]:
+        if self._resetting:
+            return {"state": "rebuilding", "current": "Stopping downloader", "downloaded": 0,
+                    "total": 0, "errors": [], "tracks": [], "sources": []}
         sources = self._sources()
         active_ids = {str(source["id"]) for source in sources}
         tracks: list[dict[str, object]] = []
@@ -560,7 +632,7 @@ class MidiLibrary:
         }
 
     def file_path(self, source_id: str, filename: str) -> Path | None:
-        if not SOURCE_ID_RE.fullmatch(source_id) or filename != Path(filename).name:
+        if self._resetting or not SOURCE_ID_RE.fullmatch(source_id) or filename != Path(filename).name:
             return None
         if source_id not in {str(source["id"]) for source in self._sources()}:
             return None
@@ -573,7 +645,7 @@ class MidiLibrary:
         return self.root / source_id / filename if self._is_downloaded(source_id, filename) else None
 
     def cover_path(self, source_id: str, filename: str) -> Path | None:
-        if not SOURCE_ID_RE.fullmatch(source_id) or filename != Path(filename).name:
+        if self._resetting or not SOURCE_ID_RE.fullmatch(source_id) or filename != Path(filename).name:
             return None
         if source_id not in {str(source["id"]) for source in self._sources()}:
             return None

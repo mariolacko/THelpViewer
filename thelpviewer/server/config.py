@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 from dataclasses import dataclass
@@ -37,6 +38,17 @@ class AppConfig:
     auth_origin: str = ""
     google_site_verification: str = ""
     midi_sources_path: Path | None = None
+    dos_config_path: Path | None = None
+    dev_auto_login: bool = False
+
+    def validate_development_login(self) -> None:
+        if not self.dev_auto_login:
+            return
+        origin = urlparse(self.auth_origin)
+        if (self.public_base_url or origin.scheme != "http"
+                or origin.hostname not in {"localhost", "127.0.0.1", "::1"}
+                or origin.username or origin.password or origin.path or origin.query or origin.fragment):
+            raise ValueError("THELP_DEV_AUTO_LOGIN requires a local HTTP auth origin and no public base URL")
 
 
 def _resolve_virtual_doc_disk_path(disk_path: str, root: Path, readme_path: Path, changelog_path: Path) -> Path:
@@ -88,4 +100,6 @@ def load_config() -> AppConfig:
         midi_sources_path=Path(os.environ.get(
             "THELP_MIDI_SOURCES_PATH", root / "thelpviewer" / "midi-sources.json"
         )),
+        dos_config_path=Path(os.environ.get("THELP_DOS_CONFIG_PATH", root / "thelpviewer" / "dos-prompt.json")),
+        dev_auto_login=os.environ.get("THELP_DEV_AUTO_LOGIN", "0") == "1",
     )

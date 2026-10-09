@@ -46,10 +46,17 @@ def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
             raise HTTPException(status_code=503, detail="Passkey login is not configured for this host")
         if require_post and request.headers.get("origin") != origin:
             raise HTTPException(status_code=403, detail="Invalid request origin")
+        if config.dev_auto_login and (
+            request.url.scheme != "http"
+            or any(name == "forwarded" or name.startswith("x-forwarded-") for name in request.headers)
+            or request.headers.get("sec-fetch-site", "same-origin") != "same-origin"
+            or request.headers.get("origin", origin) != origin
+        ):
+            raise HTTPException(status_code=403, detail="Local development login does not accept proxied or cross-origin requests")
         return origin, parsed.hostname or ""
 
-    def auth_response(token: str, origin: str) -> JSONResponse:
-        response = JSONResponse({"authenticated": True})
+    def auth_response(token: str, origin: str, payload: dict | None = None) -> JSONResponse:
+        response = JSONResponse(payload if payload is not None else {"authenticated": True})
         response.set_cookie(
             "thelp_session", token, max_age=SESSION_LIFETIME, httponly=True,
             secure=origin.startswith("https://"), samesite="strict", path="/",
@@ -60,12 +67,22 @@ def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
     @router.get("/api/auth/session")
     def auth_session(request: Request) -> JSONResponse:
         try:
-            auth_origin(request)
+            origin, _rp_id = auth_origin(request)
         except HTTPException:
             return JSONResponse({"enabled": False, "authenticated": False}, headers={"Cache-Control": "no-store"})
         user = accounts.session_user(request.cookies.get("thelp_session", ""))
+        if config.dev_auto_login and not user:
+            try:
+                token = accounts.development_session()
+            except AccountError as error:
+                raise HTTPException(status_code=403, detail=str(error)) from None
+            return auth_response(token, origin, {
+                "enabled": True, "authenticated": True, "user": accounts.session_user(token),
+                "development": True,
+            })
         return JSONResponse(
-            {"enabled": True, "authenticated": bool(user), "user": user},
+            {"enabled": True, "authenticated": bool(user), "user": user,
+             **({"development": True} if config.dev_auto_login else {})},
             headers={"Cache-Control": "no-store"},
         )
 

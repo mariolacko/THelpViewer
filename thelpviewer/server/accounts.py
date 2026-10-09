@@ -318,6 +318,22 @@ class AccountStore:
                 raise AccountError("Account already exists") from None
         return self.issue_invitation(username)
 
+    def development_session(self) -> str:
+        """Issue a normal session in the separate, opt-in development account store."""
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                "INSERT INTO accounts(id, username, display_name, role) VALUES (?, ?, ?, 'admin') "
+                "ON CONFLICT(username) DO NOTHING",
+                (uuid.uuid4().hex, "local-development-admin", "Local Administrator"),
+            )
+            account = connection.execute(
+                "SELECT id FROM accounts WHERE username = 'local-development-admin' "
+                "AND active = 1 AND role = 'admin'"
+            ).fetchone()
+            if account is None:
+                raise AccountError("Local development administrator is disabled")
+            return self._new_session(connection, account["id"])
+
     def issue_invitation(self, username: str) -> str:
         token = secrets.token_urlsafe(32)
         now = int(time.time())
@@ -503,6 +519,18 @@ class AccountStore:
         return None if row is None else {
             "username": row[0], "display_name": row[1], "email": row[2], "role": row[3],
         }
+
+    def session_account_id(self, token: str) -> str | None:
+        """Resolve a private storage owner without exposing account IDs in API sessions."""
+        if not token:
+            return None
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT a.id FROM sessions s JOIN accounts a ON a.id=s.account_id "
+                "WHERE s.token_hash=? AND s.expires_at>? AND a.active=1",
+                (_token_hash(token), int(time.time())),
+            ).fetchone()
+        return row[0] if row else None
 
     def logout(self, token: str) -> None:
         if token:

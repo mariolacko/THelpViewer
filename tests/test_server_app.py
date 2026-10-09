@@ -39,6 +39,25 @@ def test_statistics_store_uses_bind_mount_safe_journal_mode(tmp_path):
         assert connection.execute("PRAGMA journal_mode").fetchone() == ("delete",)
 
 
+def test_dos_tool_open_and_duration_are_available_in_server_statistics(tmp_path):
+    app = FastAPI()
+    app.include_router(create_statistics_router(StatisticsStore(tmp_path / "statistics.sqlite3"), {}))
+    client = TestClient(app)
+    assert client.post("/api/statistics/events", json={
+        "event": "tool_open", "name": "dos-prompt",
+    }).status_code == 204
+    assert client.post("/api/statistics/events", json={
+        "event": "view_duration", "scope": "tool", "name": "dos-prompt", "duration_ms": 90_000,
+    }).status_code == 204
+    assert client.post("/api/statistics/events", json={
+        "event": "view_duration", "scope": "tool", "name": "unknown-tool", "duration_ms": 90_000,
+    }).status_code == 422
+    summary = client.get("/api/statistics/summary").json()
+    assert summary["tool_opens"] == 1
+    assert summary["tool"] == [{"value": "dos-prompt", "count": 1}]
+    assert summary["tool_duration"] == [{"value": "dos-prompt · 1–2 min", "count": 1}]
+
+
 def test_midi_playback_statistics_count_plays_and_actual_minutes(tmp_path):
     app = FastAPI()
     app.include_router(create_statistics_router(StatisticsStore(tmp_path / "statistics.sqlite3"), {}))

@@ -18,10 +18,15 @@ from .accounts import AccountStore
 from .config import AppConfig, load_config
 from .routes.auth import create_auth_router
 from .routes.midi import create_midi_router
+from .routes.dos import create_dos_router
 from .routes.public_pages import create_public_router
 from .routes.statistics import create_statistics_router
+from .routes.settings import create_settings_router
+from .routes.rebuild import create_rebuild_router
 from .search_index import GlobalSearchIndex
 from .midi_library import MidiLibrary
+from .dos_prompt import DosPromptStore
+from .settings import ServerSettings
 from .terminal import authorize_job, read_job, send_input
 from .statistics import StatisticsStore
 from .static_assets import ViewerAssets
@@ -65,12 +70,15 @@ def _docs_catalog(config: AppConfig) -> list[dict[str, str]]:
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
     config = config or load_config()
+    config.validate_development_login()
 
     @asynccontextmanager
     async def lifespan(running_app: FastAPI):
         running_app.state.global_search.ensure_current()
         running_app.state.midi_library.start()
-        bootstrap_token = running_app.state.accounts.bootstrap_token()
+        if config.dev_auto_login:
+            print("THelpViewer LOCAL DEVELOPMENT auto-login enabled; do not expose this server publicly.", flush=True)
+        bootstrap_token = None if config.dev_auto_login else running_app.state.accounts.bootstrap_token()
         if bootstrap_token:
             print(f"THelpViewer first administrator registration token (valid 1 hour): {bootstrap_token}", flush=True)
         yield
@@ -82,8 +90,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.state.global_search = GlobalSearchIndex(
         config.helps_dir, config.state_dir, config.docs_dir, config.virtual_docs
     )
-    app.state.accounts = AccountStore(config.state_dir)
+    app.state.accounts = AccountStore(config.state_dir / "development" if config.dev_auto_login else config.state_dir)
     app.state.midi_library = MidiLibrary(config.state_dir / "midi", config.midi_sources_path)
+    app.state.server_settings = ServerSettings(config.state_dir / "server-settings.json")
+    app.state.dos_prompt = DosPromptStore(config.state_dir / "dos", config.dos_config_path, app.state.server_settings)
     app.state.help_display_names = _help_display_names(config)
 
     @app.exception_handler(StarletteHTTPException)
@@ -137,6 +147,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     ))
     app.include_router(create_auth_router(config, app.state.accounts))
     app.include_router(create_midi_router(app.state.midi_library))
+    app.include_router(create_dos_router(config, app.state.accounts, app.state.dos_prompt))
+    app.include_router(create_settings_router(config, app.state.accounts, app.state.server_settings))
+    app.include_router(create_rebuild_router(config, app.state.accounts, app.state.dos_prompt, app.state.midi_library))
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:

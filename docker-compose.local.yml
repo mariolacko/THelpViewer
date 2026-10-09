@@ -1,0 +1,10 @@
+# Opt-in development only. Never use this file on a public deployment.
+# !override requires Docker Compose >= 2.24.4; merging ports would leave the public binding active.
+services:
+  viewer:
+    environment:
+      THELP_DEV_AUTO_LOGIN: "1"
+      THELP_AUTH_ORIGIN: "http://localhost:${THELP_PORT:-5448}"
+      THELP_PUBLIC_BASE_URL: ""
+    ports: !override
+      - "127.0.0.1:${THELP_PORT:-5448}:${THELP_PORT:-5448}"

@@ -14,7 +14,7 @@ KINDS = (
     "visit", "country", "referrer", "resolution", "viewport", "pixel_ratio",
     "color_depth", "os", "browser", "device", "language", "timezone", "theme",
     "orientation", "pointer", "reduced_motion", "active_duration", "dialog", "dialog_duration",
-    "tool", "search", "link", "game", "game_outcome", "game_completion", "game_duration",
+    "tool", "tool_duration", "search", "link", "game", "game_outcome", "game_completion", "game_duration",
     "help_duration", "document_duration", "page_ttfb",
     "page_load", "lcp", "cls", "inp", "help_load", "help_decompress",
     "help_render", "help_file", "document", "topic", "client_error",
@@ -48,7 +48,7 @@ DIALOG_NAMES = {
     "tetris", "tetris-setup", "tron", "welcome", "widgets", "windowlist",
 }
 TOOL_NAMES = {
-    "context-help", "screen-saver-bounce", "screen-saver-clock",
+    "context-help", "dos-prompt", "screen-saver-bounce", "screen-saver-clock",
     "screen-saver-matrix", "screen-saver-stars", "theme-auto", "theme-dark",
     "theme-default", "theme-light",
 }
@@ -242,7 +242,7 @@ def normalize_view_duration(
     duration_ms: object,
 ) -> dict[str, str]:
     """Return aggregate rows for one active managed-view interval."""
-    normalized_scope = normalize_choice(scope, {"help", "document", "dialog", "game"}, "")
+    normalized_scope = normalize_choice(scope, {"help", "document", "dialog", "game", "tool"}, "")
     duration = bucket_duration(duration_ms)
     if not normalized_scope or not duration:
         return {}
@@ -255,6 +255,9 @@ def normalize_view_duration(
     if normalized_scope == "dialog":
         dialog = normalize_dialog(name)
         return {"dialog_duration": f"{dialog} · {duration}"} if dialog else {}
+    if normalized_scope == "tool":
+        tool = normalize_tool(name)
+        return {"tool_duration": f"{tool} · {duration}"} if tool else {}
 
     game = normalize_game(name)
     completion = normalize_game_completion(game, result)

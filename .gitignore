@@ -4,6 +4,11 @@ var/
 
 # Source help files (downloaded or user-supplied)
 sources/
+# Corresponding source snapshots shipped with the GPL DOS emulator.
+!www/assets/dos/emulators/sources/
+!www/assets/dos/emulators/sources/*.tar.gz
+!thelpviewer/converter/assets/dos/emulators/sources/
+!thelpviewer/converter/assets/dos/emulators/sources/*.tar.gz
 
 # Downloaded archives
 downloads/
