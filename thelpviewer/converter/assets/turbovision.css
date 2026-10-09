@@ -263,6 +263,20 @@ button:focus-visible {
     background: var(--tv-desktop);
 }
 
+/* DOS screen owns the client area; geometry and frames come from TVWindow. */
+.tv-window.tv-dos-window {
+    --tv-window: #000;
+    --tv-owner-content-bg: #000;
+    --tv-owner-content-fg: #aaa;
+    --tv-owner-frame-active-bg: #000;
+    --tv-owner-frame-passive-bg: #000;
+    --tv-owner-frame-icons-bg: #000;
+}
+.tv-dos-window .tv-viewport { padding: 0; overflow: hidden; background: #000; color: #aaa; }
+.tv-dos-view, .tv-dos-view canvas { display: block; width: 100%; height: 100%; }
+.tv-dos-view canvas { background: #000; object-fit: contain; image-rendering: pixelated; outline: none; }
+.tv-dos-window .tv-static-text { color: #fff; background: #000; }
+
 .tv-app {
     display: grid;
     grid-template-rows: 1em minmax(0, 1fr) 1em;
@@ -290,6 +304,8 @@ button:focus-visible {
     align-items: stretch;
     min-width: 0;
 }
+
+.tv-menu-right { margin-left: auto; flex-shrink: 0; }
 
 .tv-menu-item,
 .tv-status-item,
@@ -1073,6 +1089,10 @@ button.tv-status-item {
 
 .tv-bottom-bar > .tv-scrollbar-x {
     position: relative;
+}
+
+.tv-bottom-bar > .tv-border-fill:not(.tv-control-gap) {
+    flex: 1 1 0;
 }
 
 .tv-grow-handle {

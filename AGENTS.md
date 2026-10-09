@@ -16,6 +16,11 @@ user's problem; these rules exist to prevent regressions, not to add process.
   the user explicitly requests a break. Check callers before changing them.
 - Test the intended behavior, not just implementation details. Verify the
   result before reporting success; explicitly report failed or unverified work.
+- Run Python tests with `PYTHONDONTWRITEBYTECODE=1` and pytest's
+  `-p no:cacheprovider`. After every test run (including failures), remove and
+  verify the absence of repository `__pycache__`, `.pyc`/`.pyo`, `.pytest_cache`
+  and other temporary test caches. Never clean `.venv`, dependencies, source
+  HELP files, generated bundles or persistent `var/` data as test cache.
 - Record every user-visible feature or behavior fix under `CHANGELOG.md`'s
   `[Unreleased]` section and update affected technical documentation.
 
@@ -82,3 +87,6 @@ when only changing menu metadata, so saved HELP links keep working.
   its target object, not a caller-chosen DOM ID. Do not restore `TVWidget`,
   `TVButtonStrip`, `TVMarkupList`, object-literal compatibility constructors
   or a separate renderer service.
+- When adding or changing user-facing tools, update `tv-context-help.json`
+  (Contents, Index, topics and links) and its mirrored converter asset. New
+  views own their `hc...` context; do not add a separate dialog-context map.

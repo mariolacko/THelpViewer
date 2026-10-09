@@ -11,6 +11,7 @@ THelpViewer uses a modular JavaScript framework inspired by Borland's TurboVisio
 | `tv-context-help.js` | Shared UHF `TVHelpWindow`/`TVHelpViewer`, THelpViewer's UHF loader and generated-page context help |
 | `tv-dialogs.js` | Standard dialogs including Server Statistics |
 | `tv-games.js` | Game dialogs and rules (Puzzle, Tetris, Minesweeper, BreakOut, Sokoban, Lines, Reversi, Ludo, Mastermind, Snake, Tron, Tower of Hanoi) |
+| `tv-dos.js` | `TVDosWindow` (shared `TVWindow` chrome) and `TVDosView` (DOSBox canvas, TVEvent input, audio and cloud file synchronization) |
 | `tv-screensaver.js` | Screen saver base class and animated modes |
 | `tv-highlight.js` | Pascal, C and ASM syntax highlighting |
 | `tv-shell.js` | Menu bar, status line, window resizer, application bootstrap |
@@ -220,6 +221,14 @@ remove the bottom border or push it directly below the title.
 
 ### TVFrame, TVWindow & TVDialog
 
+The built-in UHF Help Contents/Index includes Account/Login, registration and
+tokens, Server Configuration/local rebuilds, DOS Prompt, Grid Viewer and Server
+Terminal. Their concrete view constructors own hc2280–hc2340; corresponding
+account/DOS menu items also carry these contexts. F1 in DOS keyboard input goes
+to the emulator; F1 on its menu opens the native DOS Prompt help topic. Rebuild
+confirmation and progress use shared TVMessageBox/TVIndexProgressDialog objects,
+with all commands handled through TVEvent and no dialog-specific HTML/CSS.
+
 - **TVFrame** — Generates dialog window markup (titlebar, body, footer, borders).
   Its active frame uses the Turbo Vision 2.0 double-line glyphs; the passive
   frame uses single-line glyphs. An inactive dialog keeps its close control
@@ -239,6 +248,12 @@ remove the bottom border or push it directly below the title.
   control remains clickable and Zoom becomes a single-line frame segment.
   This preserves the centered caption and both
   frame corners while matching the inactive `TFrame` drawing.
+  Windows without an outer scrollbar update both vertical frame sides, not
+  only the left side. The shared browser mover caches drag limits at mouse-down
+  and coalesces position writes with `requestAnimationFrame`; mouse-up flushes
+  the final position before persistence, and destruction cancels queued work.
+  Move/resize frame transitions use `updateWindowFrameState`, including the
+  bottom border and restoration of the window's actual active/passive state.
   Standard close/zoom controls are semantic buttons. The close glyph changes
   to an asterisk while the mouse button is held, and the window closes only
   when the button is released over the control. Releasing elsewhere leaves the
@@ -583,6 +598,19 @@ bootstrap token printed in the server log. The browser's WebAuthn API supplies
 credentials, while the server validates them and stores opaque sessions. There
 is no password field or tokenless public registration.
 
+Both the bundle viewer and generated-page shell use one `buildAccountMenu()`
+and `TVApplicationMenuBar`, derived from the shared `TVMenuBar`. Anonymous
+visitors get a right-aligned Login action; signed-in visitors get their literal
+display name and a menu with Account/Passkey, Configuration → Colors and Sign
+Out. Colors are currently browser-local, not server-synced account settings.
+Admins additionally get Server Configuration and Registration Token there,
+not under Help or the system menu. Authentication/name/role changes rebuild
+the menu; delayed session responses cannot restore a stale signed-in state.
+The standard Turbo Vision 2.0 `TMenuBar` lays out items from the left and has
+no per-item right alignment option; right alignment is our application-level
+`drawItem()` extension, retaining normal menu objects and TVEvent handling.
+Only the drawing primitive uses the minimal right-item layout CSS.
+
 `TVColorsDialog` follows the Turbo Vision 2.0 `TColorDialog` 61×18 cell
 geometry from `colorsel.cpp`: Group and Item lists, 4×4 foreground and 4×2
 background selectors, a two-line sample, and the original OK/Cancel controls.
@@ -913,6 +941,10 @@ open/close lifecycle for both dialogs and windows. `TVBundleApp` accumulates
 visible active intervals from that shared state; `TVDialog` and `TVWindow` do
 not contain HTTP or statistics code. Games are recognized through the shared
 `TVGameDialog` base rather than a second name list.
+DOS Prompt uses the same managed-window lifecycle as a `tool`, counting opens
+and bucketed tool duration without recording DOS commands. Its runnable
+predicate excludes initialization and explicit Pause as well as the shared
+inactive/hidden exclusions. The Statistics dialog exposes **Tool time**.
 
 HELP counters use the catalog's long display name. The technical source
 filename is accepted only as a compatibility fallback for clients that do not

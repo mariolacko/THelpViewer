@@ -75,6 +75,12 @@ const {
     hcCalculator,
     hcStatistics,
     hcSystemInformation,
+    hcAccount,
+    hcRegistration,
+    hcRegistrationTokens,
+    hcServerConfiguration,
+    hcServerTerminal,
+    hcGridDemo,
 } = TV_HELP_CONTEXTS;
 
 class TVFileScrollButton extends TVButton {
@@ -223,7 +229,8 @@ class TVLoginDialog extends TVDialog {
         const signOut = new TVButton(new TVRect(30, 5, 43, 7), "Sign ~O~ut", "login-sign-out", bfNormal);
         const close = new TVButton(new TVRect(44, 5, 57, 7), "~C~lose", "login-close", bfNormal);
         const status = new TVStaticText(new TVRect(2, 8, 56, 10), "Checking account status...");
-        super(new TVRect(0, 0, 60, 13), "Login / Passkey");
+        super(new TVRect(0, 0, 60, 13), "Account");
+        this.setHelpCtx(hcAccount);
         this.insert(new TVGroup(new TVRect(0, 0, 58, 11)).insertAll([
             new TVLabel(new TVRect(2, 1, 25, 2), "~E~mail or username", username), username,
             signIn, register, signOut, close, status,
@@ -233,6 +240,7 @@ class TVLoginDialog extends TVDialog {
         this.actions = [signIn, register, signOut];
         this.onRegister = null;
         this.onSessionChange = null;
+        this.sessionRequestVersion = 0;
         this.bindCommonClose(() => this.close());
         this.bindDrag();
     }
@@ -308,16 +316,19 @@ class TVLoginDialog extends TVDialog {
     }
 
     async refreshSession() {
+        const version = ++this.sessionRequestVersion;
         try {
             const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
-            this.updateSession(await response.json());
+            const session = await response.json();
+            if (version === this.sessionRequestVersion) { this.updateSession(session); }
         } catch {
-            this.status.setText("Account server is unavailable.");
+            if (version === this.sessionRequestVersion) { this.status.setText("Account server is unavailable."); }
         }
     }
 
     updateSession(data) {
+        this.sessionRequestVersion += 1;
         this.onSessionChange?.(data);
         this.status.setText(!data.enabled
             ? "Passkey login is not configured for this host."
@@ -361,6 +372,7 @@ class TVLoginDialog extends TVDialog {
     }
 
     async signOut() {
+        this.sessionRequestVersion += 1;
         this.status.setText("Signing out...");
         try {
             await TVLoginDialog.post("/api/auth/logout");
@@ -394,6 +406,7 @@ class TVRegistrationDialog extends TVDialog {
         const cancel = new TVButton(new TVRect(30, 11, 45, 13), "~C~ancel", "register-cancel", bfNormal);
         const status = new TVStaticText(new TVRect(2, 14, 56, 16), "A registration token is valid for one hour.");
         super(new TVRect(0, 0, 60, 19), "Register Passkey");
+        this.setHelpCtx(hcRegistration);
         this.insert(new TVGroup(new TVRect(0, 0, 58, 17)).insertAll([
             new TVLabel(new TVRect(2, 1, 30, 2), "~N~ame", name), name,
             new TVLabel(new TVRect(2, 4, 30, 5), "~E~mail", email), email,
@@ -512,6 +525,7 @@ class TVRegistrationTokenDialog extends TVDialog {
         const tokens = new TVListBox(new TVRect(2, 8, 71, 16));
         const status = new TVStaticText(new TVRect(2, 17, 71, 18), "Loading valid tokens...");
         super(new TVRect(0, 0, 76, 21), "Registration Token");
+        this.setHelpCtx(hcRegistrationTokens);
         this.insert(new TVGroup(new TVRect(0, 0, 74, 19)).insertAll([
             new TVLabel(new TVRect(2, 1, 30, 2), "Token", token), token,
             generate, remove, close,
@@ -636,6 +650,157 @@ class TVRegistrationTokenDialog extends TVDialog {
         else if (event.command === "token-close") { this.close(); }
         else { return; }
         this.clearEvent(event);
+    }
+}
+
+class TVServerConfigurationDialog extends TVDialog {
+    static viewName = "server-configuration";
+
+    constructor() {
+        super(new TVRect(0, 0, 62, 14), "Server Configuration");
+        this.setHelpCtx(hcServerConfiguration);
+        this.capacity = new TVInputLine(new TVRect(2, 2, 10, 3), 3);
+        this.status = new TVStaticText(new TVRect(2, 10, 58, 12), "");
+        this.saveButton = new TVButton(new TVRect(16, 7, 29, 9), "~S~ave", "server-settings-save", bfDefault);
+        this.insert(new TVGroup(new TVRect(0, 0, 60, 12)).insertAll([
+            new TVLabel(new TVRect(2, 1, 50, 2), "~D~OS private overlay per user (MiB)", this.capacity),
+            this.capacity,
+            new TVStaticText(new TVRect(2, 4, 58, 6), "1–256 MiB; default 128. Excludes shared C files.\nLowering the limit does not delete saved files."),
+            this.saveButton,
+            new TVButton(new TVRect(31, 7, 44, 9), "~C~ancel", "server-settings-cancel", bfNormal),
+            this.status,
+        ]));
+        this.requestVersion = 0;
+        this.rebuildTask = null;
+        this.onBeforeRebuild = null;
+        this.onRebuildStarted = null;
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    open() {
+        super.open();
+        this.capacity.setData("");
+        this.capacity.focus();
+        void this.loadSettings();
+    }
+
+    close() {
+        this.requestVersion += 1;
+        super.close();
+    }
+
+    async loadSettings() {
+        const version = ++this.requestVersion;
+        this.saveButton.setState(sfDisabled, true);
+        this.status.setText("Loading server configuration...");
+        try {
+            const data = await TVLoginDialog.request("/api/admin/settings");
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            this.capacity.setData(String(data.dos_user_disk_mb));
+            this.capacity.selectAll();
+            this.status.setText("Applies to every signed-in user's C drive.");
+            this.saveButton.setState(sfDisabled, false);
+        } catch (error) {
+            if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
+        }
+    }
+
+    async saveSettings() {
+        if (this.saveButton.state & sfDisabled) { return; }
+        const value = this.capacity.getData().trim();
+        const capacity = Number(value);
+        if (!/^\d{1,3}$/.test(value) || capacity < 1 || capacity > 256) {
+            this.status.setText("Enter a capacity between 1 and 256 MiB.");
+            this.capacity.focus();
+            return;
+        }
+        const version = ++this.requestVersion;
+        this.saveButton.setState(sfDisabled, true);
+        try {
+            await TVLoginDialog.request("/api/admin/settings", "PUT", { dos_user_disk_mb: capacity });
+            if (version === this.requestVersion && this.isOpen()) {
+                this.status.setText("Saved. Restart open DOS sessions to reload capacity.");
+            }
+        } catch (error) {
+            if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
+        } finally {
+            if (version === this.requestVersion) { this.saveButton.setState(sfDisabled, false); }
+        }
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        switch (event.command) {
+            case "server-settings-save": void this.saveSettings(); break;
+            case "server-settings-cancel": this.close(); break;
+            case "server-rebuild-dos": void this.rebuild("dos"); break;
+            case "server-rebuild-midi": void this.rebuild("midi"); break;
+            default: return;
+        }
+        this.clearEvent(event);
+    }
+
+    async rebuild(resource) {
+        if (this.rebuildTask) { this.rebuildTask.progress?.open(); return; }
+        const task = { progress: null };
+        this.rebuildTask = task;
+        const path = `/api/admin/rebuild/${resource}`;
+        const title = resource === "dos" ? "Rebuild DOS C" : "Rebuild MIDI";
+        try {
+            let status = await TVLoginDialog.request(path);
+            if (!status.rebuilding) {
+                const box = new TVMessageBox();
+                this.owner.insert(box);
+                let answer;
+                try {
+                    answer = await box.show({ title, type: TVMessageBox.MF_CONFIRMATION,
+                        lines: resource === "dos" ? [
+                            "Replace the shared C drive from dos-prompt.json?",
+                            "The current disk will move to a server backup.",
+                            "Private overlays and cached archives will be kept.",
+                            "Open DOS sessions must be restarted.",
+                        ] : [
+                            "Replace all game MIDI tracks, covers and catalog?",
+                            "The current library will move to a server backup.",
+                            "The old downloader stops before the data is replaced.",
+                            "Sources will be downloaded again from midi-sources.json.",
+                        ], buttons: TVMessageBox.MF_OK_CANCEL });
+                } finally { box.destroy(); }
+                if (answer !== "ok") { return; }
+                this.requestVersion += 1;
+                await this.onBeforeRebuild?.(resource);
+                status = await TVLoginDialog.request(path, "POST");
+                this.onRebuildStarted?.(resource);
+            }
+            this.saveButton.setState(sfDisabled, true);
+            const progress = new TVIndexProgressDialog(title, "Preparing rebuild...");
+            progress.setHelpCtx(hcServerConfiguration);
+            task.progress = progress;
+            this.owner.insert(progress);
+            this.owner.dialogManager.register(`rebuild-${resource}`, progress);
+            progress.open();
+            for (;;) {
+                if (this.destroyed) { return; }
+                progress.update(status);
+                progress.summary.setText(`${status.phase || "Rebuilding"}: ${status.processed || 0}/${status.total || 0}`);
+                this.status.setText(`${title}: ${status.percent || 0}% · ${status.phase || status.state}`);
+                if (["error", "partial"].includes(status.state)) { throw new Error(status.error || "Some rebuild downloads failed."); }
+                if (status.state === "ready" && !status.rebuilding) {
+                    this.status.setText(`Rebuilt. Backup: ${status.backup || "none (no previous data)"}`);
+                    break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                status = await TVLoginDialog.request(path);
+            }
+        } catch (error) {
+            this.status.setText(error.message);
+        } finally {
+            task.progress?.destroy();
+            this.rebuildTask = null;
+            this.saveButton.setState(sfDisabled, false);
+        }
     }
 }
 
@@ -3511,6 +3676,7 @@ class TVGridDemoDialog extends TVDialog {
 
     constructor() {
         super(new TVRect(0, 0, 66, 19), "Grid Viewer");
+        this.setHelpCtx(hcGridDemo);
         this.grid = new TVGridView(new TVRect(2, 2, 62, 13), [
             { title: "Object", width: 20 },
             { title: "Base", width: 18 },
@@ -3562,6 +3728,7 @@ class TVServerTerminalDialog extends TVDialog {
 
     constructor() {
         super(new TVRect(0, 0, 84, 27), "Server Terminal");
+        this.setHelpCtx(hcServerTerminal);
         this.jobId = new TVInputLine(new TVRect(10, 1, 24, 2), 12);
         this.key = new TVInputLine(new TVRect(35, 1, 79, 2), 64).setSecret();
         this.input = new TVInputLine(new TVRect(10, 22, 68, 23), 2048);
@@ -3789,7 +3956,8 @@ class TVStatisticsDialog extends TVDialog {
                 ["📄 Document time", "document_duration"], ["▤ Dialogs", "dialog"],
                 ["⌛ Dialog time", "dialog_duration"],
                 ["♫ MIDI playback", "midi_tracks"],
-                ["⚒ Tools", "tool"], ["⌕ Searches", "search"], ["↗ Links", "link"],
+                ["⚒ Tools", "tool"], ["⌛ Tool time", "tool_duration"],
+                ["⌕ Searches", "search"], ["↗ Links", "link"],
                 ["🎮 Games", "game"], ["🏁 Game results", "game_outcome"],
                 ["⏱ Game time", "game_duration"], ["🖥 Screens", "resolution"],
                 ["▣ Viewports", "viewport"], ["💻 Devices", "device"],
@@ -4726,6 +4894,7 @@ Object.assign(TV, {
     TVLoginDialog,
     TVRegistrationDialog,
     TVRegistrationTokenDialog,
+    TVServerConfigurationDialog,
     TVViewGalleryDialog,
     TVHistory,
     TVHistoryViewer,

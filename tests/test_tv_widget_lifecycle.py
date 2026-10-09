@@ -175,6 +175,7 @@ global.CustomEvent = class {};
 global.getComputedStyle = (target) => target.style;
 global.measureCells = () => ({ width: 8, height: 16 });
 global.fillBorders = () => {};
+global.updateWindowFrameState = () => {};
 global.SCROLL_REPEAT_MS = 100;
 global.TRACK_CHAR = "░";
 global.DISABLED_TRACK_CHAR = "─";
@@ -295,8 +296,38 @@ resizer.setMoveFrame(false);
 if (windowElement.classList.contains("is-moving")) {
     throw new Error("move frame state was not cleared");
 }
+const animationFrames = new Map();
+let frameNumber = 0, widthReads = 0, heightReads = 0;
+window.requestAnimationFrame = (callback) => { animationFrames.set(++frameNumber, callback); return frameNumber; };
+window.cancelAnimationFrame = (id) => animationFrames.delete(id);
+Object.defineProperty(windowElement, "offsetWidth", { get() { widthReads++; return 80; } });
+Object.defineProperty(windowElement, "offsetHeight", { get() { heightReads++; return 25; } });
+resizer.startMove({ clientX: 10, clientY: 20, target: { closest() { return null; } }, preventDefault() {} });
+widthReads = heightReads = 0;
+for (let i = 0; i < 50; i++) { resizer.onMoveDrag({ clientX: 100 + i, clientY: 200 + i }); }
+if (animationFrames.size !== 1 || widthReads || heightReads
+    || windowElement.style.getPropertyValue("--tv-window-left") !== "16px") {
+    throw new Error("drag did not coalesce writes or cached bounds were reread");
+}
+const [frameId, apply] = animationFrames.entries().next().value;
+animationFrames.delete(frameId); apply();
+if (windowElement.style.getPropertyValue("--tv-window-left") !== "155px") {
+    throw new Error("drag did not apply the latest queued position");
+}
+resizer.onMoveEnd({ clientX: 110, clientY: 220 });
+if (animationFrames.size || windowElement.style.getPropertyValue("--tv-window-left") !== "116px"
+    || windowElement.style.getPropertyValue("--tv-window-top") !== "232px"
+    || resizer.restoreSnapshot.left !== 116 || resizer.restoreSnapshot.top !== 232) {
+    throw new Error("drag did not flush and persist the final mouse-up position");
+}
+resizer.moveState = { startX: 0, startY: 0, startLeft: 0, startTop: 0, maxLeft: 720, maxTop: 475 };
+resizer.onMoveDrag({ clientX: 9999, clientY: 9999 });
+if (resizer.moveState.nextLeft !== 720 || resizer.moveState.nextTop !== 475) {
+    throw new Error("cached drag bounds did not clamp the position");
+}
 resizer.destroy();
 resizer.destroy();
+if (animationFrames.size) { throw new Error("destroy left a queued drag frame behind"); }
 if (windowElement._tvResizer) { throw new Error("destroy left a stale resizer reference"); }
 if (resizeHandle.listeners.has("mousedown") || moveHandle.listeners.has("mousedown") || window.listeners.has("beforeunload")) {
     throw new Error("resizer left a listener behind");

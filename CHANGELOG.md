@@ -3,6 +3,55 @@
 ## [Unreleased]
 
 ### Server
+- DOS source entries now support a `files` list with CP437/CRLF text lines or
+  strict Base64 bytes, relative to `target`, with path/count/size validation.
+  On a fresh install, configured content overrides its archive counterpart;
+  existing shared disks stay frozen until explicit rebuild/installation.
+  Removed DOS `allowed_hosts`; direct/form/redirect downloads accept public
+  HTTPS hosts with private-peer rejection, size limits and SHA-256 pinning.
+- Unified root and package `files` definitions, both supporting text/Base64.
+  AUTOEXEC.BAT is a normal root entry; legacy initial_files/boot-file keys
+  are rejected with a migration message. Existing C disks remain untouched.
+- Added local-development-admin DOS/MIDI rebuild endpoints with exact scope,
+  origin/session guards and recoverable backups. DOS keeps user overlays and
+  cached archives; MIDI stops its old downloader before replacing tracks,
+  covers and SQLite catalog and re-reading the configured sources.
+- Added opt-in local Docker auto-login without WebAuthn, with a loopback-only
+  port override, separate development accounts/sessions and rejection of
+  public auth origins, public base URLs and proxied/cross-origin login requests.
+- Kept Docker's Python bytecode cache enabled for imports/startup, relocating
+  it to `/tmp/thelp-python-cache` outside the bind-mounted project. Agent test
+  instructions require no-cache runs and cleanup after success or failure.
+- Removed the ineffective default CONFIG.SYS from the DOS manifest. Documented
+  DOOM's disabled source sound settings and its Sound Blaster setup, without
+  overwriting users' or the shared disk's existing game configuration.
+- Added DOS Prompt opens and active-duration buckets to tool statistics,
+  excluding startup, explicit pause, inactive windows and hidden tabs.
+  Page-exit lifecycle notifications no longer double-count window opens.
+- DOS now boots from a metadata-only ZIP and reads C files on demand in
+  gzip-capable 64 KiB chunks, with hash/account guards and private-file isolation.
+  Unread shared files are no longer transferred merely to save an overlay.
+- Private DOS files now live under each account's regular filesystem revision
+  directory; SQLite retains metadata/deletions. Legacy BLOB overlays migrate
+  automatically, and failed saves preserve the prior snapshot.
+- Added admin-only Server Configuration for a persisted private-overlay quota,
+  default 128 MiB excluding shared software. Added configured DOS game sources,
+  Volkov Commander and an optional disabled Norton Commander source.
+- Added a generated software guide and an explicit non-overwriting DOS source
+  installer. CONFIG.SYS may be stored as a normal file but is not interpreted
+  by DOSBox's internal shell.
+- The prepared DOS C drive is now initialised only once, with a completion
+  marker preventing later startups/configuration changes from rewriting it.
+  Added BlockDrop, Sudoku86 and Zmiy under `C:\GAMES`, preserving their
+  source archives/licence notices from the FreeDOS repository.
+- Fixed DOS boot ZIPs omitting parent directories for installed software and
+  overlays. DOSBox's extractor now receives directories before their files,
+  preventing the FreeDOS `APPINFO` extraction failure and startup timeouts.
+- Added DOS Prompt software preparation from a hash-pinned ZIP/IMG source JSON,
+  a shared C drive and private file overlays tied to Passkey sessions.
+  Overlay saves retain deletions, enforce quotas and reject concurrent stale
+  writes. Approved ISO/floppy uploads are private to their account; DOSBox
+  enters native secure mode before accepting commands.
 - Renamed the MIDI source manifest's URL list to `pages`, updating source
   loading, validation and documentation. Source IDs, download paths and
   previously downloaded tracks remain unchanged.
@@ -31,6 +80,55 @@
   of `app.py` into a dedicated router without changing endpoints or storage.
 
 ### TVision
+- Added local-only Rebuild DOS C / Rebuild MIDI account-menu actions with
+  confirmation and shared progress views. DOS saves/closes its current window
+  first; MIDI playback stops before reset. Hiding progress does not cancel jobs.
+- Renamed Account / Passkey to Account. Colors remains available to ordinary
+  users; menu tests now guard this independently of administrator permissions.
+- Updated the native HELP bundle, Contents/Index and view-owned hc contexts
+  for accounts, registration, configuration/rebuild, DOS, terminal and grid;
+  refreshed outdated MIDI, global search and statistics instructions.
+- Fixed passive frames of shared windows without scrollbars updating only
+  their left side, including DOS Prompt. Window dragging now caches bounds
+  and coalesces position writes per animation frame, retaining the final
+  mouse-release position and cancelling pending work on destruction.
+  The mover now reuses shared frame-state drawing instead of leaving a
+  single-line bottom border behind after moving a window.
+- Added DOS Prompt Zoom 2× / Zoom back through shared window geometry, limited
+  by the available desktop. Successful C-drive autosaves no longer overlay
+  the DOS display with a cloud-save notice; save errors remain visible.
+- Added a shared right-aligned account menu: Login for guests, display name
+  with Account/Passkey, color configuration and Sign Out for signed-in users;
+  admin server settings/tokens moved there from system/Help menus.
+- Added DOSBox-style Alt-Enter fullscreen and Alt-Pause (Alt-F16 on Mac)
+  pause/resume shortcuts, plus THelpViewer's Ctrl-Alt-R restart confirmation.
+  Commands use TVEvent and are not also forwarded to DOS as keystrokes.
+- Fixed DOS `EXIT` or an unexpected emulator stop leaving a stopped canvas in
+  native fullscreen. The control
+  menu shortcut now remains available after the emulator stops; restarting
+  a running DOS session retains fullscreen. Rapid fullscreen re-entry no longer
+  gets blocked by a delayed fullscreen-change notification.
+- DOS Fullscreen now uses native browser fullscreen for the DOS canvas alone,
+  without the TVision menu/frame and without changing window geometry.
+  Ctrl+Alt+M leaves fullscreen before opening the DOS control menu.
+- DOS Prompt now participates in `#tv=` workspace links, restoring geometry,
+  stacking/active window and Pause state without exposing commands or private
+  media/account IDs. Restoring starts a new emulator, not a CPU/RAM snapshot.
+- First-time DOS downloads/extraction now show a shared initialization dialog
+  with progress. Worker-denied browsers report unsupported mode by default,
+  without silently downloading the full C drive.
+- Made the entire DOS Prompt background black using the shared window palette,
+  and fixed shared growable-window bottom-frame fill without a scrollbar.
+- DOS startup now reports disk loading, runtime loading and emulator startup
+  separately, with bounded request/script/backend waits. Denied Web Audio
+  no longer aborts DOS startup. The full-disk direct backend is available only
+  when explicitly enabled in the server's DOS configuration.
+- Added DOS Prompt using the shared `TVWindow` frame and an embedded WASM
+  DOSBox view, with TVEvent keyboard/mouse input and a contextual menu for
+  pause, restart, cloud save, CD/floppy mounting, eject and fullscreen.
+  Inactive/hidden sessions pause automatically. C is saved every minute and
+  before normal close/restart and DOS `EXIT`; guests have an unsaved temporary
+  disk. The shared close control waits for mouse release before closing DOS.
 - HELP Files and Docs menu entries now retain real public URLs after the
   server-rendered catalog is replaced. HELP indexes, Contents outlines, inline
   links and `<more>` links also expose file/topic URLs while ordinary clicks

@@ -53,6 +53,13 @@ const {
     hcTron,
     hcStatistics,
     hcSystemInformation,
+    hcAccount,
+    hcRegistration,
+    hcRegistrationTokens,
+    hcServerConfiguration,
+    hcDosPrompt,
+    hcServerTerminal,
+    hcGridDemo,
 } = TV_HELP_CONTEXTS;
 
 const TV_CONTEXT_HELP_TOPICS = Object.freeze({
@@ -60,17 +67,17 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcSystemMenu]: { title: "System menu", text: "The system menu contains utilities, Colors, Widget Gallery, System Information, screen savers and theme selection. About is available from the Help menu." },
     [hcHelpFiles]: { title: "Help Files", text: "Open installs a HELP or Docs file. Catalog submenus open a source directly. The viewer preserves links between related files when the target exists." },
     [hcDocuments]: { title: "Documents", text: "Documentation opens in a read-only Editor-style window. Use Ctrl-F to find text and Ctrl-L to find the next occurrence." },
-    [hcSearch]: { title: "Search", text: "Find searches the active HELP or Docs window. Find Again repeats its query. Search Topics searches the current help bundle index." },
+    [hcSearch]: { title: "Search", text: "Choose server-wide Search all HELP/Docs or Find in active window. Search Topics shows topics and their source; Find Again repeats the active window's query. The server builds a persistent global index." },
     [hcGames]: { title: "Games", text: "Games share Turbo Vision dialogs, keyboard focus, inactive-window pause policies and a server-wide ten-entry Hall of Fame with local fallback." },
     [hcWindows]: { title: "Windows", text: "Tile, Cascade and Window List arrange managed windows. F5 zooms, F6 selects the next window and Alt-F3 closes the active target." },
     [hcContextHelp]: { title: "Context Help", text: "This is THelpViewer's own context-sensitive help. Each view and menu item carries an hc... identifier, following Turbo Vision's helpCtx model." },
     [hcAbout]: { title: "About", text: "Shows the application version and authors. The version is read from the running package metadata." },
     [hcFileOpen]: { title: "Open a File", text: "Choose a HELP or Docs file from the two-column list. The down-arrow opens recent files; press it again or Escape to close the history." },
     [hcChangeDirectory]: { title: "Change Directory", text: "Select a virtual HELP/DOCS directory. Chdir applies it to Open a File, Revert restores the initial path and the arrow opens directory history." },
-    [hcFind]: { title: "Find", text: "Enter text to search in the active HELP or Docs window. The arrow opens previous queries." },
-    [hcColors]: { title: "Colors", text: "Choose a group and item, then edit its DOS foreground/background attribute. Default restores one item; Reset All restores the complete palette." },
+    [hcFind]: { title: "Find", text: "Choose Search all HELP/Docs or Find in active window. Alt-F focuses the input through its label. The arrow opens previous queries; Escape or its close control dismisses history." },
+    [hcColors]: { title: "Colors", text: "All users can edit colors. Default restores one item; Reset All restores the complete palette. Colors are saved in this browser, not synchronized between accounts/devices." },
     [hcWidgetGallery]: { title: "Widget Gallery", text: "Exercises shared labels, inputs, lists, clusters, scrollbars, buttons, static text, terminal and message-box components." },
-    [hcMidiPlayer]: { title: "CD/MIDI Player", text: "The compact view contains the display and transport controls. More reveals the track list and external sources inside the resized dialog frame." },
+    [hcMidiPlayer]: { title: "CD/MIDI Player", text: "Play game MIDI with a SoundFont synthesizer and available cover art. Click the progress bar to seek. More reveals tracks, Filter/history and Random next track. A cloud marks missing downloads; playing prioritizes them. Local admins can rebuild the MIDI library." },
     [hcHelpViewer]: { title: "HELP viewer", text: "Links open topics or external companion HELP files. Use Back, Index, Contents and Search from the status line or menus." },
     [hcDocumentViewer]: { title: "Document viewer", text: "Markdown is displayed with the read-only Editor palette. The lower-left indicator reports the current line and column." },
     [hcDialog]: { title: "Dialog", text: "Tab and Shift-Tab move focus. Enter activates the default button and Escape closes the dialog unless the control uses Escape itself." },
@@ -92,9 +99,16 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcTron]: { title: "Tron Light Cycles", text: "Steer both cycles simultaneously and avoid every trail. The timer pauses while the game window is inactive." },
     [hcStatistics]: { title: "Server Statistics", text: "Browses aggregate visits, active viewing intervals for HELP files, documents, dialogs and games, search and link outcomes, environment and coarse performance intervals. Target time pauses when another window or browser tab becomes active. No search text, exact timing, IP address, cookie, visitor ID, full referrer or raw user agent is stored." },
     [hcSystemInformation]: { title: "System Information", text: "Shows local application, browser, display, locale, storage and capability information plus server status and catalog counts. Opening it does not submit these details to statistics." },
+    [hcAccount]: { title: "Account / Login", text: "Use the right-aligned Login menu; after sign-in it shows your name, Account, Configuration and Sign Out. Production uses Passkeys; explicit local Docker mode auto-signs in as a separate Local Administrator. Colors is available to regular users." },
+    [hcRegistration]: { title: "Registration", text: "Enter name, email and a single-use one-hour token, then approve Passkey creation. On success, a MessageBox confirms registration and OK closes both dialogs. The first-admin token is printed in the server log." },
+    [hcRegistrationTokens]: { title: "Registration Token", text: "Administrators generate one-hour tokens, select them from the valid-token list and confirm Delete to revoke them. Cancel, Escape or closing the confirmation keeps a token valid." },
+    [hcServerConfiguration]: { title: "Server Configuration and Rebuild", text: "Set the private DOS overlay quota (default 128 MiB). Local admins may rebuild DOS C or MIDI with confirmation/progress. DOS preserves private overlays and archive cache; MIDI restarts its downloader and recreates tracks/covers/catalog. Old data moves to var/backups for recovery; Hide does not cancel the server job." },
+    [hcDosPrompt]: { title: "DOS Prompt", text: "Run text/graphics DOS programs in a shared TVWindow using Worker DOSBox. C files load on demand; signed-in users save private overlays. Alt-Enter is native fullscreen, Alt-Pause pauses, Ctrl-Alt-R confirms restart and Ctrl-Alt-M opens the DOS menu. Zoom 2x enlarges the window. Host mounts are blocked. F1 goes to DOS; request this help from its menu." },
+    [hcServerTerminal]: { title: "Server Terminal", text: "Connect to a configured server job using its ID and private key. Output appears in the terminal; input is accepted only while the job runs. This is not DOSBox or an arbitrary remote shell." },
+    [hcGridDemo]: { title: "Grid Viewer", text: "TVGridView displays rows and columns with optional headers and shared horizontal/vertical scrollbars. Arrow keys select cells; Hide headers toggles titles." },
 });
 
-const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20260927e";
+const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20261009f";
 let contextHelpBundlePromise = null;
 
 function loadContextHelpBundle() {

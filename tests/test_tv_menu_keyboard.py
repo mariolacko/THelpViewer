@@ -63,6 +63,25 @@ global.getComputedStyle = () => ({ getPropertyValue() { return ""; } });
 
 eval(fs.readFileSync(process.argv[1], "utf8"));
 const TV = window.THelpViewerTV;
+eval(fs.readFileSync(process.argv[2], "utf8"));
+const guestAccount=TV.buildAccountMenu(null);
+if(guestAccount.command!=='account-login'||guestAccount.subMenu)throw new Error('Guest account item is not Login');
+for(const role of ['member','admin']){
+ const account=TV.buildAccountMenu({authenticated:true,user:{username:'test',display_name:'Test ~<Name>~',role}});
+ const commands=account.subMenu.entries().flatMap(item=>[item.command,...(item.subMenu?.entries()||[]).map(child=>child.command)]);
+ if(commands.includes('account-server-configuration')!==(role==='admin')||commands.includes('account-registration-token')!==(role==='admin'))throw new Error('Account role visibility is incorrect');
+ if(!commands.includes('account-colors')||!commands.includes('account-logout'))throw new Error('User configuration/sign-out missing');
+ if(commands.includes('account-rebuild-dos')||commands.includes('account-rebuild-midi'))throw new Error('Rebuild leaked into the normal account menu');
+ if(account.subMenu.entries()[0].name.replaceAll('~','')!=='Account')throw new Error('Account menu label was not renamed');
+ const bar=new TV.TVApplicationMenuBar(new TV.TVRect(),TV.NewMenu(account),account);
+ if(!bar.draw().includes('Test ~&lt;Name&gt;~')||bar.menuMnemonic(account)!=='')throw new Error('User name was interpreted as menu markup');
+}
+for(const role of ['member','admin']){
+ const account=TV.buildAccountMenu({authenticated:true,development:true,user:{username:'local',display_name:'Local',role}});
+ const commands=account.subMenu.entries().flatMap(item=>[item.command,...(item.subMenu?.entries()||[]).map(child=>child.command)]);
+ if(commands.includes('account-rebuild-dos')!==(role==='admin')||commands.includes('account-rebuild-midi')!==(role==='admin'))throw new Error('Local rebuild menu permissions are incorrect');
+ if(!commands.includes('account-colors'))throw new Error('Colors is unavailable to a local member');
+}
 
 const linkedSecond = TV.NewItem("~S~econd", "F4", TV.kbF3, "second", 20);
 const linkedFirst = TV.NewItem("~F~irst", "F3", TV.kbF3, "first", 10, linkedSecond);
@@ -350,7 +369,7 @@ if (filtered.length !== 1 || filtered[0] !== enabled) {
 }
 """
     result = subprocess.run(
-        [NODE, "-e", script, str(CORE_PATHS[0])],
+        [NODE, "-e", script, str(CORE_PATHS[0]), "www/assets/tv-shell.js"],
         capture_output=True,
         text=True,
     )
@@ -380,8 +399,9 @@ def test_shell_and_bundle_use_the_shared_menu_controller():
     assert "class TurboVisionMenus extends TVMenuController" in shell
     assert "new TVMenuController" in bundle
     assert "menuController.refresh()" in bundle
-    assert "new TVMenuBar(new TVRect(), pageMenu(top))" in shell
-    assert "new TVMenuBar(new TVRect(), menuFromItems(topItems))" in bundle
+    assert "class TVApplicationMenuBar extends TVMenuBar" in shell
+    assert "new TVApplicationMenuBar(new TVRect(), pageMenu(top), accountItem)" in shell
+    assert "new TVApplicationMenuBar(new TVRect(), menuFromItems(topItems), accountItem)" in bundle
     assert "class TVMenuBar extends TVMenuView" not in shell
     assert "renderMenuRoot" not in bundle
     assert "new TVMenu([" not in shell + bundle

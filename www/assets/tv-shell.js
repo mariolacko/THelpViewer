@@ -22,6 +22,7 @@ const {
     escapeHtml,
     renderHotkeyMarkup,
     fillBorders,
+    updateWindowFrameState,
     bindCloseButtons,
     applyThemeAndSyncPalette,
     initializeTVTheme,
@@ -33,6 +34,7 @@ const {
     TVLoginDialog,
     TVRegistrationDialog,
     TVRegistrationTokenDialog,
+    TVServerConfigurationDialog,
     TVContextHelpWindow,
     TVPuzzleDialog,
     TVHanoiDialog,
@@ -66,6 +68,10 @@ const {
     hcSystemMenu,
     hcHelpViewer,
     hcNoContext,
+    hcAccount,
+    hcColors,
+    hcRegistrationTokens,
+    hcServerConfiguration,
 } = TV_HELP_CONTEXTS;
 
 const pageMenuActions = new WeakMap();
@@ -86,7 +92,48 @@ function pageSubMenu(name, items, helpCtx = hcNoContext) {
     return NewSubMenu(name, helpCtx, pageMenu(items));
 }
 
-function buildPageMenuBar(root, context, isAdmin = false) {
+// Application extension: classic TMenuBar has no right-aligned item option.
+class TVApplicationMenuBar extends TVMenuBar {
+    constructor(bounds, menu, rightItem) {
+        super(bounds, menu);
+        this.rightItem = rightItem;
+    }
+    _drawItemName(item) {
+        return item === this.rightItem && item.subMenu instanceof TVMenu
+            ? escapeHtml(item.name) : super._drawItemName(item);
+    }
+    menuMnemonic(item) {
+        return item === this.rightItem && item.subMenu instanceof TVMenu ? "" : super.menuMnemonic(item);
+    }
+    drawItem(item, view = "bar") {
+        const markup = super.drawItem(item, view);
+        return view === "bar" && item === this.rightItem
+            ? `<div class="tv-menu-right">${markup}</div>` : markup;
+    }
+}
+
+function buildAccountMenu(session) {
+    if (!session?.authenticated || !session.user) { return new TVMenuItem("~L~ogin", "account-login", 0, hcAccount); }
+    const user = session.user;
+    const admin = user.role === "admin";
+    return pageSubMenu(String(user.display_name || user.username), [
+        new TVMenuItem("~A~ccount", "account-login", 0, hcAccount),
+        pageSubMenu("~C~onfiguration", [
+            new TVMenuItem("~C~olors", "account-colors", 0, hcColors),
+            ...(admin ? [new TVMenuItem("~S~erver Configuration", "account-server-configuration", 0, hcServerConfiguration)] : []),
+            ...(admin && session.development ? [
+                NewLine(),
+                new TVMenuItem("Rebuild ~D~OS C...", "account-rebuild-dos", 0, hcServerConfiguration),
+                new TVMenuItem("Rebuild ~M~IDI...", "account-rebuild-midi", 0, hcServerConfiguration),
+            ] : []),
+        ], hcAccount),
+        ...(admin ? [new TVMenuItem("~R~egistration Token", "account-registration-token", 0, hcRegistrationTokens)] : []),
+        NewLine(),
+        new TVMenuItem("Sign ~O~ut", "account-logout"),
+    ], hcAccount);
+}
+
+function buildPageMenuBar(root, context, session = null) {
     const dialog = (name, title) => pageMenuItem(title, "dialog-open", name);
     const savers = [
         pageMenuItem("~S~tars", "saver-start", "stars"),
@@ -99,8 +146,6 @@ function buildPageMenuBar(root, context, isAdmin = false) {
         new TVMenuItem("~C~ontext Help", "context-help"),
         NewLine(),
         dialog("about", "~A~bout"),
-        dialog("login", "~L~ogin / Passkey"),
-        ...(isAdmin ? [dialog("registration-token", "~R~egistration Token")] : []),
         dialog("puzzle", "~P~uzzle"),
         dialog("hanoi", "Tower of ~H~anoi"),
         dialog("tron", "Tr~o~n Light Cycles"),
@@ -128,7 +173,9 @@ function buildPageMenuBar(root, context, isAdmin = false) {
     if (context.pageKind === "topic" && context.topicContext && context.topicHref) {
         top.push(pageMenuItem(`~T~opic ${context.topicContext}`, "page-open", context.topicHref));
     }
-    const menuBar = new TVMenuBar(new TVRect(), pageMenu(top));
+    const accountItem = buildAccountMenu(session);
+    top.push(accountItem);
+    const menuBar = new TVApplicationMenuBar(new TVRect(), pageMenu(top), accountItem);
     root.innerHTML = menuBar.draw()
         + '<div class="tv-menu-clock" data-tv-clock>00:00:00</div>';
     menuBar.bindRoot(root);
@@ -212,6 +259,7 @@ class TurboVisionWindowResizer {
         this.handle = windowElement.querySelector("[data-tv-resize-handle]");
         this.dragState = null;
         this.moveState = null;
+        this.moveFrame = null;
         this.storageKey = this.buildStorageKey();
         this.restoreSnapshot = null;
         this.destroyed = false;
@@ -298,6 +346,8 @@ class TurboVisionWindowResizer {
             startY: event.clientY,
             startLeft: this.numericVar(style, "--tv-window-left", this.windowElement.offsetLeft),
             startTop: this.numericVar(style, "--tv-window-top", this.windowElement.offsetTop),
+            maxLeft: this.desktop ? Math.max(0, this.desktop.clientWidth - this.windowElement.offsetWidth) : Infinity,
+            maxTop: this.desktop ? Math.max(0, this.desktop.clientHeight - this.windowElement.offsetHeight) : Infinity,
         };
         this.setMoveFrame(true);
         document.addEventListener("mousemove", this.onMoveDrag);
@@ -306,7 +356,7 @@ class TurboVisionWindowResizer {
 
     setResizeFrame(active) {
         this.windowElement.classList.toggle("is-resizing", active);
-        this.setWindowFrame(active);
+        this.setWindowFrame();
     }
 
     setMoveFrame(active) {
@@ -314,26 +364,11 @@ class TurboVisionWindowResizer {
             return;
         }
         this.windowElement.classList.toggle("is-moving", active);
-        this.setWindowFrame(active);
+        this.setWindowFrame();
     }
 
-    setWindowFrame(singleFrame) {
-        const chars = singleFrame
-            ? { tl: "┌", tr: "┐", bl: "└", top: "─", side: "│" }
-            : { tl: "╔", tr: "╗", bl: "╚", top: "═", side: "║" };
-        this.windowElement.querySelectorAll("[data-tv-frame-corner]").forEach((element) => {
-            const corner = element.getAttribute("data-tv-frame-corner");
-            if (corner && chars[corner]) {
-                element.textContent = chars[corner];
-            }
-        });
-        this.windowElement.querySelectorAll(".tv-border-top [data-tv-border-fill]").forEach((element) => {
-            element.setAttribute("data-tv-border-fill", chars.top);
-        });
-        this.windowElement.querySelectorAll("[data-tv-border-side]").forEach((element) => {
-            element.setAttribute("data-tv-border-side", chars.side);
-        });
-        fillBorders(this.windowElement);
+    setWindowFrame() {
+        updateWindowFrameState(this.windowElement, !this.windowElement.classList.contains("is-window-inactive"));
     }
 
     numericVar(style, name, fallback) {
@@ -533,19 +568,28 @@ class TurboVisionWindowResizer {
         if (!this.moveState) {
             return;
         }
-        const width = this.windowElement.offsetWidth;
-        const height = this.windowElement.offsetHeight;
         const rawLeft = this.moveState.startLeft + (event.clientX - this.moveState.startX);
         const rawTop = this.moveState.startTop + (event.clientY - this.moveState.startY);
-        const maxLeft = this.desktop ? Math.max(0, this.desktop.clientWidth - width) : rawLeft;
-        const maxTop = this.desktop ? Math.max(0, this.desktop.clientHeight - height) : rawTop;
-        const nextLeft = this.clamp(rawLeft, 0, maxLeft);
-        const nextTop = this.clamp(rawTop, 0, maxTop);
-        this.windowElement.style.setProperty("--tv-window-left", `${nextLeft}px`);
-        this.windowElement.style.setProperty("--tv-window-top", `${nextTop}px`);
+        this.moveState.nextLeft = this.clamp(rawLeft, 0, this.moveState.maxLeft);
+        this.moveState.nextTop = this.clamp(rawTop, 0, this.moveState.maxTop);
+        if (this.moveFrame === null) {
+            this.moveFrame = window.requestAnimationFrame(this.applyMove);
+        }
     };
 
-    onMoveEnd = () => {
+    applyMove = () => {
+        this.moveFrame = null;
+        if (!this.moveState || this.moveState.nextLeft === undefined) { return; }
+        this.windowElement.style.setProperty("--tv-window-left", `${this.moveState.nextLeft}px`);
+        this.windowElement.style.setProperty("--tv-window-top", `${this.moveState.nextTop}px`);
+    };
+
+    onMoveEnd = (event) => {
+        if (this.moveState && Number.isFinite(event?.clientX) && Number.isFinite(event?.clientY)) {
+            this.onMoveDrag(event);
+        }
+        if (this.moveFrame !== null) { window.cancelAnimationFrame(this.moveFrame); }
+        this.applyMove();
         this.moveState = null;
         this.setMoveFrame(false);
         document.removeEventListener("mousemove", this.onMoveDrag);
@@ -561,6 +605,7 @@ class TurboVisionWindowResizer {
             this.persistState();
         }
         this.destroyed = true;
+        if (this.moveFrame !== null) { window.cancelAnimationFrame(this.moveFrame); this.moveFrame = null; }
         this.dragState = null;
         this.moveState = null;
         document.removeEventListener("mousemove", this.onResizeMove);
@@ -603,6 +648,7 @@ class TVApplication extends TVProgram {
         this.resizers = [];
         this.errors = [];
         this.isAdmin = false;
+        this.authSession = null;
     }
 
     handleEvent(event) {
@@ -643,7 +689,23 @@ class TVApplication extends TVProgram {
             ? (control.param && typeof control.param === "object" ? control.param.value : control.param)
             : "") ?? "";
         let handled = true;
-        if (event.command === "dialog-open") {
+        if (event.command === "account-logout") {
+            this.dialogManager.open("login");
+            this.dialogManager.get("login")?.handleEvent(new TVEvent(evCommand, { command: "login-sign-out" }));
+        } else if (String(event.command).startsWith("account-")) {
+            if (["account-rebuild-dos", "account-rebuild-midi"].includes(event.command)) {
+                if (this.isAdmin && this.authSession?.development) {
+                    this.dialogManager.open("server-configuration");
+                    this.serverConfigDialog?.handleEvent(new TVEvent(evCommand, {
+                        command: event.command.replace("account-", "server-"),
+                    }));
+                }
+                this.clearEvent(event); return;
+            }
+            const name = event.command === "account-login" ? "login" : event.command.slice(8);
+            if (["server-configuration", "registration-token"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
+            this.dialogManager.open(name);
+        } else if (event.command === "dialog-open") {
             this.dialogManager.open(value);
         } else if (event.command === "theme-set") {
             applyThemeAndSyncPalette(value || "default", true);
@@ -728,11 +790,14 @@ class TVApplication extends TVProgram {
 
     _setAuthSession(session) {
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
-        if (nextAdmin === this.isAdmin) { return; }
+        if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); }
+        const nextSession = session?.authenticated && session.user ? session : null;
+        if (JSON.stringify(nextSession) === JSON.stringify(this.authSession)) { return; }
+        this.authSession = nextSession;
         this.isAdmin = nextAdmin;
         const menuBar = document.querySelector("[data-tv-menu-bar]");
         if (menuBar) {
-            buildPageMenuBar(menuBar, new TVAppContext(), this.isAdmin);
+            buildPageMenuBar(menuBar, new TVAppContext(), this.authSession);
             this.menus?.refresh();
         }
     }
@@ -786,6 +851,14 @@ class TVApplication extends TVProgram {
         const loginDialog = this.registerDialog("login", () => new TVLoginDialog());
         const registrationDialog = this.registerDialog("registration", () => new TVRegistrationDialog());
         this.registerDialog("registration-token", () => new TVRegistrationTokenDialog());
+        this.serverConfigDialog = this.registerDialog("server-configuration", () => new TVServerConfigurationDialog());
+        this.serverConfigDialog.onBeforeRebuild = (resource) => {
+            if (resource === "midi") {
+                const player = this.dialogManager.get("midi");
+                player?.stopPlayback();
+                if (player) { player.pendingPlay = null; }
+            }
+        };
         loginDialog.onRegister = () => this.dialogManager.open("registration");
         loginDialog.onSessionChange = (session) => this._setAuthSession(session);
         registrationDialog.onSessionChange = (session) => loginDialog.updateSession(session);
@@ -833,6 +906,8 @@ class TVApplication extends TVProgram {
 
 
 Object.assign(TV, {
+    TVApplicationMenuBar,
+    buildAccountMenu,
     TVPageStatusLine,
     TVScrollBar,
     TurboVisionWindowResizer,

@@ -424,6 +424,13 @@ const TV_HELP_CONTEXTS = Object.freeze({
     hcTron: 2250,
     hcStatistics: 2260,
     hcSystemInformation: 2270,
+    hcAccount: 2280,
+    hcRegistration: 2290,
+    hcRegistrationTokens: 2300,
+    hcServerConfiguration: 2310,
+    hcDosPrompt: 2320,
+    hcServerTerminal: 2330,
+    hcGridDemo: 2340,
 });
 const {
     hcNoContext,
@@ -847,7 +854,7 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
     const bottomFills = bottomBar ? Array.from(bottomBar.querySelectorAll(".tv-border-fill")) : [];
     const sides = dialog
         ? Array.from(windowElement.querySelectorAll("[data-tv-border-side]"))
-        : Array.from(windowElement.querySelectorAll(".tv-border-side-left"));
+        : Array.from(windowElement.querySelectorAll(".tv-border-side-left, .tv-border-side-right"));
     const closeButton = windowElement.querySelector("[data-tv-close-button]");
     const closeGlyph = windowElement.querySelector("[data-tv-close-glyph]");
     const zoomButton = windowElement.querySelector("[data-tv-zoom-glyph]")?.closest("button, a");
@@ -3398,7 +3405,9 @@ class TVMenuView extends TVView {
     refresh() {
         if (!this.root) { return; }
         this.menuRoots = Array.from(this.root.querySelectorAll("[data-tv-menu-root]"));
-        this.topLevelActions = Array.from(this.root.querySelectorAll(".tv-menu-items > .tv-menu-item"));
+        this.topLevelActions = Array.from(this.itemElements)
+            .filter(([item]) => this.topLevelItems.has(item) && !(item.subMenu instanceof TVMenu))
+            .map(([_item, element]) => element);
         this.rootControls.clear();
         this.rootByItem.clear();
         this.menuRoots.forEach((menuRoot) => {
@@ -3811,7 +3820,7 @@ class TVMenuView extends TVView {
             });
             return '<div class="tv-submenu-root" data-tv-submenu-root="true"' + helpAttr + '>'
                 + '<button class="tv-menu-popup-item tv-submenu-toggle" ' + toggleAttrs + '>'
-                + renderHotkeyMarkup(item.name) + '<span class="tv-submenu-arrow">►</span>'
+                + this._drawItemName(item) + '<span class="tv-submenu-arrow">►</span>'
                 + '</button>'
                 + new TVMenuBox(new TVRect(), item.subMenu, this).draw()
                 + '</div>';
@@ -3833,8 +3842,10 @@ class TVMenuView extends TVView {
         const shortcut = item.param
             ? `<span class="tv-menu-hotkey">${escapeHtml(item.param)}</span>`
             : "";
-        return `<${tag} class="${className}" ${attrs}>${renderHotkeyMarkup(item.name)}${shortcut}</${tag}>`;
+        return `<${tag} class="${className}" ${attrs}>${this._drawItemName(item)}${shortcut}</${tag}>`;
     }
+
+    _drawItemName(item) { return renderHotkeyMarkup(item.name); }
 
     renderItems(view = "popup") {
         return this.menu.entries().map((item) => this.drawItem(item, view));
@@ -3940,30 +3951,31 @@ function NewSubMenu(name, helpCtx, subMenu, next = null) {
 }
 
 class TVMenuBar extends TVMenuView {
+    drawItem(item, view = "bar") {
+        if (view === "bar" && item.subMenu instanceof TVMenu) {
+            const helpAttr = item.helpCtx !== hcNoContext ? ` data-tv-help-ctx="${item.helpCtx}"` : "";
+            const toggleAttrs = attrsToString({
+                type: "button",
+                "data-tv-menu-toggle": true,
+                "data-tv-menu-item-id": item._menuId,
+                ...TVView._controlAttrs({
+                    name: "menu-toggle",
+                    command: "menu-toggle",
+                    disabled: item.disabled,
+                    ariaHasPopup: true,
+                    ariaExpanded: false,
+                }),
+            });
+            return `<div class="tv-menu-root" data-tv-menu-root="true"${helpAttr}>`
+                + `<button class="tv-menu-item tv-menu-button" ${toggleAttrs}>${this._drawItemName(item)}</button>`
+                + new TVMenuBox(new TVRect(), item.subMenu).draw()
+                + "</div>";
+        }
+        return super.drawItem(item, view);
+    }
+
     draw() {
-        const items = this.menu.entries().map((item) => {
-            if (item.subMenu instanceof TVMenu) {
-                const helpAttr = item.helpCtx !== hcNoContext ? ` data-tv-help-ctx="${item.helpCtx}"` : "";
-                const toggleAttrs = attrsToString({
-                    type: "button",
-                    "data-tv-menu-toggle": true,
-                    "data-tv-menu-item-id": item._menuId,
-                    ...TVView._controlAttrs({
-                        name: "menu-toggle",
-                        command: "menu-toggle",
-                        disabled: item.disabled,
-                        ariaHasPopup: true,
-                        ariaExpanded: false,
-                    }),
-                });
-                return `<div class="tv-menu-root" data-tv-menu-root="true"${helpAttr}>`
-                    + `<button class="tv-menu-item tv-menu-button" ${toggleAttrs}>${renderHotkeyMarkup(item.name)}</button>`
-                    + new TVMenuBox(new TVRect(), item.subMenu).draw()
-                    + "</div>";
-            }
-            return this.drawItem(item, "bar");
-        });
-        return `<nav class="tv-menu-items">${items.join("")}</nav>`;
+        return `<nav class="tv-menu-items">${this.renderItems("bar").join("")}</nav>`;
     }
 }
 
@@ -5020,6 +5032,8 @@ class TVWindow extends TVGroup {
         };
     }
 
+    hasScrollBars() { return true; }
+
     draw(contentMarkup = this.renderChildren()) {
         const limits = this.sizeLimits();
         const semanticName = this._semanticName();
@@ -5045,14 +5059,15 @@ class TVWindow extends TVGroup {
         const titleMarkup = title
             ? `<div class="tv-window-caption">${escapeHtml(title)}</div>`
             : '<span class="tv-border-fill tv-window-caption-fill" data-tv-border-fill="═" aria-hidden="true"></span>';
-        const rightFrame = growable
+        const rightFrame = growable && this.hasScrollBars()
             ? new TVScrollBar(new TVRect(), sbVertical).draw()
             : '<span class="tv-border-side tv-border-side-right" data-tv-border-side="║" aria-hidden="true"></span>';
         const bottomFrame = growable
             ? [
                 '<span class="tv-scroll-corner tv-scroll-corner-left" data-tv-frame-corner="bl" aria-hidden="true">╚</span>',
                 '<span class="tv-border-fill tv-control-gap" data-tv-border-fill="═" aria-hidden="true"></span>',
-                new TVScrollBar(new TVRect(), sbHorizontal).draw(),
+                this.hasScrollBars() ? new TVScrollBar(new TVRect(), sbHorizontal).draw()
+                    : '<span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>',
                 '<button type="button" class="tv-grow-handle" data-tv-resize-handle aria-label="Resize window">─┘</button>',
             ].join("")
             : [
@@ -5814,6 +5829,7 @@ class TVHelpController {
         this.getDialogManager = getDialogManager;
         this.onHelp = onHelp;
         this.onKeyDown = (event) => {
+            if (TVView._fromElement(event.target)?.capturesKey?.(event)) { return; }
             if (
                 event.key !== "F1" || event.altKey || event.ctrlKey
                 || event.metaKey || event.shiftKey || event.defaultPrevented

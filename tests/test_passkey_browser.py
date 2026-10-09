@@ -87,14 +87,15 @@ async function run() {
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 10000;
         const check = () => {
-            const item = Array.from(document.querySelectorAll('[data-tv-command="dialog-open"]'))
-                .find((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Login / Passkey');
+            const item = document.querySelector('[data-tv-command="account-login"]');
             if (item) { item.click(); resolve(true); return; }
             if (Date.now() > deadline) { reject(new Error('Login menu did not load')); return; }
             setTimeout(check, 30);
         };
         check();
     })`, true);
+    const guestPlacement=await evaluate(`(()=>{const nav=document.querySelector('.tv-menu-items'),item=document.querySelector('.tv-menu-right');return nav&&item&&Math.abs(nav.getBoundingClientRect().right-item.getBoundingClientRect().right)<1;})()`);
+    if(!guestPlacement)throw new Error('Login was not aligned to the right');
     await evaluate(`document.querySelector('.tv-login-window [data-tv-command="login-register"]').click()`);
     await evaluate(`(() => {
         const dialog = document.querySelector('.tv-registration-window');
@@ -166,10 +167,36 @@ async function run() {
         };
         check();
     })`, true);
-    const tokenMenu = await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="dialog-open"]'))
+    const tokenMenu = await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
         .some((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token')`);
     if (!tokenMenu) { throw new Error('Admin registration-token menu is missing'); }
-    await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="dialog-open"]'))
+    const accountTitle=await evaluate(`document.querySelector('.tv-menu-right > .tv-menu-root > .tv-menu-button')?.textContent`);
+    if(accountTitle!=='Test User')throw new Error('Authenticated user name missing from top menu: '+accountTitle);
+    await evaluate(`(()=>{window.accountTestLogin=document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView;
+        accountTestLogin.updateSession({enabled:true,authenticated:true,user:{username:'member@example.test',display_name:'Member One',role:'member'}});})()`);
+    if(await evaluate(`document.querySelector('[data-tv-command="account-server-configuration"]')!==null||document.querySelector('[data-tv-command="account-registration-token"]')!==null`))throw new Error('Member sees admin account menu');
+    await evaluate(`accountTestLogin.updateSession({enabled:true,authenticated:true,user:{username:'member@example.test',display_name:'Member ~Two~',role:'member'}})`);
+    if(await evaluate(`document.querySelector('.tv-menu-right .tv-menu-button')?.textContent`)!=='Member ~Two~')throw new Error('Same-role user name change was not rendered literally');
+    await evaluate(`accountTestLogin.updateSession({enabled:true,authenticated:false})`);
+    if(await evaluate(`document.querySelector('.tv-menu-right [data-tv-command="account-login"]')?.textContent`)!=='Login')throw new Error('Member sign-out did not restore Login');
+    await evaluate(`accountTestLogin.refreshSession()`,true);
+    await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="account-server-configuration"]'))
+        .find((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Server Configuration').click()`);
+    await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
+        const input=document.querySelector('.tv-server-configuration-window .tv-input-line');
+        if(input?.value==='128'){resolve(true);return;}
+        if(Date.now()>deadline){reject(new Error('Default DOS overlay capacity did not load'));return;}setTimeout(check,30);
+    };check();})`,true);
+    await evaluate(`(()=>{const dialog=document.querySelector('.tv-server-configuration-window');
+        dialog.querySelector('.tv-input-line').value='64';dialog.querySelector('[data-tv-command="server-settings-save"]').click();})()`);
+    await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
+        if(document.querySelector('.tv-server-configuration-window')?.textContent.includes('Saved.')){resolve(true);return;}
+        if(Date.now()>deadline){reject(new Error('DOS overlay settings did not save'));return;}setTimeout(check,30);
+    };check();})`,true);
+    const settings=await evaluate(`fetch('/api/admin/settings').then(r=>r.json())`,true);
+    if(settings.dos_user_disk_mb!==64)throw new Error('DOS overlay capacity was not persisted');
+    await evaluate(`document.querySelector('.tv-server-configuration-window [data-tv-command="server-settings-cancel"]').click()`);
+    await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
         .find((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token').click()`);
     await evaluate(`document.querySelector('.tv-registration-token-window [data-tv-command="token-generate"]').click()`);
     const issuedToken = await evaluate(`new Promise((resolve, reject) => {
@@ -186,7 +213,7 @@ async function run() {
         throw new Error('Generated registration token has the wrong format');
     }
     await evaluate(`document.querySelector('.tv-registration-token-window [data-tv-command="token-close"]').click()`);
-    await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="dialog-open"]'))
+    await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
         .find((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token').click()`);
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 5000;
@@ -272,25 +299,27 @@ async function run() {
         check();
     })`, true);
     await evaluate(`document.querySelector('.tv-registration-token-window [data-tv-command="token-close"]').click()`);
-    await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="dialog-open"]'))
-        .find((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Login / Passkey').click()`);
-    await evaluate(`document.querySelector('.tv-login-window [data-tv-command="login-sign-out"]').click()`);
+    await evaluate(`document.querySelector('[data-tv-command="account-logout"]').click()`);
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 5000;
         const check = () => {
             const status = document.querySelector('.tv-login-window')?.closest('.tv-dialog-overlay')
                 ?._tvView?.status?.root?.textContent || '';
-            const tokenMenu = Array.from(document.querySelectorAll('[data-tv-command="dialog-open"]'))
+            const tokenMenu = Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
                 .some((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token');
             if (status.includes('Sign in, or register') && !tokenMenu) { resolve(true); return; }
-            if (Date.now() > deadline) { reject(new Error('Passkey sign-out failed: ' + status)); return; }
+            if (Date.now() > deadline) {
+                fetch('/api/auth/session').then(r=>r.json()).then(session=>reject(new Error('Passkey sign-out failed: '+status+' authenticated='+session.authenticated)));
+                return;
+            }
             setTimeout(check, 30);
         };
         check();
     })`, true);
-    const tokenMenuAfterSignOut = await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="dialog-open"]'))
+    const tokenMenuAfterSignOut = await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
         .some((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token')`);
     if (tokenMenuAfterSignOut) { throw new Error('Admin registration-token menu remained after sign-out'); }
+    if(await evaluate(`document.querySelector('.tv-menu-right [data-tv-command="account-login"]')?.textContent.replaceAll('~','')`)!=='Login')throw new Error('Guest Login menu was not restored');
     await evaluate(`(() => {
         const dialog = document.querySelector('.tv-login-window');
         dialog.querySelector('.tv-input-line').value = 'test@example.test';

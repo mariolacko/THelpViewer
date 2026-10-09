@@ -20,6 +20,9 @@ const {
     TVLoginDialog,
     TVRegistrationDialog,
     TVRegistrationTokenDialog,
+    TVServerConfigurationDialog,
+    TVApplicationMenuBar,
+    buildAccountMenu,
     TVPuzzleDialog,
     TVCalendarDialog,
     TVAsciiTableDialog,
@@ -49,6 +52,7 @@ const {
     TVGameDialog,
     TVScreenSaver,
     TVWindow,
+    TVDosWindow,
     TVDialog,
     TVMessageBox,
     TVView,
@@ -112,6 +116,7 @@ const {
     hcContextHelp,
     hcDocumentViewer,
     hcNoContext,
+    hcDosPrompt,
 } = TV_HELP_CONTEXTS;
 
 // ── Catalog & data cache ────────────────────────────────────────────
@@ -1831,8 +1836,8 @@ const PROGRESS_BAR_MIN_VISIBLE_MS = 180;
 class TVLoadingDialog extends TVDialog {
     static viewName = "loading";
 
-    constructor() {
-        super(new TVRect(0, 0, 40, 9), "Loading");
+    constructor(title = "Loading") {
+        super(new TVRect(0, 0, 40, 9), title);
         this.setState(sfModal, true);
         this.cancelled = false;
         this.abortController = new AbortController();
@@ -3108,7 +3113,7 @@ function renderMarkdown(md) {
 
 // ── Menu bar for bundle page ────────────────────────────────────────
 
-function buildBundleMenuBar(catalog, activeBundle = null, isAdmin = false) {
+function buildBundleMenuBar(catalog, activeBundle = null, session = null, dosWindow = null) {
     const menuBar = document.querySelector("[data-tv-menu-bar]");
     if (!menuBar) { return; }
     const dialogItem = (label, name) => withMenuAction(
@@ -3132,6 +3137,7 @@ function buildBundleMenuBar(catalog, activeBundle = null, isAdmin = false) {
         dialogItem("~W~idget Gallery", "widgets"),
         dialogItem("~G~rid Viewer", "grid"),
         dialogItem("Server ~T~erminal", "terminal"),
+        new TVMenuItem("DOS ~P~rompt", "dos-open", 0, hcDosPrompt),
         dialogItem("S~t~atistics", "statistics"),
         dialogItem("System ~I~nformation", "systeminfo"),
         NewLine(),
@@ -3192,8 +3198,6 @@ function buildBundleMenuBar(catalog, activeBundle = null, isAdmin = false) {
         new TVMenuItem("~C~ontext Help", "context-help", kbF1, hcNoContext, "F1"),
         new TVMenuItem("~I~ndex", "context-help-index"),
         NewLine(),
-        dialogItem("~L~ogin / Passkey", "login"),
-        ...(isAdmin ? [dialogItem("~R~egistration Token", "registration-token")] : []),
         dialogItem("~A~bout", "about"),
     ];
     const topItems = [
@@ -3209,10 +3213,27 @@ function buildBundleMenuBar(catalog, activeBundle = null, isAdmin = false) {
         renderMenuSubmenu("~W~indows", windowsItems, hcWindows),
         renderMenuSubmenu("~H~elp", helpItems, hcContextHelp),
     ];
-    const contents = buildBundleContentsSubMenu(activeBundle);
+    const contents = dosWindow?.active ? null : buildBundleContentsSubMenu(activeBundle);
     if (contents) { topItems.push(contents); }
+    if (dosWindow?.active) {
+        const command = (label, name, disabled = false, shortcut = "") => new TVMenuItem(label, name, 0, hcDosPrompt, shortcut).setDisabled(disabled);
+        const ready = Boolean(dosWindow.view.ci) && !dosWindow.busy;
+        topItems.push(renderMenuSubmenu("D~O~S Prompt", [
+            command(dosWindow.paused ? "~R~esume" : "~P~ause", "dos-pause", !ready, "Alt-Pause"),
+            command("Res~t~art", "dos-restart", dosWindow.busy, "Ctrl-Alt-R"),
+            command("~S~ave C to cloud", "dos-save", !ready || !dosWindow.session?.account),
+            NewLine(),
+            command("Mount ~C~D...", "dos-mount-cd", !ready || !dosWindow.session?.account),
+            command("Mount ~F~loppy...", "dos-mount-floppy", !ready || !dosWindow.session?.account),
+            command("~E~ject media", "dos-eject", !ready || !dosWindow.media),
+            NewLine(), command(dosWindow.zoomGeometry ? "~Z~oom back" : "~Z~oom 2×", "dos-zoom"),
+            command("F~u~llscreen", "dos-fullscreen", false, "Alt-Enter"), command("C~l~ose", "dos-close"),
+        ], hcDosPrompt));
+    }
 
-    const menuView = new TVMenuBar(new TVRect(), menuFromItems(topItems));
+    const accountItem = buildAccountMenu(session);
+    topItems.push(accountItem);
+    const menuView = new TVApplicationMenuBar(new TVRect(), menuFromItems(topItems), accountItem);
     menuBar.innerHTML = menuView.draw()
         + '<div class="tv-menu-clock" data-tv-clock>00:00:00</div>';
     menuView.bindRoot(menuBar);
@@ -3241,6 +3262,7 @@ class TVBundleApp extends TVProgram {
         this.localLinkHandler = null;
         this.statisticsTargets = new Map();
         this.isAdmin = false;
+        this.authSession = null;
     }
 
     handleEvent(event) {
@@ -3305,6 +3327,27 @@ class TVBundleApp extends TVProgram {
             this._findAgain();
         } else if (event.command === "file-open") {
             this.dialogManager.open("fileopen");
+        } else if (event.command === "dos-open") {
+            void this._openDosPrompt();
+        } else if (String(event.command).startsWith("dos-")) {
+            this.dosWindow?.handleEvent(event);
+            return;
+        } else if (event.command === "account-logout") {
+            this.dialogManager.open("login");
+            this.dialogManager.get("login")?.handleEvent(new TVEvent(TV.evCommand, { command: "login-sign-out" }));
+        } else if (String(event.command).startsWith("account-")) {
+            if (["account-rebuild-dos", "account-rebuild-midi"].includes(event.command)) {
+                if (this.isAdmin && this.authSession?.development) {
+                    this.dialogManager.open("server-configuration");
+                    this.serverConfigDialog?.handleEvent(new TVEvent(TV.evCommand, {
+                        command: event.command.replace("account-", "server-"),
+                    }));
+                }
+                this.clearEvent(event); return;
+            }
+            const name = event.command === "account-login" ? "login" : event.command.slice(8);
+            if (["server-configuration", "registration-token"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
+            this.dialogManager.open(name);
         } else if (event.command === "dialog-open") {
             this.dialogManager.open(value);
         } else if (event.command === "theme-set") {
@@ -3394,6 +3437,13 @@ class TVBundleApp extends TVProgram {
 
         const windowEl = this.dialogManager.windows.get(managerName);
         if (!windowEl?.isConnected) { return null; }
+        if (managerName === "dos:prompt") {
+            const view = windowEl._tvWindowView;
+            return {
+                scope: "tool", name: "dos-prompt", view,
+                isRunning: () => Boolean(view?.view.ci) && !view.paused && !view.busy,
+            };
+        }
         if (managerName.startsWith("help:")) {
             const bundle = windowEl._tvWindowView?.bundle || null;
             const identity = statisticsHelpIdentity(bundle?._catalogFile || managerName.slice(5), bundle);
@@ -3427,6 +3477,8 @@ class TVBundleApp extends TVProgram {
             });
         } else if (target.scope === "document") {
             recordStatisticsEvent({ event: "doc_open", document: target.name });
+        } else if (target.scope === "tool") {
+            recordStatisticsEvent({ event: "tool_open", name: target.name });
         } else {
             recordStatisticsEvent({ event: "dialog_open", name: statisticsDialogName(managerName) });
             if (target.scope === "game") {
@@ -3457,6 +3509,7 @@ class TVBundleApp extends TVProgram {
     }
 
     _syncStatisticsLifecycle() {
+        if (this._statisticsFinished) { return; }
         const targets = new Map();
         this.dialogManager.dialogs.forEach((_dialog, managerName) => {
             const target = this._statisticsTarget(managerName);
@@ -3472,7 +3525,7 @@ class TVBundleApp extends TVProgram {
             ? this.dialogManager.activeTarget
             : "";
         this.statisticsTargets.forEach((session, managerName) => {
-            if (managerName !== activeName || !targets.has(managerName)) {
+            if (managerName !== activeName || !targets.has(managerName) || session.isRunning?.() === false) {
                 this._pauseStatisticsTarget(session, now);
             }
             if (!targets.has(managerName)) {
@@ -3485,12 +3538,14 @@ class TVBundleApp extends TVProgram {
             }
         });
         const active = this.statisticsTargets.get(activeName);
-        if (active && active.activeStartedAt === null) {
+        if (active && active.activeStartedAt === null && active.isRunning?.() !== false) {
             active.activeStartedAt = now;
         }
     }
 
     _finishStatisticsTargets() {
+        if (this._statisticsFinished) { return; }
+        this._statisticsFinished = true;
         this.midiDialog?.finishPlaybackStats(true);
         const now = performance.now();
         Array.from(this.statisticsTargets.keys()).forEach((managerName) => {
@@ -3511,16 +3566,17 @@ class TVBundleApp extends TVProgram {
         this.dialogManager = this.desktopView.dialogManager;
         this._bindLocalLinks();
         this.dialogManager.onChange = () => {
+            this.dosWindow?.setActive(this.dialogManager.activeTarget === "dos:prompt");
             this._syncStatisticsLifecycle();
             const activeBundle = this.windowManager
                 ? this.windowManager.syncActiveTarget(this.dialogManager.activeTarget)
                 : null;
             if (activeBundle) {
                 this._updateSearchData(activeBundle);
-                this._syncBundleMenu();
             } else if (this.searchDialog && !this.windowManager?.openWindows.size) {
                 this.searchDialog.searchData = { topics: [] };
             }
+            this._syncBundleMenu();
             this._updateWindowMenuState();
             this._updateStatusLine();
             this._scheduleUrlStateSync();
@@ -3540,6 +3596,19 @@ class TVBundleApp extends TVProgram {
         const loginDialog = this._registerDialog("login", () => new TVLoginDialog());
         const registrationDialog = this._registerDialog("registration", () => new TVRegistrationDialog());
         this._registerDialog("registration-token", () => new TVRegistrationTokenDialog());
+        this.serverConfigDialog = this._registerDialog("server-configuration", () => new TVServerConfigurationDialog());
+        this.serverConfigDialog.onBeforeRebuild = async (resource) => {
+            if (resource === "dos" && this.dosWindow) {
+                await this._closeDosPrompt();
+                if (this.dosWindow) { throw new Error("Cannot rebuild until the current DOS overlay is saved and closed."); }
+            } else if (resource === "midi") {
+                this.midiDialog?.stopPlayback();
+                if (this.midiDialog) { this.midiDialog.pendingPlay = null; }
+            }
+        };
+        this.serverConfigDialog.onRebuildStarted = (resource) => {
+            if (resource === "midi") { void this.midiDialog?.refreshCatalog(); }
+        };
         loginDialog.onRegister = () => this.dialogManager.open("registration");
         loginDialog.onSessionChange = (session) => this._setAuthSession(session);
         registrationDialog.onSessionChange = (session) => loginDialog.updateSession(session);
@@ -3582,7 +3651,13 @@ class TVBundleApp extends TVProgram {
         recordVisitStatistics();
         bindVisitLifecycleStatistics();
         document.addEventListener("visibilitychange", () => this._syncStatisticsLifecycle());
-        window.addEventListener("pagehide", () => this._finishStatisticsTargets(), { once: true });
+        window.addEventListener("pagehide", () => this._finishStatisticsTargets());
+        window.addEventListener("pageshow", (event) => {
+            if (event.persisted) {
+                this._statisticsFinished = false;
+                this._syncStatisticsLifecycle();
+            }
+        });
         const startupParams = new URLSearchParams(window.location.search);
         if (startupParams.get("server_error")) {
             const path = startupParams.get("server_path") || window.location.pathname;
@@ -3591,7 +3666,7 @@ class TVBundleApp extends TVProgram {
 
         // Show a usable File/Open command immediately, then replace the menus
         // with their complete catalog-backed contents when loading finishes.
-        this.menuState = buildBundleMenuBar([], null, this.isAdmin);
+        this.menuState = buildBundleMenuBar([], null, this.authSession);
         fillBorders();
         this._bindMenus();
         void this._refreshAuthSession();
@@ -3814,6 +3889,13 @@ class TVBundleApp extends TVProgram {
             addWindow("doc:" + file, item);
         });
 
+        if (this.dosWindow?.root?.isConnected) {
+            addWindow("dos:prompt", {
+                t: "dos", g: captureWindowGeometry(this.dosWindow.root),
+                p: this.dosWindow.paused,
+            });
+        }
+
         this.dialogManager.dialogs.forEach((dialog, name) => {
             if (name === "welcome" || !dialog || !dialog.isOpen()) { return; }
             const item = {
@@ -3887,6 +3969,14 @@ class TVBundleApp extends TVProgram {
                     this._applyUrlWindowState(windowEl, item, false);
                     targets.push("doc:" + entry.file);
                     restored = true;
+                } else if (item.t === "dos") {
+                    const view = await this._openDosPrompt();
+                    if (!view) { continue; }
+                    this._applyUrlWindowState(view.root, item, false);
+                    view.paused = item.p === true;
+                    view.syncPause(); view.onChange?.();
+                    targets.push("dos:prompt");
+                    restored = true;
                 } else if (item.t === "dlg" && item.name) {
                     const dialog = this.dialogManager.open(item.name);
                     if (!dialog) { continue; }
@@ -3958,6 +4048,7 @@ class TVBundleApp extends TVProgram {
         }
         this.dialogManager.applyAllZIndices();
         this.dialogManager.applyActiveStates();
+        this.dialogManager.onChange?.();
         const bundle = this.windowManager.syncActiveTarget(this.dialogManager.activeTarget);
         if (bundle) { this._updateSearchData(bundle); }
         this._updateStatusLine();
@@ -4150,6 +4241,10 @@ class TVBundleApp extends TVProgram {
                 element: el,
             });
         });
+        if (this.dosWindow?.root?.isConnected) {
+            items.push({ label: this.dosWindow.getTitle(), type: "window",
+                key: "dos:prompt", managerName: "dos:prompt", element: this.dosWindow.root });
+        }
         if (this.dialogManager) {
             this.dialogManager.dialogs.forEach((dialog, name) => {
                 if (dialog && dialog.isOpen()) {
@@ -4262,7 +4357,7 @@ class TVBundleApp extends TVProgram {
                 this.fileOpenDialog?.setDirectory(directory);
             });
         }
-        this.menuState = buildBundleMenuBar(catalogData, null, this.isAdmin);
+        this.menuState = buildBundleMenuBar(catalogData, null, this.authSession, this.dosWindow);
         fillBorders();
         this._bindMenus();
         this._showWelcome();
@@ -4276,12 +4371,12 @@ class TVBundleApp extends TVProgram {
         if (!Array.isArray(catalogData)) { return; }
         const currentBundle = this.windowManager ? this.windowManager.currentBundle : null;
         const hasContentsMenu = !!(currentBundle && Array.isArray(currentBundle.contents) && currentBundle.contents.length);
-        const nextKey = hasContentsMenu ? bundleWindowKey(currentBundle) : "";
+        const nextKey = (hasContentsMenu ? bundleWindowKey(currentBundle) : "") + (this.dosWindow?.active ? ":dos" : "");
         if (nextKey === this._menuBundleKey) {
             return;
         }
         this._menuBundleKey = nextKey;
-        this.menuState = buildBundleMenuBar(catalogData, hasContentsMenu ? currentBundle : null, this.isAdmin);
+        this.menuState = buildBundleMenuBar(catalogData, hasContentsMenu ? currentBundle : null, this.authSession, this.dosWindow);
         fillBorders();
         this._bindMenus();
     }
@@ -4294,11 +4389,18 @@ class TVBundleApp extends TVProgram {
     }
 
     _setAuthSession(session) {
+        if (this.dosWindow?.session && this.dosWindow.session.account !== (session?.user?.username || "")) {
+            void this._closeDosPrompt(false);
+        }
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
-        if (nextAdmin === this.isAdmin) { return; }
+        if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); }
+        const nextSession = session?.authenticated && session.user ? session : null;
+        if (JSON.stringify(nextSession) === JSON.stringify(this.authSession)) { return; }
+        this.authSession = nextSession;
         this.isAdmin = nextAdmin;
+        this._menuBundleKey = null;
         const currentBundle = this.windowManager?.currentBundle || null;
-        this.menuState = buildBundleMenuBar(catalogData || [], currentBundle, this.isAdmin);
+        this.menuState = buildBundleMenuBar(catalogData || [], currentBundle, this.authSession, this.dosWindow);
         fillBorders();
         this._bindMenus();
     }
@@ -4445,6 +4547,53 @@ class TVBundleApp extends TVProgram {
         return windowEl;
     }
 
+    async _openDosPrompt() {
+        if (!TVDosWindow) { return; }
+        if (this.dosWindow) { this.dialogManager.activateWindow("dos:prompt"); this.dosWindow.view.canvas?.focus(); return this.dosWindow; }
+        this.dialogManager.get("welcome")?.destroy();
+        const windowView = new TVDosWindow();
+        this.dosWindow = windowView;
+        this.desktopView.insert(windowView);
+        const root = TVView._fromHTML(windowView.draw());
+        this.desktop.appendChild(root); windowView.resolve(root);
+        windowView.onError = (error) => { void this._showError("DOS Prompt", error.message || String(error)); };
+        windowView.onClose = () => { void this._closeDosPrompt(); };
+        windowView.onChange = () => {
+            this._menuBundleKey = null; this._syncBundleMenu();
+            this._syncStatisticsLifecycle(); this._scheduleUrlStateSync();
+        };
+        windowView.onMenu = () => {
+            const view = this.menuState?.view;
+            const item = view?.menu.entries().find((entry) => entry.name === "D~O~S Prompt");
+            if (item) { view.openMenu(view.rootByItem.get(item)); }
+        };
+        root._tvWindowView = windowView;
+        bindCloseButtons(root);
+        windowView.resizer = new TurboVisionWindowResizer(root, "dos:prompt");
+        this.dialogManager.registerWindow("dos:prompt", root, {
+            [TV_COMMANDS.CLOSE]: () => this._closeDosPrompt(),
+            [TV_COMMANDS.ZOOM]: () => windowView.zoom(),
+        });
+        fillBorders();
+        await windowView.boot();
+        return windowView;
+    }
+
+    async _closeDosPrompt(save = true) {
+        const windowView = this.dosWindow;
+        if (!windowView || windowView.closing) { return; }
+        windowView.closing = true;
+        try {
+            await windowView.stop(save);
+            windowView.view.destroy(); windowView.resizer?.destroy();
+            this.desktopView.remove(windowView); windowView.root?.remove();
+            this.dosWindow = null;
+            this.dialogManager.unregisterWindow("dos:prompt");
+            this._menuBundleKey = null; this._syncBundleMenu(); fillBorders();
+        } catch (error) { windowView.onError?.(error); }
+        finally { windowView.closing = false; }
+    }
+
     async _openBundleFile(filename, label = "") {
         const cached = bundleCache.has(filename);
         let loadingDialog = null;
@@ -4559,6 +4708,7 @@ class TVBundleApp extends TVProgram {
     }
 
     _showWelcome() {
+        if (this.dosWindow) { return; }
         const {
             TVRect,
             TVStaticText,
