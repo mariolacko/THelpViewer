@@ -429,7 +429,7 @@ const TV_HELP_CONTEXTS = Object.freeze({
     hcRegistrationTokens: 2300,
     hcServerConfiguration: 2310,
     hcDosPrompt: 2320,
-    hcServerTerminal: 2330,
+    hcUsers: 2350,
     hcGridDemo: 2340,
 });
 const {
@@ -1875,6 +1875,37 @@ class TVLabel extends TVStaticText {
     }
 }
 
+// Turbo Vision's TFilterValidator rejects input containing disallowed characters.
+class TVFilterValidator {
+    constructor(validChars) { this.validChars = String(validChars); }
+
+    isValidInput(value, _suppressFill = false) { return this.isValid(value); }
+
+    isValid(value) {
+        return Array.from(String(value ?? "")).every(character => this.validChars.includes(character));
+    }
+}
+
+// Browser-era email validation uses the same input/complete-field contract.
+class TVEmailValidator {
+    constructor(allowEmpty = false, allowUsername = false) {
+        this.allowEmpty = Boolean(allowEmpty);
+        this.allowUsername = Boolean(allowUsername);
+    }
+
+    isValidInput(value, _suppressFill = false) {
+        const text = String(value ?? "");
+        return text.length <= 254 && !/[\s\x00-\x1f\x7f]/.test(text) && (text.match(/@/g) || []).length <= 1;
+    }
+
+    isValid(value) {
+        const text = String(value ?? "");
+        return (this.allowEmpty && text === "")
+            || (this.allowUsername && /^[\p{L}\p{N}_.-]{1,64}$/u.test(text))
+            || (text.length <= 254 && /^[^@\s\x00-\x1f\x7f]+@[^@\s\x00-\x1f\x7f]+\.[^@\s\x00-\x1f\x7f]+$/.test(text));
+    }
+}
+
 // Fixed picture subset of Turbo Vision's TPXPictureValidator: ! uppercases
 // one character and literal separators can be filled while typing.
 class TVPXPictureValidator {
@@ -1915,6 +1946,7 @@ class TVInputLine extends TVView {
         }
         super(bounds);
         this.maxLen = Math.max(1, Number(maxLen) || 255);
+        this.eventMask |= evBroadcast;
         this.data = "";
         this.disabled = false;
         this.secret = false;
@@ -1922,7 +1954,7 @@ class TVInputLine extends TVView {
     }
 
     setData(value) {
-        this.data = (this.validator?.format(value) ?? String(value ?? "")).slice(0, this.maxLen);
+        this.data = (this.validator?.format?.(value) ?? String(value ?? "")).slice(0, this.maxLen);
         if (this.root) { this.root.value = this.data; }
         return this;
     }
@@ -1944,7 +1976,11 @@ class TVInputLine extends TVView {
     handleEvent(event) {
         if (event.what !== evBroadcast || event.infoPtr !== this
             || event.nativeEvent?.type !== "input" || !this.validator) { return; }
-        const formatted = this.validator.format(this.root.value);
+        const formatted = this.validator.format?.(this.root.value) ?? this.root.value;
+        if (this.validator.isValidInput && !this.validator.isValidInput(formatted, false)) {
+            this.root.value = this.data;
+            return;
+        }
         if (formatted !== this.root.value) { this.root.value = formatted; }
         this.data = this.root.value;
     }
@@ -4297,6 +4333,10 @@ function fitMenuPopupToViewport(root, popup) {
             nextTop = minTop;
         }
         popup.style.top = `${Math.round(nextTop)}px`;
+        // Menu-bar popup coordinates are relative to the owning item.
+        const maxLeft = Math.max(0, window.innerWidth - popupRect.width);
+        const nextLeft = Math.max(0, Math.min(rootRect.left, maxLeft));
+        popup.style.left = `${Math.round(nextLeft - rootRect.left)}px`;
     }
     syncMenuPopupScrollbar(popup);
     window.requestAnimationFrame(() => {
@@ -4694,7 +4734,7 @@ class TVButton extends TVView {
         const labelMarkup = parts.labelMarkup;
         if (parts.dialog) {
             const buttonClass = [parts.baseClass, classNames].filter(Boolean).join(" ");
-            const shadow = " " + "\u2580".repeat(20);
+            const shadow = " " + "\u2580".repeat(Math.max(0, Math.ceil(this.bounds.width) - 1));
             return `
                 <button class="${buttonClass}"${styleAttr} ${attrString}>
                     <span class="tv-dialog-button-face">
@@ -6607,6 +6647,8 @@ Object.assign(TV, {
     TVBarGauge,
     TVLabel,
     TVPXPictureValidator,
+    TVFilterValidator,
+    TVEmailValidator,
     TVInputLine,
     TVListViewer,
     TVGroup,

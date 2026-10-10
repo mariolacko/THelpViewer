@@ -58,7 +58,7 @@ const {
     hcRegistrationTokens,
     hcServerConfiguration,
     hcDosPrompt,
-    hcServerTerminal,
+    hcUsers,
     hcGridDemo,
 } = TV_HELP_CONTEXTS;
 
@@ -99,16 +99,16 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcTron]: { title: "Tron Light Cycles", text: "Steer both cycles simultaneously and avoid every trail. The timer pauses while the game window is inactive." },
     [hcStatistics]: { title: "Server Statistics", text: "Browses aggregate visits, active viewing intervals for HELP files, documents, dialogs and games, search and link outcomes, environment and coarse performance intervals. Target time pauses when another window or browser tab becomes active. No search text, exact timing, IP address, cookie, visitor ID, full referrer or raw user agent is stored." },
     [hcSystemInformation]: { title: "System Information", text: "Shows local application, browser, display, locale, storage and capability information plus server status and catalog counts. Opening it does not submit these details to statistics." },
-    [hcAccount]: { title: "Account / Login", text: "Use the right-aligned Login menu; after sign-in it shows your name, Account, Configuration and Sign Out. Production uses Passkeys; explicit local Docker mode auto-signs in as a separate Local Administrator. Colors is available to regular users." },
-    [hcRegistration]: { title: "Registration", text: "Enter name, email and a single-use one-hour token, then approve Passkey creation. On success, a MessageBox confirms registration and OK closes both dialogs. The first-admin token is printed in the server log." },
+    [hcAccount]: { title: "Account and Login", text: "Login accepts a validated email or legacy username and signs in with a Passkey. Account edits first/last name, nickname and validated email; nickname or name labels the menu. Role is read-only; private C usage/capacity is shown. Save updates the menu; Cancel does not save. Username, Passkeys and DOS files remain unchanged. Admins can manage Users and rebuild DOS/MIDI; Colors is available to regular users." },
+    [hcRegistration]: { title: "Registration", text: "Enter first/last name, nickname, validated email and a single-use one-hour token, then approve your own Passkey creation. Administrator-created accounts retain their prepared profile and use a bound invitation. On success a MessageBox confirms registration; OK closes Register and Login. The first-admin token is printed in the server log." },
     [hcRegistrationTokens]: { title: "Registration Token", text: "Administrators generate one-hour tokens, select them from the valid-token list and confirm Delete to revoke them. Cancel, Escape or closing the confirmation keeps a token valid." },
-    [hcServerConfiguration]: { title: "Server Configuration and Rebuild", text: "Set the private DOS overlay quota (default 128 MiB). Local admins may rebuild DOS C or MIDI with confirmation/progress. DOS preserves private overlays and archive cache; MIDI restarts its downloader and recreates tracks/covers/catalog. Old data moves to var/backups for recovery; Hide does not cancel the server job." },
+    [hcServerConfiguration]: { title: "Server Configuration and Rebuild", text: "View runtime configuration and set the default private DOS overlay quota (default 64 MiB). Signed-in admins may rebuild DOS C or MIDI with confirmation/progress. DOS preserves private overlays and archive cache; MIDI restarts its downloader and recreates tracks/covers/catalog. Old data moves to var/backups for recovery; Hide does not cancel the server job." },
     [hcDosPrompt]: { title: "DOS Prompt", text: "Run text/graphics DOS programs in a shared TVWindow using Worker DOSBox. C files load on demand; signed-in users save private overlays. Alt-Enter is native fullscreen, Alt-Pause pauses, Ctrl-Alt-R confirms restart and Ctrl-Alt-M opens the DOS menu. Zoom 2x enlarges the window. Host mounts are blocked. F1 goes to DOS; request this help from its menu." },
-    [hcServerTerminal]: { title: "Server Terminal", text: "Connect to a configured server job using its ID and private key. Output appears in the terminal; input is accepted only while the job runs. This is not DOSBox or an arbitrary remote shell." },
+    [hcUsers]: { title: "Users and Add User", text: "Administrators manage profiles, validated emails, roles, enabled accounts and DOS capacity. Four buttons form a 2x2 block beside the extended list. Add User shares the registration-profile form: Create makes a member and a copyable one-hour, account-bound invitation without changing the admin session. The user opens Login > Register in their own browser to enroll a Passkey. Blank capacity inherits 64 MiB. Founding/last administrators remain protected; no Passkeys or DOS files are deleted." },
     [hcGridDemo]: { title: "Grid Viewer", text: "TVGridView displays rows and columns with optional headers and shared horizontal/vertical scrollbars. Arrow keys select cells; Hide headers toggles titles." },
 });
 
-const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20261009f";
+const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20261010i";
 let contextHelpBundlePromise = null;
 
 function loadContextHelpBundle() {

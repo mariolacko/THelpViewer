@@ -693,7 +693,7 @@ async function run() {
         || calculatorView.hint !== 'Use number and operation buttons or the keyboard.') {
         throw new Error(`Calculator display/status palette is broken: ${JSON.stringify(calculatorView)}`);
     }
-    await evaluate(`document.querySelector('[data-tv-calc-close]')?.click()`);
+    await evaluate(`document.querySelector('.tv-calc-window [data-tv-command="dialog-close"]').click()`);
     await evaluate(`__tvMenuItem('dialog-open', 'Ascii Table')?.click()`);
     await pause();
     const asciiGeometry = await evaluate(`(() => {
@@ -743,7 +743,25 @@ async function run() {
         throw new Error(`Global Find should be available while local Find Again remains disabled: ${JSON.stringify(initialFindState)}`);
     }
     await evaluate(`__tvMenuItem('find', 'Find').click()`);
-    await pause();
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const scope = document.querySelector('.tv-find-window .tv-radio-item input[value="global"]');
+            if (scope && !scope.disabled) { resolve(true); return; }
+            if (Date.now() >= deadline) {
+                fetch('/api/search/status').then((response) => response.json()).then((status) =>
+                    reject(new Error('global Find availability was not checked: ' + JSON.stringify({ status,
+                        dialog: (() => { const view = document.querySelector('.tv-find-window')?.closest('.tv-dialog-overlay')?._tvView;
+                            return { available: view?.globalAvailable, checked: view?.availabilityChecked,
+                                handler: Boolean(view?.globalFindHandler), serial: view?.availabilitySerial,
+                                status: view?.statusView?.text, html: scope?.outerHTML }; })(),
+                    }))));
+                return;
+            }
+            setTimeout(check, 25);
+        };
+        check();
+    })`, true);
     const globalFindRoute = await evaluate(`(() => {
         const find = document.querySelector('.tv-find-window');
         const scope = find?.querySelector('.tv-radio-item input[value="global"]');
@@ -1303,7 +1321,9 @@ async function run() {
     }
     for (const command of ["next", "previous"]) {
         if (!state.byCommand[command].disabled || state.byCommand[command].ariaDisabled !== "true") {
-            throw new Error(`${command} should be disabled while one document is the only target`);
+            throw new Error(`${command} should be disabled while one document is the only target: `
+                + JSON.stringify(await evaluate(`Array.from(document.querySelectorAll('.tv-dialog-overlay'))
+                    .filter((root) => !root.hidden).map((root) => root._tvView?.title)`)));
         }
     }
     for (const command of ["tile", "cascade", "list", "zoom", "close"]) {
@@ -1580,7 +1600,7 @@ async function run() {
     ) {
         throw new Error(`Inactive Colors state differs from Turbo Vision 2.0: ${JSON.stringify(passiveColors)}`);
     }
-    await evaluate(`document.querySelector('[data-tv-about-close]').click()`);
+    await evaluate(`document.querySelector('.tv-about-window [data-tv-command="about-ok"]').click()`);
     await pause();
     await evaluate(`document.querySelector('[data-tv-colors-foreground] [aria-pressed="true"]').focus()`);
     const foregroundBefore = await evaluate(
@@ -1930,73 +1950,6 @@ async function run() {
     await evaluate(`document.querySelector('.tv-grid-demo-window [data-tv-command="grid-headers"]')?.click()`);
     const gridHeaderHidden = await evaluate(`getComputedStyle(document.querySelector('.tv-grid-demo-window .tv-grid-header')).display`);
     if (gridHeaderHidden !== 'none') { throw new Error('TVGridView header toggle failed'); }
-    await key('Escape', 'Escape', 0, true);
-
-    await evaluate(`__tvMenuItem('dialog-open', 'Server Terminal').click()`);
-    await pause();
-    const terminalWindow = await evaluate(`(() => {
-        const dialog = document.querySelector('.tv-server-terminal-window');
-        return {
-            open: Boolean(dialog && !dialog.closest('.tv-dialog-overlay').hidden),
-            keyType: dialog?.querySelector('input[type="password"]')?.type,
-            inputDisabled: dialog?.querySelector('input[maxlength="2048"]')?.disabled,
-            background: getComputedStyle(dialog?.querySelector('.tv-terminal')).backgroundColor,
-        };
-    })()`);
-    if (!terminalWindow.open || terminalWindow.keyType !== 'password'
-        || !terminalWindow.inputDisabled || terminalWindow.background !== 'rgb(0, 0, 0)') {
-        throw new Error(`Server Terminal is not safely idle: ${JSON.stringify(terminalWindow)}`);
-    }
-    await evaluate(`(() => {
-        window.__terminalOriginalFetch = window.fetch;
-        window.__terminalPolls = 0;
-        window.__terminalSent = [];
-        window.fetch = (url, options = {}) => {
-            if (!String(url).startsWith('/api/terminal/jobs/AbCdEfGhIjKl')) {
-                return window.__terminalOriginalFetch(url, options);
-            }
-            if (options.method === 'POST') {
-                window.__terminalSent.push(JSON.parse(options.body).text);
-                return Promise.resolve(new Response(null, { status: 204 }));
-            }
-            const first = window.__terminalPolls++ === 0;
-            return Promise.resolve(new Response(JSON.stringify(first
-                ? { label: 'Browser test', running: true, exit_code: null, output: 'Ready\\n', offset: 6 }
-                : { label: 'Browser test', running: false, exit_code: 0, output: 'Done\\n', offset: 11 }),
-                { status: 200, headers: { 'Content-Type': 'application/json' } }));
-        };
-        const dialog = document.querySelector('.tv-server-terminal-window');
-        dialog.querySelector('input[maxlength="12"]').value = 'AbCdEfGhIjKl';
-        dialog.querySelector('input[type="password"]').value = 'secret-key';
-        dialog.querySelector('[data-tv-command="terminal-connect"]').click();
-    })()`);
-    await pause();
-    const terminalActive = await evaluate(`(() => {
-        const dialog = document.querySelector('.tv-server-terminal-window');
-        const input = dialog.querySelector('input[maxlength="2048"]');
-        const output = dialog.querySelector('.tv-terminal').textContent;
-        input.value = 'hello';
-        dialog.querySelector('[data-tv-command="terminal-send"]').click();
-        return { output, enabled: !input.disabled };
-    })()`);
-    if (!terminalActive.output.includes('Ready') || !terminalActive.enabled) {
-        throw new Error(`Server Terminal did not stream live output: ${JSON.stringify(terminalActive)}`);
-    }
-    await evaluate(`new Promise(resolve => setTimeout(resolve, 450))`, true);
-    const terminalFinished = await evaluate(`(() => {
-        const dialog = document.querySelector('.tv-server-terminal-window');
-        const result = {
-            output: dialog.querySelector('.tv-terminal').textContent,
-            disabled: dialog.querySelector('input[maxlength="2048"]').disabled,
-            sent: window.__terminalSent,
-        };
-        window.fetch = window.__terminalOriginalFetch;
-        return result;
-    })()`);
-    if (!terminalFinished.output.includes('Done') || !terminalFinished.disabled
-        || terminalFinished.sent.join() !== 'hello') {
-        throw new Error(`Server Terminal did not lock after completion: ${JSON.stringify(terminalFinished)}`);
-    }
     await key('Escape', 'Escape', 0, true);
 
     await evaluate(`__tvMenuItem('dialog-open', 'Change dir...').click()`);
@@ -2945,7 +2898,14 @@ async function run() {
             && pausedStatsTime >= 89_000 && pausedStatsTime < 91_000;
         const soundFont = await player.synth.constructor.loadAssets();
         const soundFontLoaded = soundFont.byteLength > 1000000 && Boolean(window.JSSynth?.Synthesizer);
-        const demoSequence = await player.loadTrack({ file: '/assets/midi/modern-neon-grid.mid' });
+        // A self-contained 32-second SMF fixture: no production demo library/network dependency.
+        const demoFile = 'data:audio/midi;base64,' + btoa(String.fromCharCode(...[
+            77,84,104,100,0,0,0,6,0,0,0,1,0,96,
+            77,84,114,107,0,0,0,23,
+            0,255,81,3,7,161,32,0,192,0,0,144,60,100,
+            176,0,128,60,0,0,255,47,0,
+        ]));
+        const demoSequence = await player.loadTrack({ file: demoFile });
         const audioStarted = await player.synth.play(demoSequence,
             (elapsed, duration) => player.updateProgress(elapsed, duration), () => {});
         const loadTiming = player.synth.loadingTimes;
@@ -2965,7 +2925,7 @@ async function run() {
         const soundFontSeeked = player.synth.synth.getPlayerCurrentTick() >= player.synth.totalTicks * 0.45;
         const demoTrack = { id: 'demo', item_id: 'demo', source_id: 'local',
             title: 'Neon Grid', game: 'THelpViewer', credit: 'Original demo', sequencer: '',
-            available: true, file: '/assets/midi/modern-neon-grid.mid', cover: '' };
+            available: true, file: demoFile, cover: '' };
         player.allTracks = [demoTrack];
         player.applyFilter();
         player.activeTrackFile = demoTrack.file;
@@ -3066,7 +3026,7 @@ async function run() {
         rows[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
         const arrowOnlySelects = player.selectedIndex === 0
             && clickedTrackId === '2222222222222222';
-        player.activeTrackFile = '/assets/midi/modern-neon-grid.mid';
+        player.activeTrackFile = demoFile;
         player.isPlaying = true;
         rows[0].click();
         player.playTrack = originalPlayTrack;
@@ -4214,6 +4174,66 @@ async function run() {
         return window.__crawlSamePage && help.isConnected && help._tvWindowView.currentTopic === target;
     })()`, true);
     if (!topicAnchorNavigation) { throw new Error('Real topic anchor did not navigate through TVEvent'); }
+    await send('Page.navigate', {
+        url: appUrl + '?topic=378&file=Norton+Guides/vista.json.gz&line=1#kept-bookmark',
+    });
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            if (document.querySelector('[data-tv-bundle-window]')
+                && window.location.search === '?file=Norton+Guides%2Fvista.json.gz&topic=378&line=1'
+                && window.location.hash === '#kept-bookmark') { resolve(true); return; }
+            if (Date.now() > deadline) { reject(new Error('Canonical redirect lost TVision topic, line or bookmark')); return; }
+            setTimeout(check, 30);
+        };
+        check();
+    })`, true);
+    for (const [file, topic] of [
+        ['Borland Turbo C 1.x current/tchelp.json.gz', '3'],
+        ['Borland Turbo C 1.x current/tchelp.json.gz', '591'],
+        ['Microsoft MS-DOS 6.22/help.json.gz', '29'],
+        ['Borland Turbo C++ 1.00/tchelp.json.gz', '719'],
+    ]) {
+        await send('Page.navigate', { url: appUrl + '?' + new URLSearchParams({ file, topic }) });
+        await evaluate(`new Promise((resolve, reject) => {
+            const deadline = Date.now() + 10000;
+            const check = () => {
+                const view = document.querySelector('[data-tv-bundle-window]')?._tvWindowView;
+                if (view?.bundle?._catalogFile === ${JSON.stringify(file)}
+                    && view.currentTopic === ${JSON.stringify(topic)}
+                    && !document.getElementById('tv-public-fallback')) {
+                    const error = document.querySelector('.tv-msgbox-window');
+                    if (error && !error.closest('.tv-dialog-overlay').hidden) {
+                        reject(new Error('A valid diagnostic HELP topic displayed a website error')); return;
+                    }
+                    if (!document.querySelector('meta[name="description"]')?.content
+                        .startsWith('Reference documentation from ')) {
+                        reject(new Error('Rendered topic lost its reference-documentation metadata')); return;
+                    }
+                    resolve(true); return;
+                }
+                if (Date.now() > deadline) { reject(new Error('Diagnostic HELP topic did not render')); return; }
+                setTimeout(check, 30);
+            };
+            check();
+        })`, true);
+    }
+    const errorResponse = await fetch(appUrl + 'seo-missing-page', { headers: { Accept: 'text/html' } });
+    if (errorResponse.status !== 404 || errorResponse.headers.get('x-robots-tag') !== 'noindex') {
+        throw new Error('Missing page still returns an indexable success response');
+    }
+    await send('Page.navigate', { url: appUrl + 'seo-missing-page' });
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const box = document.querySelector('.tv-msgbox-window');
+            if (box && !box.closest('.tv-dialog-overlay').hidden
+                && box.textContent.includes('/seo-missing-page')) { resolve(true); return; }
+            if (Date.now() > deadline) { reject(new Error('Real HTTP 404 stopped the TVision error MessageBox')); return; }
+            setTimeout(check, 30);
+        };
+        check();
+    })`, true);
     socket.close();
 }
 

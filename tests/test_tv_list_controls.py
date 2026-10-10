@@ -516,6 +516,67 @@ if (input.valid()) { throw new Error('Legacy token format was accepted'); }
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for the filter validator test")
+def test_filter_validator_rejects_text_and_preserves_optional_numeric_input():
+    script = r"""
+const fs = require('node:fs');
+const source = fs.readFileSync(process.argv[1], 'utf8');
+global.TVRect = class {};
+global.TVView = class { constructor() { this.root = null; } };
+global.evBroadcast = 0x0200;
+const start = source.indexOf('class TVFilterValidator');
+const end = source.indexOf('\nclass TVGroup extends', start);
+eval(source.slice(start, end)
+    + '\nglobalThis.Filter = TVFilterValidator; globalThis.Input = TVInputLine; globalThis.Email = TVEmailValidator;');
+const email = new Email();
+const login = new Email(false, true);
+for (const value of ['admin', 'local-development-admin', 'mario.lacko', 'mário', 'user@example.test']) {
+    if (!login.isValid(value)) { throw new Error('Login validator rejects an existing identity'); }
+}
+for (const value of ['bad@example', 'a@@b.test', 'bad user', 'a'.repeat(65), '']) {
+    if (login.isValid(value)) { throw new Error('Login validator accepts an invalid identity'); }
+}
+for (const value of ['reader@example.test', 'a+b@sub.example.test', 'jan.novak@example.sk']) {
+    if (!email.isValid(value) || !email.isValidInput(value)) { throw new Error('Valid email rejected'); }
+}
+for (const value of ['', 'reader', 'reader@', 'reader@example', 'a@@b.test', 'a @b.test', 'a@b.test\n', 'a\x00@b.test', 'a@b\x7f.test', 'a'.repeat(255) + '@b.test']) {
+    if (email.isValid(value)) { throw new Error('Invalid email accepted'); }
+}
+for (const value of ['', 'a', 'a@', 'a@b', 'a@b.']) {
+    if (!email.isValidInput(value)) { throw new Error('Cannot type incomplete email'); }
+}
+if (!new Email(true).isValid('') || email.isValidInput('a@@b.test') || email.isValidInput('a @b.test')) {
+    throw new Error('Optional email or invalid edit validation failed');
+}
+const validator = new Filter('0123456789');
+for (const value of ['', '0', '64', '256', '999']) {
+    if (!validator.isValid(value) || !validator.isValidInput(value, false)) {
+        throw new Error('Numeric filter rejected digits or empty input: ' + value);
+    }
+}
+for (const value of ['text', '1e2', '-1', '1.5', '64 MB', '１２']) {
+    if (validator.isValid(value) || validator.isValidInput(value, false)) {
+        throw new Error('Numeric filter accepts text: ' + value);
+    }
+}
+const input = new Input(new TVRect(), 3).setValidator(validator);
+if (!(input.eventMask & evBroadcast)) { throw new Error('Input ignores validation broadcasts'); }
+input.setData('64');
+input.root = { value: '64a' };
+const event = { what: evBroadcast, infoPtr: input, nativeEvent: { type: 'input' } };
+input.handleEvent(event);
+if (input.getData() !== '64') { throw new Error('Invalid edit was not rejected'); }
+input.root.value = '256'; input.handleEvent(event);
+if (input.data !== '256') { throw new Error('Valid edit was rejected'); }
+input.root.value = ''; input.handleEvent(event);
+if (input.data !== '' || !input.valid()) { throw new Error('Cannot clear inherited capacity'); }
+input.root = null; input.setData('1234');
+if (input.getData() !== '123') { throw new Error('Input maximum length changed'); }
+"""
+    result = subprocess.run([NODE, "-e", script, str(CORE_PATHS[0])], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the choice control test")
 def test_choice_groups_render_native_controls_and_messagebox_mnemonics():
     script = r"""

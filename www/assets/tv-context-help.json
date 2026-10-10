@@ -46,7 +46,6 @@
         {"label": "Server Statistics", "topic_id": 2260},
         {"label": "System Information", "topic_id": 2270},
         {"label": "DOS Prompt", "topic_id": 2320},
-        {"label": "Server Terminal", "topic_id": 2330},
         {"label": "Grid Viewer", "topic_id": 2340}
       ]
     },
@@ -56,6 +55,7 @@
       "children": [
         {"label": "Registration", "topic_id": 2290},
         {"label": "Registration Token", "topic_id": 2300},
+        {"label": "Users", "topic_id": 2350},
         {"label": "Server Configuration and Rebuild", "topic_id": 2310},
         {"label": "Colors", "topic_id": 2040}
       ]
@@ -139,7 +139,6 @@
       {"label": "Search", "topic_id": 1400},
       {"label": "Server Configuration", "topic_id": 2310},
       {"label": "Server Statistics", "topic_id": 2260},
-      {"label": "Server Terminal", "topic_id": 2330},
       {"label": "Snake", "topic_id": 2230},
       {"label": "Sokoban", "topic_id": 2180},
       {"label": "System Information", "topic_id": 2270},
@@ -150,6 +149,9 @@
       {"label": "THelpViewer", "topic_id": 1000},
       {"label": "Tower of Hanoi", "topic_id": 2240},
       {"label": "Tron Light Cycles", "topic_id": 2250}
+    ]},
+    {"group": "U", "entries": [
+      {"label": "Users", "topic_id": 2350}
     ]},
     {"group": "W", "entries": [
       {"label": "Widget Gallery", "topic_id": 2050},
@@ -242,6 +244,9 @@
         "line below the list shows the original HELP's long title.",
         "The server builds a persistent index when sources change. Its",
         "progress dialog can be hidden without stopping indexing.",
+        "Completed data stays available during updates. Unreadable files are",
+        "reported as skipped; other files remain searchable. Fix the source",
+        "and the server retries it after its content or permissions change.",
         "",
         "See also: [link:topic=2030]Find dialog[/link]"
       ]
@@ -562,20 +567,28 @@
     },
     "2280": {
       "id": 2280,
-      "title": "Account / Login",
+      "title": "Account and Login",
       "content": [
         "Login appears at the right of the menu bar. After sign-in it becomes",
         "your display name, with Account, Configuration and Sign Out.",
+        "Account edits first/last name, nickname and email.",
+        "The menu uses nickname, then first/last name; no Display name field.",
+        "If personal fields are blank, the existing account label is retained.",
+        "Email is validated before Save. Save updates the menu and closes",
+        "the dialog. Cancel/close does not save. Role is shown, not editable.",
+        "Private C shows saved overlay usage and capacity (excluding common games).",
+        "Username, Passkey, sessions and private DOS files remain unchanged.",
+        "The new email or original username works for login; email is unverified.",
         "Enter your email or legacy username, press Sign In and approve the",
         "Passkey prompt. HELP browsing/search do not require an account.",
         "Passkeys belong to a hostname: a production key cannot sign in on",
         "localhost. Use a browser supporting WebAuthn, such as Safari/Chrome.",
         "The explicit local Docker development mode signs in automatically",
-        "as Local Administrator without WebAuthn. It uses separate accounts",
+        "as Admin without WebAuthn. It uses separate accounts",
         "and sessions and must never be exposed publicly. Sign Out revokes",
         "the session; a reload/check signs in again while this mode is on.",
         "Colors is available to ordinary users. Server Configuration and",
-        "Registration Token require an administrator. Rebuild is local-only.",
+        "Registration Token and DOS/MIDI rebuild require an administrator.",
         "[link:topic=2290]Register[/link]  [link:topic=2040]Colors[/link]  [link:topic=2310]Configuration[/link]"
       ]
     },
@@ -583,13 +596,13 @@
       "id": 2290,
       "title": "Registration",
       "content": [
-        "Open Login > Register. Enter your name, email and registration token",
+        "Open Login > Register. Enter first/last name, nickname, email and token",
         "in XXXXX-XXXXX-XXXXX-XXXXX-XXXXX form, then approve Passkey creation.",
         "The token is single-use and expires after one hour. An administrator",
         "creates it; on a server with no accounts, the first-admin token is",
         "printed in the server/Docker startup log.",
         "After server confirmation, the success MessageBox appears. OK closes",
-        "both Registration and Account. Saving a Passkey alone is not proof",
+        "both Registration and Login. Saving a Passkey alone is not proof",
         "that server registration succeeded; read any displayed error.",
         "[link:topic=2300]Registration tokens[/link]  [link:topic=2280]Account[/link]"
       ]
@@ -612,11 +625,14 @@
       "id": 2310,
       "title": "Server Configuration and Rebuild",
       "content": [
+        "Server Configuration contains the default quota and runtime settings.",
+        "Host, paths and source files are read-only, configured on the server.",
+        "Users sets individual quotas and roles; blank uses the server default.",
         "An administrator sets the private DOS overlay capacity per user:",
-        "1-256 MiB, default 128 MiB. Shared C software is excluded. Lowering",
+        "1-256 MiB, default 64 MiB. Shared C software is excluded. Lowering",
         "the quota does not delete saved files; restart DOS to reload limits.",
-        "Only the local development administrator has Rebuild DOS C and",
-        "Rebuild MIDI under Account > Configuration. Both require confirmation.",
+        "Signed-in administrators have Rebuild DOS C and Rebuild MIDI",
+        "under the user Configuration menu. Both require confirmation.",
         "DOS rebuild replaces the shared base using dos-prompt.json. It keeps",
         "private overlays and cached source archives. The current browser's",
         "DOS window is saved/closed first. Restart DOS in any other open tabs.",
@@ -643,12 +659,12 @@
         "Root and package files recipes use path with text or Base64 bytes.",
         "AUTOEXEC.BAT is an ordinary entry in root files.",
         "Changed recipes need explicit installation or Rebuild DOS C. Source",
-        "downloads use public HTTPS with SHA-256 checks, without host lists.",
+        "downloads use public HTTPS; archive hashes/sizes are not in the manifest.",
         "Files are read on demand in compressed 64 KiB chunks. A signed-in",
         "user has a private overlay: changes/deletions never modify shared C.",
         "Save C to cloud, autosave, normal Close, Restart and EXIT save changes.",
         "Guests have temporary disks. Never rely on a forced browser close",
-        "to save your last changes. User overlays default to 128 MiB.",
+        "to save your last changes. User overlays default to 64 MiB.",
         "┌──────────────────┬────────────────────────────────────────────┐",
         "│ Shortcut         │ DOS Prompt action                          │",
         "├──────────────────┼────────────────────────────────────────────┤",
@@ -671,17 +687,32 @@
         "[link:topic=2280]Account[/link]  [link:topic=2310]Configuration/Rebuild[/link]"
       ]
     },
-    "2330": {
-      "id": 2330,
-      "title": "Server Terminal",
+    "2350": {
+      "id": 2350,
+      "title": "Users",
       "content": [
-        "This is a server-job output viewer, not DOSBox or a remote shell.",
-        "Enter the job ID and private key printed when the server starts a",
-        "configured job, then Connect. Output appears in the terminal view.",
-        "Input is accepted only while that job is running and expects it.",
-        "When the process ends, Send is disabled. Keep the job key private.",
-        "Account sign-in does not yet replace this separate ID/key mechanism.",
-        "[link:topic=2320]DOS Prompt[/link]"
+        "Administrators open Users from the user menu or Server Configuration.",
+        "Edit first/last name, nickname, email, role and enabled state.",
+        "Names are optional; existing display names and login IDs are kept.",
+        "Email is validated; legacy accounts may retain a blank address.",
+        "Add User opens a form for first/last name, nickname and email.",
+        "Create makes a member without a Passkey; your admin stays signed in.",
+        "Copy the one-hour invitation from its input and give it to the user.",
+        "The user completes Login > Register with their own Passkey/browser.",
+        "The invitation is single-use and bound to this account/email.",
+        "Done clears the displayed token. Cancel before Create writes nothing.",
+        "Four buttons form a 2x2 block beside the extended user list.",
+        "A blank row separates profile details from Add User and Save.",
+        "Private C capacity: 1-256 MiB; blank inherits the server default (64).",
+        "The capacity input accepts digits only; typed/pasted text is rejected.",
+        "Usage counts the committed private overlay, not common games/backups.",
+        "Save applies changes immediately; restart DOS to refresh its allowance.",
+        "Disabling an account revokes sessions without deleting Passkeys/files.",
+        "The last active administrator cannot be disabled or made a member.",
+        "The first registered admin is always protected, even with other admins.",
+        "Its name, email and private disk capacity can still be changed.",
+        "No account is automatically promoted. Members cannot access this tool.",
+        "[link:topic=2280]Account[/link]  [link:topic=2310]Server Configuration[/link]"
       ]
     },
     "2340": {

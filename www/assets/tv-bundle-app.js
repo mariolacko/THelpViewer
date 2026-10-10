@@ -18,7 +18,10 @@ const {
     TVProgram,
     TVAboutDialog,
     TVLoginDialog,
+    TVAccountDialog,
+    TVUsersDialog,
     TVRegistrationDialog,
+    TVAddUserDialog,
     TVRegistrationTokenDialog,
     TVServerConfigurationDialog,
     TVApplicationMenuBar,
@@ -30,7 +33,6 @@ const {
     TVColorsDialog,
     TVViewGalleryDialog,
     TVGridDemoDialog,
-    TVServerTerminalDialog,
     TVFileOpenDialog,
     TVChangeDirectoryDialog,
     TVMidiPlayerDialog,
@@ -3136,7 +3138,6 @@ function buildBundleMenuBar(catalog, activeBundle = null, session = null, dosWin
         dialogItem("C~o~lors", "colors"),
         dialogItem("~W~idget Gallery", "widgets"),
         dialogItem("~G~rid Viewer", "grid"),
-        dialogItem("Server ~T~erminal", "terminal"),
         new TVMenuItem("DOS ~P~rompt", "dos-open", 0, hcDosPrompt),
         dialogItem("S~t~atistics", "statistics"),
         dialogItem("System ~I~nformation", "systeminfo"),
@@ -3337,7 +3338,7 @@ class TVBundleApp extends TVProgram {
             this.dialogManager.get("login")?.handleEvent(new TVEvent(TV.evCommand, { command: "login-sign-out" }));
         } else if (String(event.command).startsWith("account-")) {
             if (["account-rebuild-dos", "account-rebuild-midi"].includes(event.command)) {
-                if (this.isAdmin && this.authSession?.development) {
+                if (this.isAdmin) {
                     this.dialogManager.open("server-configuration");
                     this.serverConfigDialog?.handleEvent(new TVEvent(TV.evCommand, {
                         command: event.command.replace("account-", "server-"),
@@ -3345,8 +3346,9 @@ class TVBundleApp extends TVProgram {
                 }
                 this.clearEvent(event); return;
             }
-            const name = event.command === "account-login" ? "login" : event.command.slice(8);
-            if (["server-configuration", "registration-token"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
+            const name = event.command === "account-login" ? "login"
+                : event.command === "account-profile" ? "account" : event.command.slice(8);
+            if (["server-configuration", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
             this.dialogManager.open(name);
         } else if (event.command === "dialog-open") {
             this.dialogManager.open(value);
@@ -3561,6 +3563,7 @@ class TVBundleApp extends TVProgram {
         const desktopRoot = document.querySelector("[data-tv-bundle-desktop]");
         if (!desktopRoot) { return; }
         this.desktopView = new TVDesktop(new TVRect()).bindRoot(desktopRoot);
+        this.insert(this.desktopView);
         this.desktop = this.desktopView.root;
 
         this.dialogManager = this.desktopView.dialogManager;
@@ -3594,6 +3597,12 @@ class TVBundleApp extends TVProgram {
         // Register standard dialogs
         this._registerDialog("about", () => new TVAboutDialog());
         const loginDialog = this._registerDialog("login", () => new TVLoginDialog());
+        const accountDialog = this._registerDialog("account", () => new TVAccountDialog());
+        accountDialog.onSessionChange = (session) => this._setAuthSession(session);
+        const usersDialog = this._registerDialog("users", () => new TVUsersDialog());
+        usersDialog.onSessionChange = (session) => this._setAuthSession(session);
+        const addUserDialog = this._registerDialog("add-user", () => new TVAddUserDialog());
+        addUserDialog.onCreated = (user) => { void usersDialog.refreshUsers(user.id); };
         const registrationDialog = this._registerDialog("registration", () => new TVRegistrationDialog());
         this._registerDialog("registration-token", () => new TVRegistrationTokenDialog());
         this.serverConfigDialog = this._registerDialog("server-configuration", () => new TVServerConfigurationDialog());
@@ -3622,7 +3631,6 @@ class TVBundleApp extends TVProgram {
         this._registerDialog("colors", () => new TVColorsDialog());
         this._registerDialog("widgets", () => new TVViewGalleryDialog());
         this._registerDialog("grid", () => new TVGridDemoDialog());
-        this._registerDialog("terminal", () => new TVServerTerminalDialog());
         this._registerDialog("statistics", () => new TVStatisticsDialog());
         this._registerDialog("systeminfo", () => new TVSystemInformationDialog());
         this.fileOpenDialog = this._registerDialog("fileopen", () => new TVFileOpenDialog());
@@ -4393,7 +4401,8 @@ class TVBundleApp extends TVProgram {
             void this._closeDosPrompt(false);
         }
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
-        if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); }
+        if (!session?.authenticated) { this.dialogManager?.get("account")?.close(); }
+        if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); this.dialogManager?.get("users")?.close(); this.dialogManager?.get("add-user")?.close(); }
         const nextSession = session?.authenticated && session.user ? session : null;
         if (JSON.stringify(nextSession) === JSON.stringify(this.authSession)) { return; }
         this.authSession = nextSession;

@@ -2710,11 +2710,6 @@ button.tv-status-item {
     overflow: hidden;
 }
 
-.tv-server-terminal-window .tv-terminal {
-    background: #000000;
-    color: #aaaaaa;
-}
-
 .tv-file-open-history-button {
     position: absolute;
     z-index: 3;

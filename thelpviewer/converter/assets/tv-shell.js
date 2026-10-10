@@ -32,7 +32,10 @@ const {
     TVHelpController,
     TVAboutDialog,
     TVLoginDialog,
+    TVAccountDialog,
+    TVUsersDialog,
     TVRegistrationDialog,
+    TVAddUserDialog,
     TVRegistrationTokenDialog,
     TVServerConfigurationDialog,
     TVContextHelpWindow,
@@ -46,7 +49,6 @@ const {
     TVViewGalleryDialog,
     TVMidiPlayerDialog,
     TVGridDemoDialog,
-    TVServerTerminalDialog,
     TVSystemInformationDialog,
     TVSearchDialog,
     TVScreenSaver,
@@ -72,6 +74,7 @@ const {
     hcColors,
     hcRegistrationTokens,
     hcServerConfiguration,
+    hcUsers,
 } = TV_HELP_CONTEXTS;
 
 const pageMenuActions = new WeakMap();
@@ -117,17 +120,18 @@ function buildAccountMenu(session) {
     const user = session.user;
     const admin = user.role === "admin";
     return pageSubMenu(String(user.display_name || user.username), [
-        new TVMenuItem("~A~ccount", "account-login", 0, hcAccount),
+        new TVMenuItem("~A~ccount", "account-profile", 0, hcAccount),
         pageSubMenu("~C~onfiguration", [
             new TVMenuItem("~C~olors", "account-colors", 0, hcColors),
             ...(admin ? [new TVMenuItem("~S~erver Configuration", "account-server-configuration", 0, hcServerConfiguration)] : []),
-            ...(admin && session.development ? [
+            ...(admin ? [
                 NewLine(),
                 new TVMenuItem("Rebuild ~D~OS C...", "account-rebuild-dos", 0, hcServerConfiguration),
                 new TVMenuItem("Rebuild ~M~IDI...", "account-rebuild-midi", 0, hcServerConfiguration),
             ] : []),
         ], hcAccount),
         ...(admin ? [new TVMenuItem("~R~egistration Token", "account-registration-token", 0, hcRegistrationTokens)] : []),
+        ...(admin ? [new TVMenuItem("~U~sers", "account-users", 0, hcUsers)] : []),
         NewLine(),
         new TVMenuItem("Sign ~O~ut", "account-logout"),
     ], hcAccount);
@@ -156,7 +160,6 @@ function buildPageMenuBar(root, context, session = null) {
         dialog("colors", "C~o~lors"),
         dialog("widgets", "~W~idget Gallery"),
         dialog("grid", "~G~rid Viewer"),
-        dialog("terminal", "Server ~T~erminal"),
         dialog("systeminfo", "System ~I~nformation"),
         NewLine(),
         pageSubMenu("~S~creen saver", savers, hcSystemMenu),
@@ -694,7 +697,7 @@ class TVApplication extends TVProgram {
             this.dialogManager.get("login")?.handleEvent(new TVEvent(evCommand, { command: "login-sign-out" }));
         } else if (String(event.command).startsWith("account-")) {
             if (["account-rebuild-dos", "account-rebuild-midi"].includes(event.command)) {
-                if (this.isAdmin && this.authSession?.development) {
+                if (this.isAdmin) {
                     this.dialogManager.open("server-configuration");
                     this.serverConfigDialog?.handleEvent(new TVEvent(evCommand, {
                         command: event.command.replace("account-", "server-"),
@@ -702,8 +705,9 @@ class TVApplication extends TVProgram {
                 }
                 this.clearEvent(event); return;
             }
-            const name = event.command === "account-login" ? "login" : event.command.slice(8);
-            if (["server-configuration", "registration-token"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
+            const name = event.command === "account-login" ? "login"
+                : event.command === "account-profile" ? "account" : event.command.slice(8);
+            if (["server-configuration", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
             this.dialogManager.open(name);
         } else if (event.command === "dialog-open") {
             this.dialogManager.open(value);
@@ -790,7 +794,8 @@ class TVApplication extends TVProgram {
 
     _setAuthSession(session) {
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
-        if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); }
+        if (!session?.authenticated) { this.dialogManager?.get("account")?.close(); }
+        if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); this.dialogManager?.get("users")?.close(); this.dialogManager?.get("add-user")?.close(); }
         const nextSession = session?.authenticated && session.user ? session : null;
         if (JSON.stringify(nextSession) === JSON.stringify(this.authSession)) { return; }
         this.authSession = nextSession;
@@ -813,6 +818,7 @@ class TVApplication extends TVProgram {
         const desktop = document.querySelector(".tv-desktop") || document.body;
         const hostWindow = document.querySelector("[data-tv-window]");
         this.desktopView = new TVDesktop(new TVRect()).bindRoot(desktop);
+        this.insert(this.desktopView);
         this.dialogManager = this.desktopView.dialogManager;
         setElementHelpContext(hostWindow, hcHelpViewer);
         const hostView = hostWindow
@@ -849,6 +855,12 @@ class TVApplication extends TVProgram {
         }
         this.registerDialog("about", () => new TVAboutDialog());
         const loginDialog = this.registerDialog("login", () => new TVLoginDialog());
+        const accountDialog = this.registerDialog("account", () => new TVAccountDialog());
+        accountDialog.onSessionChange = (session) => this._setAuthSession(session);
+        const usersDialog = this.registerDialog("users", () => new TVUsersDialog());
+        usersDialog.onSessionChange = (session) => this._setAuthSession(session);
+        const addUserDialog = this.registerDialog("add-user", () => new TVAddUserDialog());
+        addUserDialog.onCreated = (user) => { void usersDialog.refreshUsers(user.id); };
         const registrationDialog = this.registerDialog("registration", () => new TVRegistrationDialog());
         this.registerDialog("registration-token", () => new TVRegistrationTokenDialog());
         this.serverConfigDialog = this.registerDialog("server-configuration", () => new TVServerConfigurationDialog());
@@ -874,7 +886,6 @@ class TVApplication extends TVProgram {
         this.registerDialog("colors", () => new TVColorsDialog());
         this.registerDialog("widgets", () => new TVViewGalleryDialog());
         this.registerDialog("grid", () => new TVGridDemoDialog());
-        this.registerDialog("terminal", () => new TVServerTerminalDialog());
         this.registerDialog("systeminfo", () => new TVSystemInformationDialog());
         this.searchDialog = this.registerDialog("search", () => new TVSearchDialog());
         void this.searchDialog?.monitorIndex();

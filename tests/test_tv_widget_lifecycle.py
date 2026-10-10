@@ -406,6 +406,8 @@ def test_applications_follow_the_tvision_program_hierarchy():
     assert "class TVBundleApp extends TVProgram" in bundle
     assert "super(new TVRect());" in shell
     assert "super(new TVRect());" in bundle
+    assert "this.insert(this.desktopView);" in shell
+    assert "this.insert(this.desktopView);" in bundle
 
 
 def test_active_window_state_controls_scrollbars_and_scopes_frame_redraw():

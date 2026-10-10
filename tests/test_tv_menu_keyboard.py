@@ -71,7 +71,7 @@ for(const role of ['member','admin']){
  const commands=account.subMenu.entries().flatMap(item=>[item.command,...(item.subMenu?.entries()||[]).map(child=>child.command)]);
  if(commands.includes('account-server-configuration')!==(role==='admin')||commands.includes('account-registration-token')!==(role==='admin'))throw new Error('Account role visibility is incorrect');
  if(!commands.includes('account-colors')||!commands.includes('account-logout'))throw new Error('User configuration/sign-out missing');
- if(commands.includes('account-rebuild-dos')||commands.includes('account-rebuild-midi'))throw new Error('Rebuild leaked into the normal account menu');
+ if(commands.includes('account-rebuild-dos')!==(role==='admin')||commands.includes('account-rebuild-midi')!==(role==='admin')||commands.includes('account-users')!==(role==='admin'))throw new Error('Administrator menu permissions are incorrect');
  if(account.subMenu.entries()[0].name.replaceAll('~','')!=='Account')throw new Error('Account menu label was not renamed');
  const bar=new TV.TVApplicationMenuBar(new TV.TVRect(),TV.NewMenu(account),account);
  if(!bar.draw().includes('Test ~&lt;Name&gt;~')||bar.menuMnemonic(account)!=='')throw new Error('User name was interpreted as menu markup');

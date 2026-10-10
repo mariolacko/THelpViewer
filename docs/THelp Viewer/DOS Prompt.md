@@ -80,13 +80,13 @@ manual verification.
 
 ## Software sources and first use
 
-In explicit local development mode, the administrator can use **Account →
+On the server or in local development, a signed-in administrator can use **User name →
 Configuration → Rebuild DOS C** to recreate this shared disk from the current
 manifest. Confirmation is required; the current browser saves/closes DOS first.
 The server moves only `var/dos/base/` to a unique recoverable backup under
 `var/backups/`, keeps `var/dos/users/` overlays/media and cached source archives,
 then runs the normal initial preparation again. Other browser tabs must restart
-DOS after the base changes. This action is not enabled on production and is
+DOS after the base changes. Ordinary members cannot rebuild; the action is
 rejected while preparation is already running. See
 [local rebuild actions](Accounts.md#local-rebuild-actions) for API/progress and
 manual backup recovery. The built-in HELP now has a DOS Prompt topic (hc2320),
@@ -133,12 +133,10 @@ The manifest contains `cycles` (`auto`, `max` or a numeric DOSBox cycle count),
 
 - `id`: unique lowercase identifier;
 - `url`: HTTPS archive URL or HTML download page;
-- `sha256`: required hash of the original archive;
 - `format`: `zip`, `img` or `archive` (7-Zip-supported archives);
 - `image_member`: optional exact inner disk-image path in an archive;
 - `download_forms`: optional ordered POST form selectors; the downloader
   submits fresh hidden fields and the named submit button, retaining cookies;
-- `archive_bytes`: optional size for progress when HTTP omits Content-Length;
 - `target`: optional directory on C, such as `FREEDOS`;
 - `members`: optional case-insensitive glob patterns selecting paths **inside
   the archive**, before adding `target`. For example `["PRINCE/*"]` keeps the
@@ -165,7 +163,10 @@ and redirects must use HTTPS without embedded credentials. Downloads may
 follow a public CDN/other host automatically. Literal private/loopback URLs
 are rejected, and the TLS connection's actual peer must be globally routable
 before HTTP request headers/body are sent. Private HTTPS proxy peers are also
-rejected. TLS certificate validation, byte limits and SHA-256 checks remain.
+rejected. TLS certificate validation, byte limits and extraction/path checks remain.
+The standard manifest does not pin archive hashes or sizes. Download cache keys
+are derived from source URLs/forms; progress uses HTTP Content-Length when available.
+Individual lazy C-file hashes and overlay integrity checks are still generated.
 This is specific to DOS sources; the MIDI manifest is unchanged.
 
 For example, inside a source with `target: "GAMES/EXAMPLE"`:
@@ -182,7 +183,7 @@ Configured content overrides the same selected archive path in the incoming
 fresh installation. It does not overwrite an existing on-disk file with
 different bytes during resume/explicit installation: that reports a conflict.
 New missing files can be added during explicit installation. Ordinary server
-starts still leave completed base disks frozen; use local Rebuild DOS C to
+starts still leave completed base disks frozen; use administrator Rebuild DOS C to
 apply a changed recipe from scratch. User overlays are not rewritten. Paths,
 case-insensitive duplicates, file counts and combined byte sizes are checked.
 The default Volkov Commander entry demonstrates `files` with `START.BAT`.
@@ -283,8 +284,9 @@ Reload the page to load the new server state after a conflict; this discards
 the old tab's unsaved changes instead of overwriting the newer server snapshot.
 No user's files or deleted-file markers affect another account.
 
-The default private quota is **128 MiB**, excluding all shared software.
-An authenticated admin can change it in **User name → Configuration → Server
+The default private quota is **64 MiB**, excluding all shared software.
+An authenticated admin can change the default or set individual overrides in Users;
+the Account dialog shows committed overlay usage and capacity. Change the default in **User name → Configuration → Server
 Configuration** (1–256 MiB).
 It is stored in `var/server-settings.json` and enforced on each server save.
 Changing it does not delete existing data or stop DOS writes immediately;

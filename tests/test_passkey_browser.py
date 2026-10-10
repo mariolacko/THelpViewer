@@ -99,10 +99,9 @@ async function run() {
     await evaluate(`document.querySelector('.tv-login-window [data-tv-command="login-register"]').click()`);
     await evaluate(`(() => {
         const dialog = document.querySelector('.tv-registration-window');
-        const inputs = dialog.querySelectorAll('.tv-input-line');
-        inputs[0].value = 'Test User';
-        inputs[1].value = 'test@example.test';
-        inputs[2].value = 'INVALID-TOKEN';
+        const view = dialog.closest('.tv-dialog-overlay')._tvView;
+        view.name.setData('Test'); view.lastName.setData('User');
+        view.email.setData('test@example.test'); view.token.setData('INVALID-TOKEN');
         dialog.querySelector('[data-tv-command="register-confirm"]').click();
     })()`);
     await evaluate(`new Promise((resolve, reject) => {
@@ -118,7 +117,7 @@ async function run() {
     })`, true);
     await evaluate(`(() => {
         const dialog = document.querySelector('.tv-registration-window');
-        dialog.querySelectorAll('.tv-input-line')[2].value = 'AAAAA-AAAAA-AAAAA-AAAAA-AAAAA';
+        dialog.closest('.tv-dialog-overlay')._tvView.token.setData('AAAAA-AAAAA-AAAAA-AAAAA-AAAAA');
         dialog.querySelector('[data-tv-command="register-confirm"]').click();
     })()`);
     await evaluate(`new Promise((resolve, reject) => {
@@ -135,10 +134,9 @@ async function run() {
     })`, true);
     await evaluate(`(() => {
         const dialog = document.querySelector('.tv-registration-window');
-        const inputs = dialog.querySelectorAll('.tv-input-line');
-        inputs[0].value = 'Test User';
-        inputs[1].value = 'test@example.test';
-        inputs[2].value = ${JSON.stringify(bootstrap)};
+        const view = dialog.closest('.tv-dialog-overlay')._tvView;
+        view.name.setData('Test'); view.lastName.setData('User');
+        view.email.setData('test@example.test'); view.token.setData(${JSON.stringify(bootstrap)});
         dialog.querySelector('[data-tv-command="register-confirm"]').click();
     })()`);
     await evaluate(`new Promise((resolve, reject) => {
@@ -174,7 +172,9 @@ async function run() {
     if(accountTitle!=='Test User')throw new Error('Authenticated user name missing from top menu: '+accountTitle);
     await evaluate(`(()=>{window.accountTestLogin=document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView;
         accountTestLogin.updateSession({enabled:true,authenticated:true,user:{username:'member@example.test',display_name:'Member One',role:'member'}});})()`);
-    if(await evaluate(`document.querySelector('[data-tv-command="account-server-configuration"]')!==null||document.querySelector('[data-tv-command="account-registration-token"]')!==null`))throw new Error('Member sees admin account menu');
+    if(await evaluate(`document.querySelector('.tv-menu-right [data-tv-command="account-server-configuration"]')!==null||document.querySelector('.tv-menu-right [data-tv-command="account-registration-token"]')!==null`))throw new Error('Member sees admin account menu');
+    await evaluate(`document.querySelector('.tv-users-window [data-tv-command="account-add-user"]').click()`);
+    if(await evaluate(`!document.querySelector('.tv-add-user-window').closest('.tv-dialog-overlay').hidden`))throw new Error('Member opened Add user');
     await evaluate(`accountTestLogin.updateSession({enabled:true,authenticated:true,user:{username:'member@example.test',display_name:'Member ~Two~',role:'member'}})`);
     if(await evaluate(`document.querySelector('.tv-menu-right .tv-menu-button')?.textContent`)!=='Member ~Two~')throw new Error('Same-role user name change was not rendered literally');
     await evaluate(`accountTestLogin.updateSession({enabled:true,authenticated:false})`);
@@ -184,17 +184,17 @@ async function run() {
         .find((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Server Configuration').click()`);
     await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
         const input=document.querySelector('.tv-server-configuration-window .tv-input-line');
-        if(input?.value==='128'){resolve(true);return;}
+        if(input?.value==='64'){resolve(true);return;}
         if(Date.now()>deadline){reject(new Error('Default DOS overlay capacity did not load'));return;}setTimeout(check,30);
     };check();})`,true);
     await evaluate(`(()=>{const dialog=document.querySelector('.tv-server-configuration-window');
-        dialog.querySelector('.tv-input-line').value='64';dialog.querySelector('[data-tv-command="server-settings-save"]').click();})()`);
+        dialog.querySelector('.tv-input-line').value='96';dialog.querySelector('[data-tv-command="server-settings-save"]').click();})()`);
     await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
         if(document.querySelector('.tv-server-configuration-window')?.textContent.includes('Saved.')){resolve(true);return;}
         if(Date.now()>deadline){reject(new Error('DOS overlay settings did not save'));return;}setTimeout(check,30);
     };check();})`,true);
     const settings=await evaluate(`fetch('/api/admin/settings').then(r=>r.json())`,true);
-    if(settings.dos_user_disk_mb!==64)throw new Error('DOS overlay capacity was not persisted');
+    if(settings.dos_user_disk_mb!==96)throw new Error('DOS overlay capacity was not persisted');
     await evaluate(`document.querySelector('.tv-server-configuration-window [data-tv-command="server-settings-cancel"]').click()`);
     await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
         .find((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token').click()`);
@@ -341,6 +341,59 @@ async function run() {
         || session.user.role !== 'admin') {
         throw new Error('Authenticated server session is missing');
     }
+    // Create from the real administrator dialog, then enroll as the new user.
+    await evaluate(`(() => {
+        const login = document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView;
+        const users = login.owner.dialogManager.get('users');
+        users.open(); users.addButton.root.click();
+        const add = login.owner.dialogManager.get('add-user');
+        add.name.setData('New'); add.lastName.setData('Member'); add.nickname.setData('NM');
+        add.email.setData('new.member@example.test'); add.registerButton.root.click();
+    })()`);
+    const managed = await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const add = document.querySelector('.tv-add-user-window').closest('.tv-dialog-overlay')._tvView;
+            if (add.created && add.messageBox?.isOpen()) {
+                resolve({ token: add.invitation.getData(), email: add.email.getData() }); return;
+            }
+            if (Date.now() > deadline) { reject(new Error('Add User failed: ' + add.status.getText())); return; }
+            setTimeout(check, 30);
+        }; check();
+    })`, true);
+    const adminAfterCreate = await evaluate(`fetch('/api/auth/session').then(r => r.json())`, true);
+    if (adminAfterCreate.user.username !== session.user.username || adminAfterCreate.user.role !== 'admin') {
+        throw new Error('Creating a member replaced the administrator session');
+    }
+    await evaluate(`(() => {
+        const add = document.querySelector('.tv-add-user-window').closest('.tv-dialog-overlay')._tvView;
+        add.messageBox.buttonViews[0].root.click(); add.registerButton.root.click();
+    })()`);
+    await send('Network.clearBrowserCookies');
+    await evaluate(`accountTestLogin.refreshSession()`, true);
+    await evaluate(`(() => {
+        accountTestLogin.onRegister();
+        const registration = accountTestLogin.owner.dialogManager.get('registration');
+        registration.name.setData('Ignored'); registration.nickname.setData('Ignored');
+        registration.email.setData(${JSON.stringify(managed.email)});
+        registration.token.setData(${JSON.stringify(managed.token)});
+        registration.registerButton.root.click();
+    })()`);
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 15000;
+        const check = () => {
+            const registration = accountTestLogin.owner.dialogManager.get('registration');
+            if (registration.messageBox?.isOpen()) { resolve(); return; }
+            if (Date.now() > deadline) { reject(new Error('Managed-user enrollment failed: ' + registration.status.getText())); return; }
+            setTimeout(check, 50);
+        }; check();
+    })`, true);
+    const memberSession = await evaluate(`fetch('/api/auth/session').then(r => r.json())`, true);
+    if (!memberSession.authenticated || memberSession.user.username !== managed.email || memberSession.user.role !== 'member'
+        || memberSession.user.first_name !== 'New' || memberSession.user.last_name !== 'Member' || memberSession.user.nickname !== 'NM') {
+        throw new Error('Managed-user Passkey did not enroll the existing prepared profile');
+    }
+    await evaluate(`accountTestLogin.owner.dialogManager.get('registration').messageBox.buttonViews[0].root.click()`);
     socket.close();
 }
 const timeout = setTimeout(() => { process.stderr.write('Passkey browser test timed out\n'); process.exit(1); }, 45000);

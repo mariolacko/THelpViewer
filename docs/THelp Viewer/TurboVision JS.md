@@ -59,6 +59,16 @@ Core widget hierarchy and infrastructure.
   id, attributes, class or style. `TVPXPictureValidator` implements the fixed
   `!` (uppercase character) and literal-separator subset of Turbo Vision's
   picture validator; registration tokens use five groups of five characters.
+  `TVFilterValidator(validChars)` follows the original character-filter API
+  (`isValidInput`, `isValid`); Users uses digits only. Invalid native edits are
+  rejected through the shared `TVInputLine.handleEvent`, restoring the prior
+  text, while an empty capacity inherits the default. InputLine subscribes to
+  `evBroadcast` so validators run while typing/pasting.
+  and `TVEmailValidator(allowEmpty = false, allowUsername = false)` uses the same `isValidInput`/`isValid`
+  contract for email syntax. Account, Users, Add User, Registration and Login use the latter;
+  only Users allows a blank address for a legacy account. No HTML email validator
+  or per-dialog native input handler is added. Login enables `allowUsername` to
+  retain existing Unicode-letter/digit and dot/underscore/dash account names.
 - **TVGroup** — `constructor(bounds)`. Children are added with `insert()` or
   `insertAll()`; only `TVView` instances are accepted. `setCurrent(child)`
   makes `getHelpCtx()` inherit from the current child,
@@ -410,7 +420,9 @@ Small `TVGroup` owner shared by the generated-page and bundle applications.
 `TVProgram : TVGroup` is the common application-level owner. The generated
 viewer's `TVApplication` and the catalog viewer's `TVBundleApp` both derive
 from it; their constructors remain source-shaped and browser roots are bound
-only during `start()`.
+only during `start()`. Both applications insert their `TVDesktop` into this group. Thus a
+button command bubbles through control → group → dialog → desktop → program;
+it does not need a dialog-specific application callback or native click handler.
 It owns the desktop root, one `TVDialogManager`, border/background layout,
 clock updates and the global load/resize lifecycle. Product-specific startup
 and navigation remain in `TVApplication` and `TVBundleApp`.
@@ -912,29 +924,22 @@ The dialog retries one transient network/HTTP 5xx failure; persistent failures
 show their HTTP/network cause, while client rendering failures are labeled
 separately.
 
-### Server Terminal
+### User and server configuration
 
-`TVServerTerminalDialog` is assembled from shared `TVDialog`, `TVTerminal`,
-`TVInputLine`, `TVLabel`, `TVStaticText` and `TVButton` objects. Its black output
-area follows an explicitly launched server-side job. The browser can only
-attach to an existing job using its 12-character ID and random access key;
-it cannot start a command. The key is shown as a password input and is never
-stored by the browser. Output is fetched incrementally, while line input is
-sent only while the job reports `running`; controls lock when it exits.
-
-Launch from the server (or inside Docker) with:
-
-```bash
-python -m thelpviewer.server.terminal --label "Example" -- python -u -c "print(input('Name: '))"
-docker compose exec viewer python -m thelpviewer.server.terminal --label "Example" -- python -u -c "print(input('Name: '))"
-```
-
-Paste the printed ID and access key into System → Server Terminal. Keep the
-launcher running until its command finishes. Jobs, output and input queues live
-under `THELP_STATE_DIR/terminal/`; the state file stores only a hash of the
-key. The terminal API has no process-creation route. Treat output and keys as
-sensitive: use HTTPS when exposing the viewer outside localhost, and do not
-run commands that reveal secrets to other viewers of the server console.
+`TVUsersDialog` and `TVServerConfigurationDialog` are composed from shared
+TVision views. Users' four buttons form a 2×2 block, with a taller list alongside.
+Add User opens `TVAddUserDialog : TVRegistrationDialog`, sharing the profile
+controls and event handler. Its Create action creates a member and bound Passkey
+invitation, not a Passkey on the administrator's device; the token is shown in
+an owned input view. The admin session stays unchanged. `TVButton` draws its bottom shadow for its actual bounds width rather
+than a fixed number of cells, so wide buttons keep their lower-right shadow.
+Administrators edit accounts and per-user DOS capacities;
+server runtime settings are displayed read-only in a `TVListBox`. The default
+private quota is 64 MiB. `TVAccountDialog` shows saved private C usage/capacity.
+Server Terminal and its HTTP/CLI launcher have been removed. `TVTerminal`
+remains a shared output view used by Widget Gallery, not a remote shell.
+Root menu popups clamp their horizontal position to the viewport, including
+right-aligned user menus. Submenus retain left-opening overflow handling.
 
 The existing `TVDialogManager` supplies the registered name, active target and
 open/close lifecycle for both dialogs and windows. `TVBundleApp` accumulates

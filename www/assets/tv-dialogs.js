@@ -26,6 +26,8 @@ const {
     TVPercentGauge,
     TVLabel,
     TVPXPictureValidator,
+    TVFilterValidator,
+    TVEmailValidator,
     TVInputLine,
     TVGroup,
     TVListViewer,
@@ -79,7 +81,7 @@ const {
     hcRegistration,
     hcRegistrationTokens,
     hcServerConfiguration,
-    hcServerTerminal,
+    hcUsers,
     hcGridDemo,
 } = TV_HELP_CONTEXTS;
 
@@ -223,13 +225,13 @@ class TVLoginDialog extends TVDialog {
     static viewName = "login";
 
     constructor() {
-        const username = new TVInputLine(new TVRect(2, 2, 45, 3), 254);
+        const username = new TVInputLine(new TVRect(2, 2, 45, 3), 254).setValidator(new TVEmailValidator(false, true));
         const signIn = new TVButton(new TVRect(2, 5, 15, 7), "~S~ign In", "login-sign-in", bfDefault);
         const register = new TVButton(new TVRect(16, 5, 29, 7), "~R~egister", "login-register", bfNormal);
         const signOut = new TVButton(new TVRect(30, 5, 43, 7), "Sign ~O~ut", "login-sign-out", bfNormal);
         const close = new TVButton(new TVRect(44, 5, 57, 7), "~C~lose", "login-close", bfNormal);
         const status = new TVStaticText(new TVRect(2, 8, 56, 10), "Checking account status...");
-        super(new TVRect(0, 0, 60, 13), "Account");
+        super(new TVRect(0, 0, 60, 13), "Login");
         this.setHelpCtx(hcAccount);
         this.insert(new TVGroup(new TVRect(0, 0, 58, 11)).insertAll([
             new TVLabel(new TVRect(2, 1, 25, 2), "~E~mail or username", username), username,
@@ -343,6 +345,9 @@ class TVLoginDialog extends TVDialog {
             this.status.setText("Enter email or username.");
             return;
         }
+        if (!this.username.valid()) {
+            this.status.setText("Enter a valid email address or username."); this.username.focus(); return;
+        }
         if (!window.isSecureContext || !navigator.credentials?.create || !navigator.credentials?.get) {
             this.status.setText("Passkeys require HTTPS or localhost and a compatible browser.");
             return;
@@ -394,26 +399,273 @@ class TVLoginDialog extends TVDialog {
     }
 }
 
+class TVAccountDialog extends TVDialog {
+    static viewName = "account";
+
+    constructor() {
+        super(new TVRect(0, 0, 60, 22), "Account");
+        this.setHelpCtx(hcAccount);
+        this.firstNameInput = new TVInputLine(new TVRect(2, 2, 27, 3), 100);
+        this.lastNameInput = new TVInputLine(new TVRect(30, 2, 56, 3), 100);
+        this.nicknameInput = new TVInputLine(new TVRect(2, 5, 56, 6), 100);
+        this.emailInput = new TVInputLine(new TVRect(2, 8, 56, 9), 254).setValidator(new TVEmailValidator());
+        this.identity = new TVStaticText(new TVRect(2, 10, 56, 12), "");
+        this.disk = new TVStaticText(new TVRect(2, 13, 56, 14), "");
+        this.status = new TVStaticText(new TVRect(2, 18, 56, 20), "");
+        this.saveButton = new TVButton(new TVRect(13, 15, 27, 17), "~S~ave", "account-save", bfDefault);
+        this.insert(new TVGroup(new TVRect(0, 0, 58, 20)).insertAll([
+            new TVLabel(new TVRect(2, 1, 27, 2), "~F~irst name", this.firstNameInput), this.firstNameInput,
+            new TVLabel(new TVRect(30, 1, 56, 2), "~L~ast name", this.lastNameInput), this.lastNameInput,
+            new TVLabel(new TVRect(2, 4, 56, 5), "N~i~ckname", this.nicknameInput), this.nicknameInput,
+            new TVLabel(new TVRect(2, 7, 56, 8), "~E~mail", this.emailInput), this.emailInput,
+            this.identity, this.disk, this.saveButton,
+            new TVButton(new TVRect(30, 15, 44, 17), "~C~ancel", "account-cancel", bfNormal),
+            this.status,
+        ]));
+        this.requestVersion = 0;
+        this.onSessionChange = null;
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    open() {
+        super.open();
+        this.firstNameInput.setData("");
+        this.lastNameInput.setData("");
+        this.nicknameInput.setData("");
+        this.emailInput.setData("");
+        this.identity.setText("");
+        this.disk.setText("Private C: loading usage...");
+        this.firstNameInput.focus();
+        void this.loadProfile();
+    }
+
+    close() {
+        this.requestVersion += 1;
+        super.close();
+    }
+
+    async loadProfile() {
+        const version = ++this.requestVersion;
+        this.saveButton.setState(sfDisabled, true);
+        this.status.setText("Loading account...");
+        try {
+            const session = await TVLoginDialog.request("/api/auth/session");
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            this.onSessionChange?.(session);
+            if (!session.authenticated || !session.user) { throw new Error("Sign-in required."); }
+            this.session = session;
+            this.firstNameInput.setData(session.user.first_name || "");
+            this.lastNameInput.setData(session.user.last_name || "");
+            this.nicknameInput.setData(session.user.nickname || "");
+            this.emailInput.setData(session.user.email || "");
+            this.identity.setText(`Username: ${session.user.username}\nRole: ${session.user.role === "admin" ? "Administrator" : "Member"}`);
+            this.status.setText("Passkey and private DOS files stay unchanged.");
+            this.saveButton.setState(sfDisabled, false);
+            try {
+                const disk = await TVLoginDialog.request("/api/dos/usage");
+                if (version === this.requestVersion && this.isOpen()) {
+                    this.disk.setText(`Private C: ${(disk.used_bytes / 1048576).toFixed(2)} / ${disk.capacity_bytes / 1048576} MiB used`);
+                }
+            } catch (error) {
+                if (version === this.requestVersion && this.isOpen()) { this.disk.setText(`Private C: ${error.message}`); }
+            }
+        } catch (error) {
+            if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
+        }
+    }
+
+    async saveProfile() {
+        if (this.saveButton.state & sfDisabled) { return; }
+        if (!this.emailInput.valid()) {
+            this.status.setText("Enter a valid email address."); this.emailInput.focus(); return;
+        }
+        const version = ++this.requestVersion;
+        this.saveButton.setState(sfDisabled, true);
+        this.status.setText("Saving account...");
+        try {
+            const data = await TVLoginDialog.request("/api/auth/profile", "PUT", {
+                email: this.emailInput.getData().trim(),
+                first_name: this.firstNameInput.getData().trim(), last_name: this.lastNameInput.getData().trim(),
+                nickname: this.nicknameInput.getData().trim(),
+            });
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            this.onSessionChange?.({ ...this.session, user: data.user });
+            this.close();
+        } catch (error) {
+            if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
+        } finally {
+            if (version === this.requestVersion) { this.saveButton.setState(sfDisabled, false); }
+        }
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        switch (event.command) {
+            case "account-save": void this.saveProfile(); break;
+            case "account-cancel": this.close(); break;
+            default: return;
+        }
+        this.clearEvent(event);
+    }
+}
+
+class TVUsersDialog extends TVDialog {
+    static viewName = "users";
+
+    constructor() {
+        super(new TVRect(0, 0, 83, 32), "Users");
+        this.setHelpCtx(hcUsers);
+        this.users = new TVListBox(new TVRect(2, 2, 34, 28));
+        this.firstNameInput = new TVInputLine(new TVRect(37, 3, 56, 4), 100);
+        this.lastNameInput = new TVInputLine(new TVRect(59, 3, 78, 4), 100);
+        this.nicknameInput = new TVInputLine(new TVRect(37, 6, 78, 7), 100);
+        this.emailInput = new TVInputLine(new TVRect(37, 9, 78, 10), 254).setValidator(new TVEmailValidator(true));
+        this.role = new TVRadioButtons(new TVRect(37, 12, 78, 14), [{ label: "~M~ember" }, { label: "~A~dministrator" }]);
+        this.active = new TVCheckBoxes(new TVRect(37, 15, 78, 16), [{ label: "Account ena~b~led" }]);
+        this.capacity = new TVInputLine(new TVRect(37, 18, 45, 19), 3)
+            .setValidator(new TVFilterValidator("0123456789"));
+        this.disk = new TVStaticText(new TVRect(37, 20, 78, 23), "");
+        this.status = new TVStaticText(new TVRect(2, 29, 78, 30), "");
+        this.addButton = new TVButton(new TVRect(37, 24, 55, 26), "A~d~d user...", "account-add-user");
+        this.saveButton = new TVButton(new TVRect(59, 24, 77, 26), "~S~ave", "users-save");
+        this.insert(new TVGroup(new TVRect(0, 0, 81, 30)).insertAll([
+            new TVLabel(new TVRect(2, 1, 34, 2), "~U~sers", this.users), this.users,
+            new TVLabel(new TVRect(37, 2, 56, 3), "~F~irst name", this.firstNameInput), this.firstNameInput,
+            new TVLabel(new TVRect(59, 2, 78, 3), "~L~ast name", this.lastNameInput), this.lastNameInput,
+            new TVLabel(new TVRect(37, 5, 78, 6), "N~i~ckname", this.nicknameInput), this.nicknameInput,
+            new TVLabel(new TVRect(37, 8, 78, 9), "~E~mail", this.emailInput), this.emailInput,
+            new TVLabel(new TVRect(37, 11, 78, 12), "~R~ole", this.role), this.role, this.active,
+            new TVLabel(new TVRect(37, 17, 78, 18), "Private C ~c~apacity (MiB)", this.capacity), this.capacity,
+            this.disk, this.addButton, this.saveButton,
+            new TVButton(new TVRect(37, 26, 55, 28), "Refres~h~", "users-refresh"),
+            new TVButton(new TVRect(59, 26, 77, 28), "Cl~o~se", "users-close"), this.status,
+        ]));
+        this.users.bind({ onSelect: (user) => this.selectUser(user), onActivate: (user) => this.selectUser(user) });
+        this.requestVersion = 0;
+        this.onSessionChange = null;
+        this.bindCommonClose(() => this.close());
+        this.bindDrag();
+    }
+
+    open() { super.open(); void this.refreshUsers(); }
+    close() { this.requestVersion += 1; super.close(); }
+
+    selectUser(user) {
+        this.selectedUser = user || null;
+        this.firstNameInput.setData(user?.first_name || "");
+        this.lastNameInput.setData(user?.last_name || "");
+        this.nicknameInput.setData(user?.nickname || "");
+        this.emailInput.setData(user?.email || "");
+        this.role.setData(user?.role === "admin" ? 1 : 0);
+        this.active.setData(user?.active ? 1 : 0);
+        this.role.setState(sfDisabled, !!user?.protected_admin);
+        this.active.setState(sfDisabled, !!user?.protected_admin);
+        this.role.setButtonState(3, !user?.protected_admin);
+        this.active.setButtonState(1, !user?.protected_admin);
+        this.capacity.setData(user?.disk_capacity_mb == null ? "" : String(user.disk_capacity_mb));
+        this.disk.setText(user ? `Blank = server default (${this.defaultCapacity} MiB).\nUsed: ${(user.disk.used_bytes / 1048576).toFixed(2)} / ${user.disk.capacity_bytes / 1048576} MiB\nLowering capacity never deletes files.` : "");
+        this.saveButton.setState(sfDisabled, !user);
+    }
+
+    async refreshUsers(selectedId = null) {
+        const version = ++this.requestVersion;
+        this.saveButton.setState(sfDisabled, true);
+        this.status.setText("Loading users...");
+        try {
+            const data = await TVLoginDialog.request("/api/admin/users");
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            this.defaultCapacity = data.dos_user_disk_mb;
+            const rows = data.users.map((user) => ({ ...user, label: `${user.display_name} (${user.role})${user.active ? "" : " [disabled]"}` }));
+            this.users.newList(rows);
+            const index = Math.max(0, rows.findIndex((user) => user.id === selectedId));
+            this.users.select(index);
+            this.selectUser(rows[index]);
+            this.status.setText(`${rows.length} account(s). Founding admin cannot be disabled or demoted.`);
+        } catch (error) {
+            if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
+        }
+    }
+
+    async saveUser() {
+        if (!this.selectedUser || this.saveButton.state & sfDisabled) { return; }
+        if (!this.emailInput.valid()) {
+            this.status.setText("Enter a valid email address, or leave it blank for a legacy account.");
+            this.emailInput.focus(); return;
+        }
+        const rawCapacity = this.capacity.getData().trim();
+        if (rawCapacity && (!this.capacity.valid() || rawCapacity.length > 3 || Number(rawCapacity) < 1 || Number(rawCapacity) > 256)) {
+            this.status.setText("Capacity: 1–256 MiB, or blank for server default."); this.capacity.focus(); return;
+        }
+        const id = this.selectedUser.id;
+        const version = ++this.requestVersion;
+        this.saveButton.setState(sfDisabled, true);
+        this.users.setState(sfDisabled, true);
+        try {
+            await TVLoginDialog.request(`/api/admin/users/${encodeURIComponent(id)}`, "PUT", {
+                email: this.emailInput.getData().trim(),
+                first_name: this.firstNameInput.getData().trim(), last_name: this.lastNameInput.getData().trim(),
+                nickname: this.nicknameInput.getData().trim(),
+                role: this.selectedUser.protected_admin ? "admin" : this.role.getData() === 1 ? "admin" : "member",
+                active: this.selectedUser.protected_admin || !!(this.active.getData() & 1),
+                disk_capacity_mb: rawCapacity ? Number(rawCapacity) : null,
+            });
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            const session = await TVLoginDialog.request("/api/auth/session");
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            this.onSessionChange?.(session);
+            if (session.user?.role !== "admin") { this.close(); return; }
+            await this.refreshUsers(id);
+        } catch (error) {
+            if (version === this.requestVersion && this.isOpen()) {
+                this.status.setText(error.message); this.saveButton.setState(sfDisabled, false);
+            }
+        } finally { this.users.setState(sfDisabled, false); }
+    }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what !== evCommand) { return; }
+        switch (event.command) {
+            case "users-save": void this.saveUser(); break;
+            case "users-refresh": void this.refreshUsers(this.selectedUser?.id); break;
+            case "users-close": this.close(); break;
+            default: return;
+        }
+        this.clearEvent(event);
+    }
+}
+
 class TVRegistrationDialog extends TVDialog {
     static viewName = "registration";
 
-    constructor() {
-        const name = new TVInputLine(new TVRect(2, 2, 56, 3), 100);
-        const email = new TVInputLine(new TVRect(2, 5, 56, 6), 254);
-        const token = new TVInputLine(new TVRect(2, 8, 56, 9), 128)
-            .setValidator(new TVPXPictureValidator("!!!!!-!!!!!-!!!!!-!!!!!-!!!!!", true));
-        const register = new TVButton(new TVRect(13, 11, 28, 13), "~R~egister", "register-confirm", bfDefault);
-        const cancel = new TVButton(new TVRect(30, 11, 45, 13), "~C~ancel", "register-cancel", bfNormal);
-        const status = new TVStaticText(new TVRect(2, 14, 56, 16), "A registration token is valid for one hour.");
-        super(new TVRect(0, 0, 60, 19), "Register Passkey");
+    constructor(title = "Register Passkey", withToken = true) {
+        const name = new TVInputLine(new TVRect(2, 2, 27, 3), 100);
+        const lastName = new TVInputLine(new TVRect(30, 2, 56, 3), 100);
+        const nickname = new TVInputLine(new TVRect(2, 5, 56, 6), 100);
+        const email = new TVInputLine(new TVRect(2, 8, 56, 9), 254).setValidator(new TVEmailValidator());
+        const token = withToken ? new TVInputLine(new TVRect(2, 11, 56, 12), 128)
+            .setValidator(new TVPXPictureValidator("!!!!!-!!!!!-!!!!!-!!!!!-!!!!!", true)) : null;
+        const row = withToken ? 14 : 11;
+        const register = new TVButton(new TVRect(13, row, 28, row + 2), withToken ? "~R~egister" : "~C~reate", "register-confirm", bfDefault);
+        const cancel = new TVButton(new TVRect(30, row, 45, row + 2), "C~a~ncel", "register-cancel", bfNormal);
+        const status = new TVStaticText(new TVRect(2, row + 3, 56, row + 5), withToken
+            ? "A registration token is valid for one hour."
+            : "Creates a member and a one-hour Passkey invitation.\nYour administrator session stays signed in.");
+        super(new TVRect(0, 0, 60, row + 8), title);
         this.setHelpCtx(hcRegistration);
-        this.insert(new TVGroup(new TVRect(0, 0, 58, 17)).insertAll([
-            new TVLabel(new TVRect(2, 1, 30, 2), "~N~ame", name), name,
-            new TVLabel(new TVRect(2, 4, 30, 5), "~E~mail", email), email,
-            new TVLabel(new TVRect(2, 7, 30, 8), "Registration ~t~oken", token), token,
+        this.insert(new TVGroup(new TVRect(0, 0, 58, row + 6)).insertAll([
+            new TVLabel(new TVRect(2, 1, 27, 2), "~F~irst name", name), name,
+            new TVLabel(new TVRect(30, 1, 56, 2), "~L~ast name", lastName), lastName,
+            new TVLabel(new TVRect(2, 4, 56, 5), "N~i~ckname", nickname), nickname,
+            new TVLabel(new TVRect(2, 7, 56, 8), "~E~mail", email), email,
+            ...(token ? [new TVLabel(new TVRect(2, 10, 56, 11), "Registration ~t~oken", token), token] : []),
             register, cancel, status,
         ]));
         this.name = name;
+        this.lastName = lastName;
+        this.nickname = nickname;
         this.email = email;
         this.token = token;
         this.status = status;
@@ -431,17 +683,22 @@ class TVRegistrationDialog extends TVDialog {
     }
 
     close() {
-        this.token.setData("");
+        this.token?.setData("");
         super.close();
     }
 
-    async registerPasskey() {
+    async submit() {
         const name = this.name.getData().trim();
+        const lastName = this.lastName.getData().trim();
+        const nickname = this.nickname.getData().trim();
         const email = this.email.getData().trim();
         const token = this.token.getData().trim();
-        if (!name || !email || !token) {
-            this.status.setText("Enter name, email and registration token.");
+        if ((!name && !nickname) || !email || !token) {
+            this.status.setText("Enter first name or nickname, email and token.");
             return;
+        }
+        if (!this.email.valid()) {
+            this.status.setText("Enter a valid email address."); this.email.focus(); return;
         }
         if (!this.token.valid()) {
             this.status.setText("Use a token in XXXXX-XXXXX-XXXXX-XXXXX-XXXXX format.");
@@ -455,7 +712,15 @@ class TVRegistrationDialog extends TVDialog {
         let stage = "Registration request";
         try {
             const prefix = "/api/auth/passkey/register";
-            const request = await TVLoginDialog.post(`${prefix}/options`, { name, email, token });
+            const request = await TVLoginDialog.post(`${prefix}/options`, {
+                name: ([name, lastName].filter(Boolean).join(" ") || nickname).slice(0, 100), email, token,
+                first_name: name, last_name: lastName, nickname,
+            });
+            if (request.profile) {
+                this.name.setData(request.profile.first_name || "");
+                this.lastName.setData(request.profile.last_name || "");
+                this.nickname.setData(request.profile.nickname || "");
+            }
             const options = request.options;
             const decode = TVLoginDialog.decodeBase64Url;
             options.challenge = decode(options.challenge);
@@ -470,7 +735,7 @@ class TVRegistrationDialog extends TVDialog {
             const credential = await navigator.credentials.create({ publicKey: options });
             if (!credential) { throw new Error("Passkey operation was cancelled."); }
             stage = "Passkey verification";
-            const verified = await TVLoginDialog.post(`${prefix}/verify`, {
+            const verified = await TVLoginDialog.post(`${request.enrollment ? "/api/auth/passkey/enroll" : prefix}/verify`, {
                 ceremony_id: request.ceremony_id,
                 credential: TVLoginDialog.credentialAnswer(credential, true),
             });
@@ -506,10 +771,88 @@ class TVRegistrationDialog extends TVDialog {
     handleEvent(event) {
         super.handleEvent(event);
         if (event.what !== evCommand) { return; }
-        if (event.command === "register-confirm") { void this.registerPasskey(); }
+        if (event.command === "register-confirm") { void this.submit(); }
         else if (event.command === "register-cancel") { this.close(); }
         else { return; }
         this.clearEvent(event);
+    }
+}
+
+class TVAddUserDialog extends TVRegistrationDialog {
+    static viewName = "add-user";
+
+    constructor() {
+        super("Add User", false);
+        this.setHelpCtx(hcUsers);
+        this.onCreated = null;
+        this.requestVersion = 0;
+        this.created = false;
+        this.invitation = new TVInputLine(new TVRect(2, 14, 56, 15), 29);
+        this.changeBounds(new TVRect(0, 0, 60, 22));
+        this.content.setBounds(new TVRect(0, 0, 58, 20));
+        this.status.setBounds(new TVRect(2, 17, 56, 19));
+        this.content.insertAll([
+            new TVLabel(new TVRect(2, 13, 56, 14), "~T~oken (available after Create)", this.invitation), this.invitation,
+        ]);
+        this.drawContent();
+    }
+
+    open() {
+        this.requestVersion += 1;
+        this.created = false;
+        this.invitation.setData("");
+        for (const input of [this.name, this.lastName, this.nickname, this.email]) {
+            input.setState(sfDisabled, false); input.setData("");
+        }
+        this.registerButton.setTitle("~C~reate");
+        this.registerButton.setState(sfDisabled, false);
+        this.status.setText("Creates a member and a one-hour Passkey invitation.\nYour administrator session stays signed in.");
+        super.open();
+    }
+
+    close() {
+        this.requestVersion += 1;
+        this.invitation?.setData("");
+        this.messageBox?.dispatchEvent(new TVEvent(evCommand, { command: "dialog-close", infoPtr: this.messageBox }));
+        super.close();
+    }
+
+    async submit() {
+        if (this.created) { this.close(); return; }
+        if (this.registerButton.state & sfDisabled) { return; }
+        const firstName = this.name.getData().trim();
+        const nickname = this.nickname.getData().trim();
+        if (!firstName && !nickname) { this.status.setText("Enter first name or nickname."); this.name.focus(); return; }
+        if (!this.email.valid()) { this.status.setText("Enter a valid email address."); this.email.focus(); return; }
+        const version = ++this.requestVersion;
+        this.registerButton.setState(sfDisabled, true);
+        this.status.setText("Creating user...");
+        try {
+            const data = await TVLoginDialog.post("/api/admin/users", {
+                first_name: firstName, last_name: this.lastName.getData().trim(), nickname,
+                email: this.email.getData().trim(),
+            });
+            this.onCreated?.(data.user);
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            this.created = true;
+            this.invitation.setData(data.invitation.token);
+            for (const input of [this.name, this.lastName, this.nickname, this.email]) { input.setState(sfDisabled, true); }
+            this.registerButton.setTitle("~D~one");
+            this.registerButton.setState(sfDisabled, false);
+            this.status.setText(`Created. Invitation valid until ${new Date(data.invitation.expires_at * 1000).toLocaleTimeString()}.\nCopy the token; the new user opens Login > Register.`);
+            if (!this.messageBox) { this.messageBox = new TVMessageBox(); this.owner.insert(this.messageBox); }
+            await this.messageBox.show({ title: "User created", type: TVMessageBox.MF_INFORMATION, lines: [
+                `Account: ${data.user.display_name}`, `Email: ${data.user.email}`,
+                "Copy the one-hour token from the Add User input.",
+                "Login > Register lets them create their own Passkey.",
+                "Your administrator session remains signed in.",
+            ] });
+            if (version === this.requestVersion && this.isOpen()) { this.invitation.focus(); this.invitation.selectAll(); }
+        } catch (error) {
+            if (version === this.requestVersion && this.isOpen()) {
+                this.status.setText(error.message); this.registerButton.setState(sfDisabled, false);
+            }
+        }
     }
 }
 
@@ -657,17 +1000,22 @@ class TVServerConfigurationDialog extends TVDialog {
     static viewName = "server-configuration";
 
     constructor() {
-        super(new TVRect(0, 0, 62, 14), "Server Configuration");
+        super(new TVRect(0, 0, 84, 27), "Server Configuration");
         this.setHelpCtx(hcServerConfiguration);
         this.capacity = new TVInputLine(new TVRect(2, 2, 10, 3), 3);
-        this.status = new TVStaticText(new TVRect(2, 10, 58, 12), "");
-        this.saveButton = new TVButton(new TVRect(16, 7, 29, 9), "~S~ave", "server-settings-save", bfDefault);
-        this.insert(new TVGroup(new TVRect(0, 0, 60, 12)).insertAll([
+        this.runtime = new TVListBox(new TVRect(2, 8, 78, 17));
+        this.status = new TVStaticText(new TVRect(2, 23, 78, 25), "");
+        this.saveButton = new TVButton(new TVRect(2, 20, 15, 22), "~S~ave", "server-settings-save", bfDefault);
+        this.insert(new TVGroup(new TVRect(0, 0, 82, 25)).insertAll([
             new TVLabel(new TVRect(2, 1, 50, 2), "~D~OS private overlay per user (MiB)", this.capacity),
             this.capacity,
-            new TVStaticText(new TVRect(2, 4, 58, 6), "1–256 MiB; default 128. Excludes shared C files.\nLowering the limit does not delete saved files."),
+            new TVStaticText(new TVRect(2, 4, 78, 6), "1–256 MiB; default 64. User overrides are set in Users.\nShared C files are excluded. No saved files are deleted."),
+            new TVLabel(new TVRect(2, 7, 78, 8), "Runtime settings (read-only; environment/configuration files)", this.runtime), this.runtime,
+            new TVButton(new TVRect(2, 18, 25, 20), "Rebuild ~D~OS C...", "server-rebuild-dos"),
+            new TVButton(new TVRect(28, 18, 51, 20), "Rebuild ~M~IDI...", "server-rebuild-midi"),
+            new TVButton(new TVRect(54, 18, 78, 20), "~U~sers", "account-users"),
             this.saveButton,
-            new TVButton(new TVRect(31, 7, 44, 9), "~C~ancel", "server-settings-cancel", bfNormal),
+            new TVButton(new TVRect(18, 20, 31, 22), "~C~ancel", "server-settings-cancel", bfNormal),
             this.status,
         ]));
         this.requestVersion = 0;
@@ -699,7 +1047,8 @@ class TVServerConfigurationDialog extends TVDialog {
             if (version !== this.requestVersion || !this.isOpen()) { return; }
             this.capacity.setData(String(data.dos_user_disk_mb));
             this.capacity.selectAll();
-            this.status.setText("Applies to every signed-in user's C drive.");
+            this.runtime.newList(Object.entries(data.runtime || {}).map(([key, value]) => ({ label: `${key}: ${value}` })));
+            this.status.setText("Default for users without an individual capacity override.");
             this.saveButton.setState(sfDisabled, false);
         } catch (error) {
             if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
@@ -3723,126 +4072,6 @@ class TVGridDemoDialog extends TVDialog {
     }
 }
 
-class TVServerTerminalDialog extends TVDialog {
-    static viewName = "server-terminal";
-
-    constructor() {
-        super(new TVRect(0, 0, 84, 27), "Server Terminal");
-        this.setHelpCtx(hcServerTerminal);
-        this.jobId = new TVInputLine(new TVRect(10, 1, 24, 2), 12);
-        this.key = new TVInputLine(new TVRect(35, 1, 79, 2), 64).setSecret();
-        this.input = new TVInputLine(new TVRect(10, 22, 68, 23), 2048);
-        this.sendButton = new TVButton(new TVRect(69, 21, 79, 23), "~S~end", "terminal-send");
-        this.status = new TVStaticText(new TVRect(27, 3, 79, 4), "Enter the ID and key printed by the server command.");
-        const terminal = new TVTerminal(new TVRect(2, 5, 80, 21), 200);
-        this.insert(new TVGroup(new TVRect(0, 0, 82, 25)).insertAll([
-            new TVLabel(new TVRect(2, 1, 10, 2), "Job ~I~D:", this.jobId),
-            this.jobId,
-            new TVLabel(new TVRect(27, 1, 35, 2), "~K~ey:", this.key),
-            this.key,
-            new TVButton(new TVRect(2, 3, 15, 5), "~C~onnect", "terminal-connect", bfDefault),
-            this.status,
-            terminal,
-            new TVLabel(new TVRect(2, 22, 10, 23), "~I~nput:", this.input),
-            this.input,
-            this.sendButton,
-            new TVButton(new TVRect(69, 23, 79, 25), "~C~lose", "terminal-close"),
-        ]));
-        this.terminal = terminal.bind(terminal.root);
-        this.input.setState(sfDisabled, true);
-        this.sendButton.setState(sfDisabled, true);
-        this.connection = null;
-        this.pollTimer = null;
-        this.bindCommonClose(() => this.close());
-        this.bindDrag();
-    }
-
-    handleEvent(event) {
-        super.handleEvent(event);
-        if (event.what !== evCommand) { return; }
-        if (event.command === "terminal-close") { this.close(); }
-        else if (event.command === "terminal-connect") { void this.connect(); }
-        else if (event.command === "terminal-send") { void this.send(); }
-        else { return; }
-        this.clearEvent(event);
-    }
-
-    close() {
-        this.disconnect();
-        this.key.setData("");
-        super.close();
-    }
-
-    disconnect() {
-        if (this.pollTimer) { clearTimeout(this.pollTimer); }
-        this.pollTimer = null;
-        this.connection = null;
-        this.input.setState(sfDisabled, true);
-        this.sendButton.setState(sfDisabled, true);
-    }
-
-    async connect() {
-        this.disconnect();
-        const id = this.jobId.getData().trim();
-        const key = this.key.getData().trim();
-        if (!/^[A-Za-z0-9_-]{12}$/.test(id) || !key) {
-            this.status.setText("Enter a valid job ID and access key.");
-            return;
-        }
-        this.connection = { id, key, offset: 0 };
-        this.terminal.clear();
-        await this.poll();
-    }
-
-    async poll() {
-        const connection = this.connection;
-        if (!connection || !this.isOpen()) { return; }
-        try {
-            const response = await fetch(`/api/terminal/jobs/${encodeURIComponent(connection.id)}?offset=${connection.offset}`, {
-                headers: { "X-THelp-Terminal-Key": connection.key }, cache: "no-store",
-            });
-            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
-            const result = await response.json();
-            if (this.connection !== connection) { return; }
-            connection.offset = result.offset;
-            if (result.output) {
-                this.terminal.appendChunk(result.output.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ""));
-            }
-            this.input.setState(sfDisabled, !result.running);
-            this.sendButton.setState(sfDisabled, !result.running);
-            this.status.setText(result.running
-                ? `${result.label}: running`
-                : `${result.label}: finished (exit ${result.exit_code}) — input locked`);
-            if (result.running || result.output?.length) {
-                this.pollTimer = setTimeout(() => { void this.poll(); }, 350);
-            }
-        } catch (error) {
-            if (this.connection !== connection) { return; }
-            this.status.setText(`Connection failed: ${String(error?.message || error)}`);
-            this.disconnect();
-        }
-    }
-
-    async send() {
-        const connection = this.connection;
-        const text = this.input.getData();
-        if (!connection || !text || this.input.disabled) { return; }
-        try {
-            const response = await fetch(`/api/terminal/jobs/${encodeURIComponent(connection.id)}/input`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-THelp-Terminal-Key": connection.key },
-                body: JSON.stringify({ text }),
-            });
-            if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
-            this.input.setData("");
-            this.input.focus();
-        } catch (error) {
-            this.status.setText(`Input rejected: ${String(error?.message || error)}`);
-            if (String(error?.message).includes("409")) { this.input.setState(sfDisabled, true); }
-        }
-    }
-}
-
 function statisticsFlag(country) {
     const code = String(country || "").toUpperCase();
     if (!/^[A-Z]{2}$/.test(code)) { return "🌍"; }
@@ -4342,6 +4571,8 @@ class TVFindDialog extends TVDialog {
         this.targetLabel = String(targetLabel || "active window");
         this.setAvailability(false);
         this.historyWindow.refresh();
+        // The manager only activates an already-open dialog; open() is not called again.
+        if (this.isOpen()) { void this.checkGlobalAvailability(); }
     }
 
     open(initialQuery = "") {
@@ -4455,7 +4686,8 @@ class TVIndexProgressDialog extends TVDialog {
 
     update(status) {
         const percent = Math.max(0, Math.min(100, Number(status.percent) || 0));
-        this.summary.setText(`${status.processed || 0} / ${status.total || 0} files indexed`);
+        const skipped = Array.isArray(status.warnings) ? status.warnings.length : 0;
+        this.summary.setText(`${status.processed || 0} / ${status.total || 0} files checked${skipped ? ` · ${skipped} skipped` : ""}`);
         this.file.setText(String(status.file || "").slice(-40));
         this.bar.updateView(percent);
         this.percent.updateView(percent);
@@ -4537,6 +4769,7 @@ class TVSearchDialog extends TVDialog {
         this.matches = [];
         this.selectedIndex = -1;
         this.searchSerial = 0;
+        this.indexWarnings = 0;
         this.searchTimer = null;
         this.indexMonitorTimer = null;
         this.indexMonitorSerial = 0;
@@ -4664,7 +4897,9 @@ class TVSearchDialog extends TVDialog {
         this.okButton.setState(sfDisabled, this.selectedIndex < 0);
         const match = this.matches[this.selectedIndex];
         const name = match?.help_name || (match?.kind === "doc" ? "Docs" : "");
-        this.sourceView.setText(name ? `Source: ${name}`.slice(0, 60) : "");
+        const warning = this.isGlobal() && this.indexWarnings
+            ? `${this.indexWarnings} file${this.indexWarnings === 1 ? "" : "s"} skipped · ` : "";
+        this.sourceView.setText((warning + (name ? `Source: ${name}` : "")).slice(0, 60));
     }
 
     openSelected() {
@@ -4745,8 +4980,8 @@ class TVSearchDialog extends TVDialog {
             if (status.state === "building") {
                 this.showIndexProgress(status);
                 this.indexMonitorTimer = setTimeout(() => { void this.monitorIndex(); }, 250);
-            } else if (status.state === "ready" && this.indexProgress) {
-                this.indexProgress.update({ ...status, percent: 100 });
+            } else if (status.state === "ready") {
+                this.indexProgress?.update({ ...status, percent: 100 });
                 this.indexMonitorTimer = setTimeout(() => {
                     if (serial !== this.indexMonitorSerial) { return; }
                     this.indexMonitorTimer = null;
@@ -4776,14 +5011,17 @@ class TVSearchDialog extends TVDialog {
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
             const data = await response.json();
             if (serial !== this.searchSerial || !this.isGlobal()) { return; }
+            this.indexWarnings = Array.isArray(data.status?.warnings) ? data.status.warnings.length : 0;
             this.matches = Array.isArray(data.results) ? data.results : [];
             if (!this.matches.length) {
                 this.resultsBox.setMessage(`No matches for "${query}" in HELP files or Docs.`);
+                this.updateSelectionUi();
             } else {
                 this.resultsBox.setItems(this.matches, 0);
                 this.selectIndex(0);
             }
             this.resultsBox.updateScrollbar();
+            if (data.status?.state === "building") { void this.monitorIndex(); }
         } catch (error) {
             if (serial === this.searchSerial) {
                 this.resultsBox.setMessage(`Global search is unavailable: ${String(error?.message || error)}`);
@@ -4797,6 +5035,7 @@ class TVSearchDialog extends TVDialog {
         }
         this.matches = [];
         this.selectedIndex = -1;
+        this.indexWarnings = 0;
         this.sourceView.setText("");
         this.okButton.setState(sfDisabled, true);
         clearTimeout(this.searchTimer);
@@ -4892,7 +5131,10 @@ class TVSearchDialog extends TVDialog {
 Object.assign(TV, {
     TVAboutDialog,
     TVLoginDialog,
+    TVAccountDialog,
+    TVUsersDialog,
     TVRegistrationDialog,
+    TVAddUserDialog,
     TVRegistrationTokenDialog,
     TVServerConfigurationDialog,
     TVViewGalleryDialog,
@@ -4912,7 +5154,6 @@ Object.assign(TV, {
     TVColorsDialog,
     TVMidiPlayerDialog,
     TVGridDemoDialog,
-    TVServerTerminalDialog,
     TVStatisticsDialog,
     TVSystemInformationDialog,
     TVFindDialog,

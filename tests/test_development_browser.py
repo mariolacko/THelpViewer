@@ -58,7 +58,7 @@ const [port,url]=process.argv.slice(1);
   await send('Page.navigate',{url});
   await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+10000;const check=()=>{
    const title=document.querySelector('.tv-menu-right .tv-menu-button')?.textContent;
-   if(title==='Local Administrator'&&document.querySelector('[data-tv-command="account-server-configuration"]')){resolve();return;}
+   if(title==='Admin'&&document.querySelector('[data-tv-command="account-server-configuration"]')){resolve();return;}
    if(Date.now()>deadline){reject(Error('Development account menu did not load: '+title));return;}setTimeout(check,50);
   };check();})`);
   if(!await evaluate(`(async()=>{if(navigator.credentials)throw Error('WebAuthn was not disabled');
@@ -96,7 +96,7 @@ const [port,url]=process.argv.slice(1);
  }
  await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'F1',code:'F1',bubbles:true,cancelable:true}))`);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+10000;const check=()=>{
-  if(document.body.textContent.includes('Only the local development administrator has Rebuild DOS C')){resolve();return;}
+  if(document.body.textContent.includes('Server Configuration contains the default quota and runtime settings.')){resolve();return;}
   if(Date.now()>deadline){reject(Error('Configuration F1 did not open the updated native HELP topic'));return;}setTimeout(check,50);
  };check();})`);
  socket.close();

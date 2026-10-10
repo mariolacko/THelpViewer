@@ -132,7 +132,7 @@ Sign in through the existing Passkey dialog to keep a private C-drive overlay
 on the server as regular files with SQLite deletion/revision metadata.
 Only files DOS actually reads are downloaded, in gzip-capable 64 KiB chunks;
 workers are required by default, with no automatic full-disk fallback.
-Admins can configure the default 128 MiB private-only quota through
+Admins can configure the default 64 MiB private-only quota through
 **User name → Configuration → Server Configuration**. Changes never modify the shared base. Saves run every minute
 while active, and before closing or restarting DOS. Before closing the browser
 tab, explicitly choose **Save C to cloud**: a tab close/crash cannot guarantee
@@ -285,7 +285,7 @@ THelpViewer/
 - **Server statistics** — privacy-preserving aggregate SQLite counters shown in a Turbo Vision window
 - **System information** — local application, browser, display, locale, storage and capability details with live server/catalog status
 - **Grid Viewer** — two-dimensional Turbo Vision list with visible column headers and two-axis scrolling
-- **Server Terminal** — attach to a command explicitly launched on the server; output streams live and input locks at exit
+- **Users** — administrators manage profiles, roles, enabled accounts and individual private C capacities
 - **Shared Hall of Fame** — server-wide top-ten tables with automatic local-browser fallback
 - **Full-text search** — search the active window or all public HELP files and Docs through a server-side index
 - **A–Z index navigation** — letter jump links in the index view
@@ -366,6 +366,11 @@ To serve only (if bundles are already built):
 
 After regeneration, restart the local server or Docker and hard-refresh the browser (Ctrl+F5).
 
+Deploy the viewer's JS/CSS assets together with `www/index.html`, not only the
+files modified since the last local commit: the target may run an older release.
+Keep its asset-version URLs in sync with the bundle writer so browser caches do
+not mix releases. Do not overwrite `.env`, `var/`, HELP bundles or MIDI data.
+
 ### Server statistics and errors
 
 The System menu's **System Information** dialog reports the current application
@@ -437,6 +442,23 @@ without the server retain local search but cannot use the global API.
 viewer previews, `robots.txt` and sitemaps; the full-text index itself remains
 in `search_index.py`. These are separate from the JSON global-search API.
 
+Indexing isolates HELP/Docs file errors: the original file is never removed,
+only its invalid cached rows. Healthy files remain searchable and appear in
+sitemaps. `/api/search/status` and search responses report `warnings` with the
+source kind, relative filename and error, and the server logs the failure.
+An unchanged failed source is not retried on every request; changing its
+content/permissions (size, mtime or ctime) or restarting the server retries it.
+Removed sources clear their warnings, and successful retries restore their
+topics/Docs automatically. Global database errors are still fatal, not hidden
+as per-file warnings.
+
+The status `available` flag is separate from indexing progress. Readers use
+completed per-file transactions during background updates, while `state`
+remains `building`. With no usable initial index, search returns 202 and public
+content/sitemaps return 503 with `Retry-After`; a known unreadable individual
+file also returns 503 while healthy pages return 200. Search/progress dialogs
+show the count of skipped files. No original HELP bundle or link is rewritten.
+
 The server-rendered homepage links to each public HELP-file overview and Doc;
 the TVision interface replaces that catalog after loading, but its Help Files
 and Docs menu entries retain real `<a href>` URLs to the same pages. HELP
@@ -474,6 +496,24 @@ In Google Search Console, submit `sitemap.xml` under the
 Requesting indexing of `/` alone does not submit the sitemap or request every
 HELP topic. Google may need days or weeks to crawl and select individual pages.
 
+Equivalent HELP/Docs query URLs permanently redirect (HTTP 308) to the same
+encoding and parameter order used in the sitemap: spaces as `+`, literal plus
+signs as `%2B`, and path separators as `%2F`. Viewer options such as `line`
+and browser fragments are preserved; the canonical excludes these options.
+Missing resources still return 404 rather than being repaired heuristically.
+The browser error-page destination (`?server_error=404&server_path=...`) also
+returns HTTP 404 and `X-Robots-Tag: noindex`, while retaining the TVision
+MessageBox. It must not masquerade as an indexable 200 homepage.
+
+Original HELP files also document messages such as "Match Not Found" or
+"Could not find file". Public topic previews explicitly identify their text
+as original reference documentation, not a live website error. These useful
+diagnostic topics stay indexable. The same rules apply to every non-empty
+topic, including short or placeholder-like messages: the server does not
+classify their meaning by filename, topic ID, language, text or text length.
+Only empty topic bodies are omitted from topic sitemaps and return 404 on
+public topic URLs. Original bundles, topic IDs and links are unchanged.
+
 `docker-compose.yml` already passes `THELP_PUBLIC_BASE_URL` through. On the
 public host, put `THELP_PUBLIC_BASE_URL=https://thelp.zdrojak.dev` in a `.env`
 file beside `docker-compose.yml`, then run `docker compose up -d --force-recreate viewer`.
@@ -501,6 +541,11 @@ for other users, review still-valid tokens and revoke selected tokens. The
 Login appears on the right of the menu bar. After sign-in it becomes the user's
 display name with Account, Configuration and Sign Out. Colors currently
 remain browser-local; server configuration and tokens are admin-only.
+Account opens profile settings (display name, email and read-only role), not
+the Login dialog. Save updates only the signed-in user's profile and menu name.
+The stable username/account ID, Passkeys, sessions and private DOS files remain
+unchanged. Both the updated email and original username can be used to sign in;
+email addresses are not verified mailboxes. Users cannot edit their role here.
 The local origin defaults to `http://localhost:5448`. On the public host, set
 `THELP_AUTH_ORIGIN=https://thelp.zdrojak.dev` in the same `.env` file as
 `THELP_PUBLIC_BASE_URL`; the latter only configures public links and does not
@@ -509,19 +554,20 @@ enable Passkey login. Recreate the container with
 environment variables), then check that `/api/auth/session` returns
 `"enabled": true`. Do this only after securing the Cloudflare-to-origin
 connection. See [Accounts](docs/THelp%20Viewer/Accounts.md) for setup and the
-current security limitations. Login does not yet replace the Server Terminal
-ID/key mechanism.
+current security limitations. Server Terminal and its ID/key API have been removed.
 
 For local VS Code testing without Passkey support, use
 `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build --force-recreate viewer`.
-This opt-in mode binds only `127.0.0.1`, signs in as Local Administrator and
+This opt-in mode binds only `127.0.0.1`, signs in as Admin and
 uses separate development accounts/sessions. Never expose it publicly. Normal
 `docker-compose.yml` keeps Passkey authentication enabled and auto-login off;
 see [Accounts](docs/THelp%20Viewer/Accounts.md#local-development-without-passkeys).
 
-In local development mode, Account → Configuration also offers **Rebuild DOS C**
-and **Rebuild MIDI**, with confirmation and a shared progress dialog. They are
-not enabled on production. Previous data moves to `var/backups/` for recovery:
+Signed-in administrators have User name → Configuration → **Rebuild DOS C**
+and **Rebuild MIDI** in production as well as local development, with confirmation
+and a shared progress dialog. The API requires an active administrator session,
+the configured host and an exact same-origin write; ordinary members are denied.
+Previous data moves to `var/backups/` for recovery:
 DOS rebuild retains private overlays/source archives; MIDI rebuild stops the
 existing downloader before replacing tracks, covers and catalog and downloading
 the configured sources again. Keep backups deliberately; repeated rebuilds use

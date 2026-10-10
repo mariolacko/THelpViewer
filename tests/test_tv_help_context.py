@@ -36,7 +36,7 @@ def test_dialogs_own_their_help_contexts_without_registration_maps():
         "hcColors", "hcMidiPlayer", "hcFind", "hcSearch",
         "hcStatistics", "hcSystemInformation",
         "hcAccount", "hcRegistration", "hcRegistrationTokens", "hcServerConfiguration",
-        "hcGridDemo", "hcServerTerminal",
+        "hcGridDemo", "hcUsers",
     ):
         assert f"setHelpCtx({context})" in dialogs
     assert "setHelpCtx(hcContextHelp)" in context_help
@@ -69,7 +69,7 @@ def test_context_help_is_a_complete_uhf_bundle():
         2080, 2090, 2100, 2110, 2120, 2130,
         2140, 2150, 2160, 2170, 2180, 2190,
         2200, 2210, 2220, 2230, 2240, 2250, 2260, 2270,
-        2280, 2290, 2300, 2310, 2320, 2330, 2340,
+        2280, 2290, 2300, 2310, 2320, 2340, 2350,
     }
     assert bundle["uhf_version"] == "2.0"
     assert bundle["metadata"]["help_contents_topic_id"] == 1000

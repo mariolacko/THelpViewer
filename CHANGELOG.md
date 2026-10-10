@@ -2,7 +2,87 @@
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-10-10
+
+- Rechecking an already-open Find dialog refreshes global-search availability;
+  reactivating the window no longer leaves that option disabled.
+- Moved Users' Add User / Save row down one character row, leaving a blank
+  row below the profile details; Refresh / Close and the list stay unchanged.
+- Arranged Users' four buttons into a 2×2 matrix and extended the user list
+  by five character rows, aligned with the bottom of the button block.
+- Add User now opens the shared registration-profile form (first/last name,
+  nickname, email). An administrator creates a member without a Passkey and
+  receives a copyable, account-bound one-hour invitation; the admin session
+  stays unchanged. The user enrolls their own Passkey through Login → Register.
+- Registration now persists first/last name and nickname with its ceremony;
+  invitations for existing managed users reuse the existing enrollment API.
+- All email inputs, including Login, use TVEmailValidator. Login also accepts
+  valid legacy usernames; email and server validation reject control characters.
+- Renamed the default local-development account label to Admin, including
+  existing default profiles and active sessions; custom names and DOS data stay unchanged.
+- Removed the separate Display name field from Account/Users and profile-edit
+  requests. The server derives the account label from nickname, then first/last
+  name, retaining the existing label if those fields are empty.
+- Fixed TVButton shadows to cover the actual button width, including the lower
+  right corner of wide Rebuild DOS C / Rebuild MIDI / Users buttons.
+- Connected both application desktops to their TVProgram owner so dialog button
+  commands reach the application through TVEvent. Server Configuration Users works.
+- Added Add user below the Users list, opening the existing registration-token
+  workflow; the new user registers their own Passkey with a one-hour token.
+- Added first name, last name and nickname to Account and administrator Users,
+  retaining display names, usernames, Passkeys and private DOS storage. Existing
+  profiles migrate with blank optional fields, without guessing name splits.
+- Email inputs in Account, Users and Registration now use a shared TVEmailValidator
+  through TVInputLine; invalid completed addresses are blocked before submission.
+- Moved the Server Configuration Rebuild DOS C / Rebuild MIDI / Users row down
+  one character row, leaving a gap below the runtime-settings list.
+- Made Users one column narrower and its user list two rows taller.
+  Private C capacity now rejects non-digit typing/pastes through the shared
+  TVFilterValidator; blank still inherits the server default.
+- Fixed shared TVInputLine input-broadcast delivery so attached validators
+  run during typing and paste, not only when validating a completed field.
+- Added administrator Users management with name/email, role, enabled state,
+  per-account DOS overlay capacity and protection of the last administrator.
+  The founding administrator is permanently protected against deactivation
+  and demotion, even when additional administrators exist.
+- Account now shows private C usage/capacity; the default overlay is 64 MiB.
+  Server Configuration centralizes the default, runtime information and rebuilds.
+- Shared root menu placement now keeps right-aligned popups within the viewport.
+- Removed Server Terminal, its API and launcher. The shared TVTerminal view remains.
+- DOS sources no longer require manifest sha256/archive_bytes; HTTPS and archive
+  extraction limits remain enforced. Existing prepared C disks are not rebuilt.
+
+
+- Separated Login from Account profile settings. Signed-in users can update
+  their display name/email through owned TVision controls; role is read-only.
+  The API restricts edits to the session owner and preserves username, account
+  ID, Passkeys, sessions and private DOS storage. Updated emails work for login.
+- Enabled recoverable DOS/MIDI rebuilds for signed-in administrators on the
+  public server, retaining host/origin/session/role checks and stricter local
+  development proxy rejection. Members cannot rebuild; confirmation is required.
+
+- Refreshed viewer JS/CSS cache-version URLs for the complete frontend update,
+  including the right-aligned Login/account menu. Documented coherent asset
+  deployment to avoid mixing current HTML with an older set of scripts/styles.
+
 ### Server
+- Isolated gzip/JSON/UHF/Docs read failures to their own sources, preserving
+  healthy full-text search, public pages and sitemaps. Warnings name the failed
+  source in the API/log; repaired or removed sources recover automatically.
+  Completed per-file data stays available during indexing; only initial
+  unavailability and failed individual files return retryable 503 responses.
+  Database errors remain fatal. Original HELP/Docs files are never deleted.
+- Public HELP previews now identify original diagnostic messages as reference
+  documentation, rather than presenting them like website errors. All
+  non-empty topics use the same indexing rules; removed the text-specific
+  "no help available" exclusion. No filename, topic ID, language or diagnostic
+  wording determines indexing. Original HELP bundles and links are unchanged.
+- Public HELP/Docs URL encoding/order variants now permanently redirect to
+  sitemap-compatible URLs, preserving viewer options and browser fragments.
+  Missing content is still 404. Browser error pages now return HTTP 404 with
+  `noindex` instead of an indexable 200, while keeping the TVision MessageBox.
+  Public page rendering runs in FastAPI's thread pool rather than blocking
+  the event loop with synchronous index/file reads.
 - DOS source entries now support a `files` list with CP437/CRLF text lines or
   strict Base64 bytes, relative to `target`, with path/count/size validation.
   On a fresh install, configured content overrides its archive counterpart;
@@ -12,6 +92,8 @@
 - Unified root and package `files` definitions, both supporting text/Base64.
   AUTOEXEC.BAT is a normal root entry; legacy initial_files/boot-file keys
   are rejected with a migration message. Existing C disks remain untouched.
+- Removed the unused `page` field from the Norton Commander DOS source;
+  its download URL and inner disk-image selection are unchanged.
 - Added local-development-admin DOS/MIDI rebuild endpoints with exact scope,
   origin/session guards and recoverable backups. DOS keeps user overlays and
   cached archives; MIDI stops its old downloader before replacing tracks,
@@ -80,6 +162,8 @@
   of `app.py` into a dedicated router without changing endpoints or storage.
 
 ### TVision
+- Search and index progress show skipped-file counts and refresh results after
+  a background index update. Updated the native Search HELP instructions.
 - Added local-only Rebuild DOS C / Rebuild MIDI account-menu actions with
   confirmation and shared progress views. DOS saves/closes its current window
   first; MIDI playback stops before reset. Hiding progress does not cancel jobs.
