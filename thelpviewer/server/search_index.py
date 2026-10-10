@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import gzip
 import json
+import logging
 import re
 import sqlite3
 import threading
+import zlib
 from contextlib import closing
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from ..public_docs import public_doc_sources
 
 _TAG = re.compile(r"\[(?:/?[A-Za-z][^\]\n]*|rule)\]")
 _WORD = re.compile(r"\w+", re.UNICODE)
+_LOGGER = logging.getLogger(__name__)
 
 
 def _plain(value: object) -> str:
@@ -80,6 +83,9 @@ class GlobalSearchIndex:
         self.path = state_dir / "global-search.sqlite3"
         self._lock = threading.Lock()
         self._building = False
+        self._available = False
+        self._failed_files: dict[tuple[str, str], tuple[str, str]] = {}
+        self._pending_files: set[tuple[str, str]] = set()
         self._failed_snapshot = None
         self._status = {"state": "idle", "percent": 0, "processed": 0, "total": 0,
                         "topics": 0, "documents": 0, "file": ""}
@@ -116,9 +122,12 @@ class GlobalSearchIndex:
             if not path.is_file():
                 continue
             relative = path.relative_to(self.helps_dir).as_posix()
-            stat = path.stat()
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                continue  # The source disappeared while scanning.
             name = names.get(relative) or ""
-            fingerprint = f"{stat.st_size}:{stat.st_mtime_ns}:{name}"
+            fingerprint = f"{stat.st_size}:{stat.st_mtime_ns}:{stat.st_ctime_ns}:{name}"
             found[relative] = (path, fingerprint, name)
         return found
 
@@ -132,9 +141,12 @@ class GlobalSearchIndex:
             if resolved in seen_paths:
                 continue
             seen_paths.add(resolved)
-            stat = path.stat()
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                continue
             title = Path(relative).stem.replace("_", " ")
-            found[relative] = (path, f"{stat.st_size}:{stat.st_mtime_ns}", title)
+            found[relative] = (path, f"{stat.st_size}:{stat.st_mtime_ns}:{stat.st_ctime_ns}", title)
         return found
 
     def ensure_current(self) -> None:
@@ -153,15 +165,26 @@ class GlobalSearchIndex:
                     }
                     topic_count = connection.execute("SELECT coalesce(sum(topic_count), 0) FROM files").fetchone()[0]
                     doc_count = connection.execute("SELECT count(*) FROM docs_files").fetchone()[0]
+                if self._status["state"] != "error":
+                    self._available = self._available or bool(indexed or indexed_docs)
+                for key in list(self._failed_files):
+                    kind, name = key
+                    if name not in (snapshot if kind == "help" else docs_snapshot):
+                        del self._failed_files[key]
                 work = sorted(
                     [("help", name) for name, (_path, fingerprint, _title) in snapshot.items()
-                     if indexed.get(name) != fingerprint]
+                     if indexed.get(name) != fingerprint
+                     and self._failed_files.get(("help", name), (None,))[0] != fingerprint]
                     + [("help", name) for name in indexed if name not in snapshot]
                     + [("doc", name) for name, (_path, fingerprint, _title) in docs_snapshot.items()
-                       if indexed_docs.get(name) != fingerprint]
-                    + [("doc", name) for name in indexed_docs if name not in docs_snapshot]
+                       if indexed_docs.get(name) != fingerprint
+                       and self._failed_files.get(("doc", name), (None,))[0] != fingerprint]
+                    + [("doc", name) for name in indexed_docs if name not in docs_snapshot],
+                    key=lambda item: (item[1] in (snapshot if item[0] == "help" else docs_snapshot), *item),
                 )
                 if not work:
+                    self._available = True
+                    self._pending_files.clear()
                     self._status = {"state": "ready", "percent": 100, "processed": 0,
                                     "total": len(snapshot) + len(docs_snapshot), "topics": topic_count,
                                     "documents": doc_count, "file": ""}
@@ -173,60 +196,91 @@ class GlobalSearchIndex:
                 if signature == self._failed_snapshot:
                     return
                 self._building = True
+                self._pending_files = {
+                    (kind, name) for kind, name in work
+                    if name in (snapshot if kind == "help" else docs_snapshot)
+                }
                 self._status = {"state": "building", "percent": 0, "processed": 0,
                                 "total": len(work), "topics": topic_count,
                                 "documents": doc_count, "file": ""}
             except (OSError, sqlite3.Error) as error:
+                self._available = False
                 self._status = {"state": "error", "percent": 0, "processed": 0,
                                 "total": 0, "topics": 0, "documents": 0, "file": "", "error": str(error)}
                 return
         threading.Thread(target=self._build, args=(snapshot, docs_snapshot, work, signature), daemon=True).start()
+
+    @staticmethod
+    def _remove_indexed_source(connection: sqlite3.Connection, kind: str, relative: str) -> None:
+        if kind == "help":
+            connection.execute("DELETE FROM topics_fts WHERE file_path = ?", (relative,))
+            connection.execute("DELETE FROM files WHERE file_path = ?", (relative,))
+        else:
+            connection.execute("DELETE FROM docs_fts WHERE doc_path = ?", (relative,))
+            connection.execute("DELETE FROM docs_files WHERE doc_path = ?", (relative,))
+
+    def _update_source(self, connection: sqlite3.Connection, kind: str, relative: str, snapshot: dict) -> None:
+        if relative not in snapshot:
+            with connection:
+                self._remove_indexed_source(connection, kind, relative)
+            return
+        path, fingerprint, title = snapshot[relative]
+        if kind == "help":
+            with gzip.open(path, "rt", encoding="utf-8") as source:
+                bundle = json.load(source)
+            if (not isinstance(bundle, dict) or not isinstance(bundle.get("topics"), (dict, list))
+                    or not isinstance(bundle.get("metadata", {}), dict)
+                    or not isinstance(bundle.get("index", []), list)):
+                raise ValueError("Invalid UHF document structure")
+            help_name = title or str(bundle.get("metadata", {}).get("name") or relative)
+            rows = list(_topic_rows(bundle, relative, help_name))
+            with connection:
+                self._remove_indexed_source(connection, kind, relative)
+                connection.executemany(
+                    "INSERT INTO topics_fts(file_path, help_name, context_id, title, index_terms, body, preview) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)", rows,
+                )
+                connection.execute(
+                    "INSERT INTO files(file_path, fingerprint, help_name, topic_count) VALUES (?, ?, ?, ?)",
+                    (relative, fingerprint, help_name, len(rows)),
+                )
+        else:
+            body = path.read_text(encoding="utf-8", errors="replace")
+            preview = " ".join(line.strip(" #>*-`\t") for line in body.splitlines() if line.strip())[:180]
+            with connection:
+                self._remove_indexed_source(connection, kind, relative)
+                connection.execute(
+                    "INSERT INTO docs_fts(doc_path, title, body, preview) VALUES (?, ?, ?, ?)",
+                    (relative, title, body, preview),
+                )
+                connection.execute(
+                    "INSERT INTO docs_files(doc_path, fingerprint, title) VALUES (?, ?, ?)",
+                    (relative, fingerprint, title),
+                )
 
     def _build(self, snapshot: dict, docs_snapshot: dict,
                work: list[tuple[str, str]], signature: tuple) -> None:
         try:
             with closing(self._connect()) as connection:
                 for position, (kind, relative) in enumerate(work, 1):
-                    if kind == "help" and relative in snapshot:
-                        path, fingerprint, catalog_name = snapshot[relative]
-                        with gzip.open(path, "rt", encoding="utf-8") as source:
-                            bundle = json.load(source)
-                        help_name = catalog_name or str(bundle.get("metadata", {}).get("name") or relative)
-                        rows = list(_topic_rows(bundle, relative, help_name))
+                    sources = snapshot if kind == "help" else docs_snapshot
+                    try:
+                        self._update_source(connection, kind, relative, sources)
+                    except (OSError, EOFError, ValueError, TypeError, zlib.error) as error:
+                        # File/format failures are isolated; database failures are
+                        # still fatal rather than silently hiding a broken DB.
                         with connection:
-                            connection.execute("DELETE FROM topics_fts WHERE file_path = ?", (relative,))
-                            connection.executemany(
-                                "INSERT INTO topics_fts(file_path, help_name, context_id, title, index_terms, body, preview) "
-                                "VALUES (?, ?, ?, ?, ?, ?, ?)", rows,
-                            )
-                            connection.execute(
-                                "INSERT OR REPLACE INTO files(file_path, fingerprint, help_name, topic_count) "
-                                "VALUES (?, ?, ?, ?)", (relative, fingerprint, help_name, len(rows)),
-                            )
-                    elif kind == "help":
-                        with connection:
-                            connection.execute("DELETE FROM topics_fts WHERE file_path = ?", (relative,))
-                            connection.execute("DELETE FROM files WHERE file_path = ?", (relative,))
-                    elif relative in docs_snapshot:
-                        path, fingerprint, title = docs_snapshot[relative]
-                        body = path.read_text(encoding="utf-8", errors="replace")
-                        preview = " ".join(
-                            line.strip(" #>*-`\t") for line in body.splitlines() if line.strip()
-                        )[:180]
-                        with connection:
-                            connection.execute("DELETE FROM docs_fts WHERE doc_path = ?", (relative,))
-                            connection.execute(
-                                "INSERT INTO docs_fts(doc_path, title, body, preview) VALUES (?, ?, ?, ?)",
-                                (relative, title, body, preview),
-                            )
-                            connection.execute(
-                                "INSERT OR REPLACE INTO docs_files(doc_path, fingerprint, title) VALUES (?, ?, ?)",
-                                (relative, fingerprint, title),
-                            )
+                            self._remove_indexed_source(connection, kind, relative)
+                        fingerprint = sources.get(relative, (None, "", None))[1]
+                        with self._lock:
+                            self._failed_files[(kind, relative)] = (fingerprint, str(error))
+                        _LOGGER.warning("Cannot index %s %s: %s", kind, relative, error)
                     else:
-                        with connection:
-                            connection.execute("DELETE FROM docs_fts WHERE doc_path = ?", (relative,))
-                            connection.execute("DELETE FROM docs_files WHERE doc_path = ?", (relative,))
+                        with self._lock:
+                            self._failed_files.pop((kind, relative), None)
+                            self._available = True
+                    with self._lock:
+                        self._pending_files.discard((kind, relative))
                     count = connection.execute("SELECT coalesce(sum(topic_count), 0) FROM files").fetchone()[0]
                     documents = connection.execute("SELECT count(*) FROM docs_files").fetchone()[0]
                     with self._lock:
@@ -235,10 +289,12 @@ class GlobalSearchIndex:
                                         "documents": documents, "file": relative}
             with self._lock:
                 self._status = {**self._status, "state": "ready", "percent": 100, "file": ""}
+                self._available = True
                 self._failed_snapshot = None
         except (OSError, ValueError, sqlite3.Error) as error:
             with self._lock:
                 self._status = {**self._status, "state": "error", "error": str(error)}
+                self._available = False
                 self._failed_snapshot = signature
         finally:
             with self._lock:
@@ -247,11 +303,22 @@ class GlobalSearchIndex:
     def status(self) -> dict:
         self.ensure_current()
         with self._lock:
-            return dict(self._status)
+            return {**self._status, "available": self._available,
+                    "warnings": [{"kind": kind, "file": name, "error": error}
+                                 for (kind, name), (_fingerprint, error) in sorted(self._failed_files.items())]}
+
+    def file_error(self, kind: str, path: str) -> str | None:
+        with self._lock:
+            failure = self._failed_files.get((kind, path))
+            return failure[1] if failure else None
+
+    def file_pending(self, kind: str, path: str) -> bool:
+        with self._lock:
+            return (kind, path) in self._pending_files
 
     def search(self, query: str, limit: int = 60) -> tuple[dict, list[dict]]:
         status = self.status()
-        if status["state"] != "ready":
+        if not status["available"]:
             return status, []
         words = _WORD.findall(query.casefold())[:8]
         if not words:
@@ -288,7 +355,7 @@ class GlobalSearchIndex:
         return status, [result for _score, result in ranked[:result_limit]]
 
     def document(self, doc_path: str) -> dict[str, str] | None:
-        if self.status()["state"] != "ready":
+        if not self.status()["available"]:
             return None
         with closing(self._connect()) as connection:
             row = connection.execute(
@@ -298,7 +365,7 @@ class GlobalSearchIndex:
         return None if row is None else {"title": row[0], "body": row[1], "preview": row[2]}
 
     def document_paths(self) -> list[str]:
-        if self.status()["state"] != "ready":
+        if not self.status()["available"]:
             return []
         with closing(self._connect()) as connection:
             return [row[0] for row in connection.execute(
@@ -306,7 +373,7 @@ class GlobalSearchIndex:
             ).fetchall()]
 
     def topic(self, file_path: str, context_id: str) -> dict[str, str] | None:
-        if self.status()["state"] != "ready":
+        if not self.status()["available"]:
             return None
         with closing(self._connect()) as connection:
             row = connection.execute(
@@ -319,13 +386,13 @@ class GlobalSearchIndex:
         }
 
     def sitemap_count(self) -> int:
-        if self.status()["state"] != "ready":
+        if not self.status()["available"]:
             return 0
         with closing(self._connect()) as connection:
             return connection.execute("SELECT count(*) FROM topics_fts WHERE body != ''").fetchone()[0]
 
     def file_sitemap_counts(self) -> list[tuple[str, int]]:
-        if self.status()["state"] != "ready":
+        if not self.status()["available"]:
             return []
         with closing(self._connect()) as connection:
             return connection.execute(
@@ -335,7 +402,7 @@ class GlobalSearchIndex:
 
     def file_topic_rows(self, file_path: str, offset: int = 0,
                         limit: int | None = None) -> list[tuple[str, str, str]]:
-        if self.status()["state"] != "ready":
+        if not self.status()["available"]:
             return []
         query = ("SELECT context_id, title, help_name FROM topics_fts "
                  "WHERE file_path = ? AND body != '' ORDER BY context_id")
@@ -347,7 +414,7 @@ class GlobalSearchIndex:
             return connection.execute(query, parameters).fetchall()
 
     def sitemap_rows(self, offset: int, limit: int) -> list[tuple[str, str]]:
-        if self.status()["state"] != "ready":
+        if not self.status()["available"]:
             return []
         with closing(self._connect()) as connection:
             return connection.execute(

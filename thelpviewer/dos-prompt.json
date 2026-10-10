@@ -43,47 +43,15 @@
     {
       "id": "freedos-edit",
       "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.3/base/edit.zip",
-      "sha256": "582729981a967493f59f38b7d4464c1b1a6caa25f71c0a2fbf6dd9e3b782037b",
       "format": "zip",
       "target": "FREEDOS",
       "members": ["BIN/*", "DOC/EDIT/*", "SOURCE/EDIT/*", "APPINFO/EDIT.LSM"],
       "license": "FreeDOS EDIT (GPL-2.0); package includes COPYING and source archive"
     },
     {
-      "id": "blkdrop",
-      "title": "BlockDrop",
-      "launch": "CD \\GAMES\\BLKDROP then BLKDROP",
-      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.3/games/blkdrop.zip",
-      "sha256": "199171a5124daaf266f823287a3d0c492069aa91ec3d32ea2c61dbe21dd38547",
-      "format": "zip",
-      "members": ["GAMES/BLKDROP/*", "SOURCE/BLKDROP/SOURCES.ZIP", "APPINFO/BLKDROP.LSM"],
-      "license": "BlockDrop, BSD-3-Clause; original source archive and metadata retained"
-    },
-    {
-      "id": "sudoku86",
-      "title": "Sudoku86",
-      "launch": "CD \\GAMES\\SUDOKU86 then SUDOKU86",
-      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.3/games/sudoku86.zip",
-      "sha256": "79a5d89ec55bdf19c25d6ca5ac55fa9a7e7119aad2ecafe3033f993908c0bafd",
-      "format": "zip",
-      "members": ["GAMES/SUDOKU86/*", "SOURCE/SUDOKU86/SOURCES.ZIP", "APPINFO/SUDOKU86.LSM"],
-      "license": "Sudoku86, BSD-2-Clause; licence in README.TXT and original source archive retained"
-    },
-    {
-      "id": "zmiy",
-      "title": "Zmiy (Snake)",
-      "launch": "CD \\GAMES\\ZMIY then ZMIY",
-      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.3/games/zmiy.zip",
-      "sha256": "62cdac7c61d780ef793313cfc06699a731c24bd8370e0c74d0497757c3467c75",
-      "format": "zip",
-      "members": ["GAMES/ZMIY/*", "SOURCE/ZMIY/SOURCES.ZIP", "APPINFO/ZMIY.LSM"],
-      "license": "Zmiy, BSD-2-Clause; licence in ZMIY.TXT and original source archive retained"
-    },
-    {
       "id": "volkov-commander-405",
       "title": "Volkov Commander 4.05",
       "url": "https://vc.vvv.kyiv.ua/download/vc405sw.zip",
-      "sha256": "3c43b8b12d9b986d4f09c70179d845694bda5872ebc2531357ed07ca5bd0ed6b",
       "format": "zip",
       "target": "TOOLS/VC",
       "files": [
@@ -97,7 +65,6 @@
       "id": "volkov-commander-405-source",
       "title": "Volkov Commander source and BSD licence",
       "url": "https://vc.vvv.kyiv.ua/download/src/vc405.zip",
-      "sha256": "c4ede94b833ea81da24483231de157bd64b67cf1ec66a77be383490046889c3e",
       "format": "zip",
       "target": "SOURCE/VC",
       "members": ["*"],
@@ -108,8 +75,6 @@
       "title": "Norton Commander 4.0",
       "enabled": false,
       "url": "https://winworldpc.com/download/4627e280-9ec2-b518-c39a-11c3a4e284a2/from/c3ae6ee2-8099-713d-3411-c3a6e280947e",
-      "page": "https://winworldpc.com/product/norton-commander/4x",
-      "sha256": "c65c9b5f1e135fcf72078742a787ae4616e6d066df4d58c5dec694b538fc125f",
       "format": "archive",
       "image_member": "Norton Commander 4.0 (3.5)/disk1.img",
       "target": "TOOLS/NC",
@@ -121,8 +86,6 @@
       "title": "Prince of Persia",
       "url": "https://www.bestoldgames.net/prince-of-persia",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 346719,
-      "sha256": "79bc65e95908cf82bbf39403631c58842177ccd372aed47d5799abcb994a59aa",
       "format": "zip", "target": "GAMES", "members": ["PRINCE/*"],
       "launch": "CD \\GAMES\\PRINCE then PRINCE",
       "license": ""
@@ -132,8 +95,6 @@
       "title": "Wolfenstein 3D (shareware episode)",
       "url": "https://www.bestoldgames.net/wolfenstein-3d",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 692526,
-      "sha256": "32dfb964b3a0a2229d8b3259ee634dd827189765f209e0fb4c84d53bced3bda9",
       "format": "zip", "target": "GAMES", "members": ["WOLF3D/*"],
       "launch": "CD \\GAMES\\WOLF3D then WOLF3D",
       "license": "Original shareware WL1 episode; retain VENDOR.DOC and ORDER.FRM"
@@ -143,8 +104,6 @@
       "title": "DOOM (shareware episode)",
       "url": "https://www.bestoldgames.net/doom",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 2218175,
-      "sha256": "98bed74bfe690b44e31db44920d87a41dd0b0961c89014c57afc0cc2eba6b66a",
       "format": "zip", "target": "GAMES", "members": ["DOOM/*"],
       "launch": "CD \\GAMES\\DOOM then DOOM",
       "notes": "Run SETUP to enable Sound Blaster music and effects (port 220, IRQ 7, DMA 1); the archive's DEFAULT.CFG disables both",
@@ -155,8 +114,6 @@
       "title": "Battle Chess",
       "url": "https://www.bestoldgames.net/battle-chess",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 504212,
-      "sha256": "aabf746523edb02fe3b21a711a88fa02de781c580e179de72701a3ee96e959fd",
       "format": "zip", "target": "GAMES", "members": ["BATCHESS/*"],
       "launch": "CD \\GAMES\\BATCHESS then CHESS",
       "license": ""
@@ -166,8 +123,6 @@
       "title": "Commander Keen 1 (shareware)",
       "url": "https://www.bestoldgames.net/commander-keen",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 376062,
-      "sha256": "d2b0c667e912e930b9bb9f5a9d593bd5efb778e5e6c757396b174369b4e5fe6c",
       "format": "zip", "target": "GAMES", "members": ["KEEN1/*"],
       "launch": "CD \\GAMES\\KEEN1 then KEEN1",
       "license": "Original shareware episode; duplicate root copy excluded, KEEN1.DOC and order files retained"
@@ -177,8 +132,6 @@
       "title": "Color Lines",
       "url": "https://www.bestoldgames.net/color-lines",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 109556,
-      "sha256": "01b10e8de6a20d9ececa0339aacd8746fc11fc2a0ab0c990b9481b75d2f6dc38",
       "format": "zip", "target": "GAMES", "members": ["COLORLIN/*"],
       "launch": "CD \\GAMES\\COLORLIN then LINES",
       "license": "Gamos game; deployment administrator confirms permission to provide full versions"
@@ -187,8 +140,6 @@
       "id": "bog-lemmings",
       "title": "Lemmings",
       "url": "https://ia800806.us.archive.org/16/items/msdos_Lemmings_1991/Lemmings_1991.zip",
-      "archive_bytes": 675930,
-      "sha256": "d6dcf1ceaef053be9e91cb2311095392a2ba12608577ddb3889a8c64f7793c0d",
       "format": "zip", "target": "GAMES", "members": ["LEMMINGS/*"],
       "launch": "CD \\GAMES\\LEMMINGS then LEMMINGS",
       "notes": "DOS release from Internet Archive; the BestOldGames archive contains a Windows executable instead",
@@ -199,8 +150,6 @@
       "title": "The Lost Vikings",
       "url": "https://www.bestoldgames.net/lost-vikings",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 1278328,
-      "sha256": "6a5a1c98fe7cdc65bcb35727001a0af2703fadee6bb1a642d5700016a3a8f9d8",
       "format": "zip", "target": "GAMES", "members": ["LOSTVIKI/*"],
       "launch": "CD \\GAMES\\LOSTVIKI then SETUP",
       "notes": "Run the original SETUP first, then VIKINGS; the unconfigured game reports copy protection failure",
@@ -211,8 +160,6 @@
       "title": "Quadrax",
       "url": "https://www.bestoldgames.net/quadrax",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 5310055,
-      "sha256": "fe23cb362afdafc24428cb21240f2181c917917c23eadc88b41270a9719030e8",
       "format": "zip", "target": "GAMES", "members": ["QUADRAX/*"],
       "launch": "CD \\GAMES\\QUADRAX then QUADRAX",
       "license": ""
@@ -222,8 +169,6 @@
       "title": "Supaplex",
       "url": "https://www.bestoldgames.net/supaplex",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 686072,
-      "sha256": "576331afb0b9aca85ec93c7bd5734944cf5ee56b9fa85825c2a3b1dcdd7b4747",
       "format": "zip", "target": "GAMES", "members": ["SUPAPLEX/*"],
       "launch": "CD \\GAMES\\SUPAPLEX then SPFIX63",
       "license": "Supaplex package includes SPFIX63 and its documentation; deployment permission confirmed by administrator"
@@ -233,8 +178,6 @@
       "title": "Tetris",
       "url": "https://www.bestoldgames.net/tetris",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 109294,
-      "sha256": "56a1e0caa5789ab4d08b69ae1cf91e725c96e60db56acda3b031d9de1e342afc",
       "format": "zip", "target": "GAMES", "members": ["TETRIS/*"],
       "launch": "CD \\GAMES\\TETRIS then TETRIS",
       "license": ""
@@ -244,8 +187,6 @@
       "title": "The Incredible Machine (interactive demo)",
       "url": "https://www.bestoldgames.net/the-incredible-machine",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 328730,
-      "sha256": "5b622f8df1170852195c567d4ab2ff8813169c4a4e15717ce0d0b1b76eda014c",
       "format": "zip", "target": "GAMES", "members": ["TIM/*"],
       "launch": "CD \\GAMES\\TIM then TIM",
       "license": "Interactive demo, confirmed in TIM/TIM.TXT; this source does not provide the full game"
@@ -255,8 +196,6 @@
       "title": "The Incredible Machine 2",
       "url": "https://www.bestoldgames.net/the-incredible-machine-2",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 2550971,
-      "sha256": "fe2d9f1fb3b80e1f456aa62a4e8d8af46fd66c70b2d602fb842334a80a97c192",
       "format": "zip", "target": "GAMES", "members": ["TIM2/*"],
       "launch": "CD \\GAMES\\TIM2 then TIM2",
       "license": ""
@@ -266,8 +205,6 @@
       "title": "Formula One Grand Prix",
       "url": "https://www.bestoldgames.net/formula-one-grand-prix",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 3924254,
-      "sha256": "ad7169a1f24057bf6948f1136fb5edf8e6e59a458cc61e308ba1eecd7964aec6",
       "format": "zip", "target": "GAMES", "members": ["F1GP/*"],
       "launch": "CD \\GAMES\\F1GP then GP",
       "license": ""
@@ -277,8 +214,6 @@
       "title": "Grand Prix 2",
       "url": "https://www.bestoldgames.net/grand-prix-2",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 33220063,
-      "sha256": "078f1b34650f315769465d06f8fee6ad7d7d1d3dbc79b9871cbabd8f231d76e9",
       "format": "zip", "target": "GAMES", "members": ["GP2/*"],
       "launch": "CD \\GAMES\\GP2 then GP2",
       "license": ""
@@ -288,8 +223,6 @@
       "title": "Ironman Super Off Road",
       "url": "https://www.bestoldgames.net/ironman-super-offroad",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 289907,
-      "sha256": "18f98da0755fe6e9a198bd62d101dfd1a4396b410ffe5d5a2aaf1a53dd916258",
       "format": "zip", "target": "GAMES", "members": ["IRONMAN/*"],
       "launch": "CD \\GAMES\\IRONMAN then IRONMAN",
       "license": ""
@@ -299,8 +232,6 @@
       "title": "Lamborghini: American Challenge",
       "url": "https://www.bestoldgames.net/lamborghini-american-challenge",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 636447,
-      "sha256": "2449f8913d87b44084dddcf1d005710c54f6d203fe8d9271f279ca123f4a1fb4",
       "format": "zip", "target": "GAMES", "members": ["LAC/*"],
       "launch": "CD \\GAMES\\LAC then LAC",
       "license": ""
@@ -310,8 +241,6 @@
       "title": "Dungeon Master",
       "url": "https://www.bestoldgames.net/dungeon-master",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 959360,
-      "sha256": "4b0693cfdf04a646dc50c1a8de993b091c3e59197184696e63e886e9580e711b",
       "format": "zip", "target": "GAMES", "members": ["DMASTER/*"],
       "launch": "CD \\GAMES\\DMASTER then DM",
       "license": ""
@@ -321,8 +250,6 @@
       "title": "Dungeon Master 2: Skullkeep",
       "url": "https://www.bestoldgames.net/dungeon-master-2",
       "download_forms": ["form#form-download", "form.do-download"],
-      "archive_bytes": 13244282,
-      "sha256": "b4f5f542b0985bbc926ad4186ce5e7b346bcee2f0340d76550672df48162ee31",
       "format": "zip", "target": "GAMES", "members": ["DMASTER2/*"],
       "launch": "CD \\GAMES\\DMASTER2 then DM2",
       "license": ""

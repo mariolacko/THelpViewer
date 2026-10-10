@@ -14,6 +14,85 @@ from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
 
 
+def test_profile_preserves_identity_passkey_sessions_and_role(tmp_path):
+    store = AccountStore(tmp_path)
+    store.create_user("owner", "Original")
+    store.create_user("member", "Member")
+    with store._connect() as connection:
+        ident = connection.execute("SELECT id FROM accounts WHERE username='owner'").fetchone()[0]
+        connection.execute("UPDATE accounts SET username='old@example.test', email='old@example.test' WHERE id=?", (ident,))
+        connection.execute("UPDATE accounts SET email='member@example.test' WHERE username='member'")
+        connection.execute("INSERT INTO credentials(credential_id,account_id,public_key,sign_count) VALUES (?,?,?,0)",
+                           (b"credential", ident, b"key"))
+        session = store._new_session(connection, ident)
+        other_session = store._new_session(connection, ident)
+    user = store.update_profile(session, " NEW@EXAMPLE.TEST ",
+                                first_name=" Ján ", last_name=" Novák ", nickname=" Reader ")
+    assert user == {"username": "old@example.test", "display_name": "Reader", "email": "new@example.test", "role": "admin",
+                    "first_name": "Ján", "last_name": "Novák", "nickname": "Reader"}
+    assert store.update_profile(session, "new@example.test") == user
+    for field in ("first_name", "last_name", "nickname"):
+        for value in ("x" * 101, "Name\nOther", "a\x7fb"):
+            with pytest.raises(AccountError):
+                store.update_profile(session, "new@example.test", **{field: value})
+        assert store.session_user(session) == user
+    assert store.session_user(other_session) == user
+    assert store.session_account_id(session) == ident
+    assert store.authentication_options("NEW@EXAMPLE.TEST", "example.test")["options"]["allowCredentials"]
+    for email in ("invalid", "member@example.test"):
+        with pytest.raises(AccountError):
+            store.update_profile(session, email)
+        assert store.session_user(session) == user
+    with pytest.raises(AccountError, match="Sign-in"):
+        store.update_profile("invalid", "valid@example.test")
+    full_name = store.update_profile(session, "new@example.test", nickname="")
+    assert full_name["display_name"] == "Ján Novák"
+    assert store.update_profile(session, "new@example.test", first_name="X", last_name="")["display_name"] == "X"
+    assert len(store.update_profile(session, "new@example.test", first_name="x" * 100, last_name="y" * 100)["display_name"]) == 100
+    with store._connect() as connection:
+        assert connection.execute("SELECT public_key FROM credentials WHERE account_id=?", (ident,)).fetchone()[0] == b"key"
+    store.logout(session)
+    with pytest.raises(AccountError, match="Sign-in"):
+        store.update_profile(session, "valid@example.test")
+
+
+def test_profile_api_requires_owner_session_origin_and_rejects_role_changes(tmp_path):
+    manifest = tmp_path / "empty.json"
+    manifest.write_text('{"sources": []}')
+    config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+                     statistics_path=tmp_path / "var" / "statistics.sqlite3",
+                     midi_sources_path=manifest, auth_origin="https://accounts.example.test")
+    app = create_app(config)
+    store = app.state.accounts
+    store.create_user("admin")
+    store.create_user("reader", "Reader")
+    with store._connect() as connection:
+        ident = connection.execute("SELECT id FROM accounts WHERE username='reader'").fetchone()[0]
+        session = store._new_session(connection, ident)
+    payload = {"email": "reader@example.test",
+               "first_name": "Reader", "last_name": "Two", "nickname": "RT"}
+    with TestClient(app, base_url=config.auth_origin) as client:
+        assert client.put("/api/auth/profile", json=payload, headers={"Origin": config.auth_origin}).status_code == 403
+        client.cookies.set("thelp_session", session)
+        assert client.put("/api/auth/profile", json=payload).status_code == 403
+        assert client.put("/api/auth/profile", json=payload, headers={"Origin": "https://evil.test"}).status_code == 403
+        assert client.put("/api/auth/profile", json={**payload, "role": "admin"}, headers={"Origin": config.auth_origin}).status_code == 422
+        assert client.put("/api/auth/profile", json={**payload, "account_id": ident}, headers={"Origin": config.auth_origin}).status_code == 422
+        assert client.put("/api/auth/profile", json={**payload, "display_name": "Separate name"}, headers={"Origin": config.auth_origin}).status_code == 422
+        result = client.put("/api/auth/profile", json=payload, headers={"Origin": config.auth_origin})
+        assert result.status_code == 200 and result.headers["cache-control"] == "no-store"
+        assert result.json()["user"]["role"] == "member"
+        assert result.json()["user"]["display_name"] == "RT"
+        assert store.session_user(session)["email"] == "reader@example.test"
+        assert result.json()["user"]["nickname"] == "RT"
+        for field in ("first_name", "last_name", "nickname"):
+            assert client.put("/api/auth/profile", json={**payload, field: 123}, headers={"Origin": config.auth_origin}).status_code == 422
+            assert client.put("/api/auth/profile", json={**payload, field: "a\x00b"}, headers={"Origin": config.auth_origin}).status_code == 400
+        assert client.put("/api/auth/profile", json={**payload, "nickname": ""}, headers={"Origin": config.auth_origin}).json()["user"]["nickname"] == ""
+        assert client.put("/api/auth/profile", json={**payload, "email": "bad"}, headers={"Origin": config.auth_origin}).status_code == 400
+        assert client.put("/api/auth/profile", json=payload, headers={"Origin": config.auth_origin, "Host": "evil.test"}).status_code == 503
+
+
 def test_admin_invitation_passkey_and_session(tmp_path, monkeypatch):
     store = AccountStore(tmp_path)
     token = store.create_user("mario", "Mario Lacko")
@@ -38,6 +117,7 @@ def test_admin_invitation_passkey_and_session(tmp_path, monkeypatch):
                                         "example.test", "https://example.test")
     assert store.session_user(session) == {
         "username": "mario", "display_name": "Mario Lacko", "email": "", "role": "admin",
+        "first_name": "", "last_name": "", "nickname": "",
     }
     with pytest.raises(AccountError):
         store.verify_registration(enrollment["ceremony_id"], {"id": "mock"},
@@ -130,8 +210,10 @@ def test_bootstrap_admin_and_one_hour_admin_registration_tokens(tmp_path, monkey
     assert store.session_user(admin_session) == {
         "username": "mario@example.test", "display_name": "Mario Lacko",
         "email": "mario@example.test", "role": "admin",
+        "first_name": "", "last_name": "", "nickname": "",
     }
     assert store.bootstrap_token() is None
+    assert store.list_users(admin_session)[0]["protected_admin"] is True
     with pytest.raises(AccountError):
         store.new_registration_options("Another", "another@example.test", bootstrap,
                                        "example.test", "THelpViewer")
@@ -156,6 +238,7 @@ def test_bootstrap_admin_and_one_hour_admin_registration_tokens(tmp_path, monkey
     member_session = store.verify_new_registration(member_options["ceremony_id"], {"id": "mock"},
                                                    "example.test", "https://example.test")
     assert store.session_user(member_session)["role"] == "member"
+    assert {user["username"] for user in store.list_users(admin_session) if user["protected_admin"]} == {"mario@example.test"}
     assert store.list_registration_tokens(admin_session) == []
     with pytest.raises(AccountError):
         store.issue_registration_token(member_session)

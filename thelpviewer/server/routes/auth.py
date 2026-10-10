@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..accounts import AccountError, AccountStore, SESSION_LIFETIME
 from ..config import AppConfig
@@ -21,6 +21,9 @@ class PasskeyRegistration(BaseModel):
     name: str
     email: str
     token: str
+    first_name: str | None = Field(default=None, strict=True, max_length=100)
+    last_name: str | None = Field(default=None, strict=True, max_length=100)
+    nickname: str | None = Field(default=None, strict=True, max_length=100)
 
 
 class PasskeyLogin(BaseModel):
@@ -30,6 +33,14 @@ class PasskeyLogin(BaseModel):
 class PasskeyAnswer(BaseModel):
     ceremony_id: str
     credential: dict
+
+
+class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(strict=True, min_length=3, max_length=254)
+    first_name: str | None = Field(default=None, strict=True, max_length=100)
+    last_name: str | None = Field(default=None, strict=True, max_length=100)
+    nickname: str | None = Field(default=None, strict=True, max_length=100)
 
 
 def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
@@ -86,6 +97,18 @@ def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
             headers={"Cache-Control": "no-store"},
         )
 
+    @router.put("/api/auth/profile")
+    def update_profile(data: ProfileUpdate, request: Request) -> JSONResponse:
+        auth_origin(request, require_post=True)
+        token = request.cookies.get("thelp_session", "")
+        if not accounts.session_user(token):
+            raise HTTPException(status_code=403, detail="Sign-in required")
+        try:
+            user = accounts.update_profile(token, **data.model_dump())
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+        return JSONResponse({"user": user}, headers={"Cache-Control": "no-store"})
+
     @router.post("/api/auth/passkey/enroll/options")
     def passkey_enroll_options(data: PasskeyEnrollment, request: Request) -> dict:
         _origin, rp_id = auth_origin(request, require_post=True)
@@ -109,6 +132,7 @@ def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
         try:
             return accounts.new_registration_options(
                 data.name, data.email, data.token, rp_id, "THelpViewer",
+                first_name=data.first_name, last_name=data.last_name, nickname=data.nickname,
             )
         except AccountError as error:
             raise HTTPException(status_code=400, detail=str(error)) from None

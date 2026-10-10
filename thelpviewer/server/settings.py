@@ -26,7 +26,7 @@ class ServerSettings:
     def get(self) -> dict:
         with self._lock:
             if not self.path.exists():
-                return {"dos_user_disk_mb": 128}
+                return {"dos_user_disk_mb": 64}
             return self.validate(json.loads(self.path.read_text(encoding="utf-8")))
 
     def update(self, values: dict) -> dict:

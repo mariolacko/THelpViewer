@@ -27,7 +27,6 @@ from .search_index import GlobalSearchIndex
 from .midi_library import MidiLibrary
 from .dos_prompt import DosPromptStore
 from .settings import ServerSettings
-from .terminal import authorize_job, read_job, send_input
 from .statistics import StatisticsStore
 from .static_assets import ViewerAssets
 
@@ -93,7 +92,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.state.accounts = AccountStore(config.state_dir / "development" if config.dev_auto_login else config.state_dir)
     app.state.midi_library = MidiLibrary(config.state_dir / "midi", config.midi_sources_path)
     app.state.server_settings = ServerSettings(config.state_dir / "server-settings.json")
-    app.state.dos_prompt = DosPromptStore(config.state_dir / "dos", config.dos_config_path, app.state.server_settings)
+    app.state.dos_prompt = DosPromptStore(config.state_dir / "dos", config.dos_config_path, app.state.server_settings, app.state.accounts)
     app.state.help_display_names = _help_display_names(config)
 
     @app.exception_handler(StarletteHTTPException)
@@ -148,7 +147,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(create_auth_router(config, app.state.accounts))
     app.include_router(create_midi_router(app.state.midi_library))
     app.include_router(create_dos_router(config, app.state.accounts, app.state.dos_prompt))
-    app.include_router(create_settings_router(config, app.state.accounts, app.state.server_settings))
+    app.include_router(create_settings_router(config, app.state.accounts, app.state.server_settings, app.state.dos_prompt))
     app.include_router(create_rebuild_router(config, app.state.accounts, app.state.dos_prompt, app.state.midi_library))
 
     @app.get("/healthz")
@@ -164,31 +163,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if len(q) > 255:
             raise HTTPException(status_code=422, detail="Search text is too long")
         status, results = app.state.global_search.search(q, limit)
-        if status["state"] != "ready":
+        if not status["available"]:
             return JSONResponse(status, status_code=503 if status["state"] == "error" else 202)
         return JSONResponse({"status": status, "results": results}, headers={"Cache-Control": "no-store"})
-
-    @app.get("/api/terminal/jobs/{job_id}")
-    def terminal_output(job_id: str, request: Request, offset: int = 0) -> dict[str, object]:
-        return read_job(config.state_dir, job_id, request.headers.get("x-thelp-terminal-key", ""), offset)
-
-    @app.post("/api/terminal/jobs/{job_id}/input", status_code=204)
-    async def terminal_input(job_id: str, request: Request) -> Response:
-        key = request.headers.get("x-thelp-terminal-key", "")
-        authorize_job(config.state_dir, job_id, key)
-        body = bytearray()
-        async for chunk in request.stream():
-            body.extend(chunk)
-            if len(body) > 4096:
-                raise HTTPException(status_code=413, detail="Terminal input is too large")
-        try:
-            payload = json.loads(body)
-        except (UnicodeDecodeError, ValueError):
-            raise HTTPException(status_code=422, detail="Invalid terminal input") from None
-        if not isinstance(payload, dict) or not isinstance(payload.get("text"), str):
-            raise HTTPException(status_code=422, detail="Terminal input must contain text")
-        send_input(config.state_dir, job_id, key, payload["text"])
-        return Response(status_code=204)
 
     @app.get("/docs/catalog.json")
     def docs_catalog() -> JSONResponse:

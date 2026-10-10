@@ -72,6 +72,11 @@ def create_dos_router(config: AppConfig, accounts: AccountStore, store: DosPromp
         metadata["account"] = username
         return JSONResponse(metadata, headers={"Cache-Control": "no-store"})
 
+    @router.get("/usage")
+    def usage(request: Request) -> Response:
+        account_id, _username = identity(request, required=True)
+        return JSONResponse(store.disk_usage(account_id), headers={"Cache-Control": "no-store"})
+
     @router.get("/bundle")
     def bundle(request: Request, media: str = "", full: bool = False) -> Response:
         ready()
@@ -107,7 +112,7 @@ def create_dos_router(config: AppConfig, accounts: AccountStore, store: DosPromp
         ready()
         write_origin(request)
         account_id, username = identity(request, required=True)
-        data = await body(request, store.overlay_limit() * 2 + 1024 * 1024)
+        data = await body(request, store.overlay_limit(account_id) * 2 + 1024 * 1024)
         try:
             payload = json.loads(data)
             if not isinstance(payload, dict) or payload.get("account") != username:

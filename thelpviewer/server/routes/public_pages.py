@@ -8,7 +8,7 @@ from math import ceil
 from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 
 from ...public_docs import is_public_doc_path
 from ..config import AppConfig
@@ -42,6 +42,31 @@ def create_public_router(
             return config.auth_origin
         return str(request.base_url).rstrip("/")
 
+    def canonical_redirect(request: Request, parameters: dict[str, str]) -> Response | None:
+        # Use exactly the encoding/order emitted by HTML links and sitemaps.
+        # Keep viewer options such as line/slow; they do not change the canonical.
+        query_parameters = list(parameters.items())
+        query_parameters.extend(
+            (key, value) for key, value in request.query_params.multi_items()
+            if key not in ("file", "topic", "doc")
+        )
+        query = urlencode(query_parameters)
+        if request.url.query != query:
+            return RedirectResponse("/?" + query, status_code=308)
+        return None
+
+    def index_unavailable(kind: str = "", path: str = "", *, pending: bool = False) -> Response | None:
+        if not search_index.status()["available"]:
+            message = "The search index is not yet available"
+        elif kind and search_index.file_error(kind, path):
+            message = "The requested file could not be indexed"
+        elif pending and search_index.file_pending(kind, path):
+            message = "The requested file is being indexed"
+        else:
+            return None
+        return Response(message, status_code=503, media_type="text/plain",
+                        headers={"Retry-After": "60", "Cache-Control": "no-store"})
+
     def public_viewer_page(title: str, description: str, url: str, content: str) -> Response:
         if not config.index_path.is_file():
             raise HTTPException(status_code=404)
@@ -64,29 +89,48 @@ def create_public_router(
     def public_topic(file_path: str, request: Request, topic: str = "") -> Response:
         if len(file_path) > 512 or len(topic) > 64:
             raise HTTPException(status_code=404)
-        if search_index.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
+        unavailable = index_unavailable("help", file_path)
+        if unavailable is not None:
+            return unavailable
         entry = search_index.topic(file_path, topic)
         if entry is None or not entry["body"]:
+            unavailable = index_unavailable("help", file_path, pending=True)
+            if unavailable is not None:
+                return unavailable
             raise HTTPException(status_code=404)
+        redirect = canonical_redirect(request, {"file": file_path, "topic": topic})
+        if redirect is not None:
+            return redirect
         url = public_base(request) + "/?" + urlencode({"file": file_path, "topic": topic})
         overview = "/?" + urlencode({"file": file_path})
         title = f'{entry["title"]} — {entry["help_name"]}'
         content = (
-            f'<nav><a href="/">THelpViewer</a></nav><h1>{escape(entry["title"])}</h1>'
-            f'<p><a href="{escape(overview, quote=True)}">{escape(entry["help_name"])}</a></p>'
+            '<nav><a href="/">THelpViewer</a></nav>'
+            f'<h1>HELP reference: {escape(entry["title"])}</h1>'
+            f'<p>Original documentation from '
+            f'<a href="{escape(overview, quote=True)}">{escape(entry["help_name"])}</a>. '
+            'The text below is a topic from the original software HELP file, '
+            'not a status message from this website.</p>'
             f'<pre style="white-space:pre-wrap">{escape(entry["body"])}</pre>'
         )
-        return public_viewer_page(title, entry["preview"], url, content)
+        description = f'Reference documentation from {entry["help_name"]}: {entry["preview"]}'
+        return public_viewer_page(title, description, url, content)
 
     def public_file(file_path: str, request: Request) -> Response:
         if len(file_path) > 512:
             raise HTTPException(status_code=404)
-        if search_index.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
+        unavailable = index_unavailable("help", file_path)
+        if unavailable is not None:
+            return unavailable
         topics = search_index.file_topic_rows(file_path)
         if not topics:
+            unavailable = index_unavailable("help", file_path, pending=True)
+            if unavailable is not None:
+                return unavailable
             raise HTTPException(status_code=404)
+        redirect = canonical_redirect(request, {"file": file_path})
+        if redirect is not None:
+            return redirect
         name = topics[0][2]
         url = public_base(request) + "/?" + urlencode({"file": file_path})
         links = "".join(
@@ -103,11 +147,18 @@ def create_public_router(
     def public_document(doc_path: str, request: Request) -> Response:
         if len(doc_path) > 512 or not is_public_doc_path(doc_path):
             raise HTTPException(status_code=404)
-        if search_index.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
+        unavailable = index_unavailable("doc", doc_path)
+        if unavailable is not None:
+            return unavailable
         entry = search_index.document(doc_path)
         if entry is None or not entry["body"]:
+            unavailable = index_unavailable("doc", doc_path, pending=True)
+            if unavailable is not None:
+                return unavailable
             raise HTTPException(status_code=404)
+        redirect = canonical_redirect(request, {"doc": doc_path})
+        if redirect is not None:
+            return redirect
         url = public_base(request) + "/?" + urlencode({"doc": doc_path})
         content = (
             f'<nav><a href="/">THelpViewer</a></nav><h1>{escape(entry["title"])}</h1>'
@@ -116,7 +167,15 @@ def create_public_router(
         return public_viewer_page(f'{entry["title"]} — THelpViewer Docs', entry["preview"], url, content)
 
     @router.get("/")
-    async def index(request: Request, file: str = "", topic: str = "", doc: str = "") -> Response:
+    def index(request: Request, file: str = "", topic: str = "", doc: str = "") -> Response:
+        if request.query_params.get("server_error"):
+            if not config.index_path.is_file():
+                raise HTTPException(status_code=404)
+            return Response(
+                verified_html(config.index_path.read_text(encoding="utf-8")),
+                status_code=404, media_type="text/html",
+                headers={"X-Robots-Tag": "noindex"},
+            )
         if doc:
             return public_document(doc, request)
         if file:
@@ -125,8 +184,10 @@ def create_public_router(
             raise HTTPException(status_code=404)
         if not config.index_path.is_file():
             raise HTTPException(status_code=404)
-        if search_index.status()["state"] != "ready":
-            return Response(verified_html(config.index_path.read_text(encoding="utf-8")), media_type="text/html")
+        if not search_index.status()["available"]:
+            return Response(verified_html(config.index_path.read_text(encoding="utf-8")),
+                            status_code=503, media_type="text/html",
+                            headers={"Retry-After": "60", "Cache-Control": "no-store"})
         help_links = "".join(
             f'<li><a href="{escape("/?" + urlencode({"file": file_path}), quote=True)}">'
             f'{escape(help_display_names.get(file_path.casefold(), file_path))}</a></li>'
@@ -157,8 +218,9 @@ def create_public_router(
 
     @router.get("/sitemap.xml")
     def sitemap_index(request: Request) -> Response:
-        if search_index.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
+        unavailable = index_unavailable()
+        if unavailable is not None:
+            return unavailable
         base = public_base(request)
         entries = f"<sitemap><loc>{escape(base + '/sitemaps/site.xml')}</loc></sitemap>"
         entries += "".join(
@@ -190,9 +252,14 @@ def create_public_router(
 
     @router.get("/sitemaps/file.xml")
     def sitemap_file(request: Request, file: str = "", page: int = 1) -> Response:
-        if search_index.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
+        unavailable = index_unavailable("help", file)
+        if unavailable is not None:
+            return unavailable
         count = dict(search_index.file_sitemap_counts()).get(file)
+        if count is None:
+            unavailable = index_unavailable("help", file, pending=True)
+            if unavailable is not None:
+                return unavailable
         if count is None or page < 1 or page > ceil(count / SITEMAP_TOPIC_PAGE_SIZE):
             raise HTTPException(status_code=404)
         base = public_base(request)
@@ -213,8 +280,9 @@ def create_public_router(
 
     @router.get("/sitemaps/docs.xml")
     def sitemap_docs(request: Request, page: int = 1) -> Response:
-        if search_index.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
+        unavailable = index_unavailable()
+        if unavailable is not None:
+            return unavailable
         paths = search_index.document_paths()
         if page < 1 or page > ceil(len(paths) / 50_000):
             raise HTTPException(status_code=404)
@@ -232,8 +300,9 @@ def create_public_router(
 
     @router.get("/sitemap-{page}.xml")
     def sitemap_topics(page: int, request: Request) -> Response:
-        if search_index.status()["state"] != "ready":
-            return Response("Index is being built", status_code=503, media_type="text/plain")
+        unavailable = index_unavailable()
+        if unavailable is not None:
+            return unavailable
         count = search_index.sitemap_count()
         if page < 1 or page > ceil(count / 50_000):
             raise HTTPException(status_code=404)

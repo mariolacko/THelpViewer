@@ -20,6 +20,7 @@ from fnmatch import fnmatch
 from ..downloader.extractor import ExtractorTools, extract_file, find_lsar, find_sevenzip, find_unar
 from .dos_sources import fetch_dos_source
 from .settings import ServerSettings
+from .accounts import AccountStore
 from .rebuild import archive_rebuild_directory
 
 
@@ -55,9 +56,11 @@ def _atomic_file(path: Path, data: bytes) -> None:
 
 
 class DosPromptStore:
-    def __init__(self, root: Path, config_path: Path | None, settings: ServerSettings | None = None):
+    def __init__(self, root: Path, config_path: Path | None, settings: ServerSettings | None = None,
+                 accounts: AccountStore | None = None):
         self.root, self.config_path = root, config_path
         self.settings = settings or ServerSettings(root.parent / "server-settings.json")
+        self.accounts = accounts
         self.config: dict = {}
         self.files: dict[str, bytes] = {}
         self.file_hashes: dict[str, str] = {}
@@ -134,13 +137,16 @@ class DosPromptStore:
                     continue
                 ident = source.get("id", "")
                 digest = source.get("sha256", "")
-                if not ID_RE.fullmatch(ident) or ident in seen or not re.fullmatch(r"[0-9a-f]{64}", digest):
-                    raise DosError("Software sources need unique IDs and SHA-256 hashes")
+                if not ID_RE.fullmatch(ident) or ident in seen or (digest and not re.fullmatch(r"[0-9a-f]{64}", digest)):
+                    raise DosError("Software sources need unique IDs and valid optional SHA-256 hashes")
+                cache_key = digest or hashlib.sha256(json.dumps(
+                    {"url": source.get("url"), "download_forms": source.get("download_forms", [])}, sort_keys=True
+                ).encode()).hexdigest()
                 seen.add(ident)
                 additions = self._configured_files(source, limit)
                 target = c_path(source["target"]) + "/" if source.get("target") else ""
                 additions = {name: root_files.get(target + name, contents) for name, contents in additions.items()}
-                if installed.get(ident) == digest:
+                if installed.get(ident) == cache_key:
                     # Resume/explicit install may fill missing configured files,
                     # but never overwrite the administrator's existing C files.
                     for name, contents in additions.items():
@@ -153,12 +159,12 @@ class DosPromptStore:
                     continue
                 self.current = str(source.get("title", ident))
                 self._progress("Downloading", 0)
-                cached = self.root / "downloads" / digest
+                cached = self.root / "downloads" / cache_key
                 if cached.is_file():
                     data = cached.read_bytes()
                 else:
                     data = fetch_dos_source(source, MAX_SOURCE_BYTES, self._download_progress)
-                if hashlib.sha256(data).hexdigest() != digest:
+                if digest and hashlib.sha256(data).hexdigest() != digest:
                     raise DosError(f"SHA-256 mismatch for {ident}")
                 _atomic_file(cached, data)
                 self._progress("Extracting", 0.75)
@@ -175,7 +181,7 @@ class DosPromptStore:
                     else:
                         _atomic_file(destination, contents)
                     self._progress("Installing", 0.75 + 0.25 * index / max(1, len(incoming)))
-                installed[ident] = digest
+                installed[ident] = cache_key
                 _atomic_file(marker, json.dumps(installed).encode())
                 self.processed += 1
             for filename, contents in root_files.items():
@@ -191,7 +197,7 @@ class DosPromptStore:
                 if not all(isinstance(line, str) and "\n" not in line and "\r" not in line for line in guide):
                     raise DosError("DOS software_catalog must contain individual header lines")
                 for source in config["sources"]:
-                    if source.get("enabled") is not False and source.get("launch") and installed.get(source.get("id")) == source.get("sha256"):
+                    if source.get("enabled") is not False and source.get("launch") and installed.get(source.get("id")):
                         guide.extend([str(source.get("title", source["id"])), "  " + source["launch"], ""])
                 _atomic_file(base / "SOFTWARE.TXT", ("\r\n".join(guide) + "\r\n").encode("cp437", errors="replace"))
             for path in base.rglob("*"):
@@ -415,7 +421,7 @@ class DosPromptStore:
             database.close()
 
     def save(self, account_id: str, payload: dict) -> int:
-        limit = self.overlay_limit()
+        limit = self.overlay_limit(account_id)
         if payload.get("base_id") != self.base_id:
             raise DosError("C drive base changed; reload the page before saving")
         incoming, deleted = payload.get("files"), payload.get("deleted")
@@ -501,11 +507,32 @@ class DosPromptStore:
             database.close()
 
     def c_limit(self, account_id: str | None) -> int:
-        return (sum(map(len, self.files.values())) + self.overlay_limit() if account_id
+        return (sum(map(len, self.files.values())) + self.overlay_limit(account_id) if account_id
                 else int(self.config.get("max_c_bytes", MAX_SOURCE_BYTES)))
 
-    def overlay_limit(self) -> int:
-        return self.settings.get()["dos_user_disk_mb"] * 1024 * 1024
+    def overlay_limit(self, account_id: str | None = None) -> int:
+        override = self.accounts.disk_capacity(account_id) if self.accounts and account_id else None
+        return (override if override is not None else self.settings.get()["dos_user_disk_mb"]) * 1024 * 1024
+
+    def disk_usage(self, account_id: str) -> dict:
+        # Read the committed generation only; recovery copies and common C files
+        # do not count towards the user's quota. Do not boot/download DOS here.
+        path = self._user_dir(account_id) / "overlay.sqlite3"
+        used = 0
+        if path.exists():
+            if path.is_symlink():
+                raise DosError("Private C database must not be a symbolic link")
+            database = self._database(account_id)
+            try:
+                database.execute("BEGIN IMMEDIATE")
+                revision = database.execute("SELECT revision FROM state WHERE id=1").fetchone()[0]
+                self._migrate_overlay_files(database, account_id, revision)
+                used = database.execute("SELECT COALESCE(SUM(size),0) FROM entries").fetchone()[0]
+                database.commit()
+            finally:
+                database.close()
+        capacity = self.overlay_limit(account_id)
+        return {"used_bytes": used, "capacity_bytes": capacity, "free_bytes": max(0, capacity - used)}
 
     def bundle(self, account_id: str | None, media_id: str = "", *, lazy: bool = False, account_name: str = "") -> tuple[bytes, dict]:
         revision, overlay, deleted, directories = self.overlay(account_id)
@@ -554,7 +581,7 @@ class DosPromptStore:
             "base_id": self.base_id, "revision": revision,
             "files": {name: self.file_hashes.get(name) or hashlib.sha256(data).hexdigest() for name, data in self.files.items()},
             "media": media.name if media else "", "max_c_bytes": self.c_limit(account_id),
-            "max_overlay_bytes": self.overlay_limit() if account_id else 0,
+            "max_overlay_bytes": self.overlay_limit(account_id) if account_id else 0,
             "overlay_files": list(overlay), "remote_files": remote_files,
             "allow_full_disk_fallback": self.config.get("allow_full_disk_fallback") is True,
             "max_media_bytes": self.config.get("max_media_bytes", 128 * 1024 * 1024),

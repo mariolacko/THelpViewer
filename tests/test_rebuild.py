@@ -117,7 +117,7 @@ def test_midi_rebuild_stops_old_writer_before_archive_and_reindexes_sources(tmp_
     assert fetched.count("https://music.test/list") == 2
 
 
-def test_rebuild_routes_require_local_mode_admin_origin_and_explicit_post(tmp_path):
+def test_rebuild_routes_require_admin_origin_and_explicit_post(tmp_path):
     manifest = tmp_path / "empty.json"
     manifest.write_text('{"sources": []}')
     config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
@@ -147,8 +147,32 @@ def test_rebuild_routes_require_local_mode_admin_origin_and_explicit_post(tmp_pa
         client.cookies.set("thelp_session", token)
         assert client.post("/api/admin/rebuild/dos", headers={"Origin": config.auth_origin}).status_code == 403
 
-    production = create_app(replace(config, dev_auto_login=False))
-    with TestClient(production, base_url=config.auth_origin) as client:
+    public_origin = "https://help.example.test"
+    production = create_app(replace(config, dev_auto_login=False, auth_origin=public_origin))
+    accounts = production.state.accounts
+    accounts.create_user("production-admin")
+    accounts.create_user("production-member")
+    with accounts._connect() as database:
+        admin_id = database.execute("SELECT id FROM accounts WHERE username='production-admin'").fetchone()[0]
+        member_id = database.execute("SELECT id FROM accounts WHERE username='production-member'").fetchone()[0]
+        admin = accounts._new_session(database, admin_id)
+        member = accounts._new_session(database, member_id)
+    with TestClient(production, base_url="http://help.example.test") as client:
         for resource in ("dos", "midi"):
-            assert client.get(f"/api/admin/rebuild/{resource}").status_code == 404
-            assert client.post(f"/api/admin/rebuild/{resource}", headers={"Origin": config.auth_origin}).status_code == 404
+            url = f"/api/admin/rebuild/{resource}"
+            assert client.get(url).status_code == 403
+            client.cookies.set("thelp_session", member)
+            assert client.post(url, headers={"Origin": public_origin}).status_code == 403
+            client.cookies.set("thelp_session", admin)
+            assert client.get(url).status_code == 200
+            assert client.post(url).status_code == 403
+            assert client.post(url, headers={"Origin": "https://evil.test"}).status_code == 403
+            assert client.post(url, headers={"Origin": public_origin, "Host": "evil.test"}).status_code == 403
+            assert client.post(url, headers={"Origin": public_origin, "Sec-Fetch-Site": "cross-site"}).status_code == 403
+            # A valid admin works behind the production TLS-terminating proxy.
+            result = client.post(url, headers={"Origin": public_origin, "X-Forwarded-Proto": "https"})
+            assert result.status_code == 202
+            store = production.state.dos_prompt if resource == "dos" else production.state.midi_library
+            store._worker.join(timeout=5)
+            assert client.get(url).json()["state"] == "ready"
+            client.cookies.clear()

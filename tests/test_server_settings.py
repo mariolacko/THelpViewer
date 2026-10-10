@@ -10,7 +10,7 @@ from thelpviewer.server.settings import ServerSettings
 
 def test_server_settings_default_validation_and_persistence(tmp_path):
     settings = ServerSettings(tmp_path / "settings.json")
-    assert settings.get() == {"dos_user_disk_mb": 128}
+    assert settings.get() == {"dos_user_disk_mb": 64}
     assert not settings.path.exists()
     for invalid in (0, 257, -1, True, "128", 1.5):
         with pytest.raises(ValueError):
@@ -23,7 +23,7 @@ def test_only_admin_can_read_and_change_persisted_server_settings(tmp_path):
     manifest = tmp_path / "empty.json"
     manifest.write_text('{"sources": []}')
     config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
-        dos_config_path=manifest, midi_sources_path=manifest, auth_origin="http://testserver",
+        dos_config_path=manifest, midi_sources_path=manifest, auth_origin="https://testserver",
         statistics_path=tmp_path / "var" / "statistics.sqlite3")
     app = create_app(config)
     accounts = app.state.accounts
@@ -32,20 +32,20 @@ def test_only_admin_can_read_and_change_persisted_server_settings(tmp_path):
     with accounts._connect() as database:
         ids = dict(database.execute("SELECT username,id FROM accounts"))
         tokens = {name: accounts._new_session(database, ident) for name, ident in ids.items()}
-    with TestClient(app) as client:
+    with TestClient(app, base_url=config.auth_origin) as client:
         assert client.get("/api/admin/settings").status_code == 403
         client.cookies.set("thelp_session", tokens["member"])
         assert client.get("/api/admin/settings").status_code == 403
-        assert client.put("/api/admin/settings", json={"dos_user_disk_mb": 64}, headers={"Origin": "http://testserver"}).status_code == 403
+        assert client.put("/api/admin/settings", json={"dos_user_disk_mb": 64}, headers={"Origin": "https://testserver"}).status_code == 403
         client.cookies.set("thelp_session", tokens["admin"])
-        assert client.get("/api/admin/settings").json() == {"dos_user_disk_mb": 128}
+        assert client.get("/api/admin/settings").json()["dos_user_disk_mb"] == 64
         assert app.state.dos_prompt.state == "idle"  # Configuration must not download games.
         data = {"dos_user_disk_mb": 64}
         assert client.put("/api/admin/settings", json=data, headers={"Origin": "https://evil.test"}).status_code == 403
-        response = client.put("/api/admin/settings", json=data, headers={"Origin": "http://testserver"})
+        response = client.put("/api/admin/settings", json=data, headers={"Origin": "https://testserver"})
         assert response.status_code == 200 and response.headers["Cache-Control"] == "no-store"
         assert ServerSettings(config.state_dir / "server-settings.json").get() == data
         assert app.state.dos_prompt.overlay_limit() == 64 * 1024 * 1024
         for invalid in (0, 257, "64", True):
-            assert client.put("/api/admin/settings", json={"dos_user_disk_mb": invalid}, headers={"Origin": "http://testserver"}).status_code == 422
-        assert client.put("/api/admin/settings", json={**data, "arbitrary": 1}, headers={"Origin": "http://testserver"}).status_code == 422
+            assert client.put("/api/admin/settings", json={"dos_user_disk_mb": invalid}, headers={"Origin": "https://testserver"}).status_code == 422
+        assert client.put("/api/admin/settings", json={**data, "arbitrary": 1}, headers={"Origin": "https://testserver"}).status_code == 422

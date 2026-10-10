@@ -27,8 +27,9 @@ def test_local_login_reuses_real_session_and_isolates_production_accounts(tmp_pa
         response = client.get("/api/auth/session", headers={"Sec-Fetch-Site": "same-origin"})
         assert response.json() == {
             "enabled": True, "authenticated": True, "development": True, "user": {
-                "username": "local-development-admin", "display_name": "Local Administrator",
+                "username": "local-development-admin", "display_name": "Admin",
                 "email": "", "role": "admin",
+                "first_name": "", "last_name": "", "nickname": "",
             },
         }
         assert response.headers["cache-control"] == "no-store"
@@ -39,6 +40,18 @@ def test_local_login_reuses_real_session_and_isolates_production_accounts(tmp_pa
         assert client.get("/api/admin/settings").status_code == 200
         assert client.post("/api/auth/registration-tokens", headers={"Origin": config.auth_origin}).status_code == 200
         account_id = app.state.accounts.session_account_id(token)
+        # Upgrade the old default label even with an already valid session.
+        with app.state.accounts._connect() as database:
+            database.execute("UPDATE accounts SET display_name='Local Administrator', disk_capacity_mb=96 WHERE id=?", (account_id,))
+        migrated = client.get("/api/auth/session")
+        assert migrated.json()["user"]["display_name"] == "Admin"
+        assert "set-cookie" not in migrated.headers
+        assert app.state.accounts.session_account_id(token) == account_id
+        assert app.state.accounts.disk_capacity(account_id) == 96
+        # A user's custom profile label is not reset on subsequent logins.
+        with app.state.accounts._connect() as database:
+            database.execute("UPDATE accounts SET display_name='My admin' WHERE id=?", (account_id,))
+        assert client.get("/api/auth/session").json()["user"]["display_name"] == "My admin"
         assert AccountStore(config.state_dir / "development").session_account_id(token) == account_id
         assert not AccountStore(config.state_dir).session_user(token)
         assert AccountStore(config.state_dir).bootstrap_token()

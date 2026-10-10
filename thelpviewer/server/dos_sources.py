@@ -58,7 +58,7 @@ def fetch_dos_source(source: dict, limit: int, on_progress=None) -> bytes:
                           headers={"User-Agent": "THelpViewer DOS software downloader"})
         with opener.open(request, timeout=30) as response:
             contents = bytearray()
-            total = int(response.headers.get("Content-Length", "0")) or int(source.get("archive_bytes", 0))
+            total = int(response.headers.get("Content-Length", "0"))
             while len(contents) <= limit:
                 chunk = response.read(min(65536, limit + 1 - len(contents)))
                 if not chunk:
