@@ -57,6 +57,17 @@ release in `default_version` or inferred from `collection_prefixes`. Do not
 repeat the release in both menu levels. Keep existing bundle paths stable
 when only changing menu metadata, so saved HELP links keep working.
 
+## Server content storage
+
+- Keep original HELP in `sources/` and published UHF in `helps/`; URLs and
+  product/release layouts stay stable. `var/` is persistent state, not a cache.
+- Cache new HELP/DOS downloads under `var/downloads/help/` and
+  `var/downloads/dos/`. Private DOS data remains in `var/dos/users/<id>/`.
+  Never include user data in a rebuild/cache cleanup target.
+- Server download/build jobs call Python modules, not CLI subprocesses.
+  Selections use manifest IDs; an empty selection means none. Publish staged
+  HELP only after validation, preserving unselected content and a backup.
+
 ## Turbo Vision JS
 
 - Match the original Turbo Vision hierarchy, constructor order, method names,

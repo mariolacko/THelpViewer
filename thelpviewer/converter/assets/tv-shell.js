@@ -38,6 +38,7 @@ const {
     TVAddUserDialog,
     TVRegistrationTokenDialog,
     TVServerConfigurationDialog,
+    TVContentSetupDialog,
     TVContextHelpWindow,
     TVPuzzleDialog,
     TVHanoiDialog,
@@ -708,7 +709,7 @@ class TVApplication extends TVProgram {
             }
             const name = event.command === "account-login" ? "login"
                 : event.command === "account-profile" ? "account" : event.command.slice(8);
-            if (["server-configuration", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
+            if (["server-configuration", "content-setup", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
             this.dialogManager.open(name);
         } else if (event.command === "dialog-open") {
             this.dialogManager.open(value);
@@ -795,12 +796,14 @@ class TVApplication extends TVProgram {
 
     _setAuthSession(session) {
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
+        if (!nextAdmin) { this.contentDialog?.close(); this.contentDialog?.progress?.close(); }
         if (!session?.authenticated) { this.dialogManager?.get("account")?.close(); }
         if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); this.dialogManager?.get("users")?.close(); this.dialogManager?.get("add-user")?.close(); }
         const nextSession = session?.authenticated && session.user ? session : null;
         if (JSON.stringify(nextSession) === JSON.stringify(this.authSession)) { return; }
         this.authSession = nextSession;
         this.isAdmin = nextAdmin;
+        if (nextAdmin) { void this.contentDialog?.checkFirstRun(); }
         const menuBar = document.querySelector("[data-tv-menu-bar]");
         if (menuBar) {
             buildPageMenuBar(menuBar, new TVAppContext(), this.authSession);
@@ -865,6 +868,7 @@ class TVApplication extends TVProgram {
         const registrationDialog = this.registerDialog("registration", () => new TVRegistrationDialog());
         this.registerDialog("registration-token", () => new TVRegistrationTokenDialog());
         this.serverConfigDialog = this.registerDialog("server-configuration", () => new TVServerConfigurationDialog());
+        this.contentDialog = this.registerDialog("content-setup", () => new TVContentSetupDialog());
         this.serverConfigDialog.onBeforeRebuild = (resource) => {
             if (resource === "midi") {
                 const player = this.dialogManager.get("midi");

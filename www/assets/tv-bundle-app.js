@@ -24,6 +24,7 @@ const {
     TVAddUserDialog,
     TVRegistrationTokenDialog,
     TVServerConfigurationDialog,
+    TVContentSetupDialog,
     TVApplicationMenuBar,
     buildAccountMenu,
     TVPuzzleDialog,
@@ -3349,7 +3350,7 @@ class TVBundleApp extends TVProgram {
             }
             const name = event.command === "account-login" ? "login"
                 : event.command === "account-profile" ? "account" : event.command.slice(8);
-            if (["server-configuration", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
+            if (["server-configuration", "content-setup", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
             this.dialogManager.open(name);
         } else if (event.command === "dialog-open") {
             this.dialogManager.open(value);
@@ -3607,6 +3608,14 @@ class TVBundleApp extends TVProgram {
         const registrationDialog = this._registerDialog("registration", () => new TVRegistrationDialog());
         this._registerDialog("registration-token", () => new TVRegistrationTokenDialog());
         this.serverConfigDialog = this._registerDialog("server-configuration", () => new TVServerConfigurationDialog());
+        this.contentDialog = this._registerDialog("content-setup", () => new TVContentSetupDialog());
+        this.contentDialog.onBeforeInstall = async () => {
+            if (this.dosWindow) {
+                await this._closeDosPrompt();
+                if (this.dosWindow) { throw new Error("Save and close DOS Prompt before installing packages."); }
+            }
+        };
+        this.contentDialog.onInstalled = () => this._loadCatalog(false);
         this.serverConfigDialog.onBeforeRebuild = async (resource) => {
             if (resource === "dos" && this.dosWindow) {
                 await this._closeDosPrompt();
@@ -4320,7 +4329,7 @@ class TVBundleApp extends TVProgram {
         window.requestAnimationFrame(() => itemsView.selectedElement()?.focus());
     }
 
-    async _loadCatalog() {
+    async _loadCatalog(startup = true) {
         // Load both help and docs catalogs in parallel.
         const [helpResp, docsResp] = await Promise.allSettled([
             fetch(CATALOG_FILE, { cache: "no-store" }),
@@ -4369,8 +4378,10 @@ class TVBundleApp extends TVProgram {
         this.menuState = buildBundleMenuBar(catalogData, null, this.authSession, this.dosWindow);
         fillBorders();
         this._bindMenus();
-        this._showWelcome();
-        await this._handleUrlState();
+        if (startup) {
+            this._showWelcome();
+            await this._handleUrlState();
+        }
         if (!window.location.search && catalogData.length) {
             document.getElementById("tv-public-fallback")?.remove();
         }
@@ -4402,6 +4413,7 @@ class TVBundleApp extends TVProgram {
             void this._closeDosPrompt(false);
         }
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
+        if (!nextAdmin) { this.contentDialog?.close(); this.contentDialog?.progress?.close(); }
         if (!session?.authenticated) { this.dialogManager?.get("account")?.close(); }
         if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); this.dialogManager?.get("users")?.close(); this.dialogManager?.get("add-user")?.close(); }
         const nextSession = session?.authenticated && session.user ? session : null;
@@ -4413,6 +4425,11 @@ class TVBundleApp extends TVProgram {
         this.menuState = buildBundleMenuBar(catalogData || [], currentBundle, this.authSession, this.dosWindow);
         fillBorders();
         this._bindMenus();
+        if (nextAdmin) {
+            void Promise.resolve(this._catalogReady).then(() => {
+                if (this.isAdmin) { return this.contentDialog?.checkFirstRun(); }
+            });
+        }
     }
 
     async _handleUrlState() {

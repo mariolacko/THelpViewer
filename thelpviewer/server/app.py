@@ -23,6 +23,8 @@ from .routes.public_pages import create_public_router
 from .routes.statistics import create_statistics_router
 from .routes.settings import create_settings_router
 from .routes.rebuild import create_rebuild_router
+from .routes.content import create_content_router
+from .content import ContentService
 from .search_index import GlobalSearchIndex
 from .midi_library import MidiLibrary
 from .dos_prompt import DosPromptStore
@@ -92,8 +94,17 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.state.accounts = AccountStore(config.state_dir / "development" if config.dev_auto_login else config.state_dir)
     app.state.midi_library = MidiLibrary(config.state_dir / "midi", config.midi_sources_path)
     app.state.server_settings = ServerSettings(config.state_dir / "server-settings.json")
-    app.state.dos_prompt = DosPromptStore(config.state_dir / "dos", config.dos_config_path, app.state.server_settings, app.state.accounts)
+    app.state.dos_prompt = DosPromptStore(config.state_dir / "dos", config.dos_config_path,
+        app.state.server_settings, app.state.accounts, (config.downloads_dir or config.state_dir / "downloads") / "dos")
     app.state.help_display_names = _help_display_names(config)
+
+    def refresh_help_content():
+        names = app.state.help_display_names
+        names.clear()
+        names.update(_help_display_names(config))
+        app.state.global_search.ensure_current()
+
+    app.state.content = ContentService(config, app.state.dos_prompt, refresh_help_content)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
@@ -149,6 +160,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(create_dos_router(config, app.state.accounts, app.state.dos_prompt))
     app.include_router(create_settings_router(config, app.state.accounts, app.state.server_settings, app.state.dos_prompt))
     app.include_router(create_rebuild_router(config, app.state.accounts, app.state.dos_prompt, app.state.midi_library))
+    app.include_router(create_content_router(config, app.state.accounts, app.state.content))
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:

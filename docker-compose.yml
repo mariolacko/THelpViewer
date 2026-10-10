@@ -13,6 +13,8 @@ services:
       THELP_README_PATH: "/app/README.md"
       THELP_CHANGELOG_PATH: "/app/CHANGELOG.md"
       THELP_STATE_DIR: "/app/var"
+      THELP_SOURCES_DIR: "/app/sources"
+      THELP_DOWNLOADS_DIR: "/app/var/downloads"
       THELP_MIDI_SOURCES_PATH: "${THELP_MIDI_SOURCES_PATH:-/app/thelpviewer/midi-sources.json}"
       THELP_DOS_CONFIG_PATH: "${THELP_DOS_CONFIG_PATH:-/app/thelpviewer/dos-prompt.json}"
       # Set on the public host in .env; leave empty for local request URLs.

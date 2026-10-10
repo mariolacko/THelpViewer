@@ -489,6 +489,9 @@ def export_bundle_tree(
     encoding: str = "auto",
     clean: bool = False,
     layout: str = "site",
+    *,
+    source_paths: list[Path] | None = None,
+    on_progress=None,
 ) -> list[BundleResult]:
     """Export all help files under *input_root* as JSON bundles."""
     source_root = Path(input_root)
@@ -508,7 +511,9 @@ def export_bundle_tree(
     seen_crc32: set[int] = set()
     topic_count_cache: dict[Path, int] = {}
     pending_exports: dict[Path, _PendingBundleExport] = {}
-    help_paths = iter_help_files(source_root)
+    help_paths = iter_help_files(source_root) if source_paths is None else source_paths
+    if any(not path.is_relative_to(source_root) for path in help_paths):
+        raise ValueError("Selected HELP paths must be inside the source root")
     source_groups = discover_bundle_source_groups(help_paths)
     grouped_source_members = {
         path
@@ -543,9 +548,19 @@ def export_bundle_tree(
             continue
         pending_exports[pending.bundle_path] = pending
 
+    total_exports = len(pending_exports) + len(source_groups)
+    processed = 0
     for pending in pending_exports.values():
+        if on_progress:
+            on_progress({"phase": "Converting", "file": pending.source_path.name,
+                         "processed": processed, "total": total_exports})
         results.extend(_export_pending_bundle_variants(pending, encoding=encoding))
+        processed += 1
     for group in source_groups:
+        if on_progress:
+            on_progress({"phase": "Converting", "file": group.source_paths[0].name,
+                         "processed": processed, "total": total_exports})
+        processed += 1
         try:
             first_pending = _build_pending_bundle_export(
                 group.source_paths[0],
@@ -582,6 +597,8 @@ def export_bundle_tree(
                 )
             )
 
+    if on_progress:
+        on_progress({"phase": "Converting", "file": "", "processed": processed, "total": total_exports})
     # Build catalog.json in the helps/ directory.
     catalog = []
     for result in results:
@@ -719,15 +736,16 @@ def _render_bundle_index_html() -> str:
 <meta name="GENERATOR" content="THelp Viewer Converter {GENERATOR_VERSION}">
 <link rel="icon" type="image/svg+xml" href="{SITE_ASSET_DIR_NAME}/thelp-icon.svg">
 <link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20261010d">
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20261010i"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20261010i"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20261010j"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20261010j"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20261010i"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20261010j"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-content.js?v=20261010j"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20261010b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20261010i"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20261010j"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-dos.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20261010i"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20261010j"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"

@@ -25,7 +25,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCES_DIR="${THELP_SOURCES_DIR:-${SCRIPT_DIR}/sources}"
-DOWNLOADS_DIR="${THELP_DOWNLOADS_DIR:-${SCRIPT_DIR}/downloads}"
+DOWNLOADS_DIR="${THELP_DOWNLOADS_DIR:-${THELP_STATE_DIR:-${SCRIPT_DIR}/var}/downloads}"
 HELPS_DIR="${THELP_HELPS_DIR:-${SCRIPT_DIR}/helps}"
 WEB_DIR="${THELP_WEB_DIR:-${SCRIPT_DIR}/www}"
 INDEX_PATH="${THELP_INDEX_PATH:-${WEB_DIR}/index.html}"

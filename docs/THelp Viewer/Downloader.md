@@ -1,6 +1,6 @@
 # Downloader
 
-> Updated: 2026-09-29
+> Updated: 2026-10-10
 
 Automated downloader for DOS help-file sources.
 
@@ -11,11 +11,20 @@ The downloader is split into three layers:
    collect. The converter separately detects supported inputs.
 2. `winworld.py`, `archiveorg.py`, `direct.py`, `olddos.py`, `github.py`, `davep_ng.py`, `cheater_cz.py`, `slunecnice.py` define **how**
    each concrete website is scraped and downloaded.
-3. `catalog.py` exposes typed manifest objects and `extractor.py` handles
+3. `service.py` orchestrates callable provider jobs; `transport.py` supplies
+   shared bounded public-network downloads for HELP and DOS. `catalog.py`
+   exposes typed manifest objects and `extractor.py` handles
    unpacking through `unar`/`lsar`, including
    nested archives and disk images.
 
 ## Usage
+
+The server's **Server Configuration → HELP / DOS packages** dialog selects
+HELP build groups and calls `download_products()` directly. API progress uses
+the job's callback and `observe_downloads()`, not captured terminal output.
+Empty server selections download nothing. Provider failures are surfaced as
+warnings; absence of usable input fails the build without publishing it.
+See [Server Content](Server%20Content.md) for storage, setup and API behavior.
 
 ```bash
 # Download from all sources, all configured products
@@ -44,8 +53,10 @@ python3 -m thelpviewer.downloader --dry-run
 ```
 
 With no selectors, the downloader runs every configured provider for every
-configured product and skips anything already present in `downloads/` or
+configured product and skips anything already present in `var/downloads/help/` or
 `sources/`.
+The legacy `downloads/` directory is not migrated or removed automatically;
+use `--dl-dir downloads` to reuse it explicitly.
 
 ## Options
 

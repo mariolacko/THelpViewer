@@ -1016,6 +1016,7 @@ class TVServerConfigurationDialog extends TVDialog {
             new TVButton(new TVRect(54, 18, 78, 20), "~U~sers", "account-users"),
             this.saveButton,
             new TVButton(new TVRect(18, 20, 31, 22), "~C~ancel", "server-settings-cancel", bfNormal),
+            new TVButton(new TVRect(36, 20, 78, 22), "HELP / DOS ~p~ackages...", "account-content-setup"),
             this.status,
         ]));
         this.requestVersion = 0;
@@ -5137,6 +5138,7 @@ Object.assign(TV, {
     TVAddUserDialog,
     TVRegistrationTokenDialog,
     TVServerConfigurationDialog,
+    TVIndexProgressDialog,
     TVViewGalleryDialog,
     TVHistory,
     TVHistoryViewer,

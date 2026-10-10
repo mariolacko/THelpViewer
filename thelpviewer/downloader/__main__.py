@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import argparse
-import importlib
+import os
 import sys
 from pathlib import Path
 
 from .catalog import (
     PRODUCTS,
     SOURCE_DESCRIPTIONS,
-    SOURCE_RUNNERS,
     all_products,
     all_sources,
-    products_for_source,
 )
 from .extractor import require_extractor_tools
+from .service import download_products
 
 
 def _build_parser(project_root: Path) -> argparse.ArgumentParser:
@@ -56,13 +55,13 @@ def _build_parser(project_root: Path) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--out-dir",
-        default=str(project_root / "sources"),
+        default=os.environ.get("THELP_SOURCES_DIR", str(project_root / "sources")),
         help="Target directory for extracted help files (default: sources/)",
     )
     parser.add_argument(
         "--dl-dir",
-        default=str(project_root / "downloads"),
-        help="Directory for downloaded archives/files (default: downloads/)",
+        default=str(Path(os.environ.get("THELP_DOWNLOADS_DIR", project_root / "var" / "downloads")) / "help"),
+        help="Directory for downloaded archives/files (default: var/downloads/help/)",
     )
     parser.add_argument(
         "--dry-run",
@@ -110,24 +109,9 @@ def main() -> None:
         print("Mode:               DRY-RUN")
 
     extractor_tools = require_extractor_tools(dry_run=args.dry_run)
-    all_collected: list[Path] = []
-
-    for source in selected_sources:
-        supported = [spec.key for spec in products_for_source(source)]
-        selected = [key for key in selected_products if key in supported]
-        if not selected:
-            print(f"\n[{source}] No matching products selected, skipping.")
-            continue
-
-        module = importlib.import_module(SOURCE_RUNNERS[source])
-        collected = module.run(
-            product_keys=selected,
-            sources_dir=sources_dir,
-            dl_dir=dl_dir,
-            dry_run=args.dry_run,
-            extractor=extractor_tools,
-        )
-        all_collected.extend(collected)
+    result = download_products(selected_products, sources_dir, dl_dir,
+                              source_keys=selected_sources, dry_run=args.dry_run, extractor=extractor_tools)
+    all_collected = result.files
 
     print(f"\n{'=' * 60}")
     if args.dry_run:
@@ -136,6 +120,8 @@ def main() -> None:
         print(f"Total help files collected: {len(all_collected)}")
         for path in all_collected:
             print(f"  {path.relative_to(sources_dir)}")
+    if result.warnings:
+        raise SystemExit("Download errors: " + "; ".join(result.warnings))
 
 
 if __name__ == "__main__":

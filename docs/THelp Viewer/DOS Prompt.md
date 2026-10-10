@@ -94,8 +94,11 @@ including these operations, keyboard bindings, streaming and private storage.
 
 `THELP_DOS_CONFIG_PATH` selects the manifest, defaulting to
 `thelpviewer/dos-prompt.json`; Docker Compose already passes it through.
-Preparation starts on the first DOS status request, in a background thread,
-so ordinary HELP browsing does not download software. The DOS window reports
+On fresh 2.1 servers, an administrator first selects packages in
+Server Configuration → HELP / DOS packages; confirmation starts preparation.
+Before selection, opening DOS does not download the whole source manifest.
+Existing completed C disks are still loaded lazily on the first DOS request.
+The DOS window reports
 preparation status through a shared `TVLoadingDialog` with a solid-cell gauge,
 source name and download/extraction phase. Cancel closes the wait, not the
 server installer; Restart reconnects to its progress. FreeDOS EDIT (`EDIT`),
@@ -229,7 +232,8 @@ device it supports. Web Audio also requires browser permission/user activation;
 click the DOS canvas after restoring a URL if audio has not been unlocked.
 See the [DOSBox sound documentation](https://www.dosbox.com/wiki/Sound).
 
-Downloads are cached by hash in `var/dos/downloads/`. Verified files are
+New downloads are cached by hash in `var/downloads/dos/`; the legacy
+`var/dos/downloads/` cache remains readable and is not removed. Verified files are
 installed under `var/dos/base/c/`; `var/dos/base/installed.json` records installed
 source hashes. After successful initialisation its `_complete` flag freezes
 automatic installation: later starts only read the existing disk, even if the
@@ -238,11 +242,12 @@ or overwrite administrator edits. An interrupted initial installation without
 this flag resumes from verified package receipts. The earlier receipt-only
 prototype is completed once, retaining existing files and adding these games.
 Runtime memory/cycle/quota settings still reload on server restart. Later
-software additions require an explicit operation:
-`python -m thelpviewer.tools.install_dos_sources`, then restart the server.
-It adds missing configured packages without overwriting different existing
+software additions use Server Configuration → HELP / DOS packages → Install.
+The existing maintenance adapter `python -m thelpviewer.tools.install_dos_sources`
+also remains available. Installation adds selected packages without overwriting different existing
 files and refreshes SOFTWARE.TXT. Removals remain an administrator disk change;
-editing source JSON alone only affects a disk not yet initialised.
+editing source JSON alone does not install new packages on a completed disk.
+See [Server Content](Server%20Content.md) for API, selections and progress.
 
 Boot ZIPs include all parent-directory entries, ordered before files. This is
 required by the emulator's libzip extractor; a ZIP that desktop unzip accepts

@@ -40,6 +40,8 @@ class AppConfig:
     midi_sources_path: Path | None = None
     dos_config_path: Path | None = None
     dev_auto_login: bool = False
+    sources_dir: Path | None = None
+    downloads_dir: Path | None = None
 
     def validate_development_login(self) -> None:
         if not self.dev_auto_login:
@@ -102,4 +104,6 @@ def load_config() -> AppConfig:
         )),
         dos_config_path=Path(os.environ.get("THELP_DOS_CONFIG_PATH", root / "thelpviewer" / "dos-prompt.json")),
         dev_auto_login=os.environ.get("THELP_DEV_AUTO_LOGIN", "0") == "1",
+        sources_dir=Path(os.environ.get("THELP_SOURCES_DIR", root / "sources")),
+        downloads_dir=Path(os.environ.get("THELP_DOWNLOADS_DIR", state_dir / "downloads")),
     )

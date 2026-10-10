@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### 2.1 development
+
+- Added administrator server-content configuration with selectable HELP build
+  groups and DOS packages. A fresh server opens setup after admin sign-in;
+  confirmed selections launch background Python module jobs through the API.
+  Shared TVListBox/TVButton views and a TVBarGauge progress dialog need no
+  per-dialog HTML/CSS. Hide does not cancel the server operation.
+- HELP conversion stages output, validates and rebuilds the shared catalog,
+  retains a previous-generation backup and activates only after success.
+  Unselected groups, original HELP sources and private DOS disks are retained.
+  The server refreshes display names and its full-text/SEO index afterwards.
+- Unified bounded public-network transport for HELP and DOS downloads,
+  including HTML POST forms, redirects, actual-peer/private-address rejection
+  and per-task byte progress. DOS retains its HTTPS-only policy.
+- New server archives use var/downloads/help and var/downloads/dos; legacy
+  DOS cache remains readable. Published helps/ and permanent var/dos/users
+  are not moved. Content choices persist in var/content-settings.json.
+- Extracted callable downloader orchestration, staged HELP builder and catalog
+  builder; existing CLI entry points remain adapters, not server subprocesses.
+
 ## [2.0.0] — 2026-10-10
 
 - Fixed TVProgram keyboard owner-flow recursion; child input is not sent

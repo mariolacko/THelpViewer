@@ -247,13 +247,19 @@ THelpViewer/
 │   │   │   └── statistics.py ← statistics and Hall of Fame API
 │   │   └── __init__.py
 │   └── help-database.json  ←   products, download sources, build groups, conversion files, CRC metadata
-├── downloads/              ← Cached downloaded archives and disk images
+├── downloads/              ← Legacy local downloader cache (not moved automatically)
 ├── sources/                ← Source help files organized by product group
 │   ├── Borland Turbo Pascal 7/   ← e.g. TURBO.TPH, TVISION.TPH, OWL.TPH
 │   ├── Borland Turbo C 2.01/     ← e.g. TCHELP.TCH
 │   └── …
 ├── helps/                  ← Generated UHF 2.0 `.json.gz` bundles + catalog.json
-├── var/                    ← Mutable server-side state, including MIDI catalog and tracks
+├── var/                    ← Persistent server state; not a disposable cache directory
+│   ├── downloads/help/     ← Cached HELP downloads / archives
+│   ├── downloads/dos/      ← Cached DOS package archives
+│   ├── dos/base/           ← Shared installed C disk
+│   ├── dos/users/<id>/     ← Permanent private overlays and removable media
+│   ├── midi/               ← MIDI tracks, covers and catalog
+│   └── content-settings.json ← Administrator's selected HELP / DOS packages
 ├── docs/                   ← Documentation
 │   ├── Formats.md          ←   binary format index
 │   ├── Formats/            ←   detailed format specifications

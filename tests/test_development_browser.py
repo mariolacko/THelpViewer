@@ -65,6 +65,49 @@ const [port,url]=process.argv.slice(1);
    const session=await(await fetch('/api/auth/session')).json();
    return session.authenticated&&session.user.role==='admin'&&(await fetch('/api/admin/settings')).ok;})()`))throw Error('Local browser session failed');
  }
+ await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
+  const view=document.querySelector('.tv-content-setup-window')?.closest('.tv-dialog-overlay')?._tvView;
+  if(view?.isOpen()&&view.helpList.items.length){resolve();return;}
+  if(Date.now()>deadline){reject(Error('First-run content setup did not open'));return;}setTimeout(check,30);
+ };check();})`);
+ const selection=await evaluate(`(()=>{
+  const view=document.querySelector('.tv-content-setup-window').closest('.tv-dialog-overlay')._tvView;
+  const first=view.helpList.selectedElement();first.click();
+  view.helpList.selectedElement().dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+  const arrowsKeepSelection=view.selectedHelp.size===1;
+  view.helpList.selectedElement().dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true,cancelable:true}));
+  const body=view.content.root.getBoundingClientRect();
+  const lists=[view.helpList,view.dosList].map(list=>{
+   const rect=list.root.getBoundingClientRect();return rect.left>=body.left&&rect.right<=body.right&&rect.bottom<=body.bottom;
+  });
+  const result={arrowsKeepSelection,spaceToggles:view.selectedHelp.size===2,listsFit:lists.every(Boolean),
+   sharedLists:view.helpList instanceof window.THelpViewerTV.TVListBox,
+   horizontal:Boolean(view.helpList.root.querySelector('.tv-scrollbar-x'))};
+  void view.installSelected();return result;
+ })()`);
+ if(!Object.values(selection).every(Boolean))throw Error('Content TVision input/layout failed: '+JSON.stringify(selection));
+ await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
+  const box=document.querySelector('.tv-msgbox-window');
+  if(box&&!box.closest('.tv-dialog-overlay').hidden){resolve();return;}
+  if(Date.now()>deadline){reject(Error('Content confirmation missing'));return;}setTimeout(check,30);
+ };check();})`);
+ await evaluate(`document.querySelector('.tv-msgbox-window .tv-dialog-close-control').click()`);
+ if(!await evaluate(`(async()=>{const c=await(await fetch('/api/admin/content')).json();return !c.configured&&c.status.state==='idle';})()`))throw Error('Closing confirmation started installation');
+ await evaluate(`(async()=>{const v=document.querySelector('.tv-content-setup-window').closest('.tv-dialog-overlay')._tvView;
+  await v.loadChoices();void v.installSelected();})()`);
+ await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
+  const box=document.querySelector('.tv-msgbox-window');
+  if(box&&!box.closest('.tv-dialog-overlay').hidden){resolve();return;}
+  if(Date.now()>deadline){reject(Error('Empty selection confirmation missing'));return;}setTimeout(check,30);
+ };check();})`);
+ await evaluate(`Array.from(document.querySelectorAll('.tv-msgbox-window [data-tv-command="msgbox-cmd"]')).find(b=>b.textContent.includes('OK')).click()`);
+ await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
+  const v=document.querySelector('.tv-content-setup-window').closest('.tv-dialog-overlay')._tvView;
+  if(v.statusText.text.startsWith('Finished.')){resolve();return;}
+  if(Date.now()>deadline){reject(Error('Empty selection did not finish: '+v.statusText.text));return;}setTimeout(check,30);
+ };check();})`);
+ await evaluate(`document.querySelector('.tv-content-setup-window [data-tv-command="content-close"]').click()`);
+ if(!await evaluate(`(async()=>{const c=await(await fetch('/api/admin/content')).json();return c.configured&&!c.needs_setup&&c.status.percent===100;})()`))throw Error('Content preferences were not saved');
  for(const resource of ['dos','midi']){
   await evaluate(`document.querySelector('[data-tv-command="account-rebuild-${resource}"]').click()`);
   await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
@@ -100,7 +143,7 @@ const [port,url]=process.argv.slice(1);
   if(Date.now()>deadline){reject(Error('Configuration F1 did not open the updated native HELP topic'));return;}setTimeout(check,50);
  };check();})`);
  socket.close();
-})().catch(error=>{console.error(error);process.exitCode=1;});
+})().catch(error=>{console.error(error);process.exit(1);});
 '''
                 result = subprocess.run([NODE, "-e", script, debugging_port, app_url],
                                         capture_output=True, text=True, timeout=40)

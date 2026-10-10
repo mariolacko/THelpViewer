@@ -1,6 +1,6 @@
 # Converter
 
-> Updated: 2026-09-29
+> Updated: 2026-10-10
 
 Help file converter — reads binary and source help formats, exports to HTML, JSON bundles or Markdown.
 
@@ -38,6 +38,16 @@ python -m thelpviewer.converter TURBO.TPH output/ --dump-json
 | `--bundle-layout` | Bundle layout: `site` writes SPA assets + catalog, `helps` writes only bundle data |
 
 ## Architecture
+
+Server builds call `converter.build.build_help_groups()` directly. It converts
+only the selected manifest groups, stages bundles next to `helps/`, rebuilds
+the catalog through `converter.catalog.rebuild_catalog()`, and keeps live
+output untouched until validation succeeds. The previous generation remains
+as a recoverable sibling backup. `tools/rebuild_catalog.py` is a CLI adapter.
+`export_bundle_tree()` accepts optional `source_paths` and an `on_progress`
+callback, keeping paths relative to the full `sources/` root. Existing CLI
+exports remain available; the server does not run them as commands.
+See [Server Content](Server%20Content.md).
 
 The converter uses a pipeline architecture with automatic format detection:
 

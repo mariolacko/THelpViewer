@@ -3,14 +3,38 @@
 from __future__ import annotations
 
 import html as html_module
-import http.cookiejar
 import json
 import re
 import time
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
+from contextvars import ContextVar
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlparse
+
+from .transport import create_opener, download_chunks, public_url
+
+
+_progress = ContextVar("download_progress", default=None)
+
+
+@contextmanager
+def observe_downloads(callback):
+    """Per-task progress, without redirecting process-wide stdout."""
+    token = _progress.set(callback)
+    try:
+        yield
+    finally:
+        _progress.reset(token)
+
+
+def _notify(url, received, total):
+    callback = _progress.get()
+    if callback:
+        callback({"phase": "Downloading", "file": Path(urlparse(url).path).name,
+                  "received": received, "bytes_total": total})
 
 
 REQUEST_DELAY = 1.5
@@ -63,11 +87,7 @@ def get_opener() -> urllib.request.OpenerDirector:
     """Return a cached urllib opener with cookies and browser-like headers."""
     global _opener
     if _opener is None:
-        jar = http.cookiejar.CookieJar()
-        _opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(jar),
-            urllib.request.HTTPRedirectHandler(),
-        )
+        _opener = create_opener(https_only=False)
         _opener.addheaders = [
             ("User-Agent", USER_AGENT),
             ("Accept", "text/html,application/xhtml+xml,*/*;q=0.9"),
@@ -87,6 +107,7 @@ def _retry_delay(headers: object, default: int) -> int:
 
 def fetch_html(url: str, retries: int = 3, encoding: str | None = None) -> str:
     """Fetch one HTML page with retries and optional forced text encoding."""
+    public_url(url, https_only=False)
     opener = get_opener()
     for attempt in range(retries):
         try:
@@ -97,7 +118,7 @@ def fetch_html(url: str, retries: int = 3, encoding: str | None = None) -> str:
                 else:
                     match = re.search(r"charset=([^\s;]+)", content_type, re.I)
                     charset = match.group(1) if match else "utf-8"
-                return resp.read().decode(charset, errors="replace")
+                return b"".join(download_chunks(resp, 16 * 1024 * 1024)).decode(charset, errors="replace")
         except urllib.error.HTTPError as exc:
             if exc.code == 429:
                 wait = _retry_delay(exc.headers, 30)
@@ -116,9 +137,10 @@ def fetch_html(url: str, retries: int = 3, encoding: str | None = None) -> str:
 
 def fetch_json(url: str) -> object:
     """Fetch one JSON document."""
+    public_url(url, https_only=False)
     opener = get_opener()
     with opener.open(url, timeout=20) as resp:
-        return json.loads(resp.read())
+        return json.loads(b"".join(download_chunks(resp, 16 * 1024 * 1024)))
 
 
 def fetch_polite(url: str, encoding: str | None = None) -> str:
@@ -129,6 +151,7 @@ def fetch_polite(url: str, encoding: str | None = None) -> str:
 
 def download_file(url: str, dest: Path, retries: int = 3) -> Path:
     """Download one file to disk, skipping already-downloaded targets."""
+    public_url(url, https_only=False)
     if dest.exists():
         print(f"    [skipped] {dest.name} (exists)")
         return dest
@@ -144,7 +167,8 @@ def download_file(url: str, dest: Path, retries: int = 3) -> Path:
                 total = int(resp.headers.get("Content-Length") or 0)
                 done = 0
                 with tmp.open("wb") as fh:
-                    while chunk := resp.read(65536):
+                    for chunk in download_chunks(resp, 512 * 1024 * 1024,
+                                                 lambda received, size: _notify(url, received, size)):
                         fh.write(chunk)
                         done += len(chunk)
                         if total:

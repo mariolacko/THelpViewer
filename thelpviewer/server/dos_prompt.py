@@ -57,7 +57,7 @@ def _atomic_file(path: Path, data: bytes) -> None:
 
 class DosPromptStore:
     def __init__(self, root: Path, config_path: Path | None, settings: ServerSettings | None = None,
-                 accounts: AccountStore | None = None):
+                 accounts: AccountStore | None = None, downloads_dir: Path | None = None):
         self.root, self.config_path = root, config_path
         self.settings = settings or ServerSettings(root.parent / "server-settings.json")
         self.accounts = accounts
@@ -76,6 +76,21 @@ class DosPromptStore:
         self._worker: threading.Thread | None = None
         self.backup = ""
         self.rebuilding = False
+        self.downloads_dir = downloads_dir or root / "downloads"
+        self.source_selection = None
+        self.on_progress = None
+
+    def install(self, source_ids: list[str], *, on_progress=None) -> None:
+        """Install explicitly selected packages; keep the shared disk and private overlays."""
+        with self._lock:
+            if self.state == "building" or (self._worker and self._worker.is_alive()):
+                raise DosError("DOS C drive is already being prepared")
+            self.state, self.error = "building", ""
+            self.on_progress = on_progress
+        try:
+            self.prepare(install_sources=True, source_ids=source_ids)
+        finally:
+            self.on_progress = None
 
     def rebuild(self) -> None:
         """Replace only the shared base; retain downloads and every private overlay."""
@@ -99,7 +114,7 @@ class DosPromptStore:
             self._worker = threading.Thread(target=self.prepare, name="thelp-dos-first-run", daemon=True)
             self._worker.start()
 
-    def prepare(self, *, install_sources: bool = False) -> None:
+    def prepare(self, *, install_sources: bool = False, source_ids: list[str] | None = None) -> None:
         try:
             config = json.loads(self.config_path.read_text(encoding="utf-8")) if self.config_path else {"sources": []}
             if not isinstance(config, dict) or not isinstance(config.get("sources"), list):
@@ -127,13 +142,20 @@ class DosPromptStore:
             elif not base.is_dir():
                 raise DosError("The initialised C drive is missing; restore the server disk backup")
             seen = set()
+            if source_ids is None and self.source_selection:
+                source_ids = self.source_selection()
             sources = config["sources"] if self.initializing else []
-            self.total = sum(1 for source in sources if isinstance(source, dict) and source.get("enabled") is not False)
+            if source_ids is not None:
+                if set(source_ids) - {source.get("id") for source in config["sources"] if isinstance(source, dict)}:
+                    raise DosError("Unknown DOS package")
+                sources = [source for source in sources if isinstance(source, dict) and source.get("id") in source_ids]
+            self.total = sum(1 for source in sources if isinstance(source, dict)
+                             and (source_ids is not None or source.get("enabled") is not False))
             self.processed = 0
             for source in sources:
                 if not isinstance(source, dict):
                     raise DosError("Each software source must be an object")
-                if source.get("enabled") is False:
+                if source_ids is None and source.get("enabled") is False:
                     continue
                 ident = source.get("id", "")
                 digest = source.get("sha256", "")
@@ -159,9 +181,12 @@ class DosPromptStore:
                     continue
                 self.current = str(source.get("title", ident))
                 self._progress("Downloading", 0)
-                cached = self.root / "downloads" / cache_key
+                cached = self.downloads_dir / cache_key
+                legacy_cached = self.root / "downloads" / cache_key
                 if cached.is_file():
                     data = cached.read_bytes()
+                elif legacy_cached.is_file():
+                    data = legacy_cached.read_bytes()
                 else:
                     data = fetch_dos_source(source, MAX_SOURCE_BYTES, self._download_progress)
                 if digest and hashlib.sha256(data).hexdigest() != digest:
@@ -197,7 +222,7 @@ class DosPromptStore:
                 if not all(isinstance(line, str) and "\n" not in line and "\r" not in line for line in guide):
                     raise DosError("DOS software_catalog must contain individual header lines")
                 for source in config["sources"]:
-                    if source.get("enabled") is not False and source.get("launch") and installed.get(source.get("id")):
+                    if source.get("launch") and installed.get(source.get("id")):
                         guide.extend([str(source.get("title", source["id"])), "  " + source["launch"], ""])
                 _atomic_file(base / "SOFTWARE.TXT", ("\r\n".join(guide) + "\r\n").encode("cp437", errors="replace"))
             for path in base.rglob("*"):
@@ -229,6 +254,8 @@ class DosPromptStore:
     def _progress(self, phase: str, fraction: float) -> None:
         self.phase = phase
         self.percent = min(99, int(100 * (self.processed + fraction) / max(1, self.total)))
+        if self.on_progress:
+            self.on_progress(self.status(start=False))
 
     def _download_progress(self, received: int, total: int) -> None:
         self.received = received
