@@ -659,8 +659,9 @@ class TVApplication extends TVProgram {
         if (event.what === evKeyDown) {
             const keyEvent = event.nativeEvent;
             const activeDialog = this.dialogManager?.get(this.dialogManager.activeTarget);
-            if (activeDialog?.isOpen()) {
-                activeDialog.dispatchEvent(new TVEvent(evKeyDown, {
+            // Child input has already traversed its owner chain; never dispatch it back.
+            if (activeDialog?.isOpen() && event.infoPtr === this) {
+                activeDialog.handleEvent(new TVEvent(evKeyDown, {
                     infoPtr: activeDialog,
                     nativeEvent: keyEvent,
                 }));

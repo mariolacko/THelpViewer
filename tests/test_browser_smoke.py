@@ -156,7 +156,7 @@ async function run() {
         }
         return result.result.value;
     };
-    const key = (value, code, modifiers = 0, useActiveElement = false) => evaluate(`(() => {
+    const key = (value, code, modifiers = 0, useActiveElement = true) => evaluate(`(() => {
         const target = ${useActiveElement ? "document.activeElement || document" : "document"};
         const options = {
             key: ${JSON.stringify(value)},

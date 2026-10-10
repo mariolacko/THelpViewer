@@ -4,6 +4,8 @@
 
 ## [2.0.0] — 2026-10-10
 
+- Fixed TVProgram keyboard owner-flow recursion; child input is not sent
+  back into the active dialog, restoring Escape and normal key handling.
 - Rechecking an already-open Find dialog refreshes global-search availability;
   reactivating the window no longer leaves that option disabled.
 - Moved Users' Add User / Save row down one character row, leaving a blank
