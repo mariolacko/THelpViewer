@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .. import __version__
+from ... import __version__
 
 from pathlib import Path
 

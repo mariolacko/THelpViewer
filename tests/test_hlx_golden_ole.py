@@ -1,6 +1,6 @@
 import os
 
-from thelpviewer.converter.readers.hlx_deterministic import parse_hlx_deterministic
+from thelpviewer.server.converter.readers.hlx_deterministic import parse_hlx_deterministic
 
 
 def test_hlx_deterministic_ole_basic():

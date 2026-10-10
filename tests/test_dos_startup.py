@@ -41,7 +41,7 @@ win.zoom();assert.deepEqual(geometry,original);assert.equal(filled,4);assert.equ
 @pytest.mark.skipif(NODE is None, reason="Node.js is required")
 def test_embedded_dos_startup_survives_audio_denial_and_reports_worker_timeout():
     source = Path("www/assets/tv-dos.js")
-    assert source.read_bytes() == Path("thelpviewer/converter/assets/tv-dos.js").read_bytes()
+    assert source.read_bytes() == Path("thelpviewer/server/converter/assets/tv-dos.js").read_bytes()
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const source=fs.readFileSync(process.argv[1],'utf8');

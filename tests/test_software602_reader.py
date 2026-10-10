@@ -1,10 +1,10 @@
 from functools import lru_cache
 from pathlib import Path
 
-from thelpviewer.converter.exporter import detect_format_handler
-from thelpviewer.converter.readers.t602_300 import T602300Reader, is_t602_300_binary
-from thelpviewer.converter.readers.t602_310 import T602310Reader
-from thelpviewer.converter.writers.json import HelpJsonRenderer
+from thelpviewer.server.converter.exporter import detect_format_handler
+from thelpviewer.server.converter.readers.t602_300 import T602300Reader, is_t602_300_binary
+from thelpviewer.server.converter.readers.t602_310 import T602310Reader
+from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
 @lru_cache(maxsize=1)

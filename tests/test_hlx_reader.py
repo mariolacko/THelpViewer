@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from thelpviewer.converter.readers.hlx_binary import HlxBinaryReader, is_hlx_binary
+from thelpviewer.server.converter.readers.hlx_binary import HlxBinaryReader, is_hlx_binary
 
 
 def test_bcw_hlx_is_binary():

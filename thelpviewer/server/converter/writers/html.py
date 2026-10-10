@@ -10,8 +10,8 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from ... import __authors__ as GENERATOR_AUTHORS
-from ... import __version__ as GENERATOR_VERSION
+from .... import __authors__ as GENERATOR_AUTHORS
+from .... import __version__ as GENERATOR_VERSION
 from ..base import HelpDocument, PositionedKeyword, TopicRecord, context_nav_action
 from ..codepages import build_decode_table, decode_bytes_box_aware
 

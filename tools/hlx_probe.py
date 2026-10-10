@@ -14,9 +14,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from thelpviewer.converter.readers.hlx_binary import HlxBinaryReader, _scan_hlx_index_records
-from thelpviewer.converter.readers.hlx_binary import _resolve_hlx_address
-from thelpviewer.converter.readers.hlx_deterministic import parse_hlx_deterministic
+from thelpviewer.server.converter.readers.hlx_binary import HlxBinaryReader, _scan_hlx_index_records
+from thelpviewer.server.converter.readers.hlx_binary import _resolve_hlx_address
+from thelpviewer.server.converter.readers.hlx_deterministic import parse_hlx_deterministic
 
 
 @dataclass(frozen=True, slots=True)

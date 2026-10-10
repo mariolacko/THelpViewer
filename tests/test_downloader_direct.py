@@ -1,12 +1,12 @@
 import pytest
 
-from thelpviewer.downloader.direct import run
-from thelpviewer.downloader.extractor import ExtractorTools
+from thelpviewer.server.downloader.direct import run
+from thelpviewer.server.downloader.extractor import ExtractorTools
 
 
 def test_direct_dry_run_does_not_fetch_or_extract(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
-        "thelpviewer.downloader.direct.download_file",
+        "thelpviewer.server.downloader.direct.download_file",
         lambda *_: pytest.fail("dry-run downloaded a file"),
     )
 
@@ -23,9 +23,9 @@ def test_direct_dry_run_does_not_fetch_or_extract(tmp_path, monkeypatch, capsys)
 
 
 def test_direct_fails_when_pinned_archive_cannot_be_collected(tmp_path, monkeypatch):
-    monkeypatch.setattr("thelpviewer.downloader.direct.download_file", lambda _url, dest: dest)
+    monkeypatch.setattr("thelpviewer.server.downloader.direct.download_file", lambda _url, dest: dest)
     monkeypatch.setattr(
-        "thelpviewer.downloader.direct.collect_archive_members",
+        "thelpviewer.server.downloader.direct.collect_archive_members",
         lambda *_: (_ for _ in ()).throw(ValueError("Missing archive members: HELP.HLP")),
     )
 
@@ -41,13 +41,13 @@ def test_direct_fails_when_pinned_archive_cannot_be_collected(tmp_path, monkeypa
 
 def test_direct_stages_products_under_their_own_names(tmp_path, monkeypatch):
     labels = []
-    monkeypatch.setattr("thelpviewer.downloader.direct.download_file", lambda _url, dest: dest)
+    monkeypatch.setattr("thelpviewer.server.downloader.direct.download_file", lambda _url, dest: dest)
 
     def fake_collect(_archive, _members, label, _sources_dir, _extractor):
         labels.append(label)
         return []
 
-    monkeypatch.setattr("thelpviewer.downloader.direct.collect_archive_members", fake_collect)
+    monkeypatch.setattr("thelpviewer.server.downloader.direct.collect_archive_members", fake_collect)
     run(
         ["msdos622", "qb45"],
         tmp_path / "sources",
@@ -67,7 +67,7 @@ def test_direct_skips_files_already_collected_by_archive_search(tmp_path, monkey
     source.parent.mkdir(parents=True)
     source.write_bytes(b"existing")
     monkeypatch.setattr(
-        "thelpviewer.downloader.direct.download_file",
+        "thelpviewer.server.downloader.direct.download_file",
         lambda *_: pytest.fail("existing candidate was downloaded twice"),
     )
 

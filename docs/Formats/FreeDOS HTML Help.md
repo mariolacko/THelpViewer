@@ -78,7 +78,7 @@ those are THelpViewer limits, not properties of the FreeDOS format.
 ## Distribution and source identification
 
 The known archive has CRC32 `3F1A2C97` in
-`thelpviewer/help-database.json`. `FDL.TXT` and `COPYING` are kept
+`thelpviewer/config/help-database.json`. `FDL.TXT` and `COPYING` are kept
 with the downloaded package as license materials, not imported as help
 topics. The selected FreeDOS package lists an
 [Express + GNU Free Documentation License copying policy](https://ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/latest/html/en/base/htmlhelp/20251203.4/index.html).

@@ -8,23 +8,23 @@ import pytest
 NODE = shutil.which("node")
 ASSET_PATHS = (
     Path("www/assets/tv-core.js"),
-    Path("thelpviewer/converter/assets/tv-core.js"),
+    Path("thelpviewer/server/converter/assets/tv-core.js"),
 )
 DIALOG_PATHS = (
     Path("www/assets/tv-dialogs.js"),
-    Path("thelpviewer/converter/assets/tv-dialogs.js"),
+    Path("thelpviewer/server/converter/assets/tv-dialogs.js"),
 )
 GAME_PATHS = (
     Path("www/assets/tv-games.js"),
-    Path("thelpviewer/converter/assets/tv-games.js"),
+    Path("thelpviewer/server/converter/assets/tv-games.js"),
 )
 
 
 def test_system_information_is_a_shared_tv_dialog_without_private_layout_css():
     dialogs = DIALOG_PATHS[1].read_text(encoding="utf-8")
     core = ASSET_PATHS[1].read_text(encoding="utf-8")
-    bundle = Path("thelpviewer/converter/assets/tv-bundle-app.js").read_text(encoding="utf-8")
-    shell = Path("thelpviewer/converter/assets/tv-shell.js").read_text(encoding="utf-8")
+    bundle = Path("thelpviewer/server/converter/assets/tv-bundle-app.js").read_text(encoding="utf-8")
+    shell = Path("thelpviewer/server/converter/assets/tv-shell.js").read_text(encoding="utf-8")
 
     system_info = dialogs[
         dialogs.index("class TVSystemInformationDialog"):
@@ -417,7 +417,7 @@ if (!manager.dispatchCommand(TV.TV_COMMANDS.PREVIOUS) || manager.activeTarget !=
 def test_calculator_preserves_escape_as_a_calculator_key():
     dialog_paths = (
         Path("www/assets/tv-dialogs.js"),
-        Path("thelpviewer/converter/assets/tv-dialogs.js"),
+        Path("thelpviewer/server/converter/assets/tv-dialogs.js"),
     )
     assert dialog_paths[0].read_bytes() == dialog_paths[1].read_bytes()
     source = dialog_paths[0].read_text(encoding="utf-8")
@@ -472,11 +472,11 @@ def test_calendar_matches_dos_navigator_geometry_and_navigation():
 def test_close_and_zoom_commands_are_routed_to_the_active_target():
     bundle_paths = (
         Path("www/assets/tv-bundle-app.js"),
-        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+        Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
     )
     shell_paths = (
         Path("www/assets/tv-shell.js"),
-        Path("thelpviewer/converter/assets/tv-shell.js"),
+        Path("thelpviewer/server/converter/assets/tv-shell.js"),
     )
     assert bundle_paths[0].read_bytes() == bundle_paths[1].read_bytes()
     assert shell_paths[0].read_bytes() == shell_paths[1].read_bytes()

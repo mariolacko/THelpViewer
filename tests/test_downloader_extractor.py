@@ -5,7 +5,7 @@ import zipfile
 
 import pytest
 
-from thelpviewer.downloader.extractor import (
+from thelpviewer.server.downloader.extractor import (
     ExtractorTools,
     _should_probe,
     assemble_borland_split_archives,
@@ -46,7 +46,7 @@ def test_extract_file_rejects_symlinks_from_external_extractor(tmp_path, monkeyp
         (dest / "escape.txt").symlink_to(outside)
         return True, None
 
-    monkeypatch.setattr("thelpviewer.downloader.extractor._extract_with_unar", fake_extract)
+    monkeypatch.setattr("thelpviewer.server.downloader.extractor._extract_with_unar", fake_extract)
     tools = ExtractorTools(unar="unar", lsar="lsar", sevenzip=None)
 
     assert extract_file(archive, destination, tools) is False
@@ -65,7 +65,7 @@ def test_collect_archive_members_keeps_only_configured_language(tmp_path, monkey
             member.write_bytes(language.encode("ascii"))
         return True
 
-    monkeypatch.setattr("thelpviewer.downloader.extractor.extract_file", fake_extract)
+    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_file", fake_extract)
     tools = ExtractorTools(unar="unar", lsar="lsar", sevenzip=None)
 
     collected = collect_archive_members(
@@ -83,8 +83,8 @@ def test_collect_archive_members_keeps_only_configured_language(tmp_path, monkey
 def test_collect_archive_members_rejects_missing_files(tmp_path, monkeypatch):
     archive = tmp_path / "help.zip"
     archive.write_bytes(b"test")
-    monkeypatch.setattr("thelpviewer.downloader.extractor.extract_file", lambda *_: True)
-    monkeypatch.setattr("thelpviewer.downloader.extractor.extract_nested", lambda *_: None)
+    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_file", lambda *_: True)
+    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_nested", lambda *_: None)
     tools = ExtractorTools(unar="unar", lsar="lsar", sevenzip=None)
 
     with pytest.raises(ValueError, match="QB45QCK.HLP"):

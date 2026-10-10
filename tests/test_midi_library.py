@@ -18,7 +18,7 @@ PNG = bytes.fromhex("89504e470d0a1a0a") + b"test cover"
 
 
 def test_default_midi_manifest_pages_preserve_source_ids(tmp_path):
-    manifest = Path("thelpviewer/midi-sources.json")
+    manifest = Path("thelpviewer/config/midi-sources.json")
     configured = json.loads(manifest.read_text(encoding="utf-8"))["sources"]
     assert all(isinstance(source["pages"], list) and source["pages"] for source in configured)
     library = MidiLibrary(tmp_path / "midi", manifest)

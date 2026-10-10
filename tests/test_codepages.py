@@ -1,4 +1,4 @@
-from thelpviewer.converter.codepages import _cached_decode_table, build_decode_table, decode_bytes
+from thelpviewer.server.converter.codepages import _cached_decode_table, build_decode_table, decode_bytes
 
 
 def test_decode_bytes_reuses_cached_codepage_table_without_exposing_mutable_cache():

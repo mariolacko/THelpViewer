@@ -1,17 +1,17 @@
 from pathlib import Path
 
-from thelpviewer.converter.readers import scorpion_dat_reader as scorpion_dat_module
-from thelpviewer.converter.readers import scorpion_legacy_reader as scorpion_legacy_module
-from thelpviewer.converter.readers import scorpion_legacy_v1x as scorpion_legacy_v1x_module
-from thelpviewer.converter.readers import scorpion_legacy_v4x as scorpion_legacy_v4x_module
-from thelpviewer.converter.readers import scorpion_legacy_v6x as scorpion_legacy_v6x_module
-from thelpviewer.converter.exporter import detect_format_handler
-from thelpviewer.converter.readers.scorpion_dat_parser import SCORPION_DAT_SIGNATURE
-from thelpviewer.converter.readers.scorpion_dat_reader import (
+from thelpviewer.server.converter.readers import scorpion_dat_reader as scorpion_dat_module
+from thelpviewer.server.converter.readers import scorpion_legacy_reader as scorpion_legacy_module
+from thelpviewer.server.converter.readers import scorpion_legacy_v1x as scorpion_legacy_v1x_module
+from thelpviewer.server.converter.readers import scorpion_legacy_v4x as scorpion_legacy_v4x_module
+from thelpviewer.server.converter.readers import scorpion_legacy_v6x as scorpion_legacy_v6x_module
+from thelpviewer.server.converter.exporter import detect_format_handler
+from thelpviewer.server.converter.readers.scorpion_dat_parser import SCORPION_DAT_SIGNATURE
+from thelpviewer.server.converter.readers.scorpion_dat_reader import (
     ScorpionDatReader,
     scorpion_dat_reader_class_for_path,
 )
-from thelpviewer.converter.readers.scorpion_legacy_reader import (
+from thelpviewer.server.converter.readers.scorpion_legacy_reader import (
     ScorpionLegacyReader,
     is_scorpion_legacy_binary,
     scorpion_legacy_reader_class_for_path,

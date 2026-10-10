@@ -7,7 +7,7 @@ import pytest
 
 ASSET_PATHS = (
     Path("www/assets/tv-bundle-app.js"),
-    Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+    Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
 )
 
 

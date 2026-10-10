@@ -2,8 +2,8 @@ import pytest
 
 from pathlib import Path
 
-from thelpviewer.converter.exporter import detect_format_handler
-from thelpviewer.converter.readers.tdh import (
+from thelpviewer.server.converter.exporter import detect_format_handler
+from thelpviewer.server.converter.readers.tdh import (
     TdhHelpReader,
     _signed_tdh_delta,
     _tdh_runtime_table_word_count,
@@ -12,7 +12,7 @@ from thelpviewer.converter.readers.tdh import (
     probe_tdh_binary,
     probe_tfh_binary,
 )
-from thelpviewer.converter.readers.thelp import is_thelp_binary
+from thelpviewer.server.converter.readers.thelp import is_thelp_binary
 
 
 TDH_SAMPLE = Path("data/sources/Borland Turbo Debugger 1.0/TDHELP.TDH")

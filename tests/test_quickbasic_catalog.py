@@ -6,7 +6,7 @@ import shutil
 
 import pytest
 
-from thelpviewer.converter.writers.bundle import _product_metadata_for_group, export_bundle_tree
+from thelpviewer.server.converter.writers.bundle import _product_metadata_for_group, export_bundle_tree
 
 
 @pytest.mark.parametrize("group,expected_product,expected_version", [

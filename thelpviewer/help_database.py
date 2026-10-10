@@ -10,8 +10,9 @@ import os
 from pathlib import Path
 import zlib
 
+from .config import CONFIG_DIR
 
-DEFAULT_HELP_DATABASE_PATH = Path(__file__).resolve().parent / "help-database.json"
+DEFAULT_HELP_DATABASE_PATH = CONFIG_DIR / "help-database.json"
 
 
 @dataclass(frozen=True, slots=True)

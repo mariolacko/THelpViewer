@@ -322,7 +322,7 @@ To generate only the Borland C++ 4.x HLX corpus into a safe staging
 directory without overwriting the main `data/helps/` catalog:
 
 ```bash
-python -m thelpviewer.converter \
+python -m thelpviewer.server.converter \
   "data/sources/Borland C++ 4.x" \
   var/hlx-uhf \
   --bundle \
@@ -343,8 +343,8 @@ This writes `.json.gz` UHF bundles plus a local `catalog.json` under
 
 ### Implementation references
 
-- Heuristic wrapper: `thelpviewer/converter/readers/hlx_binary.py`
-- Deterministic detector: `thelpviewer/converter/readers/hlx_deterministic.py`
-- Data models: `thelpviewer/converter/base.py`
+- Heuristic wrapper: `thelpviewer/server/converter/readers/hlx_binary.py`
+- Deterministic detector: `thelpviewer/server/converter/readers/hlx_deterministic.py`
+- Data models: `thelpviewer/server/converter/base.py`
 - Probe helper: `tools/hlx_probe.py`
 - Tests: `tests/test_hlx_reader.py`, `tests/test_hlx_hotspots.py`, `tests/test_hlx_small_files.py`, `tests/test_hlx_golden_ole.py`

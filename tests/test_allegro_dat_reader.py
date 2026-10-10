@@ -1,4 +1,4 @@
-from thelpviewer.converter.readers.allegro_dat import (
+from thelpviewer.server.converter.readers.allegro_dat import (
     ALLEGRO_DAT_MAGIC,
     ALLEGRO_F_NOPACK_MAGIC,
     ALLEGRO_F_PACK_MAGIC,

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from thelpviewer.converter.exporter import detect_format_handler, load_document
-from thelpviewer.downloader.collector import is_help_file_path
+from thelpviewer.server.converter.exporter import detect_format_handler, load_document
+from thelpviewer.server.downloader.collector import is_help_file_path
 
 
 TAH_SAMPLE = Path("data/sources/Borland Turbo Assembler/TASM.TAH")

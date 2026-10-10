@@ -4,6 +4,10 @@
 
 ### 2.1 development
 
+- Consolidated versioned HELP/DOS/MIDI JSON configuration in thelpviewer/config/.
+  Converter and downloader are server submodules; Python imports, manifest
+  plugin names, shell adapters, Docker paths and documentation use that layout.
+  Existing environment overrides and public HELP/Docs URLs remain unchanged.
 - Split permanent storage into data/ (HELP, original sources, Docs, accounts,
   statistics/Hall of Fame, settings and data/dos/users) and rebuildable state
   into var/ (downloads, var/dos/c, MIDI and full-text index). Upgrade migration

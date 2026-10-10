@@ -1,6 +1,6 @@
 import re
 
-from thelpviewer.converter.readers.thelp import ThelpHelpReader
+from thelpviewer.server.converter.readers.thelp import ThelpHelpReader
 
 
 def _screen(context_id, lines):

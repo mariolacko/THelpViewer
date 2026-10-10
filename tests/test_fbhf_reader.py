@@ -1,7 +1,7 @@
 import struct
 
-from thelpviewer.converter.readers.fbhf import FBHFHelpReader, FBHFSourceReader
-from thelpviewer.converter.writers.json import HelpJsonRenderer
+from thelpviewer.server.converter.readers.fbhf import FBHFHelpReader, FBHFSourceReader
+from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
 def _topic(paragraph: bytes, crossrefs: list[tuple[int, int, int]]) -> bytes:

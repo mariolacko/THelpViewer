@@ -7,7 +7,7 @@ import pytest
 
 SAVER_PATHS = (
     Path("www/assets/tv-screensaver.js"),
-    Path("thelpviewer/converter/assets/tv-screensaver.js"),
+    Path("thelpviewer/server/converter/assets/tv-screensaver.js"),
 )
 NODE = shutil.which("node")
 

@@ -8,7 +8,7 @@ import pytest
 NODE = shutil.which("node")
 CORE_PATHS = (
     Path("www/assets/tv-core.js"),
-    Path("thelpviewer/converter/assets/tv-core.js"),
+    Path("thelpviewer/server/converter/assets/tv-core.js"),
 )
 
 
@@ -379,15 +379,15 @@ if (filtered.length !== 1 || filtered[0] !== enabled) {
 def test_shell_and_bundle_use_the_shared_menu_controller():
     shell_paths = (
         Path("www/assets/tv-shell.js"),
-        Path("thelpviewer/converter/assets/tv-shell.js"),
+        Path("thelpviewer/server/converter/assets/tv-shell.js"),
     )
     bundle_paths = (
         Path("www/assets/tv-bundle-app.js"),
-        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+        Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
     )
     css_paths = (
         Path("www/assets/turbovision.css"),
-        Path("thelpviewer/converter/assets/turbovision.css"),
+        Path("thelpviewer/server/converter/assets/turbovision.css"),
     )
     assert shell_paths[0].read_bytes() == shell_paths[1].read_bytes()
     assert bundle_paths[0].read_bytes() == bundle_paths[1].read_bytes()
@@ -470,11 +470,11 @@ if (!manager.canDispatchCommand(TV_COMMANDS.CLOSE) || manager.canDispatchCommand
 def test_bundle_window_menu_reflects_dynamic_command_state():
     bundle_paths = (
         Path("www/assets/tv-bundle-app.js"),
-        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+        Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
     )
     css_paths = (
         Path("www/assets/turbovision.css"),
-        Path("thelpviewer/converter/assets/turbovision.css"),
+        Path("thelpviewer/server/converter/assets/turbovision.css"),
     )
     assert bundle_paths[0].read_bytes() == bundle_paths[1].read_bytes()
     assert css_paths[0].read_bytes() == css_paths[1].read_bytes()

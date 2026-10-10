@@ -1,17 +1,17 @@
 from pathlib import Path
 
-from thelpviewer.converter.base import HelpDocument
-from thelpviewer.converter.exporter import detect_format_handler
-from thelpviewer.converter.readers.scorpion_dat_parser import SCORPION_DAT_SIGNATURE
-from thelpviewer.converter.readers.scorpion_dat_reader import (
+from thelpviewer.server.converter.base import HelpDocument
+from thelpviewer.server.converter.exporter import detect_format_handler
+from thelpviewer.server.converter.readers.scorpion_dat_parser import SCORPION_DAT_SIGNATURE
+from thelpviewer.server.converter.readers.scorpion_dat_reader import (
     ScorpionDatReader,
     _normalize_title,
     _render_payload_lines,
     is_scorpion_dat_binary,
     is_scorpion_dat_help_binary,
 )
-from thelpviewer.converter.readers.scorpion_dat_parser import parse_scorpion_dat_records
-from thelpviewer.converter.writers.json import HelpJsonRenderer
+from thelpviewer.server.converter.readers.scorpion_dat_parser import parse_scorpion_dat_records
+from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
 def _sample_cheaty23_path() -> Path:

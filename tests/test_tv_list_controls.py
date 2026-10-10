@@ -8,11 +8,11 @@ import pytest
 NODE = shutil.which("node")
 CORE_PATHS = (
     Path("www/assets/tv-core.js"),
-    Path("thelpviewer/converter/assets/tv-core.js"),
+    Path("thelpviewer/server/converter/assets/tv-core.js"),
 )
 DIALOG_PATHS = (
     Path("www/assets/tv-dialogs.js"),
-    Path("thelpviewer/converter/assets/tv-dialogs.js"),
+    Path("thelpviewer/server/converter/assets/tv-dialogs.js"),
 )
 
 

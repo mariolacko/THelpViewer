@@ -1,8 +1,8 @@
-from thelpviewer.converter.readers.allegro_dat import (
+from thelpviewer.server.converter.readers.allegro_dat import (
     ALLEGRO_DAT_MAGIC,
     ALLEGRO_F_NOPACK_MAGIC,
 )
-from thelpviewer.converter.readers.scorpion_dat_parser import (
+from thelpviewer.server.converter.readers.scorpion_dat_parser import (
     parse_scorpion_dat_articles,
     parse_scorpion_dat_records,
 )

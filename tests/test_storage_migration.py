@@ -126,7 +126,7 @@ def test_document_publisher_updates_managed_docs_but_keeps_edits_and_private_doc
 
 
 def test_demo_midi_removed_but_synth_assets_remain():
-    for root in (Path("www/assets/midi"), Path("thelpviewer/converter/assets/midi")):
+    for root in (Path("www/assets/midi"), Path("thelpviewer/server/converter/assets/midi")):
         assert not list(root.glob("*.mid"))
         assert not (root / "README.md").exists()
         assert (root / "synth" / "FluidR3Mono_GM.sf3").is_file()

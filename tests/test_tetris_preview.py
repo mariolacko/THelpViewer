@@ -3,9 +3,9 @@ from pathlib import Path
 import re
 
 
-GAMES_PATH = Path("thelpviewer/converter/assets/tv-games.js")
+GAMES_PATH = Path("thelpviewer/server/converter/assets/tv-games.js")
 CSS_PATHS = (
-    Path("thelpviewer/converter/assets/turbovision.css"),
+    Path("thelpviewer/server/converter/assets/turbovision.css"),
     Path("www/assets/turbovision.css"),
 )
 

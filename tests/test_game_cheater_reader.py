@@ -5,8 +5,8 @@ import json
 import struct
 from pathlib import Path
 
-from thelpviewer.converter.exporter import detect_format_handler, iter_help_files, load_document
-from thelpviewer.converter.writers.bundle import export_bundle_tree
+from thelpviewer.server.converter.exporter import detect_format_handler, iter_help_files, load_document
+from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 
 
 def _xor_fixed(text: str, size: int) -> bytes:

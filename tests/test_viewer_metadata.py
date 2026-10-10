@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from thelpviewer import __authors__, __version__
-from thelpviewer.converter.writers.bundle import _render_bundle_index_html, _write_bundle_index
+from thelpviewer.server.converter.writers.bundle import _render_bundle_index_html, _write_bundle_index
 from thelpviewer.server.config import load_config
 
 
@@ -23,7 +23,7 @@ def test_bundle_index_copies_public_preview_image(tmp_path):
 def test_about_dialog_reads_generated_project_metadata():
     asset_paths = (
         Path("www/assets/tv-dialogs.js"),
-        Path("thelpviewer/converter/assets/tv-dialogs.js"),
+        Path("thelpviewer/server/converter/assets/tv-dialogs.js"),
     )
     assert asset_paths[0].read_bytes() == asset_paths[1].read_bytes()
 

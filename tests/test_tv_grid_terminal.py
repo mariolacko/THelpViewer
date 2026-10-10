@@ -3,7 +3,7 @@
 from pathlib import Path
 
 def test_grid_is_exported_and_uses_list_scrollbars():
-    source = Path("thelpviewer/converter/assets/tv-core.js").read_text(encoding="utf-8")
+    source = Path("thelpviewer/server/converter/assets/tv-core.js").read_text(encoding="utf-8")
     assert "class TVGridView extends TVListBox" in source
     assert "setHeadersVisible(visible)" in source
     assert "selectCell(row, column, options = {})" in source

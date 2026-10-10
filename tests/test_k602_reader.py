@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
 
-from thelpviewer.converter.exporter import detect_format_handler, load_document
-from thelpviewer.converter.readers.k602 import K602Reader, is_k602_binary
-from thelpviewer.converter.writers.json import HelpJsonRenderer
+from thelpviewer.server.converter.exporter import detect_format_handler, load_document
+from thelpviewer.server.converter.readers.k602 import K602Reader, is_k602_binary
+from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
 K602_PATH = Path("data/sources") / "Software 602" / "K602.HLP"

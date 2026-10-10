@@ -90,7 +90,7 @@ of the THelpViewer UHF output:
 
 The downloaded archive contains these six topic databases. CRC32 values
 identify the exact source files registered in
-`thelpviewer/help-database.json`:
+`thelpviewer/config/help-database.json`:
 
 | File | CRC32 | Topics |
 |------|-------|-------:|

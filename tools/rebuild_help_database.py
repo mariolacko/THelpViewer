@@ -16,13 +16,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from thelpviewer.converter.exporter import (
+from thelpviewer.server.converter.exporter import (
     autodetect_display_encoding,
     detect_format_handler,
     fix_metadata_encoding,
     load_document,
 )
-from thelpviewer.downloader.collector import detect_language
+from thelpviewer.server.downloader.collector import detect_language
 from thelpviewer.help_database import crc32_file
 
 
@@ -361,7 +361,7 @@ def main() -> int:
     parser.add_argument(
         "-o",
         "--output",
-        default=str(repo_root / "thelpviewer" / "help-database.json"),
+        default=str(repo_root / "thelpviewer" / "config" / "help-database.json"),
         help="Output JSON file (default: %(default)s)",
     )
     args = parser.parse_args()

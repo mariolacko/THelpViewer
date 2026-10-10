@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from thelpviewer.converter.readers.hlx_binary import HlxBinaryReader, is_hlx_binary
+from thelpviewer.server.converter.readers.hlx_binary import HlxBinaryReader, is_hlx_binary
 
 SMALL_FILES = [
     "data/sources/Borland C++ 4.x/BWCC.HLX",

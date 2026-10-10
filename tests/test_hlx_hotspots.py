@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from thelpviewer.converter.readers.hlx_binary import HlxBinaryReader
+from thelpviewer.server.converter.readers.hlx_binary import HlxBinaryReader
 
 
 def test_content_rich_hlx_prefers_deterministic_topics():

@@ -5,42 +5,42 @@
     {
       "key": "winworld",
       "description": "WinWorldPC (product/version pages)",
-      "runner": "thelpviewer.downloader.winworld"
+      "runner": "thelpviewer.server.downloader.winworld"
     },
     {
       "key": "archiveorg",
       "description": "Archive.org (search query + metadata files)",
-      "runner": "thelpviewer.downloader.archiveorg"
+      "runner": "thelpviewer.server.downloader.archiveorg"
     },
     {
       "key": "direct",
       "description": "Pinned archives (exact source files)",
-      "runner": "thelpviewer.downloader.direct"
+      "runner": "thelpviewer.server.downloader.direct"
     },
     {
       "key": "olddos",
       "description": "old-dos.ru (category listing + detail page)",
-      "runner": "thelpviewer.downloader.olddos"
+      "runner": "thelpviewer.server.downloader.olddos"
     },
     {
       "key": "github",
       "description": "GitHub (repo tree / contents API)",
-      "runner": "thelpviewer.downloader.github"
+      "runner": "thelpviewer.server.downloader.github"
     },
     {
       "key": "davep_ng",
       "description": "Dave Pearson Norton Guides mirror",
-      "runner": "thelpviewer.downloader.davep_ng"
+      "runner": "thelpviewer.server.downloader.davep_ng"
     },
     {
       "key": "cheater_cz",
       "description": "Cheater.cz (Scorpions Cheater DOS archives)",
-      "runner": "thelpviewer.downloader.cheater_cz"
+      "runner": "thelpviewer.server.downloader.cheater_cz"
     },
     {
       "key": "slunecnice",
       "description": "Slunečnice.cz (Game-Cheater 9.02 archive)",
-      "runner": "thelpviewer.downloader.slunecnice"
+      "runner": "thelpviewer.server.downloader.slunecnice"
     }
   ],
   "converters": [
@@ -51,9 +51,9 @@
         ".txt",
         ".hlx"
       ],
-      "matcher": "thelpviewer.converter.readers.fbhf:is_fbhf_source",
+      "matcher": "thelpviewer.server.converter.readers.fbhf:is_fbhf_source",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.fbhf:FBHFSourceReader"
+      "reader": "thelpviewer.server.converter.readers.fbhf:FBHFSourceReader"
     },
     {
       "name": "hlx",
@@ -61,7 +61,7 @@
       "extensions": [
         ".hl6"
       ],
-      "reader": "thelpviewer.converter.readers.hlx:HlxHelpReader"
+      "reader": "thelpviewer.server.converter.readers.hlx:HlxHelpReader"
     },
     {
       "name": "hlx",
@@ -69,11 +69,11 @@
       "extensions": [
         ".hlx"
       ],
-      "matcher": "thelpviewer.converter.readers.hlx_binary:is_hlx_binary",
+      "matcher": "thelpviewer.server.converter.readers.hlx_binary:is_hlx_binary",
       "matcher_args": "data",
-      "reject_matcher": "thelpviewer.converter.readers.hlx:is_hlx_source",
+      "reject_matcher": "thelpviewer.server.converter.readers.hlx:is_hlx_source",
       "reject_matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.hlx_binary:HlxBinaryReader"
+      "reader": "thelpviewer.server.converter.readers.hlx_binary:HlxBinaryReader"
     },
     {
       "name": "hlx",
@@ -81,9 +81,9 @@
       "extensions": [
         ".hlx"
       ],
-      "matcher": "thelpviewer.converter.readers.hlx:is_hlx_source",
+      "matcher": "thelpviewer.server.converter.readers.hlx:is_hlx_source",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.hlx:HlxHelpReader"
+      "reader": "thelpviewer.server.converter.readers.hlx:HlxHelpReader"
     },
     {
       "name": "norton-guide",
@@ -92,119 +92,119 @@
         ".ng"
       ],
       "match_mode": "any",
-      "matcher": "thelpviewer.converter.readers.ng:is_ng_binary",
+      "matcher": "thelpviewer.server.converter.readers.ng:is_ng_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.ng:NGReader",
+      "reader": "thelpviewer.server.converter.readers.ng:NGReader",
       "reader_init": "path"
     },
     {
       "name": "helppc",
       "source_kind": "source",
       "extensions": [".txt"],
-      "matcher": "thelpviewer.converter.readers.helppc:is_helppc_source",
+      "matcher": "thelpviewer.server.converter.readers.helppc:is_helppc_source",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.helppc:HelpPCReader"
+      "reader": "thelpviewer.server.converter.readers.helppc:HelpPCReader"
     },
     {
       "name": "freedos-html",
       "source_kind": "compiled",
       "extensions": [".zip"],
-      "matcher": "thelpviewer.converter.readers.freedos_html:is_freedos_html_archive",
+      "matcher": "thelpviewer.server.converter.readers.freedos_html:is_freedos_html_archive",
       "matcher_args": "path_data",
-      "reader": "thelpviewer.converter.readers.freedos_html:FreeDOSHtmlReader"
+      "reader": "thelpviewer.server.converter.readers.freedos_html:FreeDOSHtmlReader"
     },
     {
       "name": "bw03",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.bw03:is_bw03_binary",
+      "matcher": "thelpviewer.server.converter.readers.bw03:is_bw03_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.bw03:BW03HelpReader"
+      "reader": "thelpviewer.server.converter.readers.bw03:BW03HelpReader"
     },
     {
       "name": "quickhelp",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.quickhelp:is_quickhelp_binary",
+      "matcher": "thelpviewer.server.converter.readers.quickhelp:is_quickhelp_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.quickhelp:QuickHelpReader"
+      "reader": "thelpviewer.server.converter.readers.quickhelp:QuickHelpReader"
     },
     {
       "name": "game-cheater",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.game_cheater:is_game_cheater_database",
+      "matcher": "thelpviewer.server.converter.readers.game_cheater:is_game_cheater_database",
       "matcher_args": "path_data",
-      "reader": "thelpviewer.converter.readers.game_cheater:GameCheaterReader"
+      "reader": "thelpviewer.server.converter.readers.game_cheater:GameCheaterReader"
     },
     {
       "name": "scorpion-legacy",
       "source_kind": "compiled",
-      "detector": "thelpviewer.converter.readers.scorpion_reader:detect_scorpion_reader_family",
+      "detector": "thelpviewer.server.converter.readers.scorpion_reader:detect_scorpion_reader_family",
       "detector_args": "path_data",
       "detector_equals": "legacy",
-      "reader": "thelpviewer.converter.readers.scorpion_reader:ScorpionReader"
+      "reader": "thelpviewer.server.converter.readers.scorpion_reader:ScorpionReader"
     },
     {
       "name": "scorpion-dat",
       "source_kind": "compiled",
-      "detector": "thelpviewer.converter.readers.scorpion_reader:detect_scorpion_reader_family",
+      "detector": "thelpviewer.server.converter.readers.scorpion_reader:detect_scorpion_reader_family",
       "detector_args": "path_data",
       "detector_equals": "dat",
-      "reader": "thelpviewer.converter.readers.scorpion_reader:ScorpionReader"
+      "reader": "thelpviewer.server.converter.readers.scorpion_reader:ScorpionReader"
     },
     {
       "name": "tdh",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.tdh:is_tdh_binary",
+      "matcher": "thelpviewer.server.converter.readers.tdh:is_tdh_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.tdh:TdhHelpReader"
+      "reader": "thelpviewer.server.converter.readers.tdh:TdhHelpReader"
     },
     {
       "name": "tfh",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.tdh:is_tfh_binary",
+      "matcher": "thelpviewer.server.converter.readers.tdh:is_tfh_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.tdh:TdhHelpReader"
+      "reader": "thelpviewer.server.converter.readers.tdh:TdhHelpReader"
     },
     {
       "name": "thelp",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.thelp:is_thelp_binary",
+      "matcher": "thelpviewer.server.converter.readers.thelp:is_thelp_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.thelp:ThelpHelpReader"
+      "reader": "thelpviewer.server.converter.readers.thelp:ThelpHelpReader"
     },
     {
       "name": "fbhf",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.fbhf:is_fbhf_binary",
+      "matcher": "thelpviewer.server.converter.readers.fbhf:is_fbhf_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.fbhf:FBHFHelpReader"
+      "reader": "thelpviewer.server.converter.readers.fbhf:FBHFHelpReader"
     },
     {
       "name": "k602",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.k602:is_k602_binary",
+      "matcher": "thelpviewer.server.converter.readers.k602:is_k602_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.k602:K602HelpReader"
+      "reader": "thelpviewer.server.converter.readers.k602:K602HelpReader"
     },
     {
       "name": "text602-legacy",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.t602_300:is_t602_300_binary",
+      "matcher": "thelpviewer.server.converter.readers.t602_300:is_t602_300_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.t602_300:T602300Reader"
+      "reader": "thelpviewer.server.converter.readers.t602_300:T602300Reader"
     },
     {
       "name": "m602",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.m602:is_m602_binary",
+      "matcher": "thelpviewer.server.converter.readers.m602:is_m602_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.m602:M602HelpReader"
+      "reader": "thelpviewer.server.converter.readers.m602:M602HelpReader"
     },
     {
       "name": "text602",
       "source_kind": "compiled",
-      "matcher": "thelpviewer.converter.readers.t602_310:is_t602_310_binary",
+      "matcher": "thelpviewer.server.converter.readers.t602_310:is_t602_310_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.converter.readers.t602_310:T602310Reader"
+      "reader": "thelpviewer.server.converter.readers.t602_310:T602310Reader"
     }
   ],
   "products": [

@@ -18,7 +18,7 @@ import zipfile
 import uuid
 from fnmatch import fnmatch
 
-from ..downloader.extractor import ExtractorTools, extract_file, find_lsar, find_sevenzip, find_unar
+from .downloader.extractor import ExtractorTools, extract_file, find_lsar, find_sevenzip, find_unar
 from .dos_sources import fetch_dos_source
 from .settings import ServerSettings
 from .accounts import AccountStore

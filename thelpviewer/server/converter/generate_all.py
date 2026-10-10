@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ...config import PROJECT_ROOT
 from .exporter import export_tree
 
 
 def main() -> None:
     """Export the repository sample tree into ``python/hlx2html/generated``."""
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = PROJECT_ROOT
     input_root = project_root / "samples"
     output_root = project_root / "python" / "hlx2html" / "generated"
 

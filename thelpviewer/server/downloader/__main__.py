@@ -7,6 +7,7 @@ import os
 import sys
 from pathlib import Path
 
+from ...config import PROJECT_ROOT
 from .catalog import (
     PRODUCTS,
     SOURCE_DESCRIPTIONS,
@@ -21,7 +22,7 @@ def _build_parser(project_root: Path) -> argparse.ArgumentParser:
     sources = all_sources()
     products = all_products()
     parser = argparse.ArgumentParser(
-        prog="python3 -m thelpviewer.downloader",
+        prog="python3 -m thelpviewer.server.downloader",
         description="Download DOS help files from multiple sources.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
@@ -92,7 +93,7 @@ def _resolve_selection(args: argparse.Namespace, parser: argparse.ArgumentParser
 def main() -> None:
     sys.stdout.reconfigure(line_buffering=True)
 
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = PROJECT_ROOT
     parser = _build_parser(project_root)
     args = parser.parse_args()
     selected_sources, selected_products = _resolve_selection(args, parser)

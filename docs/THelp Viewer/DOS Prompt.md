@@ -93,7 +93,7 @@ manual backup recovery. The built-in HELP now has a DOS Prompt topic (hc2320),
 including these operations, keyboard bindings, streaming and private storage.
 
 `THELP_DOS_CONFIG_PATH` selects the manifest, defaulting to
-`thelpviewer/dos-prompt.json`; Docker Compose already passes it through.
+`thelpviewer/config/dos-prompt.json`; Docker Compose already passes it through.
 On fresh 2.1 servers, an administrator first selects packages in
 Server Configuration → HELP / DOS packages; confirmation starts preparation.
 Before selection, opening DOS does not download the whole source manifest.

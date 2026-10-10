@@ -2,14 +2,14 @@ from functools import lru_cache
 from pathlib import Path
 import re
 
-from thelpviewer.converter.base import TopicRecord
-from thelpviewer.converter.readers.m602 import (
+from thelpviewer.server.converter.base import TopicRecord
+from thelpviewer.server.converter.readers.m602 import (
     M602BinaryParser,
     M602Reader,
     build_m602_binary_target_context_map,
     collect_m602_link_occurrences,
 )
-from thelpviewer.converter.writers.json import HelpJsonRenderer
+from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
 M602_PATH = Path("data/sources") / "Software 602" / "M602_200.HLP"
@@ -92,7 +92,7 @@ def test_m602_json_links_target_existing_topics():
 
 def test_m602_default_ui_matches_thelp_palette():
     for asset_path in (
-        Path("thelpviewer") / "converter" / "assets" / "tv-bundle-app.js",
+        Path("thelpviewer") / "server" / "converter" / "assets" / "tv-bundle-app.js",
         Path("www") / "assets" / "tv-bundle-app.js",
     ):
         text = asset_path.read_text(encoding="utf-8")

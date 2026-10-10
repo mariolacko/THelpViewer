@@ -2,8 +2,8 @@ import gzip
 import json
 from pathlib import Path
 
-from thelpviewer.converter.exporter import load_document
-from thelpviewer.converter.writers.bundle import export_bundle
+from thelpviewer.server.converter.exporter import load_document
+from thelpviewer.server.converter.writers.bundle import export_bundle
 
 
 def test_quickhelp_list_topic_lines_are_linkified():

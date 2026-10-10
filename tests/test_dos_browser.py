@@ -32,7 +32,7 @@ def test_dos_prompt_real_runtime_save_restart_and_secure_mounts(blocked_worker):
         audio_test = extra_game == "DOOM" and os.environ.get("THELP_DOS_TEST_AUDIO") == "1"
         if os.environ.get("THELP_DOS_TEST_INSTALLED_GAMES") == "1" or extra_game:
             # Optional local smoke test against the actually prepared public disk.
-            prepared = Path(__file__).resolve().parents[1] / "var" / "dos" / "base" / "c"
+            prepared = Path(__file__).resolve().parents[1] / "var" / "dos" / "c"
             for name in ([extra_game] if extra_game else ["BLKDROP", "SUDOKU86", "ZMIY"]):
                 shutil.copytree(prepared / "GAMES" / name, store.root / "base" / "c" / "GAMES" / name, dirs_exist_ok=True)
             if audio_test:
@@ -364,7 +364,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
             installed_games = str(os.environ.get("THELP_DOS_TEST_INSTALLED_GAMES") == "1").lower()
             game_command = extra_game
             if extra_game:
-                sources = json.loads(Path("thelpviewer/dos-prompt.json").read_text())["sources"]
+                sources = json.loads(Path("thelpviewer/config/dos-prompt.json").read_text())["sources"]
                 launch = next(source["launch"] for source in sources if f"\\GAMES\\{extra_game} then " in source.get("launch", ""))
                 game_command = launch.split(" then ", 1)[1]
             result = subprocess.run([NODE, "-e", script, debugging, url, token, media_id, cd_id, str(blocked_worker).lower(), installed_games, extra_game, game_command, str(audio_test).lower()], capture_output=True, text=True, timeout=90)

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from thelpviewer.downloader.slunecnice import DATABASE_FILENAMES, _collect_database_files, find_download_url
+from thelpviewer.server.downloader.slunecnice import DATABASE_FILENAMES, _collect_database_files, find_download_url
 
 
 def test_find_game_cheater_signed_download_url() -> None:

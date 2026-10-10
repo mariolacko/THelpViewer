@@ -14,7 +14,7 @@ import pytest
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
 from thelpviewer.server.dos_prompt import DosPromptStore, DosError, c_path
-from thelpviewer.downloader.extractor import find_unar, find_sevenzip
+from thelpviewer.server.downloader.extractor import find_unar, find_sevenzip
 
 
 def store_at(tmp_path):
@@ -235,7 +235,7 @@ def test_root_text_binary_and_boot_files_use_the_same_schema_and_remain_frozen(t
 def test_default_manifest_does_not_create_an_ineffective_config_sys(tmp_path):
     from pathlib import Path
 
-    manifest = json.loads(Path("thelpviewer/dos-prompt.json").read_text())
+    manifest = json.loads(Path("thelpviewer/config/dos-prompt.json").read_text())
     assert "config.sys" not in manifest
     manifest["sources"] = []  # Do not download software to test initial files.
     config = tmp_path / "dos.json"

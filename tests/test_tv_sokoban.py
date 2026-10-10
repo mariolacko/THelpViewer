@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 
-GAMES = Path("thelpviewer/converter/assets/tv-games.js")
+GAMES = Path("thelpviewer/server/converter/assets/tv-games.js")
 
 
 def _levels():

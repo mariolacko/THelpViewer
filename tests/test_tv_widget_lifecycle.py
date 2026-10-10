@@ -8,19 +8,19 @@ import pytest
 NODE = shutil.which("node")
 CORE_PATHS = (
     Path("www/assets/tv-core.js"),
-    Path("thelpviewer/converter/assets/tv-core.js"),
+    Path("thelpviewer/server/converter/assets/tv-core.js"),
 )
 SHELL_PATHS = (
     Path("www/assets/tv-shell.js"),
-    Path("thelpviewer/converter/assets/tv-shell.js"),
+    Path("thelpviewer/server/converter/assets/tv-shell.js"),
 )
 BUNDLE_PATHS = (
     Path("www/assets/tv-bundle-app.js"),
-    Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+    Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
 )
 CONTEXT_HELP_PATHS = (
     Path("www/assets/tv-context-help.js"),
-    Path("thelpviewer/converter/assets/tv-context-help.js"),
+    Path("thelpviewer/server/converter/assets/tv-context-help.js"),
 )
 
 
@@ -415,7 +415,7 @@ def test_active_window_state_controls_scrollbars_and_scopes_frame_redraw():
     shell = SHELL_PATHS[0].read_text(encoding="utf-8")
     css_paths = (
         Path("www/assets/turbovision.css"),
-        Path("thelpviewer/converter/assets/turbovision.css"),
+        Path("thelpviewer/server/converter/assets/turbovision.css"),
     )
     assert css_paths[0].read_bytes() == css_paths[1].read_bytes()
     css = css_paths[0].read_text(encoding="utf-8")

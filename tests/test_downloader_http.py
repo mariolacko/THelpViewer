@@ -3,7 +3,7 @@ from __future__ import annotations
 from email.message import Message
 import urllib.error
 
-from thelpviewer.downloader import http
+from thelpviewer.server.downloader import http
 
 
 class _Response:

@@ -9,8 +9,7 @@ from urllib.parse import urlparse
 
 from dataclasses import dataclass
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+from ..config import CONFIG_DIR, PROJECT_ROOT
 
 
 DEFAULT_VIRTUAL_DOCS: tuple[tuple[str, str], ...] = (
@@ -114,9 +113,9 @@ def load_config() -> AppConfig:
         auth_origin=os.environ.get("THELP_AUTH_ORIGIN", f"http://localhost:{os.environ.get('THELP_PORT', '5448')}").rstrip("/"),
         google_site_verification=os.environ.get("THELP_GOOGLE_SITE_VERIFICATION", "").strip(),
         midi_sources_path=Path(os.environ.get(
-            "THELP_MIDI_SOURCES_PATH", root / "thelpviewer" / "midi-sources.json"
+            "THELP_MIDI_SOURCES_PATH", CONFIG_DIR / "midi-sources.json"
         )),
-        dos_config_path=Path(os.environ.get("THELP_DOS_CONFIG_PATH", root / "thelpviewer" / "dos-prompt.json")),
+        dos_config_path=Path(os.environ.get("THELP_DOS_CONFIG_PATH", CONFIG_DIR / "dos-prompt.json")),
         dev_auto_login=os.environ.get("THELP_DEV_AUTO_LOGIN", "0") == "1",
         sources_dir=Path(os.environ.get("THELP_SOURCES_DIR", content_root / "sources")),
         downloads_dir=Path(os.environ.get("THELP_DOWNLOADS_DIR", state_dir / "downloads")),

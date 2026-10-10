@@ -2,20 +2,20 @@
 
 import pytest
 
-from thelpviewer.downloader.archiveorg import process_item, run
-from thelpviewer.downloader.extractor import ExtractorTools
-from thelpviewer.downloader.catalog import product_spec
+from thelpviewer.server.downloader.archiveorg import process_item, run
+from thelpviewer.server.downloader.extractor import ExtractorTools
+from thelpviewer.server.downloader.catalog import product_spec
 
 
 def test_reference_archive_search_uses_exact_members_and_product_root(tmp_path, monkeypatch):
     product = product_spec("msdos622")
     query = product.sources["archiveorg"]
     monkeypatch.setattr(
-        "thelpviewer.downloader.archiveorg.get_item_files",
+        "thelpviewer.server.downloader.archiveorg.get_item_files",
         lambda _identifier: [{"name": "en_msdos622.zip", "size": "4478365"}],
     )
     monkeypatch.setattr(
-        "thelpviewer.downloader.archiveorg.download_file",
+        "thelpviewer.server.downloader.archiveorg.download_file",
         lambda _url, _dest: None,
     )
     collected = []
@@ -24,7 +24,7 @@ def test_reference_archive_search_uses_exact_members_and_product_root(tmp_path, 
         collected.append((members, label))
         return [sources_dir / label / "HELP.HLP"]
 
-    monkeypatch.setattr("thelpviewer.downloader.archiveorg.collect_archive_members", fake_collect)
+    monkeypatch.setattr("thelpviewer.server.downloader.archiveorg.collect_archive_members", fake_collect)
     sources = tmp_path / "sources"
     result = process_item(
         {"identifier": "en_msdos622.zip", "title": "MS-DOS 6.22 (English)"},
@@ -46,7 +46,7 @@ def test_reference_archive_search_skips_existing_selected_files(tmp_path, monkey
     source.parent.mkdir(parents=True)
     source.write_bytes(b"existing")
     monkeypatch.setattr(
-        "thelpviewer.downloader.archiveorg.get_item",
+        "thelpviewer.server.downloader.archiveorg.get_item",
         lambda *_: pytest.fail("existing candidate was searched again"),
     )
 
@@ -63,17 +63,17 @@ def test_existing_product_version_is_not_appended_to_download_directory(tmp_path
     product = product_spec("qbx")
     query = product.sources["archiveorg"]
     monkeypatch.setattr(
-        "thelpviewer.downloader.archiveorg.get_item_files",
+        "thelpviewer.server.downloader.archiveorg.get_item_files",
         lambda _identifier: [{"name": "qb71.zip", "size": "100"}],
     )
-    monkeypatch.setattr("thelpviewer.downloader.archiveorg.download_file", lambda *_: None)
+    monkeypatch.setattr("thelpviewer.server.downloader.archiveorg.download_file", lambda *_: None)
     labels = []
 
     def fake_collect(_archive, label, _sources_dir, _extractor, *, lang_code):
         labels.append(label)
         return []
 
-    monkeypatch.setattr("thelpviewer.downloader.archiveorg.collect_from_archive", fake_collect)
+    monkeypatch.setattr("thelpviewer.server.downloader.archiveorg.collect_from_archive", fake_collect)
     process_item(
         {"identifier": "qb71zip", "title": "QuickBASIC Extended 7.1"},
         product,

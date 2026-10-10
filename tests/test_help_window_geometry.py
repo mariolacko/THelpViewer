@@ -1,5 +1,5 @@
-from thelpviewer.converter.base import HelpDocument
-from thelpviewer.converter.writers.html import HelpHtmlRenderer
+from thelpviewer.server.converter.base import HelpDocument
+from thelpviewer.server.converter.writers.html import HelpHtmlRenderer
 
 
 def _renderer(metadata: dict[str, object] | None = None) -> HelpHtmlRenderer:

@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 
-from thelpviewer.converter.readers.ng import NG_HEADER_SIZE, NGReader, _decrypt
+from thelpviewer.server.converter.readers.ng import NG_HEADER_SIZE, NGReader, _decrypt
 
 
 _LOCAL_LINK_RE = re.compile(r"\[link:topic=(-?\d+)\b")

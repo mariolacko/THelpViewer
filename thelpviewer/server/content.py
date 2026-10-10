@@ -6,8 +6,8 @@ from pathlib import Path
 import tempfile
 import threading
 
-from ..converter.build import build_help_groups
-from ..downloader.service import download_products
+from .converter.build import build_help_groups
+from .downloader.service import download_products
 from ..help_database import load_help_manifest
 from .dos_prompt import ID_RE
 
@@ -41,7 +41,7 @@ class ContentService:
         saved = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else None
         installed = self.dos.installed_path
         dos_installed = json.loads(installed.read_text()) if installed.exists() else {}
-        from ..downloader.catalog import build_group_for_help_root
+        from .downloader.catalog import build_group_for_help_root
         help_installed = {build_group_for_help_root(path.name) for path in self.config.helps_dir.iterdir()
                           if path.is_dir() and any(path.rglob("*.json.gz"))} if self.config.helps_dir.exists() else set()
         return {

@@ -2,8 +2,8 @@ import sys
 
 import pytest
 
-from thelpviewer.converter import __main__ as converter_cli
-from thelpviewer.converter.writers.bundle import BundleResult
+from thelpviewer.server.converter import __main__ as converter_cli
+from thelpviewer.server.converter.writers.bundle import BundleResult
 
 
 def test_bundle_cli_exits_unsuccessfully_when_export_reports_error(tmp_path, monkeypatch):

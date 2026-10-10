@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from ...config import PROJECT_ROOT
 from .writers.html import SITE_ASSET_DIR_NAME, copy_site_assets
 
 
@@ -21,15 +22,15 @@ def iter_site_roots(root: Path) -> list[Path]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the CLI parser used by ``python -m python.hlx2html.sync_assets``."""
+    """Build the CLI parser used by ``python -m thelpviewer.server.converter.sync_assets``."""
     parser = argparse.ArgumentParser(
-        prog="python -m python.hlx2html.sync_assets",
+        prog="python -m thelpviewer.server.converter.sync_assets",
         description="Refresh bundled JS/CSS/font assets in generated hlx2html output trees.",
     )
     parser.add_argument(
         "output_root",
         nargs="?",
-        default=str(Path(__file__).resolve().parents[2] / "python" / "hlx2html" / "generated"),
+        default=str(PROJECT_ROOT / "python" / "hlx2html" / "generated"),
         help="Generated site directory or a tree containing multiple generated help sites.",
     )
     return parser

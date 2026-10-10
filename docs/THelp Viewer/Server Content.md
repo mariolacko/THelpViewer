@@ -75,12 +75,19 @@ Never clean all of `var/` blindly; rebuild scopes and private data are separate.
 
 ## Module and API flow
 
-`server/content.py` schedules one background installation at a time:
+Versioned application configuration lives together in `thelpviewer/config/`:
+`help-database.json`, `dos-prompt.json` and `midi-sources.json`. Environment
+overrides (`THELP_HELP_DATABASE_PATH`, `THELP_DOS_CONFIG_PATH` and
+`THELP_MIDI_SOURCES_PATH`) still select explicit files. Update any override
+that pointed at a removed old default. `.env` and Docker Compose remain at
+the project root; settings edited in the browser remain under `data/`.
+
+`thelpviewer/server/content.py` schedules one background installation at a time:
 
 1. Validate stable manifest group/package IDs, persist the explicit selection.
-2. `downloader/service.py` invokes the existing HELP providers; transport
+2. `server/downloader/service.py` invokes the existing HELP providers; transport
    reports byte progress per task without redirecting process-wide stdout.
-3. `converter/build.py` converts selected source paths through the existing
+3. `server/converter/build.py` converts selected source paths through the existing
    readers/writers, retaining product paths, metadata and CRC behavior.
 4. Validate every produced bundle, rebuild the full staged catalog, rename
    the completed generation into place and retain the prior generation as

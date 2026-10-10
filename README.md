@@ -116,7 +116,7 @@ Fullscreen displays only DOS without the TVision frame/menu or browser chrome;
 Esc returns to the window, while Ctrl+Alt+M also opens its control menu.
 
 After an administrator confirms selected packages, the server prepares `var/dos/c/` from
-[`thelpviewer/dos-prompt.json`](thelpviewer/dos-prompt.json). The default source
+[`thelpviewer/config/dos-prompt.json`](thelpviewer/config/dos-prompt.json). The default source
 includes FreeDOS EDIT, Volkov Commander and DOS games. Run `EDIT`, `VC` or
 `TYPE C:\SOFTWARE.TXT` for game launch commands. Initialization shows a shared
 progress dialog. Additional trusted
@@ -149,7 +149,7 @@ not execute these as host/server commands. See
 ### Game MIDI library
 
 On server startup, the MIDI downloader indexes the HTML pages configured in
-[`thelpviewer/midi-sources.json`](thelpviewer/midi-sources.json) and downloads
+[`thelpviewer/config/midi-sources.json`](thelpviewer/config/midi-sources.json) and downloads
 missing MIDI tracks in the background into `var/midi/`. It resumes after a
 restart without fetching existing valid tracks again. The player reads the
 SQLite catalog at `var/midi/library.sqlite3` through `/api/midi/catalog` and
@@ -223,19 +223,14 @@ THelpViewer/
 │   ├── index.html          ←   SPA entry document
 │   └── assets/             ←   JS, CSS, fonts, images
 ├── thelpviewer/            ← Unified Python package root
-│   ├── converter/          ←   help converter package
-│   │   ├── readers/        ←     format readers (thelp, tdh, bw03, quickhelp, ng, fbhf, hlx, m602, scorpion)
-│   │   ├── writers/        ←     output writers (html, uhf json, bundle, md)
-│   │   ├── base.py         ←     shared data model (HelpDocument, TopicRecord, …)
-│   │   ├── codepages.py    ←     encoding tables (CP437, CP852, Kamenický)
-│   │   └── exporter.py     ←     high-level export orchestration
-│   ├── downloader/         ←   help file downloader
-│   │   ├── catalog.py      ←     typed facade over help-database.json
-│   │   ├── http.py         ←     shared HTTP + HTML helpers
-│   │   ├── extractor.py    ←     recursive unar/lsar extraction
-│   │   └── *.py            ←     one provider per website
+│   ├── config/             ←   version-controlled application configuration
+│   │   ├── help-database.json ← HELP products, readers, providers and CRC metadata
+│   │   ├── dos-prompt.json ←     DOS packages and initial disk files
+│   │   └── midi-sources.json ←   MIDI catalog sources and extraction rules
 │   ├── help_database.py    ←   shared manifest loader and validation
 │   ├── server/             ←   FastAPI app
+│   │   ├── converter/      ←     HELP readers, writers, assets and staged builder
+│   │   ├── downloader/     ←     providers, shared transport and archive extraction
 │   │   ├── app.py          ←     app setup, shared services and static mounts
 │   │   ├── config.py       ←     env-based runtime configuration
 │   │   ├── accounts.py     ←     Passkey accounts, tokens and sessions
@@ -246,7 +241,7 @@ THelpViewer/
 │   │   │   ├── public_pages.py ← crawlable pages and sitemaps
 │   │   │   └── statistics.py ← statistics and Hall of Fame API
 │   │   └── __init__.py
-│   └── help-database.json  ←   products, download sources, build groups, conversion files, CRC metadata
+│   └── __init__.py         ←   application version
 ├── downloads/              ← Legacy local downloader cache (not moved automatically)
 ├── data/                   ← Permanent data (included in backups, excluded from Git)
 │   ├── sources/<Product>/  ← Original HELP files and licence notices
@@ -316,7 +311,7 @@ Measured on the current generated UHF 2.0 payloads:
 
 ## How It Works
 
-1. The **downloader** (`python3 -m thelpviewer.downloader`) reads one shared manifest of
+1. The **downloader** (`python3 -m thelpviewer.server.downloader`) reads one shared manifest of
    logical products and fetches them via provider-specific downloaders
    (WinWorldPC, archive.org, old-dos.ru, GitHub, DaveP NG mirror, Cheater.cz) into `data/sources/`
    When called without selectors it downloads everything it knows about and skips
@@ -327,7 +322,7 @@ Those releases are stored under `data/sources/Scorpions Cheater DOS/` in per-ver
 subdirectories so DAT-era and pre-DAT-era builds can coexist without overwriting
 each other.
 2. `thelp.sh build` runs the converter over manifest-backed build groups resolved
-   from `thelpviewer/help-database.json`. The default build still covers
+   from `thelpviewer/config/help-database.json`. The default build still covers
    `borland`, `microsoft`, `norton-guides`, and `software602`, while the
    Scorpions Cheater group remains opt-in and can be generated later with
    `./thelp.sh build group=scorpion`. The same grouped build path also works for
@@ -344,7 +339,7 @@ each other.
 6. FastAPI serves `www/`, `data/helps/`, and published `data/docs/` directly
 7. The browser fetches `.json.gz` bundles on demand, decompresses them, and renders them in a TurboVision window
 
-The canonical [help-database.json](thelpviewer/help-database.json) is shared by
+The canonical [help-database.json](thelpviewer/config/help-database.json) is shared by
 the downloader and converter. Schema version 2 contains downloader providers,
 converter handlers, product families, build groups, conversion file rules,
 output bundle groups, and the existing source metadata keyed by `crc32`. Product families group

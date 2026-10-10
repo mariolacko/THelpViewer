@@ -474,29 +474,29 @@ palette.
 
 The reader implementation is split by responsibility:
 
-- `thelpviewer/converter/readers/scorpion_reader.py`: Scorpion version/path
+- `thelpviewer/server/converter/readers/scorpion_reader.py`: Scorpion version/path
   helpers, shared Scorpion text encoding/theme constants, and top-level
   dispatch between modern DAT and legacy readers
-- `thelpviewer/converter/readers/scorpion_bundle.py`: Scorpion-only bundle
+- `thelpviewer/server/converter/readers/scorpion_bundle.py`: Scorpion-only bundle
   grouping and document variants; this is where v3 sections and v4-v14
   multi-file category merges are assembled
-- `thelpviewer/converter/readers/allegro_dat.py`: generic Allegro DAT parser,
+- `thelpviewer/server/converter/readers/allegro_dat.py`: generic Allegro DAT parser,
   old-crypt support, and Allegro LZSS decompression
-- `thelpviewer/converter/readers/scorpion_dat_parser.py`: Scorpion password,
+- `thelpviewer/server/converter/readers/scorpion_dat_parser.py`: Scorpion password,
   decoded `DATA` entries, records, and article slices
-- `thelpviewer/converter/readers/scorpion_dat_reader.py`: Kamenicky text rendering,
+- `thelpviewer/server/converter/readers/scorpion_dat_reader.py`: Kamenicky text rendering,
   inline styles, Scorpion-specific byte fixes, topics, index entries, contents,
   black-window UI metadata, and resource-record inventory
-- `thelpviewer/converter/readers/scorpion_legacy_reader.py`: shared legacy
+- `thelpviewer/server/converter/readers/scorpion_legacy_reader.py`: shared legacy
   primitives, RAR4 overlay parsing, PKLITE unpack handoff, text normalization,
   SCO topic parsing, shared SCO text rendering, and non-text resource filtering
-- `thelpviewer/converter/readers/scorpion_legacy_v1x.py`: version-specific
+- `thelpviewer/server/converter/readers/scorpion_legacy_v1x.py`: version-specific
   v1.0 and v1.5 readers
-- `thelpviewer/converter/readers/scorpion_legacy_v3x.py`: version-specific
+- `thelpviewer/server/converter/readers/scorpion_legacy_v3x.py`: version-specific
   v3 and v3.5 readers
-- `thelpviewer/converter/readers/scorpion_legacy_v4x.py`: version-specific
+- `thelpviewer/server/converter/readers/scorpion_legacy_v4x.py`: version-specific
   v4-v5 SCO readers using the `SCORPION 00 01` Huffman text libraries
-- `thelpviewer/converter/readers/scorpion_legacy_v6x.py`: version-specific
+- `thelpviewer/server/converter/readers/scorpion_legacy_v6x.py`: version-specific
   v6-v14 SCO/SCD/SCX readers using LZHUF text libraries
 
 The Scorpion reader selects `decoded_payload` for compressed Allegro `DATA`

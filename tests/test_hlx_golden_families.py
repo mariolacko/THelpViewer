@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from thelpviewer.converter.readers.hlx_binary import HlxBinaryReader
+from thelpviewer.server.converter.readers.hlx_binary import HlxBinaryReader
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

@@ -25,7 +25,7 @@ def test_empty_server_start_waits_for_configuration_instead_of_downloading_every
             "THELP_AUTH_ORIGIN": f"http://localhost:{port}", "THELP_PUBLIC_BASE_URL": "",
             "THELP_DEV_AUTO_LOGIN": "1", "THELP_DATA_DIR": str(tmp_path / "data"),
             "THELP_STATE_DIR": str(tmp_path / "var"),
-            "THELP_HELP_DATABASE_PATH": str(script.parent / "thelpviewer" / "help-database.json"),
+            "THELP_HELP_DATABASE_PATH": str(script.parent / "thelpviewer" / "config" / "help-database.json"),
             "THELP_MIDI_SOURCES_PATH": str(manifest), "THELP_DOS_CONFIG_PATH": str(manifest)})
     try:
         deadline = time.monotonic() + 10

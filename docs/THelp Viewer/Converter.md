@@ -10,19 +10,19 @@ The converter has no external dependencies beyond Python 3.10+.
 
 ```bash
 # Single file → HTML
-python -m thelpviewer.converter TURBO.TPH output/
+python -m thelpviewer.server.converter TURBO.TPH output/
 
 # Directory tree → HTML (with clean target)
-python -m thelpviewer.converter data/sources/ output/ --clean
+python -m thelpviewer.server.converter data/sources/ output/ --clean
 
 # JSON bundle for SPA viewer
-python -m thelpviewer.converter data/sources/ www/ --bundle
+python -m thelpviewer.server.converter data/sources/ www/ --bundle
 
 # Specify encoding
-python -m thelpviewer.converter TURBO7CZ.TPH output/ --encoding cp852
+python -m thelpviewer.server.converter TURBO7CZ.TPH output/ --encoding cp852
 
 # Dump normalized HelpDocument as JSON
-python -m thelpviewer.converter TURBO.TPH output/ --dump-json
+python -m thelpviewer.server.converter TURBO.TPH output/ --dump-json
 ```
 
 ## Options
@@ -55,7 +55,7 @@ The converter uses a pipeline architecture with automatic format detection:
 Binary/Source Files → Format Detection → Reader → HelpDocument → Writer → Output
 ```
 
-Before format detection, `thelpviewer/help-database.json` supplies shared
+Before format detection, `thelpviewer/config/help-database.json` supplies shared
 product and source metadata. Its product families group releases, define build
 roots and conversion inputs, and map known CRC32 files to canonical collection,
 title, encoding, and bundle metadata. It also defines converter handlers in
@@ -170,7 +170,7 @@ characters like ☺, ♥, ♦, ♣, ♠, •, ◘, etc.).
 | `codepages.py` | Character encoding tables (CP437, Kamenický, CP852, Latin-1, Latin-2) and auto-detection |
 | `../help_database.py` | Shared JSON manifest loader, product grouping, CRC lookup, and validation |
 
-### Readers (`thelpviewer/converter/readers/`)
+### Readers (`thelpviewer/server/converter/readers/`)
 
 | Reader | Format | Signature | Binary/Text |
 |--------|--------|-----------|-------------|
@@ -187,7 +187,7 @@ characters like ☺, ♥, ♦, ♣, ♠, •, ◘, etc.).
 
 Each reader implements `read_bytes(data: bytes) → HelpDocument`.
 
-### Writers (`thelpviewer/converter/writers/`)
+### Writers (`thelpviewer/server/converter/writers/`)
 
 | Writer | Output | Description |
 |--------|--------|-------------|

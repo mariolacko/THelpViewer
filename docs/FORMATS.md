@@ -46,8 +46,8 @@ Index of supported help file binary and source formats.
 
 | Tool | Language | Purpose |
 |------|----------|---------|
-| `python -m thelpviewer.converter` | Python | Universal reader (all supported formats) → HTML / JSON bundle / Markdown |
-| `python -m thelpviewer.converter --bundle` | Python | Gzip-compressed JSON bundles for the SPA viewer |
+| `python -m thelpviewer.server.converter` | Python | Universal reader (all supported formats) → HTML / JSON bundle / Markdown |
+| `python -m thelpviewer.server.converter --bundle` | Python | Gzip-compressed JSON bundles for the SPA viewer |
 | `python -m downloader` | Python | Automated help file downloader (WinWorldPC, archive.org, old-dos.ru, GitHub, DaveP NG mirror) |
 
 ---

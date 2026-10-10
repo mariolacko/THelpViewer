@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from thelpviewer.converter.writers.bundle import export_bundle
+from thelpviewer.server.converter.writers.bundle import export_bundle
 
 
 def test_bcw_hlx_exports_functional_uhf_bundle(tmp_path):

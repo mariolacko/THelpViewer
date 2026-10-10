@@ -33,7 +33,7 @@ user's problem; these rules exist to prevent regressions, not to add process.
    `data/helps/<Product>/`; retain an existing release subdirectory when that
    product already uses one. Never add a staging/build-group directory such as
    `Candidates/` to these paths or to the Help Files menu.
-2. Register the product in `thelpviewer/help-database.json`: stable product
+2. Register the product in `thelpviewer/config/help-database.json`: stable product
    key, label, `build_group`, `collection_prefixes`, and downloader
    `search_text`/`query`/URLs following comparable products. Add CRC32
    `entries` for known source files with the correct product, title, encoding
@@ -61,6 +61,10 @@ when only changing menu metadata, so saved HELP links keep working.
 
 ## Server content storage
 
+- Versioned application JSON belongs in `thelpviewer/config/`; converter and
+  downloader modules belong in `thelpviewer/server/`. Server jobs call their
+  Python APIs directly. `.env` and Docker Compose stay at the project root;
+  web-edited settings remain permanent data, not versioned configuration.
 - Permanent storage is `data/`: original HELP in `data/sources/`, published
   UHF in `data/helps/`, documents in `data/docs/`, accounts/statistics/settings
   databases and private DOS overlays/media in `data/dos/users/<id>/`.

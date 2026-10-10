@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+from ...config import PROJECT_ROOT as REPO_ROOT
 
 # ``metadata.source.format`` in the bundle records the source format id
 # ("thelp", "quickhelp", ...).  ``helps/catalog.json`` exposes the reader

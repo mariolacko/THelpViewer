@@ -6,7 +6,7 @@ Automated downloader for DOS help-file sources.
 
 The downloader is split into three layers:
 
-1. `thelpviewer/help-database.json` defines **what** logical product families
+1. `thelpviewer/config/help-database.json` defines **what** logical product families
    we want, how each provider should find them, and which archive files to
    collect. The converter separately detects supported inputs.
 2. `winworld.py`, `archiveorg.py`, `direct.py`, `olddos.py`, `github.py`, `davep_ng.py`, `cheater_cz.py`, `slunecnice.py` define **how**
@@ -28,28 +28,28 @@ See [Server Content](Server%20Content.md) for storage, setup and API behavior.
 
 ```bash
 # Download from all sources, all configured products
-python3 -m thelpviewer.downloader
+python3 -m thelpviewer.server.downloader
 
 # Only specific sites
-python3 -m thelpviewer.downloader --source winworld archiveorg cheater_cz slunecnice
+python3 -m thelpviewer.server.downloader --source winworld archiveorg cheater_cz slunecnice
 
 # Positional selectors also work
-python3 -m thelpviewer.downloader tp olddos
+python3 -m thelpviewer.server.downloader tp olddos
 
 # Only specific logical products
-python3 -m thelpviewer.downloader --products tp tc ng qbx quickc masm scorpion game-cheater
+python3 -m thelpviewer.server.downloader --products tp tc ng qbx quickc masm scorpion game-cheater
 
 # Game-Cheater 9.02 only
 ./thelp.sh download game-cheater slunecnice
 
 # Four pinned DOS-era reference products
-python3 -m thelpviewer.downloader --source direct --products msdos622 qb45 helppc freedos-help
+python3 -m thelpviewer.server.downloader --source direct --products msdos622 qb45 helppc freedos-help
 
 # Convert the default groups and DOS reference products together for local Help Files
 ./thelp.sh build --with-dos-reference
 
 # Preview only
-python3 -m thelpviewer.downloader --dry-run
+python3 -m thelpviewer.server.downloader --dry-run
 ```
 
 With no selectors, the downloader runs every configured provider for every
@@ -63,15 +63,15 @@ use `--dl-dir downloads` to reuse it explicitly.
 | Option | Description |
 |--------|-------------|
 | `--source` | Sources to use: `winworld`, `archiveorg`, `direct`, `olddos`, `github`, `davep_ng`, `cheater_cz`, `slunecnice` |
-| `--products` | Logical product families from `thelpviewer/help-database.json` |
-| positional selectors | Short form for sources/products, e.g. `python3 -m thelpviewer.downloader tp olddos` |
+| `--products` | Logical product families from `thelpviewer/config/help-database.json` |
+| positional selectors | Short form for sources/products, e.g. `python3 -m thelpviewer.server.downloader tp olddos` |
 | `--out-dir` | Target directory for extracted help files |
 | `--dl-dir` | Directory for downloaded archives/files |
 | `--dry-run` | Print planned actions only |
 
 ## Manifest
 
-`thelpviewer/help-database.json` is the single source of truth for:
+`thelpviewer/config/help-database.json` is the single source of truth for:
 
 - `sources`: provider key, description, and Python runner module
 - `converters`: format handler order, matcher/detector function, reader class,
@@ -171,7 +171,7 @@ group:
 
 The four Microsoft `.HLP` files, six HelpPC topic databases, and FreeDOS help
 ZIP are recorded by CRC32 and assigned to their products in
-`thelpviewer/help-database.json`. HelpPC's `HELPPC.DOC` and `.NDX` are not
+`thelpviewer/config/help-database.json`. HelpPC's `HELPPC.DOC` and `.NDX` are not
 selected by the downloader because they are not conversion inputs. FreeDOS
 licence texts are retained as required companion files, not topic databases.
 These products are still outside the default public
@@ -185,7 +185,7 @@ package states `Express+GNU Free Documentation License`; review its included
 
 ## Extraction
 
-`thelpviewer/downloader/extractor.py` uses:
+`thelpviewer/server/downloader/extractor.py` uses:
 
 - `lsar -json` to detect whether a file is an extractable container and what
   format it is
@@ -235,4 +235,4 @@ Install:
 ## Output
 
 Collected help files are copied into `data/sources/<Product Label ...>/`.
-Those directories are then consumed by `python -m thelpviewer.converter` / `./thelp.sh build`.
+Those directories are then consumed by `python -m thelpviewer.server.converter` / `./thelp.sh build`.

@@ -4,7 +4,7 @@ from urllib.parse import parse_qs
 import pytest
 
 from thelpviewer.server.dos_sources import fetch_dos_source
-from thelpviewer.downloader.transport import _HTTPSRedirect, _PublicHTTPSConnection
+from thelpviewer.server.downloader.transport import _HTTPSRedirect, _PublicHTTPSConnection
 from urllib.request import Request
 from types import SimpleNamespace
 
@@ -27,7 +27,7 @@ def test_generic_dos_html_forms_keep_fields_submit_button_and_progress(monkeypat
         def open(self, request, timeout):
             requests.append(request)
             return DownloadResponse(pages[len(requests) - 1], request.full_url)
-    monkeypatch.setattr("thelpviewer.downloader.transport.build_opener", lambda *args: Opener())
+    monkeypatch.setattr("thelpviewer.server.downloader.transport.build_opener", lambda *args: Opener())
     progress = []
     source = {"url": url, "download_forms": ["form#download", "form.file"]}
     assert fetch_dos_source(source, 100000, lambda *args: progress.append(args)) == contents
@@ -42,7 +42,7 @@ def test_download_form_cannot_downgrade_to_http(monkeypatch):
     class Opener:
         def open(self, request, timeout):
             return DownloadResponse(b'<form method="post" action="http://games.test/archive"></form>', request.full_url)
-    monkeypatch.setattr("thelpviewer.downloader.transport.build_opener", lambda *args: Opener())
+    monkeypatch.setattr("thelpviewer.server.downloader.transport.build_opener", lambda *args: Opener())
     with pytest.raises(ValueError, match="HTTPS"):
         fetch_dos_source({"url": "https://games.test/game", "download_forms": ["form"]}, 10000)
 
@@ -51,7 +51,7 @@ def test_dos_source_byte_limit_applies_to_form_downloads(monkeypatch):
     class Opener:
         def open(self, request, timeout):
             return DownloadResponse(bytes(1001), request.full_url)
-    monkeypatch.setattr("thelpviewer.downloader.transport.build_opener", lambda *args: Opener())
+    monkeypatch.setattr("thelpviewer.server.downloader.transport.build_opener", lambda *args: Opener())
     with pytest.raises(ValueError, match="size limit"):
         fetch_dos_source({"url": "https://games.test/game", "download_forms": ["form"]}, 1000)
 
@@ -63,7 +63,7 @@ def test_direct_download_and_cross_host_forms_work_without_host_configuration(mo
             urls.append(request.full_url)
             data = b'<form method="post" action="https://cdn.test/archive"></form>' if len(urls) == 1 else b"archive"
             return DownloadResponse(data, request.full_url)
-    monkeypatch.setattr("thelpviewer.downloader.transport.build_opener", lambda *args: Opener())
+    monkeypatch.setattr("thelpviewer.server.downloader.transport.build_opener", lambda *args: Opener())
     assert fetch_dos_source({"url": "https://games.test/game", "download_forms": ["form"]}, 10000) == b"archive"
     assert urls == ["https://games.test/game", "https://cdn.test/archive"]
     urls.clear()

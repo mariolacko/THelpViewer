@@ -9,8 +9,8 @@ from zipfile import ZipFile
 
 import pytest
 
-from thelpviewer.converter.exporter import detect_format_handler, load_document
-from thelpviewer.converter.writers.bundle import export_bundle_tree
+from thelpviewer.server.converter.exporter import detect_format_handler, load_document
+from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 from thelpviewer.help_database import load_help_database, lookup_help_database_entry
 
 

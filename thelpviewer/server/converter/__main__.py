@@ -19,9 +19,9 @@ def _fail_on_export_errors(results: Iterable[object]) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the CLI parser used by ``python -m thelpviewer.converter``."""
+    """Build the CLI parser used by ``python -m thelpviewer.server.converter``."""
     parser = argparse.ArgumentParser(
-        prog="python -m thelpviewer.converter",
+        prog="python -m thelpviewer.server.converter",
         description="Read Borland THELP, TurboVision FBHF, Software602 M602, HLX/HL6 or TVHC source files and export HTML.",
     )
     parser.add_argument("input", help="Input .hlp/.tph/.tch/*.t?h/.hlx/.hl6/.txt file or directory tree with help files.")

@@ -104,7 +104,7 @@ with_dos_reference=false
 catalog_build_group_values() {
     local mode="${1:-all}"
     "${PYTHON_BIN}" - "$mode" <<'PY'
-from thelpviewer.downloader.catalog import all_build_groups
+from thelpviewer.server.downloader.catalog import all_build_groups
 import sys
 
 default_only = len(sys.argv) > 1 and sys.argv[1] == "default"
@@ -118,7 +118,7 @@ mapfile -t ALL_BUILD_GROUPS < <(catalog_build_group_values all)
 
 normalize_build_group() {
     "${PYTHON_BIN}" - "$1" <<'PY'
-from thelpviewer.downloader.catalog import normalize_build_group
+from thelpviewer.server.downloader.catalog import normalize_build_group
 import sys
 
 resolved = normalize_build_group(sys.argv[1])
@@ -171,7 +171,7 @@ selected_build_source_roots() {
     "${PYTHON_BIN}" - "${SOURCES_DIR}" "$@" <<'PY'
 from pathlib import Path
 import sys
-from thelpviewer.downloader.catalog import build_group_for_source_root
+from thelpviewer.server.downloader.catalog import build_group_for_source_root
 
 source_dir = Path(sys.argv[1])
 selected = set(sys.argv[2:])
@@ -192,7 +192,7 @@ remove_group_outputs() {
     done < <("${PYTHON_BIN}" - "$target_dir" "$@" <<'PY'
 from pathlib import Path
 import sys
-from thelpviewer.downloader.catalog import build_group_for_help_root
+from thelpviewer.server.downloader.catalog import build_group_for_help_root
 
 help_dir = Path(sys.argv[1])
 selected = set(sys.argv[2:])
@@ -523,7 +523,7 @@ if $do_download; then
     echo "=== Download ==="
     cd "${SCRIPT_DIR}"
     THELP_SOURCES_DIR="${SOURCES_DIR}" THELP_DOWNLOADS_DIR="${DOWNLOADS_DIR}" \
-        "${PYTHON_BIN}" -m thelpviewer.downloader "${download_args[@]}"
+        "${PYTHON_BIN}" -m thelpviewer.server.downloader "${download_args[@]}"
     echo "Download complete."
     echo ""
 fi
@@ -556,7 +556,7 @@ if $do_build; then
 
     for build_root in "${build_roots[@]}"; do
         echo "[thelp] build root: ${build_root#"${SOURCES_DIR}"/}"
-        if ! "${PYTHON_BIN}" -m thelpviewer.converter --bundle --bundle-layout helps "${build_root}" "${build_tmp_dir}"; then
+        if ! "${PYTHON_BIN}" -m thelpviewer.server.converter --bundle --bundle-layout helps "${build_root}" "${build_tmp_dir}"; then
             rm -rf "${build_tmp_dir}"
             echo "[thelp] build failed."
             exit 1

@@ -13,7 +13,7 @@ NODE = shutil.which("node")
 def test_bundle_window_keeps_explicit_height_as_its_minimum():
     asset_paths = (
         Path("www/assets/tv-bundle-app.js"),
-        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+        Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
     )
     assert asset_paths[0].read_bytes() == asset_paths[1].read_bytes()
 

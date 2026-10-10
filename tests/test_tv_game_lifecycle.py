@@ -7,7 +7,7 @@ import pytest
 
 GAME_PATHS = (
     Path("www/assets/tv-games.js"),
-    Path("thelpviewer/converter/assets/tv-games.js"),
+    Path("thelpviewer/server/converter/assets/tv-games.js"),
 )
 
 NODE = shutil.which("node")

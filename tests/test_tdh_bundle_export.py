@@ -2,7 +2,7 @@ import gzip
 import json
 from pathlib import Path
 
-from thelpviewer.converter.writers.bundle import export_bundle
+from thelpviewer.server.converter.writers.bundle import export_bundle
 
 
 def _load_bundle_payload(bundle_result):

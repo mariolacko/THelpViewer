@@ -1,7 +1,7 @@
 import struct
 
-from thelpviewer.converter.readers.bw03 import BW03HelpReader
-from thelpviewer.converter.writers.json import HelpJsonRenderer
+from thelpviewer.server.converter.readers.bw03 import BW03HelpReader
+from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
 CONTROL_TABLE = bytes(

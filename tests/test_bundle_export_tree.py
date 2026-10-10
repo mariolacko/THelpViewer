@@ -2,8 +2,8 @@ import gzip
 import json
 from pathlib import Path
 
-from thelpviewer.converter.base import ContentNode, HelpDocument, IndexEntry, TopicRecord
-from thelpviewer.converter.writers import bundle as bundle_writer
+from thelpviewer.server.converter.base import ContentNode, HelpDocument, IndexEntry, TopicRecord
+from thelpviewer.server.converter.writers import bundle as bundle_writer
 from thelpviewer.help_database import HelpDatabaseEntry, crc32_file
 
 

@@ -1,6 +1,6 @@
 import json
 
-from thelpviewer.downloader.catalog import (
+from thelpviewer.server.downloader.catalog import (
     SOURCE_RUNNERS,
     all_build_groups,
     all_products,
@@ -65,9 +65,9 @@ def test_manifest_drives_sources_products_and_conversion_files():
         "hlx",
         "norton-guide",
     ]
-    assert manifest.converters[0].reader == "thelpviewer.converter.readers.fbhf:FBHFSourceReader"
-    assert SOURCE_RUNNERS["cheater_cz"] == "thelpviewer.downloader.cheater_cz"
-    assert SOURCE_RUNNERS["direct"] == "thelpviewer.downloader.direct"
+    assert manifest.converters[0].reader == "thelpviewer.server.converter.readers.fbhf:FBHFSourceReader"
+    assert SOURCE_RUNNERS["cheater_cz"] == "thelpviewer.server.downloader.cheater_cz"
+    assert SOURCE_RUNNERS["direct"] == "thelpviewer.server.downloader.direct"
     assert "software602" in all_products()
     assert normalize_build_group("ms") == "microsoft"
     assert normalize_build_group("gamecheater") == "game-cheater"

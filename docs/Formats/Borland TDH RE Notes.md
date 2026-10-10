@@ -1137,7 +1137,7 @@ instead of the standard THELP layout.
 
 ## Current Reader Behavior
 
-`thelpviewer/converter/readers/tdh.py` contains strict TDH and TFH detectors.
+`thelpviewer/server/converter/readers/tdh.py` contains strict TDH and TFH detectors.
 TFH uses the confirmed file-side size table, the low-nibble-first text
 alphabet, and the `'^' + target word + label + '^'` control pattern above to
 emit decoded topics with positioned hotspot metadata. TDH now uses the same

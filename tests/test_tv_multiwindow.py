@@ -4,7 +4,7 @@ from pathlib import Path
 def test_bundle_desktop_keeps_multiple_help_and_document_windows():
     paths = (
         Path("www/assets/tv-bundle-app.js"),
-        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+        Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
     )
     assert paths[0].read_bytes() == paths[1].read_bytes()
     source = paths[0].read_text(encoding="utf-8")

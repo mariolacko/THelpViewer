@@ -9,15 +9,15 @@ import pytest
 NODE = shutil.which("node")
 CORE_PATHS = (
     Path("www/assets/tv-core.js"),
-    Path("thelpviewer/converter/assets/tv-core.js"),
+    Path("thelpviewer/server/converter/assets/tv-core.js"),
 )
 HELP_BUNDLE_PATHS = (
     Path("www/assets/tv-context-help.json"),
-    Path("thelpviewer/converter/assets/tv-context-help.json"),
+    Path("thelpviewer/server/converter/assets/tv-context-help.json"),
 )
 CONTEXT_HELP_JS_PATHS = (
     Path("www/assets/tv-context-help.js"),
-    Path("thelpviewer/converter/assets/tv-context-help.js"),
+    Path("thelpviewer/server/converter/assets/tv-context-help.js"),
 )
 
 

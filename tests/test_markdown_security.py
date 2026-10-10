@@ -10,7 +10,7 @@ import pytest
 NODE = shutil.which("node")
 CSS_PATHS = (
     Path("www/assets/turbovision.css"),
-    Path("thelpviewer/converter/assets/turbovision.css"),
+    Path("thelpviewer/server/converter/assets/turbovision.css"),
 )
 
 
@@ -32,7 +32,7 @@ def test_document_tables_keep_readable_columns_and_use_window_scrolling():
 def test_markdown_links_escape_attributes_and_reject_script_schemes():
     asset_paths = (
         Path("www/assets/tv-bundle-app.js"),
-        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+        Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
     )
     assert asset_paths[0].read_bytes() == asset_paths[1].read_bytes()
 
@@ -65,7 +65,7 @@ process.stdout.write(JSON.stringify({ injected, scripted }));
 def test_markdown_tables_keep_escaped_and_inline_code_pipes_in_one_cell():
     asset_paths = (
         Path("www/assets/tv-bundle-app.js"),
-        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+        Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
     )
     assert asset_paths[0].read_bytes() == asset_paths[1].read_bytes()
 
@@ -103,7 +103,7 @@ process.stdout.write(JSON.stringify({ escaped, inlineCode }));
 def test_markdown_soft_wrapped_lines_form_one_paragraph_and_keep_links():
     asset_paths = (
         Path("www/assets/tv-bundle-app.js"),
-        Path("thelpviewer/converter/assets/tv-bundle-app.js"),
+        Path("thelpviewer/server/converter/assets/tv-bundle-app.js"),
     )
     assert asset_paths[0].read_bytes() == asset_paths[1].read_bytes()
 

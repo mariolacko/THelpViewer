@@ -7,7 +7,7 @@ import pytest
 
 HIGHLIGHT_PATHS = (
     Path("www/assets/tv-highlight.js"),
-    Path("thelpviewer/converter/assets/tv-highlight.js"),
+    Path("thelpviewer/server/converter/assets/tv-highlight.js"),
 )
 NODE = shutil.which("node")
 

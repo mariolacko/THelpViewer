@@ -4,7 +4,7 @@ import re
 
 CSS_PATHS = (
     Path("www/assets/turbovision.css"),
-    Path("thelpviewer/converter/assets/turbovision.css"),
+    Path("thelpviewer/server/converter/assets/turbovision.css"),
 )
 
 

@@ -10,9 +10,9 @@ import zipfile
 from fastapi.testclient import TestClient
 import pytest
 
-from thelpviewer.converter.build import build_help_groups
-from thelpviewer.downloader.service import DownloadResult, download_products
-from thelpviewer.downloader.transport import download_chunks, public_url
+from thelpviewer.server.converter.build import build_help_groups
+from thelpviewer.server.downloader.service import DownloadResult, download_products
+from thelpviewer.server.downloader.transport import download_chunks, public_url
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
 
@@ -144,7 +144,7 @@ def test_failed_conversion_keeps_published_bundles_and_can_be_retried(tmp_path, 
     def fail(*args, **kwargs):
         raise ValueError("Conversion failed")
     with monkeypatch.context() as patch:
-        patch.setattr("thelpviewer.converter.build.export_bundle_tree", fail)
+        patch.setattr("thelpviewer.server.converter.build.export_bundle_tree", fail)
         with pytest.raises(ValueError, match="Conversion failed"):
             build_help_groups(["dos-reference"], sources, helps)
     assert original == {path.relative_to(helps): path.read_bytes() for path in helps.rglob("*") if path.is_file()}

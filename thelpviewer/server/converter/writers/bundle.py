@@ -22,6 +22,7 @@ from thelpviewer.help_database import (
     lookup_help_database_entry,
 )
 from thelpviewer.public_docs import is_public_doc_path
+from thelpviewer.config import PROJECT_ROOT
 from .html import (
     GENERATOR_AUTHORS,
     GENERATOR_VERSION,
@@ -702,7 +703,7 @@ def _write_bundle_index(target_dir: Path) -> None:
         dest = Path(target_dir) / SITE_ASSET_DIR_NAME / "tv-bundle-app.js"
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(bundle_app_js, dest)
-    site_image = Path(__file__).resolve().parents[3] / "Thelp.png"
+    site_image = PROJECT_ROOT / "Thelp.png"
     if site_image.is_file():
         dest = Path(target_dir) / SITE_ASSET_DIR_NAME / "Thelp.png"
         dest.parent.mkdir(parents=True, exist_ok=True)
