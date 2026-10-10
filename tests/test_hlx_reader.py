@@ -4,14 +4,14 @@ from thelpviewer.converter.readers.hlx_binary import HlxBinaryReader, is_hlx_bin
 
 
 def test_bcw_hlx_is_binary():
-    p = Path("sources") / "Borland C++ 4.x" / "BCW.HLX"
+    p = Path("data/sources") / "Borland C++ 4.x" / "BCW.HLX"
     assert p.exists(), f"Source HLX not found: {p}"
     data = p.read_bytes()
     assert is_hlx_binary(data)
 
 
 def test_hlx_reader_produces_topics():
-    p = Path("sources") / "Borland C++ 4.x" / "BCW.HLX"
+    p = Path("data/sources") / "Borland C++ 4.x" / "BCW.HLX"
     data = p.read_bytes()
     reader = HlxBinaryReader()
     reader.source_name = str(p)
@@ -24,7 +24,7 @@ def test_hlx_reader_produces_topics():
 
 
 def test_ole_hlx_stays_index_view():
-    p = Path("sources") / "Borland C++ 4.x" / "OLE.HLX"
+    p = Path("data/sources") / "Borland C++ 4.x" / "OLE.HLX"
     data = p.read_bytes()
     reader = HlxBinaryReader()
     reader.source_name = str(p)
@@ -37,7 +37,7 @@ def test_ole_hlx_stays_index_view():
 
 
 def test_winspctr_hlx_stays_index_view():
-    p = Path("sources") / "Borland C++ 4.x" / "WINSPCTR.HLX"
+    p = Path("data/sources") / "Borland C++ 4.x" / "WINSPCTR.HLX"
     data = p.read_bytes()
     reader = HlxBinaryReader()
     reader.source_name = str(p)
@@ -48,7 +48,7 @@ def test_winspctr_hlx_stays_index_view():
 
 
 def test_hlx_control_byte_modes_are_reported():
-    p = Path("sources") / "Borland C++ 4.x" / "BCW.HLX"
+    p = Path("data/sources") / "Borland C++ 4.x" / "BCW.HLX"
     data = p.read_bytes()
     reader = HlxBinaryReader()
     reader.source_name = str(p)
@@ -62,7 +62,7 @@ def test_hlx_control_byte_modes_are_reported():
 
 
 def test_openhelp_uses_control_byte_mode_hint_for_compact_index():
-    p = Path("sources") / "Borland C++ 4.x" / "OPENHELP.HLX"
+    p = Path("data/sources") / "Borland C++ 4.x" / "OPENHELP.HLX"
     data = p.read_bytes()
     reader = HlxBinaryReader()
     reader.source_name = str(p)
@@ -74,7 +74,7 @@ def test_openhelp_uses_control_byte_mode_hint_for_compact_index():
 
 
 def test_index_only_hlx_gets_prev_next_navigation():
-    p = Path("sources") / "Borland C++ 4.x" / "RSL.HLX"
+    p = Path("data/sources") / "Borland C++ 4.x" / "RSL.HLX"
     data = p.read_bytes()
     reader = HlxBinaryReader()
     reader.source_name = str(p)

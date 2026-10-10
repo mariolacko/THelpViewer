@@ -729,7 +729,11 @@ def main() -> None:
     invite = subcommands.add_parser("invite", help="Replace an account's enrollment token")
     invite.add_argument("username")
     args = parser.parse_args()
-    store = AccountStore(Path(os.environ.get("THELP_STATE_DIR", "var")))
+    from .config import load_config
+    from .storage import prepare_storage
+    config = load_config()
+    prepare_storage(config)
+    store = AccountStore(config.persistent_dir / "development" if config.dev_auto_login else config.persistent_dir)
     try:
         token = (store.create_user(args.username, args.name) if args.command == "create"
                  else store.issue_invitation(args.username))

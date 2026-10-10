@@ -2899,14 +2899,14 @@ async function run() {
         const soundFont = await player.synth.constructor.loadAssets();
         const soundFontLoaded = soundFont.byteLength > 1000000 && Boolean(window.JSSynth?.Synthesizer);
         // A self-contained 32-second SMF fixture: no production demo library/network dependency.
-        const demoFile = 'data:audio/midi;base64,' + btoa(String.fromCharCode(...[
+        const fixtureFile = 'data:audio/midi;base64,' + btoa(String.fromCharCode(...[
             77,84,104,100,0,0,0,6,0,0,0,1,0,96,
             77,84,114,107,0,0,0,23,
             0,255,81,3,7,161,32,0,192,0,0,144,60,100,
             176,0,128,60,0,0,255,47,0,
         ]));
-        const demoSequence = await player.loadTrack({ file: demoFile });
-        const audioStarted = await player.synth.play(demoSequence,
+        const fixtureSequence = await player.loadTrack({ file: fixtureFile });
+        const audioStarted = await player.synth.play(fixtureSequence,
             (elapsed, duration) => player.updateProgress(elapsed, duration), () => {});
         const loadTiming = player.synth.loadingTimes;
         const soundFontTimingRecorded = loadTiming.soundfontBytes === soundFont.byteLength
@@ -2917,18 +2917,18 @@ async function run() {
         const soundFontPlaying = audioStarted && player.synth.synth.getPlayerCurrentTick() > 0;
         const liveProgress = Number(player.meter.root?.getAttribute('aria-valuenow'));
         const progressRendered = liveProgress > progressStart && liveProgress < 100
-            && player.synth.totalTicks === demoSequence.maxTick
+            && player.synth.totalTicks === fixtureSequence.maxTick
             && player.meter.root?.textContent.includes('█');
         const progressTicks = [player.synth.synth.getPlayerCurrentTick(), player.synth.totalTicks];
         await player.synth.seekTo(0.5);
         await new Promise((resolve) => setTimeout(resolve, 200));
         const soundFontSeeked = player.synth.synth.getPlayerCurrentTick() >= player.synth.totalTicks * 0.45;
-        const demoTrack = { id: 'demo', item_id: 'demo', source_id: 'local',
-            title: 'Neon Grid', game: 'THelpViewer', credit: 'Original demo', sequencer: '',
-            available: true, file: demoFile, cover: '' };
-        player.allTracks = [demoTrack];
+        const fixtureTrack = { id: 'fixture', item_id: 'fixture', source_id: 'local',
+            title: 'Fixture track', game: 'THelpViewer', credit: 'Test fixture', sequencer: '',
+            available: true, file: fixtureFile, cover: '' };
+        player.allTracks = [fixtureTrack];
         player.applyFilter();
-        player.activeTrackFile = demoTrack.file;
+        player.activeTrackFile = fixtureTrack.file;
         player.isPlaying = true;
         player.pausePlayback();
         const pausedPosition = player.pausedPosition;
@@ -2942,7 +2942,7 @@ async function run() {
             && player.synth.synth.getPlayerCurrentTick() >= player.synth.totalTicks * 0.4;
         player.stopPlayback();
         player.allTracks = Array.from({ length: 40 }, (_, index) => ({
-            ...demoTrack, id: 'demo-' + index, title: 'Neon Grid ' + index,
+            ...fixtureTrack, id: 'fixture-' + index, title: 'Fixture track ' + index,
         }));
         player.applyFilter();
         const midiTrack = player.trackListBox.root.querySelector('.tv-scrollbar-y .tv-scroll-track');
@@ -3026,7 +3026,7 @@ async function run() {
         rows[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
         const arrowOnlySelects = player.selectedIndex === 0
             && clickedTrackId === '2222222222222222';
-        player.activeTrackFile = demoFile;
+        player.activeTrackFile = fixtureFile;
         player.isPlaying = true;
         rows[0].click();
         player.playTrack = originalPlayTrack;

@@ -70,7 +70,7 @@ def test_freedos_zip_import_keeps_internal_links_and_preformatted_text(tmp_path)
 
 
 def test_reference_crc_records_match_downloaded_files_when_present():
-    root = Path("sources")
+    root = Path("data/sources")
     paths = [
         *(root / "HelpPC 2.10" / name for name in (
             "ASM.TXT", "C.TXT", "HARDWARE.TXT", "INTERRUP.TXT", "MISC.TXT", "TABLES.TXT"
@@ -90,7 +90,7 @@ def test_reference_crc_records_match_downloaded_files_when_present():
 
 
 def test_downloaded_reference_help_exports_into_help_files_catalog(tmp_path):
-    root = Path("sources")
+    root = Path("data/sources")
     required = (
         root / "FreeDOS HTML Help 1.1.1a" / "HHSTNDRD.ZIP",
         root / "HelpPC 2.10" / "ASM.TXT",

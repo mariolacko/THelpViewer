@@ -24,16 +24,20 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SOURCES_DIR="${THELP_SOURCES_DIR:-${SCRIPT_DIR}/sources}"
+STATE_DIR="${THELP_STATE_DIR:-${SCRIPT_DIR}/var}"
+DATA_DIR="${THELP_DATA_DIR:-${SCRIPT_DIR}/data}"
+if [ -z "${THELP_DATA_DIR:-}" ] && [ "${STATE_DIR}" != "${SCRIPT_DIR}/var" ]; then
+    DATA_DIR="${STATE_DIR}"
+fi
+SOURCES_DIR="${THELP_SOURCES_DIR:-${DATA_DIR}/sources}"
 DOWNLOADS_DIR="${THELP_DOWNLOADS_DIR:-${THELP_STATE_DIR:-${SCRIPT_DIR}/var}/downloads}"
-HELPS_DIR="${THELP_HELPS_DIR:-${SCRIPT_DIR}/helps}"
+HELPS_DIR="${THELP_HELPS_DIR:-${DATA_DIR}/helps}"
 WEB_DIR="${THELP_WEB_DIR:-${SCRIPT_DIR}/www}"
 INDEX_PATH="${THELP_INDEX_PATH:-${WEB_DIR}/index.html}"
-DOCS_DIR="${THELP_DOCS_DIR:-${SCRIPT_DIR}/docs}"
+DOCS_DIR="${THELP_DOCS_DIR:-${DATA_DIR}/docs}"
 ASSETS_DIR="${THELP_ASSETS_DIR:-${WEB_DIR}/assets}"
 README_PATH="${THELP_README_PATH:-${SCRIPT_DIR}/README.md}"
 CHANGELOG_PATH="${THELP_CHANGELOG_PATH:-${SCRIPT_DIR}/CHANGELOG.md}"
-STATE_DIR="${THELP_STATE_DIR:-${SCRIPT_DIR}/var}"
 HOST="${THELP_HOST:-0.0.0.0}"
 PID_FILE="${THELP_PID_FILE:-${STATE_DIR}/uvicorn.pid}"
 LOG_FILE="${THELP_LOG_FILE:-${STATE_DIR}/uvicorn.log}"
@@ -270,6 +274,7 @@ start_server_background() {
     export THELP_README_PATH="${README_PATH}"
     export THELP_CHANGELOG_PATH="${CHANGELOG_PATH}"
     export THELP_STATE_DIR="${STATE_DIR}"
+    export THELP_DATA_DIR="${DATA_DIR}"
     nohup "${PYTHON_BIN}" -m uvicorn thelpviewer.server.app:app --host "${HOST}" --port "${PORT}" > "${LOG_FILE}" 2>&1 &
     echo $! > "${PID_FILE}"
     sleep 1
@@ -301,6 +306,7 @@ start_server_foreground() {
     export THELP_README_PATH="${README_PATH}"
     export THELP_CHANGELOG_PATH="${CHANGELOG_PATH}"
     export THELP_STATE_DIR="${STATE_DIR}"
+    export THELP_DATA_DIR="${DATA_DIR}"
     echo "[thelp] serving in foreground on http://localhost:${PORT}/"
     exec "${PYTHON_BIN}" -m uvicorn thelpviewer.server.app:app --host "${HOST}" --port "${PORT}"
 }
@@ -426,18 +432,19 @@ if $do_all; then
     do_start=true
 fi
 
-if ($do_serve || $do_serve_restart || $do_start || $do_restart || $do_catalog) && ! $do_build && ! has_help_bundles; then
-    echo "[thelp] help bundle directory je prázdny, zapínam build."
-    do_build=true
+if $do_download || $do_build || $do_catalog; then
+    THELP_DATA_DIR="${DATA_DIR}" THELP_STATE_DIR="${STATE_DIR}" THELP_HELPS_DIR="${HELPS_DIR}" \
+    THELP_SOURCES_DIR="${SOURCES_DIR}" THELP_DOCS_DIR="${DOCS_DIR}" "${PYTHON_BIN}" -c \
+        'from thelpviewer.server.config import load_config; from thelpviewer.server.storage import prepare_storage; prepare_storage(load_config())'
 fi
 
 needs_input_data=false
-if $do_build || $do_serve || $do_serve_restart || $do_start || $do_restart; then
+if $do_build; then
     needs_input_data=true
 fi
 
 if $needs_input_data && ! $do_download && ! has_source_data; then
-    echo "[thelp] sources/ je prázdny, zapínam download."
+    echo "[thelp] ${SOURCES_DIR} je prázdny, zapínam download."
     do_download=true
 fi
 
@@ -515,7 +522,8 @@ fi
 if $do_download; then
     echo "=== Download ==="
     cd "${SCRIPT_DIR}"
-    "${PYTHON_BIN}" -m thelpviewer.downloader "${download_args[@]}"
+    THELP_SOURCES_DIR="${SOURCES_DIR}" THELP_DOWNLOADS_DIR="${DOWNLOADS_DIR}" \
+        "${PYTHON_BIN}" -m thelpviewer.downloader "${download_args[@]}"
     echo "Download complete."
     echo ""
 fi
@@ -609,8 +617,8 @@ docker_preflight() {
 
 ensure_docker_helps_readable() {
     if [ ! -f "${HELPS_DIR}/catalog.json" ]; then
-        echo "[thelp] missing HELP catalog: ${HELPS_DIR}/catalog.json"
-        return 1
+        echo "[thelp] no HELP catalog yet; an administrator configures content after sign-in."
+        return 0
     fi
     echo "=== Check HELP files at original paths ==="
     find "${HELPS_DIR}" -type f -exec cksum {} + >/dev/null

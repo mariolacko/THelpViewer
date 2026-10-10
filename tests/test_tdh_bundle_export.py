@@ -11,7 +11,7 @@ def _load_bundle_payload(bundle_result):
 
 
 def test_legacy_tdh_bundle_suppresses_redirect_alias_topics(tmp_path):
-    source = Path("sources") / "Borland Turbo Debugger 1.0" / "TDHELP.TDH"
+    source = Path("data/sources") / "Borland Turbo Debugger 1.0" / "TDHELP.TDH"
     assert source.exists(), f"Source TDH not found: {source}"
 
     result = export_bundle(source, tmp_path)
@@ -45,7 +45,7 @@ def test_legacy_tdh_bundle_suppresses_redirect_alias_topics(tmp_path):
 
 
 def test_later_tdh_bundle_exports_known_runtime_topics(tmp_path):
-    source = Path("sources") / "Borland Turbo Assembler 1.0 with Turbo Debugger" / "TDHELP.TDH"
+    source = Path("data/sources") / "Borland Turbo Assembler 1.0 with Turbo Debugger" / "TDHELP.TDH"
     assert source.exists(), f"Source TDH not found: {source}"
 
     result = export_bundle(source, tmp_path)
@@ -78,7 +78,7 @@ def test_later_tdh_bundle_exports_known_runtime_topics(tmp_path):
 
 
 def test_tfh_bundle_exports_contents_nav_and_hotspots(tmp_path):
-    source = Path("sources") / "Borland Turbo Profiler" / "TFHELP.TFH"
+    source = Path("data/sources") / "Borland Turbo Profiler" / "TFHELP.TFH"
     assert source.exists(), f"Source TFH not found: {source}"
 
     result = export_bundle(source, tmp_path)

@@ -55,8 +55,8 @@ def _build_parser(project_root: Path) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--out-dir",
-        default=os.environ.get("THELP_SOURCES_DIR", str(project_root / "sources")),
-        help="Target directory for extracted help files (default: sources/)",
+        default=os.environ.get("THELP_SOURCES_DIR", str(Path(os.environ.get("THELP_DATA_DIR", project_root / "data")) / "sources")),
+        help="Target directory for extracted help files (default: data/sources/)",
     )
     parser.add_argument(
         "--dl-dir",

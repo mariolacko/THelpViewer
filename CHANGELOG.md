@@ -4,6 +4,18 @@
 
 ### 2.1 development
 
+- Split permanent storage into data/ (HELP, original sources, Docs, accounts,
+  statistics/Hall of Fame, settings and data/dos/users) and rebuildable state
+  into var/ (downloads, var/dos/c, MIDI and full-text index). Upgrade migration
+  checks SHA-256, refuses conflicting destinations, preserves originals in
+  data/migration-backups and keeps public URLs/account IDs/Passkeys unchanged.
+- Publish versioned documentation into data/docs while preserving administrator
+  edits and added documents; private RE/Audit files stay excluded.
+- Fresh server startup no longer downloads/builds all HELP automatically through
+  the shell wrapper; administrators confirm the initial content selection.
+- Removed old bundled MIDI demo files and playlist documentation from both asset
+  trees. Synthesizer/SoundFont assets and server MIDI tracks remain unchanged;
+  browser playback tests use their own small SMF fixture.
 - Added administrator server-content configuration with selectable HELP build
   groups and DOS packages. A fresh server opens setup after admin sign-in;
   confirmed selections launch background Python module jobs through the API.
@@ -17,8 +29,8 @@
   including HTML POST forms, redirects, actual-peer/private-address rejection
   and per-task byte progress. DOS retains its HTTPS-only policy.
 - New server archives use var/downloads/help and var/downloads/dos; legacy
-  DOS cache remains readable. Published helps/ and permanent var/dos/users
-  are not moved. Content choices persist in var/content-settings.json.
+  DOS cache migrates without redownloading. Content choices persist in
+  data/content-settings.json.
 - Extracted callable downloader orchestration, staged HELP builder and catalog
   builder; existing CLI entry points remain adapters, not server subprocesses.
 

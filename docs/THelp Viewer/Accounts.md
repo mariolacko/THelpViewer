@@ -43,11 +43,11 @@ checks supplement the loopback binding, not replace it. **Never use this
 override on a public host or expose its port via Cloudflare.**
 
 Development accounts, registration tokens and sessions are stored separately
-in `var/development/accounts.sqlite3`; production remains `var/accounts.sqlite3`.
+in `data/development/accounts.sqlite3`; production remains `data/accounts.sqlite3`.
 A development cookie cannot authenticate against the production store. The
-local account ID persists, so its DOS overlay remains in `var/dos/users/<id>/`.
-It does not inherit any production account's private disk. HELP/MIDI resources,
-server settings and other non-account state still use the existing local `var/`.
+local account ID persists, so its DOS overlay remains in `data/dos/users/<id>/`.
+It does not inherit any production account's private disk. Permanent HELP,
+statistics and server settings use `data/`; generated DOS/MIDI resources use `var/`.
 
 Return to Passkey-only mode with:
 
@@ -73,9 +73,9 @@ preparation or deleting anything. Closing a confirmation or choosing Cancel
 does not issue POST. The progress dialog's Hide button hides the view, not
 the server operation; selecting Rebuild again reconnects to an ongoing job.
 
-DOS rebuild replaces only `var/dos/base/` and restarts normal initialisation
-from `dos-prompt.json`. User overlays/media under `var/dos/users/` and source
-archives under `var/dos/downloads/` are retained. The current browser saves and
+DOS rebuild replaces only `var/dos/c/` and restarts normal initialisation
+from `dos-prompt.json`. User overlays/media under `data/dos/users/` and source
+archives under `var/downloads/dos/` are retained. The current browser saves and
 closes its DOS window first; other tabs must restart their emulator. Stale
 base IDs are rejected rather than writing against the new disk. Rebuilding
 while DOS preparation is already running returns 409.
@@ -143,7 +143,7 @@ account/permission administration interface.
 
 ### Registration
 
-The account database is `THELP_STATE_DIR/accounts.sqlite3`, separate from the
+The account database is `THELP_DATA_DIR/accounts.sqlite3`, separate from the
 global HELP index and visitor statistics. On the first server start with no
 accounts, the server creates a one-hour first-admin token and prints it to its
 logs. Retrieve it with:
@@ -180,8 +180,8 @@ row fills the token input for copying and enables **Delete**; deletion requires
 confirmation and immediately revokes that token. Closing the confirmation
 MessageBox or pressing Escape keeps the token valid. The list is available after
 signing in again. Newly issued token values are encrypted in
-`THELP_STATE_DIR/accounts.sqlite3` using a private key in
-`THELP_STATE_DIR/registration-tokens.key`; back up both files together and
+`THELP_DATA_DIR/accounts.sqlite3` using a private key in
+`THELP_DATA_DIR/registration-tokens.key`; back up both files together and
 keep the key private. Tokens issued before this change stored only a hash:
 they remain valid until use or expiry and can be deleted, but their full value
 cannot be recovered. `GET /api/auth/registration-tokens` and
@@ -236,8 +236,7 @@ Cloudflare's [Origin CA](https://developers.cloudflare.com/ssl/origin-configurat
 can provide the origin certificate. Browser-to-Cloudflare HTTPS alone is not
 enough when the origin still uses plaintext HTTP. Configure Cloudflare rate
 limits for the auth API before public rollout; the current application does
-not yet provide account recovery or administrative account management in the
-browser.
+not yet provide account recovery. Administrators manage accounts through Users.
 
 Email is not required for administrator-created accounts. If public
 registration is added later, Cloudflare [Email Service](https://developers.cloudflare.com/email-service/get-started/send-emails/)

@@ -33,7 +33,7 @@ topic starts; others are closer to compiled search/index databases.
 
 ### 3 Corpus snapshot (current project state)
 
-Measured with the current reader on `sources/Borland C++ 4.x/`:
+Measured with the current reader on `data/sources/Borland C++ 4.x/`:
 
 - 20 compiled `.HLX` files total.
 - 9 files currently export as `compiled-topics`.
@@ -296,8 +296,8 @@ Recommended next fixture work:
 Use the dedicated probe helper:
 
 ```bash
-python tools/hlx_probe.py "sources/Borland C++ 4.x"
-python tools/hlx_probe.py "sources/Borland C++ 4.x/OLE.HLX" --details
+python tools/hlx_probe.py "data/sources/Borland C++ 4.x"
+python tools/hlx_probe.py "data/sources/Borland C++ 4.x/OLE.HLX" --details
 ```
 
 The script reports:
@@ -319,11 +319,11 @@ stable baseline.
 ### 18 Generating UHF bundles for HLX samples
 
 To generate only the Borland C++ 4.x HLX corpus into a safe staging
-directory without overwriting the main `helps/` catalog:
+directory without overwriting the main `data/helps/` catalog:
 
 ```bash
 python -m thelpviewer.converter \
-  "sources/Borland C++ 4.x" \
+  "data/sources/Borland C++ 4.x" \
   var/hlx-uhf \
   --bundle \
   --bundle-layout helps \

@@ -16,7 +16,7 @@ class ContentService:
     def __init__(self, config, dos, on_help_publish=None):
         self.config, self.dos = config, dos
         self.on_help_publish = on_help_publish
-        self.path = config.state_dir / "content-settings.json"
+        self.path = config.persistent_dir / "content-settings.json"
         self.sources_dir = config.sources_dir or config.helps_dir.parent / "sources"
         self.downloads_dir = config.downloads_dir or config.state_dir / "downloads"
         self._lock = threading.RLock()
@@ -39,7 +39,7 @@ class ContentService:
     def choices(self):
         manifest = load_help_manifest()
         saved = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else None
-        installed = self.dos.root / "base" / "installed.json"
+        installed = self.dos.installed_path
         dos_installed = json.loads(installed.read_text()) if installed.exists() else {}
         from ..downloader.catalog import build_group_for_help_root
         help_installed = {build_group_for_help_root(path.name) for path in self.config.helps_dir.iterdir()
@@ -62,7 +62,7 @@ class ContentService:
         if self.path.exists():
             return json.loads(self.path.read_text(encoding="utf-8"))["dos_packages"]
         # New deployments wait for explicit setup. Existing installations retain their policy.
-        return None if (self.dos.root / "base" / "installed.json").exists() else []
+        return None if self.dos.installed_path.exists() else []
 
     def status(self):
         with self._lock:

@@ -2,11 +2,17 @@
 
 from thelpviewer.server.config import load_config
 from thelpviewer.server.dos_prompt import DosPromptStore
+from thelpviewer.server.settings import ServerSettings
+from thelpviewer.server.storage import prepare_storage
 
 
 def main() -> None:
     config = load_config()
-    store = DosPromptStore(config.state_dir / "dos", config.dos_config_path)
+    prepare_storage(config)
+    store = DosPromptStore(config.state_dir / "dos", config.dos_config_path,
+        ServerSettings(config.persistent_dir / "server-settings.json"),
+        users_dir=config.persistent_dir / "dos" / "users", disk_dir=config.state_dir / "dos" / "c",
+        downloads_dir=(config.downloads_dir or config.state_dir / "downloads") / "dos")
     store.prepare(install_sources=True)
     if store.state != "ready":
         raise SystemExit(store.error)

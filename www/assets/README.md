@@ -13,7 +13,7 @@ Presentation assets for the generated TurboVision-style HTML viewer:
 - `tv-bundle-app.js` — SPA bundle loader, window manager and docs viewer
 - `turbovision.js` — bootstrap that starts the shell
 - `fonts/` — local web fonts for authentic DOS/VGA look
-- `midi/` — small demo MIDI files for the built-in player
+- `midi/synth/` — synthesizer and SoundFont assets; playable tracks come from the server's MIDI catalog
 
 ## Fonts
 

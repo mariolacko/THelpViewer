@@ -9,7 +9,7 @@ from thelpviewer.converter.writers.bundle import export_bundle
 
 
 def test_bcw_hlx_exports_functional_uhf_bundle(tmp_path):
-    source = Path("sources") / "Borland C++ 4.x" / "BCW.HLX"
+    source = Path("data/sources") / "Borland C++ 4.x" / "BCW.HLX"
     assert source.exists(), f"Source HLX not found: {source}"
 
     result = export_bundle(source, tmp_path)
@@ -38,7 +38,7 @@ def test_bcw_hlx_exports_functional_uhf_bundle(tmp_path):
 
 
 def test_opengl_hlx_stays_index_like_bundle(tmp_path):
-    source = Path("sources") / "Borland C++ 4.x" / "OPENGL.HLX"
+    source = Path("data/sources") / "Borland C++ 4.x" / "OPENGL.HLX"
     assert source.exists(), f"Source HLX not found: {source}"
 
     result = export_bundle(source, tmp_path)
@@ -64,7 +64,7 @@ def test_opengl_hlx_stays_index_like_bundle(tmp_path):
 
 
 def test_helpref_hlx_stays_heading_catalog_bundle(tmp_path):
-    source = Path("sources") / "Borland C++ 4.x" / "HELPREF.HLX"
+    source = Path("data/sources") / "Borland C++ 4.x" / "HELPREF.HLX"
     assert source.exists(), f"Source HLX not found: {source}"
 
     result = export_bundle(source, tmp_path)
@@ -84,7 +84,7 @@ def test_helpref_hlx_stays_heading_catalog_bundle(tmp_path):
 
 
 def test_rsl_hlx_exports_prev_next_navigation(tmp_path):
-    source = Path("sources") / "Borland C++ 4.x" / "RSL.HLX"
+    source = Path("data/sources") / "Borland C++ 4.x" / "RSL.HLX"
     assert source.exists(), f"Source HLX not found: {source}"
 
     result = export_bundle(source, tmp_path)
@@ -119,7 +119,7 @@ def test_rsl_hlx_exports_prev_next_navigation(tmp_path):
     ],
 )
 def test_catalog_hlx_variants_remain_single_line_bundles(tmp_path, filename, family, min_topics):
-    source = Path("sources") / "Borland C++ 4.x" / filename
+    source = Path("data/sources") / "Borland C++ 4.x" / filename
     assert source.exists(), f"Source HLX not found: {source}"
 
     result = export_bundle(source, tmp_path)

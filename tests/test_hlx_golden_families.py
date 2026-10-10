@@ -16,7 +16,7 @@ def _load_fixtures() -> list[dict[str, object]]:
 
 @pytest.mark.parametrize("fixture", _load_fixtures(), ids=lambda item: str(item["name"]))
 def test_hlx_family_fixture(fixture: dict[str, object]) -> None:
-    source_path = REPO_ROOT / "sources" / str(fixture["group"]) / str(fixture["file"])
+    source_path = REPO_ROOT / "data" / "sources" / str(fixture["group"]) / str(fixture["file"])
     data = source_path.read_bytes()
     document = HlxBinaryReader(source_name=source_path.name, source_path=source_path).read_bytes(data)
     metadata = document.metadata

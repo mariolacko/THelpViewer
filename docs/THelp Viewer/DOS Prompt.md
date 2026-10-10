@@ -83,8 +83,8 @@ manual verification.
 On the server or in local development, a signed-in administrator can use **User name →
 Configuration → Rebuild DOS C** to recreate this shared disk from the current
 manifest. Confirmation is required; the current browser saves/closes DOS first.
-The server moves only `var/dos/base/` to a unique recoverable backup under
-`var/backups/`, keeps `var/dos/users/` overlays/media and cached source archives,
+The server moves only `var/dos/c/` to a unique recoverable backup under
+`var/backups/`, keeps `data/dos/users/` overlays/media and cached source archives,
 then runs the normal initial preparation again. Other browser tabs must restart
 DOS after the base changes. Ordinary members cannot rebuild; the action is
 rejected while preparation is already running. See
@@ -232,9 +232,9 @@ device it supports. Web Audio also requires browser permission/user activation;
 click the DOS canvas after restoring a URL if audio has not been unlocked.
 See the [DOSBox sound documentation](https://www.dosbox.com/wiki/Sound).
 
-New downloads are cached by hash in `var/downloads/dos/`; the legacy
-`var/dos/downloads/` cache remains readable and is not removed. Verified files are
-installed under `var/dos/base/c/`; `var/dos/base/installed.json` records installed
+New downloads are cached by hash in `var/downloads/dos/`; upgrade migrates the
+legacy `var/dos/downloads/` cache there and archives its original. Verified files are
+installed under `var/dos/c/`; `var/dos/installed.json` records installed
 source hashes. After successful initialisation its `_complete` flag freezes
 automatic installation: later starts only read the existing disk, even if the
 manifest's source list changes. They do not redownload, restore deleted files
@@ -265,18 +265,18 @@ the browser's in-memory filesystem, not the whole disk. Large mounted media
 are still transferred as a complete image; they are not streamed yet.
 
 New/changed files and empty directories are ordinary filesystem entries in
-`var/dos/users/<internal-account-id>/c/<revision>/`. The adjacent
+`data/dos/users/<internal-account-id>/c/<revision>/`. The adjacent
 `overlay.sqlite3` holds names, sizes, hashes, deletion markers and the current
 revision, not file BLOBs. Existing SQLite-BLOB overlays migrate automatically
 without losing deletions. Current and previous generations are retained for
 recovery; older generations are removed after successful saves. The internal
 ID comes from the session cookie, never a caller-supplied username/path.
 In the standard Compose deployment these are ordinary host files inside the
-project's `var/`, mounted as `/app/var` in the container. `THELP_STATE_DIR` can
+project's `data/`, mounted as `/app/data` in the container. `THELP_DATA_DIR` can
 change that root in other deployments. Savegames and game configuration are
 stored only after a successful overlay save; guests have no persisted account
 directory. Uploaded CD/floppy images live in the account's `media/` directory.
-Back up `var/dos/users/` together with `var/accounts.sqlite3`, which maps the
+Back up `data/dos/users/` together with `data/accounts.sqlite3`, which maps the
 stable internal IDs to accounts; a username change does not rename the disk.
 
 Saving briefly pauses DOS and scans C. The worker tracks changed files so
@@ -293,7 +293,7 @@ The default private quota is **64 MiB**, excluding all shared software.
 An authenticated admin can change the default or set individual overrides in Users;
 the Account dialog shows committed overlay usage and capacity. Change the default in **User name → Configuration → Server
 Configuration** (1–256 MiB).
-It is stored in `var/server-settings.json` and enforced on each server save.
+It is stored in `data/server-settings.json` and enforced on each server save.
 Changing it does not delete existing data or stop DOS writes immediately;
 an over-limit save fails and leaves the last good overlay intact. Restart DOS
 to refresh its advertised client-side allowance. Backup generations are not

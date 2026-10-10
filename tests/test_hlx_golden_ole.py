@@ -7,7 +7,7 @@ def test_hlx_deterministic_ole_basic():
     """Basic sanity: deterministic parser reads topics/indexes from OLE.HLX
     without relying on external fixtures or mappings.
     """
-    p = os.path.join("sources", "Borland C++ 4.x", "OLE.HLX")
+    p = os.path.join("data", "sources", "Borland C++ 4.x", "OLE.HLX")
     data = open(p, "rb").read()
     res = parse_hlx_deterministic(data, min_topics=1)
     assert res is not None

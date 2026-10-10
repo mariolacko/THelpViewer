@@ -13,10 +13,10 @@ The converter has no external dependencies beyond Python 3.10+.
 python -m thelpviewer.converter TURBO.TPH output/
 
 # Directory tree → HTML (with clean target)
-python -m thelpviewer.converter sources/ output/ --clean
+python -m thelpviewer.converter data/sources/ output/ --clean
 
 # JSON bundle for SPA viewer
-python -m thelpviewer.converter sources/ www/ --bundle
+python -m thelpviewer.converter data/sources/ www/ --bundle
 
 # Specify encoding
 python -m thelpviewer.converter TURBO7CZ.TPH output/ --encoding cp852
@@ -40,12 +40,12 @@ python -m thelpviewer.converter TURBO.TPH output/ --dump-json
 ## Architecture
 
 Server builds call `converter.build.build_help_groups()` directly. It converts
-only the selected manifest groups, stages bundles next to `helps/`, rebuilds
+only the selected manifest groups, stages bundles next to `data/helps/`, rebuilds
 the catalog through `converter.catalog.rebuild_catalog()`, and keeps live
 output untouched until validation succeeds. The previous generation remains
 as a recoverable sibling backup. `tools/rebuild_catalog.py` is a CLI adapter.
 `export_bundle_tree()` accepts optional `source_paths` and an `on_progress`
-callback, keeping paths relative to the full `sources/` root. Existing CLI
+callback, keeping paths relative to the full `data/sources/` root. Existing CLI
 exports remain available; the server does not run them as commands.
 See [Server Content](Server%20Content.md).
 
@@ -205,8 +205,8 @@ Each reader implements `read_bytes(data: bytes) → HelpDocument`.
 | `export_bundle(path, output_dir, ...)` | Single file → `.json.gz` bundle |
 | `export_bundle_tree(input_dir, output_dir, ...)` | Directory → bundles + `catalog.json` |
 
-Tree exports preserve subdirectory structure from `sources/`. Bundle tree
-exports also generate a `helps/catalog.json` that the SPA viewer loads at
+Tree exports preserve subdirectory structure from `data/sources/`. Bundle tree
+exports also generate a `data/helps/catalog.json` that the SPA viewer loads at
 startup.
 
 The Help Files menu uses `product_name` as its family level and `version` as

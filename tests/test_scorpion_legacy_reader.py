@@ -100,7 +100,7 @@ def _build_fixed_width_sco_stream(payload: bytes) -> bytes:
 
 
 def test_scorpion_legacy_reader_detects_oldest_dat_release():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 1/DATA.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1/DATA.DAT")
     payload = b"MZ" + b"\x00" * 62
 
     handler = detect_format_handler(path, payload)
@@ -117,7 +117,7 @@ def test_scorpion_legacy_reader_detects_oldest_dat_release():
 
 
 def test_scorpion_legacy_reader_parses_mz_sfx_archive_members():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 1/DATA.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1/DATA.DAT")
     payload = _build_legacy_mz_sfx(
         _rar_main_header(),
         _rar_file_header("VGACS.COM", unp_size=40548),
@@ -137,7 +137,7 @@ def test_scorpion_legacy_reader_parses_mz_sfx_archive_members():
 
 
 def test_scorpion_legacy_reader_builds_structured_topics_for_version_1_release():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 1/DATA.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1/DATA.DAT")
     payload = _build_legacy_mz_sfx(
         _rar_main_header(),
         _rar_file_header("VGACS.COM", unp_size=40548),
@@ -374,7 +374,7 @@ def test_v1_topic_parser_stops_before_footer_art_and_directory():
 
 
 def test_scorpion_legacy_reader_normalizes_embedded_archive_paths_for_version3():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 3/CHEATER.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 3/CHEATER.DAT")
     payload = _build_legacy_mz_sfx(
         _rar_main_header(),
         _rar_file_header("_", attributes=0x10),
@@ -391,7 +391,7 @@ def test_scorpion_legacy_reader_normalizes_embedded_archive_paths_for_version3()
 
 
 def test_scorpion_v3_reader_parses_bracketed_member_topics():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 3/CHEATER.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 3/CHEATER.DAT")
     payload = _build_legacy_mz_sfx(
         _rar_main_header(),
         _rar_file_header("_", attributes=0x10),
@@ -440,7 +440,7 @@ def test_scorpion_v3_reader_parses_bracketed_member_topics():
 
 
 def test_scorpion_v3_reader_does_not_apply_cheat_index_titles_to_jokes():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 3/CHEATER.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 3/CHEATER.DAT")
     payload = _build_legacy_mz_sfx(
         _rar_main_header(),
         _rar_file_header("_", attributes=0x10),
@@ -493,7 +493,7 @@ def test_scorpion_legacy_reader_preserves_internal_blank_lines():
 
 
 def test_scorpion_v3_reader_cleans_legacy_formatting_markers():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 3/CHEATER.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 3/CHEATER.DAT")
     payload = _build_legacy_mz_sfx(
         _rar_main_header(),
         _rar_file_header("_", attributes=0x10),
@@ -529,7 +529,7 @@ def test_scorpion_v3_reader_cleans_legacy_formatting_markers():
 
 
 def test_scorpion_v3_reader_preserves_layout_after_formatting_markers():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 3.5/CHEATER.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 3.5/CHEATER.DAT")
     prefix = b"\x95\x00" + b"\x00" * 31
     payload = prefix + RAR4_SIGNATURE + b"".join(
         (
@@ -570,7 +570,7 @@ def test_scorpion_v3_reader_preserves_layout_after_formatting_markers():
 
 
 def test_scorpion_v3_5_reader_parses_embedded_rar_without_mz_header():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 3.5/CHEATER.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 3.5/CHEATER.DAT")
     prefix = b"\x95\x00" + b"\x00" * 31
     payload = prefix + RAR4_SIGNATURE + b"".join(
         (
@@ -611,37 +611,37 @@ def test_scorpion_v3_5_reader_parses_embedded_rar_without_mz_header():
 
 def test_scorpion_legacy_reader_skips_known_non_help_resources():
     assert not is_scorpion_legacy_binary(
-        Path("sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CS.EXE"),
+        Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CS.EXE"),
         b"MZ" + b"\x00" * 62,
     )
     assert not is_scorpion_legacy_binary(
-        Path("sources/Scorpions Cheater DOS/Scorpions Cheater 3/BLCK.DAT"),
+        Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 3/BLCK.DAT"),
         b"\xEB\x3D" + b"\x00" * 62,
     )
     assert not is_scorpion_legacy_binary(
-        Path("sources/Scorpions Cheater DOS/Scorpions Cheater 3.5/MAIN.DAT"),
+        Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 3.5/MAIN.DAT"),
         b"MZ" + b"\x00" * 62,
     )
     assert not is_scorpion_legacy_binary(
-        Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/FB.SCO"),
+        Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/FB.SCO"),
         b"\xEB\x67\x90" + b"\x00" * 10 + b"SCORPIONS CHEATER 4.0 font B",
     )
     assert not is_scorpion_legacy_binary(
-        Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/SLEEPER.SCO"),
+        Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/SLEEPER.SCO"),
         b"MZ" + b"\x00" * 62,
     )
     assert not is_scorpion_legacy_binary(
-        Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/SCR001.SCX"),
+        Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/SCR001.SCX"),
         b"\x00" * 64,
     )
     assert is_scorpion_legacy_binary(
-        Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATAB.SCO"),
+        Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATAB.SCO"),
         scorpion_legacy_v4x_module.SCORPION_SCO_SIGNATURE + b"\x00" * 62,
     )
 
 
 def test_scorpion_legacy_reader_extracts_version_hints_for_shareware_dirs():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 7 _shareware_/SCR1.SCD")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 7 _shareware_/SCR1.SCD")
 
     assert scorpion_version_hint_from_path(path) == "7"
     profile = scorpion_legacy_profile_for_path(path)
@@ -651,7 +651,7 @@ def test_scorpion_legacy_reader_extracts_version_hints_for_shareware_dirs():
 
 
 def test_scorpion_legacy_reader_accepts_embedded_exe_release():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")
     payload = bytearray(b"MZ" + b"\x90" * 62)
     payload[0x02:0x04] = len(payload).to_bytes(2, "little")
     payload[0x04:0x06] = (1).to_bytes(2, "little")
@@ -672,13 +672,13 @@ def test_scorpion_legacy_reader_accepts_embedded_exe_release():
 
 
 def test_scorpion_legacy_reader_selects_version_specific_reader_classes():
-    assert scorpion_legacy_reader_class_for_path(Path("sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")) is scorpion_legacy_module.ScorpionV1_5Reader
-    assert scorpion_legacy_reader_class_for_path(Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATA1.SCO")) is scorpion_legacy_v4x_module.ScorpionV4Reader
-    assert scorpion_legacy_reader_class_for_path(Path("sources/Scorpions Cheater DOS/Scorpions Cheater 7 _shareware_/SCR1.SCD")) is scorpion_legacy_v6x_module.ScorpionV7Reader
+    assert scorpion_legacy_reader_class_for_path(Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")) is scorpion_legacy_module.ScorpionV1_5Reader
+    assert scorpion_legacy_reader_class_for_path(Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATA1.SCO")) is scorpion_legacy_v4x_module.ScorpionV4Reader
+    assert scorpion_legacy_reader_class_for_path(Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 7 _shareware_/SCR1.SCD")) is scorpion_legacy_v6x_module.ScorpionV7Reader
 
 
 def test_scorpion_v4_reader_reports_sco_probe_metadata():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATA1.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATA1.SCO")
     payload = (
         b"SCORPION\x00\x01"
         + (-49).to_bytes(2, "little", signed=True)
@@ -710,7 +710,7 @@ def test_scorpion_v4_reader_reports_sco_probe_metadata():
 
 
 def test_scorpion_v4_reader_decodes_sco_huffman_topics():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATA1.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATA1.SCO")
     stream_text = (
         "[0101]\r\n"
         "B A T T L E   B E A S T\r\n"
@@ -735,7 +735,7 @@ def test_scorpion_v4_reader_decodes_sco_huffman_topics():
 
 
 def test_scorpion_sco_reader_labels_datav_topic_files_as_jokes():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATAV1.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATAV1.SCO")
     stream_text = (
         "[0001]\r\n"
         "ŘETĚZ\r\n"
@@ -757,7 +757,7 @@ def test_scorpion_sco_reader_labels_datav_topic_files_as_jokes():
 
 
 def test_scorpion_sco_reader_labels_datan_topic_files_as_manuals():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATAN1.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATAN1.SCO")
     stream_text = (
         "[N001]\r\n"
         "THE LEGEND OF KYRANDIA\r\n"
@@ -775,7 +775,7 @@ def test_scorpion_sco_reader_labels_datan_topic_files_as_manuals():
 
 
 def test_scorpion_sco_reader_labels_joke_index_files():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 5/DATAB.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 5/DATAB.SCO")
     stream_text = (
         "SEZNAM,[fórů]-\r\n"
         "ŘETĚZ,[0001]-\r\n"
@@ -806,7 +806,7 @@ def test_scorpion_sco_reader_labels_joke_index_files():
 
 
 def test_scorpion_sco_reader_parses_universal_index_flags():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATAA.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 4/DATAA.SCO")
     stream_text = (
         "SEZNAM LABELU,[1234]--\r\n"
         "4 GET IT,[2256]--\r\n"
@@ -845,7 +845,7 @@ def test_scorpion_sco_reader_parses_universal_index_flags():
 
 
 def test_scorpion_v7_index_classifies_bang_entries_as_supplements():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 7 _shareware_/DATAA.SCD")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 7 _shareware_/DATAA.SCD")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     supplements = [
@@ -867,7 +867,7 @@ def test_scorpion_v7_index_classifies_bang_entries_as_supplements():
 
 
 def test_scorpion_v6_reader_decodes_scd_lzhuf_index():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 6 _shareware_/DATAA.SCD")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 6 _shareware_/DATAA.SCD")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
 
@@ -882,7 +882,7 @@ def test_scorpion_v6_reader_decodes_scd_lzhuf_index():
 
 
 def test_scorpion_v6_reader_decodes_scd_lzhuf_marker_topics():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 6 _shareware_/DATA1.SCD")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 6 _shareware_/DATA1.SCD")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
 
@@ -894,7 +894,7 @@ def test_scorpion_v6_reader_decodes_scd_lzhuf_marker_topics():
 
 
 def test_scorpion_v10_reader_decodes_prefixed_lzhuf_sco_blocks():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 10/CHEATS.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 10/CHEATS.SCO")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
 
@@ -908,7 +908,7 @@ def test_scorpion_v10_reader_decodes_prefixed_lzhuf_sco_blocks():
 
 
 def test_scorpion_v10_reader_renders_legacy_inline_styles():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 10/CHEATS.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 10/CHEATS.SCO")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     battle_beast = document.topics[1]
@@ -923,7 +923,7 @@ def test_scorpion_v10_reader_renders_legacy_inline_styles():
 
 
 def test_scorpion_v5_reader_renders_dos_observed_magenta_control():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 5/DATA1.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 5/DATA1.SCO")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     battle_beast = next(topic for topic in document.topics if "0101" in topic.alias_strings)
@@ -935,7 +935,7 @@ def test_scorpion_v5_reader_renders_dos_observed_magenta_control():
 
 
 def test_scorpion_v5_reader_renders_dos_observed_blue_background():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 5/DATA6.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 5/DATA6.SCO")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     sword_of_sodan = next(topic for topic in document.topics if "4001" in topic.alias_strings)
@@ -947,7 +947,7 @@ def test_scorpion_v5_reader_renders_dos_observed_blue_background():
 
 
 def test_scorpion_v10_program_renders_table_inline_styles_without_control_glyphs():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 10/DATATEXT.SCD")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 10/DATATEXT.SCD")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     body = "\n".join(document.topics[0].uhf_content[:8])
@@ -968,7 +968,7 @@ def test_scorpion_v10_program_renders_table_inline_styles_without_control_glyphs
 
 
 def test_scorpion_v14_program_renders_dos_observed_gray_background():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 14/DATATEXT.SCD")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 14/DATATEXT.SCD")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     feedback = next(topic for topic in document.topics if "R010" in topic.alias_strings)
@@ -980,7 +980,7 @@ def test_scorpion_v14_program_renders_dos_observed_gray_background():
 
 
 def test_scorpion_v14_reader_renders_dos_observed_fifa_colors():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 14/CHEATS.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 14/CHEATS.SCO")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     fifa = next(topic for topic in document.topics if "4078" in topic.alias_strings)
@@ -1003,7 +1003,7 @@ def test_scorpion_v14_reader_renders_dos_observed_fifa_colors():
 
 
 def test_scorpion_v14_manual_index_preserves_content_kind_suffixes():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 14/NAVODY2.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 14/NAVODY2.SCO")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     entries = {
@@ -1031,7 +1031,7 @@ def test_scorpion_sco_normalizes_epsilon_only_inside_words():
 
 
 def test_scorpion_v11_reader_decodes_numbered_hlp_lzhuf_blocks():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 11/NAVODY3.SCO")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 11/NAVODY3.SCO")
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
 
@@ -1043,12 +1043,12 @@ def test_scorpion_v11_reader_decodes_numbered_hlp_lzhuf_blocks():
 
 
 def test_scorpion_dat_reader_selects_version_specific_reader_classes():
-    assert scorpion_dat_reader_class_for_path(Path("sources/Scorpions Cheater DOS/Scorpions Cheater 15/CHEATY.DAT")) is scorpion_dat_module.ScorpionAllegroDatReader
-    assert scorpion_dat_reader_class_for_path(Path("sources/Scorpions Cheater DOS/Scorpions Cheater 23/CHEATY.DAT")) is scorpion_dat_module.ScorpionAllegroDatReader
+    assert scorpion_dat_reader_class_for_path(Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 15/CHEATY.DAT")) is scorpion_dat_module.ScorpionAllegroDatReader
+    assert scorpion_dat_reader_class_for_path(Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 23/CHEATY.DAT")) is scorpion_dat_module.ScorpionAllegroDatReader
 
 
 def test_scorpion_legacy_reader_builds_structured_topics_for_embedded_exe_release():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")
     payload = bytearray(b"MZ" + b"\x90" * 62)
     payload[0x02:0x04] = len(payload).to_bytes(2, "little")
     payload[0x04:0x06] = (1).to_bytes(2, "little")
@@ -1113,7 +1113,7 @@ def test_scorpion_legacy_reader_builds_structured_topics_for_embedded_exe_releas
 
 
 def test_scorpion_legacy_reader_extracts_cheat_topics_from_embedded_exe_string_stream():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")
     payload = bytearray(b"MZ" + b"\x90" * 62)
     payload[0x02:0x04] = len(payload).to_bytes(2, "little")
     payload[0x04:0x06] = (1).to_bytes(2, "little")
@@ -1274,7 +1274,7 @@ def test_v1_5_directory_alias_resolver_maps_known_variants_without_guessing():
 
 
 def test_scorpion_legacy_reader_tracks_v1_5_resolved_and_unresolved_directory_titles():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1.5/CHEATER.EXE")
     payload = bytearray(b"MZ" + b"\x90" * 62)
     payload[0x02:0x04] = len(payload).to_bytes(2, "little")
     payload[0x04:0x06] = (1).to_bytes(2, "little")
@@ -1339,7 +1339,7 @@ def test_scorpion_legacy_reader_tracks_v1_5_resolved_and_unresolved_directory_ti
 
 
 def test_scorpion_modern_dat_reader_keeps_newest_branch_and_version_metadata():
-    path = Path("sources/Scorpions Cheater DOS/Scorpions Cheater 15/CHEATY.DAT")
+    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 15/CHEATY.DAT")
     payload = path.read_bytes()
 
     handler = detect_format_handler(path, payload)

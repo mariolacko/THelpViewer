@@ -15,9 +15,9 @@ from thelpviewer.converter.readers.tdh import (
 from thelpviewer.converter.readers.thelp import is_thelp_binary
 
 
-TDH_SAMPLE = Path("sources/Borland Turbo Debugger 1.0/TDHELP.TDH")
-TDH_SAMPLE_2X = Path("sources/Borland Turbo Assembler 1.0 with Turbo Debugger/TDHELP.TDH")
-TFH_SAMPLE = Path("sources/Borland Turbo Profiler/TFHELP.TFH")
+TDH_SAMPLE = Path("data/sources/Borland Turbo Debugger 1.0/TDHELP.TDH")
+TDH_SAMPLE_2X = Path("data/sources/Borland Turbo Assembler 1.0 with Turbo Debugger/TDHELP.TDH")
+TFH_SAMPLE = Path("data/sources/Borland Turbo Profiler/TFHELP.TFH")
 
 
 def test_tdh_sample_is_detected_separately_from_thelp():

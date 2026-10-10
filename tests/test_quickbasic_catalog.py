@@ -21,15 +21,15 @@ def test_quickbasic_group_metadata_has_one_product_name(group, expected_product,
 
 def test_quickbasic_exports_share_one_product_with_two_version_branches(tmp_path):
     originals = (
-        Path("sources/Microsoft QuickBASIC Extended 7.1/BAS7QCK.HLP"),
-        Path("sources/Microsoft QuickBASIC 4.5/QB45QCK.HLP"),
+        Path("data/sources/Microsoft QuickBASIC Extended 7.1/BAS7QCK.HLP"),
+        Path("data/sources/Microsoft QuickBASIC 4.5/QB45QCK.HLP"),
     )
     if not all(path.is_file() for path in originals):
         pytest.skip("QuickBASIC source help files were not downloaded")
 
     sources = tmp_path / "sources"
     for original in originals:
-        target = sources / original.relative_to("sources")
+        target = sources / original.relative_to("data/sources")
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(original, target)
 

@@ -4,7 +4,7 @@ from thelpviewer.converter.readers.hlx_binary import HlxBinaryReader
 
 
 def test_content_rich_hlx_prefers_deterministic_topics():
-    p = Path("sources") / "Borland C++ 4.x" / "BCW.HLX"
+    p = Path("data/sources") / "Borland C++ 4.x" / "BCW.HLX"
     assert p.exists(), f"Source HLX not found: {p}"
     data = p.read_bytes()
     reader = HlxBinaryReader()
@@ -16,7 +16,7 @@ def test_content_rich_hlx_prefers_deterministic_topics():
 
 
 def test_topic_rich_hlx_without_pointer_map_still_uses_topics():
-    p = Path("sources") / "Borland C++ 4.x" / "BCDOS.HLX"
+    p = Path("data/sources") / "Borland C++ 4.x" / "BCDOS.HLX"
     assert p.exists(), f"Source HLX not found: {p}"
     data = p.read_bytes()
     reader = HlxBinaryReader()

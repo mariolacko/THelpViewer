@@ -12,7 +12,7 @@ from thelpviewer.converter.readers.m602 import (
 from thelpviewer.converter.writers.json import HelpJsonRenderer
 
 
-M602_PATH = Path("sources") / "Software 602" / "M602_200.HLP"
+M602_PATH = Path("data/sources") / "Software 602" / "M602_200.HLP"
 
 
 @lru_cache(maxsize=1)

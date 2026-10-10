@@ -18,7 +18,7 @@ completes setup without installing anything.
 
 Existing HELP/DOS installations do not trigger first-run setup. Their installed
 groups/packages initially appear selected. Preferences are saved atomically in
-`var/content-settings.json`, separately from server quota settings. A failed
+`data/content-settings.json`, separately from server quota settings. A failed
 or interrupted initial job keeps its selection and requires explicit retry;
 restart does not silently resume network work. Progress itself is in memory,
 so one Uvicorn worker is required. Do not enable multiple processes until
@@ -28,27 +28,50 @@ cross-process job scheduling and publication locks are implemented.
 
 | Location | Content | Retention |
 | --- | --- | --- |
-| `sources/<Product>/` | Original HELP and required licence files | Keep; may not be available upstream later |
-| `helps/<Product>/` | Published gzip UHF bundles and catalog | Keep; rebuildable from original sources |
+| `data/sources/<Product>/` | Original HELP and required licence files | Permanent; may not be available upstream later |
+| `data/helps/<Product>/` | Published gzip UHF bundles and catalog | Permanent publication |
+| `data/docs/` | Published documentation and additional/edited documents | Permanent |
 | `var/downloads/help/` | Downloaded HELP archives | Reusable cache, not a user disk |
 | `var/downloads/dos/` | Downloaded DOS packages | Reusable cache, never cleared by a base rebuild |
-| `var/dos/base/` | Shared installed DOS C | Recoverable rebuild; not private data |
-| `var/dos/users/<account-id>/` | Overlay revisions, deletion records and media | Permanent; back up independently |
+| `var/dos/c/` | Shared generated DOS C | Recoverable rebuild; not private data |
+| `data/dos/users/<account-id>/` | Overlay revisions, deletion records and media | Permanent; back up independently |
 | `var/midi/` | Tracks, covers and catalog | Recoverable MIDI rebuild |
-| `var/accounts.sqlite3`, `var/statistics.sqlite3` | Accounts/sessions and aggregate statistics/Hall of Fame | Permanent; include in backups |
+| `data/accounts.sqlite3`, `data/statistics.sqlite3` | Accounts/sessions and aggregate statistics/Hall of Fame | Permanent; include in backups |
 | `var/global-search.sqlite3` | Full-text HELP/Docs and public-index metadata | Rebuildable index |
-| `var/server-settings.json`, `var/content-settings.json` | Quotas and installation selections | Permanent configuration |
+| `data/server-settings.json`, `data/content-settings.json` | Quotas and installation selections | Permanent configuration |
 
-Published HELP stays outside `var/`; moving it gives no benefit here and risks
-existing installations. URLs remain `/helps/...` and `/?file=...&topic=...`.
-`THELP_HELPS_DIR`, `THELP_SOURCES_DIR`, `THELP_DOWNLOADS_DIR` and
-`THELP_STATE_DIR` permit explicit storage overrides. Docker mounts the project
-with these defaults. `var/` must survive image/container replacement.
+URLs remain `/helps/...`, `/?file=...&topic=...` and `/?doc=...` despite the
+physical move. `THELP_DATA_DIR` selects the permanent root; `THELP_STATE_DIR`
+selects generated/runtime state. `THELP_HELPS_DIR`, `THELP_SOURCES_DIR`,
+`THELP_DOCS_DIR` and `THELP_DOWNLOADS_DIR` still permit explicit overrides.
+When using a custom legacy state location, set THELP_DATA_DIR explicitly.
+Docker configures `/app/data` and `/app/var`; both survive container replacement.
 
-Old `downloads/` and `var/dos/downloads/` are not moved/deleted. DOS reads its
-old cache before fetching a missing new-cache entry. Original HELP and private
-user storage are never temporary downloads, even though generated files and
-state are excluded from Git. Do not clean all of `var/` as cache.
+## Upgrade migration
+
+Stop the old server/container before upgrading. Startup (and the existing
+build adapter) migrates legacy root helps/sources, accounts including Passkey
+credentials/sessions and the registration-token encryption key, statistics,
+configuration and private DOS files/media. It separately relocates the
+generated disk to `var/dos/c`, its receipt to `var/dos/installed.json`, and old
+DOS downloads to `var/downloads/dos`. MIDI tracks remain in `var/midi`.
+
+Migration verifies SHA-256 before and after publishing each copied tree.
+Conflicting destination files abort before source changes; symlinks are
+rejected. Identical destinations can be merged. Originals move to a unique
+`data/migration-backups/<id>/` directory, not the trash. The relative-path
+`data/storage-migration.json` journal makes completed transfers repeat-safe
+and portable between native paths and Docker bind mounts. Account IDs and
+shared disk hashes do not change. Keep the backup until the upgraded server's
+login, private disks and HELP links are verified. Do not downgrade 2.1 storage
+to 2.0 without restoring that snapshot and its matching configuration.
+
+`docs/` remains version-controlled source documentation. Startup publishes
+public Markdown into `data/docs` and records managed hashes; later code
+updates replace only unchanged managed documents. Administrator edits and
+additional documents remain untouched. RE/Audit files are not published.
+Old root `downloads/` is left as a legacy cache for explicit maintenance use.
+Never clean all of `var/` blindly; rebuild scopes and private data are separate.
 
 ## Module and API flow
 

@@ -6,6 +6,46 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from urllib.request import urlopen
+import time
+
+from test_browser_smoke import _free_port
+
+
+def test_empty_server_start_waits_for_configuration_instead_of_downloading_everything(tmp_path):
+    port = _free_port()
+    manifest = tmp_path / "empty.json"
+    manifest.write_text(json.dumps({"version": 1, "sources": [], "products": [],
+        "converters": [], "build_groups": [], "entries": []}))
+    script = Path(__file__).resolve().parents[1] / "thelp.sh"
+    log = (tmp_path / "server.log").open("w+")
+    process = subprocess.Popen([str(script), "serve", str(port)], stdout=log,
+        stderr=subprocess.STDOUT, env={**os.environ,
+            "THELP_PYTHON": sys.executable, "THELP_SERVER_FOREGROUND": "1", "THELP_HOST": "127.0.0.1",
+            "THELP_AUTH_ORIGIN": f"http://localhost:{port}", "THELP_PUBLIC_BASE_URL": "",
+            "THELP_DEV_AUTO_LOGIN": "1", "THELP_DATA_DIR": str(tmp_path / "data"),
+            "THELP_STATE_DIR": str(tmp_path / "var"),
+            "THELP_HELP_DATABASE_PATH": str(script.parent / "thelpviewer" / "help-database.json"),
+            "THELP_MIDI_SOURCES_PATH": str(manifest), "THELP_DOS_CONFIG_PATH": str(manifest)})
+    try:
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                log.seek(0)
+                raise AssertionError(f"Empty server failed to start:\n{log.read()}")
+            try:
+                with urlopen(f"http://localhost:{port}/healthz", timeout=.2) as response:
+                    assert json.load(response)["status"] == "ok"
+                break
+            except OSError:
+                time.sleep(.05)
+        else:
+            raise AssertionError("Empty server did not start")
+        assert not (tmp_path / "data" / "sources").exists()
+        assert not (tmp_path / "var" / "downloads").exists()
+    finally:
+        process.terminate(); process.wait(timeout=5)
+        log.close()
 
 
 def test_with_dos_reference_builds_default_and_reference_sources_together(tmp_path):

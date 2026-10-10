@@ -1,6 +1,7 @@
 # Generated output
 helps/
 var/
+data/
 
 # Source help files (downloaded or user-supplied)
 sources/

@@ -15,6 +15,7 @@ import stat
 import tempfile
 import threading
 import zipfile
+import uuid
 from fnmatch import fnmatch
 
 from ..downloader.extractor import ExtractorTools, extract_file, find_lsar, find_sevenzip, find_unar
@@ -57,7 +58,8 @@ def _atomic_file(path: Path, data: bytes) -> None:
 
 class DosPromptStore:
     def __init__(self, root: Path, config_path: Path | None, settings: ServerSettings | None = None,
-                 accounts: AccountStore | None = None, downloads_dir: Path | None = None):
+                 accounts: AccountStore | None = None, downloads_dir: Path | None = None,
+                 *, users_dir: Path | None = None, disk_dir: Path | None = None):
         self.root, self.config_path = root, config_path
         self.settings = settings or ServerSettings(root.parent / "server-settings.json")
         self.accounts = accounts
@@ -79,6 +81,10 @@ class DosPromptStore:
         self.downloads_dir = downloads_dir or root / "downloads"
         self.source_selection = None
         self.on_progress = None
+        self.users_dir = users_dir or root / "users"
+        self.disk_dir = disk_dir or root / "base" / "c"
+        self.base_root = disk_dir or root / "base"
+        self.installed_path = root / "installed.json" if disk_dir else root / "base" / "installed.json"
 
     def install(self, source_ids: list[str], *, on_progress=None) -> None:
         """Install explicitly selected packages; keep the shared disk and private overlays."""
@@ -97,7 +103,15 @@ class DosPromptStore:
         with self._lock:
             if self.state == "building" or (self._worker and self._worker.is_alive()):
                 raise DosError("DOS C drive is already being prepared")
-            self.backup = archive_rebuild_directory(self.root / "base", self.root.parent / "backups", "dos-base")
+            if self.installed_path.is_symlink():
+                raise DosError("DOS installation metadata must not be a symbolic link")
+            self.backup = archive_rebuild_directory(self.base_root, self.root.parent / "backups", "dos-base")
+            if not self.installed_path.is_relative_to(self.base_root) and self.installed_path.exists():
+                if not self.backup:
+                    backup = self.root.parent / "backups" / f"dos-base-{uuid.uuid4().hex}"
+                    backup.mkdir(parents=True)
+                    self.backup = str(backup.relative_to(self.root.parent))
+                self.installed_path.rename(self.root.parent / self.backup / "installed.json")
             self.files, self.file_hashes, self.base_id = {}, {}, ""
             self.state, self.error, self.current = "idle", "", ""
             self.processed = self.total = self.percent = self.received = 0
@@ -130,8 +144,8 @@ class DosPromptStore:
                 raise DosError("Invalid media size limit")
             root_files = self._configured_files(config, limit)
             self.root.mkdir(parents=True, exist_ok=True)
-            base = self.root / "base" / "c"
-            marker = self.root / "base" / "installed.json"
+            base = self.disk_dir
+            marker = self.installed_path
             installed = json.loads(marker.read_text()) if marker.exists() else {}
             if not isinstance(installed, dict):
                 raise DosError("Invalid DOS disk installation marker")
@@ -362,11 +376,17 @@ class DosPromptStore:
     def _user_dir(self, account_id: str) -> Path:
         if not ACCOUNT_RE.fullmatch(account_id):
             raise DosError("Invalid account storage ID")
-        directory = self.root / "users" / account_id
+        directory = self.users_dir / account_id
         if directory.is_symlink() or directory.parent.is_symlink():
             raise DosError("Private user storage must not be a symbolic link")
         directory.mkdir(parents=True, exist_ok=True)
         return directory
+
+    def _check_private_path(self, path: Path) -> None:
+        parts = path.relative_to(self.users_dir).parts
+        if self.users_dir.is_symlink() or any(
+                self.users_dir.joinpath(*parts[:index]).is_symlink() for index in range(1, len(parts) + 1)):
+            raise DosError("Private C storage must not contain symbolic links")
 
     def _database(self, account_id: str) -> sqlite3.Connection:
         database = sqlite3.connect(self._user_dir(account_id) / "overlay.sqlite3", timeout=15)
@@ -431,9 +451,7 @@ class DosPromptStore:
             for row in database.execute("SELECT name FROM entries"):
                 name = c_path(row[0])
                 path = snapshot / name
-                parts = path.relative_to(self.root).parts
-                if any(self.root.joinpath(*parts[:index]).is_symlink() for index in range(1, len(parts) + 1)):
-                    raise DosError("Private C storage must not contain symbolic links")
+                self._check_private_path(path)
                 try:
                     files[name] = path.read_bytes()
                 except OSError as error:
@@ -635,9 +653,7 @@ class DosPromptStore:
             if row is None or row[0] != digest:
                 raise DosError("Private DOS file changed; reload the disk")
             path = self._user_dir(account_id) / "c" / str(revision) / name
-            parts = path.relative_to(self.root).parts
-            if any(self.root.joinpath(*parts[:index]).is_symlink() for index in range(1, len(parts) + 1)):
-                raise DosError("Private C storage must not contain symbolic links")
+            self._check_private_path(path)
             with path.open("rb") as handle:
                 handle.seek(offset)
                 data = handle.read(size)

@@ -77,9 +77,10 @@ def annotate_index_entries(helps_dir: Path, mapping: Dict[int, str]) -> int:
 
 
 def main():
-    helps_dir = Path("helps")
+    from thelpviewer.server.config import load_config
+    helps_dir = load_config().helps_dir
     if not helps_dir.exists():
-        print("helps/ directory not found — run this from the project root")
+        print(f"{helps_dir} directory not found")
         return
     print("Scanning bundles for topic owners...")
     mapping = build_context_owner_map(helps_dir)

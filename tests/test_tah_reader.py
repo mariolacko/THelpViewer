@@ -4,7 +4,7 @@ from thelpviewer.converter.exporter import detect_format_handler, load_document
 from thelpviewer.downloader.collector import is_help_file_path
 
 
-TAH_SAMPLE = Path("sources/Borland Turbo Assembler/TASM.TAH")
+TAH_SAMPLE = Path("data/sources/Borland Turbo Assembler/TASM.TAH")
 
 
 def test_tah_sample_is_detected_as_thelp():

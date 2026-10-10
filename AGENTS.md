@@ -20,15 +20,17 @@ user's problem; these rules exist to prevent regressions, not to add process.
   `-p no:cacheprovider`. After every test run (including failures), remove and
   verify the absence of repository `__pycache__`, `.pyc`/`.pyo`, `.pytest_cache`
   and other temporary test caches. Never clean `.venv`, dependencies, source
-  HELP files, generated bundles or persistent `var/` data as test cache.
+  HELP files, generated bundles or persistent `data/` as test cache. Never
+  recursively clean all of `var/`; its generated DOS/MIDI data and downloads
+  have explicit, recoverable rebuild operations.
 - Record every user-visible feature or behavior fix under `CHANGELOG.md`'s
   `[Unreleased]` section and update affected technical documentation.
 
 ## Adding HELP files
 
 1. Inspect the existing product, source and bundle layout first. Put original
-   files in `sources/<Product>/` and generated UHF bundles in
-   `helps/<Product>/`; retain an existing release subdirectory when that
+   files in `data/sources/<Product>/` and generated UHF bundles in
+   `data/helps/<Product>/`; retain an existing release subdirectory when that
    product already uses one. Never add a staging/build-group directory such as
    `Candidates/` to these paths or to the Help Files menu.
 2. Register the product in `thelpviewer/help-database.json`: stable product
@@ -45,7 +47,7 @@ user's problem; these rules exist to prevent regressions, not to add process.
    a specification of the original format first: evidence, structure,
    encoding, controls, links, limits and a small example. Separate confirmed
    facts from converter behavior and unresolved observations.
-5. Build the affected group, rebuild `helps/catalog.json`, and verify the
+5. Build the affected group, rebuild `data/helps/catalog.json`, and verify the
    source-to-bundle mapping, titles, topic counts, cross-file links and Help
    Files menu. Test downloader selection and conversion with representative
    files. Build groups select product roots; opt-in groups need explicit roots
@@ -59,11 +61,15 @@ when only changing menu metadata, so saved HELP links keep working.
 
 ## Server content storage
 
-- Keep original HELP in `sources/` and published UHF in `helps/`; URLs and
-  product/release layouts stay stable. `var/` is persistent state, not a cache.
+- Permanent storage is `data/`: original HELP in `data/sources/`, published
+  UHF in `data/helps/`, documents in `data/docs/`, accounts/statistics/settings
+  databases and private DOS overlays/media in `data/dos/users/<id>/`.
+  HTTP URLs and product/release-relative paths stay stable.
 - Cache new HELP/DOS downloads under `var/downloads/help/` and
-  `var/downloads/dos/`. Private DOS data remains in `var/dos/users/<id>/`.
-  Never include user data in a rebuild/cache cleanup target.
+  `var/downloads/dos/`. Shared generated DOS C is `var/dos/c/`; downloaded
+  tracks/covers/catalog are `var/midi/`. Never include `data/` in a rebuild or
+  cache cleanup target. Upgrade with the old server stopped; migration verifies
+  copies, refuses conflicts and archives originals in `data/migration-backups/`.
 - Server download/build jobs call Python modules, not CLI subprocesses.
   Selections use manifest IDs; an empty selection means none. Publish staged
   HELP only after validation, preserving unselected content and a backup.

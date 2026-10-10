@@ -23,7 +23,7 @@ def _physical_record_offsets(data: bytes) -> list[int]:
 
 
 def test_ng_reader_preserves_every_record_and_link_in_the_corpus():
-    source_paths = sorted((Path("sources") / "Norton Guides").glob("*.NG"))
+    source_paths = sorted((Path("data/sources") / "Norton Guides").glob("*.NG"))
     assert len(source_paths) == 58
 
     total_topics = 0
@@ -63,7 +63,7 @@ def test_ng_reader_preserves_every_record_and_link_in_the_corpus():
 
 
 def test_ng_reader_keeps_compact_long_entry_targets():
-    document = NGReader(Path("sources") / "Norton Guides" / "AREACODE.NG").read()
+    document = NGReader(Path("data/sources") / "Norton Guides" / "AREACODE.NG").read()
     topics = {topic.context_id: topic for topic in document.topics}
 
     assert topics[4276].names[0] == "Wyckoff, NJ"
@@ -71,7 +71,7 @@ def test_ng_reader_keeps_compact_long_entry_targets():
 
 
 def test_ng_reader_uses_the_stored_menu_count_without_a_phantom_prompt():
-    document = NGReader(Path("sources") / "Norton Guides" / "4DOS.NG").read()
+    document = NGReader(Path("data/sources") / "Norton Guides" / "4DOS.NG").read()
     menu_topics = [topic for topic in document.topics if topic.context_id in (378, 486)]
 
     assert [topic.names[0] for topic in menu_topics] == ["4DOS", "Tables"]

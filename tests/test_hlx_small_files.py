@@ -3,10 +3,10 @@ from pathlib import Path
 from thelpviewer.converter.readers.hlx_binary import HlxBinaryReader, is_hlx_binary
 
 SMALL_FILES = [
-    "sources/Borland C++ 4.x/BWCC.HLX",
-    "sources/Borland C++ 4.x/OPENHELP.HLX",
-    "sources/Borland C++ 4.x/WINSIGHT.HLX",
-    "sources/Borland C++ 4.x/WINSPCTR.HLX",
+    "data/sources/Borland C++ 4.x/BWCC.HLX",
+    "data/sources/Borland C++ 4.x/OPENHELP.HLX",
+    "data/sources/Borland C++ 4.x/WINSIGHT.HLX",
+    "data/sources/Borland C++ 4.x/WINSPCTR.HLX",
 ]
 
 

@@ -7,6 +7,7 @@ import argparse
 from collections import defaultdict
 from datetime import UTC, datetime
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -353,7 +354,8 @@ def main() -> int:
     parser.add_argument(
         "sources_dir",
         nargs="?",
-        default=str(repo_root / "sources"),
+        default=os.environ.get("THELP_SOURCES_DIR",
+            str(Path(os.environ.get("THELP_DATA_DIR", repo_root / "data")) / "sources")),
         help="Directory containing source help files (default: %(default)s)",
     )
     parser.add_argument(

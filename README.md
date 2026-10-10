@@ -78,7 +78,7 @@ Port 5448 = `0x5448` = ASCII "TH" (THelp).
 ./thelp.sh all
 ```
 
-That downloads missing source archives, builds `helps/`, and starts the
+That downloads missing source archives, builds `data/helps/`, and starts the
 FastAPI server in Docker on http://localhost:5448.
 Python bytecode caching remains enabled, with `PYTHONPYCACHEPREFIX` pointing to
 `/tmp/thelp-python-cache` inside the container instead of the source tree.
@@ -115,7 +115,7 @@ that menu. The emulator pauses when its window is inactive or the tab is hidden.
 Fullscreen displays only DOS without the TVision frame/menu or browser chrome;
 Esc returns to the window, while Ctrl+Alt+M also opens its control menu.
 
-On first use, the server prepares `var/dos/base/c/` from
+After an administrator confirms selected packages, the server prepares `var/dos/c/` from
 [`thelpviewer/dos-prompt.json`](thelpviewer/dos-prompt.json). The default source
 includes FreeDOS EDIT, Volkov Commander and DOS games. Run `EDIT`, `VC` or
 `TYPE C:\SOFTWARE.TXT` for game launch commands. Initialization shows a shared
@@ -248,19 +248,20 @@ THelpViewer/
 │   │   └── __init__.py
 │   └── help-database.json  ←   products, download sources, build groups, conversion files, CRC metadata
 ├── downloads/              ← Legacy local downloader cache (not moved automatically)
-├── sources/                ← Source help files organized by product group
-│   ├── Borland Turbo Pascal 7/   ← e.g. TURBO.TPH, TVISION.TPH, OWL.TPH
-│   ├── Borland Turbo C 2.01/     ← e.g. TCHELP.TCH
-│   └── …
-├── helps/                  ← Generated UHF 2.0 `.json.gz` bundles + catalog.json
-├── var/                    ← Persistent server state; not a disposable cache directory
+├── data/                   ← Permanent data (included in backups, excluded from Git)
+│   ├── sources/<Product>/  ← Original HELP files and licence notices
+│   ├── helps/<Product>/    ← Published UHF bundles + catalog.json
+│   ├── docs/               ← Published documentation / permanent additional documents
+│   ├── dos/users/<id>/     ← Private overlays, savegames and removable media
+│   ├── accounts.sqlite3    ← Accounts, Passkeys and sessions
+│   ├── statistics.sqlite3  ← Statistics and Hall of Fame
+│   └── content-settings.json ← Administrator's selected HELP / DOS packages
+├── var/                    ← Rebuildable runtime data; do not erase wholesale
 │   ├── downloads/help/     ← Cached HELP downloads / archives
 │   ├── downloads/dos/      ← Cached DOS package archives
-│   ├── dos/base/           ← Shared installed C disk
-│   ├── dos/users/<id>/     ← Permanent private overlays and removable media
-│   ├── midi/               ← MIDI tracks, covers and catalog
-│   └── content-settings.json ← Administrator's selected HELP / DOS packages
-├── docs/                   ← Documentation
+│   ├── dos/c/              ← Generated shared C disk
+│   └── midi/               ← Downloaded MIDI tracks, covers and catalog
+├── docs/                   ← Version-controlled documentation sources
 │   ├── Formats.md          ←   binary format index
 │   ├── Formats/            ←   detailed format specifications
 │   │   ├── Borland THELP.md
@@ -317,12 +318,12 @@ Measured on the current generated UHF 2.0 payloads:
 
 1. The **downloader** (`python3 -m thelpviewer.downloader`) reads one shared manifest of
    logical products and fetches them via provider-specific downloaders
-   (WinWorldPC, archive.org, old-dos.ru, GitHub, DaveP NG mirror, Cheater.cz) into `sources/`
+   (WinWorldPC, archive.org, old-dos.ru, GitHub, DaveP NG mirror, Cheater.cz) into `data/sources/`
    When called without selectors it downloads everything it knows about and skips
-   files already present in `downloads/` or `sources/`
+   files already present in `var/downloads/help/` or `data/sources/`
 
 The downloader now also manages the full published DOS Scorpions Cheater corpus.
-Those releases are stored under `sources/Scorpions Cheater DOS/` in per-version
+Those releases are stored under `data/sources/Scorpions Cheater DOS/` in per-version
 subdirectories so DAT-era and pre-DAT-era builds can coexist without overwriting
 each other.
 2. `thelp.sh build` runs the converter over manifest-backed build groups resolved
@@ -339,8 +340,8 @@ each other.
 3. Each help file is parsed and rendered into a UHF 2.0 JSON payload containing
    structured topics, index entries, and metadata
 4. The JSON payload is gzip-compressed into a `.json.gz` bundle for web transport
-5. A `catalog.json` is generated in `helps/`
-6. FastAPI serves `www/`, `helps/`, and `docs/` directly
+5. A `catalog.json` is generated in `data/helps/`
+6. FastAPI serves `www/`, `data/helps/`, and published `data/docs/` directly
 7. The browser fetches `.json.gz` bundles on demand, decompresses them, and renders them in a TurboVision window
 
 The canonical [help-database.json](thelpviewer/help-database.json) is shared by
@@ -375,7 +376,7 @@ After regeneration, restart the local server or Docker and hard-refresh the brow
 Deploy the viewer's JS/CSS assets together with `www/index.html`, not only the
 files modified since the last local commit: the target may run an older release.
 Keep its asset-version URLs in sync with the bundle writer so browser caches do
-not mix releases. Do not overwrite `.env`, `var/`, HELP bundles or MIDI data.
+not mix releases. Do not overwrite `.env`, `data/`, runtime `var/` or migrated HELP/MIDI data.
 
 ### Server statistics and errors
 
@@ -386,11 +387,11 @@ running version and HELP/Docs catalog sizes. These details remain local to the
 dialog and are not submitted as statistics merely by opening it.
 
 The System menu's **Statistics** window reads aggregate counters from
-`var/statistics.sqlite3`. The location can be changed with
-`THELP_STATISTICS_PATH`; `THELP_STATE_DIR` changes the default state directory.
+`data/statistics.sqlite3`. The location can be changed with
+`THELP_STATISTICS_PATH`; `THELP_DATA_DIR` changes permanent storage.
 `app.py` creates the store; `server/routes/statistics.py` registers the statistics
 and Hall of Fame endpoints without changing their URLs or response formats.
-SQLite uses its rollback journal so the database also works when `var/` is a
+SQLite uses its rollback journal so the database also works when `data/` is a
 Docker Desktop bind mount.
 The server records daily visits, referrer hosts, proxy-supplied country codes,
 screen/viewport sizes, pixel ratio, color depth, coarse device/OS/browser

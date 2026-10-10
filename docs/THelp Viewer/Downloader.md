@@ -54,7 +54,7 @@ python3 -m thelpviewer.downloader --dry-run
 
 With no selectors, the downloader runs every configured provider for every
 configured product and skips anything already present in `var/downloads/help/` or
-`sources/`.
+`data/sources/`.
 The legacy `downloads/` directory is not migrated or removed automatically;
 use `--dl-dir downloads` to reuse it explicitly.
 
@@ -131,7 +131,7 @@ directory only if its `label` does not already end in that version (for
 example, `Microsoft QuickBASIC Extended 7.1` stays a single `7.1`).
 
 `cheater_cz.py` is intentionally provider-specific: it keeps every DOS release in a
-separate version folder under `sources/Scorpions Cheater DOS/` and copies the raw
+separate version folder under `data/sources/Scorpions Cheater DOS/` and copies the raw
 Scorpion corpus artifacts selected by the manifest. For the earliest
 releases where the corpus is embedded directly in executables, it falls back to
 preserving the `.exe` files so no DOS version is silently dropped.
@@ -140,10 +140,10 @@ The same manifest also drives build-group selection and aliases in `thelp.sh`,
 so adding a group does not require another shell `case` branch.
 
 `slunecnice.py` copies the eleven Game-Cheater database files into
-`sources/Game-Cheater/Game-Cheater 9.02/`. Build them with
+`data/sources/Game-Cheater/Game-Cheater 9.02/`. Build them with
 `./thelp.sh build --group=game-cheater`.
 
-The four pinned products are downloaded into `sources/<Product>/`, alongside
+The four pinned products are downloaded into `data/sources/<Product>/`, alongside
 the existing product directories.
 MS-DOS 6.22 and QuickBASIC 4.5 also have Archive.org `search_text` and
 verified, exact-identifier `query` entries, following the other Microsoft
@@ -154,7 +154,7 @@ sources: Archive.org search did not locate those exact releases (the HelpPC
 result is 2.0), while the FreeDOS package is indexed by its official ibiblio
 repository.
 The opt-in `dos-reference` build group converts them to eleven UHF bundles under
-their respective `helps/<Product>/` directories and updates `helps/catalog.json`,
+their respective `data/helps/<Product>/` directories and updates `data/helps/catalog.json`,
 which supplies the Help Files menu. Use `./thelp.sh build --with-dos-reference` to include them in
 the same build as the default groups while preserving unrelated opt-in bundles.
 A normal default build does not select this group; rerun with the flag after a
@@ -218,7 +218,7 @@ This replaces the old mix of `7z`, `zipfile`, and special-case RAR handling.
 | Module | Purpose |
 |--------|---------|
 | `http.py` | HTTP fetch/download helpers and anchor parsing |
-| `collector.py` | language detection, help-file scanning, final copy to `sources/` |
+| `collector.py` | language detection, help-file scanning, final copy to `data/sources/` |
 | `extractor.py` | archive probing and extraction through `unar` / `lsar` |
 
 ## Requirements
@@ -234,5 +234,5 @@ Install:
 
 ## Output
 
-Collected help files are copied into `sources/<Product Label ...>/`.
+Collected help files are copied into `data/sources/<Product Label ...>/`.
 Those directories are then consumed by `python -m thelpviewer.converter` / `./thelp.sh build`.

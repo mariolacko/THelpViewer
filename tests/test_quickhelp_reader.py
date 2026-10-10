@@ -7,7 +7,7 @@ from thelpviewer.converter.writers.bundle import export_bundle
 
 
 def test_quickhelp_list_topic_lines_are_linkified():
-    path = Path("sources") / "Microsoft QuickC, C, and C++ 6.0" / "PWB.HLP"
+    path = Path("data/sources") / "Microsoft QuickC, C, and C++ 6.0" / "PWB.HLP"
     doc = load_document(path)
 
     topic = doc.topics[1]
@@ -16,7 +16,7 @@ def test_quickhelp_list_topic_lines_are_linkified():
 
 
 def test_quickhelp_category_target_is_resolved():
-    path = Path("sources") / "Microsoft QuickC, C, and C++ 6.0" / "RC.HLP"
+    path = Path("data/sources") / "Microsoft QuickC, C, and C++ 6.0" / "RC.HLP"
     doc = load_document(path)
 
     topic = doc.topics[1]
@@ -26,7 +26,7 @@ def test_quickhelp_category_target_is_resolved():
 
 
 def test_quickhelp_popup_topics_are_flagged():
-    path = Path("sources") / "Microsoft QuickC, C, and C++ 6.0" / "QH.HLP"
+    path = Path("data/sources") / "Microsoft QuickC, C, and C++ 6.0" / "QH.HLP"
     doc = load_document(path)
 
     topic = doc.topics[12]
@@ -34,7 +34,7 @@ def test_quickhelp_popup_topics_are_flagged():
 
 
 def test_quickhelp_popup_topics_export_as_standard_topics(tmp_path):
-    source = Path("sources") / "Microsoft QuickC, C, and C++ 6.0" / "QH.HLP"
+    source = Path("data/sources") / "Microsoft QuickC, C, and C++ 6.0" / "QH.HLP"
     result = export_bundle(source, tmp_path)
     payload = json.loads(gzip.decompress(result.json_path.read_bytes()))
 
@@ -45,7 +45,7 @@ def test_quickhelp_popup_topics_export_as_standard_topics(tmp_path):
 
 
 def test_quickbasic_marker_only_contents_nav_is_reader_rendered():
-    path = Path("sources") / "Microsoft QuickBASIC Extended 7.1" / "BAS7QCK.HLP"
+    path = Path("data/sources") / "Microsoft QuickBASIC Extended 7.1" / "BAS7QCK.HLP"
     doc = load_document(path)
 
     nav_line = next(
@@ -60,7 +60,7 @@ def test_quickbasic_marker_only_contents_nav_is_reader_rendered():
 
 
 def test_quickc_250_marker_nav_buttons_are_reader_rendered():
-    path = Path("sources") / "Microsoft QuickC, C, and C++ 2.50" / "ERRORS.HLP"
+    path = Path("data/sources") / "Microsoft QuickC, C, and C++ 2.50" / "ERRORS.HLP"
     doc = load_document(path)
 
     nav_line = doc.topics[8].uhf_content[0]
@@ -71,7 +71,7 @@ def test_quickc_250_marker_nav_buttons_are_reader_rendered():
 
 
 def test_existing_external_quickhelp_target_keeps_file_topic_and_alias():
-    path = Path("sources") / "Microsoft QuickBASIC Extended 7.1" / "BC.HLP"
+    path = Path("data/sources") / "Microsoft QuickBASIC Extended 7.1" / "BC.HLP"
     doc = load_document(path)
 
     assert any(
@@ -82,7 +82,7 @@ def test_existing_external_quickhelp_target_keeps_file_topic_and_alias():
 
 
 def test_missing_external_quickhelp_target_remains_a_real_link():
-    path = Path("sources") / "Microsoft QuickC, C, and C++ 6.0" / "PWB.HLP"
+    path = Path("data/sources") / "Microsoft QuickC, C, and C++ 6.0" / "PWB.HLP"
     doc = load_document(path)
 
     assert any(
@@ -93,7 +93,7 @@ def test_missing_external_quickhelp_target_remains_a_real_link():
 
 
 def test_qualified_missing_quickhelp_targets_remain_real_links():
-    path = Path("sources") / "Microsoft QuickC, C, and C++ 6.0" / "PWB.HLP"
+    path = Path("data/sources") / "Microsoft QuickC, C, and C++ 6.0" / "PWB.HLP"
     doc = load_document(path)
     content = "\n".join(line for topic in doc.topics for line in topic.uhf_content)
 
@@ -104,7 +104,7 @@ def test_qualified_missing_quickhelp_targets_remain_real_links():
 
 
 def test_quickbasic_advisor_links_resolve_across_original_disks():
-    root = Path("sources/Microsoft QuickBASIC 4.5")
+    root = Path("data/sources/Microsoft QuickBASIC 4.5")
     if not (root / "QB45ADVR.HLP").is_file():
         return
     quick = load_document(root / "QB45QCK.HLP")
@@ -119,7 +119,7 @@ def test_quickbasic_advisor_links_resolve_across_original_disks():
 
 
 def test_quickc_250_qa_file_is_an_intact_search_stub():
-    path = Path("sources/Microsoft QuickC, C, and C++ 2.50/QA.HLP")
+    path = Path("data/sources/Microsoft QuickC, C, and C++ 2.50/QA.HLP")
     doc = load_document(path)
 
     assert len(doc.topics) == 2

@@ -132,7 +132,8 @@ def rebuild_catalog(helps_dir: Path, output_path: Path) -> int:
 
 
 def main() -> int:
-    default_helps_dir = REPO_ROOT / "helps"
+    default_helps_dir = Path(os.environ.get("THELP_HELPS_DIR",
+        Path(os.environ.get("THELP_DATA_DIR", REPO_ROOT / "data")) / "helps"))
     parser = argparse.ArgumentParser(
         description="Rebuild helps/catalog.json from existing .json.gz bundles.",
     )

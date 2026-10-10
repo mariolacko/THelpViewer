@@ -31,6 +31,7 @@ from .dos_prompt import DosPromptStore
 from .settings import ServerSettings
 from .statistics import StatisticsStore
 from .static_assets import ViewerAssets
+from .storage import prepare_storage
 
 
 def _help_display_names(config: AppConfig) -> dict[str, str]:
@@ -72,6 +73,7 @@ def _docs_catalog(config: AppConfig) -> list[dict[str, str]]:
 def create_app(config: AppConfig | None = None) -> FastAPI:
     config = config or load_config()
     config.validate_development_login()
+    prepare_storage(config)
 
     @asynccontextmanager
     async def lifespan(running_app: FastAPI):
@@ -86,16 +88,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     app = FastAPI(title="THelpViewer", version=__version__, lifespan=lifespan)
     app.state.config = config
-    statistics_path = config.statistics_path or config.state_dir / "statistics.sqlite3"
+    persistent = config.persistent_dir
+    statistics_path = config.statistics_path or persistent / "statistics.sqlite3"
     app.state.statistics = StatisticsStore(statistics_path)
     app.state.global_search = GlobalSearchIndex(
         config.helps_dir, config.state_dir, config.docs_dir, config.virtual_docs
     )
-    app.state.accounts = AccountStore(config.state_dir / "development" if config.dev_auto_login else config.state_dir)
+    app.state.accounts = AccountStore(persistent / "development" if config.dev_auto_login else persistent)
     app.state.midi_library = MidiLibrary(config.state_dir / "midi", config.midi_sources_path)
-    app.state.server_settings = ServerSettings(config.state_dir / "server-settings.json")
+    app.state.server_settings = ServerSettings(persistent / "server-settings.json")
     app.state.dos_prompt = DosPromptStore(config.state_dir / "dos", config.dos_config_path,
-        app.state.server_settings, app.state.accounts, (config.downloads_dir or config.state_dir / "downloads") / "dos")
+        app.state.server_settings, app.state.accounts, (config.downloads_dir or config.state_dir / "downloads") / "dos",
+        users_dir=persistent / "dos" / "users", disk_dir=config.state_dir / "dos" / "c")
     app.state.help_display_names = _help_display_names(config)
 
     def refresh_help_content():
