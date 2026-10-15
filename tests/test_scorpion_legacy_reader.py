@@ -954,17 +954,16 @@ def test_scorpion_v10_program_renders_table_inline_styles_without_control_glyphs
 
     assert document.metadata["scorpion_sco_inline_styles"] is True
     assert document.metadata["ui"]["window"] == "cga:0"
-    assert "[fg:8][b]█▀▀▀▀" in body
-    assert "[fg:1][b]─┼[/b][/fg][fg:9][b]─┼" in body
-    assert "SCORPIONS  CHEATER  v10.0" in body
+    screens = list(document.text_screens.values())
+    assert any(screen.cells[21] == (0xDB, 8, 0) for screen in screens)
+    assert any((0xC4, 1, 0) in screen.cells and (0xC4, 9, 0) in screen.cells for screen in screens)
+    assert any("SCORPIONS  CHEATER  v10.0" in screen.text[0] for screen in screens)
     assert "ε" not in body
     assert "τ" not in body
 
     first_aid = next(topic for topic in document.topics if "R002" in topic.alias_strings)
-    assert any(
-        "[color:11:1][b]00000  61 68 6F 6A" in line
-        for line in first_aid.uhf_content
-    )
+    first_aid_rows = [document.text_screens[line[8:-1]] for line in first_aid.uhf_content if line.startswith("[screen:")]
+    assert any("00000  61 68 6F 6A" in row.text[0] and (ord("0"), 11, 1) in row.cells for row in first_aid_rows)
 
 
 def test_scorpion_v14_program_renders_dos_observed_gray_background():
@@ -972,11 +971,12 @@ def test_scorpion_v14_program_renders_dos_observed_gray_background():
 
     document = ScorpionLegacyReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     feedback = next(topic for topic in document.topics if "R010" in topic.alias_strings)
-    art_only_line = next(line for line in feedback.uhf_content if "▄██▄█▌" in line)
+    screens = [document.text_screens[line[8:-1]] for line in feedback.uhf_content if line.startswith("[screen:")]
+    art_only_line = next(screen for screen in screens if "▄██▄█▌" in screen.text[0])
 
     assert document.metadata["display_width"] == 80
-    assert any("[color:15:7][b]▄██[/b][/color]" in line for line in feedback.uhf_content)
-    assert art_only_line.startswith(" " * 41)
+    assert any((0xDC, 15, 7) in screen.cells for screen in screens)
+    assert art_only_line.text[0].startswith(" " * 41)
 
 
 def test_scorpion_v14_reader_renders_dos_observed_fifa_colors():

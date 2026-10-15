@@ -1,0 +1,34 @@
+[
+  {
+    "file": "BCW.HLP",
+    "member": "BC45/BIN/BCW.HLP",
+    "crc32": "08397CCE",
+    "source_sha256": "b4c5713f9e03729643f0a5c944940fe437c334be3a88970890a56625de72de00",
+    "title": "Borland C++ Help",
+    "keywords": 2320,
+    "references": 4129,
+    "records": 22795,
+    "topics": 4221,
+    "decoded_size": 2732630,
+    "record_sha256": "7dc2cdc6b1dc7829ba2166797760d9374868c37cb3436acbbde690a789035998",
+    "minor": 21,
+    "flags": 4,
+    "hlx_crc32": "A8D8D20E"
+  },
+  {
+    "file": "OWL.HLP",
+    "member": "BC45/BIN/OWL.HLP",
+    "crc32": "BA45D41E",
+    "source_sha256": "3fd0be431aa8557f96aff4d08126f04af32ca68d984ba19b34e0c8b8c730783a",
+    "title": "ObjectWindows Library Help",
+    "keywords": 3193,
+    "references": 4887,
+    "records": 31961,
+    "topics": 5058,
+    "decoded_size": 3636882,
+    "record_sha256": "f40d20073aa00f85c7ed3622f3c5eae26d068b4ec43346086c7b96a73e409291",
+    "minor": 21,
+    "flags": 4,
+    "hlx_crc32": "D0874754"
+  }
+]

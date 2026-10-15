@@ -36,6 +36,8 @@ described here is still plain JSON.
 | `metadata` | object | ✅ | File-level metadata. See §2. |
 | `default_palette` | string | ❌ | Default palette used by inline color tags. Default `"cga"` when omitted. See §3. |
 | `palettes` | object | ❌ | Document palette definitions and overrides. See §3. |
+| `fonts` | object | ❌ | Map of resource identifier → embedded bitmap font. See §9.1. |
+| `text_screens` | object | ❌ | Map of resource identifier → native character-cell screen. See §9.1. |
 | `converter` | object | ✅ | Tool that produced this file. See §4. |
 | `contents` | array | ✅ | Table of contents tree (may be empty `[]`). See §5. |
 | `index` | array | ✅ | Alphabetical index (may be empty `[]`). See §6. |
@@ -103,9 +105,52 @@ described here is still plain JSON.
 | `encoding` | string | ✅ | Encoding of the text in this UHF file. Always `"utf-8"` for new conversions. |
 | `source` | object | ✅ | Information about the original source file. |
 | `source.filename` | string | ✅ | Original file name without path (e.g. `"BAS7ADVR.HLP"`). |
-| `source.format` | string | ✅ | Source format: `"thelp"`, `"tdh"`, `"tfh"`, `"norton-guide"`, `"quickhelp"`, `"bw03"`, `"fbhf"`, `"m602"`, `"text602"`, `"hlx"`, `"scorpion-dat"`. |
+| `source.format` | string | ✅ | Source format, e.g. `"thelp"`, `"tdh"`, `"tfh"`, `"norton-guide"`, `"quickhelp"`, `"bw03"`, `"fbhf"`, `"m602"`, `"text602"`, `"hlx"`, `"scorpion-dat"`, `"sidekick1"`, `"sidekick-plus"`, `"microcalc-text"`, `"dos-text"`, `"prolog-help"`, `"helppc"` or `"freedos-html"`. |
 | `source.encoding` | string | ✅ | Encoding of the original source file (e.g. `"cp437"`, `"cp852"`, `"latin-1"`). |
 | `source.date` | string | ❌ | File creation or modification date in ISO 8601 (`"YYYY-MM-DD"`). Omit if unknown. |
+
+THelpViewer's optional transport metadata includes `catalog_source_files`
+(verified original/logical database names) and `quickhelp_databases` for LN
+containers. Each database descriptor has `name`, `offset`, `size`,
+`first_topic_id`, `topic_count` and `case_sensitive`. Byte positions refer to
+the original file; topic ranges refer to merged UHF IDs. These fields do not
+change UHF 2.0's topic/link structures. Context strings in a case-sensitive
+database compare exactly, while its DOS filename qualifier compares without
+case. Qualified `database!context` aliases distinguish equal names in different
+databases.
+
+`source_container` optionally describes an original transport wrapper, separate
+from `source.format`: `{"format":"dos-backup","pathname":"\\PROLOG\\PROLOG.HLP",
+"disk_number":1}`. The original filename/CRC identifies the wrapped file;
+the inner text is decoded without modifying that original. Generated topic
+IDs/Contents for uncompiled text are presentation metadata, not source contexts.
+
+For Sidekick 1, `sidekick_version_tag` is the opaque executable/HLP pairing
+word. `sidekick_contexts` describes each original context with `context_id`,
+`offset`, `rows`, `columns` and ordered `page_ids`. The first page retains the
+source context ID; synthesized continuation IDs follow the original context
+range. Prev/Next links stay within each context. These optional transport
+fields are descriptive; they do not introduce another UHF topic/link syntax.
+
+For Sidekick Plus, `sidekick_plus_groups` retains native group-directory order
+and `sidekick_plus_contexts` describes distinct contexts (`context_id`,
+`group`, `slot`, `offset`, `size`, `rows`, `columns`, `page_ids`). IDs combine
+the native group and slot; continuation IDs start beyond the 24-bit source
+range. Shared records and native redirects use standard `aliases.ids`.
+`sidekick_plus_redirects` records each native `context_id`, `target_context`
+and raw descriptor integer. `sidekick_plus_common_group` records the selected
+runtime/common-group binding; `sidekick_plus_version_tag` retains the opaque
+executable/HLP pairing word. `unresolved_contexts.links` records missing source
+targets without changing or suppressing their link tags.
+
+The same `unresolved_contexts` transport object can declare missing native
+`index` targets; converters preserve those index entries' real `topic_id`
+instead of substituting the page that refers to them. THELP also records
+`space_tail`, `no_help`, `unbound_contents` and `out_of_range` subsets, plus
+`offsets` keyed by decimal context ID (original 24-bit file offset/sentinel).
+These are diagnostics, not another link syntax. Known numeric aliases still
+use `aliases.ids`; an unavailable target stays a normal link and the viewer
+reports the failure without replacing the active page.
 
 ---
 
@@ -322,7 +367,8 @@ integer topic id `0`, but the canonical numeric value is always `topic.id`.
 {
   "id":          42,
   "title":       "CHDRIVE Statement Details",
-  "aliases":     { "ids": [10, 11], "strings": ["chdrive", "chdrive.details"] },
+  "aliases":     { "ids": [10, 11], "strings": ["chdrive", "chdrive.details"],
+                   "lines": { "11": 8, "chdrive.details": 8 } },
   "tags": [
     { "key": "source", "label": "Zdroj", "value": "Cheat-Pack" }
   ],
@@ -345,6 +391,7 @@ integer topic id `0`, but the canonical numeric value is always `topic.id`.
 | `aliases` | object | ❌ | Optional alternative identifiers that also resolve to this topic. |
 | `aliases.ids` | array\<integer\> | ❌ | Alternative numeric topic ids. |
 | `aliases.strings` | array\<string\> | ❌ | Alternative symbolic aliases such as QuickHelp context strings. |
+| `aliases.lines` | object\<integer\> | ❌ | Optional alias → 1-based visible destination line. Keys must be declared in `ids` (decimal string keys) or `strings`; values must be positive integers. An omitted line means the topic start. |
 | `tags` | array\<Tag Object\> | ❌ | Searchable topic attributes. A viewer may render them as links to all topics with the same exact `key` and `value`. |
 | `is_help_contents` | boolean | ❌ | `true` for the source Help Contents / table-of-contents topic. This is distinct from the alphabetical help index. Default `false`. |
 | `nav` | object | ❌ | Map of display label → Nav Item. Keys are source-provided labels to show in the viewer menu. Labels such as `Up`, `Next`, or `Back` are not reserved; use them only when the source help file uses them. |
@@ -358,6 +405,15 @@ integer topic id `0`, but the canonical numeric value is always `topic.id`.
 
 Each nav item should contain either `action` or a link target composed from any
 combination of `file`, `topic_id`, `alias`, and `line`.
+Resolve an alias together with its destination line, including when the target
+bundle is external. An explicit link `line` overrides `aliases.lines`; an
+explicit `topic_id` takes precedence when the target also contains `alias`
+and does not inherit that alias's line. An alias-only target looks up the
+alias namespace even when it consists of digits or has the same spelling
+as an actual topic ID; do not strip its leading zeros or reinterpret it as
+an ordinal. Duplicate aliases use the first declaration in
+their comparison namespace. Symbolic aliases normally compare without case;
+the native case-sensitive database rule described in §2 takes precedence.
 The viewer must not synthesize localized labels from `action`; the object key is
 the visible label.
 
@@ -409,6 +465,7 @@ terminal display — no text wrapping).
 | `"[rule]"` (exactly) | Horizontal separator (box-drawing or dash line) |
 | `"[code]"` or `"[code:lang]"` (exactly) | Start of a code block — all following lines until `"[/code]"` are code lines |
 | `"[/code]"` (exactly) | End of the current code block |
+| `"[screen:ID]"` (exactly, outside code) | Character-cell screen resource; occupies its declared number of display rows. See §9.1. |
 | Anything else | Text line — parsed for inline markup (see §10) |
 
 ### Code blocks
@@ -431,6 +488,115 @@ highlighting based on `lang`.
 
 Supported `lang` values: `"pascal"`, `"c"`, `"basic"`, `"asm"`, `"python"`.
 Omit `lang` (use just `"[code]"`) for generic / unknown language.
+
+### 9.1 TextScreen and custom bitmap fonts
+
+A `TextScreen` preserves native glyph bytes and palette indexes, not a PNG
+or a Unicode approximation of a custom font. Resources are shared across
+topics; their identifiers contain 1–64 ASCII letters, digits, `_` or `-`.
+An exact standalone `[screen:ID]` references `text_screens.ID`. A literal
+spelling is escaped as `[[screen:ID]`. No external resource URL is required.
+
+```json
+"text_screens": {
+  "title": {
+    "cols": 2,
+    "rows": 2,
+    "font": "native-font",
+    "palette": "cga",
+    "cells": [[65, 15, 1], [66, 14, 1], [219, 12, 0], [32, 7, 0]],
+    "text": ["AB", "█ "]
+  }
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cols`, `rows` | integer | Required character dimensions, each 1–512. |
+| `font` | string | Required identifier in root `fonts`. |
+| `palette` | string | Required indexed palette name from §3; built-in `cga` is valid without an explicit definition. |
+| `cells` | array | Readable form: exactly `cols * rows` triples `[glyph, foreground, background]`, in row-major order. All three values are integers 0–255. Colors are indexes in `palette`, never embedded RGB values. Mutually exclusive with `data`/`cell_format`. |
+| `data` | string | Packed form: standard padded Base64 containing the original cell bytes; requires `cell_format` and no `cells` array. |
+| `cell_format` | string | Packed-cell layout: `"dos-text"`, `"dos-text-blink"`, `"dos-text-bright"` or `"glyph-fg-bg"`, described below. Omitted for the readable array form. |
+| `blink` | array of booleans | Optional explicit mask, exactly `cols * rows` values, for readable triples or `glyph-fg-bg`. A true cell alternates visible/hidden foreground; its background never disappears. Invalid with packed DOS forms, whose attribute byte already contains the bit. |
+| `text` | array of strings | Optional literal Unicode transcription, exactly one string per row, with no embedded CR/LF. Used for accessibility/search, not for drawing glyphs. Brackets and HTML-looking text here are literal, not UHF markup. |
+
+Cell `(x, y)` has array index `y * cols + x`. A glyph is the original
+8-bit font-table index, **not** a Unicode code point. For example byte `D2`
+can draw a curved fragment even though CP437 calls that byte `╥`.
+
+The packed form keeps the same dimensions, font, palette and transcription.
+Use exactly one cell representation:
+
+- `dos-text`: exactly `cols * rows * 2` decoded bytes. Each row-major cell
+  is its original `glyph, VGA attribute` pair. Foreground is `attr & 15`,
+  background is `(attr >> 4) & 7`. Bit 7 must be clear in this profile;
+  blink/bright-background bindings cannot be inferred from Base64. Both
+  colors remain indexes into the named UHF palette.
+- `dos-text-blink`: the same two-byte glyph/attribute layout, explicitly
+  interpreted in blink-enabled DOS mode. Foreground is `attr & 15`, background
+  is `(attr >> 4) & 7`, and `(attr & 128) != 0` enables foreground blinking.
+  Preserve all eight attribute bits in Base64, even on blank cells.
+- `dos-text-bright`: the same two-byte layout, explicitly interpreted with
+  DOS blinking disabled. Foreground is `attr & 15`; background is
+  `(attr >> 4) & 15`. Bit 7 selects a bright background, never animation.
+- `glyph-fg-bg`: exactly `cols * rows * 3` decoded bytes. Each row-major
+  cell contains independent glyph, foreground index, background index bytes,
+  equivalent to the array triple. This can address all 256 palette indexes.
+
+For example, the readable four-cell example above has this byte-exact DOS
+form (decoded bytes `41 1F 42 1E DB 0C 20 07`):
+
+```json
+{
+  "cols": 2, "rows": 2, "font": "native-font", "palette": "cga",
+  "cell_format": "dos-text", "data": "QR9CHtsMIAc=",
+  "text": ["AB", "█ "]
+}
+```
+
+Base64 changes only JSON transport, never glyph/attribute interpretation.
+Mixed representations, truncated data and unsupported `cell_format` values
+are invalid. Gzip transport can compress either representation.
+
+`fonts.ID` has required fields `width` (integer 1–32 pixels), `height`
+(integer 1–64 pixels) and `data` (standard padded Base64). Decode `data` to
+exactly `256 * height * ceil(width / 8)` bytes. There are always 256 glyphs;
+no compression or character-map reinterpretation is applied after Base64.
+Each scanline uses `ceil(width / 8)` bytes. Glyphs are ordered by their byte
+index, scanlines top-to-bottom, bytes left-to-right, with bit 7 the leftmost
+pixel in each byte. Unused right-hand bits of the last byte are ignored.
+
+```text
+stride = (width + 7) // 8
+offset = (glyph * height + pixel_y) * stride + pixel_x // 8
+set = data[offset] & (0x80 >> (pixel_x % 8))
+pixel_color = palette[foreground] if set else palette[background]
+```
+
+For an 8×16 font there are 4096 bytes and glyph `65` begins at byte 1040.
+For a 2×2 font, glyph scanlines `80 40` set only the upper-left and
+lower-right pixels. Such fonts can be referenced by any TextScreen; they
+do not change the application's frame/menu font or reinterpret ordinary
+Unicode topic text.
+
+Render the screen on the viewer's character grid with nearest-neighbor
+pixel scaling: `cols` character widths and `rows` character heights. Each
+screen row counts as one visible line for UHF `line` cursors and frozen
+rows; surrounding topic text remains in its original order. Undefined
+fonts/palette indexes, invalid cell counts and incomplete font data are
+errors, not reasons to substitute a browser font. Consumers bound the
+native bitmap area to 16,777,216 pixels. Blink/animation and clickable
+screen regions are not implicit properties of a triple.
+
+The explicit blink mask is row-major and sliced with cells when drawing rows
+separately. During the hidden phase paint the cell background normally and
+omit only its glyph foreground. The shared viewer uses a 16-frame phase at
+the conventional 70 Hz VGA text refresh rate (about 229 ms per phase).
+With `prefers-reduced-motion: reduce`, keep flagged glyphs permanently
+visible. Stop animation and remove preference listeners when a view leaves
+its topic/window; neither blink nor motion preferences alter stored source
+attributes, palette indexes, transcription or UHF line cursors.
 
 ---
 
@@ -491,10 +657,15 @@ nesting `[fg]` and `[bg]` when either color value contains `:`, for example
 `line` is a 1-based visible display line inside the rendered topic. It counts
 only lines that the viewer actually shows; UHF control lines such as
 `"[code]"` / `"[/code]"` are not counted.
+Each `[screen:ID]` expands to `text_screens.ID.rows` visible rows.
 
 `alias` is a symbolic topic identifier. It is primarily used for formats such
 as QuickHelp where links are stored as `file!context` names instead of direct
 numeric topic ids.
+
+An alias-only link resolves only through the topic's declared aliases.
+For example `alias=0070` and `topic=70` are different targets, and a declared
+`alias=70` may also point to a different topic from `topic=70`.
 
 When both `topic` and `alias` are present, `topic` is the canonical direct
 target and `alias` acts as an additional stable resolver or preservation of

@@ -10,7 +10,6 @@ import re
 from ..base import ContentNode, HelpDocument, HelpReaderBase, IndexEntry, TopicRecord
 from ..codepages import KAMENICKY
 from ..uhf_markup import UhfStyleSpan, render_uhf_line
-from .allegro_dat import AllegroDatafileError
 from .scorpion_reader import (
     SCORPION_ATTRIBUTE_CONTROLS,
     SCORPION_BACKGROUND_CONTROLS,
@@ -34,6 +33,8 @@ from .scorpion_dat_parser import (
     parse_scorpion_dat_records,
     split_scorpion_record_articles,
 )
+from .scorpion_sc2000 import catalog_topic, is_sc2000_catalog, is_sc2000_prose
+from .scorpion_screens import inline_text_screen, modern_screens
 
 
 SCORPION_DAT_TRANSPORT_METADATA_KEYS = (
@@ -44,6 +45,7 @@ SCORPION_DAT_TRANSPORT_METADATA_KEYS = (
     "scorpion_reader_class",
     "scorpion_resource_record_count",
     "scorpion_resource_record_names",
+    "scorpion_unconverted_record_names",
 )
 SCORPION_TEXT_BYTE_OVERRIDES = {
     0xE0: "ŕ",
@@ -70,22 +72,20 @@ class _RenderedLine:
     text: str
     uhf: str
     has_code_style: bool = False
+    cells: tuple[tuple[int, int, int], ...] = ()
 
 
 def is_scorpion_dat_binary(data: bytes) -> bool:
     """Return True when bytes look like a modern Scorpion Allegro DAT file."""
-    return len(data) >= 12 and data.startswith(SCORPION_DAT_SIGNATURE)
+    return data.startswith(SCORPION_DAT_SIGNATURE)
 
 
 def is_scorpion_dat_help_binary(data: bytes) -> bool:
-    """Return True when bytes contain at least one readable Scorpion article."""
+    """Identify article containers; malformed recognized DATs must fail a build."""
     if not is_scorpion_dat_binary(data):
         return False
-    try:
-        records = parse_scorpion_dat_records(data)
-    except AllegroDatafileError:
-        return False
-    return any(_is_text_record(record) for record in records)
+    records = parse_scorpion_dat_records(data)
+    return any(_is_text_record(record) or is_sc2000_catalog(record) for record in records)
 
 
 def _decode_scorpion_byte(value: int) -> str:
@@ -134,6 +134,7 @@ def _render_payload_lines(payload: bytes) -> list[_RenderedLine]:
     """Render one Scorpion article stream to visible lines plus UHF styling."""
     lines: list[_RenderedLine] = []
     chars: list[str] = []
+    cells = []
     spans: list[UhfStyleSpan] = []
     current_fg: int | None = None
     current_bg: int | None = None
@@ -141,7 +142,7 @@ def _render_payload_lines(payload: bytes) -> list[_RenderedLine]:
     previous_was_cr = False
 
     def finish_line() -> None:
-        nonlocal chars, spans, current_fg, current_bg, span_start
+        nonlocal chars, cells, spans, current_fg, current_bg, span_start
         _close_style_span(
             spans,
             start=span_start,
@@ -155,13 +156,20 @@ def _render_payload_lines(payload: bytes) -> list[_RenderedLine]:
                 text=text,
                 uhf=render_uhf_line(text, style_spans=spans),
                 has_code_style=any(span.fg == SCORPION_STYLE_CONTROLS[0xF0] for span in spans),
+                cells=tuple(cells[:len(text)]),
             )
         )
         chars = []
+        cells = []
         spans = []
         current_fg = None
         current_bg = None
         span_start = None
+
+    def append_char(glyph: int, char: str) -> None:
+        chars.append(char)
+        cells.append((glyph, 7 if current_fg is None else current_fg,
+                      0 if current_bg is None else current_bg))
 
     index = 0
     while index < len(payload):
@@ -180,11 +188,12 @@ def _render_payload_lines(payload: bytes) -> list[_RenderedLine]:
             index += 1
             continue
         if value == 0x09:
-            chars.extend(SCORPION_RENDER_TAB_TEXT)
+            for space in SCORPION_RENDER_TAB_TEXT:
+                append_char(32, space)
             index += 1
             continue
         if value == 0xE5 and _is_literal_e5_n(payload, index):
-            chars.append("ň")
+            append_char(value, "ň")
             index += 1
             continue
         if value == SCORPION_RESET_CONTROL:
@@ -239,10 +248,10 @@ def _render_payload_lines(payload: bytes) -> list[_RenderedLine]:
             index += 1
             continue
         if value < 0x20:
-            chars.append(" ")
+            append_char(32, " ")
             index += 1
             continue
-        chars.append(_decode_scorpion_byte(value))
+        append_char(value, _decode_scorpion_byte(value))
         index += 1
 
     if chars or spans:
@@ -293,6 +302,7 @@ def _topic_from_article(
     article: ScorpionDatArticle,
     *,
     context_id: int,
+    screens: dict | None = None,
 ) -> TopicRecord | None:
     rendered = _drop_marker_line(_render_payload_lines(article.payload), article.page_tag)
     while rendered and not rendered[0].text.strip():
@@ -304,6 +314,16 @@ def _topic_from_article(
 
     title = _guess_article_title(article, rendered)
     raw_lines = [line.text.encode("utf-8") for line in rendered]
+    uhf_lines = [line.uhf for line in rendered]
+    if screens is not None:
+        for index, line in enumerate(rendered):
+            if index == 0:
+                continue
+            screen = inline_text_screen(line.cells, line.text, "program-font")
+            if screen is not None:
+                screen_id = f"inline-{context_id}-{index}"
+                screens[screen_id] = screen
+                uhf_lines[index] = f"[screen:{screen_id}]"
     aliases = [article.record_name]
     if article.page_tag:
         aliases.append(article.page_tag)
@@ -315,12 +335,12 @@ def _topic_from_article(
         alias_strings=aliases,
         names=[title],
         code_line_indices={index for index, line in enumerate(rendered) if line.has_code_style},
-        uhf_content=[line.uhf for line in rendered],
+        uhf_content=uhf_lines,
     )
 
 
 def _is_text_record(record: ScorpionDatRecord) -> bool:
-    if SCORPION_RESOURCE_RECORD_RE.match(record.name):
+    if is_sc2000_prose(record) or SCORPION_RESOURCE_RECORD_RE.match(record.name):
         return False
     return any(article.page_tag for article in split_scorpion_record_articles(record))
 
@@ -384,18 +404,35 @@ class ScorpionAllegroDatReader(HelpReaderBase):
         records = parse_scorpion_dat_records(data)
         if not records:
             raise ValueError("Scorpion DAT file contains no readable records.")
-        resource_records = [record for record in records if not _is_text_record(record)]
+
+        source_path = self.source_path or Path(self.source_name)
+        fonts, screens = {}, {}
+        font, screen_records = modern_screens(records) if source_path.name.lower() == "program.dat" else (None, [])
+        if font is not None:
+            fonts["program-font"] = font
+        unconverted_records = [record for record in records if is_sc2000_prose(record)]
+        resource_records = [record for record in records if not _is_text_record(record)
+                            and not is_sc2000_catalog(record) and record not in unconverted_records]
 
         topics: list[TopicRecord] = []
         index_entries: list[IndexEntry] = []
+        catalog_contents: list[ContentNode] = []
 
         for record in records:
+            if is_sc2000_catalog(record):
+                topic, entries, children = catalog_topic(
+                    record, self.source_path or Path(self.source_name), len(topics),
+                )
+                topics.append(topic)
+                index_entries.extend(entries)
+                catalog_contents.extend(children)
+                continue
             if not _is_text_record(record):
                 continue
             for article in split_scorpion_record_articles(record):
                 if not article.page_tag:
                     continue
-                topic = _topic_from_article(article, context_id=len(topics))
+                topic = _topic_from_article(article, context_id=len(topics), screens=screens if font is not None else None)
                 if topic is None:
                     continue
                 topics.append(topic)
@@ -404,7 +441,21 @@ class ScorpionAllegroDatReader(HelpReaderBase):
         if not topics:
             raise ValueError("Scorpion DAT file contains no readable articles.")
 
-        source_path = self.source_path or Path(self.source_name)
+        screen_contents = []
+        # Resource views follow all articles; existing article IDs stay intact.
+        if source_path.name.lower() == "program.dat":
+            for record, screen in screen_records:
+                screen_id = f"screen-{record.index}"
+                screens[screen_id] = screen
+                title = f"Obrazovka: {record.name}"
+                topic = TopicRecord(context_id=len(topics),
+                    raw_lines=[line.encode("utf-8") for line in screen.text],
+                    names=[title], index_terms=[title.encode("utf-8")], alias_strings=[record.name],
+                    uhf_content=[f"[screen:{screen_id}]"],
+                )
+                topics.append(topic)
+                index_entries.append(IndexEntry(label=title.encode("utf-8"), context_id=topic.context_id))
+                screen_contents.append(ContentNode(label=title, topic_id=topic.context_id))
         metadata: dict[str, object] = {
             "title": _display_name_from_source(source_path),
             "description": _display_name_from_source(source_path),
@@ -422,6 +473,10 @@ class ScorpionAllegroDatReader(HelpReaderBase):
             "topic_count": len(topics),
             "transport_metadata_keys": list(SCORPION_DAT_TRANSPORT_METADATA_KEYS),
         }
+        if catalog_contents:
+            metadata["source_text_encoding"] = "cp1250"
+        if unconverted_records:
+            metadata["scorpion_unconverted_record_names"] = [record.name for record in unconverted_records]
         source_date = _shared_source_date(records)
         if source_date is not None:
             metadata["source_date"] = source_date
@@ -430,14 +485,21 @@ class ScorpionAllegroDatReader(HelpReaderBase):
             metadata["scorpion_version"] = version_hint
         metadata["scorpion_reader_class"] = type(self).__name__
 
+        contents = _build_contents(topics, source_path)
+        if screen_contents:
+            contents[0].children = contents[0].children[:-len(screen_contents)]
+            contents[0].children.append(ContentNode(label="Obrazovky programu", children=screen_contents))
+        contents[0].children.extend(catalog_contents)
         return HelpDocument(
             format_name="scorpion-dat",
             source_name=self.source_name,
             topics=topics,
             index_entries=index_entries,
-            contents=_build_contents(topics, source_path),
+            contents=contents,
             metadata=metadata,
             binary_data=data,
+            fonts=fonts,
+            text_screens=screens,
         )
 
 

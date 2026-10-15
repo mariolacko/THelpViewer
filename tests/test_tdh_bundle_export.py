@@ -2,7 +2,9 @@ import gzip
 import json
 from pathlib import Path
 
-from thelpviewer.server.converter.writers.bundle import export_bundle
+import pytest
+
+from thelpviewer.server.converter.writers.bundle import export_bundle, export_bundle_tree
 
 
 def _load_bundle_payload(bundle_result):
@@ -16,13 +18,13 @@ def test_legacy_tdh_bundle_suppresses_redirect_alias_topics(tmp_path):
 
     result = export_bundle(source, tmp_path)
     assert result.format_name == "tdh"
-    assert result.topic_count == 530
+    assert result.topic_count == 519
 
     payload = _load_bundle_payload(result)
     metadata = payload.get("metadata") or {}
     assert metadata.get("source", {}).get("format") == "tdh"
     assert metadata.get("help_contents_topic_id") == 1
-    assert (metadata.get("display") or {}).get("cols") == 49
+    assert (metadata.get("display") or {}).get("cols") == 48
 
     contents = payload.get("contents") or []
     assert contents[0]["label"] == "Help on Help"
@@ -37,8 +39,8 @@ def test_legacy_tdh_bundle_suppresses_redirect_alias_topics(tmp_path):
     help_index = topics.get("1") or {}
     assert "[link:topic=2]Help on Help[/link]" in "\n".join(help_index.get("content") or [])
 
-    toggle_breakpoint = topics.get("424") or {}
-    assert 520 in ((toggle_breakpoint.get("aliases") or {}).get("ids") or [])
+    serial_port = topics.get("425") or {}
+    assert 520 in ((serial_port.get("aliases") or {}).get("ids") or [])
 
     selected_character = topics.get("328") or {}
     assert 528 in ((selected_character.get("aliases") or {}).get("ids") or [])
@@ -50,13 +52,13 @@ def test_later_tdh_bundle_exports_known_runtime_topics(tmp_path):
 
     result = export_bundle(source, tmp_path)
     assert result.format_name == "tdh"
-    assert result.topic_count == 596
+    assert result.topic_count == 597
 
     payload = _load_bundle_payload(result)
     metadata = payload.get("metadata") or {}
     assert metadata.get("source", {}).get("format") == "tdh"
     assert metadata.get("help_contents_topic_id") == 1
-    assert (metadata.get("display") or {}).get("cols") == 49
+    assert (metadata.get("display") or {}).get("cols") == 48
 
     contents = payload.get("contents") or []
     assert contents[0]["label"] == "Help on Help"
@@ -64,7 +66,7 @@ def test_later_tdh_bundle_exports_known_runtime_topics(tmp_path):
 
     topics = payload.get("topics") or {}
     assert isinstance(topics, dict)
-    assert len(topics) == 596
+    assert len(topics) == 597
 
     help_index = topics.get("1") or {}
     help_index_text = "\n".join(help_index.get("content") or [])
@@ -74,7 +76,7 @@ def test_later_tdh_bundle_exports_known_runtime_topics(tmp_path):
 
     assert (topics.get("537") or {}).get("content") == [""]
     assert (topics.get("539") or {}).get("content", [None, None])[1] == "Opens an object type Inspector to show the data"
-    assert (topics.get("530") or {}).get("title") == "In some cases, a Ctrl function key duplicates the"
+    assert (topics.get("530") or {}).get("title") == "In some cases, a Ctrl function key duplicates"
 
 
 def test_tfh_bundle_exports_contents_nav_and_hotspots(tmp_path):
@@ -89,7 +91,7 @@ def test_tfh_bundle_exports_contents_nav_and_hotspots(tmp_path):
     metadata = payload.get("metadata") or {}
     assert metadata.get("source", {}).get("format") == "tfh"
     assert metadata.get("help_contents_topic_id") == 1
-    assert (metadata.get("display") or {}).get("cols") == 49
+    assert (metadata.get("display") or {}).get("cols") == 48
 
     contents = payload.get("contents") or []
     assert len(contents) == 7
@@ -115,3 +117,20 @@ def test_tfh_bundle_exports_contents_nav_and_hotspots(tmp_path):
     module_window = topics.get("103") or {}
     assert "[link:topic=149]text pane[/link]" in (module_window.get("content") or [""])[0]
     assert "[link:topic=66]Module Window[/link]" in (module_window.get("content") or [""])[0]
+
+
+def test_german_debugger_15_keeps_native_contents_and_verified_language(tmp_path):
+    source = Path("data/sources/Borland Turbo Debugger 1.5 (DE)/TDHELP.TDH")
+    if not source.is_file():
+        pytest.skip("Original German Debugger 1.5 not available")
+    results = export_bundle_tree(Path("data/sources"), tmp_path, source_paths=[source], layout="helps")
+    assert len(results) == 1 and results[0].topic_count == 536
+    payload = _load_bundle_payload(results[0])
+    assert payload["metadata"]["language"] == "de"
+    assert payload["metadata"]["help_contents_topic_id"] == 1
+    assert payload["contents"][0] == {"label": "Hilfe zur Hilfe", "children": [], "topic_id": 2}
+    assert "Ausdrücke" in "\n".join(payload["topics"]["2"]["content"])
+    assert not payload["metadata"].get("unresolved_contexts", {}).get("links")
+    single = _load_bundle_payload(export_bundle(source, tmp_path / "single"))
+    assert single["metadata"]["language"] == "de"
+    assert single["contents"] == payload["contents"]

@@ -17,28 +17,6 @@ The `.T00` file contains variable-length text blocks referenced by offsets store
 
 The analyzed files belong to Game-Cheater 9.02.
 
-## 2. Source / Download
-
-The analyzed database files come from **Game-Cheater 9.02**.
-
-Download / catalog page:
-
-```text
-https://www.slunecnice.cz/sw/game-cheater/
-```
-
-Known information about the program:
-
-```text
-Name:      Game-Cheater
-Version:   9.02
-Author:    Jiří Kalous
-License:   Freeware
-Language:  Czech
-Platform:  MS-DOS / Windows
-Archive:   instgc.zip
-```
-
 ## 3. Analyzed File Set
 
 This specification describes the observed format of the following files:
@@ -82,7 +60,7 @@ The usual `.000` header format is:
 ```text
 Offset  Size  Type       Description
 ------  ----  ---------  ---------------------------------------
-0x00    4     int32LE    Record count or internal table counter
+0x00    4     int32LE    Signed record count; its absolute value is the active count
 0x04    2     uint16LE   Record size
 ```
 
@@ -93,7 +71,13 @@ In that case, the real number of records can be obtained using:
 record_count = abs(record_count_raw)
 ```
 
-The record size at offset `0x04` is reliable and should be used when iterating over records.
+The sign distinguishes the native table kind; it is not a deletion count.
+`RdPrefix` uses the absolute value for the record count, and `WrPrefix` writes
+negative counts for type X tables. Zero denotes zero active records even if
+unused physical slots remain. The record size at `0x04` determines each
+record boundary. Record `i` starts at `6 + i*record_size` for
+`0 <= i < abs(record_count_raw)`.
+See PC-Fand's [`RdPrefix` / `WrPrefix`](https://github.com/alisoss/pcfand/blob/master/pas/FILEACC.PAS).
 
 ## 4.2 `.T00` Variable-Length Text Files
 
@@ -114,20 +98,28 @@ Offset  Size      Type       Description
 A zero offset usually means that no text block is assigned.
 
 The length is the logical text length. It does not include page-chain pointers.
+There is no required NUL terminator. A NUL inside the logical payload is
+still a byte in that field and does not shorten the declared length.
 Texts longer than the remaining payload space of a page are not contiguous.
 PC-Fand reserves the final four bytes of each continued 512-byte page for a
 little-endian absolute pointer to the next page:
 
 ```text
 Memo page size: 512 bytes
-First page:     uint16LE length + up to 506 payload bytes + uint32LE next_page
-Next pages:     up to 508 payload bytes + uint32LE next_page
-Final page:     remaining payload bytes; no pointer is consumed
+Continued first page at a page boundary:
+               uint16LE length + 506 payload bytes + uint32LE next_page
+Continued next page:
+               508 payload bytes + uint32LE next_page
+Final first page:
+               uint16LE length + up to 510 payload bytes
+Final continuation page:
+               up to 512 payload bytes; no pointer is consumed
 ```
 
 The payload bytes are XOR-encoded, but the four-byte page pointers are raw
 PC-Fand file offsets and must not be XOR-decoded. A naive contiguous read works
-only for texts of at most 510 bytes and exposes the pointer bytes as visible
+only for texts that fit after their two-byte header in the current page, and
+exposes the pointer bytes as visible
 garbage in longer articles.
 
 This behavior is confirmed by PC-Fand's open-source `TFile.RdWr` implementation
@@ -154,11 +146,10 @@ CP852 is the DOS Central European code page. It is required for correct Czech an
 Do not decode the data as UTF-8 or Windows-1250 directly.
 
 CP852 byte `0xB5` is `Á`, while the same byte is the CP437 box character `╡`.
-Do not classify a repeated sequence such as `0xB5 0xB5 0xB5` as box drawing
-only because the bytes are adjacent. Interpret a contiguous run of conflicting
-bytes as box drawing only when that same run also contains an unambiguous box
-byte; otherwise decode it normally as CP852. This preserves strings such as
-`DDDLLLOOOUUUHHHÁÁÁ` without damaging actual PC-Fand tables.
+A repeated `B5h` sequence therefore need not be box drawing. Some text
+tables mix glyph assignments from different display fonts. Character identity
+cannot be established by byte repetition alone; preserve the byte/font context
+where the encoding assignment is ambiguous.
 
 ### 4.3.1 Inline Style Controls
 
@@ -166,15 +157,15 @@ After page-chain reconstruction and XOR decoding, text can contain PC-Fand
 toggle controls. The same byte opens and closes a style:
 
 ```text
-Byte  Pascal name  Meaning                UHF mapping
-----  -----------  ---------------------  -----------
-0x01  Ctrl-A       elite typeface         omitted
-0x02  Ctrl-B       emphasized             [b]...[/b]
-0x04  Ctrl-D       double strike          omitted
-0x05  Ctrl-E       compressed typeface    omitted
-0x11  Ctrl-Q       double width           omitted
-0x13  Ctrl-S       underline              [u]...[/u]
-0x17  Ctrl-W       italic                 [i]...[/i]
+Byte  Pascal name  Meaning
+----  -----------  ---------------------
+0x01  Ctrl-A       elite typeface
+0x02  Ctrl-B       emphasized
+0x04  Ctrl-D       double strike
+0x05  Ctrl-E       compressed typeface
+0x11  Ctrl-Q       double width
+0x13  Ctrl-S       underline
+0x17  Ctrl-W       italic
 ```
 
 `CR` starts a new line and a following `LF` is consumed. Other low DOS bytes,
@@ -191,9 +182,11 @@ table is a confirmed example: its heading starts with `╔═...═╗`, but its
 uses bytes for `├─...─┤` and `│`.
 
 This mixture exists in the source data; it is not a code-page decoding error.
-THelpViewer normalizes every table that starts with a double top border to
-double borders throughout (`╠═...═╣`, `║`, `╚═...═╝`) for consistent display.
-An archival extractor may instead preserve the original mixed glyphs.
+Single and double border characters remain distinct source glyphs; the mixed
+borders are not an instruction to replace them. `WrStyleChar` changes the
+attribute for style controls and writes ordinary characters unchanged; it
+does not infer table geometry or substitute border glyphs. See
+[`COMMON.PAS`](https://github.com/alisoss/pcfand/blob/master/pas/COMMON.PAS).
 
 ## 4.4 Fixed XOR Strings
 
@@ -266,13 +259,14 @@ The record size is stored in `CHEATDBS.000` at offset `0x04`:
 ```text
 Offset  Size  Type       Description
 ------  ----  ---------  ---------------------------------------
-0x00    4     unknown    Unknown / internal Pc-Fand value
+0x00    4     int32LE    Signed record count; absolute value gives the record count
 0x04    2     uint16LE   Record size
 ```
 
 For Game-Cheater 9.02:
 
 ```text
+Record count = -3301 (3,301 records)
 Record size = 111 bytes
 ```
 
@@ -510,7 +504,9 @@ The first observed text block begins at offset:
 0x0200 = 512
 ```
 
-The first 512 bytes appear to be a Pc-Fand memo-file header or internal structure.
+The first 512 bytes are the Pc-Fand memo-file header; they are not article
+payload. Native `TFile.Read` rejects nonzero text offsets in that header.
+The full administrative/encryption field layout is not specified here.
 
 A text block uses the common chained `.T00` structure from section 4.2:
 
@@ -596,7 +592,7 @@ The file uses the common `.000` header:
 ```text
 Offset  Size  Type       Description
 ------  ----  ---------  ---------------------------------------
-0x00    4     int32LE    Record count or internal table counter
+0x00    4     int32LE    Signed record count
 0x04    2     uint16LE   Record size
 ```
 
@@ -701,7 +697,7 @@ Uses the common `.000` header:
 ```text
 Offset  Size  Type       Description
 ------  ----  ---------  ---------------------------------------
-0x00    4     int32LE    Record count or internal table counter
+0x00    4     int32LE    Signed record count
 0x04    2     uint16LE   Record size
 ```
 
@@ -799,8 +795,7 @@ GCHLP.T00
 ```
 
 `GCHLP` contains the built-in Game-Cheater help system and an embedded copy of
-PC-Fand's internal runtime help. Only the Game-Cheater topics belong in a
-Game-Cheater export.
+PC-Fand's internal runtime help, separated by marker records.
 
 ## 8.2 Purpose
 
@@ -813,7 +808,7 @@ Uses the common `.000` header:
 ```text
 Offset  Size  Type       Description
 ------  ----  ---------  ---------------------------------------
-0x00    4     int32LE    Record count or internal table counter
+0x00    4     int32LE    Signed record count
 0x04    2     uint16LE   Record size
 ```
 
@@ -873,34 +868,101 @@ The topic list contains explicit boundary records:
 !! ZDE KONČÍ INTERNÍ HELP FANDU !!
 ```
 
-An extractor should skip both boundary records and every record between them.
+The markers delimit the embedded PC-Fand help range; they are stored records.
 The analyzed `GCHLP.000` has 531 physical records. The embedded PC-Fand range
 starts at record 149 and ends at record 508 (zero-based); valid Game-Cheater
-help continues after the end marker. Filtering by marker text is preferred to
-hard-coded record numbers.
-
-After blank titles and the embedded range are removed, Game-Cheater 9.02 has
-167 user-facing help topics. Names such as `FMEdit`, one-letter entries and
-other generic database-runtime commands come from PC-Fand and must not appear
-in the Game-Cheater Contents tree.
+help continues after the end marker. The range uses the same name/text fields
+and participates in the same physical-order name lookup; its boundaries do
+not create another lookup namespace. For example, `Int_help` first resolves
+inside this range, even though another similarly named record occurs later.
+There are 486 nonblank stored names, 383 nonempty memo texts and 103 named
+empty records in this specimen. Empty named records can forward lookup to
+the next physical record with nonempty text, as described below.
 
 ## 8.4.4 Hypertext Links
 
-In user-facing `GCHLP` topics, Ctrl-S underlining is also used for hypertext
-targets. After all retained help records have topic ids, compare the visible
-text of each underlined span with the decoded topic titles, case-insensitively
-and with whitespace collapsed. A match should be exported as a link to that
-topic while preserving the underline.
+In help mode, paired Ctrl-S bytes (`13h`) delimit selectable words. The
+selected delimiters are temporarily changed to Ctrl-Q (`11h`) in the editor
+buffer; this selection state is not a separate stored numeric destination.
+The selected word supplies the lookup text. Other style controls inside the
+word are bytes of that lookup text, not instructions to remove them. Example:
 
 ```text
 Viz.: Ctrl-S "O programu" Ctrl-S
-    -> [link:topic=<id>][u]O programu[/u][/link]
 ```
 
-Not every underlined span is a link. If no help title matches, retain it as
-ordinary underline formatting. If a title occurs more than once, the nearest
-matching record in topic order is the best reconstruction of PC-Fand's local
-help navigation.
+Name lookup scans records from physical record 1 through the declared count:
+
+1. Remove trailing padding spaces from the stored 35-byte name.
+2. Convert the clicked name and stored name to non-diacritic bytes using
+   the current video-font profile, then compare using the runtime's
+   configured character-order table.
+3. The stored name is a mask; the clicked word is its input. Stop at the
+   first matching record, not the nearest record or the best-looking title.
+4. Read its memo. If its logical length is zero, advance through subsequent
+   physical records until a nonempty memo or the final record is reached.
+   Do not repeat the name comparison while advancing. Both offset zero and
+   an assigned zero-length memo have this forwarding behavior.
+5. If no name matches, the consumer can continue through parent application
+   help files. That parent chain belongs to runtime configuration, not to
+   the `.000` record or an inferred same-caption destination.
+
+The default Latin2 profile uses the following non-diacritic byte table.
+ASCII bytes below `80h` are unchanged; the first row below maps input
+`80h..8Fh`, and subsequent rows advance by `10h`:
+
+```text
+43 75 65 61 61 75 63 63 6C 65 4F 6F 69 5A 41 43
+45 4C 6C 6F 6F 4C 6C 53 73 4F 55 54 74 4C 9E 63
+61 69 6F 75 41 61 5A 7A 45 65 61 7A 43 73 AE AF
+B0 B1 B2 B3 B4 41 41 45 53 B9 BA BB BC 5A 7A BF
+C0 C1 C2 C3 C4 C5 41 61 C8 C9 CA CB CC CD CE CF
+64 44 44 45 64 4E 49 49 65 D9 DA DB DC 54 55 DF
+4F E1 4F 4E 6E 6E 53 73 52 55 72 55 79 59 74 EF
+F0 F1 F2 F3 F4 F5 F6 F7 F8 F9 FA 75 52 72 FE FF
+```
+
+The default character-order table compares ASCII letters without case after
+this conversion. Comparison is byte-based: spaces are not collapsed, `ß`
+does not expand to `ss`, and literal brackets are not markup. Custom
+character-order tables and other video-font profiles require their external
+configuration; they cannot be reconstructed from `GCHLP.000` alone.
+
+Mask syntax is the native `EqualsMask` grammar, not regular DOS filename
+matching. An ordinary byte compares one folded byte. `?` consumes exactly
+one input byte. A final `*` accepts the remaining input, including none.
+Otherwise `*` consumes the next mask byte as a **literal** and searches for
+that byte in the input; after each occurrence it tries the remaining mask
+against the remaining input. Thus `*?` matches an input ending in a literal
+question mark, and `**` needs a literal asterisk; neither means two generic
+wildcards. The complete mask must match the complete clicked name.
+
+Examples for the Latin2/default profile:
+
+```text
+clicked "Hledání cheatu"  matches stored "hledání cheatů"
+clicked "root "          does not match stored "root"
+clicked "ABC?"           matches stored "*?"
+clicked "ABC"            does not match stored "*?"
+```
+
+If record 6 has name `Alias` and zero text offset, record 7 has an assigned
+zero-length memo, and record 8 contains text, lookup of `Alias` returns record
+8. Its name need not be `Alias`. A later duplicate `Alias` does not override
+the first match.
+
+The native Help command requests the name `root` for F1. This is a consumer
+convention, not a numeric Contents field in the table header.
+
+## 8.4.5 Hidden Description Line
+
+If a selected memo begins with byte `7Bh` (`{`), the help display omits its
+first line. It locates the first `0Dh`, advances over it and one immediately
+following `0Ah`, then displays the remaining bytes. A following blank line
+is preserved. No closing `}` is required by this test. If no `0Dh` occurs,
+the entire memo is hidden, even if it contains standalone `0Ah` bytes.
+The stored length and memo bytes remain unchanged; name lookup tests that
+original length before this display-only removal.
 
 ## 8.5 `GCHLP.T00`
 
@@ -1073,16 +1135,18 @@ General algorithm:
 1. Open NAME.000.
 2. Read int32LE at offset 0x00.
 3. Read uint16LE at offset 0x04 as record_size.
-4. Use abs(record_count_raw) when the record count is meaningful.
+4. Use abs(record_count_raw); zero denotes an empty table.
 5. Start reading records at offset 0x06.
 6. Read records using record_size.
 7. Decode fields according to the table-specific layout.
 ```
 
-For `CHEATDBS.000`, record count may also be derived from file size:
+File size supplies a validation bound, not a replacement count:
 
 ```python
-record_count = (len(data) - 6) // record_size
+assert (len(data) - 6) % record_size == 0
+available_slots = (len(data) - 6) // record_size
+assert abs(record_count_raw) <= available_slots
 ```
 
 ## 11.2 Reading `.T00` Files
@@ -1094,302 +1158,83 @@ General algorithm:
 2. For each non-zero text offset:
    1. Read `uint16LE length` at the absolute offset.
    2. Start at `offset + 2` with `remaining = length`.
-   3. Copy payload bytes up to the final four bytes of the current 512-byte page.
-   4. If more logical bytes remain, read the raw `uint32LE next_page` pointer.
+   3. Let `rest = 512 - (position % 512)`.
+   4. If `remaining <= rest`, copy exactly `remaining` bytes and finish.
+      Otherwise, copy `rest - 4` bytes and read the raw `uint32LE next_page`.
    5. Continue at `next_page` and repeat with up to 508 payload bytes per page.
    6. XOR only the collected logical payload bytes with `0xAA`.
    7. Interpret style controls and decode ordinary bytes as DOS CP852.
 ```
 
-Python implementation:
+Boundary-checked payload algorithm (the returned bytes still contain styles):
 
 ```python
-def read_text_block(t00_data: bytes, offset: int) -> str | None:
+import struct
+
+def read_text_block(t00_data: bytes, offset: int) -> bytes | None:
     if offset == 0:
         return None
 
-    if offset < 0 or offset + 2 > len(t00_data):
-        return None
+    if offset < 512 or offset + 2 > len(t00_data):
+        raise ValueError("Invalid memo header")
 
     remaining = struct.unpack_from("<H", t00_data, offset)[0]
     position = offset + 2
     encoded = bytearray()
-    visited = set()
+    visited = {offset - offset % 512}
 
     while remaining:
         page_rest = 512 - (position % 512)
         if remaining <= page_rest:
             if position + remaining > len(t00_data):
-                return None
+                raise ValueError("Incomplete memo text")
             encoded.extend(t00_data[position:position + remaining])
             break
 
         payload_size = page_rest - 4
         pointer_offset = position + payload_size
         if payload_size < 0 or pointer_offset + 4 > len(t00_data):
-            return None
+            raise ValueError("Incomplete memo continuation pointer")
         encoded.extend(t00_data[position:pointer_offset])
         remaining -= payload_size
         position = struct.unpack_from("<I", t00_data, pointer_offset)[0]
         if position < 512 or position % 512 or position + 512 > len(t00_data):
-            return None
+            raise ValueError("Invalid memo continuation page")
         if position in visited:
-            return None
+            raise ValueError("Cyclic memo chain")
         visited.add(position)
 
-    decoded = bytes(byte ^ 0xAA for byte in encoded).rstrip(b"\x00")
-    decoded = bytes(byte for byte in decoded if byte not in {1, 2, 4, 5, 17, 19, 23})
-    return decoded.decode("cp852", errors="replace")
+    return bytes(byte ^ 0xAA for byte in encoded)
 ```
 
-## 12. Reference Python Extractor
-
-```python
-#!/usr/bin/env python3
-# File: game_cheater_full_extract.py
-# Description: Reference extractor for Game-Cheater 9.02 database files.
-# Author: Mario Lacko / ChatGPT
-# Created: 2026-06-03
-# Version: 1.0
-# License: GPL v3
-
-from __future__ import annotations
-
-import json
-import struct
-from pathlib import Path
-from typing import Optional
-
-
-XOR_KEY = 0xAA
-ENCODING = "cp852"
-
-
-def xor_decode(data: bytes) -> bytes:
-    return bytes(byte ^ XOR_KEY for byte in data)
-
-
-def decode_xor_string(data: bytes) -> str:
-    decoded = xor_decode(data)
-    decoded = decoded.rstrip(b"\x00 ")
-    return decoded.decode(ENCODING, errors="replace").strip()
-
-
-def read_i32le(data: bytes, offset: int) -> int:
-    return struct.unpack_from("<i", data, offset)[0]
-
-
-def read_u16le(data: bytes, offset: int) -> int:
-    return struct.unpack_from("<H", data, offset)[0]
-
-
-def read_u16be(data: bytes, offset: int) -> int:
-    return struct.unpack_from(">H", data, offset)[0]
-
-
-def read_u32le(data: bytes, offset: int) -> int:
-    return struct.unpack_from("<I", data, offset)[0]
-
-
-def decode_version_code(code: int) -> str:
-    if code == 0:
-        return "alias / redirect"
-
-    major = code // 100
-    minor = code % 100
-    return f"{major}.{minor:02d}"
-
-
-def read_text_block(t00_data: bytes, offset: int) -> Optional[str]:
-    if offset == 0:
-        return None
-
-    if offset < 0 or offset + 2 > len(t00_data):
-        return None
-
-    remaining = read_u16le(t00_data, offset)
-    position = offset + 2
-    encoded = bytearray()
-    visited = set()
-
-    while remaining:
-        page_rest = 512 - (position % 512)
-        if remaining <= page_rest:
-            if position + remaining > len(t00_data):
-                return None
-            encoded.extend(t00_data[position:position + remaining])
-            break
-
-        payload_size = page_rest - 4
-        pointer_offset = position + payload_size
-        if payload_size < 0 or pointer_offset + 4 > len(t00_data):
-            return None
-        encoded.extend(t00_data[position:pointer_offset])
-        remaining -= payload_size
-        position = read_u32le(t00_data, pointer_offset)
-        if position < 512 or position % 512 or position + 512 > len(t00_data):
-            return None
-        if position in visited:
-            return None
-        visited.add(position)
-
-    decoded = xor_decode(bytes(encoded)).rstrip(b"\x00")
-    decoded = bytes(byte for byte in decoded if byte not in {1, 2, 4, 5, 17, 19, 23})
-    return decoded.decode(ENCODING, errors="replace")
-
-
-def parse_cheatdbs(index_path: Path, text_path: Path) -> list[dict]:
-    index_data = index_path.read_bytes()
-    text_data = text_path.read_bytes()
-
-    record_size = read_u16le(index_data, 0x04)
-    records_start = 0x06
-
-    entries = []
-
-    for record_offset in range(records_start, len(index_data), record_size):
-        record = index_data[record_offset:record_offset + record_size]
-
-        if len(record) < record_size:
-            break
-
-        source_offset = read_u32le(record, 0x33)
-        cheat_offset = read_u32le(record, 0x37)
-        version_code = read_u16be(record, 0x3B)
-
-        entries.append({
-            "record_offset": record_offset,
-            "status": record[0x00],
-            "title": decode_xor_string(record[0x01:0x33]),
-            "publisher": decode_xor_string(record[0x3D:0x6F]),
-            "source_offset": source_offset,
-            "cheat_offset": cheat_offset,
-            "version_code": version_code,
-            "version": decode_version_code(version_code),
-            "source": read_text_block(text_data, source_offset),
-            "text": read_text_block(text_data, cheat_offset),
-        })
-
-    return entries
-
-
-def parse_firmy(index_path: Path, text_path: Path) -> list[dict]:
-    index_data = index_path.read_bytes()
-    text_data = text_path.read_bytes()
-
-    record_count = abs(read_i32le(index_data, 0x00))
-    record_size = read_u16le(index_data, 0x04)
-    records_start = 0x06
-
-    entries = []
-
-    for i in range(record_count):
-        record_offset = records_start + i * record_size
-        record = index_data[record_offset:record_offset + record_size]
-
-        if len(record) < record_size:
-            break
-
-        text_offset = read_u32le(record, 0x33)
-
-        entries.append({
-            "record_offset": record_offset,
-            "status": record[0x00],
-            "company": decode_xor_string(record[0x01:0x33]),
-            "text_offset": text_offset,
-            "text": read_text_block(text_data, text_offset),
-        })
-
-    return entries
-
-
-def parse_gcnetadr(index_path: Path, text_path: Path) -> list[dict]:
-    index_data = index_path.read_bytes()
-    text_data = text_path.read_bytes()
-
-    record_count = abs(read_i32le(index_data, 0x00))
-    record_size = read_u16le(index_data, 0x04)
-    records_start = 0x06
-
-    entries = []
-
-    for i in range(record_count):
-        record_offset = records_start + i * record_size
-        record = index_data[record_offset:record_offset + record_size]
-
-        if len(record) < record_size:
-            break
-
-        description_offset = read_u32le(record, 0x8B)
-
-        entries.append({
-            "record_offset": record_offset,
-            "status": record[0x00],
-            "name": decode_xor_string(record[0x01:0x3D]),
-            "url": decode_xor_string(record[0x3D:0x8B]),
-            "description_offset": description_offset,
-            "description": read_text_block(text_data, description_offset),
-        })
-
-    return entries
-
-
-def parse_gchlp(index_path: Path, text_path: Path) -> list[dict]:
-    index_data = index_path.read_bytes()
-    text_data = text_path.read_bytes()
-
-    record_count = abs(read_i32le(index_data, 0x00))
-    record_size = read_u16le(index_data, 0x04)
-    records_start = 0x06
-
-    entries = []
-
-    for i in range(record_count):
-        record_offset = records_start + i * record_size
-        record = index_data[record_offset:record_offset + record_size]
-
-        if len(record) < record_size:
-            break
-
-        text_offset = read_u32le(record, 0x23)
-
-        entries.append({
-            "record_offset": record_offset,
-            "topic": decode_xor_string(record[0x00:0x23]),
-            "text_offset": text_offset,
-            "text": read_text_block(text_data, text_offset),
-        })
-
-    return entries
-
-
-def main() -> None:
-    exports = {}
-
-    if Path("CHEATDBS.000").exists() and Path("CHEATDBS.T00").exists():
-        exports["cheats"] = parse_cheatdbs(Path("CHEATDBS.000"), Path("CHEATDBS.T00"))
-
-    if Path("FIRMY.000").exists() and Path("FIRMY.T00").exists():
-        exports["companies"] = parse_firmy(Path("FIRMY.000"), Path("FIRMY.T00"))
-
-    if Path("GCNETADR.000").exists() and Path("GCNETADR.T00").exists():
-        exports["internet_addresses"] = parse_gcnetadr(Path("GCNETADR.000"), Path("GCNETADR.T00"))
-
-    if Path("GCHLP.000").exists() and Path("GCHLP.T00").exists():
-        exports["help"] = parse_gchlp(Path("GCHLP.000"), Path("GCHLP.T00"))
-
-    output_path = Path("game_cheater_full_export.json")
-    output_path.write_text(
-        json.dumps(exports, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    print(f"Export written to {output_path}")
-
-
-if __name__ == "__main__":
-    main()
-```
+## 12. Structural validation
+
+A table header must contain all six bytes and the declared record size must
+match its table layout. Compute `count = abs(i32le(0))`; zero is an empty
+table, not a request to scan every allocated slot. For file size `S` and
+record size `R`, require `(S-6) mod R = 0` and `count <= (S-6)/R`.
+Whole slots after the declared count are not additional active records.
+Do not replace a declared count with the physical slot count or silently
+stop after an incomplete record.
+
+Memo offset zero denotes an unassigned field. A nonzero offset must be at
+least 512 and leave both length bytes inside the memo file. A valid length
+of zero denotes assigned empty text, distinct from an absent field. Read
+exactly the declared logical payload; physical EOF is not an implicit text
+terminator.
+
+Check every payload read and raw continuation DWORD before using it.
+Continuation addresses identify complete, 512-aligned pages at or beyond
+byte 512. Include the initial containing page in the visited set; returning
+to it is a cycle even when the remaining length could fit in that page.
+A backward pointer to a different, unvisited page is not itself a cycle.
+A missing member of a present index/memo pair cannot supply empty article
+text; the referenced memo must be available.
+
+The length/count fields do not store a complete-file checksum. Removing
+unreferenced memo pages or unused whole record slots cannot always be detected
+from the referenced content alone. Arbitrary file-integrity verification
+requires a trusted external length or digest.
 
 ## 13. Confirmed Constants
 
@@ -1400,6 +1245,25 @@ Common .000 header:    6 bytes
 Common .T00 block:     uint16LE logical length + chained 512-byte pages
 Text offsets:          absolute offsets into corresponding .T00 file
 ```
+
+### 13.1 Byte examples
+
+`FD FF FF FF 6F 00` is a six-byte table header with signed count -3 and
+record size 111; the three active records occupy bytes 6 through 338.
+The count's sign does not reverse their order.
+
+At memo offset 512, `03 00 EB E8 E9` declares three logical bytes.
+XOR `AAh` gives `41 42 43` (ABC). No NUL terminator is required.
+
+For a 511-byte memo beginning at 512, the length WORD is `FF 01`.
+The first 506 encoded bytes occupy 514..1019; the raw pointer at 1020
+can be `00 06 00 00`, selecting page 1536. Its first five bytes finish the
+logical text. The physical gap at page 1024 is not part of the text.
+
+For a 1,018-byte memo, the length WORD is `FA 03`. After the same first
+506 bytes and pointer, all 512 bytes at 1536..2047 are final-page payload.
+Bytes 2044..2047 are then encoded text, not another pointer. The comparison
+is against the whole page remainder, not a permanent 508-byte capacity.
 
 ## 14. Known Table Summary
 
@@ -1414,110 +1278,21 @@ DBSNFO     DBSNFO.000     DBSNFO.T00      Database information / notices
 GCPRM      GCPRM.000      -               Program parameters / configuration
 ```
 
-THelpViewer exports the user-facing groups as separate UHF bundles:
-
-```text
-cheaty.json.gz               CHEATDBS
-firmy.json.gz                FIRMY
-internetove-adresy.json.gz   GCNETADR
-napoveda.json.gz             filtered GCHLP
-informace.json.gz            DBSNFO and GCPRM metadata
-```
-
 ## 15. Unknown or Partially Confirmed Fields
 
 The following fields are still not fully identified:
 
 ```text
-first 4 bytes of some .000 headers
 exact meaning of the status byte in most records
 remaining administrative fields in the first 512-byte .T00 header page
 whether CHEATDBS version_code means "added in version" or "last updated in version"
-all numeric fields in DBSNFO.000
+remaining numeric fields in DBSNFO.000
 all numeric fields in GCPRM.000
 ```
 
 These unknowns do not prevent reliable extraction of the main textual content.
 
-## 16. Recommended Export Model
-
-For practical use, the extracted Game-Cheater database can be represented as JSON.
-
-## 16.1 Cheat Entry
-
-```json
-{
-  "title": "04X - Alien Eliminator",
-  "publisher": "",
-  "source": "WWW.CHEATY.SK",
-  "version": "9.02",
-  "text": "Uvedená písmena stiskněte najednou pro daný efekt..."
-}
-```
-
-## 16.2 Company Entry
-
-```json
-{
-  "company": "3D Realms",
-  "text": "E-mail: help@3drealms.com\nWWW: http://www.3drealms.com/..."
-}
-```
-
-## 16.3 Internet Address Entry
-
-```json
-{
-  "name": "Alis",
-  "url": "http://www.alis.cz",
-  "description": "Stránka autorů PC-Fandu -> zajímavosti, demo verze atd."
-}
-```
-
-## 16.4 Help Entry
-
-```json
-{
-  "topic": "Root",
-  "text": "Všeobecné informace o Game-Cheateru ver. 9.00..."
-}
-```
-
-## 17. Implementation Notes
-
-A robust extractor should:
-
-```text
-validate all offsets before reading
-treat offset 0 as missing text
-tolerate malformed or truncated text blocks
-decode text with CP852, not UTF-8 or Windows-1250
-keep original offsets in exported metadata for debugging
-preserve Czech and Slovak text in UTF-8 output
-handle negative record counts by using abs()
-derive record count from file size when the header count is unreliable
-exclude the marker-delimited internal PC-Fand help range from GCHLP
-resolve matching underlined GCHLP titles as topic links
-normalize mixed box tables only if the target renderer requires consistent borders
-export CHEATDBS source and publisher fields as structured topic tags/facets
-```
-
-Recommended output encoding:
-
-```text
-UTF-8
-```
-
-Recommended interchange formats:
-
-```text
-JSON
-CSV
-Markdown
-SQLite
-```
-
-## 18. Minimal Extraction Checklist
+## 16. Minimal Extraction Checklist
 
 To extract all useful user-facing content:
 
@@ -1550,11 +1325,9 @@ GCPRM:
   optional configuration values
 ```
 
-## 19. Final Notes
+## 17. Storage Summary
 
-The Game-Cheater 9.02 database format is simple enough to extract reliably.
-
-The most important discoveries are:
+Core storage rules:
 
 ```text
 1. Fixed-size records are stored in .000 files.
@@ -1565,5 +1338,3 @@ The most important discoveries are:
 6. CHEATDBS stores a version code as uint16BE.
 7. The version code maps cleanly to Game-Cheater versions such as 9.02.
 ```
-
-This is sufficient to implement a complete extractor and convert the original Game-Cheater data into modern formats.

@@ -6,6 +6,7 @@ from bisect import bisect_right
 from dataclasses import dataclass
 
 from ..base import HelpDocument
+from ..text_screen import BitmapFont
 from .scorpion_legacy_reader import (
     ScorpionLegacyProfile,
     ScorpionVersionReaderBase,
@@ -13,6 +14,7 @@ from .scorpion_legacy_reader import (
     _build_sco_text_document,
     _sco_decoded_text,
 )
+from .scorpion_screens import legacy_default_font
 
 
 SCORPION_SCO_SIGNATURE = b"SCORPION\x00\x01"
@@ -666,6 +668,7 @@ def _build_sco_huffman_document(
     profile: ScorpionLegacyProfile,
     source_name: str,
     data: bytes,
+    artwork_font: BitmapFont | None = None,
 ) -> HelpDocument | None:
     decoded_result = _decode_sco_huffman_bytes(data)
     if decoded_result is None:
@@ -678,6 +681,7 @@ def _build_sco_huffman_document(
         data,
         _sco_decoded_text(decoded),
         parser_name="v4-sco-huffman",
+        artwork_font=artwork_font,
         parser_metadata={
             "scorpion_container_signature": "SCORPION\\x00\\x01",
             "scorpion_sco_table_entries": SCORPION_SCO_HUFFMAN_SYMBOL_COUNT,
@@ -692,7 +696,9 @@ def _build_sco_huffman_document(
 class ScorpionV4ScoHuffmanReaderBase(ScorpionVersionReaderBase):
     def read_bytes(self, data: bytes):
         if data.startswith(SCORPION_SCO_SIGNATURE):
-            document = _build_sco_huffman_document(self.profile, self.source_path.name, data)
+            font = (legacy_default_font(self.source_path.parent, float(self.profile.version))
+                    if self.source_path.stem.upper() in {"DATATEXT", "DATAHELP"} else None)
+            document = _build_sco_huffman_document(self.profile, self.source_path.name, data, font)
             if document is not None:
                 return self._finalize_document(document)
 

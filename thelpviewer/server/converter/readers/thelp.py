@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from pathlib import Path
 import re
 import struct
@@ -13,13 +12,12 @@ from ..base import (
     HelpReaderBase,
     IndexEntry,
     PositionedKeyword,
+    TopicNavItem,
     TopicRecord,
-    build_directional_nav_items,
     ensure_document_index,
     render_topic_uhf_content,
 )
 from ..codepages import decode_bytes, decode_bytes_box_aware
-from ..uhf_markup import escape_uhf_text, format_uhf_link
 
 THELP_SIG = b"$*$* &&&&$*$"
 
@@ -34,8 +32,10 @@ RT_INDEX_TAGS = 6
 OF_CASESENSE = 0x0004
 NC_RAW_CHAR = 0x0F
 NC_REP_CHAR = 0x0E
-CODE_BLOCK_MARKER_BYTES = {0x03, 0x05, 0x10}
-FORMAT_MARKER_BYTES = bytes((0x14,))
+TURBO_EXAMPLE_MARKER = b"\x05"
+PRODUCT_NAME_MARKER = b"\x14"
+# The ordinary 80-column DOS help view leaves 76 cells for flowing text.
+THELP_WRAP_WIDTH = 76
 # Match standalone headers like "Example:", "Examples", "Example 1:".
 # Do not match prose such as "example code for ..." inside an indented list.
 EXAMPLE_HEADER_RE = re.compile(r"^\s*Examples?(?:\s+\d+)?\s*(?:[:.)-]\s*)?$", re.IGNORECASE)
@@ -114,12 +114,15 @@ class ThelpFormatV1ToV3(ThelpFormatVariant):
 
 
 class ThelpFormatV4(ThelpFormatVariant):
-    """Format 4 THELP files with the short 5-byte file header."""
+    """Format 4 files with short/long headers and positioned keywords."""
 
     variant_name = "v4"
 
     def parse_file_header(self, parser: "ThelpBinaryParser", rec_length: int) -> None:
-        parser._parse_short_file_header(help_contents_topic_id=0)
+        if rec_length <= 5:
+            parser._parse_short_file_header()
+            return
+        parser._parse_extended_file_header()
 
     def parse_keyword_record(self, parser: "ThelpBinaryParser", screen: dict[str, object]) -> None:
         parser._parse_legacy_keyword_record(screen)
@@ -132,7 +135,7 @@ class ThelpFormatV41(ThelpFormatVariant):
 
     def parse_file_header(self, parser: "ThelpBinaryParser", rec_length: int) -> None:
         if rec_length <= 5:
-            parser._parse_short_file_header(help_contents_topic_id=0)
+            parser._parse_short_file_header()
             return
         parser._parse_extended_file_header()
 
@@ -173,6 +176,8 @@ class ThelpFormatV52Plus(ThelpFormatV5):
 
 def make_thelp_variant(format_version: int, text_version: int, internal_version: int) -> ThelpFormatVariant:
     """Choose the semantic THELP parser branch for one compiled help file."""
+    if format_version not in {1, 2, 3, 4, 5, 51, 52}:
+        raise ValueError(f"Unsupported THELP format version {format_version}")
     if internal_version <= 3:
         return ThelpFormatV1ToV3()
     if internal_version == 4:
@@ -197,14 +202,18 @@ class ThelpBinaryParser:
     def __init__(self, data: bytes):
         self.data = data
         self.pos = 0
+        self._read_limit = len(data)
+        self._record_start: int | None = None
+        self._record_type: int | None = None
         self.format_version = 0
         self.text_version = 0
         self.internal_version = 0
         self.variant: ThelpFormatVariant | None = None
         self.comp_rec: tuple[int, list[int]] | None = None
         self.context_array: list[int] = []
+        self.context_by_offset: dict[int, int] = {}
         self.context_aliases: dict[int, list[int]] = {}
-        self.file_hdr: dict[str, int] | None = None
+        self.file_hdr: dict[str, int | None] | None = None
         self.idx_list: list[tuple[int, bytes, int]] = []
         self.index_tags: list[tuple[int, str]] = []
         self.keyword_rec = {"up": 0, "down": 0, "cnt": 0}
@@ -221,7 +230,7 @@ class ThelpBinaryParser:
             "width": None,
             "left_margin": 0,
             "description": None,
-            "help_contents_topic_id": 0,
+            "help_contents_topic_id": None,
             "casesense": False,
             "context_count": None,
             "special_contexts": {},
@@ -236,71 +245,77 @@ class ThelpBinaryParser:
         """Parse the whole THELP file into screen dictionaries and metadata."""
         self._parse_administrative()
         while self.pos < len(self.data):
-            if self.pos + 3 > len(self.data):
-                self._record_trailing_data(self.pos)
+            if self.data[self.pos] == 0x20 and all(value == 0x20 for value in self.data[self.pos:]):
+                self._record_trailing_padding(self.pos)
                 break
+            if self.pos + 3 > len(self.data):
+                raise ValueError(f"Truncated THELP record header at offset {self.pos}")
             rec_type = self.data[self.pos]
             rec_length = struct.unpack_from("<H", self.data, self.pos + 1)[0]
             rec_end = self.pos + 3 + rec_length
             if rec_type not in {RT_FILE_HEADER, RT_CONTEXT, RT_TEXT, RT_KEYWORD, RT_INDEX, RT_COMPRESSION, RT_INDEX_TAGS}:
-                self._record_trailing_data(self.pos)
-                break
+                raise ValueError(f"Unknown THELP record type {rec_type} at offset {self.pos}")
             if rec_end > len(self.data):
-                self._record_trailing_data(self.pos)
-                break
+                raise ValueError(f"Truncated THELP record {rec_type} at offset {self.pos}: "
+                                 f"declared end {rec_end} exceeds file size {len(self.data)}")
             self._parse_record()
+        if self.file_hdr is None:
+            raise ValueError("Missing THELP file header record")
         self.meta["_internal_version"] = self.internal_version
         index_entries = [(label, context_id) for _idx, label, context_id in self.idx_list]
         return self.meta, self.screens, index_entries, self.index_tags
 
-    def _record_trailing_data(self, offset: int) -> None:
-        """Persist opaque bytes after the last valid BOA-style record."""
-        if offset >= len(self.data):
-            return
-        tail = self.data[offset:]
-        if not tail:
-            return
-        if set(tail) == {0x20}:
-            self.meta["trailing_padding"] = {
-                "offset": offset,
-                "length": len(tail),
-                "byte": 0x20,
-            }
-            return
-        self.meta["trailing_data"] = {
+    def _record_trailing_padding(self, offset: int) -> None:
+        """Record the already-validated terminal space extension."""
+        self.meta["trailing_padding"] = {
             "offset": offset,
-            "length": len(tail),
+            "length": len(self.data) - offset,
+            "byte": 0x20,
         }
 
+    def _require(self, n: int) -> None:
+        if n < 0 or self.pos + n > self._read_limit:
+            location = ("administrative header" if self._record_start is None else
+                        f"record {self._record_type} at offset {self._record_start}")
+            raise ValueError(f"Truncated THELP {location}: need {n} bytes at offset "
+                             f"{self.pos}, boundary {self._read_limit}")
+
     def read_bytes(self, n: int) -> bytes:
+        self._require(n)
         chunk = self.data[self.pos:self.pos + n]
         self.pos += n
         return chunk
 
     def read_byte(self) -> int:
+        self._require(1)
         value = self.data[self.pos]
         self.pos += 1
         return value
 
     def read_word(self) -> int:
+        self._require(2)
         value = struct.unpack_from("<H", self.data, self.pos)[0]
         self.pos += 2
         return value
 
     def read_stringz_bytes(self) -> bytes:
-        start = self.pos
-        while self.pos < len(self.data) and self.data[self.pos] != 0:
-            self.pos += 1
-        text = self.data[start:self.pos]
-        self.pos += 1
+        end = self.data.find(b"\0", self.pos, self._read_limit)
+        if end < 0:
+            location = ("administrative header" if self._record_start is None else
+                        f"record {self._record_type} at offset {self._record_start}")
+            raise ValueError(f"Unterminated THELP string in {location} at offset {self.pos}")
+        text = self.data[self.pos:end]
+        self.pos = end + 1
         return text
 
     def _parse_administrative(self) -> None:
         self.meta["stamp"] = self.read_stringz_bytes().decode("latin-1")
         marker = self.read_byte()
         if marker != 0x1A:
-            raise ValueError(f"Expected 0x1A after stamp, got 0x{marker:02X}")
+            raise ValueError(f"Invalid THELP stamp terminator: expected 0x1A, got 0x{marker:02X}")
         self.meta["signature"] = self.read_stringz_bytes().decode("latin-1")
+        if self.meta["signature"] != THELP_SIG.decode("ascii"):
+            raise ValueError("Invalid THELP administrative signature")
         self.format_version = self.read_byte()
         self.text_version = self.read_byte()
         self.internal_version = 41 if self.format_version == 4 and self.text_version == 2 else self.format_version
@@ -310,29 +325,32 @@ class ThelpBinaryParser:
         self.meta["format_variant"] = self.variant.variant_name
 
     def _parse_record(self) -> None:
-        if self.pos + 3 > len(self.data):
-            self.pos = len(self.data)
-            return
         old_pos = self.pos
         rec_type = self.read_byte()
         rec_length = self.read_word()
         rec_end = old_pos + 3 + rec_length
-        if rec_type == RT_FILE_HEADER:
-            self._parse_file_header(rec_length)
-        elif rec_type == RT_CONTEXT:
-            self._parse_context()
-        elif rec_type == RT_TEXT:
-            self._parse_text(old_pos, rec_length)
-        elif rec_type == RT_KEYWORD:
-            self._parse_keyword()
-        elif rec_type == RT_INDEX:
-            self._parse_index()
-        elif rec_type == RT_COMPRESSION:
-            self._parse_compression()
-        elif rec_type == RT_INDEX_TAGS:
-            self._parse_index_tags(rec_end)
-        if self.pos != rec_end:
+        self._read_limit = rec_end
+        self._record_start, self._record_type = old_pos, rec_type
+        try:
+            match rec_type:
+                case 0:
+                    self._parse_file_header(rec_length)
+                case 1:
+                    self._parse_context()
+                case 2:
+                    self._parse_text(old_pos, rec_length)
+                case 3:
+                    self._parse_keyword()
+                case 4:
+                    self._parse_index()
+                case 5:
+                    self._parse_compression()
+                case 6:
+                    self._parse_index_tags(rec_end)
             self.pos = rec_end
+        finally:
+            self._read_limit = len(self.data)
+            self._record_start = self._record_type = None
 
     def _parse_file_header(self, rec_length: int = 0) -> None:
         if self.variant is None:
@@ -345,28 +363,25 @@ class ThelpBinaryParser:
         self.meta["height"] = self.read_byte()
         self.meta["width"] = self.read_byte()
         self.meta["left_margin"] = self.read_byte()
-        comp_type = self.read_byte()
-        char_table = list(self.read_bytes(14))
-        self.comp_rec = (comp_type, char_table)
+        self._parse_compression()
         self.left_margin = self.meta["left_margin"]
         self.meta["casesense"] = bool(options & OF_CASESENSE)
-        self.file_hdr = {"help_contents_topic_id": 0}
+        # Pascal 4's format 2/1 consumer binds its default screen to slot 100.
+        # This is not a field in the short header or a rule for other profiles.
+        help_contents_topic_id = 100 if (self.format_version, self.text_version) == (2, 1) else None
+        self.meta["help_contents_topic_id"] = help_contents_topic_id
+        self.file_hdr = {"help_contents_topic_id": help_contents_topic_id}
 
-    def _parse_short_file_header(self, *, help_contents_topic_id: int) -> None:
+    def _parse_short_file_header(self) -> None:
         """Parse the short file header used by format 4 / short 4.2 files."""
         options = self.read_word()
         self.meta["height"] = self.read_byte()
         self.meta["width"] = self.read_byte()
         self.meta["left_margin"] = self.read_byte()
-        if self.meta["width"] == 0 and self.meta["left_margin"] > 80:
-            self.meta["raw_width"] = self.meta["width"]
-            self.meta["raw_left_margin"] = self.meta["left_margin"]
-            self.meta["width"] = 80
-            self.meta["left_margin"] = 2
         self.left_margin = self.meta["left_margin"]
         self.meta["casesense"] = bool(options & OF_CASESENSE)
-        self.meta["help_contents_topic_id"] = help_contents_topic_id
-        self.file_hdr = {"help_contents_topic_id": help_contents_topic_id}
+        self.meta["help_contents_topic_id"] = None
+        self.file_hdr = {"help_contents_topic_id": None}
 
     def _parse_extended_file_header(self) -> None:
         """Parse the long file header used by page-oriented THELP variants."""
@@ -385,11 +400,14 @@ class ThelpBinaryParser:
         context_num = self.read_word()
         self.meta["context_count"] = context_num
         self.context_array = []
-        for _ in range(context_num):
+        for context_id in range(context_num):
             b1 = self.read_byte()
             b2 = self.read_byte()
             b3 = self.read_byte()
-            self.context_array.append(b1 + (b2 << 8) + (b3 << 16))
+            offset = b1 + (b2 << 8) + (b3 << 16)
+            if offset not in {0xFFFFFF, 0xFFFFFE} and offset >= len(self.data):
+                raise ValueError(f"THELP context {context_id} offset {offset} is outside the file")
+            self.context_array.append(offset)
 
         offset_to_contexts: dict[int, list[int]] = {}
         for i, offset in enumerate(self.context_array):
@@ -401,29 +419,20 @@ class ThelpBinaryParser:
             if offset not in {0xFFFFFF, 0xFFFFFE}:
                 offset_to_contexts.setdefault(offset, []).append(i)
 
-        help_contents_topic_id = 0
-        if self.file_hdr is not None:
-            help_contents_topic_id = int(self.file_hdr.get("help_contents_topic_id", 0) or 0)
-        if 0 <= help_contents_topic_id < len(self.context_array):
+        help_contents_topic_id = (self.file_hdr or {}).get("help_contents_topic_id")
+        if isinstance(help_contents_topic_id, int) and 0 <= help_contents_topic_id < len(self.context_array):
             help_contents_offset = self.context_array[help_contents_topic_id]
-            if help_contents_offset < 0xFFFF00:
+            if help_contents_offset not in {0xFFFFFF, 0xFFFFFE}:
                 alias_ids = [
                     idx
                     for idx, offset in enumerate(self.context_array)
                     if offset == 0xFFFFFF and idx != help_contents_topic_id
                 ]
-                if alias_ids:
-                    bucket = offset_to_contexts.setdefault(help_contents_offset, [])
-                    if help_contents_topic_id in bucket:
-                        bucket[:] = [help_contents_topic_id] + [
-                            ctx for ctx in bucket if ctx != help_contents_topic_id
-                        ]
-                    else:
-                        bucket.insert(0, help_contents_topic_id)
-                    for alias_id in alias_ids:
-                        if alias_id not in bucket:
-                            bucket.append(alias_id)
-                    self.meta["help_contents_aliases"] = list(alias_ids)
+                bucket = offset_to_contexts[help_contents_offset]
+                bucket[:] = [help_contents_topic_id] + [ctx for ctx in bucket if ctx != help_contents_topic_id]
+                bucket.extend(alias_ids)
+                self.meta["help_contents_aliases"] = list(alias_ids)
+        self.context_by_offset = {offset: ctxs[0] for offset, ctxs in offset_to_contexts.items()}
         self.context_aliases = {offset: ctxs[1:] for offset, ctxs in offset_to_contexts.items() if len(ctxs) > 1}
 
     def _parse_text(self, old_pos: int, rec_length: int) -> None:
@@ -438,7 +447,7 @@ class ThelpBinaryParser:
             "keywords_v4": [],
             "keywords_v5": [],
             "indices": [],
-            "is_help_contents": False,
+            "is_help_contents": screen_num != 0xFFFF and screen_num == (self.file_hdr or {}).get("help_contents_topic_id"),
             "group_end": False,
             "text_complete": False,
             "link_up": None,
@@ -456,6 +465,11 @@ class ThelpBinaryParser:
         text_lines: list[bytes] = []
         trailing_newlines = 0
         trailing_newlines_before_eot = 0
+        product_runs = bytearray() if (self.format_version, self.text_version) == (52, 2) else None
+
+        def remember_run(character: int, count: int = 1) -> None:
+            if product_runs is not None:
+                product_runs.extend((count, character))
 
         def emit_line() -> None:
             nonlocal line_buf
@@ -475,34 +489,48 @@ class ThelpBinaryParser:
             get_next = True
             return nibble
 
-        while remaining > 0:
+        # Fetching the final byte does not consume its pending high nibble.
+        while remaining > 0 or not get_next:
             nibble = get_nibble()
             if nibble == 0x00:
+                remember_run(0)
                 emit_line()
                 trailing_newlines += 1
                 continue
             if 0x01 <= nibble <= 0x0D:
-                line_buf.append(self.comp_rec[1][nibble])
-                trailing_newlines = 0
+                character = self.comp_rec[1][nibble]
+                remember_run(character)
+                if character == 0:
+                    emit_line()
+                    trailing_newlines += 1
+                else:
+                    line_buf.append(character)
+                    trailing_newlines = 0
                 continue
             if nibble == NC_REP_CHAR:
                 count_nibble = get_nibble()
                 char_nibble = get_nibble()
                 repeat_count = count_nibble + 2
-                if char_nibble == 0x00:
+                if char_nibble <= 0x0D and self.comp_rec[1][char_nibble] == 0:
+                    remember_run(0, repeat_count)
                     for _ in range(repeat_count):
                         emit_line()
                     trailing_newlines += repeat_count
                 elif 0x01 <= char_nibble <= 0x0D:
+                    remember_run(self.comp_rec[1][char_nibble], repeat_count)
                     line_buf.extend([self.comp_rec[1][char_nibble]] * repeat_count)
                     trailing_newlines = 0
                 elif char_nibble == NC_RAW_CHAR:
                     raw = get_nibble() + get_nibble() * 16
+                    remember_run(raw, repeat_count)
                     line_buf.extend([raw] * repeat_count)
                     trailing_newlines = 0
+                else:
+                    raise ValueError("Invalid THELP repeat character nibble 0xE")
                 continue
             if nibble == NC_RAW_CHAR:
                 raw = get_nibble() + get_nibble() * 16
+                remember_run(raw)
                 if raw == 1:
                     trailing_newlines_before_eot = trailing_newlines
                     break
@@ -519,6 +547,10 @@ class ThelpBinaryParser:
             screen["text_complete"] = trailing_newlines_before_eot > trailing_blank_lines
 
         screen["lines"] = text_lines
+        if product_runs is not None and 0x14 in product_runs[1::2]:
+            # Keep token runs only where the consumer needs them: ^T is tested
+            # before RLE emission, and a suppressed run retains the repeat count.
+            screen["product_runs"] = bytes(product_runs)
 
     def _parse_keyword(self) -> None:
         screen = self._require_current_screen()
@@ -568,8 +600,6 @@ class ThelpBinaryParser:
         screen["link_up"] = up_ctx
         screen["link_down"] = down_ctx
         screen["group_end"] = down_ctx == 0
-        if self.file_hdr and self.screen_num == self.file_hdr["help_contents_topic_id"]:
-            screen["is_help_contents"] = True
         self.keyword_rec = {"up": up_ctx, "down": down_ctx, "cnt": kw_cnt}
 
     def _parse_index(self) -> None:
@@ -581,6 +611,8 @@ class ThelpBinaryParser:
             head = self.read_byte()
             keep = (head >> 5) & 0x07
             new_len = head & 0x1F
+            if keep > len(prev_label):
+                raise ValueError(f"Invalid THELP index prefix length {keep} for entry {idx}")
             label = prev_label[:keep] + self.read_bytes(new_len)
             prev_label = label
             context_id = self.read_word()
@@ -590,6 +622,10 @@ class ThelpBinaryParser:
     def _parse_compression(self) -> None:
         comp_type = self.read_byte()
         char_table = list(self.read_bytes(14))
+        if comp_type != 2:
+            raise ValueError(f"Unsupported THELP compression type {comp_type}")
+        if char_table[0] != 0:
+            raise ValueError("Invalid THELP compression table: entry zero must be NUL")
         self.comp_rec = (comp_type, char_table)
 
     def _parse_index_tags(self, rec_end: int) -> None:
@@ -597,18 +633,17 @@ class ThelpBinaryParser:
         self.meta["tag_order"] = []
         while self.pos < rec_end:
             idx_num = self.read_word()
-            self.read_byte()
+            text_length = self.read_byte()
             tag_str = self.read_stringz_bytes().decode("latin-1")
+            if len(tag_str) != text_length:
+                raise ValueError(f"Invalid THELP index tag length at record offset {self._record_start}")
             self.index_tags.append((idx_num, tag_str))
             self.meta["tag_order"].append((idx_num, tag_str))
             if idx_num == 0xFFFF:
                 self.meta["description"] = tag_str
 
     def _get_screen_num(self, file_pos: int) -> int:
-        for i, offset in enumerate(self.context_array):
-            if offset == file_pos:
-                return i
-        return 0xFFFF
+        return self.context_by_offset.get(file_pos, 0xFFFF)
 
     def _require_current_screen(self) -> dict[str, object]:
         if self.current_screen is None:
@@ -628,9 +663,6 @@ class ThelpHelpReader(HelpReaderBase):
         meta.setdefault("text_encoding", "cp437")
         self._populate_title_metadata(meta)
         document = self._build_document(meta, screens, index_entries, binary_data=data)
-        self._annotate_context_fallbacks(document)
-        self._apply_context_fallbacks(document)
-        self._apply_keyword_index_targets(document)
         self._annotate_unresolved_contexts(document, parser.context_array, data)
         encoding = str((document.metadata or {}).get("text_encoding") or "cp437")
         self.refresh_rendered_uhf_content(document, encoding=encoding)
@@ -670,455 +702,25 @@ class ThelpHelpReader(HelpReaderBase):
         except LookupError:
             return decode_bytes(raw, "cp437")
 
-    @staticmethod
-    def _label_forms(label: str) -> set[str]:
-        """Return normalized label variants for conservative alias matching."""
-        text = " ".join(label.strip().split())
-        if not text:
-            return set()
-        forms = {text.casefold()}
-        parts = [part.strip() for part in text.split(",") if part.strip()]
-        forms.update(part.casefold() for part in parts)
-        if len(parts) > 1:
-            forms.add(" ".join(parts).casefold())
-        if "$" in text:
-            stripped = text.replace("$", "").strip()
-            if stripped:
-                forms.add(" ".join(stripped.split()).casefold())
-                stripped_parts = [part.strip() for part in stripped.split(",") if part.strip()]
-                forms.update(part.casefold() for part in stripped_parts)
-                if len(stripped_parts) > 1:
-                    forms.add(" ".join(stripped_parts).casefold())
-        return {form for form in forms if form}
-
-    @classmethod
-    def _annotate_context_fallbacks(cls, document: HelpDocument) -> None:
-        """Derive context-level fallback targets from actual orphan keyword occurrences."""
-        topic_ids = {topic.context_id for topic in document.topics}
-        encoding = str((document.metadata or {}).get("text_encoding") or "cp437")
-
-        occurrences = cls._collect_orphan_keyword_occurrences(document, topic_ids, encoding)
-
-        fallbacks: dict[str, dict[str, int | str]] = {}
-        for context_id, hits in occurrences.items():
-            if context_id in topic_ids or not hits:
-                continue
-            locations = {(topic_id, line_number) for topic_id, line_number, _label in hits}
-            if len(locations) != 1:
-                continue
-
-            topic_id, line_number = next(iter(locations))
-            label = next((value.strip() for _topic_id, _line, value in hits if value.strip()), "")
-            fallbacks[str(context_id)] = {
-                "topic_id": topic_id,
-                "line": line_number,
-                "label": label,
-                "source": "keyword-single",
-            }
-
-        if fallbacks:
-            document.metadata["context_fallbacks"] = fallbacks
-
-    @classmethod
-    def _collect_orphan_keyword_occurrences(
-        cls,
-        document: HelpDocument,
-        topic_ids: set[int],
-        encoding: str,
-    ) -> dict[int, list[tuple[int, int, str]]]:
-        """Return actual hotspot labels that target orphan context ids."""
-        occurrences: dict[int, list[tuple[int, int, str]]] = defaultdict(list)
-        for topic in document.topics:
-            for keyword in topic.positional_keywords:
-                if keyword.target_context in topic_ids:
-                    continue
-                line_index = keyword.line - 1
-                if not (0 <= line_index < len(topic.raw_lines)):
-                    continue
-                raw_line = topic.raw_lines[line_index]
-                start = max(keyword.first_column - 1, 0)
-                end = min(keyword.last_column, len(raw_line))
-                label = cls._decode_context_text(raw_line[start:end], encoding).strip()
-                if label:
-                    occurrences[keyword.target_context].append((topic.context_id, keyword.line, label))
-
-            keyword_index = 0
-            for line_number, raw_line in enumerate(topic.raw_lines, start=1):
-                if b"\x02" not in raw_line or keyword_index >= len(topic.sequential_keywords):
-                    continue
-                parts = raw_line.split(b"\x02")
-                for part_index in range(1, len(parts), 2):
-                    if keyword_index >= len(topic.sequential_keywords):
-                        break
-                    target_context = topic.sequential_keywords[keyword_index]
-                    keyword_index += 1
-                    if target_context in topic_ids:
-                        continue
-                    label = cls._decode_context_text(parts[part_index], encoding).strip()
-                    if label:
-                        occurrences[target_context].append((topic.context_id, line_number, label))
-        return occurrences
-
-    @classmethod
-    def _apply_context_fallbacks(cls, document: HelpDocument) -> None:
-        """Project reader-specific orphan-context knowledge into the shared model."""
-        topic_ids = {topic.context_id for topic in document.topics}
-        fallback_map = {
-            int(context_id): target
-            for context_id, target in (document.metadata.get("context_fallbacks", {}) or {}).items()
-            if str(context_id).isdigit() and isinstance(target, dict)
-        }
-        if not fallback_map:
-            return
-
-        for entry in document.index_entries:
-            if entry.context_id in topic_ids:
-                continue
-            fallback = fallback_map.get(entry.context_id)
-            if fallback is None:
-                continue
-            topic_id = fallback.get("topic_id")
-            if topic_id in topic_ids:
-                entry.topic_id = topic_id
-                line = fallback.get("line")
-                if isinstance(line, int) and line > 0:
-                    entry.line = line
-                source_file = fallback.get("source_file")
-                if isinstance(source_file, str) and source_file.strip():
-                    entry.source_file = source_file.strip()
-                alias = fallback.get("alias")
-                if isinstance(alias, str) and alias.strip():
-                    entry.alias = alias.strip()
-
-        encoding = str((document.metadata or {}).get("text_encoding") or "cp437")
-        cls.refresh_rendered_uhf_content(document, encoding=encoding)
-
     @classmethod
     def refresh_rendered_uhf_content(cls, document: HelpDocument, *, encoding: str) -> None:
-        """Rebuild THELP UHF lines that depend on resolved orphan targets.
+        """Render native references without guessing another destination.
 
-        The reader can discover fallback link targets before the final display
-        encoding is known. Exporters call this again after applying the help
-        database encoding so pre-rendered link labels do not keep stale CP437
-        text.
+        Genuine aliases address the same Text record. Missing targets remain
+        explicit links; the viewer reports failure without replacing the page.
+        Exporters repeat this after selecting the final display encoding.
         """
-        topic_ids = {topic.context_id for topic in document.topics}
-        fallback_map = {
-            int(context_id): target
-            for context_id, target in (document.metadata.get("context_fallbacks", {}) or {}).items()
-            if str(context_id).isdigit() and isinstance(target, dict)
-        }
+        link_targets = {context for topic in document.topics
+                        for context in [topic.context_id, *topic.alias_contexts,
+                                        *topic.sequential_keywords,
+                                        *(keyword.target_context for keyword in topic.positional_keywords)]}
         for topic in document.topics:
             rendered_content = render_topic_uhf_content(
                 topic,
                 decode_bytes=lambda raw: cls._decode_context_text(raw, encoding),
-                topic_ids=topic_ids,
-                fallback_map=fallback_map,
+                topic_ids=link_targets,
             )
-            topic.uhf_content = cls._restore_sequential_hotspot_tables(rendered_content)
-
-    @classmethod
-    def _restore_sequential_hotspot_tables(cls, lines: list[str]) -> list[str]:
-        """Rebuild THELP tables stored as a flat sequence of linked cells."""
-        restored: list[str] = []
-        index = 0
-        while index < len(lines):
-            line = lines[index]
-            restored.append(line)
-            column_count = cls._table_header_column_count(line)
-            if column_count < 2:
-                index += 1
-                continue
-
-            cell_index = index + 1
-            cells: list[str] = []
-            while cell_index < len(lines) and cls._is_sequential_table_cell(lines[cell_index]):
-                cells.append(lines[cell_index])
-                cell_index += 1
-
-            if len(cells) >= column_count:
-                for offset in range(0, len(cells), column_count):
-                    row_cells = cells[offset:offset + column_count]
-                    restored.append(
-                        row_cells[0] + "".join(f" {cell}" for cell in row_cells[1:])
-                    )
-                index = cell_index
-                continue
-
-            index += 1
-        return restored
-
-    @staticmethod
-    def _table_header_column_count(line: str) -> int:
-        """Return the number of cells described by a top table border."""
-        if "╤" not in line or "╕" not in line:
-            return 0
-        if line.rfind("╕") < line.find("╤"):
-            return 0
-        return line.count("╤") + 1
-
-    @staticmethod
-    def _is_sequential_table_cell(line: str) -> bool:
-        """Return true for one linked cell emitted as its own THELP line."""
-        stripped = line.rstrip()
-        return (
-            (stripped.endswith("│") or stripped.endswith("│[/link]"))
-            and line.count("[link:") == 1
-            and line.count("[/link]") == 1
-        )
-
-    @classmethod
-    def _apply_keyword_index_targets(cls, document: HelpDocument) -> None:
-        """Resolve orphan index entries from real RT_Keyword hotspot occurrences."""
-        topic_ids = {topic.context_id for topic in document.topics}
-        encoding = str((document.metadata or {}).get("text_encoding") or "cp437")
-        occurrences = cls._collect_orphan_keyword_occurrences(document, topic_ids, encoding)
-        resolved: dict[int, dict[str, object]] = {}
-        ambiguous: dict[int, dict[str, object]] = {}
-
-        for index, entry in enumerate(document.index_entries):
-            if entry.topic_id is not None or entry.context_id in topic_ids:
-                continue
-            label = cls._decode_context_text(entry.label, encoding).strip()
-            if not label:
-                continue
-            hits = occurrences.get(entry.context_id, [])
-            if not hits:
-                continue
-
-            label_forms = cls._label_forms(label)
-            matched_hits = [
-                hit for hit in hits
-                if label_forms and not cls._label_forms(hit[2]).isdisjoint(label_forms)
-            ]
-            chosen = cls._choose_keyword_index_hit(matched_hits)
-            source = "keyword-label"
-
-            if chosen is None and len(hits) == 1:
-                chosen = hits[0]
-                source = "keyword-single-context"
-
-            if chosen is None:
-                candidate_hits = matched_hits or hits
-                ambiguous[index] = {
-                    "context_id": entry.context_id,
-                    "label": label,
-                    "hits": [
-                        {"topic_id": topic_id, "line": line, "label": hit_label}
-                        for topic_id, line, hit_label in candidate_hits
-                    ],
-                }
-                continue
-
-            topic_id, line_number, hit_label = chosen
-            entry.topic_id = topic_id
-            if line_number > 0:
-                entry.line = line_number
-            resolved[index] = {
-                "context_id": entry.context_id,
-                "label": label,
-                "topic_id": topic_id,
-                "line": line_number,
-                "hotspot_label": hit_label,
-                "source": source,
-            }
-
-        if resolved:
-            document.metadata["keyword_index_targets"] = resolved
-        if ambiguous:
-            document.metadata["ambiguous_keyword_index_targets"] = ambiguous
-
-    @staticmethod
-    def _choose_keyword_index_hit(
-        hits: list[tuple[int, int, str]],
-    ) -> tuple[int, int, str] | None:
-        """Choose a keyword-derived index target only when the binary evidence is unique."""
-        if not hits:
-            return None
-        locations = {(topic_id, line_number) for topic_id, line_number, _label in hits}
-        if len(locations) == 1:
-            return hits[0]
-        return None
-
-    @classmethod
-    def _render_topic_uhf_content(
-        cls,
-        topic: TopicRecord,
-        *,
-        topic_ids: set[int],
-        fallback_map: dict[int, dict[str, int | str]],
-        encoding: str,
-    ) -> list[str]:
-        """Render one topic directly to UHF using reader-resolved fallback targets."""
-        content: list[str] = []
-        code_line_indices = set(topic.code_line_indices or set())
-        in_code_block = False
-
-        positional_by_line: dict[int, list[PositionedKeyword]] = defaultdict(list)
-        for keyword in topic.positional_keywords:
-            positional_by_line[keyword.line].append(keyword)
-        for keywords in positional_by_line.values():
-            keywords.sort(key=lambda keyword: keyword.first_column)
-
-        sequential_index = 0
-        for line_index, raw_line in enumerate(topic.raw_lines):
-            line_is_code = line_index in code_line_indices
-            if line_is_code and not in_code_block:
-                content.append("[code]")
-                in_code_block = True
-            elif not line_is_code and in_code_block:
-                content.append("[/code]")
-                in_code_block = False
-
-            line_number = line_index + 1
-            if line_number in positional_by_line:
-                content.append(
-                    cls._render_positioned_uhf_line(
-                        raw_line,
-                        positional_by_line[line_number],
-                        topic_ids=topic_ids,
-                        fallback_map=fallback_map,
-                        encoding=encoding,
-                    )
-                )
-                continue
-
-            if b"\x02" in raw_line and topic.sequential_keywords:
-                rendered_line, sequential_index = cls._render_sequential_uhf_line(
-                    raw_line,
-                    topic.sequential_keywords,
-                    sequential_index,
-                    topic_ids=topic_ids,
-                    fallback_map=fallback_map,
-                    encoding=encoding,
-                )
-                content.append(rendered_line)
-                continue
-
-            content.append(cls._escape_uhf_segment(raw_line, encoding))
-
-        if in_code_block:
-            content.append("[/code]")
-
-        return content
-
-    @classmethod
-    def _render_positioned_uhf_line(
-        cls,
-        raw_line: bytes,
-        keywords: list[PositionedKeyword],
-        *,
-        topic_ids: set[int],
-        fallback_map: dict[int, dict[str, int | str]],
-        encoding: str,
-    ) -> str:
-        """Render one line with positioned hotspots directly to UHF."""
-        parts: list[str] = []
-        cursor = 0
-
-        for keyword in keywords:
-            start = max(keyword.first_column - 1, 0)
-            end = min(keyword.last_column, len(raw_line))
-            if start > cursor:
-                parts.append(cls._escape_uhf_segment(raw_line[cursor:start], encoding))
-            label = cls._escape_uhf_text_fragment(raw_line[start:end], encoding)
-            parts.append(
-                cls._wrap_uhf_link_target(
-                    keyword.target_context,
-                    label,
-                    topic_ids=topic_ids,
-                    fallback_map=fallback_map,
-                )
-            )
-            cursor = end
-
-        parts.append(cls._escape_uhf_segment(raw_line[cursor:], encoding))
-        return "".join(parts)
-
-    @classmethod
-    def _render_sequential_uhf_line(
-        cls,
-        raw_line: bytes,
-        keywords: list[int],
-        start_index: int,
-        *,
-        topic_ids: set[int],
-        fallback_map: dict[int, dict[str, int | str]],
-        encoding: str,
-    ) -> tuple[str, int]:
-        """Render one line with in-band sequential hotspots directly to UHF."""
-        parts: list[str] = []
-        buffer = bytearray()
-        in_hotspot = False
-        keyword_index = start_index
-
-        for value in raw_line:
-            if value != 0x02:
-                buffer.append(value)
-                continue
-
-            if in_hotspot:
-                label = cls._escape_uhf_text_fragment(bytes(buffer), encoding)
-                if keyword_index < len(keywords):
-                    parts.append(
-                        cls._wrap_uhf_link_target(
-                            keywords[keyword_index],
-                            label,
-                            topic_ids=topic_ids,
-                            fallback_map=fallback_map,
-                        )
-                    )
-                    keyword_index += 1
-                else:
-                    parts.append(label)
-                buffer.clear()
-                in_hotspot = False
-                continue
-
-            if buffer:
-                parts.append(cls._escape_uhf_segment(bytes(buffer), encoding))
-                buffer.clear()
-            in_hotspot = True
-
-        if buffer:
-            parts.append(cls._escape_uhf_segment(bytes(buffer), encoding))
-
-        return "".join(parts), keyword_index
-
-    @classmethod
-    def _wrap_uhf_link_target(
-        cls,
-        target_context: int,
-        label: str,
-        *,
-        topic_ids: set[int],
-        fallback_map: dict[int, dict[str, int | str]],
-    ) -> str:
-        """Format one visible label as a universal UHF link when a target exists."""
-        if target_context in topic_ids:
-            return format_uhf_link(label, topic_id=target_context)
-
-        fallback = fallback_map.get(target_context)
-        if fallback is None:
-            return label
-
-        return format_uhf_link(
-            label,
-            topic_id=fallback.get("topic_id"),
-            source_file=fallback.get("source_file"),
-            alias=fallback.get("alias"),
-            line=fallback.get("line"),
-        )
-
-    @classmethod
-    def _escape_uhf_text_fragment(cls, raw: bytes | str, encoding: str) -> str:
-        """Decode one visible segment and escape it for literal UHF text."""
-        return escape_uhf_text(cls._decode_context_text(raw, encoding))
-
-    @classmethod
-    def _escape_uhf_segment(cls, raw: bytes | str, encoding: str) -> str:
-        """Decode and escape one non-hotspot segment."""
-        return cls._escape_uhf_text_fragment(raw, encoding)
+            topic.uhf_content = rendered_content
 
     @staticmethod
     def _annotate_unresolved_contexts(
@@ -1126,48 +728,48 @@ class ThelpHelpReader(HelpReaderBase):
         context_array: list[int],
         data: bytes,
     ) -> None:
-        """Record unresolved context ids for TCH/THELP variants with orphan links."""
-        topic_ids = {topic.context_id for topic in document.topics}
-        resolved_fallbacks = {
-            int(context_id)
-            for context_id in (document.metadata.get("context_fallbacks", {}) or {}).keys()
-            if str(context_id).isdigit()
-        }
+        """Classify missing native destinations, never their referring rows."""
+        topic_ids = {context for topic in document.topics
+                     for context in [topic.context_id, *topic.alias_contexts]}
         unresolved_index: set[int] = set()
         unresolved_links: set[int] = set()
 
         for entry in document.index_entries:
             if entry.topic_id in topic_ids:
                 continue
-            if entry.context_id not in topic_ids and entry.context_id not in resolved_fallbacks:
+            if entry.context_id not in topic_ids:
                 unresolved_index.add(entry.context_id)
 
         for topic in document.topics:
             for target in topic.sequential_keywords:
-                if target not in topic_ids and target not in resolved_fallbacks:
+                if target not in topic_ids:
                     unresolved_links.add(target)
             for keyword in topic.positional_keywords:
-                if keyword.target_context not in topic_ids and keyword.target_context not in resolved_fallbacks:
+                if keyword.target_context not in topic_ids:
                     unresolved_links.add(keyword.target_context)
 
         if not unresolved_index and not unresolved_links:
             return
 
-        def _space_tail_context(context_id: int) -> bool:
-            if not (0 <= context_id < len(context_array)):
-                return False
-            offset = context_array[context_id]
-            if not (0 <= offset < len(data)):
-                return False
-            chunk = data[offset:offset + 64]
-            return bool(chunk) and set(chunk) == {0x20}
-
         unresolved_all = unresolved_index | unresolved_links
+        offsets = {str(context): context_array[context] for context in sorted(unresolved_all)
+                   if 0 <= context < len(context_array)}
+        padding_start = (document.metadata.get("trailing_padding") or {}).get("offset")
         document.metadata["unresolved_contexts"] = {
             "index": sorted(unresolved_index),
             "links": sorted(unresolved_links),
-            "space_tail": sorted(context_id for context_id in unresolved_all if _space_tail_context(context_id)),
+            "space_tail": sorted(context for context in unresolved_all
+                                 if isinstance(padding_start, int) and 0 <= context < len(context_array)
+                                 and padding_start <= context_array[context] < len(data)),
+            "no_help": sorted(int(context) for context, offset in offsets.items() if offset == 0xFFFFFE),
+            "unbound_contents": sorted(int(context) for context, offset in offsets.items() if offset == 0xFFFFFF),
+            "out_of_range": sorted(context for context in unresolved_all
+                                   if not 0 <= context < len(context_array)),
+            "offsets": offsets,
         }
+        keys = document.metadata.setdefault("transport_metadata_keys", [])
+        if "unresolved_contexts" not in keys:
+            keys.append("unresolved_contexts")
 
     @staticmethod
     def _normalize_label(label: str | bytes) -> bytes:
@@ -1212,13 +814,32 @@ class ThelpHelpReader(HelpReaderBase):
         topics = []
         orphan_context_ids: list[int] = []
         skipped_empty_orphans = 0
-        for screen in screens:
+        if (meta.get("format_version"), meta.get("text_version")) == (52, 2):
+            # Pascal 7's decoder substitutes an application-owned short string,
+            # not an emphasis attribute. Native IndexTags identify the product;
+            # an untagged stream uses the verified Turbo Pascal viewer default.
+            description = str(meta.get("description") or "").casefold()
+            product_name = b"Borland" if description.startswith("borland pascal") else b"Turbo"
+            screens = [dict(screen, lines=cls._substitute_product_name(
+                screen["lines"], product_name, screen.get("product_runs")))
+                       for screen in screens]
+        example_states = cls._example_entry_states(screens)
+        width = meta.get("width")
+        # UHF stores fixed display rows. Choose a bounded DOS viewport once;
+        # the lossless parser retains the authored rows and compressed bytes.
+        wrap_width = (min(THELP_WRAP_WIDTH, max(1, width - int(meta.get("left_margin") or 0)))
+                      if isinstance(width, int) and width > 0 and int(meta.get("format_version") or 0) >= 5
+                      else None)
+        for screen_index, screen in enumerate(screens):
+            display_lines = (cls._wrap_text_lines(screen["lines"], wrap_width)
+                             if wrap_width is not None else list(screen["lines"]))
             raw_lines, code_line_indices = cls._extract_code_lines(
-                list(screen["lines"]),
+                display_lines,
                 use_example_heuristic=True,
+                initial_code_state=example_states[screen_index],
             )
-            code_line_indices.update(cls._detect_pascal_sample_code_lines(raw_lines))
-            raw_lines = cls._strip_format_markers(raw_lines)
+            if not example_states[screen_index] and not any(TURBO_EXAMPLE_MARKER in line for line in screen["lines"]):
+                code_line_indices.update(cls._detect_pascal_sample_code_lines(raw_lines))
             positional_keywords = []
             for keyword in screen.get("keywords_v4", []):
                 context_id, line, col1, col2, left_btn, right_btn, up_btn, down_btn = keyword
@@ -1254,11 +875,18 @@ class ThelpHelpReader(HelpReaderBase):
                 sequential_keywords=list(screen.get("keywords_v5", [])),
                 positional_keywords=positional_keywords,
                 is_help_contents=bool(screen.get("is_help_contents")),
-                up_context=screen.get("link_up"),
-                down_context=screen.get("link_down"),
+                up_context=screen.get("link_up") or None,
+                down_context=screen.get("link_down") or None,
+                prev_context=screen.get("link_up") or None,
+                next_context=screen.get("link_down") or None,
                 code_line_indices=code_line_indices,
             )
-            topic.nav_items = build_directional_nav_items(topic)
+            # Zero terminates a page chain. Positioned keyword navigation
+            # bytes select another hotspot, never a topic-level destination.
+            topic.nav_items = [TopicNavItem(label=label, topic_id=target)
+                               for label, target in (("Up", topic.up_context), ("Down", topic.down_context),
+                                                     ("Prev", topic.prev_context), ("Next", topic.next_context))
+                               if target is not None]
             topics.append(topic)
         if orphan_context_ids:
             meta["orphan_screen_contexts"] = orphan_context_ids
@@ -1267,58 +895,161 @@ class ThelpHelpReader(HelpReaderBase):
         return topics
 
     @staticmethod
-    def _strip_format_markers(raw_lines: list[bytes]) -> list[bytes]:
-        """Remove THELP inline style delimiters from visible text.
+    def _wrap_text_lines(lines: list[bytes], width: int) -> list[bytes]:
+        """Project sequential THELP text with the native byte-word algorithm.
 
-        Borland help files use byte 0x14 around emphasized product names
-        (for example ``Turbo``). In CP437 that byte is a paragraph glyph,
-        but in THELP payload it is not meant to be displayed.
+        A leading literal space or empty row is fixed. Otherwise join soft
+        returns, retaining their space and atomic 02h-delimited keywords.
+        Process controls before removing example markers: they occupy no
+        formatter cells, but a leading marker still makes a row wrappable.
+        Long indivisible words/fixed rows are retained for horizontal scroll.
         """
-        return [raw_line.replace(FORMAT_MARKER_BYTES, b"") for raw_line in raw_lines]
+        if width <= 0:
+            raise ValueError("THELP wrap width must be positive")
+        output: list[bytes] = []
+        row = bytearray()
+        row_width = 0
+        # A raw-escape NUL is lossless in the codec, but the consumer's
+        # uncompressed buffer still treats it as a row boundary.
+        for line in (part for source_line in lines for part in source_line.split(b"\0")):
+            if not line or line.startswith(b" "):
+                if row:
+                    output.append(bytes(row))
+                    row.clear()
+                    row_width = 0
+                output.append(line)
+                continue
+            position = 0
+            while position < len(line):
+                word = bytearray()
+                word_width = 0
+                in_keyword = False
+                while position < len(line):
+                    value = line[position]
+                    if value == 0x20 and not in_keyword:
+                        break
+                    word.append(value)
+                    position += 1
+                    if value >= 7:
+                        word_width += 1
+                    elif value == 2:
+                        in_keyword = not in_keyword
+                if row_width and row_width + word_width > width:
+                    output.append(bytes(row))
+                    row.clear()
+                    row_width = 0
+                if position == len(line):
+                    word.append(0x20)  # A wrappable source return is a space.
+                else:
+                    while position < len(line) and line[position] == 0x20:
+                        word.append(0x20)
+                        position += 1
+                row.extend(word)
+                row_width += sum(value >= 7 for value in word)
+        if row:
+            output.append(bytes(row))
+        return output
+
+    @staticmethod
+    def _example_entry_states(screens: list[dict[str, object]]) -> list[bool]:
+        """Carry ^E state along actual reciprocal page links, not file order."""
+        parity = [sum(line.count(TURBO_EXAMPLE_MARKER) for line in screen["lines"]) % 2
+                  for screen in screens]
+        states = [False] * len(screens)
+        if not any(parity):
+            return states
+        by_context = {context: index for index, screen in enumerate(screens)
+                      for context in [screen["id"], *screen.get("alias_ids", [])] if context != 0xFFFF}
+        predecessors = []
+        for screen in screens:
+            up = screen.get("link_up")
+            previous = by_context.get(up) if up not in (None, 0) else None
+            if previous is not None:
+                down = screens[previous].get("link_down")
+                if down in (None, 0) or down not in [screen["id"], *screen.get("alias_ids", [])]:
+                    previous = None
+            predecessors.append(previous)
+        resolved, unknown = set(), set()
+        for index in range(len(screens)):
+            route, visiting = [], set()
+            current = index
+            while current is not None and current not in resolved and current not in visiting:
+                route.append(current)
+                visiting.add(current)
+                current = predecessors[current]
+            if current in visiting:
+                # A cycle has no established entry state; do not invent one.
+                cycle_start = route.index(current)
+                resolved.update(route[cycle_start:])
+                unknown.update(route[cycle_start:])
+                route = route[:cycle_start]
+            for current in reversed(route):
+                previous = predecessors[current]
+                if previous in unknown:
+                    unknown.add(current)
+                elif previous is not None:
+                    states[current] = states[previous] ^ bool(parity[previous])
+                resolved.add(current)
+        return states
+
+    @staticmethod
+    def _substitute_product_name(
+        raw_lines: list[bytes], product_name: bytes, runs: bytes | None = None,
+    ) -> list[bytes]:
+        """Replace each ^T-delimited placeholder before interpreting text controls."""
+        if not any(PRODUCT_NAME_MARKER in line for line in raw_lines):
+            return list(raw_lines)
+        # The original decoder's toggle belongs to one physical Text record.
+        # Suppressed placeholder bytes include NUL row boundaries and controls.
+        if runs is None:
+            text = b"\0".join(raw_lines) + b"\0"
+            runs = bytes(value for character in text for value in (1, character))
+        visible = bytearray()
+        suppressed = False
+        repeat_count = 0
+        for count, character in zip(runs[::2], runs[1::2]):
+            if count > 1:
+                repeat_count = count
+            if character == 1:
+                break
+            if character == 0x14:
+                suppressed = not suppressed
+                if suppressed:
+                    visible.extend(product_name)
+            elif not suppressed:
+                visible.extend(bytes((character,)) * (repeat_count or 1))
+                repeat_count = 0
+        lines = bytes(visible).split(b"\0")
+        if lines[-1] == b"":
+            lines.pop()
+        return lines
 
     @staticmethod
     def _extract_code_lines(
         raw_lines: list[bytes],
         *,
         use_example_heuristic: bool = False,
+        initial_code_state: bool = False,
     ) -> tuple[list[bytes], set[int]]:
-        """Strip THELP code markers and expose code lines as zero-based indices."""
+        """Decode native ^E toggles without losing rows, whitespace or glyphs."""
         cleaned_lines: list[bytes] = []
         code_line_indices: set[int] = set()
-        in_code_block = False
-        saw_explicit_markers = False
+        in_code_block = initial_code_state
+        saw_explicit_markers = initial_code_state
 
         for raw_line in raw_lines:
-            stripped = raw_line.strip(b" \t")
-            # Marker-only lines toggle code mode (e.g. b"\x05" or b"\x10\x05").
-            if stripped and all(value in CODE_BLOCK_MARKER_BYTES for value in stripped):
-                in_code_block = not in_code_block
-                saw_explicit_markers = True
-                continue
-
-            # Some THELP files place the marker byte(s) at the start of a
-            # line immediately followed by source text (e.g. b" \x05#include...").
-            # Treat a leading marker sequence as a toggle and, if the
-            # marker is followed by text, expose the remainder as a code
-            # line (or normal text when closing).
-            left_stripped = raw_line.lstrip(b" \t")
-            if left_stripped and left_stripped[0] in CODE_BLOCK_MARKER_BYTES:
-                # measure consecutive marker bytes at line start
-                idx = 0
-                while idx < len(left_stripped) and left_stripped[idx] in CODE_BLOCK_MARKER_BYTES:
-                    idx += 1
-                remainder = left_stripped[idx:]
-                in_code_block = not in_code_block
-                saw_explicit_markers = True
-                if remainder:
-                    if in_code_block:
-                        code_line_indices.add(len(cleaned_lines))
-                    cleaned_lines.append(remainder)
-                continue
-
-            if in_code_block:
+            parts = raw_line.split(TURBO_EXAMPLE_MARKER)
+            line_is_code = False
+            for part_index, part in enumerate(parts):
+                if in_code_block and part:
+                    line_is_code = True
+                if part_index < len(parts) - 1:
+                    in_code_block = not in_code_block
+                    saw_explicit_markers = True
+            visible_line = b"".join(parts)
+            if line_is_code or (not visible_line.strip(b" \t") and in_code_block):
                 code_line_indices.add(len(cleaned_lines))
-            cleaned_lines.append(raw_line)
+            cleaned_lines.append(visible_line)
 
         if use_example_heuristic and not saw_explicit_markers:
             code_line_indices.update(ThelpHelpReader._detect_example_code_lines(cleaned_lines))

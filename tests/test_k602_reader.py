@@ -31,37 +31,38 @@ def test_k602_reader_parses_topic_table_and_text_blocks():
 
     assert len(document.topics) == 115
     assert len(document.index_entries) == 92
-    assert document.metadata["table_entry_count"] == 239
+    assert document.metadata["table_entry_count"] == 256
     assert document.metadata["topic_count"] == 115
     assert document.metadata["title"] == "Kartotéka 602"
     assert document.metadata["text_encoding"] == "utf-8"
     assert document.metadata["source_encoding"] == "software602-direct"
     assert document.metadata["ui"]["window"] == "#005454"
 
-    topic = next(topic for topic in document.topics if topic.context_id == 109)
+    topic = next(topic for topic in document.topics if topic.context_id == 125)
     assert topic.names == ["Nová databáze"]
-    assert "  [b]Nová databáze [/b]" in topic.uhf_content
+    assert "  [b]Nová databáze [/b]▄" in topic.uhf_content
     assert "vytvoření struktury věty datového ([b]DBF[/b]) souboru." in topic.uhf_content
 
     labels = [entry.label.decode("utf-8") for entry in document.index_entries]
     assert "Uložení makra" not in labels
     assert "Příkaz zruší seznam příkazů pro tisk." not in labels
-    assert "Topic 90" not in labels
-    assert "Topic 91" not in labels
+    assert "Topic 106" not in labels
+    assert "Topic 107" not in labels
     assert labels.count("Výběr klávesnice") == 8
 
-    macro_stub = next(topic for topic in document.topics if topic.context_id == 18)
+    macro_stub = next(topic for topic in document.topics if topic.context_id == 34)
     assert macro_stub.names == ["Uložení makra"]
-    assert macro_stub.uhf_content == ["  Uložení makra", "   ■■■■■■■■■■■■■■■"]
+    assert macro_stub.uhf_content == ["  Uložení makra  ▄", "   ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀"]
 
 
-def test_k602_strips_line_attributes_without_losing_box_art():
+def test_k602_preserves_native_block_art_and_italic_without_fake_codepage_letters():
     document = _k602_document()
 
-    intro = next(topic for topic in document.topics if topic.context_id == 120)
+    intro = next(topic for topic in document.topics if topic.context_id == 136)
     assert intro.names == ["Kartotéka K602"]
     assert " ┌────────────────────────────────────────────┐" in intro.uhf_content
-    assert " │          [b]K a r t o t é k a  K602           [/b]│" in intro.uhf_content
+    assert " │          [b]K a r t o t é k a  K602           [/b]│ █" in intro.uhf_content
+    assert " │    [i]Copyright Software602, spol. s r.o.     [/i]│ █" in intro.uhf_content
     assert not any(line.endswith("ů") for line in intro.uhf_content[:12])
 
     all_text = "\n".join(line for topic in document.topics for line in topic.uhf_content)
@@ -77,5 +78,6 @@ def test_k602_json_payload_is_renderable():
 
     assert payload["metadata"]["source"]["format"] == "k602"
     assert payload["metadata"]["source"]["encoding"] == "software602-direct"
-    assert payload["topics"]["109"]["title"] == "Nová databáze"
-    assert payload["topics"]["120"]["title"] == "Kartotéka K602"
+    assert payload["metadata"]["display"]["cols"] == 70
+    assert payload["topics"]["125"]["title"] == "Nová databáze"
+    assert payload["topics"]["136"]["title"] == "Kartotéka K602"

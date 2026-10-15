@@ -2,6 +2,8 @@ import gzip
 import json
 from pathlib import Path
 
+import pytest
+
 from thelpviewer.server.converter.exporter import load_document
 from thelpviewer.server.converter.writers.bundle import export_bundle
 
@@ -59,13 +61,22 @@ def test_quickbasic_marker_only_contents_nav_is_reader_rendered():
     assert "◄[b]Contents[/b]►" not in nav_line
 
 
-def test_quickc_250_marker_nav_buttons_are_reader_rendered():
-    path = Path("data/sources") / "Microsoft QuickC, C, and C++ 2.50" / "ERRORS.HLP"
+@pytest.mark.parametrize("with_advisor", [False, True])
+def test_quickc_250_marker_nav_buttons_are_reader_rendered(tmp_path, with_advisor):
+    originals = Path("data/sources/Microsoft QuickC, C, and C++ 2.50")
+    path = tmp_path / "ERRORS.HLP"
+    path.write_bytes((originals / path.name).read_bytes())
+    if with_advisor:
+        (tmp_path / "QC.HLP").write_bytes((originals / "QC.HLP").read_bytes())
     doc = load_document(path)
 
     nav_line = doc.topics[8].uhf_content[0]
-    assert "[nav:contents]Contents[/nav]" in nav_line
-    assert "[nav:index]Index[/nav]" in nav_line
+    if with_advisor:
+        assert "[link:file=QC.HLP,topic=0,alias=h.contents]Contents[/link]" in nav_line
+        assert "[link:file=QC.HLP,topic=852,alias=h.index]Index[/link]" in nav_line
+    else:
+        assert "[nav:contents]Contents[/nav]" in nav_line
+        assert "[nav:index]Index[/nav]" in nav_line
     assert "[nav:back]Back[/nav]" in nav_line
     assert "◄[b]Contents[/b]►" not in nav_line
 

@@ -30,26 +30,24 @@ class _TextFile:
         padding = (-len(self.data)) % 512
         self.data.extend(bytes(padding))
         offset = len(self.data)
-        page_count = 1
-        remaining_after_first = max(0, len(encoded) - 506)
-        if remaining_after_first:
-            page_count += (remaining_after_first + 507) // 508
-        self.data.extend(bytes(page_count * 512))
+        self.data.extend(bytes(512))
         struct.pack_into("<H", self.data, offset, len(encoded))
 
         source_position = 0
         page = offset
         payload_start = page + 2
-        payload_capacity = 506
+        payload_capacity = 510
         while len(encoded) - source_position > payload_capacity:
-            end = source_position + payload_capacity
-            self.data[payload_start : payload_start + payload_capacity] = encoded[source_position:end]
+            count = payload_capacity - 4
+            end = source_position + count
+            self.data[payload_start : payload_start + count] = encoded[source_position:end]
             next_page = page + 512
             struct.pack_into("<I", self.data, page + 508, next_page)
+            self.data.extend(bytes(512))
             source_position = end
             page = next_page
             payload_start = page
-            payload_capacity = 508
+            payload_capacity = 512
         tail = encoded[source_position:]
         self.data[payload_start : payload_start + len(tail)] = tail
         return offset
@@ -82,7 +80,7 @@ def _write_fixture(root: Path) -> Path:
     struct.pack_into(">H", cheat, 0x3B, 902)
     cheat[0x3D:0x6F] = _xor_fixed("Český vydavatel", 50)
     primary = root / "CHEATDBS.000"
-    primary.write_bytes(_table([bytes(cheat)], 111, count=-123))
+    primary.write_bytes(_table([bytes(cheat)], 111, count=-1))
     (root / "CHEATDBS.T00").write_bytes(text.data)
 
     text = _TextFile()
@@ -161,6 +159,9 @@ def test_game_cheater_reader_loads_all_user_facing_tables(tmp_path: Path) -> Non
         "Firma",
         "Web",
         "Ovládání",
+        "!! ZDE ZAČÍNÁ INTERNÍ HELP FANDU !!",
+        "FMEdit",
+        "!! ZDE KONČÍ INTERNÍ HELP FANDU !!",
         "O programu",
         "Informace o databázi",
     ]
@@ -175,14 +176,14 @@ def test_game_cheater_reader_loads_all_user_facing_tables(tmp_path: Path) -> Non
         ("source", "Zdroj", "WWW.CHEATY.SK"),
     ]
     assert not any(line.startswith(("Vydavatel:", "Zdroj:")) for line in cheat.uhf_content)
-    assert "FMEdit" not in [topic.names[0] for topic in document.topics]
-    assert document.topics[3].uhf_content == ["Viz.: [link:topic=5][u]O programu[/u][/link]"]
-    assert document.topics[5].uhf_content == [
+    assert "FMEdit" in [topic.names[0] for topic in document.topics]
+    assert document.topics[3].uhf_content == ["Viz.: [link:topic=8][u]O programu[/u][/link]"]
+    assert document.topics[-1].uhf_content == [
         "╔════╗",
         "║Info║",
-        "╠════╣",
-        "║Text║",
-        "╚════╝",
+        "├────┤",
+        "│Text│",
+        "└────┘",
     ]
     assert document.metadata["database_version"] == "9.02"
     assert len(document.metadata["source_files"]) == 11
@@ -221,9 +222,9 @@ def test_game_cheater_bundle_has_stable_name(tmp_path: Path) -> None:
     assert help_payload["metadata"]["name"] == "Game-Cheater 9.02 - Nápověda"
     assert help_payload["metadata"]["source"]["filename"] == "GCHLP.000"
     assert help_payload["metadata"]["show_topic_titles"] is False
-    assert set(help_payload["topics"]) == {"4", "5"}
+    assert set(help_payload["topics"]) == {"4", "5", "6", "7", "8"}
     assert help_payload["topics"]["4"]["content"] == [
-        "Viz.: [link:topic=5][u]O programu[/u][/link]"
+        "Viz.: [link:topic=8][u]O programu[/u][/link]"
     ]
 
     expected_sources = {
@@ -236,5 +237,5 @@ def test_game_cheater_bundle_has_stable_name(tmp_path: Path) -> None:
         assert payload["metadata"]["source"]["filename"] == source_name
 
     catalog = json.loads((output / "catalog.json").read_text(encoding="utf-8"))
-    assert {item["topics"] for item in catalog} == {1, 2}
-    assert next(item for item in catalog if item["file"].endswith("napoveda.json.gz"))["topics"] == 2
+    assert {item["topics"] for item in catalog} == {1, 5}
+    assert next(item for item in catalog if item["file"].endswith("napoveda.json.gz"))["topics"] == 5

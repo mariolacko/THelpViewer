@@ -159,7 +159,7 @@ def test_allegro_dat_parser_rejects_truncated_compressed_object_payload():
     )
 
     try:
-        parse_allegro_datafile(payload, strict_chunks=True)
+        parse_allegro_datafile(payload)
     except AllegroDatafileError:
         return
     raise AssertionError("truncated Allegro chunk was accepted")

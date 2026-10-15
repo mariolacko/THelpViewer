@@ -120,7 +120,6 @@ def parse_allegro_datafile(
     *,
     accepted_pack_magics: tuple[bytes, ...] = ALLEGRO_SUPPORTED_PACK_MAGICS,
     parse_nested: bool = True,
-    strict_chunks: bool = False,
     packfile_password: bytes | str | None = None,
     old_crypt_chunk_local: bool | None = None,
 ) -> AllegroDatafile:
@@ -133,9 +132,9 @@ def parse_allegro_datafile(
     compatibility path. Some producers reset the old-crypt password stream for
     each object chunk; use ``old_crypt_chunk_local`` for those files.
 
-    Use ``strict_chunks`` to reject chunk streams that end before their declared
-    decoded length. The default keeps short producer-specific placeholder
-    objects readable.
+    Every chunk must supply its declared decoded length; uncompressed chunks
+    must have equal stored and decoded sizes. Incomplete objects are errors,
+    not short placeholder payloads.
     """
     if len(data) < 12:
         raise AllegroDatafileError("Allegro DAT header is incomplete")
@@ -171,7 +170,6 @@ def parse_allegro_datafile(
         4,
         base_offset=4,
         parse_nested=parse_nested,
-        strict_chunks=strict_chunks,
         old_crypt_state=old_crypt_state,
     )
     if offset != len(body):
@@ -193,7 +191,6 @@ def parse_allegro_datafile_objects(
     *,
     accepted_pack_magics: tuple[bytes, ...] = ALLEGRO_SUPPORTED_PACK_MAGICS,
     parse_nested: bool = True,
-    strict_chunks: bool = False,
     packfile_password: bytes | str | None = None,
     old_crypt_chunk_local: bool | None = None,
 ) -> list[AllegroDatafileObject]:
@@ -203,7 +200,6 @@ def parse_allegro_datafile_objects(
             data,
             accepted_pack_magics=accepted_pack_magics,
             parse_nested=parse_nested,
-            strict_chunks=strict_chunks,
             packfile_password=packfile_password,
             old_crypt_chunk_local=old_crypt_chunk_local,
         ).objects
@@ -242,7 +238,6 @@ def extract_allegro_datafile_entries(
     include_types: Iterable[str] | str | None = None,
     accepted_pack_magics: tuple[bytes, ...] = ALLEGRO_SUPPORTED_PACK_MAGICS,
     parse_nested: bool = True,
-    strict_chunks: bool = False,
     packfile_password: bytes | str | None = None,
     old_crypt_chunk_local: bool | None = None,
 ) -> list[AllegroDatafileEntry]:
@@ -251,7 +246,6 @@ def extract_allegro_datafile_entries(
         data,
         accepted_pack_magics=accepted_pack_magics,
         parse_nested=parse_nested,
-        strict_chunks=strict_chunks,
         packfile_password=packfile_password,
         old_crypt_chunk_local=old_crypt_chunk_local,
     )
@@ -263,7 +257,6 @@ def extract_allegro_data_objects(
     *,
     accepted_pack_magics: tuple[bytes, ...] = ALLEGRO_SUPPORTED_PACK_MAGICS,
     parse_nested: bool = True,
-    strict_chunks: bool = False,
     packfile_password: bytes | str | None = None,
     old_crypt_chunk_local: bool | None = None,
 ) -> list[AllegroDatafileEntry]:
@@ -273,7 +266,6 @@ def extract_allegro_data_objects(
         include_types=(ALLEGRO_TYPE_DATA,),
         accepted_pack_magics=accepted_pack_magics,
         parse_nested=parse_nested,
-        strict_chunks=strict_chunks,
         packfile_password=packfile_password,
         old_crypt_chunk_local=old_crypt_chunk_local,
     )
@@ -311,9 +303,9 @@ def _allegro_lzss_decompress(
 ) -> tuple[bytes, int]:
     """Return decompressed bytes and the updated old-crypt password position.
     """
-    if expected_size is not None and expected_size <= 0:
-        return b"", password_position
-    if not payload:
+    if expected_size is not None and expected_size < 0:
+        raise AllegroDatafileError("Allegro decoded length must be nonnegative")
+    if expected_size == 0:
         return b"", password_position
 
     window_size = 4096
@@ -362,6 +354,10 @@ def _allegro_lzss_decompress(
             if not has_room():
                 break
 
+    if expected_size is not None and len(out) != expected_size:
+        raise AllegroDatafileError(
+            f"Allegro LZSS stream decoded to {len(out)} bytes, expected {expected_size}"
+        )
     return bytes(out), password_position
 
 
@@ -455,7 +451,6 @@ def _parse_object_list(
     *,
     base_offset: int,
     parse_nested: bool,
-    strict_chunks: bool,
     old_crypt_state: _AllegroOldCryptState,
 ) -> tuple[list[AllegroDatafileObject], int]:
     if offset + 4 > len(data):
@@ -473,7 +468,6 @@ def _parse_object_list(
             offset,
             base_offset=base_offset,
             parse_nested=parse_nested,
-            strict_chunks=strict_chunks,
             old_crypt_state=old_crypt_state,
         )
         objects.append(item)
@@ -486,7 +480,6 @@ def _parse_object(
     *,
     base_offset: int,
     parse_nested: bool,
-    strict_chunks: bool,
     old_crypt_state: _AllegroOldCryptState,
 ) -> tuple[AllegroDatafileObject, int]:
     object_offset = base_offset + offset
@@ -532,12 +525,7 @@ def _parse_object(
         old_crypt_state.finish_chunk(password_position)
     else:
         payload = packed_payload
-    if strict_chunks and payload_is_compressed and len(payload) != -uncompressed_size:
-        raise AllegroDatafileError(
-            "Allegro object decompressed to "
-            f"{len(payload)} bytes, expected {-uncompressed_size}"
-        )
-    if strict_chunks and not payload_is_compressed and uncompressed_size != compressed_size:
+    if not payload_is_compressed and uncompressed_size != compressed_size:
         raise AllegroDatafileError(
             "Allegro uncompressed object has mismatched stored and decoded sizes"
         )
@@ -549,7 +537,6 @@ def _parse_object(
             0,
             base_offset=0,
             parse_nested=parse_nested,
-            strict_chunks=strict_chunks,
             old_crypt_state=old_crypt_state,
         )
         if nested_offset != len(payload):

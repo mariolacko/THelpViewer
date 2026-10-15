@@ -1,6 +1,6 @@
 # HelpPC 2.10 Text Database Format
 
-> Created: 2026-09-29 · Last updated: 2026-09-29
+> Created: 2026-09-29 · Last updated: 2026-10-11
 
 HelpPC is a DOS quick-reference system. Its readable source consists of
 independent `.TXT` databases; `INDEXHLP` / `BUILD` creates `HELPPC.NDX`
@@ -11,8 +11,8 @@ The primary specification is **Creating your own Help Files** in the
 original `HELPPC.DOC` shipped with HelpPC 2.10. The same format is also
 described by the [HelpPC format reference](https://stanislavs.org/helppc/helppc_format.html).
 The local 2.10 manual says source lines should not exceed **79 characters**;
-the online reference says 70. We follow the manual bundled with the
-sample being converted.
+the online reference says 70. These are source-size recommendations, not a
+field stored in the TXT.
 
 ## File structure
 
@@ -53,8 +53,27 @@ DOS box-drawing bytes; the English sample is decoded as CP437.
 | Other | Not displayed by the original HelpPC viewer. |
 
 The control character occupies column one and is not part of the displayed
-text. A blank line remains a blank display line. Tabs within display text
-advance to the next eight-column stop.
+text. The native renderer starts ordinary and `%` text at zero-based column 1
+(the second screen column), and a leading TAB at column 8. A blank line remains
+a blank display line. Tabs within display text advance to the next eight-column
+stop using the **actual output column**, not the byte position in the source.
+
+## Centering and tab expansion
+
+For a `^` line, the zero-based start column is:
+
+```text
+column = floor((80 - byte_length(source_after_control)) / 2)
+```
+
+Measure source bytes before expanding TAB or consuming tilde controls.
+Centering the eventual displayed text gives a different position. Internal
+TAB advances to the next multiple of eight from the actual output column.
+Ordinary and `%` rows start at column 1; a leading TAB starts at 8.
+
+For example, `^PORTS<TAB>Common I/O Port Addresses` has 31 source bytes after
+`^`, so starts at column 24. After `PORTS`, TAB advances from column 29 to 32;
+centering the expanded heading instead would give a different result.
 
 ## Inline links
 
@@ -70,10 +89,14 @@ serve as lookup keys; there is no separate numeric destination in the text
 file. An index built from the complete set of databases is therefore needed
 for cross-file navigation.
 
+The original renderer also consumes an unclosed `~` marker through the end
+of the current row. One such row occurs in the `int 2a,81` article of the
+original `INTERRUP.TXT`. The marker is not displayed; subsequent characters
+remain visible through the row end.
+
 ## Original HelpPC limits
 
-These are limits of the DOS application stated in `HELPPC.DOC`, not limits
-of the THelpViewer UHF output:
+These are limits of the DOS application stated in `HELPPC.DOC`:
 
 | Item | Limit |
 |------|------:|
@@ -88,9 +111,8 @@ of the THelpViewer UHF output:
 
 ## Distributed HelpPC 2.10 sample
 
-The downloaded archive contains these six topic databases. CRC32 values
-identify the exact source files registered in
-`thelpviewer/config/help-database.json`:
+The inspected distribution contains these six topic databases. CRC32 values
+identify the exact source examples:
 
 | File | CRC32 | Topics |
 |------|-------|-------:|
@@ -105,28 +127,14 @@ This totals **1,006 topics**. `HELPPC.DOC` also names `DOS.TXT`, but that
 file is absent from the selected distribution. `HELPPC.NDX` is the index
 generated for the original HelpPC executable, not another topic source.
 
-## THelpViewer mapping and known gaps
+## Lookup and absent fields
 
-`helppc.py` recognizes an `@` title followed by `:` topic lines. Each key
-becomes an index entry; database titles become Contents sections. A
-single `.TXT` is exported as its own UHF bundle (`ASM.TXT` to `asm.json.gz`,
-and likewise for the other five files). Each bundle assigns topic IDs in
-source order. The reader indexes sibling HelpPC databases before rendering,
-so a cross-database `~key~` becomes a `file=...` link to the correct bundle;
-the six original files contain 1,006 topics in total.
+Lookup ignores letter case and compresses repeated spaces in keys and link
+labels. Their displayed spelling and spacing remain significant source text.
+Cross-database keys use all databases participating in the index.
 
-Link lookup ignores letter case and compresses repeated spaces in both topic
-keys and link labels, matching the original HelpPC key rule; the displayed
-spelling and spacing are preserved.
-
-Display lines retain their spacing and CP437 text. `%` and `^` become UHF
-highlighted lines, and resolvable `~key~` references become topic links.
-The current converter does **not** reproduce the original centering of
-`^` lines. References to keys absent from the six available files remain
-text rather than being given invented destinations. The original DOS
-`HELPPC.NDX` binary is not parsed or regenerated.
-
-The downloader selects only the six `.TXT` conversion inputs into
-`sources/HelpPC 2.10/`. `HELPPC.DOC` and `HELPPC.NDX` remain in the original
-downloaded archive; the converter does not use them. These sources are
-excluded from the default public build pending a redistribution-rights review.
+Numeric context IDs, topic-offset tables, RGB palettes and display-width fields
+are not stored in TXT. The native renderer uses an 80-column screen. Some
+ordinary rows expand to 81–82 cells after TAB; the screen clips the overrun.
+Centered source text longer than 80 bytes causes unsigned-margin underflow,
+not a defined alternative centering rule.

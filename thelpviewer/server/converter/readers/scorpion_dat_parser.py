@@ -69,39 +69,28 @@ class ScorpionDatArticle:
     file_end: int | None
 
 
-def parse_scorpion_allegro_datafile(data: bytes, *, strict_chunks: bool = False) -> AllegroDatafile:
+def parse_scorpion_allegro_datafile(data: bytes) -> AllegroDatafile:
     """Parse the Scorpion old-crypt Allegro container variant."""
     return parse_allegro_datafile(
         data,
-        strict_chunks=strict_chunks,
         packfile_password=SCORPION_ALLEGRO_PASSWORD,
         old_crypt_chunk_local=True,
     )
 
 
-def parse_scorpion_allegro_objects(
-    data: bytes,
-    *,
-    strict_chunks: bool = False,
-) -> list[AllegroDatafileObject]:
+def parse_scorpion_allegro_objects(data: bytes) -> list[AllegroDatafileObject]:
     """Parse Scorpion Allegro objects with the Scorpion packfile password."""
     return parse_allegro_datafile_objects(
         data,
-        strict_chunks=strict_chunks,
         packfile_password=SCORPION_ALLEGRO_PASSWORD,
         old_crypt_chunk_local=True,
     )
 
 
-def extract_scorpion_allegro_data_objects(
-    data: bytes,
-    *,
-    strict_chunks: bool = False,
-) -> list[AllegroDatafileEntry]:
+def extract_scorpion_allegro_data_objects(data: bytes) -> list[AllegroDatafileEntry]:
     """Return Scorpion DATA entries with old-crypt/LZSS already decoded."""
     return extract_allegro_data_objects(
         data,
-        strict_chunks=strict_chunks,
         packfile_password=SCORPION_ALLEGRO_PASSWORD,
         old_crypt_chunk_local=True,
     )
@@ -121,14 +110,15 @@ def find_scorpion_article_markers(payload: bytes) -> list[ScorpionArticleMarker]
 
 
 def select_scorpion_payload(entry: AllegroDatafileEntry) -> tuple[str, bytes]:
-    """Choose the most useful payload candidate for Scorpion article slicing.
+    """Select the actual article bytes after validated container decoding.
 
     The Allegro layer exposes both the stored object bytes and the LZSS-decoded
-    candidate. Modern password-protected Scorpion files carry LZSS-compressed
+    payload. Modern password-protected Scorpion files carry LZSS-compressed
     object payloads, so the decompressed bytes are the real article stream.
-    Keep the stored bytes only for uncompressed or undecodable objects.
+    Stored bytes are article text only for uncompressed objects; a failed
+    compressed stream cannot be interpreted as plain text.
     """
-    if entry.payload_is_compressed and entry.decoded_payload:
+    if entry.payload_is_compressed:
         return "decoded", entry.decoded_payload
     return "stored", entry.stored_payload
 

@@ -116,8 +116,11 @@ class ProductSpec:
     key: str
     label: str
     sources: dict[str, SourceQuery]
+    description: str = ""
+    version_descriptions: dict[str, str] = field(default_factory=dict)
     menu_label: str = ""
     default_version: str = ""
+    versions: tuple[str, ...] = ()
     build_group: str = ""
     collection_prefixes: tuple[str, ...] = ()
     conversion: ConversionSpec = field(default_factory=ConversionSpec)
@@ -149,6 +152,7 @@ class HelpDatabaseEntry:
     help_contents_topic_id: int | None = None
     product_key: str = ""
     version: str = ""
+    sources: dict[str, SourceQuery] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,7 +253,7 @@ def _parse_converter(value: object) -> ConverterSpec | None:
     source_kind = value.get("source_kind") if isinstance(value.get("source_kind"), str) else ""
     reader = value.get("reader") if isinstance(value.get("reader"), str) else ""
     loader = value.get("loader") if isinstance(value.get("loader"), str) else ""
-    if not name.strip() or source_kind.strip() not in {"compiled", "source"}:
+    if not name.strip() or source_kind.strip() not in {"compiled", "source", "index"}:
         return None
     if not reader.strip() and not loader.strip():
         return None
@@ -415,8 +419,13 @@ def _parse_manifest(payload: object) -> HelpManifest:
                     key=key.strip(),
                     label=label.strip(),
                     sources=queries,
+                    description=str(item.get("description") or "").strip(),
+                    version_descriptions={version: text.strip() for version, text
+                        in (item.get("version_descriptions") if isinstance(item.get("version_descriptions"), dict) else {}).items()
+                        if isinstance(version, str) and isinstance(text, str) and text.strip()},
                     menu_label=str(item.get("menu_label") or "").strip(),
                     default_version=str(item.get("default_version") or "").strip(),
+                    versions=_string_tuple(item.get("versions")),
                     build_group=build_group.strip(),
                     collection_prefixes=_string_tuple(item.get("collection_prefixes")),
                     conversion=_parse_conversion(item.get("conversion")),
@@ -482,6 +491,9 @@ def _parse_manifest(payload: object) -> HelpManifest:
                     help_contents_topic_id=topic_id,
                     product_key=product_key.strip(),
                     version=version.strip(),
+                    sources={str(key): _parse_source_query(value)
+                             for key, value in item.get("sources", {}).items()}
+                    if isinstance(item.get("sources"), dict) else {},
                 )
             )
 
@@ -509,7 +521,7 @@ def _parse_manifest(payload: object) -> HelpManifest:
     for converter in converters:
         if converter.match_mode not in {"all", "any"}:
             raise ValueError(f"converter {converter.name} has invalid match_mode: {converter.match_mode}")
-        if converter.reader_init not in {"source", "path", "none"}:
+        if converter.reader_init not in {"source", "none"}:
             raise ValueError(f"converter {converter.name} has invalid reader_init: {converter.reader_init}")
         has_matcher = bool(converter.matcher or converter.detector or converter.extensions)
         if not has_matcher:

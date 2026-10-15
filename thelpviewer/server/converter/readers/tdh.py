@@ -1,18 +1,18 @@
 """Reader for Borland Turbo Debugger/Profiler runtime help files.
 
 TDH/TFH files are not THELP/TPH/TCH variants. Both formats now decode through
-the runtime-aligned nibble/text parser. TFH uses a direct size table; TDH uses
-runtime-map entries that are cumulatively summed as signed 16-bit deltas from
-the separator/base offset, using the larger of the legacy `0x212` width and the
-full pre-separator prefix for the known sample families.
+the runtime-aligned nibble/text parser. Both use runtime-map entries
+cumulatively summed as signed 16-bit deltas from the
+block base. Newer maps include a final page and may reference continuations
+through the native loader's overlapping payload prefix.
 """
 
 from __future__ import annotations
 
 from bisect import bisect_right
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-import re
 import struct
 import zlib
 
@@ -20,18 +20,16 @@ from ..base import ContentNode, HelpDocument, HelpReaderBase, IndexEntry, Positi
 from ..codepages import decode_bytes
 from ..uhf_markup import UhfLinkSpan, format_uhf_link, render_uhf_line
 
-TDH_MIN_TABLE_BYTE_SIZE = 0x0200
-TDH_MAX_TABLE_BYTE_SIZE = 0x0800
+TDH_MIN_TABLE_WORD_COUNT = 0x0200
+TDH_MAX_TABLE_WORD_COUNT = 0x0800
 TDH_MIN_SIZE = 0x420
 TDH_RUNTIME_TABLE_WORD_COUNT = 0x212
-TFH_MIN_TABLE_BYTE_SIZE = 0x0100
+TDH_LEGACY_MAP_MAX_WORD_COUNT = 0x254
+TFH_MIN_TABLE_WORD_COUNT = 0x0100
 TFH_MIN_SIZE = 0x2E0
-TFH_UNKNOWN_MARKER = b"<E>"
 TFH_SYNTHETIC_LEADING_CRLF_WORD = 0xDFF0
-TFH_SCREEN_LINE_WIDTH = 0x31
+RUNTIME_SCREEN_LINE_WIDTH = 0x30
 TDH_MAX_SCREEN_LINES = 0x0F
-_TDH_ALIAS_TAG_RE = re.compile(r"\[/?(?:link|nav)[^\]]*\]")
-_TDH_ALIAS_WS_RE = re.compile(r"\s+")
 
 TFH_NIBBLE_TEXT = {
     0x1: b"e",
@@ -46,8 +44,8 @@ TFH_NIBBLE_TEXT = {
     0xA: b"c",
     0xB: b"h",
     0xC: b" ",
-    0xD: b"^",
-    0xE: TFH_UNKNOWN_MARKER,
+    0xD: b"\x00",
+    0xE: b"\x00",
 }
 
 
@@ -61,8 +59,7 @@ class TdhProbe:
     header_word: int
     table_byte_size: int
     table_word_count: int
-    left_table_offset: int
-    right_table_offset: int
+    table_offset: int
     separator_offset: int
     separator_word: int
     encoded_payload_offset: int
@@ -79,8 +76,7 @@ class TdhProbe:
             "header_word": f"0x{self.header_word:04X}",
             "table_byte_size": self.table_byte_size,
             "table_word_count": self.table_word_count,
-            "left_table_offset": self.left_table_offset,
-            "right_table_offset": self.right_table_offset,
+            "table_offset": self.table_offset,
             "separator_offset": self.separator_offset,
             "separator_word": f"0x{self.separator_word:04X}",
             "encoded_payload_offset": self.encoded_payload_offset,
@@ -109,38 +105,32 @@ def _probe_runtime_help_binary(
     title: str,
     description: str,
     min_size: int,
-    min_table_byte_size: int,
-    require_even_table_size: bool,
-    allowed_separator_words: set[int],
+    min_table_word_count: int,
+    max_table_word_count: int = TDH_MAX_TABLE_WORD_COUNT,
 ) -> TdhProbe | None:
     """Return structural information when *data* matches a known TDH/TFH shape."""
     if len(data) < min_size:
         return None
     header_word = struct.unpack_from(">H", data, 0)[0]
 
-    # Known runtime-help files share one observable outer shape: the first word
-    # gives the byte length of one visible pre-separator half, followed by a
-    # matching second half and then one family marker/separator word. TDH uses
-    # even-sized halves and separator 0x0001; TFH reuses the same probe shape
-    # with an odd-sized size-table prefix and separator 0x0000.
-    table_byte_size = header_word
-    if (
-        table_byte_size < min_table_byte_size
-        or table_byte_size > TDH_MAX_TABLE_BYTE_SIZE
-        or (require_even_table_size and table_byte_size % 2)
-    ):
+    # Word zero is the context-map WORD count, not two byte-sized tables.
+    # Later DOS/Windows/32-bit maps can have odd word counts. The WORD at
+    # the block base overlaps slot zero and slot one's next-page field: it is
+    # not a version/separator signature in either family.
+    table_word_count = header_word
+    if not min_table_word_count <= table_word_count <= max_table_word_count:
         return None
-    table_word_count = (table_byte_size + 1) // 2
-    left_table_offset = 2
-    right_table_offset = left_table_offset + table_byte_size
-    separator_offset = right_table_offset + table_byte_size
+    table_byte_size = 2 * table_word_count
+    table_offset = 2
+    separator_offset = table_offset + table_byte_size
     encoded_payload_offset = separator_offset + 2
     if encoded_payload_offset + 2 >= len(data):
         return None
     separator_word = struct.unpack_from(">H", data, separator_offset)[0]
-    if separator_word not in allowed_separator_words:
+    if struct.unpack_from(">H", data, 2)[0] != 1:
         return None
-    if not (0x80 <= data[encoded_payload_offset] <= 0xBF):
+    first_page_context = struct.unpack_from(">H", data, separator_offset + 1)[0]
+    if not 0 < first_page_context < header_word:
         return None
     if data[encoded_payload_offset + 1:encoded_payload_offset + 5] != b"\xcc\xcc\xcc\xcc":
         return None
@@ -155,8 +145,7 @@ def _probe_runtime_help_binary(
         header_word=header_word,
         table_byte_size=table_byte_size,
         table_word_count=table_word_count,
-        left_table_offset=left_table_offset,
-        right_table_offset=right_table_offset,
+        table_offset=table_offset,
         separator_offset=separator_offset,
         separator_word=separator_word,
         encoded_payload_offset=encoded_payload_offset,
@@ -176,9 +165,7 @@ def probe_tdh_binary(data: bytes) -> TdhProbe | None:
         title="Turbo Debugger Help",
         description="Borland Turbo Debugger TDH help file",
         min_size=TDH_MIN_SIZE,
-        min_table_byte_size=TDH_MIN_TABLE_BYTE_SIZE,
-        require_even_table_size=True,
-        allowed_separator_words={1},
+        min_table_word_count=TDH_MIN_TABLE_WORD_COUNT,
     )
 
 
@@ -190,9 +177,10 @@ def probe_tfh_binary(data: bytes) -> TdhProbe | None:
         title="Turbo Profiler Help",
         description="Borland Turbo Profiler TFH help file",
         min_size=TFH_MIN_SIZE,
-        min_table_byte_size=TFH_MIN_TABLE_BYTE_SIZE,
-        require_even_table_size=False,
-        allowed_separator_words={0},
+        min_table_word_count=TFH_MIN_TABLE_WORD_COUNT,
+        # Known Profiler maps occupy the smaller range. The overlapping base
+        # WORD is not a family signature (1.01 has 2C00h, not 0000h).
+        max_table_word_count=TDH_MIN_TABLE_WORD_COUNT - 1,
     )
 
 
@@ -230,7 +218,7 @@ def _read_tfh_symbol(block: bytes, offset: int, half: int) -> tuple[str | None, 
             low, offset, half = _read_tfh_raw_nibble(block, offset, half)
             high, offset, half = _read_tfh_raw_nibble(block, offset, half)
             if low is None or high is None:
-                return None, offset, half
+                raise ValueError("Truncated runtime HELP literal escape")
             return chr(low | (high << 4)), offset, half
         return TFH_NIBBLE_TEXT[nibble].decode("latin1"), offset, half
 
@@ -239,18 +227,23 @@ def _parse_tfh_block(
     block: bytes,
     *,
     text_lead_word: int | None = None,
-    max_target_context: int | None = None,
     max_lines: int | None = None,
-    position_callback: callable | None = None,
+    position_callback: Callable[[int, int], None] | None = None,
+    hotspot_lookahead: bool = True,
 ) -> tuple[list[bytes], list[PositionedKeyword], bool]:
-    """Parse one TFH block into visible lines and positioned hotspots."""
-    offset = 2 if len(block) >= 2 else 0
+    """Parse cells/hotspots; report consumed half-open source-byte ranges."""
+    if len(block) < 2:
+        raise ValueError("Truncated runtime HELP page header")
+    offset = 2
     half = 0
     pushback_symbol: str | None = None
     pending_prefix = ""
     pending_hotspot_target: int | None = None
     lines: list[str] = []
     keywords: list[PositionedKeyword] = []
+    line_width = RUNTIME_SCREEN_LINE_WIDTH
+    if position_callback is not None:
+        position_callback(0, 2)
 
     def get_symbol() -> str | None:
         nonlocal offset, half, pushback_symbol
@@ -258,7 +251,12 @@ def _parse_tfh_block(
             symbol = pushback_symbol
             pushback_symbol = None
             return symbol
+        first_byte = offset
         symbol, offset, half = _read_tfh_symbol(block, offset, half)
+        if position_callback is not None and symbol is not None:
+            # A literal can cross bytes; a consumed high/low nibble belongs
+            # to its physical byte even when the final cursor skips it.
+            position_callback(first_byte, offset + bool(half))
         return symbol
 
     def unread_symbol(symbol: str) -> None:
@@ -274,21 +272,47 @@ def _parse_tfh_block(
         if next_symbol is not None:
             unread_symbol(next_symbol)
 
-    def skip_hidden_nul_trailer() -> bool:
-        """Discard hidden trailer bytes after NUL until the next line break."""
-        while True:
-            hidden_symbol = get_symbol()
-            if hidden_symbol is None:
-                return False
-            if hidden_symbol in ("\r", "\n"):
-                consume_line_break(hidden_symbol)
-                return True
+    def display_row(parts: list[str]) -> str:
+        # Native row/prefix buffers are C strings. A NUL inside a label cuts
+        # its visible text, not its encoded field or closing caret.
+        return "".join(parts).split("\x00", 1)[0].rstrip(" ")
 
     def wrap_text(current_parts: list[str]) -> tuple[list[str], str]:
         wrap_at = "".join(current_parts).rfind(" ")
         if wrap_at <= 0:
-            return current_parts[:TFH_SCREEN_LINE_WIDTH], "".join(current_parts[TFH_SCREEN_LINE_WIDTH:])
-        return current_parts[:wrap_at], "".join(current_parts[wrap_at + 1 :])
+            wrap_at = line_width
+            carry_start = line_width
+        else:
+            carry_start = wrap_at + 1
+
+        # Ordinary text after a hotspot can wrap its label again (e.g. a
+        # hyphenated suffix or punctuation at column 49). Move/split the
+        # ranges together with the cells, not by searching the finished text.
+        reflowed: list[PositionedKeyword] = []
+        for keyword in keywords:
+            if keyword.line != len(lines):
+                reflowed.append(keyword)
+                continue
+            first = keyword.first_column - 1
+            last = keyword.last_column
+            if first < min(last, wrap_at):
+                reflowed.append(PositionedKeyword(
+                    target_context=keyword.target_context,
+                    line=keyword.line,
+                    first_column=first + 1,
+                    last_column=min(last, wrap_at),
+                    navigation=keyword.navigation,
+                ))
+            if max(first, carry_start) < last:
+                reflowed.append(PositionedKeyword(
+                    target_context=keyword.target_context,
+                    line=keyword.line + 1,
+                    first_column=max(first, carry_start) - carry_start + 1,
+                    last_column=last - carry_start,
+                    navigation=keyword.navigation,
+                ))
+        keywords[:] = reflowed
+        return current_parts[:wrap_at], "".join(current_parts[carry_start:]).split("\x00", 1)[0]
 
     while True:
         current_parts = list(pending_prefix)
@@ -298,18 +322,20 @@ def _parse_tfh_block(
         line_break_encountered = False
 
         if pending_hotspot_target is not None and current_columns:
-            if current_columns > TFH_SCREEN_LINE_WIDTH:
-                visible_prefix = current_parts[:TFH_SCREEN_LINE_WIDTH]
+            if current_columns > line_width:
+                visible_prefix = current_parts[:line_width]
                 keywords.append(
                     PositionedKeyword(
                         target_context=pending_hotspot_target,
                         line=len(lines),
                         first_column=1,
-                        last_column=TFH_SCREEN_LINE_WIDTH,
+                        last_column=line_width,
                     )
                 )
-                pending_prefix = "".join(current_parts[TFH_SCREEN_LINE_WIDTH:])
-                lines.append("".join(visible_prefix).rstrip(" "))
+                pending_prefix = "".join(current_parts[line_width:])
+                lines.append(display_row(visible_prefix))
+                if max_lines is not None and len(lines) >= max_lines:
+                    break
                 continue
             keywords.append(
                 PositionedKeyword(
@@ -323,14 +349,8 @@ def _parse_tfh_block(
 
         symbol = get_symbol()
         while True:
-            if position_callback is not None:
-                position_callback(offset, current_columns, half)
             if symbol is None:
-                if current_columns == 0:
-                    end_of_topic = True
-                    break
-                end_of_topic = True
-                break
+                raise ValueError("Truncated runtime HELP text: missing topic terminator")
             if symbol == "\x00":
                 end_of_topic = True
                 break
@@ -339,63 +359,49 @@ def _parse_tfh_block(
                 line_break_encountered = True
                 break
             if symbol == "^":
-                saved_offset = offset
-                saved_half = half
                 if half:
                     offset += 1
                     half = 0
                 if offset + 2 > len(block):
-                    end_of_topic = current_columns > 0
-                    break
+                    raise ValueError("Truncated runtime HELP hotspot target")
                 target_context = struct.unpack_from(">H", block, offset)[0]
-                if current_columns == 0 and saved_half and target_context == 0:
-                    end_of_topic = True
-                    break
+                if position_callback is not None:
+                    position_callback(offset, offset + 2)
                 offset += 2
-                if (
-                    target_context == 0
-                    or (
-                        max_target_context is not None
-                        and not 0 < target_context < max_target_context
-                    )
-                ):
-                    offset = saved_offset
-                    half = saved_half
+                if target_context == 0:
+                    # Native zero-target controls consume their raw WORD and
+                    # display a literal caret (e.g. Pascal pointer operators).
                     symbol = "^"
                 else:
                     label_parts: list[str] = []
-                    line_break_after_hotspot = False
+                    label_has_nul = False
                     while True:
                         label_symbol = get_symbol()
-                        if position_callback is not None:
-                            position_callback(offset, current_columns, half)
                         if label_symbol is None or label_symbol == "^":
+                            if label_symbol is None:
+                                field = "trailer: missing closing caret" if label_has_nul else "label"
+                                raise ValueError(f"Truncated runtime HELP hotspot {field}")
                             break
                         if label_symbol == "\x00":
-                            line_break_after_hotspot = skip_hidden_nul_trailer()
-                            break
+                            label_has_nul = True
                         label_parts.append(label_symbol)
-                    if (
-                        line_break_after_hotspot
-                        and current_columns == 0
-                        and label_parts[:2] == ["\r", "\n"]
-                    ):
-                        end_of_topic = True
-                        break
                     if not label_parts:
-                        if line_break_after_hotspot:
-                            break
                         symbol = get_symbol()
                         continue
-                    if line_break_after_hotspot:
-                        while label_parts and label_parts[-1] in {"\r", "\n"}:
-                            label_parts.pop()
-                        if not label_parts:
-                            break
                     label = "".join(label_parts)
-                    if current_columns + len(label) > TFH_SCREEN_LINE_WIDTH:
-                        pending_prefix = label
-                        pending_hotspot_target = target_context
+                    hotspot_width = line_width
+                    if hotspot_lookahead:
+                        # TD 4/5 reserves a cell unless the character after the
+                        # closing caret is a space. Older TD and Profiler do
+                        # not inspect it. Preserve the normal text stream.
+                        following = get_symbol()
+                        if following != " ":
+                            hotspot_width -= 1
+                        if following is not None:
+                            unread_symbol(following)
+                    if current_columns + len(label) > hotspot_width:
+                        pending_prefix = label.split("\x00", 1)[0]
+                        pending_hotspot_target = target_context if pending_prefix else None
                         break
                     first_column = current_columns + 1
                     current_parts.extend(label_parts)
@@ -408,26 +414,38 @@ def _parse_tfh_block(
                             last_column=current_columns,
                         )
                     )
-                    if line_break_after_hotspot:
-                        break
                     symbol = get_symbol()
                     continue
             if symbol == "\t":
                 symbol = " "
             current_parts.append(symbol)
             current_columns += 1
-            if current_columns > TFH_SCREEN_LINE_WIDTH:
+            if current_columns > line_width:
                 current_parts, pending_prefix = wrap_text(current_parts)
                 current_columns = len(current_parts)
                 break
             symbol = get_symbol()
 
         if current_parts or not lines or line_break_encountered:
-            lines.append("".join(current_parts).rstrip(" "))
+            lines.append(display_row(current_parts))
         if end_of_topic:
             break
         if max_lines is not None and len(lines) >= max_lines:
             break
+
+    # A carried fragment may fall below the native screen-row limit. Only
+    # expose ranges on displayed cells, including after trailing-space trim.
+    keywords = [
+        PositionedKeyword(
+            target_context=keyword.target_context,
+            line=keyword.line,
+            first_column=keyword.first_column,
+            last_column=min(keyword.last_column, len(lines[keyword.line])),
+            navigation=keyword.navigation,
+        )
+        for keyword in keywords
+        if keyword.line < len(lines) and keyword.first_column <= len(lines[keyword.line])
+    ]
 
     trimmed_synthetic_blank = False
     if text_lead_word == TFH_SYNTHETIC_LEADING_CRLF_WORD and lines and lines[0] == "":
@@ -446,43 +464,6 @@ def _parse_tfh_block(
     return [line.encode("latin1") for line in lines], keywords, trimmed_synthetic_blank
 
 
-def _normalize_tdh_alias_text(lines: list[str]) -> str:
-    text = "\n".join(lines)
-    text = _TDH_ALIAS_TAG_RE.sub("", text)
-    text = text.replace("[[", "[").replace("]]", "]")
-    text = _TDH_ALIAS_WS_RE.sub(" ", text)
-    return text.strip().lower()
-
-
-def _tdh_alias_owner_by_text(topics: list[TopicRecord], alias_contexts: set[int]) -> dict[int, int]:
-    normalized = {
-        topic.context_id: _normalize_tdh_alias_text(topic.uhf_content)
-        for topic in topics
-    }
-    owners: dict[int, int] = {}
-    for context_id in sorted(alias_contexts):
-        text = normalized.get(context_id, "")
-        if not text:
-            continue
-        best_match: tuple[int, int] | None = None
-        for owner_id in range(context_id):
-            haystack = normalized.get(owner_id, "")
-            if not haystack:
-                continue
-            for trim in range(0, min(8, len(text))):
-                fragment = text[trim:]
-                if len(fragment) < 8:
-                    continue
-                if fragment in haystack:
-                    candidate = (trim, owner_id)
-                    if best_match is None or candidate < best_match:
-                        best_match = candidate
-                    break
-        if best_match is not None:
-            owners[context_id] = best_match[1]
-    return owners
-
-
 def _label_from_tfh_lines(lines: list[bytes], context_id: int) -> bytes:
     """Choose a stable visible label for one decoded TFH topic."""
     for line in lines:
@@ -499,14 +480,18 @@ def _signed_tdh_delta(value: int) -> int:
 
 
 def _tdh_runtime_table_word_count(probe: TdhProbe) -> int:
-    """Return the active TDH runtime map width for known sample families.
+    """Return the initial TDH map width for known sample families.
 
     TD 1.0 loads a legacy fixed 0x212-word map, which extends 12 words past the
-    visible pre-separator prefix. The later 2.x sample keeps the whole
-    pre-separator prefix as runtime map data, so use whichever is larger.
+    visible pre-separator prefix. Later files also address a final
+    page at the stored map's cumulative end; authored references can extend
+    that initial map through the native loader's overlapping payload prefix.
     """
     pre_separator_word_count = max((probe.separator_offset - 2) // 2, 0)
-    return max(TDH_RUNTIME_TABLE_WORD_COUNT, pre_separator_word_count)
+    # Slot N overlaps the base WORD in older editions too. A nonzero WORD
+    # enables their genuine cumulative-end page (including TD 2.x's target
+    # 596), not just final pages in the 4.x/5.x editions.
+    return max(TDH_RUNTIME_TABLE_WORD_COUNT, pre_separator_word_count + 1)
 
 
 def _empty_tdh_alias_stats() -> dict[str, object]:
@@ -514,12 +499,10 @@ def _empty_tdh_alias_stats() -> dict[str, object]:
     return {
         "out_of_range_page_word_context_count": 0,
         "embedded_alias_context_count": 0,
-        "text_alias_context_count": 0,
         "remaining_unresolved_alias_context_count": 0,
         "empty_placeholder_context_count": 0,
         "out_of_range_page_word_contexts": [],
         "embedded_alias_contexts": [],
-        "text_alias_contexts": [],
         "remaining_unresolved_alias_contexts": [],
         "empty_placeholder_contexts": [],
     }
@@ -594,13 +577,26 @@ def _decode_tfh_topics(
     probe: TdhProbe,
 ) -> tuple[list[TopicRecord], dict[str, int], dict[str, int], int, int, int, int, int]:
     """Return decoded TFH topics from the runtime-aligned block map."""
-    context_count = probe.header_word
-    size_table_end = 2 + context_count * 2
+    context_count = probe.header_word + 1
+    size_table_end = probe.separator_offset
     if size_table_end + 2 > len(data):
         return [], {}, {}, 0, 0, 0, 0, 0
 
-    sizes = [struct.unpack_from(">H", data, 2 + index * 2)[0] for index in range(context_count)]
+    # Native TPROF preloads 600 map WORDs, beyond the stored prefix. Slot N
+    # overlaps the base WORD: zero disables it in 1.0, nonzero enables the
+    # genuine cumulative-end page in 1.01. It is not that page's byte length.
+    deltas = struct.unpack_from(f">{context_count}h", data, 2)
     runtime_block_offset = size_table_end
+    starts = []
+    offset = runtime_block_offset
+    for delta in deltas:
+        starts.append(offset)
+        offset += delta
+    if any(not runtime_block_offset <= start <= len(data)
+           or (context_id != 0 and delta != 0 and start + 2 > len(data))
+           for context_id, (start, delta) in enumerate(zip(starts, deltas))):
+        raise ValueError("Unsupported or truncated TFH payload: context map outside file")
+    boundaries = sorted(set(starts) | {len(data)})
     topics: list[TopicRecord] = []
     control_word_counts: dict[str, int] = {}
     text_lead_word_counts: dict[str, int] = {}
@@ -609,11 +605,10 @@ def _decode_tfh_topics(
     control_word_context_range_count = 0
     text_lead_word_zero_count = 0
     text_lead_word_context_range_count = 0
-    offset = runtime_block_offset
-    for context_id, size in enumerate(sizes):
-        next_offset = offset + size
-        if next_offset > len(data):
-            break
+    for context_id, (offset, delta) in enumerate(zip(starts, deltas)):
+        if delta == 0:
+            continue
+        next_offset = boundaries[bisect_right(boundaries, offset)]
         raw_block = data[offset:next_offset]
         control_word = struct.unpack_from(">H", raw_block, 0)[0] if len(raw_block) >= 2 else None
         text_lead_word = struct.unpack_from(">H", raw_block, 2)[0] if len(raw_block) >= 4 else None
@@ -632,11 +627,17 @@ def _decode_tfh_topics(
         elif text_lead_word is not None and 0 < text_lead_word < context_count:
             text_lead_word_context_range_count += 1
 
-        lines, positional_keywords, trimmed_synthetic_blank = _parse_tfh_block(
-            raw_block,
-            text_lead_word=text_lead_word,
-            max_target_context=context_count,
-        )
+        if context_id == 0:
+            # Opaque slot zero is not a page with a text terminator.
+            lines, positional_keywords, trimmed_synthetic_blank = [b""], [], False
+        else:
+            lines, positional_keywords, trimmed_synthetic_blank = _parse_tfh_block(
+                raw_block,
+                text_lead_word=text_lead_word,
+                max_lines=TDH_MAX_SCREEN_LINES,
+                # Original TPROF does not reserve a post-hotspot cell.
+                hotspot_lookahead=False,
+            )
         if trimmed_synthetic_blank:
             trimmed_prefix_topics += 1
         label = _label_from_tfh_lines(lines, context_id)
@@ -645,15 +646,14 @@ def _decode_tfh_topics(
             TopicRecord(
                 context_id=context_id,
                 raw_lines=lines,
-                index_terms=[label],
+                index_terms=[label] if context_id else [],
                 names=[label.decode("latin1")],
                 positional_keywords=positional_keywords,
-                is_help_contents=(label == b"HELP INDEX"),
+                is_help_contents=context_id == 1,
                 next_context=control_word if control_word is not None and 0 < control_word < context_count else None,
                 uhf_content=text_lines,
             )
         )
-        offset = next_offset
     for topic in topics:
         topic.nav_items = build_directional_nav_items(topic)
     return (
@@ -668,7 +668,7 @@ def _decode_tfh_topics(
     )
 
 
-def _read_tfh_partial_document(data: bytes, probe: TdhProbe, source_name: str) -> HelpDocument:
+def _read_tfh_document(data: bytes, probe: TdhProbe, source_name: str) -> HelpDocument:
     """Return a decoded TFH document with topic text, hotspots, and next links."""
     (
         topics,
@@ -701,11 +701,13 @@ def _read_tfh_partial_document(data: bytes, probe: TdhProbe, source_name: str) -
             "format": probe.format_name,
             "format_status": "decoded",
             "text_encoding": "latin1",
-            "display_width": TFH_SCREEN_LINE_WIDTH,
+            "display_width": RUNTIME_SCREEN_LINE_WIDTH,
             "language": "en",
             "tdh_probe": probe.to_metadata(),
-            "tfh_partial_decode": {
-                "context_count": probe.header_word,
+            "tfh_decode": {
+                "stored_map_word_count": probe.header_word,
+                "runtime_table_word_count": probe.header_word + 1,
+                "context_count": len(topics),
                 "runtime_block_offset": probe.separator_offset,
                 "payload_offset": probe.encoded_payload_offset,
                 "hotspot_count": hotspot_count,
@@ -719,7 +721,6 @@ def _read_tfh_partial_document(data: bytes, probe: TdhProbe, source_name: str) -
                 "leading_word_zero_count": text_lead_word_zero_count,
                 "leading_word_context_range_count": text_lead_word_context_range_count,
                 "trimmed_synthetic_leading_blank_topics": trimmed_prefix_topics,
-                "unknown_marker": TFH_UNKNOWN_MARKER.decode("ascii"),
             },
             "help_contents_topic_id": help_contents_topic_id,
         },
@@ -730,9 +731,11 @@ def _read_tfh_partial_document(data: bytes, probe: TdhProbe, source_name: str) -
 def _decode_tdh_topics(
     data: bytes,
     probe: TdhProbe,
+    *,
+    runtime_table_word_count: int | None = None,
 ) -> tuple[list[TopicRecord], dict[str, int], int, int, dict[str, object]]:
     """Return decoded TDH topics from the runtime-aligned signed delta map."""
-    runtime_table_word_count = _tdh_runtime_table_word_count(probe)
+    runtime_table_word_count = runtime_table_word_count or _tdh_runtime_table_word_count(probe)
     runtime_table_end = 2 + runtime_table_word_count * 2
     if runtime_table_end > len(data):
         return [], {}, 0, 0, _empty_tdh_alias_stats()
@@ -752,6 +755,11 @@ def _decode_tdh_topics(
             negative_delta_count += 1
         cumulative_offset += signed_delta
 
+    if any(raw_deltas[context_id] != 0 and start != len(data)
+           and not probe.separator_offset <= start <= len(data) - 2
+           for context_id, start in enumerate(runtime_starts)):
+        raise ValueError("Unsupported or truncated TDH payload: context map outside file")
+
     page_words: list[int | None] = []
     context_count = len(runtime_starts)
     for start in runtime_starts:
@@ -763,15 +771,18 @@ def _decode_tdh_topics(
     out_of_range_context_by_start = {
         start: context_id
         for context_id, start in enumerate(runtime_starts)
-        if (page_word := page_words[context_id]) is not None
+        if context_id != 0 and raw_deltas[context_id] != 0
+        and (page_word := page_words[context_id]) is not None
         and page_word != 0
         and not 0 < page_word < context_count
     }
+    modern_layout = probe.header_word > TDH_LEGACY_MAP_MAX_WORD_COUNT
     topic_boundaries = sorted(
         {
             start
             for context_id, start in enumerate(runtime_starts)
             if 0 <= start < len(data)
+            and (not modern_layout or context_id <= probe.header_word)
             and (page_word := page_words[context_id]) is not None
             and (page_word == 0 or 0 < page_word < context_count)
         }
@@ -782,6 +793,12 @@ def _decode_tdh_topics(
     trimmed_prefix_topics = 0
     alias_owner_by_context: dict[int, int] = {}
     for context_id, start in enumerate(runtime_starts):
+        # The native page routine rejects a zero map entry before seeking.
+        # It is an absent context, not another copy of its following page.
+        if context_id and raw_deltas[context_id] == 0:
+            continue
+        if start == len(data):
+            continue
         if start < 0 or start + 2 > len(data):
             break
         boundary_index = bisect_right(topic_boundaries, start)
@@ -793,30 +810,33 @@ def _decode_tdh_topics(
         page_word_key = f"0x{page_word:04X}"
         page_word_counts[page_word_key] = page_word_counts.get(page_word_key, 0) + 1
 
-        def note_embedded_alias(relative_offset: int, current_columns: int, half: int) -> None:
-            alias_context = out_of_range_context_by_start.get(start + relative_offset)
-            if alias_context is None or alias_context == context_id:
-                return
-            alias_owner_by_context.setdefault(alias_context, context_id)
+        def note_embedded_alias(first_byte: int, end_byte: int) -> None:
+            for relative_offset in range(first_byte, end_byte):
+                alias_context = out_of_range_context_by_start.get(start + relative_offset)
+                if alias_context is not None and alias_context != context_id:
+                    alias_owner_by_context.setdefault(alias_context, context_id)
 
-        if out_of_range_context_by_start:
+        if context_id and out_of_range_context_by_start:
             # Alias offsets can sit past a visible page boundary. Scan the
             # runtime stream as the original viewer did, but keep that scan
             # separate from the bounded text rendered for this topic.
             _parse_tfh_block(
                 data[start:],
                 text_lead_word=page_word,
-                max_target_context=len(runtime_starts),
                 max_lines=TDH_MAX_SCREEN_LINES,
                 position_callback=note_embedded_alias,
+                hotspot_lookahead=modern_layout,
             )
 
-        lines, positional_keywords, trimmed_synthetic_blank = _parse_tfh_block(
-            raw_block,
-            text_lead_word=page_word,
-            max_target_context=len(runtime_starts),
-            max_lines=TDH_MAX_SCREEN_LINES,
-        )
+        if context_id == 0:
+            lines, positional_keywords, trimmed_synthetic_blank = [b""], [], False
+        else:
+            lines, positional_keywords, trimmed_synthetic_blank = _parse_tfh_block(
+                raw_block,
+                text_lead_word=page_word,
+                max_lines=TDH_MAX_SCREEN_LINES,
+                hotspot_lookahead=modern_layout,
+            )
         if trimmed_synthetic_blank:
             trimmed_prefix_topics += 1
 
@@ -835,21 +855,49 @@ def _decode_tdh_topics(
                 index_terms=index_terms,
                 names=[label.decode("latin1")],
                 positional_keywords=positional_keywords,
-                is_help_contents=(context_id == 1 and label == b"HELP INDEX"),
+                is_help_contents=(context_id == 1),
                 next_context=page_word if 0 < page_word < len(runtime_starts) else None,
                 uhf_content=text_lines,
             )
         )
 
+    if modern_layout:
+        # Native loaders read beyond the stored map. Only import extra slots
+        # actually referenced by the source, not arbitrary text interpreted as
+        # hundreds of new topics. The same signed-delta addressing applies.
+        referenced_contexts = {keyword.target_context for topic in topics
+                               for keyword in topic.positional_keywords}
+        referenced_contexts.update(word for word in page_words[1:probe.header_word + 1]
+                                   if word is not None and 0 < word < TDH_MAX_TABLE_WORD_COUNT)
+        required_words = max((context + 1 for context in referenced_contexts
+                              if 0 < context < TDH_MAX_TABLE_WORD_COUNT), default=0)
+        if required_words > runtime_table_word_count:
+            return _decode_tdh_topics(data, probe, runtime_table_word_count=required_words)
+        # An overlapping slot is a redirect only when its decoded cells and
+        # hotspots exactly equal the real page containing its source offset.
+        # No title matching or case/whitespace normalization is needed.
+        by_context = {topic.context_id: topic for topic in topics}
+        owner_by_start = {runtime_starts[topic.context_id]: topic.context_id
+                          for topic in topics if 0 < topic.context_id <= probe.header_word}
+        owner_starts = sorted(owner_by_start)
+        for topic in topics:
+            if topic.context_id <= probe.header_word:
+                continue
+            start = runtime_starts[topic.context_id]
+            owner_index = bisect_right(owner_starts, start) - 1
+            if owner_index < 0:
+                continue
+            owner_id = owner_by_start[owner_starts[owner_index]]
+            owner = by_context[owner_id]
+            if topic.raw_lines == owner.raw_lines and topic.positional_keywords == owner.positional_keywords:
+                alias_owner_by_context[topic.context_id] = owner_id
+                out_of_range_context_by_start[start] = topic.context_id
+
     unresolved_alias_contexts = set(out_of_range_context_by_start.values()) - set(alias_owner_by_context)
     out_of_range_alias_contexts = sorted(out_of_range_context_by_start.values())
     embedded_alias_contexts = sorted(alias_owner_by_context)
     embedded_alias_context_count = len(alias_owner_by_context)
-    text_alias_owners = _tdh_alias_owner_by_text(topics, unresolved_alias_contexts)
-    text_alias_contexts = sorted(text_alias_owners)
-    for alias_context, owner_context in text_alias_owners.items():
-        alias_owner_by_context.setdefault(alias_context, owner_context)
-    remaining_unresolved_alias_contexts = sorted(unresolved_alias_contexts - set(text_alias_owners))
+    remaining_unresolved_alias_contexts = sorted(unresolved_alias_contexts)
     empty_placeholder_contexts = sorted(
         topic.context_id
         for topic in topics
@@ -858,14 +906,14 @@ def _decode_tdh_topics(
         and not any(line.strip() for line in topic.uhf_content)
     )
     alias_stats = {
+        "runtime_table_word_count": runtime_table_word_count,
+        "absent_contexts": [context for context, delta in enumerate(raw_deltas) if context and delta == 0],
         "out_of_range_page_word_context_count": len(out_of_range_context_by_start),
         "embedded_alias_context_count": embedded_alias_context_count,
-        "text_alias_context_count": len(text_alias_owners),
         "remaining_unresolved_alias_context_count": len(remaining_unresolved_alias_contexts),
         "empty_placeholder_context_count": len(empty_placeholder_contexts),
         "out_of_range_page_word_contexts": out_of_range_alias_contexts,
         "embedded_alias_contexts": embedded_alias_contexts,
-        "text_alias_contexts": text_alias_contexts,
         "remaining_unresolved_alias_contexts": remaining_unresolved_alias_contexts,
         "empty_placeholder_contexts": empty_placeholder_contexts,
     }
@@ -913,11 +961,11 @@ def _read_tdh_document(data: bytes, probe: TdhProbe, source_name: str) -> HelpDo
             "format": probe.format_name,
             "format_status": "decoded",
             "text_encoding": "latin1",
-            "display_width": TFH_SCREEN_LINE_WIDTH,
+            "display_width": RUNTIME_SCREEN_LINE_WIDTH,
             "language": "en",
             "tdh_probe": probe.to_metadata(),
             "tdh_decode": {
-                "runtime_context_count": len(topics),
+                "runtime_context_count": alias_stats["runtime_table_word_count"],
                 "runtime_table_word_count": _tdh_runtime_table_word_count(probe),
                 "runtime_block_offset": probe.separator_offset,
                 "payload_offset": probe.encoded_payload_offset,
@@ -950,7 +998,7 @@ class TdhHelpReader(HelpReaderBase):
             raise ValueError("Unsupported Borland runtime help format")
 
         if probe.format_name == "tfh":
-            return _read_tfh_partial_document(data, probe, self.source_name)
+            return _read_tfh_document(data, probe, self.source_name)
         return _read_tdh_document(data, probe, self.source_name)
 
 

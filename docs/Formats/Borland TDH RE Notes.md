@@ -4,6 +4,184 @@ This file keeps the full reverse-engineering notes, runtime observations, and
 open questions for the TDH/TFH family. The format-only summary lives in
 `Borland TDH.md`.
 
+## Source-byte alias ownership (2026-10-12)
+
+The remaining TD 1.0 text-owner fallback is removed. The former observer
+sampled only `(offset, half)` after decoding a symbol. It could miss every
+byte inside a multi-nibble literal, and never observed a page-header byte.
+The shared block decoder now reports consumed half-open byte ranges for the
+page WORD, each nibble-decoded symbol and each raw hotspot target WORD.
+Pushback has no new read; the exclusive end cursor does not claim an unread
+byte. Ownership still follows actual stream execution up to its terminator
+or 15-row cap, not a nearest-address/title policy.
+
+The two former fallback cases are explained directly by the original bytes:
+
+| Context | Address | Source owner | Address relation |
+| --- | ---: | --- | --- |
+| 519 | 112,639 | 518 at 112,638 | Second page-header byte, relative `+1` |
+| 528 | 63,973 | 328 at 63,905 | Literal b starts at `(67, high)`, finishes at `(69, low)` and consumes byte `+68` |
+
+All source owners remain the same: `519:518`, `520:425`, `521:380`,
+`522:314`, `523:220`, `524:156`, `525:152`, `526:294`, `527:393`,
+`528:328`, `529:306`. Fresh bounded execution of the original TD 1.0
+line helper agrees with raw cells/hotspots for all 11 aliases and owners
+328/518. No original context or source bytes are removed or renamed.
+
+Regression inputs copy each owner's complete stream into earlier context 2;
+the identical displayed text no longer steals 519/528's source ownership.
+A separate input terminates owner 328 before byte `+68`, leaving both a
+similar page 2 and the independently readable context 528. The latter remains
+unresolved with its own text rather than receiving a fabricated owner.
+These modified checksums also demonstrate that the rule is not CRC-specific.
+The old `text_alias_context_count` / `text_alias_contexts` fields are removed,
+not retained as compatibility diagnostics. Corpus rows, links, aliases and
+navigation are unchanged; only TDH ownership diagnostics change.
+All 15 source paths were re-exported and compared against their 12 canonical
+bundles with only that diagnostic delta and converter dates allowed. The
+selected TD/TFH product was then staged and published with a recoverable
+backup. All 253 catalog entries, unselected bundles (including Windows HLP)
+and 495 original source files remain intact. The duplicate-caption reader/UHF
+checks also pass in the Docker Python 3.12 runtime.
+
+## Hotspot edge paths and Profiler profile (2026-10-12)
+
+The original TPROF 1.0 and DOS TD 4/5 line routines were executed on 11
+bounded synthetic records per application in separate Unicorn instances.
+The harness hooks only file reads, C-string copies and keyword allocation;
+no application, installer or host code is run. Executable SHA256 identities:
+
+| Original | Bytes | SHA256 |
+| --- | ---: | --- |
+| TPROF 1.0 | 313,616 | `cc926b2139a880de232068bc64e247ac0757bcf4df2d6bba1a43dc265b2b2186` |
+| TD DOS 4.0 | 708,648 | `64fc1c997aa3c9ef2c094e305f387b272baf719e528d675055dedcdc2ad803b6` |
+| TD DOS 5.0 | 773,468 | `30e17706499709ccd0eca8604c00baf909e2cb93feba71a01bafde85533a6aa9` |
+
+Profiler does **not** perform newer TD's post-label lookahead reservation.
+`x*23 + hotspot(L*25) + NUL` occupies one 48-cell Profiler row; TD 4/5
+carries the entire label. CR/LF following that label has the same profile
+difference; a following space permits column 48 in all three. The existing
+Profiler originals happen not to exercise that distinction, so their earlier
+complete-corpus matches did not establish the lookahead rule. This supersedes
+the Profiler/modern-TD equivalence claimed in the earlier notes below.
+
+At TPROF image `3C66Fh..3C679h`, the label loop stops only on `5Eh`.
+NUL and CR/LF remain raw bytes until the closing caret; there is no
+NUL-to-newline terminal path. C-string row/prefix copies stop at NUL.
+All three originals produce the following:
+
+| Prefix / label / following text | Visible rows |
+| --- | --- |
+| `x*46` / `Label NUL hidden` / `CR LF NEXT NUL` | `x*46`, `Label`, `NEXT` |
+| `prefix SPACE` / `Label NUL hidden` / `CR LF NEXT NUL` | `prefix Label`, `NEXT` |
+| `prefix SPACE` / `Label NUL hidden CR LF more` / `CR LF NEXT NUL` | `prefix Label`, `NEXT` |
+| `prefix SPACE` / `Label NUL hidden` / `SPACE visible NUL` | `prefix Label` |
+| `x*46` / `Label NUL hidden` / `SPACE visible NUL` | `x*46`, `Label visible` |
+
+Every label above has a closing caret before the following text. A label
+beginning with NUL creates no visible hotspot, and label `A TAB B` / `A CR LF B`
+retains those raw bytes. Native keyword coordinates can include hidden cells;
+the exporter intersects them with displayed cells rather than exposing dead
+links. The tests retain these captured vectors and a whole-TFH last-page
+replacement, including exact UHF targets. They require no emulator dependency.
+The parser now continues to the mandatory caret, preserving the subsequent
+break and rejecting malformed NUL/newline labels without that delimiter.
+Re-exporting all 15 local TDH/TFH source paths yields the same 12 canonical
+bundles and catalog entries, except the fresh converter date. All 495 source
+files and all published HELP bytes remain unchanged; no unnecessary bundle
+replacement or global-index rebuild is required for this out-of-sample fix.
+
+Remaining work is explicitly separate: oversized native labels can write
+beyond their fixed buffers, so safe 48-cell splitting is not claimed to match
+native memory corruption. At this stage, older TD 1.0 contexts 519 and 528
+still used the historical text-owner fallback; the source-byte audit above
+subsequently replaces it, including header and mid-literal overlaps.
+No genuine aliases were removed or redirected by this edge-path change.
+
+## Bounded corruption validation (2026-10-11)
+
+The former TDH call path allowed block EOF to terminate text and could return
+all contexts after losing 100 trailing text bytes. Strict terminator checks
+were enabled only for TFH. Every nonzero page in the ten inspected TDH
+originals passes the strict parser, including legacy embedded offsets;
+there is no source-profile need for the lax mode. Both readers now bypass
+opaque context zero explicitly and require bounded page/literal/target reads,
+closed hotspot labels/trailers, and an actual terminal control or native row
+cap. A missing escape nibble is not a normal EOF symbol, and an unfinished
+hidden trailer cannot hide corruption behind a long pending label.
+
+Tests truncate mapped data in all twelve TDH/TFH originals at 1/10/50/100
+bytes, validate incomplete control fields, and run actual malformed inputs
+through the staged server publication and successful retry. Existing corpus
+baselines remain unchanged. Limits stay explicit: Profiler 1.0's 159
+unaddressed tail bytes (2-byte page WORD + 157 encoded bytes) are not a
+mandatory final page; TD32 4.0 has a genuine
+unused EOF slot. Removing TDW 4.0's entire unreferenced three-byte last blank
+record yields an indistinguishable EOF slot. Neither the source header nor
+these control fields store a trusted complete-file length/hash, so this last
+case cannot be universally classified as damage from structure alone.
+
+## Older text/runtime verification (2026-10-11)
+
+Executed only the bounded help-line routines of original TD 1.0 (`TD.EXE` /
+`TD.OVL` from the cached TASM 1.0 disks) and German TD 1.5 (cached installation
+image). File access was replaced by read-only HELP byte/BE-WORD hooks and
+hotspot allocation was captured rather than running the application or DOS.
+Unicorn/Capstone remain temporary research tools, not converter dependencies.
+
+The 1.0 overlay body is addressed at `272B:0000`; its line entry is `27461`,
+byte-read call `273DF`, target-WORD read `27526`, prefix-copy calls `27568` /
+`275CF`, and hotspot entry `2738A`. Resident DS is `2028`, nibble/pushback state
+at `5823/5824`, pending hotspot `5831`, word-wrap prefix `75DF`. The line starts
+with a margin byte; `SI <= 31h` therefore permits 48, not 49 visible cells.
+Alphabet D/E are both NUL, not caret or a visible `<E>` token.
+
+TD 1.5's homologous line entry is overlay file offset `15371` (body `151C0`),
+DS `2424`, nibble/pushback `6131/6132`, pending hotspot `613F`, prefix `8131`.
+The helper offsets relative to its line entry equal the 1.0 offsets. Both
+old routines accept a 48-cell hotspot without the 4.x/5.x lookahead
+reservation. A zero target displays a literal caret after consuming its WORD.
+The previous high-nibble/zero-target termination heuristic truncated German
+context 474 after the address operator; native output continues with pointer,
+not, typeid and signed operators.
+
+| HELP CRC | Nonzero displayed contexts | Native rows | Cells + hotspot digest |
+| --- | ---: | ---: | --- |
+| `A9C668A7` | 529 | 4,499 | `7544a2c1120af0c8753d327de745b1afd7689657b3bbd6eddbebee630d5ddad8` |
+| `A6E139F2` | 596 | 4,978 | `61b7047beaeff0a5816da3f5251fc76695484ab36da2786f0ed7ac439abfff4c` |
+| `4B5D33CE` | 535 | 4,985 | `dd57c28f5307f08f500812997a03ad216cbca260ba336e2299d2fe150991d8f7` |
+| `F126AD2C` | 537 | 4,565 | `26b2fcbbeea3551b73e2615253df3d59061b0515024c2819149087be9738469e` |
+
+The 2.x bytes were compared using the original 1.0 line routine, not an
+independently re-executed 2.x binary; they share the same old text grammar.
+Both 1.5 files were compared using the original German 1.5 line routine.
+Digests use JSON `[context, [raw-row-hex], [[target,row,first,last],...]]`,
+compact separators, excluding opaque context zero. All rows and original
+spans matched before semantic label-range reflow. The current baseline test
+checks the six corrected ranges independently, then reverses only those
+explicit fixture changes to reproduce the captured native digest. This keeps
+the native text/spans proof without requiring the exporter to reproduce bugs.
+
+Stored count N is not the last available context: the nonzero overlapping
+base WORD enables page N. This exposes previously omitted 2.x context 596
+(`55 -> 596`, Hardware breakpoint), German 1.5 context 537 and English 1.5
+context 538. The last page in each case has native text, not trailer debris.
+The corrected stream also puts old embedded aliases 520 and 527 in contexts
+425 and 393, not the preceding pages 424/392; alias 519 belongs to 518.
+
+Old native line wrapping leaves six already-created hotspot spans beyond the
+final row. This is now handled by the shared decoder's character-range
+intersections at the actual wrap boundary, not by source/title special cases.
+`tests/test_legacy_tdh_runtime.py` keeps original/corrected coordinates for
+2.x context 225, German 116/525/530/537 and English 1.5 context 67. `byte list`
+and `Breakpoint window` become two same-target UHF fragments; `Assembler` and
+`Objekthierarchie` move wholly to the following row, without absorbing literal
+`-Befehl`/`-Fenster` suffixes. All raw text remains byte-identical to the native
+capture. A long pending label now respects the same row cap, including when
+its fragment has no space at which to break; fragments below the cap are not
+phantom hotspots. Synthetic tests cover multiple targets moved in one word,
+repeated reflow, hard breaks and the final visible row.
+
 Status: TDH runtime-aligned text layer decoded for the current 1.0 and 2.x
 samples; TFH decoded for the current real sample family.
 
@@ -357,8 +535,9 @@ topic boundaries seen by the program. The first few sizes are:
 ```
 
 and the cumulative byte sum of all `363` sizes lands almost exactly on the end
-of the file. The current real sample leaves only a small trailing tail of `157`
-bytes after the last sized block, which strongly supports the model:
+of the file. The current real sample leaves a `159`-byte tail (two-byte
+page WORD and `157` encoded bytes) after the last sized block, which supported
+the following early hypothesis:
 
 1. big-endian context count
 2. big-endian per-context byte sizes
@@ -1153,8 +1332,9 @@ The TDH reader metadata contains:
   "format_status": "decoded",
   "tdh_probe": {
     "header_word": "0x0206",
-    "table_byte_size": 518,
-    "table_word_count": 259,
+    "table_byte_size": 1036,
+    "table_word_count": 518,
+    "table_offset": 2,
     "encoded_payload_offset": 1040,
     "payload_lead_byte": "0xA0",
     "payload_lead_cc_run": 9
@@ -1173,12 +1353,10 @@ that same `tdh_decode` block as
 `out_of_range_page_word_context_count`,
 `out_of_range_page_word_contexts`,
 `embedded_alias_context_count`,
-`embedded_alias_contexts`,
-`text_alias_context_count`, and
-`text_alias_contexts`, plus
+`embedded_alias_contexts`, plus
 `remaining_unresolved_alias_context_count` and
-`remaining_unresolved_alias_contexts`, so the remaining heuristic surface is
-measured explicitly instead of being inferred only from redirect behavior.
+`remaining_unresolved_alias_contexts`. The former text-alias diagnostics were
+removed by the source-byte ownership audit; unresolved streams are not guessed.
 
 For the current TFH sample, the reader now recovers all `363` context blocks,
 exposes real strings such as `HELP INDEX` and `Welcome to Turbo Profiler's help
@@ -1212,3 +1390,113 @@ now narrowed to the exact Borland-side owner of the shared selector-style
 service families, the optional export policy for blank placeholder context
 `537`, and validation of TFH edge cases that are not covered by the current
 real sample family.
+
+## TD 4.0/5.0 map and native-row verification (2026-10-11)
+
+The old fixed-marker probe was not a new compression barrier. Original TD
+4.0/5.0 binaries and six DOS/Windows/32-bit HLP files confirm:
+
+- Header WORD is the stored delta count, including odd counts. Base is
+  `2 + 2*N`; its WORD overlaps slot zero and page one's next-context WORD.
+  `C101h`/`0901h` are valid, not corruption or a changed version marker.
+- TD 4 DOS `TD.EXE` loader at file `34B16h` preloads `0316h` (790) WORDs;
+  TD 5's loader preloads `0352h` (850). Both sum signed WORD deltas and check
+  a zero slot before seeking (`33D94h..33DA7h` in TD 4).
+- The cumulative-end page is real where bytes remain. DOS 5 context 776 and
+  TD32 5 context 817 are Goto help; discarding the tail loses authored links.
+- TDW 5 context 776 starts at `start(775)+1`. Both streams render exactly the
+  same Imports cells/hotspots. The reader retains 776 as a genuine alias on
+  775, using the shared UHF alias/export path, not label similarity.
+- Original character tables at TD 4 file `9C391h` and TD 5 `AD557h` use
+  D/E as NUL. Caret markers are escaped literal `5Eh`. Native line entries
+  `337EEh` / `377EBh` use a `31h` limit including their margin: 48 visible
+  cells. Lookahead after a closing caret reserves another cell unless the
+  following decoded character is SPACE.
+
+Read-only Unicorn execution of each matching original DOS routine, with
+bounded HLP byte/WORD reads and captured native keyword-helper calls, agrees
+with the actual reader's bounded pages, not just an unbounded scratch decode:
+
+| Input | Rows compared | Text/span mismatches |
+| --- | ---: | ---: |
+| 4.0 TD32 | 6,318 | 0 |
+| 4.0 DOS | 5,976 | 0 |
+| 4.0 Windows | 5,989 | 0 |
+| 5.0 TD32 | 6,560 | 0 |
+| 5.0 DOS | 6,281 | 0 |
+| 5.0 Windows, including overlapping 776 | 6,256 | 0 |
+
+The harness loads the NE help-code/automatic-data segments and stubs read-only
+far I/O/string copies; it does not run installation, start DOS, or execute
+Windows/32-bit UI programs. Temporary research dependencies are not production
+requirements. Native 4 and 5 comparisons run in separate emulator instances.
+Context zero is an opaque sentinel and is explicitly exported blank. All
+4,423 hotspots/next-page targets resolve across 4,602 emitted UHF topics.
+
+The modern importer initially includes `N+1` map slots, then extends only for
+source-authored targets in the overlapping preload. Unreferenced text words
+are not invented topics. Modern extra aliases require exact cells/spans and
+an actual overlapping offset; historical older alias heuristics are unchanged.
+Older 49-column/D/E conversion behavior remains a separate fidelity audit,
+not a proven universal codec rule.
+
+Additional originals discovered in the same cached archives were retained
+and registered: TASM 2.01 `C517BD6D` (THELP v5, 491 topics), Profiler 1.01
+`C7CCE043`, and the independently inspected Sidekick 1.56b `0EA517F6`.
+Before the subsequent TFH audit, Profiler 1.01 was outside supported conversion: its 366 stored sizes end
+at 68,980 of 69,238 bytes (258-byte tail), and the base WORD is `2C00h`.
+Loosening the marker alone yields text but would not establish complete topic
+coverage, so no partial bundle is published. The 2.0 TASM/TFH inputs are exact
+existing CRC duplicates (`07E89446` / `EDCB6DAB`); 5.2's update has no new HELP.
+
+## 2026-10-11 — Profiler cumulative-end page and native cell audit
+
+This supersedes the earlier fixed-zero-separator, unsigned-size-only and
+49-visible-column TFH assumptions. Original `TPROF.EXE` 1.0 (313,616 bytes,
+MZ header `2200h`) was recovered from the
+[preserved installation](https://archive.org/details/borland-turbo-profiler).
+Only bounded, read-only line/seek helpers were inspected/executed; no DOS
+installation or host execution of the executable was performed.
+
+Loader `3D144h` reads the header then **600 actual WORDs**, not an expanded
+version of the stored prefix. Seek helper `3C9FDh` sign-extends each delta
+before adding `2 + 2*N`; topic loader `3CA9Bh` rejects a zero map entry before
+seeking and renders at most 15 rows. The preloaded slot at index `N` therefore
+overlaps the base WORD. In `EDCB6DAB`, slot 363 is zero: its 159-byte tail
+(two-byte page WORD plus 157 encoded bytes) is not addressable through that
+context. In `C7CCE043`, slot 366 is `2C00h`, so
+the 258-byte tail at 68,980 is a real page. The map value tests availability,
+not the byte length of that final page. The importer reads `N+1` initial
+slots, validates addressed starts, and bounds each page by the next distinct
+start/EOF; it does not manufacture the rest of the preload as topics.
+
+The resident nibble alphabet at `DS:5451h` has NUL at D/E, not `^`/`<E>`.
+Line helper `3C5A0h` includes a left-margin cell in its `31h` buffer limit;
+48 visible cells match all TFH rows/spans in either lookahead mode, while
+the former 49-cell mode matches only 201 pages per
+revision. Byte/WORD reads at `3C520h` / `3C649h`, string-copy calls at
+`3C68Bh` / `3C6F4h` and keyword helper `3C471h` were replaced with read-only
+I/O/capture hooks in a temporary Unicorn harness. Every actual bounded reader
+page agrees after the existing synthetic-prefix normalization:
+
+| Input | Nonzero contexts | Native rows | Hotspots | Cell/span mismatches |
+| --- | ---: | ---: | ---: | ---: |
+| 1.0 `EDCB6DAB` | 362 | 2,772 | 321 | 0 |
+| 1.01 `C7CCE043` | 366 | 2,850 | 325 | 0 |
+
+Canonical JSON SHA256 baselines (nonzero context ID, raw-row hex strings,
+target/row/first/last spans, compact separators) are respectively
+`9a4badb7700c04dcd3b74882f3a59ba7f984498a0ac77ac529b5f6ac65fb0df9` and
+`e254bac6eadfdbc56f162cc5f7b4e7a0a1a3d58aed2519ba7119c9a28a6160f5`.
+The reader emits an additional blank sentinel at context zero, giving 363 /
+367 UHF contexts. All hotspot and Next targets resolve. Final context 366
+starts with `There are no source modules available for you to` and its
+`Options Source Directories` hotspot targets 228.
+
+The original 1.0 decoder was exercised on both HELP inputs; a separate 1.01
+executable was not obtained. This proves codec/addressing compatibility and
+exact imported cells for these originals, not an exhaustive certification of
+all later Profiler versions. TFH detection uses the observed smaller map
+range and the shared first-page structure, never a `2C00h` whitelist or CRC
+branch. Missing map/page/text data now raises rather than silently ending a
+partial decode. `tfh_decode` replaces the obsolete partial-decode diagnostic.

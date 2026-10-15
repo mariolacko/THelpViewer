@@ -1,142 +1,46 @@
 import gzip
 import json
-import re
 from pathlib import Path
 
 import pytest
 
+from thelpviewer.server.converter.readers.hlx_binary import HlxBinaryParser
 from thelpviewer.server.converter.writers.bundle import export_bundle
 
 
-def test_bcw_hlx_exports_functional_uhf_bundle(tmp_path):
-    source = Path("data/sources") / "Borland C++ 4.x" / "BCW.HLX"
-    assert source.exists(), f"Source HLX not found: {source}"
+SOURCES = [Path("data/sources") / collection for collection in ("Borland C++ 4.x", "Borland C++ 4.5")]
 
+
+@pytest.mark.parametrize("source", sorted(path for root in SOURCES for path in root.glob("*.HLX")),
+                         ids=lambda path: path.parent.name + "/" + path.name)
+def test_hlx_exports_exact_keyword_labels_and_retains_companion_addresses(tmp_path, source):
+    parser = HlxBinaryParser(source.read_bytes())
     result = export_bundle(source, tmp_path)
-    assert result.json_path.exists(), f"Expected bundle missing: {result.json_path}"
-
+    assert result.format_name == "hlx" and result.json_path.exists()
     payload = json.loads(gzip.decompress(result.json_path.read_bytes()))
-    assert payload.get("uhf_version") == "2.0"
+    assert payload["uhf_version"] == "2.0"
+    metadata = payload["metadata"]
+    assert metadata["source"]["format"] == "hlx"
+    assert metadata["source"]["encoding"] == "cp1252"
+    assert metadata["hlx_kind"] == "compiled-index"
+    assert metadata["index_record_count"] == parser.header.keyword_count
+    assert len(payload["topics"]) == len(parser.records)
+    assert len(metadata["hlx_keyword_records"]) == len(parser.records)
+    assert metadata["hlx_header"]["leaf_pages"] == parser.leaf_pages
 
-    metadata = payload.get("metadata") or {}
-    assert metadata.get("source", {}).get("format") == "hlx"
-    assert metadata.get("hlx_kind") == "compiled-topics"
-    assert metadata.get("hlx_family") == "rtf-keyword-map"
+    from thelpviewer.server.converter.uhf_markup import escape_uhf_text
+    for ordinal, record in enumerate(parser.records, start=1):
+        topic = payload["topics"][str(ordinal)]
+        label = record.label.decode("cp1252")
+        assert topic["content"] == [escape_uhf_text(label)]
+        assert not topic.get("nav")
+        assert metadata["hlx_keyword_records"][ordinal - 1] == {
+            "keyword_id": ordinal, "file_offset": record.file_offset, "page": record.page,
+            "reference_count": record.reference_count, "kwdata_offset": record.kwdata_offset,
+        }
 
-    topics = payload.get("topics") or {}
-    assert isinstance(topics, dict)
-    assert len(topics) >= 100
-
-    nontrivial_topics = 0
-    for topic in topics.values():
-        content = topic.get("content") or []
-        joined = " ".join(str(line).strip() for line in content if str(line).strip())
-        if len(joined) >= 40:
-            nontrivial_topics += 1
-
-    assert nontrivial_topics >= 100
-
-
-def test_opengl_hlx_stays_index_like_bundle(tmp_path):
-    source = Path("data/sources") / "Borland C++ 4.x" / "OPENGL.HLX"
-    assert source.exists(), f"Source HLX not found: {source}"
-
-    result = export_bundle(source, tmp_path)
-    payload = json.loads(gzip.decompress(result.json_path.read_bytes()))
-
-    metadata = payload.get("metadata") or {}
-    assert metadata.get("hlx_kind") == "compiled-index"
-    assert metadata.get("hlx_family") == "rtf-reference-map"
-
-    topics = payload.get("topics") or {}
-    assert isinstance(topics, dict)
-    assert len(topics) >= 900
-
-    for topic in topics.values():
-        content = [str(line).strip() for line in (topic.get("content") or []) if str(line).strip()]
-        assert len(content) <= 1
-
-    for section in payload.get("index") or []:
-        for entry in section.get("entries") or []:
-            label = str(entry.get("label") or "")
-            assert ".rtf" not in label.lower()
-            assert not re.match(r"^[0-9A-F]{8}\s", label)
-
-
-def test_helpref_hlx_stays_heading_catalog_bundle(tmp_path):
-    source = Path("data/sources") / "Borland C++ 4.x" / "HELPREF.HLX"
-    assert source.exists(), f"Source HLX not found: {source}"
-
-    result = export_bundle(source, tmp_path)
-    payload = json.loads(gzip.decompress(result.json_path.read_bytes()))
-
-    metadata = payload.get("metadata") or {}
-    assert metadata.get("hlx_kind") == "compiled-index"
-    assert metadata.get("hlx_family") == "heading-catalog"
-
-    topics = payload.get("topics") or {}
-    assert isinstance(topics, dict)
-    assert len(topics) >= 100
-
-    for topic in topics.values():
-        content = [str(line).strip() for line in (topic.get("content") or []) if str(line).strip()]
-        assert len(content) <= 1
-
-
-def test_rsl_hlx_exports_prev_next_navigation(tmp_path):
-    source = Path("data/sources") / "Borland C++ 4.x" / "RSL.HLX"
-    assert source.exists(), f"Source HLX not found: {source}"
-
-    result = export_bundle(source, tmp_path)
-    payload = json.loads(gzip.decompress(result.json_path.read_bytes()))
-
-    metadata = payload.get("metadata") or {}
-    assert metadata.get("hlx_kind") == "compiled-index"
-    assert metadata.get("index_navigation_order") == "target_offset"
-
-    topics = payload.get("topics") or {}
-    assert isinstance(topics, dict)
-    assert len(topics) >= 3
-
-    first = topics.get("1")
-    assert isinstance(first, dict)
-    assert first.get("nav", {}).get("Next", {}).get("topic_id") == 2
-
-    last_key = str(max(int(key) for key in topics))
-    last = topics[last_key]
-    assert last.get("nav", {}).get("Prev", {}).get("topic_id") == int(last_key) - 1
-
-
-@pytest.mark.parametrize(
-    ("filename", "family", "min_topics"),
-    [
-        ("OLE.HLX", "heading-catalog", 1500),
-        ("RSL.HLX", "topic-clusters", 100),
-        ("VFW.HLX", "rtf-reference-map", 500),
-        ("WIN31WH.HLX", "rtf-overview-map", 2500),
-        ("WIN32.HLX", "rtf-reference-map", 2000),
-        ("WINSPCTR.HLX", "rtf-reference-map", 70),
-    ],
-)
-def test_catalog_hlx_variants_remain_single_line_bundles(tmp_path, filename, family, min_topics):
-    source = Path("data/sources") / "Borland C++ 4.x" / filename
-    assert source.exists(), f"Source HLX not found: {source}"
-
-    result = export_bundle(source, tmp_path)
-    payload = json.loads(gzip.decompress(result.json_path.read_bytes()))
-
-    metadata = payload.get("metadata") or {}
-    assert metadata.get("hlx_kind") == "compiled-index"
-    assert metadata.get("hlx_family") == family
-
-    topics = payload.get("topics") or {}
-    assert isinstance(topics, dict)
-    assert len(topics) >= min_topics
-
-    multi_line_topics = 0
-    for topic in topics.values():
-        content = [str(line).strip() for line in (topic.get("content") or []) if str(line).strip()]
-        if len(content) >= 3:
-            multi_line_topics += 1
-
-    assert multi_line_topics == 0
+    # These are real index records, not heuristic strings recovered from free space.
+    entries = [entry for section in payload["index"] for entry in section["entries"]]
+    assert len(entries) == len(parser.records)
+    assert {entry["label"] for entry in entries} == {r.label.decode("cp1252") for r in parser.records}
+    assert not any(key in metadata for key in ("hlx_family", "pointer_count", "control_byte_dominant"))

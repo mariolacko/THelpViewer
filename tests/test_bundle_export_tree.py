@@ -2,9 +2,37 @@ import gzip
 import json
 from pathlib import Path
 
+import pytest
+
 from thelpviewer.server.converter.base import ContentNode, HelpDocument, IndexEntry, TopicRecord
 from thelpviewer.server.converter.writers import bundle as bundle_writer
 from thelpviewer.help_database import HelpDatabaseEntry, crc32_file
+
+
+@pytest.mark.parametrize("container,publication,product,version", [
+    ("Game-Cheater", "Game-Cheater 9.02", "game-cheater", "9.02"),
+    ("Scorpions Cheater DOS", "Scorpions Cheater 23", "scorpion", "23"),
+])
+def test_export_from_container_or_whole_tree_keeps_publication_paths(tmp_path, container, publication, product, version):
+    source_root = tmp_path / "sources"
+    source = source_root / container / publication / "REFERENCE.TXT"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"@Reference\r\n:Topic\r\n%Reference text\r\n")
+    for root, output in [(source_root, tmp_path / "server"), (source_root / container, tmp_path / "cli")]:
+        results = bundle_writer.export_bundle_tree(root, output, layout="helps", source_paths=[source])
+        assert results[0].json_path.relative_to(output).as_posix() == f"{publication}/reference.json.gz"
+        catalog = json.loads((output / "catalog.json").read_text())
+        assert catalog[0]["group"] == publication
+        assert catalog[0]["product"] == product
+        assert catalog[0]["version"] == version
+
+
+def test_unknown_nested_source_directory_is_not_silently_stripped(tmp_path):
+    source = tmp_path / "sources" / "Unknown" / "Release" / "REFERENCE.TXT"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"@Reference\r\n:Topic\r\n%Reference text\r\n")
+    results = bundle_writer.export_bundle_tree(tmp_path / "sources", tmp_path / "out", layout="helps")
+    assert results[0].json_path.relative_to(tmp_path / "out").as_posix() == "Unknown/Release/reference.json.gz"
 
 
 def test_copy_docs_omits_internal_audits_and_reverse_engineering_notes(tmp_path):
@@ -93,13 +121,13 @@ def test_export_bundle_tree_prefers_tdh_candidate_with_more_topics(tmp_path, mon
     assert len(results) == 1
     result = results[0]
     assert result.input_path == later_copy
-    assert result.topic_count == 596
+    assert result.topic_count == 597
     assert result.json_path == output_dir / "Borland Turbo Debugger/Profiler/Assembler" / "tdhelp.json.gz"
 
     payload = json.loads(gzip.decompress(result.json_path.read_bytes()).decode("utf-8"))
     topics = payload.get("topics") or {}
     assert isinstance(topics, dict)
-    assert len(topics) == 596
+    assert len(topics) == 597
 
     catalog = json.loads((output_dir / "catalog.json").read_text(encoding="utf-8"))
     assert catalog == [
@@ -110,7 +138,7 @@ def test_export_bundle_tree_prefers_tdh_candidate_with_more_topics(tmp_path, mon
             "source_files": ["TDHELP.TDH"],
             "name": "Turbo Debugger Help",
                 "format": "tdh",
-            "topics": 596,
+            "topics": 597,
             "product": "td",
             "product_name": "Borland Turbo Debugger",
         }
@@ -164,8 +192,8 @@ def test_export_bundle_tree_uses_versioned_bundle_stems_for_tdh_variants(tmp_pat
 
     result_by_name = {result.json_path.name: result for result in results}
     assert set(result_by_name) == {"tdhelp-1.0.json.gz", "tdhelp-2.x.json.gz"}
-    assert result_by_name["tdhelp-1.0.json.gz"].topic_count == 530
-    assert result_by_name["tdhelp-2.x.json.gz"].topic_count == 596
+    assert result_by_name["tdhelp-1.0.json.gz"].topic_count == 519
+    assert result_by_name["tdhelp-2.x.json.gz"].topic_count == 597
 
     catalog = json.loads((output_dir / "catalog.json").read_text(encoding="utf-8"))
     catalog_by_file = {item["file"]: item for item in catalog}
@@ -173,8 +201,8 @@ def test_export_bundle_tree_uses_versioned_bundle_stems_for_tdh_variants(tmp_pat
         "Borland Turbo Debugger/Profiler/Assembler/tdhelp-1.0.json.gz",
         "Borland Turbo Debugger/Profiler/Assembler/tdhelp-2.x.json.gz",
     }
-    assert catalog_by_file["Borland Turbo Debugger/Profiler/Assembler/tdhelp-1.0.json.gz"]["topics"] == 530
-    assert catalog_by_file["Borland Turbo Debugger/Profiler/Assembler/tdhelp-2.x.json.gz"]["topics"] == 596
+    assert catalog_by_file["Borland Turbo Debugger/Profiler/Assembler/tdhelp-1.0.json.gz"]["topics"] == 519
+    assert catalog_by_file["Borland Turbo Debugger/Profiler/Assembler/tdhelp-2.x.json.gz"]["topics"] == 597
 
 
 def test_export_bundle_tree_splits_scorpion_v3_sections(tmp_path, monkeypatch):

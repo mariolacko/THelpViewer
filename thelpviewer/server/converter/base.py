@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 
 from .uhf_markup import escape_uhf_text, format_uhf_link, parse_uhf_link_target
+from .text_screen import BitmapFont, TextScreen
 
 _BOX_LINE_BYTES = frozenset(
     {
@@ -171,6 +172,7 @@ class TopicRecord:
     quickhelp_is_popup: bool = False
     uhf_content: list[str] = field(default_factory=list)
     tags: list[TopicTag] = field(default_factory=list)
+    alias_lines: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self, text_encoding: str = "latin1") -> dict[str, object]:
         """Return a JSON-safe view of one normalized help topic."""
@@ -195,6 +197,8 @@ class TopicRecord:
             "uhf_content": list(self.uhf_content),
             "tags": [tag.to_dict() for tag in self.tags],
         }
+        if self.alias_lines:
+            payload["alias_lines"] = dict(self.alias_lines)
         if self.quickhelp_category_nav is not None:
             payload["quickhelp_category_nav"] = self.quickhelp_category_nav.to_dict()
         if self.quickhelp_is_list:
@@ -290,6 +294,8 @@ class HelpDocument:
     comments: list[CommentRecord] = field(default_factory=list)
     metadata: dict[str, object] = field(default_factory=dict)
     binary_data: bytes | None = None
+    fonts: dict[str, BitmapFont] = field(default_factory=dict)
+    text_screens: dict[str, TextScreen] = field(default_factory=dict)
 
     @property
     def display_name(self) -> str:
@@ -331,6 +337,10 @@ class HelpDocument:
             "comments": [comment.to_dict() for comment in self.comments],
             "metadata": _json_safe(self.metadata, text_encoding),
         }
+        if self.fonts:
+            payload["fonts"] = {key: font.to_dict() for key, font in self.fonts.items()}
+        if self.text_screens:
+            payload["text_screens"] = {key: screen.to_dict() for key, screen in self.text_screens.items()}
         if include_binary_data and self.binary_data is not None:
             payload["binary_data"] = {
                 "size": len(self.binary_data),

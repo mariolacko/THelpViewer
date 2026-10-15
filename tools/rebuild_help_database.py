@@ -10,7 +10,9 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import sys
+import tempfile
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -23,7 +25,7 @@ from thelpviewer.server.converter.exporter import (
     load_document,
 )
 from thelpviewer.server.downloader.collector import detect_language
-from thelpviewer.help_database import crc32_file
+from thelpviewer.help_database import crc32_file, help_database_path
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
@@ -157,10 +159,11 @@ def _normalize_entry(item: object) -> dict[str, object] | None:
 
     if item.get("kind") == _NEW_ENTRIES_SEPARATOR_KIND:
         note = item.get("note") if isinstance(item.get("note"), str) else _NEW_ENTRIES_NOTE
-        normalized = {
+        normalized = dict(item)
+        normalized.update({
             "kind": _NEW_ENTRIES_SEPARATOR_KIND,
             "note": note.strip() or _NEW_ENTRIES_NOTE,
-        }
+        })
         generated_at = item.get("generated_at")
         if isinstance(generated_at, str) and generated_at.strip():
             normalized["generated_at"] = generated_at.strip()
@@ -170,8 +173,10 @@ def _normalize_entry(item: object) -> dict[str, object] | None:
     if not isinstance(crc32, str):
         return None
     try:
-        int(crc32, 16)
+        crc32_value = int(crc32, 16)
     except ValueError:
+        return None
+    if not 0 <= crc32_value <= 0xFFFFFFFF:
         return None
 
     raw_filenames = item.get("filenames")
@@ -183,16 +188,10 @@ def _normalize_entry(item: object) -> dict[str, object] | None:
             if isinstance(value, str) and value.strip()
         )
     if not filenames:
-        legacy_filename = item.get("filename")
-        if isinstance(legacy_filename, str) and legacy_filename.strip():
-            filenames.append(legacy_filename.strip())
-    if not filenames:
         return None
 
     title = item.get("title") if isinstance(item.get("title"), str) else ""
     collection = item.get("collection") if isinstance(item.get("collection"), str) else ""
-    if not collection and isinstance(item.get("project"), str):
-        collection = item.get("project")
     text_encoding = item.get("text_encoding") if isinstance(item.get("text_encoding"), str) else ""
     language = item.get("language") if isinstance(item.get("language"), str) else ""
     bundle_stem = item.get("bundle_stem") if isinstance(item.get("bundle_stem"), str) else ""
@@ -203,13 +202,16 @@ def _normalize_entry(item: object) -> dict[str, object] | None:
         except (TypeError, ValueError):
             help_contents_topic_id = None
 
-    normalized = {
-        "crc32": crc32.upper(),
+    # The manifest owns product/release assignments and may contain fields this
+    # maintenance tool does not know about. Never reconstruct it from a whitelist.
+    normalized = dict(item)
+    normalized.update({
+        "crc32": f"{crc32_value:08X}",
         "filenames": filenames,
         "title": title,
         "collection": collection,
         "text_encoding": text_encoding,
-    }
+    })
     if bundle_stem.strip():
         normalized["bundle_stem"] = bundle_stem.strip()
     if language.strip():
@@ -249,22 +251,51 @@ def _merge_existing_entry(existing: dict[str, object], discovered: dict[str, obj
     return merged
 
 
-def _load_existing_entries(output_path: Path) -> list[dict[str, object]]:
-    if not output_path.is_file():
-        return []
-    try:
-        payload = json.loads(output_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
+def _load_existing_database(output_path: Path) -> dict[str, object]:
+    source_path = output_path if output_path.exists() else help_database_path()
+    payload = json.loads(source_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{output_path}: help database root must be a JSON object")
+    if payload.get("version") != 2:
+        raise ValueError(f"{output_path}: expected help manifest version 2")
     raw_entries = payload.get("entries")
     if not isinstance(raw_entries, list):
-        return []
+        raise ValueError(f"{output_path}: entries must be a JSON array")
     normalized_entries: list[dict[str, object]] = []
-    for item in raw_entries:
+    seen_crc32: set[str] = set()
+    for index, item in enumerate(raw_entries):
         normalized = _normalize_entry(item)
-        if normalized is not None:
-            normalized_entries.append(normalized)
-    return normalized_entries
+        if normalized is None:
+            raise ValueError(f"{output_path}: invalid CRC entry at index {index}")
+        crc32 = normalized.get("crc32")
+        if isinstance(crc32, str):
+            if crc32 in seen_crc32:
+                raise ValueError(f"{output_path}: duplicate CRC entry {crc32}")
+            seen_crc32.add(crc32)
+        normalized_entries.append(normalized)
+    payload["entries"] = normalized_entries
+    return payload
+
+
+def _write_database(output_path: Path, payload: dict[str, object]) -> None:
+    """Publish a complete JSON file, leaving the prior manifest on any failure."""
+    content = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    mode = stat.S_IMODE(output_path.stat().st_mode) if output_path.exists() else 0o644
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=output_path.parent,
+            prefix=f".{output_path.name}-", delete=False,
+        ) as output:
+            temporary = Path(output.name)
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.chmod(mode)
+        os.replace(temporary, output_path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def _discover_entries(sources_dir: Path) -> dict[str, dict[str, object]]:
@@ -312,8 +343,11 @@ def _discover_entries(sources_dir: Path) -> dict[str, dict[str, object]]:
 
 
 def rebuild_help_database(sources_dir: Path, output_path: Path) -> int:
+    if not sources_dir.is_dir():
+        raise ValueError(f"Sources directory does not exist: {sources_dir}")
+    payload = _load_existing_database(output_path)
     discovered_entries = _discover_entries(sources_dir)
-    existing_entries = _load_existing_entries(output_path)
+    existing_entries = payload["entries"]
 
     merged_entries: list[dict[str, object]] = []
     seen_crc32: set[str] = set()
@@ -336,15 +370,9 @@ def rebuild_help_database(sources_dir: Path, output_path: Path) -> int:
         entries.append(_separator_entry())
         entries.extend(new_entries)
 
-    payload = {
-        "version": 1,
-        "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat(),
-        "entries": entries,
-    }
-    output_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    payload["generated_at"] = datetime.now(UTC).replace(microsecond=0).isoformat()
+    payload["entries"] = entries
+    _write_database(output_path, payload)
     return len([item for item in entries if isinstance(item, dict) and item.get("crc32")])
 
 

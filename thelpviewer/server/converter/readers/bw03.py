@@ -17,13 +17,13 @@ from ..base import (
     ensure_document_index,
 )
 from ..uhf_markup import UhfStyleSpan, render_uhf_line
+from ..codepages import build_decode_table
 
 
 BW03_SIGNATURE = b"BW03"
 MENU_ENTRY_SIZE = 22
 SCREEN_DESCRIPTOR_SIZE = 12
 STYLE_TABLE_SIZE = 48
-STYLE_CONTROL_BYTES = frozenset(range(0xE1, 0xF1))
 SCREEN_FOOTER_RE = re.compile(r"SCREEN\s+(\d+)\s+OF\s+(\d+)\s+\((.+)\)\s*$", re.IGNORECASE)
 BW03_MONO_COLORS = {
     "0": "#000000",
@@ -31,6 +31,9 @@ BW03_MONO_COLORS = {
     "8": "#555555",
     "15": "#ffffff",
 }
+_SCREEN_GLYPHS = build_decode_table("cp437", "utf-8")
+for _value, _glyph in {0: " ", 9: "○", 10: "◙", 13: "♪", 127: "⌂"}.items():
+    _SCREEN_GLYPHS[_value] = _glyph
 
 
 def is_bw03_binary(data: bytes) -> bool:
@@ -47,7 +50,7 @@ class _MenuEntry:
 
 @dataclass(frozen=True, slots=True)
 class _ScreenDescriptor:
-    screen_number: int
+    next_index: int
     prev_index: int
     offset: int
     length: int
@@ -82,61 +85,34 @@ def _parse_menu_entries(data: bytes, menu_count: int) -> list[_MenuEntry]:
     return entries
 
 
-def _looks_like_descriptor_table(data: bytes, offset: int, screen_count: int) -> bool:
-    if offset < 0 or offset + (screen_count * SCREEN_DESCRIPTOR_SIZE) > len(data):
-        return False
-
-    previous_offset = -1
-    for index in range(min(screen_count, 4)):
-        chunk = data[offset + (index * SCREEN_DESCRIPTOR_SIZE): offset + ((index + 1) * SCREEN_DESCRIPTOR_SIZE)]
-        if len(chunk) < SCREEN_DESCRIPTOR_SIZE:
-            return False
-        screen_number, prev_index, payload_offset, payload_length = struct.unpack_from("<HHII", chunk, 0)
-        if screen_number != index + 1:
-            return False
-        if payload_offset <= 0 or payload_length <= 0:
-            return False
-        if payload_offset + payload_length > len(data):
-            return False
-        if payload_offset <= previous_offset:
-            return False
-        previous_offset = payload_offset
-
-    first_screen_number, first_prev_index, _, _ = struct.unpack_from("<HHII", data, offset)
-    return first_screen_number == 1 and first_prev_index in {0, max(screen_count - 1, 0)}
-
-
 def _descriptor_table_offset(data: bytes, menu_count: int, screen_count: int) -> int:
-    base = 8 + (menu_count * MENU_ENTRY_SIZE)
-    for candidate in range(base, base + 64):
-        if _looks_like_descriptor_table(data, candidate, screen_count):
-            return candidate
-    raise ValueError("Unable to locate BW03 screen descriptor table")
+    offset = 8 + menu_count * MENU_ENTRY_SIZE + STYLE_TABLE_SIZE
+    if offset + screen_count * SCREEN_DESCRIPTOR_SIZE > len(data):
+        raise ValueError("Incomplete BW03 style/descriptor tables.")
+    return offset
 
 
 def _parse_screen_descriptors_at_offset(data: bytes, screen_count: int, offset: int) -> list[_ScreenDescriptor]:
     entries: list[_ScreenDescriptor] = []
+    payload_start = offset + screen_count * SCREEN_DESCRIPTOR_SIZE
     for index in range(screen_count):
         chunk = data[offset + (index * SCREEN_DESCRIPTOR_SIZE): offset + ((index + 1) * SCREEN_DESCRIPTOR_SIZE)]
         if len(chunk) < SCREEN_DESCRIPTOR_SIZE:
             raise ValueError("Incomplete BW03 screen descriptor table")
-        screen_number, prev_index, payload_offset, payload_length = struct.unpack_from("<HHII", chunk, 0)
-        if payload_offset <= 0 or payload_length <= 0:
-            raise ValueError("Invalid BW03 screen descriptor")
+        next_index, prev_index, payload_offset, payload_length = struct.unpack_from("<HHII", chunk, 0)
+        if next_index >= screen_count or prev_index >= screen_count:
+            raise ValueError(f"BW03 screen {index}: navigation references a nonexistent screen.")
+        if payload_offset < payload_start or payload_length <= 0 or payload_offset + payload_length > len(data):
+            raise ValueError(f"BW03 screen {index}: payload lies outside the screen area.")
         entries.append(
             _ScreenDescriptor(
-                screen_number=screen_number,
+                next_index=next_index,
                 prev_index=prev_index,
                 offset=payload_offset,
                 length=payload_length,
             )
         )
     return entries
-
-
-def _parse_screen_descriptors(data: bytes, screen_count: int, menu_count: int) -> list[_ScreenDescriptor]:
-    offset = _descriptor_table_offset(data, menu_count, screen_count)
-    return _parse_screen_descriptors_at_offset(data, screen_count, offset)
 
 
 def _attr_colors(attr: int) -> tuple[int, int]:
@@ -146,14 +122,14 @@ def _attr_colors(attr: int) -> tuple[int, int]:
 def _parse_style_table(data: bytes, menu_count: int, descriptor_offset: int) -> dict[int, _StyleEntry]:
     table_offset = 8 + (menu_count * MENU_ENTRY_SIZE)
     chunk = data[table_offset:descriptor_offset]
-    if len(chunk) != STYLE_TABLE_SIZE or len(chunk) % 3 != 0:
-        return {}
+    if len(chunk) != STYLE_TABLE_SIZE:
+        raise ValueError("Incomplete BW03 style table.")
 
     entries: dict[int, _StyleEntry] = {}
     for pos in range(0, len(chunk), 3):
         color_attr, mono_attr, style_code = chunk[pos:pos + 3]
-        if style_code not in STYLE_CONTROL_BYTES:
-            continue
+        if not 0x80 <= style_code < 0xFF or style_code in entries:
+            raise ValueError("Invalid or duplicate BW03 style code.")
         color_fg, color_bg = _attr_colors(color_attr)
         mono_fg, mono_bg = _attr_colors(mono_attr)
         entries[style_code] = _StyleEntry(
@@ -190,26 +166,19 @@ def _decode_screen_payload(
     uhf_lines: list[str] = []
     visible_bytes = bytearray()
     visible_styles: list[tuple[int, int] | None] = []
-    current_style = style_table.get(0xE1)
+    # The native screen routine starts at attribute 07h; an E1 marker, not
+    # opening the screen, selects the dictionary's body-text attribute.
+    current_style = _StyleEntry(7, 7, 7, 0, 7, 0)
 
     def flush_line() -> None:
         raw_line = bytes(visible_bytes)
-        text = raw_line.decode("cp437", errors="replace")
+        text = "".join(_SCREEN_GLYPHS[value] for value in raw_line)
         raw_lines.append(raw_line)
         uhf_lines.append(render_uhf_line(text, style_spans=_build_style_spans(visible_styles)))
         visible_bytes.clear()
         visible_styles.clear()
 
-    def append_value(value: int) -> None:
-        nonlocal current_style
-        if value in STYLE_CONTROL_BYTES:
-            current_style = style_table.get(value)
-            return
-        if value == 0x00 or value == 0x0A:
-            flush_line()
-            return
-        if value == 0x0D:
-            return
+    def append_literal(value: int) -> None:
         visible_bytes.append(value)
         if current_style is None:
             visible_styles.append(None)
@@ -219,14 +188,23 @@ def _decode_screen_payload(
     pos = 0
     while pos < len(payload):
         value = payload[pos]
-        if value == 0xFF and pos + 2 < len(payload):
+        if value == 0xFF:
+            if pos + 2 >= len(payload):
+                raise ValueError("Truncated BW03 repeat control.")
             count = payload[pos + 1]
             repeated = payload[pos + 2]
             for _ in range(count):
-                append_value(repeated)
+                append_literal(repeated)
             pos += 3
             continue
-        append_value(value)
+        if value == 0:
+            break
+        if value in style_table:
+            current_style = style_table.get(value)
+        elif value == 0x0A:
+            flush_line()
+        elif value != 0x0D:
+            append_literal(value)
         pos += 1
 
     if visible_bytes or not raw_lines:
@@ -274,37 +252,6 @@ def _build_bw03_palettes(style_table: dict[int, _StyleEntry]) -> dict[str, objec
     return palettes
 
 
-def _expand_screen_payload(payload: bytes) -> bytes:
-    out = bytearray()
-    pos = 0
-    while pos < len(payload):
-        value = payload[pos]
-        if value == 0xFF and pos + 2 < len(payload):
-            count = payload[pos + 1]
-            repeated = payload[pos + 2]
-            out.extend(bytes([repeated]) * count)
-            pos += 3
-            continue
-        if value in STYLE_CONTROL_BYTES:
-            pos += 1
-            continue
-        if value == 0x00:
-            out.extend(b"\r\n")
-            pos += 1
-            continue
-        out.append(value)
-        pos += 1
-    return bytes(out)
-
-
-def _split_raw_lines(payload: bytes) -> list[bytes]:
-    normalized = payload.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-    lines = [line for line in normalized.split(b"\n")]
-    while lines and not lines[-1]:
-        lines.pop()
-    return lines or [b""]
-
-
 def _visible_lines(raw_lines: list[bytes]) -> list[str]:
     return [line.decode("cp437", errors="replace").rstrip() for line in raw_lines]
 
@@ -344,13 +291,13 @@ def _document_title(topics: list[TopicRecord]) -> str | None:
 
 def _menu_ranges(menu_entries: list[_MenuEntry], screen_count: int) -> list[tuple[_MenuEntry, range]]:
     ranges: list[tuple[_MenuEntry, range]] = []
-    for index, entry in enumerate(menu_entries):
+    starts = sorted({entry.first_screen for entry in menu_entries if entry.first_screen < screen_count})
+    ends = dict(zip(starts, starts[1:] + [screen_count]))
+    for entry in menu_entries:
         start = entry.first_screen
         if start >= screen_count:
             continue
-        end = screen_count
-        if index + 1 < len(menu_entries):
-            end = min(menu_entries[index + 1].first_screen, screen_count)
+        end = ends[start]
         if end <= start:
             continue
         ranges.append((entry, range(start, end)))
@@ -402,6 +349,43 @@ def _build_contents_tree(menu_entries: list[_MenuEntry], topics: list[TopicRecor
     return nodes
 
 
+def _read_command_summary(data: bytes, descriptors: list[_ScreenDescriptor]) -> list[TopicRecord]:
+    """Read the native plain-text short-help block after the final screen."""
+    if not descriptors:
+        return []
+    start = descriptors[-1].offset + descriptors[-1].length
+    if start == len(data) or start < max(entry.offset + entry.length for entry in descriptors):
+        return []  # No unindexed suffix; never reinterpret another indexed screen.
+    end = data.find(b"\0", start)
+    if end < 0:
+        raise ValueError("Unterminated BW03 command summary.")
+    text = data[start:end]
+    if any(value < 32 and value not in (10, 12, 13) for value in text):
+        raise ValueError("Unsupported BW03 command-summary console control.")
+    if not text.strip(b"\r\n\x0c "):
+        return []
+    pages = text.split(b"\x0c")
+    first = len(descriptors)
+    topics = []
+    for index, page in enumerate(pages):
+        lines = page.replace(b"\r", b"").split(b"\n")
+        while lines and not lines[-1]:
+            lines.pop()
+        title = _topic_name("Command summary", index + 1, len(pages))
+        uhf_lines = []
+        for line in lines:
+            visible = "".join(_SCREEN_GLYPHS[value] for value in line)
+            uhf_lines.append(render_uhf_line(visible, style_spans=[UhfStyleSpan(
+                start=0, end=len(visible), fg=7, bg=0,
+            )]))
+        topics.append(TopicRecord(
+            context_id=first + index, raw_lines=lines or [b""], uhf_content=uhf_lines or [""],
+            names=[title], prev_context=first + index - 1 if index else None,
+            next_context=first + index + 1 if index + 1 < len(pages) else None,
+        ))
+    return topics
+
+
 class BW03HelpReader(HelpReaderBase):
     """Parse one BW03 help file into the shared document model."""
 
@@ -413,17 +397,20 @@ class BW03HelpReader(HelpReaderBase):
 
         screen_count = struct.unpack_from("<H", data, 4)[0]
         menu_count = struct.unpack_from("<H", data, 6)[0]
-        menu_entries = _parse_menu_entries(data, menu_count)
         descriptor_offset = _descriptor_table_offset(data, menu_count, screen_count)
+        menu_entries = _parse_menu_entries(data, menu_count)
+        if any(entry.first_screen >= screen_count for entry in menu_entries):
+            raise ValueError("BW03 menu references a nonexistent screen.")
         style_table = _parse_style_table(data, menu_count, descriptor_offset)
         descriptors = _parse_screen_descriptors_at_offset(data, screen_count, descriptor_offset)
 
         topics: list[TopicRecord] = []
         for index, descriptor in enumerate(descriptors):
             end = descriptor.offset + descriptor.length
-            if end > len(data):
-                raise ValueError("BW03 screen payload points outside the file.")
-            raw_lines, uhf_lines = _decode_screen_payload(data[descriptor.offset:end], style_table)
+            try:
+                raw_lines, uhf_lines = _decode_screen_payload(data[descriptor.offset:end], style_table)
+            except ValueError as error:
+                raise ValueError(f"BW03 screen {index}: {error}") from error
             visible = _visible_lines(raw_lines)
             footer = _find_screen_footer(visible)
 
@@ -440,21 +427,24 @@ class BW03HelpReader(HelpReaderBase):
                     raw_lines=raw_lines,
                     uhf_content=uhf_lines,
                     index_terms=index_terms,
-                    prev_context=descriptor.prev_index if 0 <= descriptor.prev_index < screen_count else None,
-                    next_context=(index + 1) % screen_count if screen_count else None,
+                    prev_context=descriptor.prev_index,
+                    next_context=descriptor.next_index,
                     names=names,
                 )
             )
 
         index_entries: list[IndexEntry] = []
+        named_contexts: set[int] = set()
         for menu_entry, screen_range in _menu_ranges(menu_entries, screen_count):
             first_context = screen_range.start
             if not (0 <= first_context < len(topics)):
                 continue
-            if topics[first_context].names:
-                topics[first_context].names[0] = menu_entry.title
-            elif menu_entry.title:
-                topics[first_context].names.append(menu_entry.title)
+            if menu_entry.title and first_context not in named_contexts:
+                if topics[first_context].names:
+                    topics[first_context].names[0] = menu_entry.title
+                else:
+                    topics[first_context].names.append(menu_entry.title)
+                named_contexts.add(first_context)
             if menu_entry.title:
                 index_entries.append(
                     IndexEntry(
@@ -469,6 +459,16 @@ class BW03HelpReader(HelpReaderBase):
                 if local_index + 1 < len(screen_range):
                     topic.down_context = topic_index + 1
 
+        contents = _build_contents_tree(menu_entries, topics)
+        summary = _read_command_summary(data, descriptors)
+        if summary:
+            contents.append(ContentNode(
+                label="Command summary", topic_id=summary[0].context_id,
+                children=[ContentNode(label=topic.names[0], topic_id=topic.context_id) for topic in summary]
+                if len(summary) > 1 else [],
+            ))
+            index_entries.append(IndexEntry(label=b"Command summary", context_id=summary[0].context_id))
+            topics.extend(summary)
         for topic in topics:
             topic.nav_items = build_directional_nav_items(topic)
 
@@ -495,7 +495,7 @@ class BW03HelpReader(HelpReaderBase):
                 source_name=self.source_name,
                 topics=topics,
                 index_entries=index_entries,
-                contents=_build_contents_tree(menu_entries, topics),
+                contents=contents,
                 metadata=metadata,
                 binary_data=data,
             )

@@ -60,13 +60,7 @@ def _section_document(
         contents=[
             ContentNode(
                 label=label,
-                children=[
-                    ContentNode(
-                        label=topic.names[0] if topic.names else str(topic.context_id),
-                        topic_id=topic.context_id,
-                    )
-                    for topic in topics
-                ],
+                children=list(section.children),
             )
         ],
         comments=list(document.comments),

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 import re
 
-from ..base import HelpDocument, HelpReaderBase, IndexEntry, TopicRecord, ensure_document_index, render_topic_uhf_content
-from ..codepages import decode_bytes, guess_display_encoding
+from ..base import HelpDocument, IndexEntry, PositionedKeyword, TopicRecord, ensure_document_index, render_topic_uhf_content
+from ..codepages import decode_bytes
 
 
 M602_HEADER = b"\x1a(c) Software602 HelpSystem"
@@ -14,8 +15,13 @@ M602_MARKER = 0x01
 M602_LINK = 0x02
 M602_TITLE_END = 0xDC
 M602_SEPARATOR = 0xDF
-M602_INDEX_HEADER_SIZE = 6
+M602_INDEX_FOOTER_SIZE = 6
 M602_INDEX_ENTRY_SIZE = 8
+M602_ERROR_TARGET = 0x0F27  # Native context 9999, in the inline LE target convention.
+# Standard DOS client-width projection, not an on-disk field.
+M602_DISPLAY_WIDTH = 78
+_M602Cell = tuple[int | None, int | None]  # Literal cell or removed byte, hotspot occurrence.
+_M602Record = tuple[bytes, list[_M602Cell]]
 
 
 def is_m602_binary(data: bytes) -> bool:
@@ -23,36 +29,39 @@ def is_m602_binary(data: bytes) -> bool:
     return data.startswith(M602_HEADER)
 
 
-def detect_m602_binary_index_offset(data: bytes) -> tuple[int | None, int | None, int | None]:
-    """Return `(body_offset, entry_count, root_count)` for the unencrypted tail.
+@dataclass(frozen=True)
+class M602IndexEntry:
+    raw_target: int
+    offset: int
+    size: int
 
-    Observed classic M602 files end with an 8-byte sentinel whose last 4 bytes
-    equal the absolute EOF offset and whose middle 2 bytes equal the total
-    number of 8-byte index entries stored after the 6-byte tail header.
-    """
-    minimum_size = len(M602_HEADER) + M602_INDEX_HEADER_SIZE + M602_INDEX_ENTRY_SIZE
-    if len(data) < minimum_size:
-        return None, None, None
 
-    last = data[-M602_INDEX_ENTRY_SIZE:]
-    entry_count = last[2] | (last[3] << 8)
-    encoded_eof = (
-        (last[4] | (last[5] << 8))
-        | ((last[6] | (last[7] << 8)) << 16)
-    )
-    if entry_count <= 0 or encoded_eof != len(data):
-        return None, None, None
-
-    tail_size = M602_INDEX_HEADER_SIZE + (entry_count * M602_INDEX_ENTRY_SIZE)
-    tail_file_offset = len(data) - tail_size
-    if tail_file_offset < len(M602_HEADER):
-        return None, None, None
-
-    root_count = data[tail_file_offset]
-    if root_count <= 0 or root_count > entry_count:
-        return None, None, None
-
-    return tail_file_offset - len(M602_HEADER), entry_count, root_count
+def _read_m602_index(data: bytes) -> tuple[int, list[M602IndexEntry]]:
+    """Read native (context, absolute offset, byte size) rows and the EOF footer."""
+    if not is_m602_binary(data):
+        raise ValueError("Input is not a classic Software602 M602 help file.")
+    if len(data) < len(M602_HEADER) + M602_INDEX_FOOTER_SIZE:
+        raise ValueError("M602 has a truncated binary index footer")
+    count = int.from_bytes(data[-6:-4], "little")
+    if int.from_bytes(data[-4:], "little") != len(data):
+        raise ValueError("M602 binary index footer has an invalid file size")
+    offset = len(data) - M602_INDEX_FOOTER_SIZE - count * M602_INDEX_ENTRY_SIZE
+    if offset < len(M602_HEADER):
+        raise ValueError("M602 binary index count exceeds the file bounds")
+    entries = []
+    for index in range(count):
+        start = offset + index * M602_INDEX_ENTRY_SIZE
+        # Native context WORDs are LE; inline operands spell that WORD's high
+        # byte first. Preserve the reader/source-HLX raw-inline-ID convention.
+        entry = M602IndexEntry(
+            int.from_bytes(data[start:start+2], "big"),
+            int.from_bytes(data[start+2:start+6], "little"),
+            int.from_bytes(data[start+6:start+8], "little"),
+        )
+        if entry.offset < len(M602_HEADER) or entry.offset + entry.size > offset:
+            raise ValueError(f"M602 binary index entry {index} has an invalid topic range")
+        entries.append(entry)
+    return offset, entries
 
 
 def normalize_m602_title(text: str) -> str:
@@ -72,115 +81,29 @@ def build_m602_title_candidates(topics: list[TopicRecord], text_encoding: str) -
     return candidates
 
 
-def resolve_m602_label_context(
-    label: str,
-    candidates: list[tuple[int, str, set[str]]],
-    current_context: int | None = None,
-) -> int | None:
-    """Resolve one M602 hotspot label when it matches exactly one topic title."""
-    matches = [
-        context_id
-        for context_id, _title, aliases in candidates
-        if any(key in aliases for key in _iter_m602_label_keys(label))
-    ]
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1 and current_context is not None:
-        for context_id in matches:
-            if context_id != current_context:
-                return context_id
-    return None
-
-
 def build_m602_binary_target_context_map(
     data: bytes,
     parsed_topics: list[dict[str, object]],
     tail_offset: int | None = None,
 ) -> dict[int, int]:
-    """Decode the unencrypted binary tail and map raw targets to topic contexts."""
-    if not parsed_topics:
-        return {}
-
-    if tail_offset is None or tail_offset < 0:
-        tail_offset, _entry_count, _root_count = detect_m602_binary_index_offset(data)
-    if tail_offset is None or tail_offset < 0:
-        return {}
-
-    tail = data[len(M602_HEADER) + tail_offset:]
-    if len(tail) < M602_INDEX_HEADER_SIZE:
-        return {}
-    if (len(tail) - M602_INDEX_HEADER_SIZE) % M602_INDEX_ENTRY_SIZE:
-        return {}
-
-    topic_offsets = {
-        int(topic["start_offset"]) + len(M602_HEADER): int(topic["context_id"])
+    """Map native directory ranges to physical-topic contexts used by source HLX."""
+    index_offset, entries = _read_m602_index(data)
+    if tail_offset is not None and tail_offset != index_offset - len(M602_HEADER):
+        raise ValueError("M602 binary index offset disagrees with its footer")
+    topic_ranges = {
+        (int(topic["start_offset"]) + len(M602_HEADER),
+         int(topic["end_offset"]) + len(M602_HEADER)): int(topic["context_id"])
         for topic in parsed_topics
-        if isinstance(topic.get("start_offset"), int) and isinstance(topic.get("context_id"), int)
     }
     resolved: dict[int, int] = {}
-    expected_previous_offset = len(M602_HEADER)
-    entries = (len(tail) - M602_INDEX_HEADER_SIZE) // M602_INDEX_ENTRY_SIZE
-
-    for entry_index in range(entries):
-        entry_offset = M602_INDEX_HEADER_SIZE + (entry_index * M602_INDEX_ENTRY_SIZE)
-        entry = tail[entry_offset:entry_offset + M602_INDEX_ENTRY_SIZE]
-        delta = entry[0] | (entry[1] << 8)
-        raw_target_swapped = entry[2] | (entry[3] << 8)
-        absolute_offset = (entry[4] | (entry[5] << 8)) | ((entry[6] | (entry[7] << 8)) << 16)
-
-        # The index stores the raw link id with bytes swapped compared to the
-        # in-band body encoding `$02 ... $02 lo hi`.
-        raw_target = ((raw_target_swapped & 0x00FF) << 8) | (raw_target_swapped >> 8)
-        target_context = topic_offsets.get(absolute_offset)
+    for entry in entries:
+        target_context = topic_ranges.get((entry.offset, entry.offset + entry.size))
         if target_context is None:
-            continue
-
-        # All observed samples store the distance from the previous topic start
-        # alongside the absolute file offset. Keep the check soft so unknown
-        # variants can still fall back to title-based matching.
-        if absolute_offset - expected_previous_offset != delta:
-            expected_previous_offset = absolute_offset
-            continue
-        expected_previous_offset = absolute_offset
-        resolved[raw_target] = target_context
+            raise ValueError(f"M602 binary index target {entry.raw_target:04X} has no parsed topic")
+        # The original lookup scans forward and returns its first match.
+        resolved.setdefault(entry.raw_target, target_context)
 
     return resolved
-
-
-def improve_m602_topic_links(
-    topics: list[TopicRecord],
-    text_encoding: str,
-    exact_targets: dict[int, int] | None = None,
-) -> dict[int, int]:
-    """Resolve M602 raw 16-bit link ids, preferring the exact binary tail map."""
-    resolved_targets = dict(exact_targets or {})
-    unresolved_targets = {
-        raw_target
-        for topic in topics
-        for raw_target in topic.sequential_keywords
-        if raw_target not in resolved_targets
-    }
-    if unresolved_targets:
-        occurrences = [
-            occurrence
-            for occurrence in collect_m602_link_occurrences(topics, text_encoding=text_encoding)
-            if occurrence[1] in unresolved_targets
-        ]
-        heuristic_targets = build_m602_target_context_map(
-            topics,
-            occurrences,
-            text_encoding=text_encoding,
-        )
-        for raw_target, context_id in heuristic_targets.items():
-            resolved_targets.setdefault(raw_target, context_id)
-
-    for topic in topics:
-        topic.sequential_keywords = [
-            resolved_targets.get(raw_target, raw_target)
-            for raw_target in topic.sequential_keywords
-        ]
-
-    return resolved_targets
 
 
 def collect_m602_link_occurrences(
@@ -190,15 +113,10 @@ def collect_m602_link_occurrences(
     """Collect `(source_context, raw_target, label)` tuples from M602 topic bodies."""
     occurrences: list[tuple[int, int, str]] = []
     for topic in topics:
-        keyword_index = 0
-        for raw_line in topic.raw_lines:
-            parts = raw_line.split(b"\x02")
-            for part_index in range(1, len(parts), 2):
-                if keyword_index >= len(topic.sequential_keywords):
-                    break
-                label = decode_m602_bytes(parts[part_index], text_encoding).strip()
-                occurrences.append((topic.context_id, topic.sequential_keywords[keyword_index], label))
-                keyword_index += 1
+        for keyword in topic.positional_keywords:
+            row = topic.raw_lines[keyword.line - 1]
+            label = decode_m602_bytes(row[keyword.first_column - 1:keyword.last_column], text_encoding).strip()
+            occurrences.append((topic.context_id, keyword.target_context, label))
     return occurrences
 
 
@@ -261,168 +179,186 @@ def decode_m602_bytes(data: bytes, text_encoding: str) -> str:
     """Decode M602 text from either UTF-8 source dumps or DOS single-byte bytes."""
     if text_encoding == "utf-8":
         return data.decode("utf-8", errors="replace")
-    return decode_bytes(data, text_encoding)
+    # These are literal screen cells, not browser terminal controls. Decode
+    # one cell at a time so NUL and internal CR do not disappear/move a row.
+    literal = {0: " ", 9: "○", 10: "◙", 13: "♪", 127: "⌂"}
+    return "".join(literal[value] if value in literal else decode_bytes(bytes([value]), text_encoding)
+                   for value in data)
+
+
+def _layout_m602_records(
+    records: list[_M602Record], targets: list[int], width: int,
+) -> tuple[list[bytes], list[PositionedKeyword]]:
+    """Native raw-byte short-string wrapping, with bounded link-cell projection."""
+    rows: list[bytes] = []
+    keywords: list[PositionedKeyword] = []
+
+    def emit(cells: list[_M602Cell]) -> None:
+        row = bytearray()
+        active = None
+        start = 0
+
+        def flush() -> None:
+            if active is not None:
+                keywords.append(PositionedKeyword(target_context=targets[active],
+                                                  line=len(rows) + 1,
+                                                  first_column=start + 1,
+                                                  last_column=len(row)))
+
+        for value, link in cells:
+            if link != active:
+                flush()
+                active, start = link, len(row)
+            if value is not None:
+                row.append(value)
+        flush()
+        if row.startswith(b"\x01"):
+            row[0] = 0x20
+        rows.append(bytes(row))
+
+    index = 0
+    while index < len(records):
+        raw, cells = records[index]
+        index += 1
+        if raw.startswith(b"\x01"):
+            emit(cells)
+            continue
+        while index < len(records) and not records[index][0].startswith(b"\x01"):
+            following, next_cells = records[index]
+            index += 1
+            raw += b" " + following
+            cells = cells + [(0x20, None)] + next_cells
+            while len(raw) > width:
+                # Original indices are one-based; include the cut's space.
+                cut = raw.rfind(b" ", 0, width) + 1
+                if not cut:
+                    next_space = raw.find(b" ", width - 1)
+                    cut = next_space + 1 if next_space >= 0 else len(raw)
+                emit(cells[:cut])
+                raw, cells = raw[cut:], cells[cut:]
+        emit(cells)
+    return rows, keywords
 
 
 class M602BinaryParser:
     """Parse the encrypted M602 record stream into normalized topic data."""
 
-    def __init__(self, data: bytes):
+    def __init__(self, data: bytes, width: int = M602_DISPLAY_WIDTH):
+        if not isinstance(width, int) or not 1 <= width <= 255:
+            raise ValueError("M602 display width must be between 1 and 255 cells")
         self.data = data
+        self.width = width
         self.pos = len(M602_HEADER)
         self.current_topic_id = 0
-        self.current_lines: list[bytes] = []
+        self.current_records: list[_M602Record] = []
+        self.current_title: bytes | None = None
         self.current_keywords: list[int] = []
         self.current_start_offset: int | None = None
         self.topics: list[dict[str, object]] = []
-        (
-            self.binary_index_offset,
-            self.binary_index_entry_count,
-            self.binary_index_root_count,
-        ) = detect_m602_binary_index_offset(data)
+        index_offset, self.index_entries = _read_m602_index(data)
+        self.binary_index_offset = index_offset - len(M602_HEADER)
+        self.binary_index_entry_count = len(self.index_entries)
+        self.topic_end = self.pos
 
     def parse(self) -> list[dict[str, object]]:
-        """Parse the full encrypted record stream into topic dictionaries."""
-        while True:
-            if self.binary_index_offset is not None and self.pos - len(M602_HEADER) >= self.binary_index_offset:
-                break
-            record = self._read_record()
-            if record is None:
-                break
-            record_offset, raw_buf, visible_len = record
-            if visible_len == 0:
-                if self.current_topic_id:
-                    self.current_lines.append(b"")
-                continue
-            if self._is_binary_index(raw_buf, visible_len):
-                self.binary_index_offset = record_offset
-                break
-            if self._is_title(raw_buf, visible_len):
-                self._start_topic(record_offset, raw_buf[1:visible_len - 1])
-                continue
-            if not self.current_topic_id:
-                continue
-            if self._is_separator(raw_buf, visible_len):
-                self.current_lines.append(raw_buf[1:visible_len])
-                continue
-            self.current_lines.extend(self._decode_body_record(raw_buf, visible_len))
-
-        self._flush_topic()
-        self._finalize_topic_offsets()
+        """Decode each distinct native range, bounded by its stored byte size."""
+        self.topics = []
+        self.current_records, self.current_keywords = [], []
+        self.current_title = None
+        for start, size in sorted({(entry.offset, entry.size) for entry in self.index_entries}):
+            self.pos = start
+            self.topic_end = start + size
+            self.current_topic_id = len(self.topics) + 1
+            self.current_start_offset = start - len(M602_HEADER)
+            first_record = True
+            while self.pos < self.topic_end:
+                record_offset, raw_buf, visible_len = self._read_record()
+                if first_record and self._is_title(raw_buf, visible_len):
+                    self.current_title = raw_buf[1:visible_len - 1].strip()
+                try:
+                    raw = raw_buf[:visible_len]
+                    self.current_records.append((raw, self._decode_body_record(raw)))
+                except ValueError as error:
+                    raise ValueError(f"M602 topic {self.current_topic_id}, record at "
+                                     f"{record_offset + len(M602_HEADER):X}h: {error}") from error
+                first_record = False
+            self._flush_topic()
         return self.topics
 
-    def _read_record(self) -> tuple[int, bytes, int] | None:
-        """Read one XOR-decoded record and strip trailing CR bytes for parsing."""
-        if self.pos >= len(self.data):
-            return None
+    def _read_record(self) -> tuple[int, bytes, int]:
+        """Read one complete XOR-decoded Pascal string with its single CR suffix."""
         record_offset = self.pos - len(M602_HEADER)
         raw_len = self.data[self.pos] ^ 0xFA
         self.pos += 1
         if raw_len == 0:
-            return record_offset, b"", 0
-        if self.pos + raw_len > len(self.data):
-            return None
+            raise ValueError(f"M602 topic {self.current_topic_id} has a zero-length record")
+        if self.pos + raw_len > self.topic_end:
+            raise ValueError(f"M602 topic {self.current_topic_id} has a truncated record "
+                             f"at {record_offset + len(M602_HEADER):X}h")
         raw_buf = bytes(value ^ 0xFA for value in self.data[self.pos:self.pos + raw_len])
         self.pos += raw_len
-        visible_len = len(raw_buf)
-        while visible_len > 0 and raw_buf[visible_len - 1] == 0x0D:
-            visible_len -= 1
-        return record_offset, raw_buf, visible_len
-
-    def _start_topic(self, record_offset: int, title_bytes: bytes) -> None:
-        self._flush_topic()
-        self.current_topic_id = len(self.topics) + 1
-        self.current_start_offset = record_offset
-        self.current_lines = [title_bytes]
-        self.current_keywords = []
+        if raw_buf[-1] != 0x0D:
+            raise ValueError(f"M602 topic {self.current_topic_id} has a record without a CR terminator "
+                             f"at {record_offset + len(M602_HEADER):X}h")
+        return record_offset, raw_buf, len(raw_buf) - 1
 
     def _flush_topic(self) -> None:
         if not self.current_topic_id:
             return
-        title = self.current_lines[0].strip() if self.current_lines else f"Topic {self.current_topic_id}".encode("latin-1")
+        rows, keywords = _layout_m602_records(self.current_records, self.current_keywords, self.width)
+        title = self.current_title
+        if title is None:
+            title = rows[0].strip() if rows else f"Topic {self.current_topic_id}".encode("latin-1")
         self.topics.append(
             {
                 "context_id": self.current_topic_id,
                 "start_offset": self.current_start_offset,
-                "end_offset": None,
+                "end_offset": self.topic_end - len(M602_HEADER),
                 "title": title,
-                "raw_lines": list(self.current_lines),
+                "raw_lines": rows,
+                "positional_keywords": keywords,
                 "raw_link_targets": list(self.current_keywords),
-                "sequential_keywords": list(self.current_keywords),
             }
         )
-        if len(self.topics) >= 2 and self.current_start_offset is not None:
-            self.topics[-2]["end_offset"] = self.current_start_offset
         self.current_topic_id = 0
         self.current_start_offset = None
-        self.current_lines = []
+        self.current_records = []
+        self.current_title = None
         self.current_keywords = []
 
-    def _decode_body_record(self, raw_buf: bytes, visible_len: int) -> list[bytes]:
-        """Decode one body record and translate inline M602 links to `0x02` markers."""
-        lines: list[bytes] = []
-        line = bytearray()
+    def _decode_body_record(self, raw_buf: bytes) -> list[_M602Cell]:
+        """Map source bytes to literal cells and source hotspot occurrences."""
+        cells: list[_M602Cell] = []
         raw_len = len(raw_buf)
         index = 0
-
-        if visible_len > 0 and raw_buf[0] == M602_MARKER:
-            index = 1
-
-        while index < visible_len:
+        while index < raw_len:
             value = raw_buf[index]
             if value == M602_LINK:
-                index += 1
-                link_bytes = bytearray()
-                while index < raw_len and raw_buf[index] != M602_LINK:
-                    link_bytes.append(0x20 if raw_buf[index] == ord("_") else raw_buf[index])
-                    index += 1
-                if index < raw_len and raw_buf[index] == M602_LINK:
-                    index += 1
-                    if index + 1 < raw_len:
-                        context_id = raw_buf[index] | (raw_buf[index + 1] << 8)
-                        self.current_keywords.append(context_id)
-                        index += 2
-                    line.append(0x02)
-                    line.extend(bytes(link_bytes).rstrip(b" "))
-                    line.append(0x02)
+                end = raw_buf.find(b"\x02", index + 1)
+                if end < 0:
+                    raise ValueError("unterminated hyperlink label")
+                if end + 3 > raw_len:
+                    raise ValueError("truncated hyperlink target")
+                context_id = int.from_bytes(raw_buf[end + 1:end + 3], "little")
+                occurrence = len(self.current_keywords)
+                self.current_keywords.append(context_id)
+                cells.append((None, occurrence))
+                cells.extend((0x20 if byte == ord("_") else byte, occurrence)
+                             for byte in raw_buf[index + 1:end])
+                cells.extend([(None, occurrence), (None, None), (None, None)])
+                index = end + 3
                 continue
-            if value == 0x0D:
-                lines.append(bytes(line))
-                line = bytearray()
-                index += 1
-                continue
-            line.append(value)
+            cells.append((value, None))
             index += 1
-
-        lines.append(bytes(line))
-        return lines
+        return cells
 
     @staticmethod
     def _is_title(buf: bytes, visible_len: int) -> bool:
         if visible_len <= 2 or buf[0] != M602_MARKER:
             return False
-        if buf[1] == M602_LINK or buf[visible_len - 1] != M602_TITLE_END:
+        if M602_LINK in buf[:visible_len] or buf[visible_len - 1] != M602_TITLE_END:
             return False
         return M602_SEPARATOR not in buf[1:visible_len - 1]
-
-    @staticmethod
-    def _is_separator(buf: bytes, visible_len: int) -> bool:
-        if visible_len <= 1 or buf[0] != M602_MARKER:
-            return False
-        return M602_SEPARATOR in buf[1:visible_len]
-
-    @staticmethod
-    def _is_binary_index(buf: bytes, visible_len: int) -> bool:
-        """M602 appends a binary tail which is visibly dominated by XOR key bytes."""
-        if visible_len <= 10:
-            return False
-        fa_count = sum(value == 0xFA for value in buf[:visible_len])
-        return fa_count * 8 > visible_len
-
-    def _finalize_topic_offsets(self) -> None:
-        """Close the last topic span so debugging tools can inspect record offsets."""
-        if self.topics:
-            self.topics[-1]["end_offset"] = len(self.data) - len(M602_HEADER)
 
 
 class M602Reader:
@@ -447,16 +383,23 @@ class M602Reader:
             TopicRecord(
                 context_id=topic["context_id"],
                 raw_lines=list(topic["raw_lines"]),
-                sequential_keywords=list(topic["sequential_keywords"]),
+                positional_keywords=list(topic["positional_keywords"]),
                 index_terms=[topic["title"]],
             )
             for topic in parsed_topics
         ]
-        resolved_targets = improve_m602_topic_links(
-            topics,
-            text_encoding=self.text_encoding,
-            exact_targets=exact_target_map,
-        )
+        missing_targets = set()
+        for topic in topics:
+            for keyword in topic.positional_keywords:
+                raw_target = keyword.target_context
+                target = exact_target_map.get(raw_target)
+                if target is None:
+                    missing_targets.add(raw_target)
+                    target = exact_target_map.get(M602_ERROR_TARGET)
+                if target is None:
+                    raise ValueError(f"M602 topic {topic.context_id} references absent target "
+                                     f"{raw_target:04X}h without a native error context")
+                keyword.target_context = target
         topic_ids = {topic.context_id for topic in topics}
         for topic in topics:
             topic.uhf_content = render_topic_uhf_content(
@@ -468,9 +411,6 @@ class M602Reader:
             IndexEntry(label=topic["title"], context_id=topic["context_id"])
             for topic in parsed_topics
         ]
-        resolution_mode = "binary_tail_exact"
-        if len(resolved_targets) > len(exact_target_map):
-            resolution_mode = "binary_tail_exact+label_title_fallback"
         return ensure_document_index(HelpDocument(
             format_name="m602",
             source_name=self.source_name,
@@ -478,18 +418,19 @@ class M602Reader:
             index_entries=index_entries,
             metadata={
                 "stamp": "(c) Software602 HelpSystem",
+                "display_width": M602_DISPLAY_WIDTH,
                 "encrypted": True,
                 "text_encoding": self.text_encoding,
                 "link_target_kind": "m602_raw_link_code",
                 "link_targets_resolved": True,
                 "link_targets_exact_count": len(exact_target_map),
                 "binary_index_entry_count": parser.binary_index_entry_count,
-                "binary_index_root_count": parser.binary_index_root_count,
-                "link_target_resolution": resolution_mode,
+                "link_target_resolution": "binary_index_error_context" if missing_targets else "binary_tail_exact",
+                "missing_raw_link_targets": sorted(missing_targets),
             },
             binary_data=data,
         ))
 
 
-# Alias pre kompatibilitu
+# Manifest/export entry point.
 M602HelpReader = M602Reader

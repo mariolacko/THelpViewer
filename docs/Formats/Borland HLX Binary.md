@@ -1,350 +1,223 @@
-# Borland HLX (compiled) — best-effort analysis
+# Borland Compiled HLX Keyword Index
 
-> Created: 2026-04-19 · Last updated: 2026-05-05
+Compiled Borland Windows Help `.HLX` files with structure `i24` are
+standalone keyword B+ trees. They contain keywords, occurrence counts and
+addresses into a companion Windows Help keyword-data stream. They do not
+contain the article text addressed by that stream.
 
-Used by: Borland C++ 3.x–4.x compiled help (extension: `.HLX`).
+This is unrelated to semicolon-directive `.hlx` source text. A complete
+Windows `.HLP` container also has a different outer signature, `3F 5F 03 00`.
+An HLX tree starts directly with its B+ tree header; there is no preceding
+nine-byte internal-file wrapper.
 
-This document summarises a pragmatic analysis of compiled `.HLX` files
-found in the Borland C++ 4.x sample tree and documents the project's
-best-effort reader. It collects observed patterns, parsing heuristics,
-hotspot extraction notes, measured corpus behaviour and practical test
-guidance. It is still not a formal binary specification.
+All numeric fields below are little-endian. Page numbers are zero-based;
+`FFFFh` means no page where a chain endpoint permits it.
 
-### 1 Overview
+## 1. File header
 
-Compiled `.HLX` files are binary. A printable NUL-terminated string pool
-coexists with pointer-like tables and binary control streams that encode
-cross-topic navigation. Some variants behave like full manuals with many
-topic starts; others are closer to compiled search/index databases.
+The fixed header is 38 bytes. It is followed by `TotalPages` fixed-size
+pages. A standalone file's length is exactly:
 
-### 2 Observations
+`38 + TotalPages * PageSize`
 
-- Files often begin with a short signature-like area. Many samples start
-  with `3B 29 02 00 00 08 69 32 34 00`.
-- Numerous NUL-terminated printable strings are present: topic titles,
-  index labels, API names and occasional fragments of layout/control
-  text.
-- Multiple arrays of little-endian offsets (16-bit or 32-bit) typically
-  point into the string pool, but their exact position and quality vary.
-- Textual HLX directives such as `;SCREEN` or `;STAMP` are absent in
-  compiled `.HLX` files.
-- In the current Borland C++ 4.x corpus, bytes `4..5` consistently hold
-  `0x0800`, which is also a valid inferred pool base.
+| Absolute offset | Size | Field | Interpretation |
+| --- | ---: | --- | --- |
+| `00h` | 2 | Magic | LE16 `293Bh` |
+| `02h` | 2 | Flags | Bit `0002h` is set; retain other bits |
+| `04h` | 2 | PageSize | Page size in bytes, not a string-pool offset |
+| `06h` | 16 | Structure | NUL-terminated descriptor `i24`; bytes after its NUL are unused |
+| `16h` | 2 | ReservedZero | `0000h` |
+| `18h` | 2 | PageSplits | Page-split count |
+| `1Ah` | 2 | RootPage | Page containing the root of the tree |
+| `1Ch` | 2 | ReservedMinusOne | `FFFFh` |
+| `1Eh` | 2 | TotalPages | Number of allocated pages |
+| `20h` | 2 | Levels | Root-to-leaf depth, counting the leaf level |
+| `22h` | 4 | TotalEntries | Total number of keyword records in the leaves |
+| `26h` | variable | Pages | `TotalPages` pages of `PageSize` bytes |
 
-### 3 Corpus snapshot (current project state)
+The `i24` descriptor denotes a NUL-terminated indexed string, a two-byte
+value and a four-byte value. It describes leaf records, not branch records.
 
-Measured with the current reader on `data/sources/Borland C++ 4.x/`:
+The inspected trees use `PageSize = 0800h` (2,048 bytes) and one or two
+levels. Other page sizes are not ruled out by the addressing scheme.
+`Levels = 1` means the root itself is a leaf. Page type is determined by
+its depth; no separate page-type byte is stored.
 
-- 20 compiled `.HLX` files total.
-- 9 files currently export as `compiled-topics`.
-- 11 files currently export as `compiled-index`.
+The precise meaning of additional flags is not established here.
+`WIN31WH.HLX` has `2002h` instead of `0002h` while retaining the same
+record grammar. Header descriptor padding is not guaranteed to be zero:
+it can contain old RTF paths, labels or arbitrary bytes. Such padding is
+not a table or an external resource declaration.
 
-Representative samples:
+## 2. Page addressing and used area
 
-| File | Size | Reader result | Topics | Pointer map | Positional hotspots | Notes |
-|------|-----:|---------------|-------:|------------:|--------------------:|-------|
-| `BCW.HLX` | 45,094 B | `compiled-topics` | 425 | 5 | 14,461 | Still rich enough to keep grouped topics |
-| `BCDOS.HLX` | 6,182 B | `compiled-topics` | 94 | 0 | 1,082 | Topic-rich even without a usable pointer map |
-| `OLE.HLX` | 61,478 B | `compiled-index` | 1,984 | 13 | 0 | Pointer map exists, but payload is still too shallow to present as article topics |
-| `OWL.HLX` | 69,670 B | `compiled-topics` | 712 | 14 | 20,680 | Large corpus with stable hotspot extraction |
-| `OPENHELP.HLX` | 2,086 B | `compiled-index` | 36 | 0 | 0 | Low-diversity/search-like payload; deterministic parse is too weak |
+For page number `p`:
 
-Current `compiled-index` files in the sample corpus:
+`page_start = 38 + p * PageSize`
 
-- `BWCC.HLX`
-- `HELPREF.HLX`
-- `OLE.HLX`
-- `OPENGL.HLX`
-- `OPENHELP.HLX`
-- `RSL.HLX`
-- `VFW.HLX`
-- `WIN31WH.HLX`
-- `WIN32.HLX`
-- `WINSIGHT.HLX`
-- `WINSPCTR.HLX`
+Every page starts with:
 
-### 4 Payload families (current typology)
+| Page-relative offset | Size | Field |
+| --- | ---: | --- |
+| `00h` | 2 | Unused: number of free bytes at the end of the page |
+| `02h` | 2 | Entries: number of records on this page |
 
-The current reverse-engineering work distinguishes several recurring HLX
-payload families. These are not official Borland format names; they are
-working labels derived from the observed binary content.
+The used area ends at `page_start + PageSize - Unused`. Read exactly
+`Entries` records, and verify that the cursor reaches this boundary.
+The unused tail can contain remnants of older records and is not necessarily
+zero-filled. A string found there is not an additional keyword or article.
 
-| Family | Typical signals | Current examples | Interpretation |
-|--------|-----------------|------------------|----------------|
-| `rtf-keyword-map` | many `.rtf` strings, especially `lkeyword.rtf`, plus many strings starting with 8 hex digits | `BCW.HLX` | keyword/index map that still groups labels richly enough to expose clustered topics |
-| `rtf-overview-map` | many `overview.rtf` references | `WIN31WH.HLX` | external overview/topic map rather than article storage |
-| `rtf-reference-map` | many generic `.rtf` references without a strong `lkeyword` or `overview` bias | `BWCC.HLX`, `CWH.HLX`, `OCF.HLX`, `OPENGL.HLX`, `RPC.HLX`, `SOC.HLX`, `WIN32.HLX` | external reference map with labels and anchors, but not self-contained full text |
-| `heading-catalog` | very high topic count, average lines per topic around 1 to 2, high single-line ratio, many long headings | `OLE.HLX`, `HELPREF.HLX` | heading catalog or navigational title store, not article bodies |
-| `topic-clusters` | average lines per topic around 3 or more, lower single-line ratio, meaningful grouped lexical neighborhoods | `BCDOS.HLX`, `CLASSLIB.HLX`, `OWL.HLX` | best current candidate for genuine internal topic clustering |
-| `compact-index` | low-diversity compact payload, few long strings, usually small file size | `OPENHELP.HLX` | small search/index database |
-| `mixed-catalog` | none of the above dominates clearly | rare / transitional | requires case-by-case inspection |
+Records do not cross page boundaries. A missing NUL or operand before the
+used-area end is malformed; do not continue searching in free bytes or the
+following page.
 
-The parser now writes this classification to metadata as `hlx_family`.
+## 3. Branch pages
 
-Additional current corpus result from export validation:
+A branch page has a six-byte header:
 
-- `BCW.HLX` is still the strongest confirmed case of a functional HLX → UHF 2.0 topic bundle.
-- `OLE.HLX`, `RSL.HLX`, `WINSPCTR.HLX`, `VFW.HLX`, `WIN32.HLX`, and `WIN31WH.HLX` currently remain `compiled-index` exports: they produce many one-line labels or headings, but no stable multi-line article stream.
+| Page-relative offset | Size | Field |
+| --- | ---: | --- |
+| `00h` | 2 | Unused |
+| `02h` | 2 | Entries |
+| `04h` | 2 | LeftChild: child preceding the first separator |
 
-### 4.1 Index-record structure signals
+Starting at `06h`, each separator record is:
 
-The current `hlx_probe.py` can also summarize the compiled index records themselves. This turned out to be useful for distinguishing between several catalog-like variants that all remain `compiled-index` at export time.
+| Field | Size | Meaning |
+| --- | ---: | --- |
+| Separator | variable | NUL-terminated keyword |
+| Child | 2 | Page number for this separator's subtree |
 
-Observed patterns:
+There are `Entries + 1` child pointers. The left child handles keys
+before the first separator; each remaining child handles keys from its
+separator up to the next. Each descent reduces the remaining level count
+by one. Separators are routing copies, not additional keyword entries.
 
-- `OLE.HLX`: 2005 scanned index records, 1984 unique target offsets, only 15 repeated targets. Dominant flag is `1`, but target deltas are still mostly `+4`, with smaller tails at `+8`, `+12`, and `+16`. This looks like a dense heading/address catalog rather than a plain sequential slot table.
-- `RSL.HLX`: 117 records, 117 unique targets, no repeated targets. Target deltas are predominantly `+4`, then `+8`, `+16`, `+12`, `+24`. This is a compact linear catalog with no obvious target reuse.
-- `WINSPCTR.HLX`: 75 records, 75 unique targets, no repeated targets. Again, `+4` dominates strongly, with a short sparse tail of larger jumps. This is structurally closer to `RSL.HLX` than to `OLE.HLX`.
+Enumeration visits the left child, then separator children in stored order.
+Do not reconstruct this order using file offsets or sorting the numeric
+keyword-data addresses. Character-set and locale collation are not encoded
+fully in this header; portable enumeration needs no guessed comparator.
 
-The strongest current reverse-engineering result for these index records is:
+## 4. Leaf pages
 
-- in the sorted target stream, `flags` behave almost like a span or step code where `target_stride ~= flags * 4`
-- `OLE.HLX` fits this very strongly (`flag 1 -> +4` in 1730/1753 cases, `flag 2 -> +8` in 153/153, `flag 3 -> +12` in 55/55, `flag 4 -> +16` in 23/23)
-- `RSL.HLX` and `WINSPCTR.HLX` fit it even more cleanly, with no target reuse and exact `flag * 4` stride matches for all dominant flags currently observed
+A leaf has an eight-byte header:
 
-This does not yet prove the semantic meaning of each flag, but it strongly suggests that the low flag values encode how many 4-byte target slots the current record spans in the compiled index table.
+| Page-relative offset | Size | Field |
+| --- | ---: | --- |
+| `00h` | 2 | Unused |
+| `02h` | 2 | Entries |
+| `04h` | 2 | PreviousLeaf, or `FFFFh` for the first leaf |
+| `06h` | 2 | NextLeaf, or `FFFFh` for the last leaf |
 
-So far, these signals reinforce the current routing choice: some HLX variants do expose rich lexical neighborhoods or external reference maps, but they still serialize to one-line catalog entries rather than to stable internal article bodies.
+Starting at `08h`, every keyword record is:
 
-### 5 Tentative file layout (observed)
+| Field | Size | Meaning |
+| --- | ---: | --- |
+| Keyword | variable | NUL-terminated byte string |
+| Count | 2 | Number of referenced positions for this keyword |
+| KWDataOffset | 4 | Byte offset in the companion keyword-data stream |
 
-```
-┌──────────────────────────────┐
-│  Small signature / sync area │  (often starts 0x3B 0x29)
-├──────────────────────────────┤
-│  Small header fields         │  (pool base candidate often at data[4:6])
-├──────────────────────────────┤
-│  Pointer table(s)            │  (16-bit or 32-bit arrays)
-├──────────────────────────────┤
-│  Binary blobs / controls     │  (hotspots, layout, variant-specific data)
-├──────────────────────────────┤
-│  String pool (ASCIIZ)        │  (NUL-terminated printable runs)
-└──────────────────────────────┘
-```
+`Count` is not a style flag or a navigation opcode.
+`KWDataOffset` is not an offset into the HLX tree and is not a topic ID.
+Do not clamp it to the HLX file size or add `PageSize` to it.
 
-This is an observed layout, not a guaranteed one. Tables and pools may
-interleave differently by variant.
+The double-linked leaf chain follows the same order as branch traversal.
+Its endpoints are `FFFFh`; check reciprocity, valid page numbers and
+absence of loops. The sum of leaf record counts must equal `TotalEntries`.
+The same count/address tuple can occur under multiple keywords. A shorter
+keyword which happens to be a suffix of another is not a damaged fragment.
 
-### 6 Header field candidates
+An alternate enumeration descends through left children to the first leaf
+and follows `NextLeaf`. Validate the branch structure as well if
+corruption detection is required. Never interpret unreachable allocated
+pages as live records merely because they contain printable strings.
 
-The following fields are commonly observed (tentative):
+## 5. Resolving keyword addresses
 
-| Offset | Size | Field | Observed notes |
-|--------|------|-------|----------------|
-| 0..3 | var | Signature | often `3B 29 ...` sync area |
-| 4..5 | 2 | PoolBase? | candidate 16-bit pool base; validate before use |
-| 6..? | var | Header flags | sample-dependent metadata |
+The layout matches the Windows Help `|KWBTREE` keyword tree. Its associated
+`|KWDATA` stream is an array of four-byte TOPICOFFSET cursor addresses.
+To resolve one record, read:
 
-Treat these values as heuristics. Only trust a pool base when it is at
-least `0x100` and still inside the file.
+`Count` LE32 values from `KWDataOffset` in the keyword-data payload.
 
-### 7 Pointer table shapes
+Offsets are relative to the payload, excluding its nine-byte internal-file
+header in the containing Windows Help file. Require
+`KWDataOffset + 4 * Count <= keyword_data_payload_size`.
+Adjacent records often satisfy
+`next.KWDataOffset = current.KWDataOffset + 4 * current.Count`, because
+their lists are stored consecutively. Shared/reused lists are not ruled out;
+this relationship is not a required HLX record-boundary rule.
 
-| Type | Entry size | Notes |
-|------|-----------:|-------|
-| 16-bit | 2 bytes | Common; often monotonic offsets into the pool |
-| 32-bit | 4 bytes | Present in some larger variants |
+These values address the Windows Help topic system, whose interpretation
+depends on the parent help version. They are not the ordinal numbers of
+HLX keywords. In Windows Help variants with macro keywords, `FFFFFFFFh`
+is a macro reference rather than an article address.
+For HC31, TOPICOFFSET's high 17 bits select a physical topic block and its
+low 15 bits select a character/hotspot position accumulated from native
+display-record lengths. It is distinct from the 16-KiB-stride TOPICPOS
+record address. See [Windows Help](Windows%20Help.md) for the container,
+compression and bounded record-span resolution; do not interpret either
+address as a raw HLP file byte offset.
 
-Measured pointer-map counts for selected files:
+Without that companion data, the destination list cannot be recovered.
+The tree header stores no companion filename. Binding a particular tree
+to a particular help file must be verified separately. RTF filenames in
+unused bytes do not supply this binding or the missing article text.
 
-- `BCW.HLX`: 5
-- `OCF.HLX`: 7
-- `OLE.HLX`: 13
-- `OWL.HLX`: 14
-- `WIN31WH.HLX`: 19
+## 6. Strings, encoding and controls
 
-### 8 Header scanning and pointer-table scoring
+Keywords are byte strings, not compressed paragraphs. No article codec,
+screen layout or inline hotspot opcode stream is present in this grammar.
+Preserve complete strings, including punctuation, one-character keywords,
+spaces, numeric terms and control bytes; there is no 128-byte label limit.
 
-When the deterministic detector is not immediately confident, it scans
-the header region in both 2-byte and 4-byte strides and scores candidate
-tables using three main signals:
+The tree has no explicit character-set field. English Borland Windows
+keywords use Windows ANSI; `A0h` in the OLE keyword
+`Windows A0 NT?` is a nonbreaking space under Windows-1252, not the
+DOS CP437 letter á. Other language/code-page bindings require separate
+evidence from the companion help or its environment. C0 bytes are not
+automatically DOS display glyphs or hyperlinks. For example, OLE keys
+containing a Word field-code fragment have a literal `15h` inside
+the NUL-terminated keyword; the rest of that key remains in the same record.
 
-- fraction of entries that resolve into the pool range
-- monotonicity of adjacent entries
-- uniqueness of values
+## 7. Byte examples
 
-The current implementation also adds a strong signal for title matches
-against the naive topic set. In practical terms, it uses this shape:
+`OPENHELP.HLX` is 2,086 bytes: a 38-byte header and one 2,048-byte leaf.
+Its root is page 0, depth 1, with 36 keywords.
 
-```python
-score = (
-    frac_into_pool * 100.0
-    + monotonicity * 40.0
-    + uniqueness * 10.0
-    + title_fraction * 80.0
-    + (2.0 if step == 2 else 0.0)
-)
-```
+At file offset `26h` its leaf header is:
 
-Candidates with `frac_into_pool < 0.25` are discarded.
-
-### 9 Naive topic grouping
-
-- Extract all printable ASCIIZ strings, preferring CP437 and falling
-  back to Latin-1.
-- Group strings into naive topics using title heuristics: all-caps
-  labels, short headings or strings starting with words like `About`,
-  `Help`, `Contents` or `Menu`.
-- If no good title-like sequence is found, still return a usable fallback
-  topic list instead of aborting the parse.
-
-### 10 Reader decision rule
-
-The current wrapper in `hlx_binary.py` does not trust compiled index
-records blindly. The effective rule is:
-
-1. Always attempt deterministic topic extraction.
-2. Scan compiled search/index records in parallel.
-3. Prefer `compiled-topics` only when the deterministic parse looks both
-  substantial and non-shallow:
-  - `topic_count >= 50`, and
-  - average `raw_lines` per topic is at least `3.0` or the share of
-    single-line topics is at most `0.75`
-4. Within that richer topic set, pointer-map evidence still helps confirm
-  that the grouped topics are useful:
-  - `pointer_map >= 3`, or
-  - `topic_count >= 50`
-5. Otherwise, if there are at least 10 compiled index records, fall back
-   to `compiled-index`.
-
-This is why files like `BCW.HLX` and `OWL.HLX` remain topic-based, while
-`OLE.HLX`, `WIN31WH.HLX` and similarly shallow corpora now downgrade to
-`compiled-index` instead of pretending to be article trees.
-
-### 11 Pointer-to-topic mapping
-
-- When a reliable pointer table is found, the deterministic detector
-  returns `pointer_map` directly.
-- Otherwise the wrapper maps control-stream targets to the nearest topic
-  start found in the file.
-- When no topic tree is reliable enough but many compiled index records
-  exist, the reader emits an index-only document.
-
-### 12 Hotspot scanning algorithm (effective behavior)
-
-The wrapper scans the full binary for small control bytes followed by a
-2-byte or 4-byte address candidate:
-
-```python
-for i in range(file_size):
-    if data[i] in range(0x00, 0x08):
-        try_16bit_target(i + 1)
-        try_32bit_target(i + 1)
+```text
+8E 04 24 00 FF FF FF FF
 ```
 
-For each candidate target address:
+This means 1,166 unused bytes, 36 records, no previous leaf and no next leaf.
+Records occupy file offsets `2Eh..397h`; the used-area end is `398h`.
 
-- prefer an explicit `pointer_map` hit
-- otherwise map to the nearest topic start at or before that address
-- attach a `PositionedKeyword` to the source topic using a simple column
-  estimate derived from printable bytes before the control sequence
+The first keyword starts at `2Eh`:
 
-This produces useful navigation even in files where `pointer_count == 0`
-but the binary still contains many target-like control sequences.
-
-### 13 Control bytes (observed)
-
-- `0x00`–`0x07`: common hotspot prefixes followed by 2-byte or 4-byte
-  pointer payloads
-- other values: variant-specific; no general meaning is assigned yet
-
-### 14 Concrete sample bytes
-
-Representative first 32 bytes from current samples:
-
-| File | First 32 bytes (hex) |
-|------|----------------------|
-| `BCW.HLX` | `3b29020000086932340061725f457831206c6b657977000014001500ffff1600` |
-| `BCDOS.HLX` | `3b29020000086932340075727265640a0006002a2f0a000001000200ffff0300` |
-| `OLE.HLX` | `3b290200000869323400fff01dff810f4bff840000ff00001c001d00ffff1e00` |
-| `OWL.HLX` | `3b290200000869323400000000000000000000000000000020002100ffff2200` |
-| `OPENHELP.HLX` | `3b290200000869323400010101010101010101010101000000000000ffff0100` |
-
-These values are useful mostly as family markers. The prefix is stable,
-but the header diverges quickly after it.
-
-### 15 First printable pool strings (examples)
-
-Representative early strings after the inferred `0x0800` pool base:
-
-- `BCW.HLX`: `-wmsg`, `-wnsf`, `-wobs`, `page size`, `parameter types`
-- `BCDOS.HLX`: `pieslice`, `polygon`, `program segment prefix`
-- `OLE.HLX`: `APIs to initialize OLE`, `APIs to manage compound documents`
-- `OWL.HLX`: `BITMAPINFO`, `BITMAPINFOHEADER`, `BitmapOrigin`
-- `OPENHELP.HLX`: only two weak printable fragments near the pool start
-
-This is a useful discriminator between topic-rich manuals and the more
-index-heavy low-diversity variants.
-
-### 16 Tests and fixtures
-
-Existing regression coverage:
-
-- `tests/test_hlx_reader.py`
-- `tests/test_hlx_hotspots.py`
-- `tests/test_hlx_small_files.py`
-- `tests/test_hlx_golden_ole.py`
-
-Recommended next fixture work:
-
-- create a `tests/golden/hlx/` directory with small hand-verified slices
-- add at least one strong pointer-map case (`OLE` or `OWL`)
-- add at least one low-diversity/index-heavy case (`OPENHELP`)
-
-### 17 Reverse-engineering workflow in this repo
-
-Use the dedicated probe helper:
-
-```bash
-python tools/hlx_probe.py "data/sources/Borland C++ 4.x"
-python tools/hlx_probe.py "data/sources/Borland C++ 4.x/OLE.HLX" --details
+```text
+61 64 64 69 6E 67 20 68 65 6C 70 20 66 69 6C 65 73
+20 74 6F 20 4F 70 65 6E 48 65 6C 70 00 01 00 00 00 00 00
 ```
 
-The script reports:
+It spells `adding help files to OpenHelp`, has Count 1 and KWDataOffset 0.
+The following record begins at `52h`, spells
+`adding help files to search ranges`, has Count 1 and KWDataOffset 4.
+The four-byte values 0 and 4 select keyword-data cells, not local topics.
 
-- final reader classification (`compiled-topics` vs `compiled-index`)
-- payload family (`hlx_family`)
-- topic count
-- pointer-map count
-- hotspot count
-- index-record count
-- average lines per topic
-- RTF reference count
-- first printable strings after the inferred pool base
-- sample pointer-to-context mappings
+For larger examples, `BCW.HLX` declares 22 pages, root page 21,
+depth 2 and 2,322 keyword records; the root contains only separator keys.
+Its first leaf record is at `2Eh`, far before file offset `0800h`.
 
-This makes it easier to compare future heuristic changes against a
-stable baseline.
+## 8. Reference implementations
 
-### 18 Generating UHF bundles for HLX samples
-
-To generate only the Borland C++ 4.x HLX corpus into a safe staging
-directory without overwriting the main `data/helps/` catalog:
-
-```bash
-python -m thelpviewer.server.converter \
-  "data/sources/Borland C++ 4.x" \
-  var/hlx-uhf \
-  --bundle \
-  --bundle-layout helps \
-  --clean
-```
-
-This writes `.json.gz` UHF bundles plus a local `catalog.json` under
-`var/hlx-uhf/`.
-
-### 19 Next steps
-
-- investigate the five current `compiled-index` variants to decide
-  whether they are truly search databases or still hide a topic stream
-- add golden fixtures for one strong and one weak variant
-- refine hotspot scanning for variants with `pointer_count == 0` but a
-  large hotspot count (`BCDOS`, `CLASSLIB`, `OPENGL`)
-
-### Implementation references
-
-- Heuristic wrapper: `thelpviewer/server/converter/readers/hlx_binary.py`
-- Deterministic detector: `thelpviewer/server/converter/readers/hlx_deterministic.py`
-- Data models: `thelpviewer/server/converter/base.py`
-- Probe helper: `tools/hlx_probe.py`
-- Tests: `tests/test_hlx_reader.py`, `tests/test_hlx_hotspots.py`, `tests/test_hlx_small_files.py`, `tests/test_hlx_golden_ole.py`
+The B+ tree layout and companion keyword-data interpretation can also be
+checked against the independently maintained
+[HelpDeco format description](https://github.com/pmachapman/helpdeco/blob/master/helpfile.txt)
+and Wine's
+[B+ tree traversal](https://github.com/wine-mirror/wine/blob/master/programs/winhlp32/hlpfile.c)
+and [keyword lookup](https://github.com/wine-mirror/wine/blob/master/programs/winhlp32/winhelp.c).
+Other tree descriptors and undocumented flag meanings are outside this
+index specification. Container/article addressing and compression are
+described separately in [Windows Help](Windows%20Help.md).

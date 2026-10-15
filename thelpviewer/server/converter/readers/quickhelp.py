@@ -6,12 +6,14 @@ Format specification: fancidev/DosHelp (MIT licence) - Format.txt
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 import re
 import struct
 from pathlib import Path
 from ..base import (
+    ContentNode,
     HelpDocument,
     HelpReaderBase,
     IndexEntry,
@@ -38,6 +40,35 @@ def is_quickhelp_binary(data: bytes) -> bool:
     return len(data) >= 4 and data[:2] == b"LN" and data[2:4] == b"\x02\x00"
 
 
+def _quickhelp_databases(data: bytes):
+    """Yield complete databases; all section offsets are relative to each one."""
+    offset = 0
+    while offset < len(data):
+        if len(data) - offset < 0x46 or not is_quickhelp_binary(data[offset:offset + 4]):
+            raise ValueError(f"Invalid QuickHelp database header at offset {offset}.")
+        size = struct.unpack_from("<I", data, offset + 0x42)[0]
+        if size < 0x46 or offset + size > len(data):
+            raise ValueError(f"Invalid QuickHelp DatabaseSize at offset {offset}: {size}.")
+        yield offset, data[offset:offset + size]
+        offset += size
+
+
+def _quickhelp_contexts(data: bytes, count: int, strings_offset: int, map_offset: int):
+    if not 0x46 <= strings_offset <= map_offset <= len(data) or map_offset + count * 2 > len(data):
+        raise ValueError("QuickHelp context map exceeds its database.")
+    result: list[tuple[str, int]] = []
+    position = strings_offset
+    for index in range(count):
+        end = data.find(b"\x00", position, map_offset)
+        if end < 0:
+            raise ValueError("Unterminated QuickHelp context string.")
+        context = data[position:end].decode("latin-1")
+        topic_id = struct.unpack_from("<H", data, map_offset + index * 2)[0]
+        result.append((context, topic_id))
+        position = end + 1
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Huffman decompression (Steps 3 and 2 reversal)
 # ---------------------------------------------------------------------------
@@ -51,27 +82,34 @@ def _read_huffman_tree(data: bytes, huff_off: int, topic_text_off: int) -> list[
     Leaf node: value < 0, symbol = value & 0xFF.
     Terminator: value == 0 (stops the list).
     """
-    nodes: list[int] = []
-    pos = huff_off
-    while pos + 1 < topic_text_off:
-        val = struct.unpack_from("<h", data, pos)[0]  # signed int16
-        pos += 2
-        if val == 0:
-            break
-        nodes.append(val)
+    if huff_off == topic_text_off:
+        return []
+    size = topic_text_off - huff_off
+    if not 0x46 <= huff_off < topic_text_off <= len(data) or size % 2 or size > 1024:
+        raise ValueError("Invalid QuickHelp Huffman tree size.")
+    values = list(struct.unpack_from(f"<{size // 2}h", data, huff_off))
+    if values[-1] != 0 or 0 in values[:-1] or len(values) == 1:
+        raise ValueError("Invalid QuickHelp Huffman tree terminator.")
+    nodes = values[:-1]
+    for index, value in enumerate(nodes):
+        # The serialized post-order numbering puts both children after their
+        # parent. Checking this also rules out cycles before decoding any topic.
+        if value > 0 and (value % 2 or not index < value // 2 < len(nodes)
+                          or index + 1 >= len(nodes)):
+            raise ValueError("Invalid QuickHelp Huffman child offset.")
     return nodes
 
 
-def _huffman_decode(compressed: bytes, tree: list[int]) -> bytes:
+def _huffman_decode(compressed: bytes, tree: list[int]) -> Iterator[int]:
     """Decode a Huffman-encoded byte stream using the given tree.
 
     Bits are read MSB-first from each byte.
-    Returns raw bytes (compact representation, Step 2 input).
+    Yields compact bytes on demand; OUTLEN, not Huffman padding, stops expansion.
     """
     if not tree:
-        return compressed  # no Huffman tree → data is already compact
+        yield from compressed  # no Huffman tree → data is already compact
+        return
 
-    result = bytearray()
     bit_buf = 0
     bits_avail = 0
     comp_pos = 0
@@ -91,23 +129,21 @@ def _huffman_decode(compressed: bytes, tree: list[int]) -> bytes:
         node = 0  # root is always at index 0
         while True:
             if node >= len(tree):
-                return bytes(result)
+                raise ValueError("Invalid QuickHelp Huffman child offset.")
             v = tree[node]
             if v < 0:
                 # Leaf: emit symbol
-                result.append(v & 0xFF)
+                yield v & 0xFF
                 break
             bit = next_bit()
             if bit is None:
-                return bytes(result)
+                return
             if bit == 0:
                 # 0-bit child: navigate to tree[v // 2]
                 node = v // 2
             else:
                 # 1-bit child: always the next sequential node
                 node = node + 1
-
-    return bytes(result)
 
 
 def _read_keywords(data: bytes, kw_off: int, huff_off: int) -> list[bytes]:
@@ -120,52 +156,52 @@ def _read_keywords(data: bytes, kw_off: int, huff_off: int) -> list[bytes]:
         length = data[pos]
         pos += 1
         if pos + length > huff_off:
-            break
+            raise ValueError("Truncated QuickHelp dictionary entry.")
         keywords.append(data[pos: pos + length])
         pos += length
+    if len(keywords) > 1024:
+        raise ValueError("QuickHelp dictionary exceeds 1024 entries.")
     return keywords
 
 
-def _keyword_expand(compact: bytes, outlen: int, keywords: list[bytes]) -> bytes:
+def _keyword_expand(compact: Iterable[int], outlen: int, keywords: list[bytes]) -> bytes:
     """Expand keyword-compressed + RLE data to the binary topic representation."""
     out = bytearray()
-    i = 0
-    while len(out) < outlen and i < len(compact):
-        b = compact[i]
-        i += 1
+    values = iter(compact)
+
+    def read_byte() -> int:
+        try:
+            return next(values)
+        except StopIteration:
+            raise ValueError("Truncated QuickHelp compressed topic before OUTLEN.") from None
+
+    while len(out) < outlen:
+        b = read_byte()
         match b:
             case _ if b < 0x10 or b > 0x1A:
                 # Value byte: copy as-is
                 out.append(b)
             case 0x1A:
                 # Escape: next byte is literal
-                if i < len(compact):
-                    out.append(compact[i])
-                    i += 1
+                out.append(read_byte())
             case 0x19:
                 # Repeat: repeat_byte × repeat_count
-                if i + 1 < len(compact):
-                    repeat_byte = compact[i]
-                    i += 1
-                    repeat_count = compact[i]
-                    i += 1
-                    out.extend(bytes([repeat_byte]) * repeat_count)
+                repeat_byte = read_byte()
+                repeat_count = read_byte()
+                out.extend(bytes([repeat_byte]) * repeat_count)
             case 0x18:
                 # Space run
-                if i < len(compact):
-                    space_count = compact[i]
-                    i += 1
-                    out.extend(b" " * space_count)
+                out.extend(b" " * read_byte())
             case _:
                 # Dictionary lookup (0x10–0x17): 10-bit index
-                if i < len(compact):
-                    lo = compact[i]
-                    i += 1
-                    idx = ((b & 3) << 8) | lo
-                    if idx < len(keywords):
-                        out.extend(keywords[idx])
-                    if b & 4:  # Append-Space bit
-                        out.append(0x20)
+                idx = ((b & 3) << 8) | read_byte()
+                if idx >= len(keywords) or not keywords[idx]:
+                    raise ValueError("Invalid QuickHelp dictionary reference.")
+                out.extend(keywords[idx])
+                if b & 4:  # Append-Space bit
+                    out.append(0x20)
+        if len(out) > outlen:
+            raise ValueError("QuickHelp expansion exceeds OUTLEN.")
     return bytes(out)
 
 
@@ -192,62 +228,45 @@ class _QuickHelpTopicOptions:
     is_popup: bool = False
 
 
+@dataclass(slots=True, frozen=True)
+class _QuickHelpContextIndex:
+    name: str
+    topic_base: int
+    case_sensitive: bool
+    contexts: dict[str, int]
+
+
 @lru_cache(maxsize=256)
-def _read_quickhelp_context_index(path_str: str) -> dict[str, int]:
-    """Read only the context-string → topic-id map from one QuickHelp file."""
-    path = Path(path_str)
+def _cached_quickhelp_context_indices(path_str: str, mtime_ns: int, size: int):
+    """Index every logical database, invalidating cached data after replacement."""
+    indices: list[_QuickHelpContextIndex] = []
+    topic_base = 0
     try:
-        data = path.read_bytes()
+        for _offset, data in _quickhelp_databases(Path(path_str).read_bytes()):
+            attributes, topic_count, context_count = (
+                struct.unpack_from("<H", data, offset)[0] for offset in (4, 8, 10)
+            )
+            name = data[0x10:0x1E].split(b"\x00")[0].decode("latin-1")
+            strings_offset, map_offset = struct.unpack_from("<II", data, 0x26)
+            case_sensitive = bool(attributes & 1)
+            contexts = {
+                context if case_sensitive else context.upper(): topic_base + topic_id
+                for context, topic_id in _quickhelp_contexts(data, context_count, strings_offset, map_offset)
+                if topic_id < topic_count
+            }
+            indices.append(_QuickHelpContextIndex(name, topic_base, case_sensitive, contexts))
+            topic_base += topic_count
+    except (OSError, ValueError, struct.error):
+        return ()
+    return tuple(indices)
+
+
+def _read_quickhelp_context_indices(path: Path):
+    try:
+        info = path.stat()
     except OSError:
-        return {}
-    if not is_quickhelp_binary(data):
-        return {}
-
-    (_, _attributes, _control_char, _pad, _topic_count, context_count, _display_width, _predef_ctx_count) = struct.unpack_from(
-        "<HHBBHHHH",
-        data,
-        0x02,
-    )
-    (_reserved1, _topic_index_off, ctx_strings_off, ctx_map_off, _keywords_off, _huffman_tree_off, _topic_text_off, _reserved2, _reserved3, _db_size) = struct.unpack_from(
-        "<IIIIIIIIII",
-        data,
-        0x1E,
-    )
-
-    context_strings: list[str] = []
-    pos = ctx_strings_off
-    for _ in range(context_count):
-        nul = data.find(b"\x00", pos)
-        if nul < 0:
-            break
-        context_strings.append(data[pos:nul].decode("latin-1", errors="replace"))
-        pos = nul + 1
-
-    index: dict[str, int] = {}
-    for i, context_str in enumerate(context_strings):
-        if ctx_map_off + (i + 1) * 2 > len(data):
-            break
-        topic_id = struct.unpack_from("<H", data, ctx_map_off + i * 2)[0]
-        index.setdefault(context_str, topic_id)
-        index.setdefault(context_str.upper(), topic_id)
-    return index
-
-
-def _find_quickhelp_sibling_file(source_path: Path, file_hint: str) -> Path | None:
-    """Resolve one DOS-style help file name in the current source directory."""
-    wanted = file_hint.strip()
-    if not wanted:
-        return None
-
-    wanted_name = Path(wanted).name.casefold()
-    wanted_stem = Path(wanted).stem.casefold()
-    for candidate in sorted(source_path.parent.glob("*.HLP")):
-        if candidate.name.casefold() == wanted_name:
-            return candidate
-    for candidate in sorted(source_path.parent.glob("*.HLP")):
-        if candidate.stem.casefold() == wanted_stem:
-            return candidate
-    return None
+        return ()
+    return _cached_quickhelp_context_indices(str(path), info.st_mtime_ns, info.st_size)
 
 
 def _resolve_external_quickhelp_target(
@@ -255,9 +274,6 @@ def _resolve_external_quickhelp_target(
     source_path: Path | None,
 ) -> _ExternalQuickHelpTarget | None:
     """Resolve a QuickHelp `database!context` or bare cross-file context."""
-    if source_path is None:
-        return None
-
     explicit_file: str | None = None
     target_context = context_str.strip()
     if "!" in target_context:
@@ -279,50 +295,59 @@ def _resolve_external_quickhelp_target(
             target_context = qualified_context
     if not target_context:
         return None
-
-    resolved: Path | None = None
-    if explicit_file is not None:
-        candidates = []
-        resolved = _find_quickhelp_sibling_file(source_path, explicit_file)
-        if resolved is not None:
-            candidates.append(resolved)
-        else:
-            # Some shipped databases contain a misspelled filename in an
-            # otherwise valid qualified link (QB45QCK's AB45ADVR example).
-            # Recover it only when its context is unique among siblings.
-            candidates = sorted(source_path.parent.glob("*.HLP"))
-    else:
-        candidates = sorted(source_path.parent.glob("*.HLP"))
+    if source_path is None:
+        # In-memory conversion has no sibling directory. Keep explicit targets
+        # with their namespace so an installed logical database can resolve them.
+        if explicit_file is not None:
+            filename = Path(explicit_file).name
+            return _ExternalQuickHelpTarget(filename, context_alias=f"{filename}!{target_context}")
+        return None
 
     try:
-        current_file = source_path.resolve()
+        candidates = sorted(
+            (path for path in source_path.parent.iterdir() if path.is_file() and path.suffix.casefold() == ".hlp"),
+            key=lambda path: path.name.casefold(),
+        )
     except OSError:
-        current_file = source_path
+        candidates = []
+    databases = [(path, index) for path in candidates for index in _read_quickhelp_context_indices(path)]
+    if explicit_file is not None:
+        wanted = Path(explicit_file).name.casefold()
+        named = [(path, index) for path, index in databases
+                 if wanted in {path.name.casefold(), path.stem.casefold(),
+                               index.name.casefold(), Path(index.name).stem.casefold()}]
+        # Recover an absent/misspelled filename only from a unique sibling
+        # context. If the named database exists, never substitute another one.
+        if named:
+            databases = named
+        if named and target_context.upper() in {"HV", "VX"}:
+            candidate, index = named[0]
+            if target_context.upper() == "VX":
+                return _ExternalQuickHelpTarget(candidate.name, context_alias=f"{index.name}!vx")
+            # Home is database-scoped even when several databases share a file.
+            # Prefer declared home aliases, then the database's first topic.
+            homes = [(context.upper(), topic_id) for context, topic_id in index.contexts.items()]
+            topic_id = next((ident for alias, ident in homes if alias == "-9996" or alias.endswith("!HV")), None)
+            if topic_id is None:
+                topic_id = next((ident for alias, ident in homes if alias == "H.CONTENTS"), None)
+            if topic_id is None:
+                topic_id = next((ident for alias, ident in homes if alias.endswith(".CONTENTS")), index.topic_base)
+            return _ExternalQuickHelpTarget(candidate.name, topic_id, f"{index.name}!hv")
 
     matches: list[_ExternalQuickHelpTarget] = []
-    for candidate in candidates:
-        try:
-            if explicit_file is None and candidate.resolve() == current_file:
-                continue
-        except OSError:
-            if explicit_file is None and candidate == source_path:
-                continue
-
-        context_index = _read_quickhelp_context_index(str(candidate))
-        topic_id = context_index.get(target_context)
-        if topic_id is None:
-            topic_id = context_index.get(target_context.upper())
+    for candidate, index in databases:
+        key = target_context if index.case_sensitive else target_context.upper()
+        topic_id = index.contexts.get(key)
         if topic_id is None:
             continue
+        alias = f"{index.name}!{target_context}" if index.topic_base and index.name else target_context
         matches.append(
             _ExternalQuickHelpTarget(
                 source_file=candidate.name,
                 topic_id=topic_id,
-                context_alias=target_context,
+                context_alias=alias,
             )
         )
-        if resolved is not None:
-            break
 
     if explicit_file is not None:
         if len({(match.source_file.casefold(), match.topic_id) for match in matches}) == 1:
@@ -331,7 +356,7 @@ def _resolve_external_quickhelp_target(
         if fallback_file:
             return _ExternalQuickHelpTarget(
                 source_file=fallback_file,
-                context_alias=target_context,
+                context_alias=f"{fallback_file}!{target_context}" if named else target_context,
             )
         return None
 
@@ -455,6 +480,8 @@ def _decompile_topic(
     context_map: dict[str, int],
     topic_count: int,
     source_path: Path | None,
+    topic_base: int = 0,
+    case_sensitive: bool = False,
 ) -> tuple[list[bytes], list[PositionedKeyword], list[str], list[str], _QuickHelpTopicOptions]:
     """Decompile a binary topic into display lines and hyperlink data.
 
@@ -471,23 +498,24 @@ def _decompile_topic(
     pos = 0
     while pos < len(binary):
         # --- Text block ---
-        if pos >= len(binary):
-            break
         text_block_len = binary[pos]
         pos += 1
         if text_block_len == 0:
-            break
+            raise ValueError("Invalid QuickHelp zero-length text block.")
+        if pos + text_block_len - 1 > len(binary):
+            raise ValueError("Truncated QuickHelp text block.")
         text_data = binary[pos: pos + text_block_len - 1]
         pos += text_block_len - 1
 
         # --- Attribute block ---
         if pos >= len(binary):
-            raw_lines.append(_strip_quickhelp_markers(text_data))
-            break
+            raise ValueError("Missing QuickHelp attribute block.")
         attr_block_len = binary[pos]
         pos += 1
         if attr_block_len == 0:
-            break
+            raise ValueError("Invalid QuickHelp zero-length attribute block.")
+        if pos + attr_block_len - 1 > len(binary):
+            raise ValueError("Truncated QuickHelp attribute block.")
         attr_data = binary[pos: pos + attr_block_len - 1]
         pos += attr_block_len - 1
 
@@ -536,6 +564,8 @@ def _decompile_topic(
                 keywords,
                 line_keywords,
                 source_path=source_path,
+                topic_base=topic_base,
+                case_sensitive=case_sensitive,
             )
 
         marker_nav_links = _quickhelp_marker_nav_links(text_data, line_keywords)
@@ -559,7 +589,7 @@ def _decompile_topic(
                 visible_text,
                 style_spans=style_spans,
                 link_spans=line_keywords,
-                link_formatter=lambda link, label: _format_quickhelp_link(link, label, topic_count),
+                link_formatter=lambda link, label: _format_quickhelp_link(link, label, topic_base + topic_count),
             )
         )
         raw_lines.append(stored_text)
@@ -576,10 +606,14 @@ def _parse_links(
     line_keywords: list[UhfLinkSpan],
     *,
     source_path: Path | None,
+    topic_base: int = 0,
+    case_sensitive: bool = False,
 ) -> None:
     """Parse the links section of an attribute block and append to out."""
     pos = 0
-    while pos + 2 <= len(links_data):
+    while pos < len(links_data):
+        if pos + 2 > len(links_data):
+            raise ValueError("Truncated QuickHelp link range.")
         start_idx = links_data[pos]       # 1-based
         end_idx = links_data[pos + 1]     # 1-based
         pos += 2
@@ -587,34 +621,35 @@ def _parse_links(
         # Read NUL-terminated context string
         nul = links_data.find(b"\x00", pos)
         if nul < 0:
-            break
+            raise ValueError("Unterminated QuickHelp link context.")
         context_str = links_data[pos:nul].decode("latin-1", errors="replace")
         pos = nul + 1
 
         if context_str == "":
             # No context string → read WORD topic index
             if pos + 2 > len(links_data):
-                break
+                raise ValueError("Truncated QuickHelp direct link target.")
             raw_idx = struct.unpack_from("<H", links_data, pos)[0]
             pos += 2
             # Highest bit may be set (direct topic index marker)
-            topic_idx = raw_idx & 0x7FFF
+            local_idx = raw_idx & 0x7FFF
+            if local_idx >= topic_count:
+                raise ValueError("QuickHelp direct link references a nonexistent topic.")
+            topic_idx = topic_base + local_idx
         else:
             # Check QuickHelp built-in navigation contexts first.
             ctx_upper = context_str.upper()
             if ctx_upper == "!B":
                 topic_idx = nav_action_context("back")
-            elif ctx_upper.endswith("!HV") or ctx_upper == "-9996":
+            elif ctx_upper == "!HV" or ctx_upper == "-9996":
                 # Home-view context: source Contents topic.
                 topic_idx = nav_action_context("contents")
-            elif ctx_upper.endswith("!VX") or ctx_upper == "-9997":
+            elif ctx_upper == "!VX" or ctx_upper == "-9997":
                 # Index-view context
                 topic_idx = nav_action_context("index")
             else:
                 # Try local resolution first
-                topic_idx = context_map.get(ctx_upper, -1)
-                if topic_idx < 0:
-                    topic_idx = context_map.get(context_str, -1)
+                topic_idx = context_map.get(context_str if case_sensitive else ctx_upper, -1)
                 if topic_idx < 0:
                     external_target = _resolve_external_quickhelp_target(context_str, source_path)
                     if external_target is None:
@@ -631,7 +666,7 @@ def _parse_links(
                     continue
 
         if context_nav_action(topic_idx) or (
-            0 <= topic_idx < topic_count
+            topic_base <= topic_idx < topic_base + topic_count
         ):
             out.append(PositionedKeyword(
                 target_context=topic_idx,
@@ -656,9 +691,42 @@ def _parse_links(
 class QuickHelpReader(HelpReaderBase):
     """Parse a Microsoft QuickHelp LN binary file into HelpDocument."""
 
-    def read_bytes(self, data: bytes) -> HelpDocument:  # noqa: C901
+    def read_bytes(self, data: bytes) -> HelpDocument:
         if not is_quickhelp_binary(data):
             raise ValueError("Not a QuickHelp LN file (missing 'LN' signature or wrong version).")
+        documents: list[HelpDocument] = []
+        databases: list[dict[str, object]] = []
+        topic_base = 0
+        for offset, section in _quickhelp_databases(data):
+            document = self._read_database(section, topic_base)
+            documents.append(document)
+            databases.append({
+                "name": document.metadata["db_name"], "offset": offset,
+                "size": len(section), "first_topic_id": topic_base,
+                "topic_count": len(document.topics),
+                "case_sensitive": bool(struct.unpack_from("<H", section, 4)[0] & 1),
+            })
+            topic_base += len(document.topics)
+
+        document = documents[0]
+        if len(documents) > 1:
+            document.contents = [
+                ContentNode(
+                    label=part.display_name,
+                    topic_id=part.metadata.get("help_contents_topic_id"),
+                    children=[ContentNode(label=topic.names[0] if topic.names else str(topic.context_id),
+                                          topic_id=topic.context_id) for topic in part.topics],
+                ) for part in documents
+            ]
+            for part in documents[1:]:
+                document.topics.extend(part.topics)
+                document.index_entries.extend(part.index_entries)
+        document.metadata["quickhelp_databases"] = databases
+        document.metadata["source_file_aliases"] = [item["name"] for item in databases if item["name"]]
+        document.metadata["transport_metadata_keys"] = ["db_name", "quickhelp_databases"]
+        return document
+
+    def _read_database(self, data: bytes, topic_base: int) -> HelpDocument:  # noqa: C901
 
         # --- File header (starting at offset 0x02) ---
         #  02-04  WORD  Version          always 2
@@ -696,6 +764,15 @@ class QuickHelpReader(HelpReaderBase):
             _reserved2, _reserved3, db_size,
         ) = struct.unpack_from("<IIIIIIIIII", data, 0x1E)
 
+        sections = [topic_index_off, ctx_strings_off, ctx_map_off]
+        sections.extend(offset for offset in (keywords_off, huffman_tree_off) if offset)
+        sections.extend((topic_text_off, len(data)))
+        if (sections != sorted(sections) or sections[0] < 0x46
+                or topic_index_off + (topic_count + 1) * 4 > ctx_strings_off
+                or ctx_map_off + context_count * 2 > sections[3]
+                or huffman_tree_off and huffman_tree_off == topic_text_off):
+            raise ValueError("Invalid QuickHelp section boundaries.")
+
         # If HuffmanTree section is absent, huffman_tree_off == 0
         if huffman_tree_off == 0:
             huffman_tree_off = topic_text_off  # no huffman section
@@ -714,29 +791,23 @@ class QuickHelpReader(HelpReaderBase):
         for i in range(topic_count + 1):
             off = struct.unpack_from("<I", data, topic_index_off + i * 4)[0]
             topic_offsets.append(off)
+        if (topic_offsets[0] != topic_text_off or topic_offsets[-1] != len(data)
+                or any(end - start < 2 for start, end in zip(topic_offsets, topic_offsets[1:]))):
+            raise ValueError("Invalid QuickHelp topic index boundaries.")
 
-        # --- Read context strings ---
-        ctx_strings: list[str] = []
-        pos = ctx_strings_off
-        for _ in range(context_count):
-            nul = data.find(b"\x00", pos)
-            if nul < 0:
-                break
-            ctx_strings.append(data[pos:nul].decode("latin-1", errors="replace"))
-            pos = nul + 1
-
-        # --- Read context map (ContextCount WORDs) ---
-        ctx_topic_indices: list[int] = []
-        for i in range(context_count):
-            idx = struct.unpack_from("<H", data, ctx_map_off + i * 2)[0]
-            ctx_topic_indices.append(idx)
+        # --- Read context strings and their database-local topic indices ---
+        contexts = _quickhelp_contexts(data, context_count, ctx_strings_off, ctx_map_off)
+        if any(index >= topic_count for _context, index in contexts):
+            raise ValueError("QuickHelp context map references a nonexistent topic.")
+        ctx_strings = [context for context, _index in contexts]
+        ctx_topic_indices = [index for _context, index in contexts]
 
         # Build context string → topic index lookup (case-insensitive)
         case_sensitive = bool(attributes & 0x01)
         context_map: dict[str, int] = {}
         for ctx_str, topic_idx in zip(ctx_strings, ctx_topic_indices):
             key = ctx_str if case_sensitive else ctx_str.upper()
-            context_map[key] = topic_idx
+            context_map[key] = topic_base + topic_idx
 
         # --- Decode each topic ---
         topics: list[TopicRecord] = []
@@ -749,14 +820,10 @@ class QuickHelpReader(HelpReaderBase):
             try:
                 raw_lines, pos_keywords, names, uhf_lines, topic_options = _decode_topic(
                     raw_topic, tree, keywords, control_char,
-                    context_map, topic_count, self.source_path,
+                    context_map, topic_count, self.source_path, topic_base, case_sensitive,
                 )
-            except Exception:
-                raw_lines = []
-                pos_keywords = []
-                names = []
-                uhf_lines = []
-                topic_options = _QuickHelpTopicOptions()
+            except ValueError as error:
+                raise ValueError(f"QuickHelp database {db_name!r}, topic {i}: {error}") from error
 
             if not names:
                 derived_heading = _quickhelp_topic_heading(
@@ -778,9 +845,11 @@ class QuickHelpReader(HelpReaderBase):
                     continue
                 seen_aliases.add(marker)
                 alias_strings.append(cleaned)
+                if db_name:
+                    alias_strings.append(f"{db_name}!{cleaned}")
 
             topic = TopicRecord(
-                context_id=i,
+                context_id=topic_base + i,
                 raw_lines=raw_lines,
                 positional_keywords=pos_keywords,
                 names=names,
@@ -792,15 +861,27 @@ class QuickHelpReader(HelpReaderBase):
             )
             topic.nav_items = extract_nav_items_from_uhf(
                 uhf_lines,
-                valid_topic_ids=set(range(topic_count)),
+                valid_topic_ids=set(range(topic_base, topic_base + topic_count)),
             )
             if topic_options.category_param:
-                quickhelp_category_params[i] = topic_options.category_param
+                quickhelp_category_params[topic_base + i] = topic_options.category_param
             topics.append(topic)
 
         help_contents_topic_id = _quickhelp_help_contents_topic_id(topics)
         if help_contents_topic_id is not None:
-            topics[help_contents_topic_id].is_help_contents = True
+            topics[help_contents_topic_id - topic_base].is_help_contents = True
+        if topic_base and topics:
+            # Contents inside a later database refers to that database's home,
+            # not the first database in the physical HLP container.
+            home_id = help_contents_topic_id if help_contents_topic_id is not None else topic_base
+            for topic in topics:
+                topic.uhf_content = [re.sub(
+                    r"\[nav:contents\](.*?)\[/nav\]",
+                    lambda match: format_uhf_link(match.group(1), topic_id=home_id), line,
+                ) for line in topic.uhf_content]
+                topic.nav_items = extract_nav_items_from_uhf(
+                    topic.uhf_content, valid_topic_ids=set(range(topic_base, topic_base + topic_count)),
+                )
 
         # --- Build index entries ---
         # Prefer `:n` topic titles as visible labels; fall back to context strings.
@@ -819,7 +900,7 @@ class QuickHelpReader(HelpReaderBase):
                         label = heading.encode("latin-1", errors="replace")
                     else:
                         label = ctx_str.encode("latin-1", errors="replace")
-                index_entries.append(IndexEntry(label=label, context_id=topic_idx))
+                index_entries.append(IndexEntry(label=label, context_id=topic_base + topic_idx))
 
         _linkify_quickhelp_grid_topics(topics, index_entries)
         label_lookup = _build_quickhelp_index_lookup(topics, index_entries)
@@ -856,10 +937,12 @@ def _decode_topic(
     context_map: dict[str, int],
     topic_count: int,
     source_path: Path | None,
+    topic_base: int = 0,
+    case_sensitive: bool = False,
 ) -> tuple[list[bytes], list[PositionedKeyword], list[str], list[str], _QuickHelpTopicOptions]:
     """Full three-stage decoding pipeline for one topic."""
     if len(raw_topic) < 2:
-        return [], [], [], [], _QuickHelpTopicOptions()
+        raise ValueError("Truncated QuickHelp topic OUTLEN.")
 
     # OUTLEN = uncompressed binary size (Step 1 output size)
     outlen = struct.unpack_from("<H", raw_topic, 0)[0]
@@ -872,7 +955,8 @@ def _decode_topic(
     binary = _keyword_expand(compact, outlen, keywords)
 
     # Step 1 reverse: decompile binary lines
-    return _decompile_topic(binary, control_char, context_map, topic_count, source_path)
+    return _decompile_topic(binary, control_char, context_map, topic_count, source_path,
+                            topic_base, case_sensitive)
 
 
 def _parse_quickhelp_style_spans(
@@ -1106,7 +1190,7 @@ def _resolve_quickhelp_category_target(
         return TopicNavItem(label="Category", alias=alias)
 
     line_number: int | None = None
-    target_record = topics[target_topic] if 0 <= target_topic < len(topics) else None
+    target_record = next((topic for topic in topics if topic.context_id == target_topic), None)
     if target_record is not None and target_record.quickhelp_is_list:
         if explicit_line is not None:
             line_number = explicit_line

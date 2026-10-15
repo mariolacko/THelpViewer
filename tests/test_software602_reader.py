@@ -59,24 +59,26 @@ def test_text602_and_calc602_keep_navigation_links_resolved():
     assert c602_links >= 1000
 
 
-def test_text602_and_calc602_drop_trailing_topic_rules():
+def test_text602_and_calc602_keep_authored_title_rules_and_footer_rules():
     for document in (_t602_document(), _c602_document()):
-        assert not any(topic.uhf_content and topic.uhf_content[-1] == "[rule]" for topic in document.topics)
+        assert document.topics[0].uhf_content[0] == ""
+        assert document.topics[0].uhf_content[3] == "[rule]"
+        assert document.topics[0].uhf_content[-1] == "[rule]"
 
 
 def test_text602_index_links_menu_entries_without_corrupting_footer():
     document = _t602_document()
-    index_topic = _topic_by_name(document, "Text602 | Abecední rejstřík nápovědy.")
-    contents_topic = _topic_by_name(document, "Text602 | Obsah")
+    index_topic = _topic_by_name(document, "Text602 │ Abecední rejstřík nápovědy.")
+    contents_topic = _topic_by_name(document, "Text602 │ Obsah")
 
     assert any("]Jdi na konec bloku[/link]" in line for line in index_topic.uhf_content)
-    assert index_topic.uhf_content[-1] == f"■ [link:topic={contents_topic.context_id}]Obsah nápovědy[/link]"
+    assert index_topic.uhf_content[-3:] == [f"▀ [link:topic={contents_topic.context_id}]Obsah nápovědy[/link]", "", "[rule]"]
     assert "[link:topic=12]Obsah[/link] nápovědy" not in index_topic.uhf_content
 
 
 def test_text602_contents_uses_its_complete_source_link_table():
     document = _t602_document()
-    contents_topic = _topic_by_name(document, "Text602 | Obsah")
+    contents_topic = _topic_by_name(document, "Text602 │ Obsah")
     text = "\n".join(contents_topic.uhf_content)
 
     for label in (
@@ -96,37 +98,36 @@ def test_text602_context_summary_is_followed_by_a_blank_line():
     document = _t602_document()
     centered_line = _topic_by_name(
         document,
-        "Řádka | Centrování textu na řádce        <Ctrl-OC>",
+        "Řádka │ Centrování textu na řádce        <Ctrl-OC>",
     )
-    database_field = _topic_by_name(document, "Řádka | Políčko")
+    database_field = _topic_by_name(document, "Řádka │ Políčko")
 
-    assert centered_line.uhf_content[:3] == [
-        "Centrování textu na řádku",
-        "",
+    assert centered_line.uhf_content[5:7] == ["Centrování textu na řádku ", ""]
+    assert "".join(centered_line.uhf_content[7:9]).strip() == (
         "Text na řádku, kde je umístěn kurzor, je možné vystředit mezi "
         "definované a aktivní okraje. Zároveň je u daného odstavce změněn "
-        "styl: Zarovnání na střed.",
-    ]
-    assert database_field.uhf_content[:3] == [
-        "Vložení pole",
-        "",
+        "styl: Zarovnání na střed."
+    )
+    assert database_field.uhf_content[5:7] == ["Vložení pole ", ""]
+    end = database_field.uhf_content.index("", 7)
+    assert "".join(database_field.uhf_content[7:end]).strip() == (
         "Při návrhu formuláře pro kartotéku se mezi příkazy menu Řádka "
         "zpřístupnil příkaz Políčko, který je při editaci běžných dokumentů "
         "nepřístupný. Tento příkaz použijete ke vkládání polí formuláře jako "
-        "referencí na položky záznamů zvolené databáze.",
-    ]
+        "referencí na položky záznamů zvolené databáze."
+    )
 
 
 def test_text602_helpctx_links_use_exact_editor_and_cardfile_targets():
     document = _t602_document()
-    index_topic = _topic_by_name(document, "Text602 | Abecední rejstřík nápovědy.")
+    index_topic = _topic_by_name(document, "Text602 │ Abecední rejstřík nápovědy.")
     editor_open, cardfile_open = _topics_by_name(
         document,
-        "Soubor | Otevření                 <F3>",
+        "Soubor │ Otevření                 <F3>",
     )
     editor_calculator, _, cardfile_calculator = _topics_by_name(
         document,
-        "Text602 | Kalkulačka              <Alt-Q>",
+        "Text602 │ Kalkulačka              <Alt-Q>",
     )
     _, cardfile_go_to = _topics_by_name(
         document,
@@ -138,16 +139,16 @@ def test_text602_helpctx_links_use_exact_editor_and_cardfile_targets():
     )
     _, cardfile_find = _topics_by_name(
         document,
-        "Jdi na | Najít                    <Ctrl-QF>",
+        "Jdi na │ Najít                    <Ctrl-QF>",
     )
-    _, cardfile_print = _topics_by_name(document, "Soubor | Tisk")
+    _, cardfile_print = _topics_by_name(document, "Soubor │ Tisk")
     _, cardfile_basic_help = _topics_by_name(document, "Základní pohyb v nápovědě")
-    editor_find_next = _topic_by_name(document, "Vzorce | Další                    <Ctrl-L>")
-    cardfile_find_next = _topic_by_name(document, "Jdi na | Další                    <Ctrl-L>")
+    editor_find_next = _topic_by_name(document, "Vzorce │ Další                    <Ctrl-L>")
+    cardfile_find_next = _topic_by_name(document, "Jdi na │ Další                    <Ctrl-L>")
     cardfile_forms = _topic_by_name(document, "Menu Formulář                     <Alt-F>")
     cardfile_functions = _topic_by_name(document, "Seznam funkcí kartotéky")
-    cardfile_show_deleted = _topic_by_name(document, "Zobrazit | Zrušené")
-    editor_window = _topic_by_name(document, "Text602 | Editor")
+    cardfile_show_deleted = _topic_by_name(document, "Zobrazit │ Zrušené")
+    editor_window = _topic_by_name(document, "Text602 │ Editor")
 
     text = "\n".join(index_topic.uhf_content)
     assert f"[link:topic={cardfile_open.context_id}]Otevřít databázový soubor[/link]" in text
@@ -169,26 +170,28 @@ def test_text602_helpctx_links_use_exact_editor_and_cardfile_targets():
 
 def test_text602_topic_footer_links_index_and_contents():
     document = _t602_document()
-    opening_topic = _topic_by_name(document, "Soubor | Otevření                 <F3>")
-    contents_topic = _topic_by_name(document, "Text602 | Obsah")
-    index_topic = _topic_by_name(document, "Text602 | Abecední rejstřík nápovědy.")
+    opening_topic = _topic_by_name(document, "Soubor │ Otevření                 <F3>")
+    contents_topic = _topic_by_name(document, "Text602 │ Obsah")
+    index_topic = _topic_by_name(document, "Text602 │ Abecední rejstřík nápovědy.")
 
-    assert opening_topic.uhf_content[-1] == (
-        f"■ [link:topic={index_topic.context_id}]Rejstřík[/link]  "
+    assert opening_topic.uhf_content[-3] == (
+        f"▀ [link:topic={index_topic.context_id}]Rejstřík[/link]  "
         f"[link:topic={contents_topic.context_id}]Obsah[/link]"
     )
 
 
 def test_text602_marked_title_screens_and_keyboard_alias_links_are_preserved():
     document = _t602_document()
-    block_start = _topic_by_name(document, "Blok | Začátek                    <F7> +                                    <Ctrl-KB>")
-    block_end = _topic_by_name(document, "Blok | Konec                      <F8> +                                    <Ctrl-KK>")
+    block_start = _topic_by_name(document, "Blok │ Začátek                    <F7>")
+    block_end = _topic_by_name(document, "Blok │ Konec                      <F8>")
     keyboard_menu = _topic_by_name(document, "Menu Klávesnice")
-    czech_keyboard = _topic_by_name(document, "Klávesnice | Český psací stroj    <Alt-2>")
-    ibm_keyboard = _topic_by_name(document, "Klávesnice | Počítačová klávesnice       <Alt-5>")
+    czech_keyboard = _topic_by_name(document, "Klávesnice │ Český psací stroj    <Alt-2>")
+    ibm_keyboard = _topic_by_name(document, "Klávesnice │ Počítačová klávesnice       <Alt-5>")
 
-    assert "Označuje začátek bloku." in block_start.uhf_content
-    assert "Označuje konec bloku." in block_end.uhf_content
+    assert "Označuje začátek bloku. " in block_start.uhf_content
+    assert "Označuje konec bloku. " in block_end.uhf_content
+    assert "                                  <Ctrl-KB>" in block_start.uhf_content
+    assert "                                  <Ctrl-KK>" in block_end.uhf_content
     assert any(
         f"[link:topic={czech_keyboard.context_id}]Česká profesionální[/link]" in line
         for line in keyboard_menu.uhf_content
@@ -202,31 +205,28 @@ def test_text602_marked_title_screens_and_keyboard_alias_links_are_preserved():
 def test_c602_context_menu_links_are_resolved_without_linking_ascii_art():
     doc = _c602_document()
 
-    graph_topic = doc.topics[49]
-    assert graph_topic.context_id == 50
+    graph_topic = _topic_by_name(doc, "Graf │ Zobrazit                   <F8>")
+    graph_2d = _topic_by_name(doc, "Graf │ 2D rovinný graf")
+    graph_3d = _topic_by_name(doc, "Graf │ 3D prostorový graf")
+    graph_title = _topic_by_name(doc, "Graf │ Nadpis")
     assert any("┌─────┬─────┬───────── názvy kategorií" in line for line in graph_topic.uhf_content)
-    assert not any("[link:topic=54]┌" in line for line in graph_topic.uhf_content)
-    assert not any("[link:topic=56](legenda)" in line for line in graph_topic.uhf_content)
-    assert not any("[link:topic=56]4 α" in line for line in graph_topic.uhf_content)
-    assert "■ [link:topic=51]Výběr 2D grafu[/link]" in graph_topic.uhf_content
-    assert "  [link:topic=52]Výběr 3D grafu[/link]" in graph_topic.uhf_content
-    assert "■ [link:topic=53]Nadpis grafu[/link]" in graph_topic.uhf_content
+    assert not any("[link:topic=" in line for line in graph_topic.uhf_content[4:30])
+    assert f"▀ [link:topic={graph_2d.context_id}]Výběr 2D grafu[/link]" in graph_topic.uhf_content
+    assert f"  [link:topic={graph_3d.context_id}]Výběr 3D grafu[/link]" in graph_topic.uhf_content
+    assert f"▀ [link:topic={graph_title.context_id}]Nadpis grafu[/link]" in graph_topic.uhf_content
 
-    graph_3d_topic = doc.topics[51]
-    assert graph_3d_topic.context_id == 52
-    assert "■ [link:topic=51]Výběr 2D grafu[/link]" in graph_3d_topic.uhf_content
+    assert f"▀ [link:topic={graph_2d.context_id}]Výběr 2D grafu[/link]" in graph_3d.uhf_content
 
 
 def test_c602_uses_software602_character_overrides():
     doc = _c602_document()
 
-    contents = doc.topics[128]
-    assert contents.context_id == 129
-    assert contents.uhf_content[0] == "■ Úvod"
+    contents = _topic_by_name(doc, "Help │ Obsah")
+    assert contents.uhf_content[5] == "▀ Úvod"
 
-    finance = doc.topics[100]
+    finance = _topic_by_name(doc, "Finanční funkce")
     assert " │ FV(Úrok,PočetObdobí,Splátka,<SoučasnáHodnota>,<Typ>)                    │" in finance.uhf_content
-    assert "Úrok - úroková míra (rate - RATE)." in finance.uhf_content
+    assert "Úrok - úroková míra (rate - RATE). " in finance.uhf_content
 
     all_text = "\n".join(line for topic in doc.topics for line in topic.uhf_content)
     for bad_text in ("⌡vod", "⌡rok", "zvláš╘", "pamě╘", "TERMINßL", "KLADN≈", "ZßPORN≈", "bu─"):
@@ -253,16 +253,17 @@ def test_t602_300_reader_parses_legacy_length_prefixed_rows():
     assert document.metadata["title"] == "Text 602 3.00"
     assert document.metadata["ui"]["window"] == "#005454"
 
-    opening = next(topic for topic in document.topics if topic.context_id == 35)
+    opening = next(topic for topic in document.topics if topic.context_id == 34)
     assert opening.names == ["Otevření"]
-    assert opening.uhf_content[:5] == [
+    assert opening.uhf_content[:3] == ["  [b]Otevření [/b]▄", "   ▀▀▀▀▀▀▀▀▀", ""]
+    assert opening.uhf_content[3:8] == [
         "     Příkaz je určen pro otevření (načtení",
         "z disku) pracovního textového souboru. Není-li",
         "stávající (dosud editovaný) soubor uložen, bude",
         "zobrazen dotaz, zda má být zapsán na disk či",
         "nikoliv.",
     ]
-    assert "zapsat do dialogového rámečku [b]Jméno souboru[/b]. Při" in opening.uhf_content
+    assert "zapsat do dialogového rámečku [i]Jméno souboru[/i]. Při" in opening.uhf_content
 
     all_text = "\n".join(line for topic in document.topics for line in topic.uhf_content)
     for bad_text in ("načtení.z", "Není-li/stávající", "bude,zobrazen", "či\x08", "[97]", "[96]"):

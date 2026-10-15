@@ -5,6 +5,7 @@ from __future__ import annotations
 import struct
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from ..base import (
@@ -30,25 +31,19 @@ UNAMBIGUOUS_BOX_BYTES = frozenset(
      0xCC, 0xCD, 0xCE, 0xD9, 0xDA, 0xDB, 0xDC, 0xDF}
 )
 BOX_CONTEXT_BYTES = UNAMBIGUOUS_BOX_BYTES | CP852_BOX_CONFLICTS.keys()
-PC_FAND_INTERNAL_HELP_START = "!! ZDE ZAČÍNÁ INTERNÍ HELP FANDU !!"
-PC_FAND_INTERNAL_HELP_END = "!! ZDE KONČÍ INTERNÍ HELP FANDU !!"
-UHF_UNDERLINE_RE = re.compile(r"\[u\](.*?)\[/u\]", re.IGNORECASE)
-UHF_INLINE_TAG_RE = re.compile(r"\[/?(?:b|i|u)\]", re.IGNORECASE)
-DOUBLE_BOX_TRANSLATION = str.maketrans(
-    {
-        "┌": "╔",
-        "┐": "╗",
-        "└": "╚",
-        "┘": "╝",
-        "├": "╠",
-        "┤": "╣",
-        "┬": "╦",
-        "┴": "╩",
-        "┼": "╬",
-        "─": "═",
-        "│": "║",
-    }
-)
+UHF_INLINE_TOKEN_RE = re.compile(r"\[\[|\[/?(?:b|i|u)\]", re.IGNORECASE)
+# Pc-Fand KEYBD.PAS TabLtN, followed by the default ASCII case comparison.
+# In particular, this is a byte fold: sharp-s does not expand to two letters.
+PC_FAND_HELP_FOLD = (bytes(range(128)) + bytes.fromhex(
+    "43 75 65 61 61 75 63 63 6c 65 4f 6f 69 5a 41 43 "
+    "45 4c 6c 6f 6f 4c 6c 53 73 4f 55 54 74 4c 9e 63 "
+    "61 69 6f 75 41 61 5a 7a 45 65 61 7a 43 73 ae af "
+    "b0 b1 b2 b3 b4 41 41 45 53 b9 ba bb bc 5a 7a bf "
+    "c0 c1 c2 c3 c4 c5 41 61 c8 c9 ca cb cc cd ce cf "
+    "64 44 44 45 64 4e 49 49 65 d9 da db dc 54 55 df "
+    "4f e1 4f 4e 6e 6e 53 73 52 55 72 55 79 59 74 ef "
+    "f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 fa 75 52 72 fe ff"
+)).upper()
 GAME_CHEATER_DATABASE_FILES = (
     "CHEATDBS.000",
     "CHEATDBS.T00",
@@ -80,26 +75,26 @@ def _read_text_block_bytes(data: bytes, offset: int) -> bytes | None:
     """Read one Pc-Fand memo block, following chained 512-byte pages."""
     if offset == 0:
         return None
-    if offset < 0 or offset + 2 > len(data):
-        return None
+    if offset < MEMO_PAGE_SIZE or offset + 2 > len(data):
+        raise ValueError(f"Invalid or truncated Pc-Fand memo header at {offset}")
     length = struct.unpack_from("<H", data, offset)[0]
     position = offset + 2
     remaining = length
     encoded = bytearray()
-    visited_pages: set[int] = set()
+    visited_pages = {offset - offset % MEMO_PAGE_SIZE}
 
     while remaining:
         bytes_left_on_page = MEMO_PAGE_SIZE - (position % MEMO_PAGE_SIZE)
         if remaining <= bytes_left_on_page:
             if position + remaining > len(data):
-                return None
+                raise ValueError(f"Truncated Pc-Fand memo text at {position}")
             encoded.extend(data[position : position + remaining])
             break
 
         payload_size = bytes_left_on_page - 4
         pointer_offset = position + payload_size
         if payload_size < 0 or pointer_offset + 4 > len(data):
-            return None
+            raise ValueError(f"Invalid or truncated Pc-Fand memo page pointer at {pointer_offset}")
         encoded.extend(data[position:pointer_offset])
         remaining -= payload_size
         next_page = struct.unpack_from("<I", data, pointer_offset)[0]
@@ -107,13 +102,14 @@ def _read_text_block_bytes(data: bytes, offset: int) -> bytes | None:
             next_page < MEMO_PAGE_SIZE
             or next_page % MEMO_PAGE_SIZE != 0
             or next_page + MEMO_PAGE_SIZE > len(data)
-            or next_page in visited_pages
         ):
-            return None
+            raise ValueError(f"Invalid or truncated Pc-Fand memo continuation page {next_page}")
+        if next_page in visited_pages:
+            raise ValueError(f"Cyclic Pc-Fand memo continuation page {next_page}")
         visited_pages.add(next_page)
         position = next_page
 
-    return bytes(value ^ XOR_KEY for value in encoded).rstrip(b"\x00")
+    return bytes(value ^ XOR_KEY for value in encoded)
 
 
 def _decode_text_block_bytes(data: bytes) -> DecodedTextBlock:
@@ -189,49 +185,96 @@ def _decode_text_block_bytes(data: bytes) -> DecodedTextBlock:
     for tag in reversed(active_tags):
         uhf_parts.append(f"[/{tag}]")
     return DecodedTextBlock(
-        plain=_normalize_mixed_box_tables("".join(plain_parts)),
-        uhf=_normalize_mixed_box_tables("".join(uhf_parts)),
+        plain="".join(plain_parts),
+        uhf="".join(uhf_parts),
     )
 
 
-def _normalize_mixed_box_tables(text: str) -> str:
-    """Make Pc-Fand tables with double headers use one consistent border."""
-    lines = text.split("\n")
-    inside_double_table = False
-    for index, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped.startswith("╔") and "═" in stripped:
-            inside_double_table = True
-        if inside_double_table:
-            lines[index] = line.translate(DOUBLE_BOX_TRANSLATION)
-        if inside_double_table and stripped.endswith(("┘", "╝")):
-            inside_double_table = False
-    return "\n".join(lines)
+def _help_name_matches(label: bytes, pattern: bytes) -> bool:
+    """Pc-Fand EqualsMask: the stored name is the mask, not the clicked label."""
+    label = label.translate(PC_FAND_HELP_FOLD)
+    pattern = pattern.translate(PC_FAND_HELP_FOLD)
+    if b"*" not in pattern and b"?" not in pattern:
+        return label == pattern
+
+    @lru_cache(maxsize=None)
+    def matches(p: int, t: int) -> bool:
+        if t == len(label):
+            return p == len(pattern) or pattern[p:] == b"*"
+        if p == len(pattern):
+            return False
+        if pattern[p] == ord("*"):
+            if p + 1 == len(pattern):
+                return True
+            # The native routine consumes the byte after '*' as a literal,
+            # including '?' or another '*', before recursing on the suffix.
+            return any(label[i] == pattern[p + 1] and matches(p + 2, i + 1)
+                       for i in range(t, len(label)))
+        return (pattern[p] == ord("?") or pattern[p] == label[t]) and matches(p + 1, t + 1)
+
+    return matches(0, 0)
 
 
-def _normalized_help_title(value: str) -> str:
-    return " ".join(value.replace("[[", "[").split()).casefold()
+def _help_caption_bytes(markup: str) -> bytes | None:
+    """Recover escaped source text and controls, not a cleaned-up caption."""
+    parts = []
+    previous = 0
+    for token in UHF_INLINE_TOKEN_RE.finditer(markup):
+        parts.append(markup[previous:token.start()])
+        name = token.group().lower()
+        if name == "[[":
+            parts.append("[")
+        else:
+            parts.append({"b": "\x02", "i": "\x17", "u": "\x13"}[name.strip("[/]")])
+        previous = token.end()
+    parts.append(markup[previous:])
+    try:
+        return "".join(parts).encode("cp852")
+    except UnicodeEncodeError:
+        return None
 
 
-def _link_help_topic_references(topics: list[TopicRecord]) -> None:
-    """Turn underlined Pc-Fand help titles into UHF topic links."""
-    targets: dict[str, list[int]] = {}
+def _link_help_topic_references(topics: list[TopicRecord], names: list[tuple[bytes, int]]) -> None:
+    """Resolve first physical title matches, including native empty aliases."""
+    @lru_cache(maxsize=None)
+    def target_for(label: bytes) -> int | None:
+        return next((target for pattern, target in names if _help_name_matches(label, pattern)), None)
+
     for topic in topics:
-        if not topic.names:
-            continue
-        targets.setdefault(_normalized_help_title(topic.names[0]), []).append(topic.context_id)
+        lines = []
+        for line in topic.uhf_content:
+            parts = []
+            previous = 0
+            opening = None
+            for token in UHF_INLINE_TOKEN_RE.finditer(line):
+                name = token.group().lower()
+                if name == "[u]":
+                    opening = token
+                elif name == "[/u]" and opening is not None:
+                    markup = line[opening.end():token.start()]
+                    label = _help_caption_bytes(markup)
+                    target = target_for(label) if label is not None else None
+                    if target is not None:
+                        parts.append(line[previous:opening.start()])
+                        parts.append(format_uhf_link(line[opening.start():token.end()], topic_id=target))
+                        previous = token.end()
+                    opening = None
+            parts.append(line[previous:])
+            lines.append("".join(parts))
+        topic.uhf_content = lines
 
-    for topic in topics:
-        def replace(match: re.Match[str]) -> str:
-            markup = match.group(1)
-            label = UHF_INLINE_TAG_RE.sub("", markup)
-            candidates = targets.get(_normalized_help_title(label), [])
-            if not candidates:
-                return match.group(0)
-            target = min(candidates, key=lambda context_id: abs(context_id - topic.context_id))
-            return format_uhf_link(f"[u]{markup}[/u]", topic_id=target)
 
-        topic.uhf_content = [UHF_UNDERLINE_RE.sub(replace, line) for line in topic.uhf_content]
+def _help_display_text(data: bytes) -> bytes:
+    """The native Help window hides a leading '{...' description line."""
+    if not data.startswith(b"{"):
+        return data
+    end = data.find(b"\r")
+    if end < 0:
+        return b""
+    end += 1
+    if data[end:end+1] == b"\n":
+        end += 1
+    return data[end:]
 
 
 def read_text_block(data: bytes, offset: int) -> str | None:
@@ -261,18 +304,22 @@ def is_game_cheater_database(path: Path, data: bytes) -> bool:
     if path.name.upper() != "CHEATDBS.000" or len(data) < HEADER_SIZE:
         return False
     record_size = struct.unpack_from("<H", data, 4)[0]
-    return record_size == 111 and (len(data) - HEADER_SIZE) % record_size == 0
+    return record_size == 111
 
 
-def _records(data: bytes, expected_size: int, *, derive_count: bool = False) -> list[bytes]:
+def _records(data: bytes, expected_size: int) -> list[bytes]:
     if len(data) < HEADER_SIZE:
         raise ValueError("Pc-Fand table header is incomplete")
     record_size = struct.unpack_from("<H", data, 4)[0]
     if record_size != expected_size:
         raise ValueError(f"Unexpected record size {record_size}; expected {expected_size}")
+    if (len(data) - HEADER_SIZE) % record_size:
+        raise ValueError("Truncated Pc-Fand table record")
     available = (len(data) - HEADER_SIZE) // record_size
     raw_count = struct.unpack_from("<i", data, 0)[0]
-    count = available if derive_count else min(abs(raw_count) or available, available)
+    count = abs(raw_count)
+    if count > available:
+        raise ValueError(f"Truncated Pc-Fand table: declared {count} records, available {available}")
     return [
         data[HEADER_SIZE + index * record_size : HEADER_SIZE + (index + 1) * record_size]
         for index in range(count)
@@ -362,7 +409,7 @@ class GameCheaterReader(HelpReaderBase):
 
         cheat_text = text_path.read_bytes()
         cheat_entries: list[tuple[str, list[str], list[str], list[str], list[TopicTag]]] = []
-        for record in _records(data, 111, derive_count=True):
+        for record in _records(data, 111):
             title = decode_xor_string(record[0x01:0x33])
             source = read_text_block(cheat_text, struct.unpack_from("<I", record, 0x33)[0])
             body = _read_formatted_text_block(cheat_text, struct.unpack_from("<I", record, 0x37)[0])
@@ -408,22 +455,63 @@ class GameCheaterReader(HelpReaderBase):
         if pair is not None:
             index_data, text_data = pair
             entries = []
-            inside_internal_help = False
-            for record in _records(index_data, 39):
+            source_rows = []
+            included_records = []
+            for index, record in enumerate(_records(index_data, 39)):
+                raw_name = bytes(value ^ XOR_KEY for value in record[:0x23]).rstrip(b" \0")
                 title = decode_xor_string(record[0x00:0x23])
-                if title == PC_FAND_INTERNAL_HELP_START:
-                    inside_internal_help = True
+                raw_body = _read_text_block_bytes(text_data, struct.unpack_from("<I", record, 0x23)[0]) or b""
+                source_rows.append((raw_name, raw_body))
+                if not title and not raw_body:
                     continue
-                if title == PC_FAND_INTERNAL_HELP_END:
-                    inside_internal_help = False
-                    continue
-                if inside_internal_help:
-                    continue
-                body = _read_formatted_text_block(text_data, struct.unpack_from("<I", record, 0x23)[0])
+                if not title:
+                    title = f"Record {index + 1}"
+                body = _decode_text_block_bytes(_help_display_text(raw_body))
                 plain_lines, uhf_lines = _split_decoded_text(body)
                 entries.append((title, plain_lines, uhf_lines, [], []))
+                included_records.append(index)
             help_topics = add_section("Nápověda", entries)
-            _link_help_topic_references(help_topics)
+            by_record = dict(zip(included_records, help_topics))
+            targets = {}
+            following = None
+            for index in range(len(source_rows) - 1, -1, -1):
+                topic = by_record.get(index)
+                if topic is not None and source_rows[index][1]:
+                    following = topic
+                if topic is None:
+                    continue
+                if not source_rows[index][0]:
+                    topic.alias_strings = []  # A generated heading is not a source name.
+                if not source_rows[index][1] and following is not None:
+                    topic.redirect_context = following.context_id
+                    following.alias_contexts.append(topic.context_id)
+                    following.alias_strings.extend(name for name in topic.names if name not in following.alias_strings)
+                    topic.alias_strings = []
+                    targets[index] = following.context_id
+                else:
+                    targets[index] = topic.context_id
+            names = [(name, targets[index]) for index, (name, _body) in enumerate(source_rows)
+                     if name and index in targets]
+            _link_help_topic_references(help_topics, names)
+            # Named empty records are native aliases, not blank articles.
+            by_context = {topic.context_id: topic for topic in help_topics}
+            root = next((target for pattern, target in names if _help_name_matches(b"root", pattern)), None)
+            if root is not None:
+                by_context[root].is_help_contents = True
+            for entry in index_entries:
+                owner = by_context.get(entry.context_id)
+                if owner is not None and owner.redirect_context is not None:
+                    entry.topic_id = owner.redirect_context
+            for section in contents:
+                if section.label == "Nápověda":
+                    redirects = {topic.context_id: topic.redirect_context for topic in help_topics
+                                 if topic.redirect_context is not None}
+                    for child in section.children:
+                        child.topic_id = redirects.get(child.topic_id, child.topic_id)
+            visible = [topic for topic in help_topics if topic.redirect_context is None]
+            for index, topic in enumerate(visible):
+                topic.prev_context = visible[index - 1].context_id if index else None
+                topic.next_context = visible[index + 1].context_id if index + 1 < len(visible) else None
 
         pair = self._read_pair(siblings, "DBSNFO")
         database_version = None
@@ -481,6 +569,8 @@ class GameCheaterReader(HelpReaderBase):
     def _read_pair(siblings: dict[str, Path], stem: str) -> tuple[bytes, bytes] | None:
         index_path = siblings.get(f"{stem}.000")
         text_path = siblings.get(f"{stem}.T00")
-        if index_path is None or text_path is None:
+        if index_path is None and text_path is None:
             return None
+        if index_path is None or text_path is None:
+            raise ValueError(f"Incomplete Pc-Fand {stem}.000/{stem}.T00 pair")
         return index_path.read_bytes(), text_path.read_bytes()

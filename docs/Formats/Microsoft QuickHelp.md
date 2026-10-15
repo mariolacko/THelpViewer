@@ -1,13 +1,18 @@
 # Microsoft QuickHelp LN Format
 
-> Created: 2026-04-07 · Last updated: 2026-09-29
+> Created: 2026-04-07 · Last updated: 2026-10-14
 
-Used by: Microsoft QuickBasic 4.5, QuickC 2.0, MASM 6, PWB, LINK, later CodeView bundles, and compatible products.
+Used by: Microsoft QuickBasic 4.5, QuickC 2.0/2.50, MASM 6, PWB, LINK, later CodeView bundles, and compatible products.
 File extension: `.HLP` (LN binary database).
+
+Installer media may wrap or split the file using
+[Microsoft SZ compression](Microsoft%20SZ%20Compression.md). The LN offsets
+below apply to the complete expanded database, not to individual compressed
+disk parts.
 
 **Authoritative format specification:**
 [fancidev/DosHelp — Format.txt](https://raw.githubusercontent.com/fancidev/DosHelp/master/QuickHelp/Serialization/Format.txt)
-(MIT licence; this document summarises the most relevant parts with implementation notes.)
+(MIT licence; layouts below also describe observations from original LN databases.)
 
 All multi-byte integers are little-endian.
 
@@ -30,7 +35,9 @@ data[:2] == b"LN" and data[2:4] == b"\x02\x00"
 ```
 00-02  WORD  Signature ("LN")
 02-04  WORD  Version           = 2
-04-06  WORD  Attributes        bit 0 = CaseSensitive context strings
+04-06  WORD  Attributes        bit 0 = CaseSensitive context strings;
+                              bit 1 = prevent HELPMAKE decoding;
+                              bits 2-15 reserved (zero)
 06-07  BYTE  ControlCharacter  command-line prefix (typically 0x3A = ':')
 07-08  BYTE  (padding)
 08-0A  WORD  TopicCount        number of topics
@@ -47,8 +54,30 @@ data[:2] == b"LN" and data[2:4] == b"\x02\x00"
 36-3A  DWORD TopicTextOffset   → TopicText section (compressed topic data)
 3A-3E  DWORD (reserved)
 3E-42  DWORD (reserved)
-42-46  DWORD DatabaseSize      total file size
+42-46  DWORD DatabaseSize      size of this database, not necessarily the file
 ```
+
+### 2.1 Concatenated databases
+
+The format permits consecutive complete LN databases in one physical `.HLP`.
+Each has its own header, context namespace and compression tables. Section and
+topic offsets are relative to that database's beginning. Advance by its
+`DatabaseSize` to find the next header; never scan arbitrary compressed bytes
+for `LN`. `DatabaseName` identifies the logical database for external links,
+and need not match the physical filename.
+
+Original-file examples:
+
+| Product / physical file | Logical databases in order | Topic counts |
+| --- | --- | --- |
+| QuickBASIC Extended 7.1 / `BC.HLP` | `bc.hlp`, `pwbbc.hlp` | 20 + 22 = 42 |
+| QuickBASIC Extended 7.1 / `LINK.HLP` | `linkx.hlp`, `ilink.hlp` | 155 + 51 = 206 |
+| QuickBASIC Extended 7.1 / `UTILS.HLP` | `lib.hlp`, `nmake.hlp`, `helpmake.hlp`, `bind.hlp`, `misc.hlp` | 59 + 102 + 73 + 43 + 36 = 313 |
+| QuickC, C, and C++ 6.0 / `LINK.HLP` | `linkx.hlp`, `ilink.hlp` | 155 + 51 = 206 |
+
+Each concatenated database must fit within the physical file, including its
+header, sections and indexed topic ranges. Advance by the declared size, not
+by scanning compressed data for another signature.
 
 ---
 
@@ -57,8 +86,11 @@ data[:2] == b"LN" and data[2:4] == b"\x02\x00"
 ### 3.1 TopicIndex
 
 `TopicCount + 1` DWORDs at `TopicIndexOffset`.
-Each entry is an offset into `TopicText` (relative to file start).
+Each entry is an offset into `TopicText` (relative to database start).
 Topic *i* occupies bytes `TopicIndex[i]` through `TopicIndex[i+1] - 1`.
+The first entry equals `TopicTextOffset`; the final entry equals `DatabaseSize`.
+Entries are increasing and every interval contains at least its two-byte
+`OUTLEN`. An empty topic can have `OUTLEN = 0`, but is not a zero-byte interval.
 
 ### 3.2 ContextStrings
 
@@ -69,6 +101,7 @@ These are the human-visible or internal context names used for linking.
 
 `ContextCount` WORDs at `ContextMapOffset`.
 `ContextMap[i]` = topic index for `ContextStrings[i]`.
+Each index must be below `TopicCount`; it is local to this logical database.
 
 Context lookup is case-insensitive unless `Attributes & 0x01` is set.
 
@@ -79,6 +112,9 @@ Each entry: `BYTE length` followed by `length` bytes of keyword text.
 Absent when `KeywordsOffset == 0`; in that case treat as empty dictionary.
 
 Used by Step 2 decompression (keyword substitution).
+There are at most 1024 entries because a reference has ten index bits. Every
+length-prefixed entry fits entirely before the Huffman section, or before
+`TopicTextOffset` when Huffman compression is absent.
 
 ### 3.5 HuffmanTree (optional)
 
@@ -94,6 +130,14 @@ Tree encoding (per Format.txt):
   - `V == 0` → terminator (end of tree array).
 
 Bits are read **MSB-first** from each byte.
+
+The section contains at most 511 nodes plus its final zero WORD (1024 bytes).
+Its length is even and the terminator is the final WORD, not an internal node.
+For an internal node, `V` is an even byte offset. The serialized post-order
+numbering puts both child indices strictly after the parent and within the
+node array; this prevents cycles and out-of-array traversal. A tree with one
+leaf encodes a single repeated symbol without consuming bits: expansion still
+stops at the declared `OUTLEN`.
 
 ### 3.6 TopicText
 
@@ -118,6 +162,10 @@ using the tree from §3.5.
 If no HuffmanTree section is present, the bytes after `OUTLEN` are already
 compact and no decoding is needed.
 
+Read symbols on demand for Stage 2. The final encoded byte can contain unused
+padding bits; decoding every bit as another output symbol is not an end rule.
+Exhausting the bit stream before Stage 2 produces `OUTLEN` is truncated data.
+
 ### Stage 2 → Keyword expand + RLE
 
 Input: compact bytes from Stage 3.
@@ -133,6 +181,12 @@ Control byte values:
 | `0x19` | Repeat: emit `next_byte₁` × `next_byte₂` times |
 | `0x1A` | Escape: next byte is literal |
 
+Every control's argument must be present, and each dictionary index must refer
+to an existing entry. Do not skip an invalid reference or an incomplete escape.
+An expansion must produce exactly `OUTLEN`: neither too few bytes nor an
+overshooting dictionary/run is a complete topic. Stop requesting Huffman
+symbols as soon as that count is reached.
+
 ### Stage 1 → Binary topic decompile
 
 Input: binary topic data from Stage 2.
@@ -141,13 +195,28 @@ Output: display lines + attribute records.
 The binary stream is a sequence of `(TextBlock, AttrBlock)` pairs:
 
 ```
-BYTE  TextLen        length of text data + 1 (0 = end of topic)
+BYTE  TextLen        length of text data + 1; at least 1
 BYTE  text[TextLen-1]
-BYTE  AttrLen        length of attribute data + 1 (0 = end of topic)
+BYTE  AttrLen        length of attribute data + 1; at least 1
 BYTE  attr[AttrLen-1]
 ```
 
-A `TextLen == 0` or `AttrLen == 0` terminates the topic.
+The stream ends after exactly `OUTLEN` bytes, at a complete pair boundary.
+Neither block length may be zero; there is no additional NUL topic terminator.
+`TextLen = 1` represents an empty text block and `AttrLen = 1` empty attributes.
+Bounds apply to command lines as well as visible lines.
+
+Uncompressed byte example for the visible line `Hello` in normal style:
+
+```text
+08 00  06 48 65 6C 6C 6F  02 05
+^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^
+OUTLEN text block        attributes: five characters in default style
+```
+
+The two-byte `OUTLEN` is not included in its value. `01 01` is a complete
+two-byte binary pair for a blank line; `01 00` is not, because the attribute
+block length is zero.
 
 ---
 
@@ -161,7 +230,7 @@ Parameters follow immediately (no separator between command byte and parameter).
 
 | Cmd | Parameter | Source directive | Meaning |
 |-----|-----------|-----------------|---------|
-| `n` | topic title | `.topic` | Human-readable topic title stored in `topic.names[]` |
+| `n` | topic title | `.topic` | Human-readable topic title |
 | `c` | `string [linenum]` | `.category` | Category name + optional line number for Table of Contents placement |
 | `l` | `N` (decimal) | `.freeze` | Freeze first *N* lines — they stay visible when the user scrolls |
 | `z` | `N` (decimal) | — | Numeric display parameter (observed alongside `:l`; exact meaning unclear) |
@@ -172,11 +241,6 @@ Parameters follow immediately (no separator between command byte and parameter).
 | `g` | — | `.popup` | Mark topic for popup display in a temporary window |
 | `x` | comment text | — | Author/editor annotation; never displayed (compiler metadata) |
 | `u` | — | — | Observed in QBX; meaning unknown |
-
-**Implementation note:** the reader extracts `:n`, `:l`, `:c`, `:i`, and `:g`
-into topic names, frozen-row count, category navigation, list state, and popup
-state respectively. Other command lines remain invisible and are filtered from
-`raw_lines`.
 
 ---
 
@@ -205,7 +269,7 @@ The first byte is always a ChunkLen (no leading Style; defaults to Normal).
 ```
 BYTE  StartIndex  1-based index of first link character (inclusive)
 BYTE  EndIndex    1-based index of last link character (inclusive)
-                  = 0-based exclusive slice end when used with raw_lines
+                  = 0-based exclusive byte-slice end
 NUL-terminated context string  (empty string → use inline WORD index instead)
 [WORD TopicIndex]              present only when context string is empty;
                                high bit may be set as a marker — mask with 0x7FFF
@@ -214,20 +278,33 @@ NUL-terminated context string  (empty string → use inline WORD index instead)
 If the context string is non-empty it is looked up in the `ContextMap`.
 If the context string is empty, the following `WORD` gives the topic index
 directly.
+After masking its marker bit, the direct index must be below this database's
+`TopicCount`; it is not an external context number.
 
 Links whose context strings are built-in commands are handled as navigation
-actions (§9). Cross-file references are resolved against sibling QuickHelp
-`.HLP` files in the same source directory. Explicit `FILE.HLP!context` links
+actions (§9). Cross-database references are resolved against every logical
+database in the current file and sibling QuickHelp `.HLP` files in the same
+source directory, regardless of extension case. Explicit `FILE.HLP!context` links
 and the Microsoft Advisor variant `DATABASE.context` (for example
 `OS2.h.overview`) are preserved as external links even if that optional file
 or context is not currently available.
-If an explicit filename is absent but its context exists in exactly one
-sibling database, the converter uses that database. This repairs the original
-`QB45QCK.HLP` reference to `AB45ADVR.HLP!.erasex`: the actual file on the
-Advisor disk is `QB45ADVR.HLP`. Ambiguous contexts retain their original
-external target rather than guessing. A duplicated qualifier such as
-`qb45advr.hlp!qb45advr.hlp!.vupri` is reduced to its actual context only
-when both filenames agree.
+The explicit qualifier identifies a database namespace. A destination absent
+from that namespace is unresolved; it is not an instruction to substitute a
+similar title or a same-named context from another database. Original files
+can contain erroneous qualifiers: `QB45QCK.HLP` refers to
+`AB45ADVR.HLP!.erasex`, while its distribution contains `QB45ADVR.HLP`.
+This mismatch is source data, not a different qualifier grammar.
+
+Parse every link record within its attribute block. A lone range byte,
+unterminated context string or missing inline target WORD is an incomplete
+record, not a plain-text/no-link alternative.
+
+Observed source anomaly: in QuickC/C 6.0 `CLANG.HLP`, seven link records have
+`EndIndex = text byte count + 1` (topics 750, 754, 760, 766 and 1029, with some
+containing multiple such records). This does not encode an extra display
+character. A defensive renderer can bound the highlighted range to existing
+text while retaining the stored destination; it must not read into attributes.
+This is not evidence for shifting every LN link's coordinates by one.
 
 ---
 
@@ -237,24 +314,18 @@ QuickHelp stores `0x11` **before** and `0x10` **after**
 link text as visual selection markers visible in the original QuickHelp viewer.
 
 The link `StartIndex`/`EndIndex` values in the attribute block are measured
-over the **raw text bytes including these markers**.  Our reader:
-
-1. Keeps the markers visible in UHF output as `◄` / `►`.
-2. Strips them only from stored `raw_lines`, so title/index heuristics do not
-   see decorative tab markers.
-3. Leaves link column positions in raw-byte coordinates, because the visible
-   UHF line still contains one character per marker.
+over the **raw text bytes including these markers**. Bytes `11h` and
+`10h` display as CP437 left/right pointer glyphs (`◄` / `►`). Removing
+them changes coordinate positions; any transformed display must explicitly
+map raw byte ranges to its displayed columns.
 
 ---
 
 ## 8. Index and Topic Titles
 
-Topic titles come from `:n` command lines, stored in `topic.names[]`.
-
-When no `:n` command is present, the first non-empty `raw_line` (stripped of
-leading/trailing whitespace) is used as the human-readable index label.
-Context strings (e.g. `h.pg1`, `.cccp`) are internal identifiers used only
-as a last resort.
+A `:n` command stores the title independently of display lines. Context
+strings are link identifiers, not a guaranteed human-readable title. If no
+`:n` is present, the file has no separate authoritative title field.
 
 ---
 
@@ -271,12 +342,13 @@ Context string `!B` (case-insensitive) means "navigate back in history".
 ### 9.2 !hv — Contents (Home View)
 
 Context string `*!HV` (suffix, case-insensitive, e.g. `pwb.hlp!hv`) means
-"go to the main/first topic of the current database" (Contents view).
+"go to the home topic of the named database". Bare `!HV` and `-9996` use the
+current database; in a concatenated file, this is not always the first database.
 
 ### 9.3 !vx — Index
 
 Context string `*!VX` (suffix, case-insensitive, e.g. `pwb.hlp!vx`) means
-"open the topic index of the current database".
+"open the index of the named database". Bare `!VX` uses the current database.
 
 ### 9.4 Numeric predefined contexts (-9996, -9997)
 
@@ -300,40 +372,24 @@ QuickHelp references can name another database explicitly, for example:
 CV.HLP!cv.contents
 ```
 
-The converter preserves this as a UHF link containing the source filename and
-alias. If the sibling file is present, it also stores the resolved topic id:
+The name can identify a physical file or a logical `DatabaseName` in a
+concatenated container. Resolve context names using that database's case rule;
+DOS filename qualifiers remain case-insensitive. Original filename extensions
+are significant: `MISC.HLP` and `MISC.TXT` are not the same namespace.
 
-```text
-[link:file=CV.HLP,topic=90,alias=cv.contents]...[/link]
-```
+Duplicate names in different product/release collections need the application's
+search path or another explicit binding. That selection is not stored in a
+link record. A missing file or context remains a missing destination.
 
-If the explicitly named file is absent, the link remains real and keeps
-`file=CV.HLP,alias=cv.contents`; it is not downgraded to plain text. It starts
-working automatically when a matching bundle is later added to the catalog.
-
-A bare unresolved alias is searched across sibling `.HLP` files and becomes an
-external link only when exactly one file matches. Ambiguous bare aliases stay
-plain because the source format does not identify which database was intended.
-
-The QuickBASIC 4.5 distribution has `QB45QCK.HLP` on the Program disk,
-`QB45ADVR.HLP` on the Advisor disk, and `QB45ENER.HLP` on a Utilities disk.
-Converting only the first leaves hundreds of valid cross-file links without
-their targets. The tiny QuickC 2.50 `QA.HLP` (445 bytes, two contexts,
-including `taw080554`) explicitly says it is a null search-order context;
-it is an original placeholder, not a damaged help database.
-
-At display time, duplicate filenames such as `CV.HLP`, `PWB.HLP`, `LINK.HLP`,
-or `UTILERR.HLP` are resolved in this order:
-
-1. same catalog collection/group as the current help file;
-2. same product and version;
-3. first remaining filename match as a compatibility fallback.
+The tiny QuickC 2.50 `QA.HLP` (445 bytes, two contexts including
+`taw080554`) is an original null search-order placeholder. Small file size
+alone does not establish corruption.
 
 ---
 
 ## 10. File Layout Diagram
 
-```
+```text
 ┌────────────────────────────────┐  0x00
 │  Header (0x46 bytes)           │
 ├────────────────────────────────┤  TopicIndexOffset
@@ -351,13 +407,23 @@ or `UTILERR.HLP` are resolved in this order:
 └────────────────────────────────┘  DatabaseSize
 ```
 
+### Structural boundaries
+
+The non-absent sections follow the order above. `TopicIndex` must contain all
+`TopicCount + 1` DWORDs before context strings, context strings must contain
+their NUL terminators before the map, and all map WORDs precede compression
+tables/text. No offset can point into the 70-byte header or beyond the declared
+database. An absent compression table has a zero header pointer, not a fake
+pointer into another section. These are database-local bounds; a following
+concatenated database cannot supply missing bytes to the previous one.
+
 ---
 
-## 11. Supported Products
+## 11. Format examples
 
 | Product | HLP file | Notes |
 |---------|----------|-------|
-| QuickBasic 4.5 / QBX 7.1 | `QB.HLP`, `BAS7*.HLP` | Full format |
+| QuickBasic 4.5 / QBX 7.1 | `QB.HLP`, `BAS7*.HLP` | LN database |
 | QuickC 2.x | `QC.HLP` | Full format |
 | MASM 6.x | `MASM.HLP` | Full format |
 | Microsoft PWB | `PWB.HLP` | Full format |
@@ -366,7 +432,3 @@ or `UTILERR.HLP` are resolved in this order:
 
 Older `CV.HLP` / `CVP.HLP` files from the DOS / OS/2 CodeView line can use the
 separate `BW03` format documented in [Microsoft BW03 Help.md](Microsoft%20BW03%20Help.md).
-
----
-
-*Part of the [THelpViewer](https://github.com/) project.*

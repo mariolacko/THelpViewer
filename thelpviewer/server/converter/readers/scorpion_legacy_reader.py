@@ -10,6 +10,7 @@ import tempfile
 from ...downloader.extractor import ExtractorTools, extract_file, find_lsar, find_sevenzip, find_unar
 from ..base import ContentNode, HelpDocument, HelpReaderBase, IndexEntry, TopicRecord, ensure_document_index
 from ..codepages import KAMENICKY, decode_bytes
+from ..text_screen import BitmapFont
 from ..uhf_markup import UhfStyleSpan, render_uhf_line
 from .scorpion_reader import (
     SCORPION_ATTRIBUTE_CONTROLS,
@@ -262,12 +263,14 @@ SCO_FORMATTING_BYTE_BY_CHAR = {
     for byte, char in KAMENICKY.items()
     if 0xE1 <= byte <= 0xFB and byte != 0xF8
 }
+SCO_GLYPH_BYTES = {chr(byte): byte for byte in range(128)} | {char: byte for byte, char in KAMENICKY.items()}
 
 
 @dataclass(frozen=True, slots=True)
 class StyledScoLine:
     text: str
     uhf: str
+    cells: tuple[tuple[int, int, int], ...] = ()
 
 
 def _normalize_sco_text_line(text: str) -> str:
@@ -340,27 +343,37 @@ def _render_sco_text_line(text: str, *, inline_styles: bool = False) -> StyledSc
         return StyledScoLine(normalized, render_uhf_line(normalized))
 
     chars: list[str] = []
+    cells = []
     spans: list[UhfStyleSpan] = []
     current_fg: int | None = None
     current_bg: int | None = None
     span_start: int | None = None
 
+    def append_char(char: str) -> None:
+        # Kamenicky is one-to-one for printable bytes. Keep that byte address,
+        # including custom glyphs 99/D2, rather than drawing Unicode glyphs.
+        code = SCO_GLYPH_BYTES.get(char)
+        chars.append(char)
+        cells.append(None if code is None else (code, 7 if current_fg is None else current_fg,
+                                                0 if current_bg is None else current_bg))
+
     for index, char in enumerate(text):
         if char == "\t":
-            chars.extend(SCORPION_RENDER_TAB_TEXT)
+            for space in SCORPION_RENDER_TAB_TEXT:
+                append_char(space)
             continue
 
         control_byte = SCO_FORMATTING_BYTE_BY_CHAR.get(char)
         if control_byte is None:
-            chars.append(char)
+            append_char(char)
             continue
 
         if control_byte == 0xEE and _sco_epsilon_is_literal_e(text, index):
-            chars.append("E")
+            append_char("E")
             continue
 
         if control_byte == 0xE5 and _sco_e5_is_literal_n(text, index):
-            chars.append("ň")
+            append_char("ň")
             continue
 
         if control_byte == SCORPION_RESET_CONTROL:
@@ -417,7 +430,7 @@ def _render_sco_text_line(text: str, *, inline_styles: bool = False) -> StyledSc
         if control_byte in SCORPION_ATTRIBUTE_CONTROLS:
             continue
 
-        chars.append(char)
+        append_char(char)
 
     _close_sco_style_span(
         spans,
@@ -427,7 +440,9 @@ def _render_sco_text_line(text: str, *, inline_styles: bool = False) -> StyledSc
         bg=current_bg,
     )
     text_value, trimmed_spans = _trim_sco_style_spans("".join(chars), spans)
-    return StyledScoLine(text_value, render_uhf_line(text_value, style_spans=trimmed_spans))
+    left = 0 if _sco_line_has_fixed_art("".join(chars)) else len(chars) - len("".join(chars).lstrip())
+    return StyledScoLine(text_value, render_uhf_line(text_value, style_spans=trimmed_spans),
+                         () if None in cells else tuple(cells[left:left + len(text_value)]))
 
 
 def _normalize_sco_styled_entries(entries: list[StyledScoLine]) -> list[StyledScoLine]:
@@ -490,6 +505,7 @@ def _parse_sco_huffman_topics(text: str, *, inline_styles: bool = False) -> list
                     "title": body_title,
                     "lines": normalized_lines,
                     "uhf_lines": normalized_uhf_lines,
+                    "cells": [entry.cells for entry in normalized_entries],
                 }
             )
         current_marker = None
@@ -619,6 +635,7 @@ def _build_sco_text_document(
     *,
     parser_name: str,
     parser_metadata: dict[str, object],
+    artwork_font: BitmapFont | None = None,
 ) -> HelpDocument | None:
     if not _sco_text_is_readable(decoded_text):
         return None
@@ -630,6 +647,7 @@ def _build_sco_text_document(
     prefix_topic_uhf_lines = [entry.uhf for entry in prefix_topic_entries]
     title = _legacy_public_document_title(profile, source_name)
     topics: list[TopicRecord] = []
+    screens = {}
     index_entries: list[IndexEntry] = []
     contents: list[ContentNode]
     sco_role: str | None = None
@@ -669,6 +687,17 @@ def _build_sco_text_document(
                 topic_lines[0] = topic_title
             if topic_uhf_lines:
                 topic_uhf_lines[0] = render_uhf_line(topic_title)
+            if artwork_font is not None:
+                from .scorpion_screens import inline_text_screen
+
+                for index, cells in enumerate(parsed_topic["cells"]):
+                    if index == 0:
+                        continue
+                    screen = inline_text_screen(cells, topic_lines[index], "program-font")
+                    if screen is not None:
+                        screen_id = f"inline-{Path(source_name).stem.lower()}-{marker.lower()}-{index}"
+                        screens[screen_id] = screen
+                        topic_uhf_lines[index] = f"[screen:{screen_id}]"
             topic_label = _encode_legacy_text(topic_title)
             topics.append(
                 TopicRecord(
@@ -717,6 +746,8 @@ def _build_sco_text_document(
         topics=topics,
         index_entries=index_entries,
         contents=contents,
+        fonts={"program-font": artwork_font} if screens else {},
+        text_screens=screens,
         metadata={
             "title": title,
             "description": title,

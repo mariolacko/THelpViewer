@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 import string
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +12,7 @@ from pathlib import Path
 from .. import __version__ as GENERATOR_VERSION
 from ..base import HelpDocument, PositionedKeyword, TopicNavItem, TopicRecord, context_nav_action, render_topic_uhf_content
 from ..uhf_markup import escape_uhf_text, format_uhf_link
+from ..text_screen import SCREEN_LINE
 from .html import HelpHtmlRenderer
 
 
@@ -28,30 +30,18 @@ SOURCE_FORMAT_BY_READER: dict[str, str] = {
     "tdh": "tdh",
     "tfh": "tfh",
     "text602": "text602",
+    "winhelp": "winhelp",
 }
 
 TRANSPORT_METADATA_KEYS: tuple[str, ...] = (
     "hlx_kind",
-    "hlx_family",
-    "index_navigation_order",
-    "control_byte_dominant",
     "record_count",
     "pointer_count",
     "topic_count",
     "index_record_count",
-    "index_topic_count",
-    "rtf_ref_count",
-    "overview_rtf_count",
-    "lkeyword_rtf_count",
-    "hex_prefix_count",
-    "long_string_count",
-    "avg_lines_per_topic",
-    "single_line_ratio",
 )
 
-TRANSPORT_METADATA_LIST_KEYS: tuple[str, ...] = (
-    "control_byte_dominant",
-)
+TRANSPORT_METADATA_LIST_KEYS: tuple[str, ...] = ()
 
 TRANSPORT_METADATA_STRUCT_KEYS: tuple[str, ...] = ()
 TRANSPORT_METADATA_KEY_LIST = "transport_metadata_keys"
@@ -101,6 +91,22 @@ class HelpJsonRenderer:
 
     def render_document(self) -> dict[str, object]:
         """Return a JSON-serializable UHF 2.0 document."""
+        for key in (*self.document.fonts, *self.document.text_screens):
+            if not SCREEN_LINE.fullmatch(f"[screen:{key}]"):
+                raise ValueError("Invalid UHF font/text-screen identifier")
+        for screen in self.document.text_screens.values():
+            if screen.font not in self.document.fonts:
+                raise ValueError(f"Missing UHF bitmap font: {screen.font}")
+            palette = self._build_palettes().get(screen.palette)
+            colors = palette.get("colors") if isinstance(palette, dict) else None
+            if screen.palette != "cga" and not isinstance(colors, dict):
+                raise ValueError(f"Missing UHF indexed palette: {screen.palette}")
+            if any((str(index) not in (colors or {}) and not (screen.palette == "cga" and index <= 15))
+                   for cell in screen.cells for index in cell[1:]):
+                raise ValueError("Text screen references an undefined palette index")
+            font = self.document.fonts[screen.font]
+            if screen.cols * font.width * screen.rows * font.height > 16777216:
+                raise ValueError("UHF text screen bitmap is too large")
         payload: dict[str, object] = {
             "uhf_version": "2.0",
             "metadata": self._build_metadata(),
@@ -109,6 +115,10 @@ class HelpJsonRenderer:
             "index": self._build_index(),
             "topics": self._build_topics(),
         }
+        if self.document.fonts:
+            payload["fonts"] = {key: font.to_dict() for key, font in self.document.fonts.items()}
+        if self.document.text_screens:
+            payload["text_screens"] = {key: screen.to_dict() for key, screen in self.document.text_screens.items()}
         default_palette = self._default_palette()
         if default_palette:
             payload["default_palette"] = default_palette
@@ -326,10 +336,12 @@ class HelpJsonRenderer:
 
     def _build_index(self) -> list[dict[str, object]]:
         grouped: dict[str, list[dict[str, object]]] = {"#": []}
+        unresolved = (self.document.metadata or {}).get("unresolved_contexts")
+        unresolved_ids = {value for value in unresolved.get("index", []) if isinstance(value, int)} if isinstance(unresolved, dict) else set()
 
         # Build helper maps to resolve index entry context ids or alias strings
-        alias_id_map: dict[int, int] = {}
-        alias_string_map: dict[str, int] = {}
+        alias_id_map: dict[int, tuple[int, int | None]] = {}
+        alias_string_map: dict[str, tuple[int, int | None]] = {}
         for topic in self.document.topics:
             try:
                 topic_id = int(topic.context_id)
@@ -337,14 +349,14 @@ class HelpJsonRenderer:
                 topic_id = topic.context_id
             for aid in getattr(topic, "alias_contexts", []) or []:
                 if isinstance(aid, int):
-                    alias_id_map[aid] = topic_id
+                    alias_id_map.setdefault(aid, (topic_id, topic.alias_lines.get(str(aid))))
             for astr in getattr(topic, "alias_strings", []) or []:
                 if isinstance(astr, bytes):
                     s = self.html_renderer._decode_bytes(astr).strip().lower()
                 else:
                     s = str(astr).strip().lower()
                 if s:
-                    alias_string_map[s] = topic_id
+                    alias_string_map.setdefault(s, (topic_id, topic.alias_lines.get(str(astr))))
 
         for entry in self.document.index_entries:
             label = self.html_renderer._decode_bytes(entry.label).strip()
@@ -354,17 +366,18 @@ class HelpJsonRenderer:
             if group not in string.ascii_uppercase:
                 group = "#"
 
-            # Resolve target context id to one that exists in this document's topics.
-            # UHF2 does not emit unresolved/debug-only index targets.
+            # Resolve verified aliases, but retain a reader-declared missing
+            # native context instead of inventing a destination from its label.
             target = entry.topic_id if entry.topic_id is not None else entry.context_id
-            if target not in self.topic_ids:
+            alias_line = None
+            if target not in self.topic_ids and target not in unresolved_ids:
                 mapped = alias_id_map.get(target)
                 if mapped is None:
                     mapped = alias_string_map.get(label.strip().lower())
                 if mapped is not None:
-                    target = mapped
+                    target, alias_line = mapped
             payload: dict[str, object] = {"label": label}
-            if target in self.topic_ids:
+            if target in self.topic_ids or target in unresolved_ids:
                 payload["topic_id"] = target
             elif entry.topic_id is not None:
                 continue
@@ -375,8 +388,9 @@ class HelpJsonRenderer:
                     payload["file"] = entry.source_file
                 if entry.alias:
                     payload["alias"] = entry.alias
-                if entry.line is not None:
-                    payload["line"] = entry.line
+            line = entry.line if entry.line is not None else alias_line
+            if line is not None:
+                payload["line"] = line
             grouped.setdefault(group, []).append(payload)
 
         payload: list[dict[str, object]] = []
@@ -396,6 +410,15 @@ class HelpJsonRenderer:
             if topic.context_id in self.suppressed_topic_ids:
                 continue
             content = self._build_topic_content(topic)
+            in_code = False
+            for line in content:
+                if re.fullmatch(r"\[code(?::[A-Za-z0-9_-]+)?\]", line, re.IGNORECASE):
+                    in_code = True
+                elif line == "[/code]":
+                    in_code = False
+                elif not in_code and (screen := SCREEN_LINE.fullmatch(line)):
+                    if screen[1] not in self.document.text_screens:
+                        raise ValueError(f"Missing UHF text screen: {screen[1]}")
             topic_payload: dict[str, object] = {
                 "id": topic.context_id,
                 "title": self.html_renderer._topic_heading(topic),
@@ -421,12 +444,18 @@ class HelpJsonRenderer:
         return payload
 
     @staticmethod
-    def _build_topic_aliases(topic: TopicRecord) -> dict[str, list[int] | list[str]] | None:
-        aliases: dict[str, list[int] | list[str]] = {}
+    def _build_topic_aliases(topic: TopicRecord) -> dict[str, object] | None:
+        aliases: dict[str, object] = {}
         if topic.alias_contexts:
             aliases["ids"] = list(topic.alias_contexts)
         if topic.alias_strings:
             aliases["strings"] = list(topic.alias_strings)
+        if topic.alias_lines:
+            names = {str(value) for value in [*topic.alias_contexts, *topic.alias_strings]}
+            if any(name not in names or isinstance(line, bool) or not isinstance(line, int) or line < 1
+                   for name, line in topic.alias_lines.items()):
+                raise ValueError("Alias lines require declared aliases and positive integer lines")
+            aliases["lines"] = dict(topic.alias_lines)
         return aliases or None
 
     def _build_topic_content(self, topic: TopicRecord) -> list[str]:

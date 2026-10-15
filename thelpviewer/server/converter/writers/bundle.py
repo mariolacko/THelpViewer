@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..base import HelpDocument
-from ..bundle_extensions import discover_bundle_source_groups, document_bundle_variants
+from .bundle_extensions import discover_bundle_source_groups, document_bundle_variants
 from ..bundle_types import BundleDocumentVariant, BundleSourceGroup
 from ..exporter import iter_help_files, load_document, select_display_encoding, fix_metadata_encoding, _clean_dir
 from .json import HelpJsonRenderer, TRANSPORT_METADATA_KEY_LIST
@@ -114,6 +114,26 @@ def _product_metadata_for_group(group_name: str) -> tuple[str, str, str]:
     return "", "", ""
 
 
+def _product_metadata_for_source(
+    source_path: Path, group_name: str, database_entry: HelpDatabaseEntry | None,
+) -> tuple[str, str, str]:
+    """Prefer verified CRC/file ownership over the containing archive's label."""
+    if database_entry is not None and database_entry.product_key:
+        return _product_metadata_for_database_entry(database_entry)
+    manifest = load_help_manifest()
+    owners = {product.key for product in manifest.products if product.conversion.matches(source_path)}
+    owners.update(entry.product_key for entry in manifest.entries
+                  if entry.product_key and any(name.casefold() == source_path.name.casefold()
+                                               for name in entry.filenames))
+    inferred = _product_metadata_for_group(group_name)
+    if not owners or inferred[0] in owners:
+        return inferred
+    if len(owners) == 1:
+        product = manifest.product_map[next(iter(owners))]
+        return product.key, _product_menu_label(product), product.default_version
+    return "", "", ""  # A mixed archive cannot disambiguate a shared filename.
+
+
 def _catalog_menu_name(
     display_name: str,
     *,
@@ -144,6 +164,19 @@ def _add_transport_metadata_keys(document: HelpDocument, keys: tuple[str, ...]) 
         if key not in transport_keys:
             transport_keys.append(key)
     document.metadata[TRANSPORT_METADATA_KEY_LIST] = transport_keys
+
+
+def _source_files_with_aliases(document: HelpDocument, source_files: tuple[str, ...]) -> tuple[str, ...]:
+    """Retain physical filenames and reader-verified logical database names."""
+    aliases = document.metadata.get("source_file_aliases")
+    values = list(source_files) + (aliases if isinstance(aliases, list) else [])
+    files: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if isinstance(value, str) and value.strip() and value.strip().casefold() not in seen:
+            files.append(value.strip())
+            seen.add(value.strip().casefold())
+    return tuple(files)
 
 
 def _apply_catalog_metadata(
@@ -192,6 +225,8 @@ def export_bundle(
     source_path = Path(source_path)
     print(f"[bundle] Spracovávam: {source_path.name}")
     try:
+        if database_entry is None:
+            database_entry = lookup_help_database_entry(source_path, load_help_database())
         document = load_document(source_path)
         chosen_encoding = select_display_encoding(
             document,
@@ -202,14 +237,8 @@ def export_bundle(
             database_entry=database_entry,
         )
         fix_metadata_encoding(document, chosen_encoding)
-        if isinstance(collection_name, str) and collection_name.strip():
-            document.metadata["collection"] = collection_name.strip()
-        if isinstance(title_override, str) and title_override.strip():
-            document.metadata["title"] = title_override.strip()
-        if database_entry is not None and getattr(database_entry, "help_contents_topic_id", None) is not None:
-            document.metadata.setdefault("help_contents_topic_id", database_entry.help_contents_topic_id)
-        if database_entry is not None and getattr(database_entry, "language", ""):
-            document.metadata.setdefault("language", database_entry.language)
+        _apply_bundle_metadata(document, collection_name=collection_name,
+                               title_override=title_override, database_entry=database_entry)
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
         display_name = document.display_name
@@ -217,6 +246,7 @@ def export_bundle(
         source_files = tuple(
             getattr(database_entry, "filenames", ()) or (source_path.name,)
         )
+        source_files = _source_files_with_aliases(document, source_files)
         product_key, product_name, version = _product_metadata_for_database_entry(database_entry)
         menu_name = _catalog_menu_name(
             display_name,
@@ -232,13 +262,13 @@ def export_bundle(
             menu_name=menu_name if menu_name != display_name else "",
             source_files=source_files,
         )
-        json_path = _write_document_bundle(document, target_dir / (file_stem + ".json.gz"), chosen_encoding)
+        json_path, topic_count = _write_document_bundle(document, target_dir / (file_stem + ".json.gz"), chosen_encoding)
         print(f"[bundle] OK: {source_path.name} → {json_path.name} ({getattr(document, 'format_name', '?')})")
         return BundleResult(
             input_path=source_path,
             json_path=json_path,
             format_name=document.format_name,
-            topic_count=len(document.topics),
+            topic_count=topic_count,
             display_name=display_name,
             source_files=source_files,
             product=product_key,
@@ -260,9 +290,9 @@ def export_bundle(
         )
 
 
-def _write_document_bundle(document: HelpDocument, json_path: Path, display_encoding: str) -> Path:
+def _write_document_bundle(document: HelpDocument, json_path: Path, display_encoding: str) -> tuple[Path, int]:
     renderer = HelpJsonRenderer(document, display_encoding=display_encoding)
-    return renderer.write_json_gz(json_path)
+    return renderer.write_json_gz(json_path), len(renderer.topic_ids)
 
 
 def _export_bundle_source_group(
@@ -288,7 +318,7 @@ def _export_bundle_source_group(
 
     document = group.build_document(group.source_paths, documents)
     product_key, product_name, version = _product_metadata_for_group(group_name)
-    source_files = tuple(path.name for path in group.source_paths)
+    source_files = _source_files_with_aliases(document, tuple(path.name for path in group.source_paths))
     menu_name = _catalog_menu_name(
         document.display_name,
         group_name=group_name,
@@ -303,13 +333,13 @@ def _export_bundle_source_group(
         menu_name=menu_name if menu_name != document.display_name else "",
         source_files=source_files,
     )
-    json_path = _write_document_bundle(document, bundle_dir / f"{group.bundle_stem}.json.gz", chosen_encoding)
+    json_path, topic_count = _write_document_bundle(document, bundle_dir / f"{group.bundle_stem}.json.gz", chosen_encoding)
     print(f"[bundle] OK: {source_names} → {json_path.name} ({getattr(document, 'format_name', '?')})")
     return BundleResult(
         input_path=group.source_paths[0],
         json_path=json_path,
         format_name=document.format_name,
-        topic_count=len(document.topics),
+        topic_count=topic_count,
         display_name=document.display_name,
         source_files=source_files,
         product=product_key,
@@ -330,9 +360,9 @@ def _apply_bundle_metadata(
     if isinstance(title_override, str) and title_override.strip():
         document.metadata["title"] = title_override.strip()
     if database_entry is not None and getattr(database_entry, "help_contents_topic_id", None) is not None:
-        document.metadata.setdefault("help_contents_topic_id", database_entry.help_contents_topic_id)
+        document.metadata["help_contents_topic_id"] = database_entry.help_contents_topic_id
     if database_entry is not None and getattr(database_entry, "language", ""):
-        document.metadata.setdefault("language", database_entry.language)
+        document.metadata["language"] = database_entry.language
 
 
 def _export_pending_bundle_variants(
@@ -365,14 +395,13 @@ def _export_pending_bundle_variants(
             BundleDocumentVariant(bundle_stem=pending.bundle_stem, document=document)
         ]
         results: list[BundleResult] = []
-        product_key, product_name, version = (
-            _product_metadata_for_database_entry(db_entry)
-            if db_entry is not None
-            else _product_metadata_for_group(pending.group_name)
+        product_key, product_name, version = _product_metadata_for_source(
+            source_path, pending.group_name, db_entry,
         )
         for variant in variants:
             variant_document = variant.document
             source_files = variant.source_files or tuple(getattr(db_entry, "filenames", ()) or (source_path.name,))
+            source_files = _source_files_with_aliases(variant_document, source_files)
             menu_name = _catalog_menu_name(
                 variant_document.display_name,
                 group_name=pending.group_name,
@@ -387,7 +416,7 @@ def _export_pending_bundle_variants(
                 menu_name=menu_name if menu_name != variant_document.display_name else "",
                 source_files=source_files,
             )
-            json_path = _write_document_bundle(
+            json_path, topic_count = _write_document_bundle(
                 variant_document,
                 pending.bundle_dir / f"{variant.bundle_stem}.json.gz",
                 chosen_encoding,
@@ -401,7 +430,7 @@ def _export_pending_bundle_variants(
                     input_path=source_path,
                     json_path=json_path,
                     format_name=variant_document.format_name,
-                    topic_count=len(variant_document.topics),
+                    topic_count=topic_count,
                     display_name=variant_document.display_name,
                     source_files=source_files,
                     product=product_key,
@@ -442,6 +471,16 @@ def _build_pending_bundle_export(
         if database_entry is not None and getattr(database_entry, "collection", "")
         else str(relative.parent).replace("\\", "/")
     )
+    if (database_entry is None or not database_entry.collection) and len(relative.parent.parts) > 1:
+        # A declared source container can hold publication roots. The result
+        # must not depend on whether the caller exports that container or its
+        # parent (CLI product roots versus the server's complete source tree).
+        container, publication_root, *rest = relative.parent.parts
+        for group in load_help_manifest().build_groups:
+            if (any(container.startswith(prefix) for prefix in group.source_root_prefixes)
+                    and any(publication_root.startswith(prefix) for prefix in group.help_dir_prefixes)):
+                group_name = Path(publication_root, *rest).as_posix()
+                break
     group_parts = tuple(part for part in Path(group_name).parts if part not in {"", "."})
     bundle_dir = helps_dir.joinpath(*group_parts) if group_parts else helps_dir
     bundle_stem = _bundle_stem_for_entry(path, database_entry)
@@ -736,17 +775,17 @@ def _render_bundle_index_html() -> str:
 <meta name="theme-color" content="#000080">
 <meta name="GENERATOR" content="THelp Viewer Converter {GENERATOR_VERSION}">
 <link rel="icon" type="image/svg+xml" href="{SITE_ASSET_DIR_NAME}/thelp-icon.svg">
-<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20261010d">
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20261010k"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20261010k"></script>
+<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20261015b">
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20261015c"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20261015k"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20261010k"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-content.js?v=20261010k"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20261015c"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-content.js?v=20261015f"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20261010b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20261010k"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20261015b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-dos.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20261010k"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20261015c"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"

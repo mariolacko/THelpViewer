@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import codecs
 from functools import lru_cache
 
 CP437_LOW = {
@@ -119,8 +120,9 @@ def _cached_decode_table(from_enc: str, to_enc: str | None) -> tuple[str, ...]:
     if to_enc is None:
         return tuple(chr(i) for i in range(256))
     table: list[str] = []
+    windows_ansi = from_enc != "kamenicky" and codecs.lookup(from_enc).name.startswith("cp125")
     for i in range(32):
-        table.append(CP437_LOW.get(i, chr(i)))
+        table.append(chr(i) if windows_ansi else CP437_LOW.get(i, chr(i)))
     for i in range(32, 128):
         table.append(chr(i))
     if from_enc == "kamenicky":

@@ -65,15 +65,21 @@
     },
     {
       "name": "hlx",
-      "source_kind": "compiled",
+      "source_kind": "index",
       "extensions": [
         ".hlx"
       ],
       "matcher": "thelpviewer.server.converter.readers.hlx_binary:is_hlx_binary",
       "matcher_args": "data",
-      "reject_matcher": "thelpviewer.server.converter.readers.hlx:is_hlx_source",
-      "reject_matcher_args": "data",
       "reader": "thelpviewer.server.converter.readers.hlx_binary:HlxBinaryReader"
+    },
+    {
+      "name": "winhelp",
+      "source_kind": "compiled",
+      "extensions": [".hlp"],
+      "matcher": "thelpviewer.server.converter.readers.winhelp_binary:is_winhelp_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.server.converter.readers.winhelp:WinHelpReader"
     },
     {
       "name": "hlx",
@@ -94,8 +100,7 @@
       "match_mode": "any",
       "matcher": "thelpviewer.server.converter.readers.ng:is_ng_binary",
       "matcher_args": "data",
-      "reader": "thelpviewer.server.converter.readers.ng:NGReader",
-      "reader_init": "path"
+      "reader": "thelpviewer.server.converter.readers.ng:NGReader"
     },
     {
       "name": "helppc",
@@ -205,12 +210,64 @@
       "matcher": "thelpviewer.server.converter.readers.t602_310:is_t602_310_binary",
       "matcher_args": "data",
       "reader": "thelpviewer.server.converter.readers.t602_310:T602310Reader"
+    },
+    {
+      "name": "sidekick1",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.server.converter.readers.sidekick1:is_sidekick1_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.server.converter.readers.sidekick1:Sidekick1Reader"
+    },
+    {
+      "name": "sidekick-plus",
+      "source_kind": "compiled",
+      "matcher": "thelpviewer.server.converter.readers.sidekick_plus:is_sidekick_plus_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.server.converter.readers.sidekick_plus:SidekickPlusReader"
+    },
+    {
+      "name": "microcalc-text",
+      "source_kind": "source",
+      "extensions": [".hlp"],
+      "matcher": "thelpviewer.server.converter.readers.dos_text:is_microcalc_help",
+      "matcher_args": "data",
+      "reader": "thelpviewer.server.converter.readers.dos_text:MicroCalcReader"
+    },
+    {
+      "name": "prolog-help",
+      "source_kind": "source",
+      "extensions": [".hlp"],
+      "matcher": "thelpviewer.server.converter.readers.dos_text:is_prolog_help_source",
+      "matcher_args": "data",
+      "reader": "thelpviewer.server.converter.readers.dos_text:PrologHelpReader"
+    },
+    {
+      "name": "dos-text",
+      "source_kind": "source",
+      "extensions": [".hlp"],
+      "matcher": "thelpviewer.server.converter.readers.dos_text:is_dos_text_help",
+      "matcher_args": "data",
+      "reader": "thelpviewer.server.converter.readers.dos_text:DosTextHelpReader"
     }
   ],
   "products": [
     {
       "key": "tp",
       "label": "Borland Turbo Pascal",
+      "description": "Pascal language, IDE commands, compiler directives and runtime routines. Later packages also contain object-library and Windows references.",
+      "version_descriptions": {
+        "7": "Pascal language and IDE help plus separate Turbo Vision and ObjectWindows library references: TURBO.TPH, TVISION.TPH and OWL.TPH.",
+        "4.0": "The Turbo Pascal 4 reference from TURBO.HLP: Pascal syntax, compiler directives, standard routines and IDE commands.",
+        "5.0": "Turbo Pascal 5 language, runtime and development-environment reference from the English TURBO.HLP.",
+        "5.0 (DE)": "German-language Turbo Pascal 5 reference, with IDE commands, compiler settings and Pascal routines from TURBO.HLP.",
+        "5.5": "Turbo Pascal 5.5's Object Pascal language and programming-environment help, including its runtime reference.",
+        "6.0 (DE)": "German Turbo Pascal 6 reference for working in the IDE and looking up Pascal language and runtime routines.",
+        "6.01 (DE)": "The German 6.01 help-file edition for Turbo Pascal 6, covering its IDE, compiler options and Pascal routines.",
+        "6.x": "Turbo Pascal 6 language and IDE reference from TURBO.HLP, for looking up syntax, compiler directives and runtime calls.",
+        "7 (CZ)": "Czech Pascal, Turbo Vision and ObjectWindows references, plus Windows API help in WINDOWS.TPH.",
+        "7.0 (DE)": "German-language Turbo Pascal 7 help for language constructs, runtime routines and work in the development environment.",
+        "7.1": "Pascal language and IDE reference together with the Turbo Vision class-library documentation from TURBO.TPH and TVISION.TPH."
+      },
       "build_group": "borland",
       "collection_prefixes": [
         "Borland Turbo Pascal"
@@ -245,6 +302,14 @@
     {
       "key": "tc",
       "label": "Borland Turbo C",
+      "description": "C/C++ language and library reference for the Turbo development tools, including DOS programming, graphics and compiler commands.",
+      "version_descriptions": {
+        "1.00": "Turbo C++ 1.00 language, library and IDE help from TCHELP.TCH, as identified by the original file.",
+        "1.x current": "Turbo C++ 1.01's TCHELP.TCH reference for compiler/IDE commands and C/C++ library use.",
+        "2.0": "Turbo C 2.0 language and library reference with compiler and development-environment commands.",
+        "2.01": "Turbo C 2.01 reference for the TC IDE, C runtime, DOS and graphics programming.",
+        "3.0": "Turbo C++ 3.0's language, compiler, IDE and library reference from TCHELP.TCH."
+      },
       "build_group": "borland",
       "collection_prefixes": [
         "Borland Turbo C++",
@@ -283,7 +348,12 @@
     {
       "key": "tasm",
       "label": "Borland Turbo Assembler",
+      "description": "Assembler instructions, directives and macros for writing DOS assembly code with Turbo Assembler.",
       "build_group": "borland",
+      "collection_prefixes": ["Borland Turbo Assembler"],
+      "conversion": {
+        "files": [{"filename": "TASM.TAH"}]
+      },
       "sources": {
         "winworld": {
           "search_text": "Turbo Assembler",
@@ -313,20 +383,41 @@
     {
       "key": "td",
       "label": "Borland Turbo Debugger",
+      "description": "Look up debugger commands, breakpoints, expressions and inspection windows. The available DOS, Windows and profiler guides depend on the edition.",
+      "version_descriptions": {
+        "": "Turbo Profiler reference from TFHELP.TFH: profiling commands and interpretation of program-performance results.",
+        "1.01": "Turbo Profiler help distributed with the assembler tools, from TFHELP.TFH; this entry is the profiler rather than the debugger.",
+        "1.0": "The early Turbo Debugger command and window reference from TDHELP.TDH.",
+        "1.5": "Turbo Debugger 1.5 reference for debugger commands, breakpoints and inspecting program state.",
+        "2.x": "Turbo Debugger 2.x help for tracing execution, evaluating expressions and working with debugger windows.",
+        "4.0": "Separate Turbo Debugger 4 references for DOS, Windows and 32-bit debugging: TDHELP, TDWHELP and TD32HELP.",
+        "5.0": "Turbo Debugger 5's DOS, Windows and 32-bit help set, covering its debugging commands and program-inspection tools."
+      },
       "build_group": "borland",
       "collection_prefixes": [
         "Borland Turbo Debugger/Profiler/Assembler"
       ],
       "conversion": {
-        "use_database_entries": true
+        "use_database_entries": true,
+        "files": [
+          {"filename": "TDHELP.TDH"},
+          {"filename": "TD32HELP.TDH"},
+          {"filename": "TDWHELP.TDH"}
+        ]
       },
       "sources": {
+        "winworld": {
+          "search_text": "Turbo Debugger DOS, Windows and 32-bit help bundled with Turbo Assembler",
+          "slug": "turbo-assembler"
+        },
         "archiveorg": {
-          "search_text": "Borland Turbo Debugger",
-          "query": "creator:Borland AND title:\"Turbo Debugger\" AND mediatype:software",
+          "search_text": "Borland Turbo Debugger / Turbo Profiler / Turbo Assembler distribution disks",
+          "query": "(title:\"Turbo Debugger\" OR title:\"Turbo Profiler\" OR title:\"Turbo Assembler\") AND mediatype:software",
           "keywords": [
             "borland",
-            "turbo debugger"
+            "turbo debugger",
+            "turbo profiler",
+            "turbo assembler"
           ]
         },
         "olddos": {
@@ -343,6 +434,11 @@
     {
       "key": "tbasic",
       "label": "Borland Turbo Basic",
+      "description": "Help for the MicroCalc spreadsheet example shipped with Turbo Basic: worksheet commands, cell navigation and calculations.",
+      "version_descriptions": {
+        "1.x current": "English MC.HLP for Turbo Basic's MicroCalc example: spreadsheet commands, worksheet navigation and calculations.",
+        "1.0 (DE)": "German MC.HLP for the MicroCalc spreadsheet bundled with Turbo Basic, describing its worksheet commands and calculations."
+      },
       "build_group": "borland",
       "collection_prefixes": [
         "Borland Turbo Basic"
@@ -378,6 +474,12 @@
     {
       "key": "tprolog",
       "label": "Borland Turbo Prolog",
+      "description": "Turbo Prolog's development environment and bundled example applications, with separate help databases for their commands.",
+      "version_descriptions": {
+        "1.0": "Turbo Prolog's PROLOG.HLP and the GEOBASE, SCRDEF and XHELP example help databases.",
+        "1.x current": "Turbo Prolog environment help plus GEOBASE, DIFF, GENI and SANAL example-application references.",
+        "2.0": "Turbo Prolog 2 environment and example help, including the PIE, GEOBASE, GENI and registration databases."
+      },
       "build_group": "borland",
       "collection_prefixes": [
         "Borland Turbo Prolog"
@@ -412,6 +514,15 @@
     {
       "key": "bc",
       "label": "Borland C++",
+      "description": "Borland C++ IDE, compiler and libraries, with edition-specific Turbo Vision, Windows, ObjectWindows and platform API references.",
+      "version_descriptions": {
+        "2.0 DOS current": "Borland C++ 2.0's language/IDE reference and its separate Windows API guide, from TCHELP.TCH and TCHELPW.TCH.",
+        "3.0": "Borland C++ 3.0 compiler, IDE and C/C++ programming reference from TCHELP.TCH.",
+        "3.1": "Borland C++ 3.1 help with a separate Windows programming reference in WINHELP.TCH.",
+        "3.x": "Turbo Vision C++ class-library reference together with the Borland C++ 3.x programming help.",
+        "4.5": "Borland C++ 4.5's help set, including its Windows development and associated tool references.",
+        "4.52": "Borland C++ 4.52 reference collection: Win32 APIs, ObjectWindows, OCF, Resource Workshop, RPC, sockets and OpenGL."
+      },
       "build_group": "borland",
       "collection_prefixes": [
         "Borland C++"
@@ -448,6 +559,11 @@
     {
       "key": "bp",
       "label": "Borland Pascal",
+      "description": "Borland Pascal language and IDE reference with the Windows and object-library guides supplied by the selected release.",
+      "version_descriptions": {
+        "7.x current": "Borland Pascal 7 language/IDE help plus its Windows API reference from TURBO.TPH and WINDOWS.TPH.",
+        "7.x current (DE)": "German Borland Pascal 7 help with Windows API, ObjectWindows and Turbo Vision library references."
+      },
       "build_group": "borland",
       "collection_prefixes": [
         "Borland Pascal"
@@ -482,6 +598,7 @@
     {
       "key": "sk",
       "label": "Borland Sidekick",
+      "description": "Use Sidekick's resident desktop tools: notepad, calendar, calculator and dialler. Select the standard or Plus edition's own help.",
       "build_group": "borland",
       "collection_prefixes": [
         "Borland Sidekick"
@@ -493,12 +610,18 @@
         "winworld": {
           "search_text": "Sidekick",
           "slug": "sidekick"
+        },
+        "archiveorg": {
+          "search_text": "Borland Sidekick DOS 1.56b and Sidekick Plus distribution disks",
+          "query": "title:Sidekick AND mediatype:software",
+          "keywords": ["sidekick", "borland"]
         }
       }
     },
     {
       "key": "ng",
       "label": "Norton Guides",
+      "description": "A collection of Norton Guides covering assembly, C, Pascal, DOS and BIOS services, hardware, libraries and individual DOS utilities.",
       "build_group": "norton-guides",
       "collection_prefixes": [
         "Norton Guides"
@@ -534,6 +657,7 @@
     {
       "key": "qbx",
       "label": "Microsoft QuickBASIC Extended 7.1",
+      "description": "Microsoft BASIC PDS 7.1 language and examples, Programmer's WorkBench, CodeView, linker and utility-error references.",
       "menu_label": "Microsoft QuickBASIC",
       "default_version": "7.1",
       "build_group": "microsoft",
@@ -563,6 +687,7 @@
     {
       "key": "msdos622",
       "label": "Microsoft MS-DOS 6.22",
+      "description": "Command syntax, options, examples and configuration guidance for MS-DOS 6.22, from its original HELP.HLP.",
       "build_group": "dos-reference",
       "collection_prefixes": ["Microsoft MS-DOS 6.22"],
       "sources": {
@@ -587,6 +712,7 @@
     {
       "key": "qb45",
       "label": "Microsoft QuickBASIC 4.5",
+      "description": "QuickBASIC 4.5 Advisor, detailed language reference and runtime-error explanations from the three original QB45 help files.",
       "menu_label": "Microsoft QuickBASIC",
       "default_version": "4.5",
       "build_group": "dos-reference",
@@ -615,6 +741,7 @@
     {
       "key": "helppc",
       "label": "HelpPC 2.10",
+      "description": "Programmer's desk reference: x86 assembly, C, BIOS/DOS interrupts, PC hardware, data tables and miscellaneous technical topics.",
       "build_group": "dos-reference",
       "collection_prefixes": ["HelpPC 2.10"],
       "conversion": {"use_database_entries": true},
@@ -638,6 +765,7 @@
     {
       "key": "freedos-help",
       "label": "FreeDOS HTML Help 1.1.1a",
+      "description": "Browse FreeDOS command documentation and configuration guidance from the original linked HTML help collection.",
       "build_group": "dos-reference",
       "collection_prefixes": ["FreeDOS HTML Help 1.1.1a"],
       "conversion": {"use_database_entries": true},
@@ -658,6 +786,11 @@
     {
       "key": "quickc",
       "label": "Microsoft QuickC, C, and C++",
+      "description": "Microsoft C development references: QuickC Advisor and graphics, or C 6.0's command-line tools, WorkBench and CodeView.",
+      "version_descriptions": {
+        "2.50": "QuickC 2.50 Advisor, graphics routines, environment commands and error messages, with the original cross-file help links.",
+        "6.0": "Microsoft C 6.0 language/runtime reference, WorkBench extensions, CodeView, linker, Resource Compiler and utility-error help."
+      },
       "build_group": "microsoft",
       "collection_prefixes": [
         "Microsoft QuickC, C, and C++"
@@ -686,6 +819,11 @@
     {
       "key": "masm",
       "label": "Microsoft MASM and CodeView",
+      "description": "CodeView debugger help distributed with MASM: commands, breakpoints and inspecting a running program. This package is not an assembler manual.",
+      "version_descriptions": {
+        "5.0": "The DOS CodeView command reference from CV.HLP, distributed with MASM 5.0.",
+        "5.1": "MASM 5.1's CodeView help-file editions CV.HLP and CVP.HLP, covering debugger commands and program inspection."
+      },
       "build_group": "microsoft",
       "collection_prefixes": [
         "Microsoft MASM and CodeView"
@@ -714,6 +852,7 @@
     {
       "key": "software602",
       "label": "Software 602",
+      "description": "Czech and Slovak application manuals for Text602, Calc602, Kartoteka602 and Manager602, retaining their original topic links.",
       "build_group": "software602",
       "collection_prefixes": [
         "Software 602"
@@ -725,8 +864,10 @@
     },
     {
       "key": "scorpion",
+      "versions": ["1", "1.5", "3", "3.5", "4", "5", "6", "7", "8", "10", "11", "12", "13", "14", "15", "16", "21", "22", "23"],
       "label": "Scorpions Cheater DOS",
       "menu_label": "Scorpions Cheater",
+      "description": "Browse game-specific walkthroughs, hints and cheat codes in Scorpions Cheater's DOS databases, including the original text-screen illustrations.",
       "build_group": "scorpion",
       "conversion": {
         "use_database_entries": false,
@@ -764,6 +905,7 @@
       "key": "game-cheater",
       "label": "Game-Cheater 9.02",
       "menu_label": "Game-Cheater",
+      "description": "Game-Cheater walkthroughs and cheat entries, plus its own application instructions and the bundled PC-Fand help.",
       "default_version": "9.02",
       "build_group": "game-cheater",
       "conversion": {
@@ -934,6 +1076,30 @@
     {"crc32": "F7B1BD0B", "filenames": ["MISC.TXT"], "title": "HelpPC Miscellaneous Topics", "collection": "HelpPC 2.10", "text_encoding": "cp437", "language": "en", "product": "helppc"},
     {"crc32": "96D09BA1", "filenames": ["TABLES.TXT"], "title": "HelpPC Tables", "collection": "HelpPC 2.10", "text_encoding": "cp437", "language": "en", "product": "helppc"},
     {"crc32": "3F1A2C97", "filenames": ["HHSTNDRD.ZIP"], "title": "FreeDOS HTML Help 1.1.1a", "collection": "FreeDOS HTML Help 1.1.1a", "text_encoding": "utf-8", "language": "en", "product": "freedos-help"},
+    {
+      "crc32": "0143767A",
+      "filenames": ["QC.HLP"],
+      "title": "Microsoft QuickC Advisor",
+      "collection": "Microsoft QuickC, C, and C++ 2.50",
+      "text_encoding": "cp437",
+      "language": "en",
+      "product": "quickc",
+      "release": "2.50",
+      "help_contents_topic_id": 0,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Microsoft QuickC 2.50 DOS Microsoft QuickC 2.50.zip Advisor.img QC.HL$ Learning.img QC.HL2 QC.HLP",
+          "direct_urls": ["https://archive.org/details/microsoft-quick-c-2.50"],
+          "query": "(identifier:microsoft-quick-c-2.50 OR (title:QuickC AND title:2.50)) AND mediatype:software",
+          "archive_members": ["QC.HLP"]
+        },
+        "direct": {
+          "search_text": "Microsoft QuickC 2.50 DOS Advisor and Learning disks split QC.HLP",
+          "direct_urls": ["https://archive.org/download/microsoft-quick-c-2.50/Microsoft%20QuickC%202.50.zip"],
+          "archive_members": ["QC.HLP"]
+        }
+      }
+    },
     {
       "crc32": "03F6A215",
       "filenames": [
@@ -1164,7 +1330,22 @@
       "title": "Turbo Pascal 4",
       "collection": "Borland Turbo Pascal 4.0",
       "text_encoding": "cp437",
-      "language": "en"
+      "language": "en",
+      "product": "tp",
+      "release": "4.0",
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Pascal 4.0 December 1987 compiler disk TURBO.HLP",
+          "direct_urls": ["https://archive.org/details/BorlandTurboPascal4.0"],
+          "query": "title:\"Turbo Pascal\" AND (title:\"4.0\" OR title:\"4\") AND mediatype:software",
+          "archive_members": ["TURBO.HLP"]
+        },
+        "direct": {
+          "search_text": "Borland Turbo Pascal 4.0 December 1987 compiler disk TURBO.HLP",
+          "direct_urls": ["https://archive.org/download/BorlandTurboPascal4.0/disk1_compiler.img"],
+          "archive_members": ["TURBO.HLP"]
+        }
+      }
     },
     {
       "crc32": "58D27871",
@@ -1174,7 +1355,21 @@
       "title": "Sidekick 2",
       "collection": "Borland Sidekick 2",
       "text_encoding": "cp437",
-      "language": "en"
+      "language": "en",
+      "product": "sk",
+      "release": "2.0",
+      "help_contents_topic_id": 101,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Sidekick 2.0 1-11-1991 DOS SK2.HLP",
+          "direct_urls": ["https://winworldpc.com/product/sidekick/2x", "https://winworldpc.com/download/2d20744e-7356-11c3-a7c2-9d25525400ef"],
+          "archive_members": ["SK2.HLP"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Sidekick 2.0 DOS January 1991 SK2.HLP",
+          "query": "title:Sidekick AND mediatype:software"
+        }
+      }
     },
     {
       "crc32": "59DAE54E",
@@ -1797,8 +1992,114 @@
       ],
       "title": "Win32 API Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "1058F6E8",
@@ -1895,8 +2196,114 @@
       ],
       "title": "ObjectComponents Framework",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "2F039386",
@@ -1937,8 +2344,114 @@
       ],
       "title": "Borland Resource Workshop Help",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "392086F1",
@@ -1999,10 +2512,12 @@
       "filenames": [
         "SKPLUS.HLP"
       ],
-      "title": "SKPLUS",
+      "title": "SideKick Plus Help",
       "collection": "Borland Sidekick Plus",
-      "text_encoding": "",
-      "language": "en"
+      "text_encoding": "cp437",
+      "language": "en",
+      "product": "sk",
+      "help_contents_topic_id": 768
     },
     {
       "crc32": "B2E9DC4F",
@@ -2044,8 +2559,114 @@
       ],
       "title": "Microsoft RPC Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "54CF860C",
@@ -2054,8 +2675,114 @@
       ],
       "title": "Windows Sockets Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "BD0C1891",
@@ -2075,8 +2802,114 @@
       ],
       "title": "WinHelp Project Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "593D981C",
@@ -2139,17 +2972,123 @@
       ],
       "title": "ObjectWindows Library",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "6AE04030",
       "filenames": [
         "SK.HLP"
       ],
-      "title": "SK",
+      "title": "Sidekick Help System",
       "collection": "Borland Sidekick 1.x current",
-      "text_encoding": "",
+      "text_encoding": "cp437",
       "language": "en"
     },
     {
@@ -2159,8 +3098,114 @@
       ],
       "title": "Borland OpenHelp",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "74FF0E95",
@@ -2224,8 +3269,114 @@
       ],
       "title": "OpenGL Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "845BADAB",
@@ -2311,8 +3462,114 @@
       ],
       "title": "WinSight",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "A617EC41",
@@ -2332,8 +3589,114 @@
       ],
       "title": "Borland C++ DOS Runtime Library",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "ABF314D3",
@@ -2353,8 +3716,114 @@
       ],
       "title": "Video for Windows Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "B81D70FB",
@@ -2373,8 +3842,114 @@
       ],
       "title": "Borland C++ Windows Runtime Library",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "202BC542",
@@ -2416,8 +3991,114 @@
       ],
       "title": "Windows 3.1 API Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "C1A53A35",
@@ -2470,8 +4151,114 @@
       ],
       "title": "WinSpector",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "C729A167",
@@ -2535,8 +4322,114 @@
       ],
       "title": "Borland C++ Class Library",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "D83076A6",
@@ -2588,8 +4481,114 @@
       ],
       "title": "Borland Windows Custom Controls",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "E47077FD",
@@ -2642,8 +4641,114 @@
       ],
       "title": "Resource Script Language Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "F15731FE",
@@ -2652,8 +4757,114 @@
       ],
       "title": "OLE 2 Reference",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "FA7FDAD1",
@@ -2673,8 +4884,114 @@
       ],
       "title": "Creating Windows Help",
       "collection": "Borland C++ 4.x",
-      "text_encoding": "cp437",
-      "language": "en"
+      "text_encoding": "cp1252",
+      "language": "en",
+      "product": "bc",
+      "release": "4.52",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
     },
     {
       "crc32": "A9C668A7",
@@ -2683,6 +5000,8 @@
       ],
       "title": "Turbo Debugger Help",
       "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "td",
+      "release": "1.0",
       "bundle_stem": "tdhelp-1.0",
       "text_encoding": "cp437",
       "language": "en",
@@ -2695,8 +5014,23 @@
       ],
       "title": "Turbo Assembler Help",
       "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "tasm",
+      "release": "2.0",
+      "bundle_stem": "tasm-2.0",
       "text_encoding": "cp437",
-      "language": "en"
+      "language": "en",
+      "help_contents_topic_id": 3,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Assembler 2.0 (5.25-360k) THELP.ZIP TASM.TAH",
+          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/20", "https://winworldpc.com/download/64c3bec2-abc2-b9c3-aa03-11c3a6c2bb2a"],
+          "archive_members": ["TASM.TAH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Assembler 2.0 distribution disks",
+          "query": "title:\"Turbo Assembler\" AND mediatype:software"
+        }
+      }
     },
     {
       "crc32": "A6E139F2",
@@ -2705,6 +5039,8 @@
       ],
       "title": "Turbo Debugger Help",
       "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "td",
+      "release": "2.x",
       "bundle_stem": "tdhelp-2.x",
       "text_encoding": "",
       "language": "en"
@@ -2732,9 +5068,2745 @@
       "crc32": "9AC3E64A",
       "title": "Turbo Assembler Help",
       "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "tasm",
       "text_encoding": "cp437",
       "language": "en",
       "help_contents_topic_id": 3
+    },
+    {
+      "crc32": "C517BD6D",
+      "filenames": ["TASM.TAH"],
+      "title": "Turbo Assembler Help",
+      "collection": "Borland Turbo Assembler 2.01",
+      "product": "tasm",
+      "release": "2.01",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 3,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Assembler 2.01 (5.25) THELP.ZIP TASM.TAH",
+          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/20", "https://winworldpc.com/download/501ac3a8-59c2-bdc3-a511-c3a4e280a613"],
+          "archive_members": ["TASM.TAH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Assembler 2.01 distribution disks",
+          "query": "title:\"Turbo Assembler\" AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "F126AD2C",
+      "filenames": ["TDHELP.TDH"],
+      "title": "Turbo Debugger Help",
+      "collection": "Borland Turbo Assembler 1.01 (DE)",
+      "product": "td",
+      "release": "1.5",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "direct": {
+          "search_text": "Borland Turbo Assembler 1.01 Turbo Debugger 1.5 German disk set Disk2-Utilities.img TDHELP.TDH (English HELP)",
+          "direct_urls": ["https://archive.org/download/borland-tassm-1.01-tdebug-1.5-german/Disk2-Utilities.img"],
+          "archive_members": ["TDHELP.TDH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Assembler 1.01 Turbo Debugger 1.5 German distribution disks",
+          "direct_urls": ["https://archive.org/details/borland-tassm-1.01-tdebug-1.5-german"],
+          "query": "(title:\"Turbo Debugger\" OR title:\"Turbo Assembler\") AND (title:1.01 OR title:1.5 OR description:1.5) AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "4B5D33CE",
+      "filenames": ["TDHELP.TDH"],
+      "title": "Turbo Debugger Hilfe",
+      "collection": "Borland Turbo Debugger 1.5 (DE)",
+      "product": "td",
+      "release": "1.5",
+      "text_encoding": "cp437",
+      "language": "de",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "direct": {
+          "search_text": "Borland Turbo Assembler 1.01 Turbo Debugger 1.5 German Disk4-Hilfe.img TDHELP.TDH (German HELP)",
+          "direct_urls": ["https://archive.org/download/borland-tassm-1.01-tdebug-1.5-german/Disk4-Hilfe.img"],
+          "archive_members": ["TDHELP.TDH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Debugger 1.5 German help disk",
+          "direct_urls": ["https://archive.org/details/borland-tassm-1.01-tdebug-1.5-german"],
+          "query": "identifier:borland-tassm-1.01-tdebug-1.5-german AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "C7CCE043",
+      "filenames": ["TFHELP.TFH"],
+      "title": "Turbo Profiler Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "td",
+      "release": "1.01",
+      "bundle_stem": "tfhelp-1.01",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "winworld": {
+          "search_text": "Turbo Profiler 1.01 TFHELP.ZIP TFHELP.TFH bundled with Borland Turbo Assembler 2.01 (5.25)",
+          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/20", "https://winworldpc.com/download/501ac3a8-59c2-bdc3-a511-c3a4e280a613"],
+          "archive_members": ["TFHELP.TFH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Profiler 1.01 Turbo Assembler 2.01",
+          "query": "(title:\"Turbo Profiler\" OR title:\"Turbo Assembler\") AND (title:1.01 OR description:1.01 OR title:2.01 OR description:2.01) AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "0EA517F6",
+      "filenames": ["SK.HLP"],
+      "title": "Sidekick Help System",
+      "collection": "Borland Sidekick 1.56b",
+      "product": "sk",
+      "release": "1.56b",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Sidekick 1.56b (1986) (3.5-720k) SK.HLP",
+          "direct_urls": ["https://winworldpc.com/product/sidekick/1x", "https://winworldpc.com/download/26edffb7-482e-11e9-8581-fa163e9022f0"],
+          "archive_members": ["SK.HLP"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Sidekick 1.56b DOS",
+          "query": "title:Sidekick AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "BBF9DEFB",
+      "filenames": ["TDHELP.TDH"],
+      "title": "Turbo Debugger DOS Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "td",
+      "release": "4.0",
+      "bundle_stem": "tdhelp-4.0",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Assembler 4.0 (3.5-1.44mb) TDDOS.PAK TDHELP.TDH Turbo Debugger 4.0",
+          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/4x", "https://winworldpc.com/download/c2a9c393-6b65-c391-c380-11c3a6c2bb2a"],
+          "archive_members": ["TDHELP.TDH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Debugger 4.0 Turbo Assembler 4.0",
+          "query": "(title:\"Turbo Debugger\" OR title:\"Turbo Assembler\") AND (title:4.0 OR description:4.0) AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "7C2A5934",
+      "filenames": ["TD32HELP.TDH"],
+      "title": "Turbo Debugger 32-bit Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "td",
+      "release": "4.0",
+      "bundle_stem": "td32help-4.0",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Assembler 4.0 (3.5-1.44mb) TD32.PAK TD32HELP.TDH",
+          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/4x", "https://winworldpc.com/download/c2a9c393-6b65-c391-c380-11c3a6c2bb2a"],
+          "archive_members": ["TD32HELP.TDH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Assembler 4.0 Turbo Debugger 32",
+          "query": "title:\"Turbo Assembler\" AND (title:4.0 OR description:4.0) AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "77B4692D",
+      "filenames": ["TDWHELP.TDH"],
+      "title": "Turbo Debugger Windows Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "td",
+      "release": "4.0",
+      "bundle_stem": "tdwhelp-4.0",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Assembler 4.0 (3.5-1.44mb) TDWIN.PAK TDWHELP.TDH",
+          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/4x", "https://winworldpc.com/download/c2a9c393-6b65-c391-c380-11c3a6c2bb2a"],
+          "archive_members": ["TDWHELP.TDH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Assembler 4.0 Turbo Debugger Windows",
+          "query": "title:\"Turbo Assembler\" AND (title:4.0 OR description:4.0) AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "1A84ACE2",
+      "filenames": ["TDHELP.TDH"],
+      "title": "Turbo Debugger DOS Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "td",
+      "release": "5.0",
+      "bundle_stem": "tdhelp-5.0",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Assembler 5.0 (3.5-1.44mb) TDDOS.PAK TDHELP.TDH Turbo Debugger 5.0",
+          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/5x", "https://winworldpc.com/download/30487b55-c392-c592-11c3-a6c2bb2a5254"],
+          "archive_members": ["TDHELP.TDH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Debugger 5.0 Turbo Assembler 5.0",
+          "query": "(title:\"Turbo Debugger\" OR title:\"Turbo Assembler\") AND (title:5.0 OR description:5.0) AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "7D23BEE7",
+      "filenames": ["TD32HELP.TDH"],
+      "title": "Turbo Debugger 32-bit Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "td",
+      "release": "5.0",
+      "bundle_stem": "td32help-5.0",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Assembler 5.0 (3.5-1.44mb) TD32.PAK TD32HELP.TDH",
+          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/5x", "https://winworldpc.com/download/30487b55-c392-c592-11c3-a6c2bb2a5254"],
+          "archive_members": ["TD32HELP.TDH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Assembler 5.0 Turbo Debugger 32",
+          "query": "title:\"Turbo Assembler\" AND (title:5.0 OR description:5.0) AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "86079353",
+      "filenames": ["TDWHELP.TDH"],
+      "title": "Turbo Debugger Windows Help",
+      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "product": "td",
+      "release": "5.0",
+      "bundle_stem": "tdwhelp-5.0",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 1,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Assembler 5.0 (3.5-1.44mb) TDWIN.PAK TDWHELP.TDH",
+          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/5x", "https://winworldpc.com/download/30487b55-c392-c592-11c3-a6c2bb2a5254"],
+          "archive_members": ["TDWHELP.TDH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Assembler 5.0 Turbo Debugger Windows",
+          "query": "title:\"Turbo Assembler\" AND (title:5.0 OR description:5.0) AND mediatype:software"
+        }
+      }
+    },
+    {
+      "crc32": "953AA2C2",
+      "filenames": [
+        "BCDOS.HLP"
+      ],
+      "title": "Borland C++ Dos Support Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "E963D2D0",
+      "filenames": [
+        "BCW.HLP"
+      ],
+      "title": "Borland C++ Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "E3D39E48",
+      "filenames": [
+        "BWCC.HLP"
+      ],
+      "title": "Borland Windows Custom Controls Reference",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "E1479B74",
+      "filenames": [
+        "CLASSLIB.HLP"
+      ],
+      "title": "Class Library Reference",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "CE884527",
+      "filenames": [
+        "CWH.HLP"
+      ],
+      "title": "Creating Windows Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "D511F2FE",
+      "filenames": [
+        "HELPREF.HLP"
+      ],
+      "title": "Windows 3.1 Help Reference",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "B5BA7159",
+      "filenames": [
+        "OCF.HLP"
+      ],
+      "title": "OCF Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "2FAA5BF6",
+      "filenames": [
+        "OLE.HLP"
+      ],
+      "title": "OLE Online Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "266DF15C",
+      "filenames": [
+        "OPENGL.HLP"
+      ],
+      "title": "OpenGL Online Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "64522E3E",
+      "filenames": [
+        "OPENHELP.HLP"
+      ],
+      "title": "Using Borland C++ Online Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "9900E9D3",
+      "filenames": [
+        "OWL.HLP"
+      ],
+      "title": "ObjectWindows Library Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "24C916E8",
+      "filenames": [
+        "RPC.HLP"
+      ],
+      "title": "RPC Online Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "EAFD814C",
+      "filenames": [
+        "RSL.HLP"
+      ],
+      "title": "Resource Script Language Reference",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "D2ACE576",
+      "filenames": [
+        "SOC.HLP"
+      ],
+      "title": "Sockets Online Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "C5619D20",
+      "filenames": [
+        "VFW.HLP"
+      ],
+      "title": "Video For Windows Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "79B66B8C",
+      "filenames": [
+        "WIN31WH.HLP"
+      ],
+      "title": "Windows 3.1 SDK",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "09D37C91",
+      "filenames": [
+        "WIN32.HLP"
+      ],
+      "title": "Win32 Online Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "8B8AA6F7",
+      "filenames": [
+        "WINSIGHT.HLP"
+      ],
+      "title": "WinSight Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "EDA7B515",
+      "filenames": [
+        "WINSPCTR.HLP"
+      ],
+      "title": "WinSpector Help",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "3E9945BC",
+      "filenames": [
+        "WORKHELP.HLP"
+      ],
+      "title": "Resource Workshop",
+      "collection": "Borland C++ 4.x",
+      "product": "bc",
+      "release": "4.52",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.52 Windows Help HLP HLX BCPP4_52.ISO",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/45c2b512-c382-18c3-9a11-c3a4e284a2ef"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.52 CD BCPP4_52.ISO Windows Help",
+          "query": "title:\"Borland C++\" AND (title:4.52 OR description:4.52) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-c-4-5"
+          ],
+          "keywords": [
+            "borland",
+            "c++"
+          ],
+          "archive_members": [
+            "BC45/ADDONHLP/BCDOS.HLP",
+            "BC45/ADDONHLP/BCDOS.HLX",
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/BWCC.HLP",
+            "BC45/BIN/BWCC.HLX",
+            "BC45/BIN/CLASSLIB.HLP",
+            "BC45/BIN/CLASSLIB.HLX",
+            "BC45/BIN/CWH.HLP",
+            "BC45/BIN/CWH.HLX",
+            "BC45/BIN/HELPREF.HLP",
+            "BC45/BIN/HELPREF.HLX",
+            "BC45/BIN/OCF.HLP",
+            "BC45/BIN/OCF.HLX",
+            "BC45/BIN/OLE.HLP",
+            "BC45/BIN/OLE.HLX",
+            "BC45/BIN/OPENGL.HLP",
+            "BC45/BIN/OPENGL.HLX",
+            "BC45/BIN/OPENHELP.HLP",
+            "BC45/BIN/OPENHELP.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX",
+            "BC45/BIN/RPC.HLP",
+            "BC45/BIN/RPC.HLX",
+            "BC45/BIN/RSL.HLP",
+            "BC45/BIN/RSL.HLX",
+            "BC45/BIN/SOC.HLP",
+            "BC45/BIN/SOC.HLX",
+            "BC45/BIN/VFW.HLP",
+            "BC45/BIN/VFW.HLX",
+            "BC45/BIN/WIN31WH.HLP",
+            "BC45/BIN/WIN31WH.HLX",
+            "BC45/BIN/WIN32.HLP",
+            "BC45/BIN/WIN32.HLX",
+            "BC45/BIN/WINSIGHT.HLP",
+            "BC45/BIN/WINSIGHT.HLX",
+            "BC45/BIN/WINSPCTR.HLP",
+            "BC45/BIN/WINSPCTR.HLX",
+            "BC45/BIN/WORKHELP.HLP",
+            "BC45/BIN/WORKHELP.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "08397CCE",
+      "filenames": [
+        "BCW.HLP"
+      ],
+      "title": "Borland C++ Help",
+      "collection": "Borland C++ 4.5",
+      "product": "bc",
+      "release": "4.5",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.5 (CD) BORLANDC_45.ISO BCW.HLP BCW.HLX OWL.HLP OWL.HLX",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/c2a44ac3-a459-4f66-11c3-a5c28fc2a3ef"
+          ],
+          "archive_members": [
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.5 Windows help BCW.HLP OWL.HLP",
+          "query": "title:\"Borland C++\" AND (title:4.5 OR description:4.5) AND NOT (title:4.52 OR description:4.52) AND mediatype:software",
+          "keywords": [
+            "borland",
+            "4.5"
+          ],
+          "archive_members": [
+            "BCW.HLP",
+            "BCW.HLX",
+            "OWL.HLP",
+            "OWL.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "A8D8D20E",
+      "filenames": [
+        "BCW.HLX"
+      ],
+      "title": "Borland C++ Help - Keyword Index",
+      "collection": "Borland C++ 4.5",
+      "product": "bc",
+      "release": "4.5",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.5 (CD) BORLANDC_45.ISO BCW.HLP BCW.HLX OWL.HLP OWL.HLX",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/c2a44ac3-a459-4f66-11c3-a5c28fc2a3ef"
+          ],
+          "archive_members": [
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.5 Windows help BCW.HLP OWL.HLP",
+          "query": "title:\"Borland C++\" AND (title:4.5 OR description:4.5) AND NOT (title:4.52 OR description:4.52) AND mediatype:software",
+          "keywords": [
+            "borland",
+            "4.5"
+          ],
+          "archive_members": [
+            "BCW.HLP",
+            "BCW.HLX",
+            "OWL.HLP",
+            "OWL.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "BA45D41E",
+      "filenames": [
+        "OWL.HLP"
+      ],
+      "title": "ObjectWindows Library Help",
+      "collection": "Borland C++ 4.5",
+      "product": "bc",
+      "release": "4.5",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.5 (CD) BORLANDC_45.ISO BCW.HLP BCW.HLX OWL.HLP OWL.HLX",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/c2a44ac3-a459-4f66-11c3-a5c28fc2a3ef"
+          ],
+          "archive_members": [
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.5 Windows help BCW.HLP OWL.HLP",
+          "query": "title:\"Borland C++\" AND (title:4.5 OR description:4.5) AND NOT (title:4.52 OR description:4.52) AND mediatype:software",
+          "keywords": [
+            "borland",
+            "4.5"
+          ],
+          "archive_members": [
+            "BCW.HLP",
+            "BCW.HLX",
+            "OWL.HLP",
+            "OWL.HLX"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "D0874754",
+      "filenames": [
+        "OWL.HLX"
+      ],
+      "title": "ObjectWindows Library Help - Keyword Index",
+      "collection": "Borland C++ 4.5",
+      "product": "bc",
+      "release": "4.5",
+      "text_encoding": "cp1252",
+      "language": "en",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland C++ 4.5 (CD) BORLANDC_45.ISO BCW.HLP BCW.HLX OWL.HLP OWL.HLX",
+          "direct_urls": [
+            "https://winworldpc.com/product/borland-c/40",
+            "https://winworldpc.com/download/c2a44ac3-a459-4f66-11c3-a5c28fc2a3ef"
+          ],
+          "archive_members": [
+            "BC45/BIN/BCW.HLP",
+            "BC45/BIN/BCW.HLX",
+            "BC45/BIN/OWL.HLP",
+            "BC45/BIN/OWL.HLX"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland C++ 4.5 Windows help BCW.HLP OWL.HLP",
+          "query": "title:\"Borland C++\" AND (title:4.5 OR description:4.5) AND NOT (title:4.52 OR description:4.52) AND mediatype:software",
+          "keywords": [
+            "borland",
+            "4.5"
+          ],
+          "archive_members": [
+            "BCW.HLP",
+            "BCW.HLX",
+            "OWL.HLP",
+            "OWL.HLX"
+          ]
+        }
+      }
     }
   ]
 }

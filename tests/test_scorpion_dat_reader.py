@@ -46,15 +46,18 @@ def test_scorpion_dat_reader_detects_modern_old_crypt_allegro_dat():
     assert handler.name == "scorpion-dat"
 
 
-def test_scorpion_dat_detection_skips_empty_resource_only_dat():
+def test_scorpion_dat_detection_recognizes_sc2000_catalog_without_dos_article_markers():
     path = _sample_texty21_path()
     payload = path.read_bytes()
 
     handler = detect_format_handler(path, payload)
 
     assert is_scorpion_dat_binary(payload)
-    assert not is_scorpion_dat_help_binary(payload)
-    assert handler is None
+    assert is_scorpion_dat_help_binary(payload)
+    assert {r.name for r in parse_scorpion_dat_records(payload)} == {
+        "kontakt", "novezpra", "oprogramu", "spoluaut", "txt",
+    }
+    assert handler is not None and handler.name == "scorpion-dat"
 
 
 def test_scorpion_dat_parser_uses_decoded_payload_for_real_cheaty23_records():

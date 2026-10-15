@@ -1,266 +1,342 @@
 # Borland Turbo Debugger/Profiler Runtime Help
 
-> Created: 2026-05-14 · Last updated: 2026-09-19
+File extensions: `.TDH`, `.TFH`. These are separate from Borland THELP,
+TPH/TCH and Turbo Vision FBHF. There is no ASCII magic or stored product,
+language, character-set or decoder-profile identifier.
 
-Used by: Borland Turbo Debugger 1.0/2.x and Borland Turbo Profiler.
-File extensions: `.TDH`, `.TFH`.
+## 1. Integer and offset conventions
 
-These files are not Borland THELP/TPH/TCH streams. They do not contain the
-THELP signature `$*$* &&&&$*$` and must be detected and parsed separately.
+- `u16be(p) = (file[p] << 8) | file[p+1]`.
+- A signed map value is `s16(x) = x` for `x < 8000h`, otherwise `x - 10000h`.
+- File offsets are zero-based absolute byte offsets.
+- Context numbers are zero-based map indices, not byte offsets.
+- Cumulative offsets require at least a signed 32-bit accumulator; do not
+  wrap them modulo 65536.
 
-Detailed reverse-engineering history, runtime traces, and unresolved questions
-are kept in internal project notes rather than the public format reference.
+## 2. File header and stored map
 
-All visible multi-byte integers in the on-disk outer structures are
-big-endian unless stated otherwise. In the TDH runtime map, each word is later
-interpreted as a signed 16-bit delta.
+| Absolute offset | Size | Field | Meaning |
+| --- | ---: | --- | --- |
+| `0000h` | 2 | `N: u16be` | Number of stored delta WORDs |
+| `0002h + 2*i` | 2 | `map[i]: s16be` | Delta used in cumulative addressing, for `0 <= i < N` |
+| `B = 2 + 2*N` | 1 | slot-zero byte | Opaque byte; context 0 is not normal topic text |
+| `B+1` | 2 | page 1 next-context | Context 1 begins here when `map[0] = 1` |
+| `B+3` | variable | page 1 text | Nibble-coded text after its next-context WORD |
 
-For the known TDH/TFH sample families, the runtime text layer and topic
-addressing are now decoded rather than merely sketched. The formerly suspicious
-later-2.x context `537` is now confirmed as a literal three-byte empty
-placeholder block (`00 00 0D`), not as hidden undecoded text. The old
-loader/service blocker has also narrowed sharply: the widened 2.x path is now
-anchored directly in resident `TD.EXE`, while `TDH386.SYS` turns out to be a
-separate `TDHDEBUG` DOS device driver rather than the TDH text loader itself.
-That status is now also covered by end-to-end bundle export regression checks
-for the current legacy TDH, later 2.x TDH, and TFH samples rather than only by
-reader-local decode assertions.
-The exact proof addresses, helper entrypoints, and byte-level runtime traces
-stay in those internal notes; this document only keeps the stable format-level
-conclusions.
+The WORD at `B` overlaps the slot-zero byte and the first byte of page 1's
+next-context field. It is **not a separator signature**. Values such as
+`0000h`, `0001h`, `2C00h`, `C101h` and `0901h` occur.
 
-## 1. Family Overview
+In the inspected files, `map[0] = 1` and page 1 contains the help index.
+Its nonzero next-context WORD is followed by a run of `CCh` bytes, which
+decode to spaces. These are structural recognition clues, not universal magic.
+Odd `N` values are valid. Observed TFH maps have 363/366 stored WORDs;
+TDH examples have 518, 537, 538, 596 and 728–817. A range chosen for detection
+is not a stored field or a proof of the format.
 
-The TDH/TFH family shares one higher text layer:
+## 3. Runtime map and context addressing
 
-- nibble-packed text, read low nibble first then high nibble
-- `^` hotspot markers with a big-endian target word
-- fixed-width runtime line layout (`49` columns)
+The original applications preload more map WORDs than the file header declares.
+Those additional WORDs are read directly from the payload beginning at `B`;
+there is no second table or decompression step.
 
-The outer container differs by product family:
+| Application profile | Preloaded map WORDs | Stored-map example |
+| --- | ---: | ---: |
+| Turbo Debugger 1.0 | 530 | 518 |
+| Turbo Debugger DOS 2.0 | 600 | 596 |
+| Turbo Debugger DOS 4.0 | 790 | 728 |
+| Turbo Debugger DOS 5.0 | 850 | 776 |
+| Turbo Profiler 1.0 | 600 | 363 |
 
-| Variant | Used by | Word 0 | Outer layout |
-|---------|---------|--------|--------------|
-| TDH | Turbo Debugger | byte size of each visible pre-separator half | `header -> half A -> half B -> separator -> payload` |
-| TFH | Turbo Profiler | context count | `count -> size table -> separator -> cumulative blocks` |
+These counts belong to the application profile, not the file header. The
+exact preload count for other application profiles is not established here.
 
-## 2. Detection
-
-There is no fixed ASCII magic string. Detection is structural.
-
-### 2.1 TDH Detection
-
-Known TDH samples satisfy all of the following:
-
-- word `0x0000` is an even byte count in the observed range `0x0200..0x0800`
-- two visible halves of that byte size follow immediately after the header word
-- the separator word at `2 + header_word + header_word` is `0x0001`
-- the first payload byte after the separator is in the observed range `0x80..0xBF`
-- the payload begins with a short run of `0xCC` bytes after that lead byte
-
-### 2.2 TFH Detection
-
-Known TFH samples satisfy all of the following:
-
-- word `0x0000` is the big-endian context count
-- `context_count` big-endian words follow as a size table
-- the separator word at `2 + context_count * 2` is `0x0000`
-- the first byte after the separator follows the same observed payload lead pattern
-
-## 3. TDH Outer Layout
+For any addressed context `c`, including an overlapping map slot:
 
 ```text
-┌──────────────────────────────────────────┐  +0x0000
-│ HeaderWord (WORD)                        │  byte size of each visible half
-├──────────────────────────────────────────┤  +0x0002
-│ VisibleHalfA (HeaderWord bytes)          │
-├──────────────────────────────────────────┤
-│ VisibleHalfB (HeaderWord bytes)          │
-├──────────────────────────────────────────┤  +SeparatorOffset
-│ SeparatorWord = 0x0001                   │
-├──────────────────────────────────────────┤  +EncodedPayloadOffset
-│ Encoded payload                          │
-└──────────────────────────────────────────┘
+delta(i) = s16(u16be(2 + 2*i))
+start(0) = B
+start(c) = B + sum(delta(i), i = 0 .. c-1)
+
+available(c) = (delta(c) != 0)
 ```
 
-Known header values:
+A zero map WORD means no help for that context. It does not identify an empty
+page at the next context's offset. A negative delta can move backward into an
+earlier page; context starts need not be monotonic or unique.
 
-- TD 1.0 sample: `0x0206` (`518` bytes per half)
-- later TD 2.x sample: `0x0254` (`596` bytes per half)
+The header's `N` is not a maximum context ID. Context `N` starts at
+`B + sum(delta(0)..delta(N-1))`; its availability WORD is `u16be(B)`.
+Thus remaining bytes at that cumulative end can be a real final page.
 
-The first word is a byte-size field, not a fixed TDH version signature.
+The namespace of application-selected contexts is external to the file.
+To reconstruct it, use the matching application's map profile and contexts,
+together with authored hotspot/next-page targets. Do not interpret every
+preloaded text WORD as proof of an independent article.
 
-Current sample-specific probe offsets, payload-prefix comparisons, and other
-byte-level evidence stay in the internal reverse-engineering notes.
+## 4. Page record
 
-### 3.1 Runtime Context Map
+At a valid addressed page start `P`:
 
-The runtime uses the separator offset as the context-map base.
+| Page-relative offset | Size | Meaning |
+| --- | ---: | --- |
+| `+0` | 2 | Big-endian next-page context; zero means no next page |
+| `+2` | variable | Nibble-coded text/control stream |
 
-Known sample families currently use these active map widths:
+There is no stored title, paragraph count, text-byte length or per-page palette.
+The native help index is context 1; an English caption is not its identifier.
+Previous-page navigation uses application history, not another page field.
 
-- TD 1.0: fixed legacy width `0x212` (`530`) words
-- later TD 2.x sample: full pre-separator prefix width (`596`) words
+A context can point inside another page's bytes. For example, TDW 5.0 context
+776 begins at `start(775)+1`; both streams display the same Imports page.
+That is a genuine overlapping context, not a second physical article or a
+title-based redirect. Keep the source context identity.
 
-That split is also visible directly in the file layout. In TD 1.0, the visible
-pre-separator area contains only `259 + 259 = 518` words, so the live legacy
-`530`-word runtime load necessarily overruns by `12` words into the separator
-and payload prefix. In the later 2.x sample, the widened `298 + 298 = 596`
-visible words already fill the whole active runtime map, so the `596`-word
-model stops cleanly before the separator instead of spilling into the payload.
+A page's native termination comes from its control stream and screen-row limit,
+not from a size WORD. For bounded extraction, the next distinct ordinary page
+start or EOF supplies a byte boundary; overlapping alias starts are not new
+ordinary-page boundaries. An EOF offset alone contains no page WORD.
 
-On the later TD 2.x sample, decoding that full `596`-word runtime map exposes a
-coherent late-topic region through contexts `530..595`. So the `596`-word
-model is an observed property of the known 2.x sample family, not just a
-reader-side overrun heuristic.
+### 4.1 Overlapping context addresses
 
-For the known TDH sample families, that is now enough for practical end-to-end
-support rather than only partial reverse-engineering:
+An overlapping address can lie in either header byte or in the middle of
+a literal escape. It is not necessarily the final byte/nibble cursor of a
+decoded character. To associate a context address with a containing stream,
+track the complete byte ranges actually consumed while reading that stream:
 
-- the legacy TDH 1.0 sample decodes through the full user-visible namespace,
-  with the old high-tail `519..529` now resolving as alias continuations rather
-  than as unnamed hidden pages
-- the later TDH 2.x sample decodes through the full real `596`-context map,
-  including the confirmed late tail `530..595`
-- the resident TD 2.x runtime agrees with the same cumulative signed-delta
-  addressing model used by the file-side reader
-- context `537` is a genuine empty placeholder block, so any future collapse to
-  nearby context `539` would be viewer/export policy rather than missing format
-  decode
+- The page WORD consumes `[P, P+2)`.
+- A symbol starting at byte cursor `O` and ending at cursor `(O2, half2)`
+  consumes `[O, O2 + half2)`, where `half2 = 1` means that the low nibble
+  of byte `O2` has been read and its high nibble remains unread. The range
+  can overlap the preceding symbol's range because they share a byte.
+- An aligned hotspot target WORD consumes its two raw bytes, separately
+  from the nibble-coded symbols. Returning a pushed-back symbol does not
+  consume additional bytes.
+- The byte at the exclusive end of a range is not owned merely because
+  the cursor reached it. Stop tracing at the page terminator or row cap;
+  do not assign unused trailing bytes by proximity or text similarity.
 
-That does not erase every historical caution. The end of the legacy TDH 1.0
-high-context range is alias-heavy rather than a clean run of standalone pages:
-current tooling reconstructs redirects such as `520 -> 425`, `521 -> 380`,
-`522 -> 314`, `527 -> 393`, and `528 -> 328`, so the overlap window near
-`530..543` cannot be resolved by naive title-for-title comparison alone. But
-that is now a namespace-reconstruction nuance, not a missing decoder.
+For TDH CRC32 `A9C668A7`, context 519 starts at 112,639, one byte into
+context 518's header at 112,638. Context 528 starts at 63,973, byte `+68`
+of context 328 at 63,905. That byte belongs to a literal `62h` (b) whose
+nibbles span relative bytes 67 and 68; its final cursor is byte 69. Looking
+only at final cursors misses both overlaps. A context starts its own
+next-context WORD at its addressed byte and resets nibble decoding at
+`start+2`, so overlapping streams need not display identical first rows.
+Equal captions or normalized prose are not evidence of an address relation.
 
-In other words, for the known TDH sample families the current reader status is
-already `decoded` at the text/topic-addressing layer. The remaining uncertainty
-is limited to exact 1.0-to-2.x namespace reconstruction near the front edge of
-the late 2.x tail plus a few runtime implementation details already tracked in
-the internal reverse-engineering notes. Exact `TD.EXE` helper addresses,
-runtime buffers, the `600` vs. `596` preload nuance, and the detailed anchor
-list for the observed high-context drift stay there.
+## 5. Nibble decoding
 
-Each map entry is interpreted as `sign16(word)`, not as an unsigned block size.
+Reset the nibble cursor at `P+2`. Read the low nibble of a byte first, then
+the high nibble. The verified TD 1.0/1.5, Profiler and TD DOS 4/5 alphabet is:
 
-Context starts are computed cumulatively:
+| Nibble | Decoded byte |
+| --- | --- |
+| `0` | no output; read another nibble |
+| `1` | `65h` — e |
+| `2` | `74h` — t |
+| `3` | `72h` — r |
+| `4` | `6Fh` — o |
+| `5` | `69h` — i |
+| `6` | `6Eh` — n |
+| `7` | `61h` — a |
+| `8` | `73h` — s |
+| `9` | `6Ch` — l |
+| `A` | `63h` — c |
+| `B` | `68h` — h |
+| `C` | `20h` — space |
+| `D`, `E` | `00h` — NUL control |
+| `F` | literal byte: read two raw nibbles `lo, hi`, emit `lo | (hi << 4)` |
+
+Literal nibbles are raw values: zero inside an escape is not skipped. An escape
+can cross a byte boundary. A caret control is the literal byte `5Eh`, encoded
+by nibble sequence `F E 5`, not by compressed nibble D.
 
 ```text
-start(0) = separator_offset
-start(n) = separator_offset + sum(sign16(map[i]) for i = 0 .. n-1)
+next_symbol():
+    n = next_raw_nibble()
+    while n == 0:
+        n = next_raw_nibble()
+    if n == F:
+        lo = next_raw_nibble()
+        hi = next_raw_nibble()
+        return lo | (hi << 4)
+    return alphabet[n]
 ```
 
-Runtime slot `0` is effectively a separator-aligned artifact rather than a
-user-visible help topic. Real help content starts at context `1`.
+Decoded text uses the application's DOS character set; inspected English
+files use CP437. NUL, CR/LF and caret must be interpreted as controls before
+translating ordinary character bytes. The file has no encoding declaration.
 
-### 3.2 TDH Topic Block
+## 6. Text controls and hotspots
 
-At each computed TDH topic start:
+| Decoded byte | Operation outside a hotspot |
+| --- | --- |
+| `00h` | End page |
+| `0Ah`, `0Dh` | End display row; consume an adjacent complementary CR/LF |
+| `09h` | One space, not a tab stop |
+| `5Eh` | Begin hotspot control |
+| other | Append a DOS character |
 
-- the first big-endian word is a per-page control / next-context field
-- visible text begins immediately after that word
-- there is no explicit per-topic byte length, so the next distinct computed
-  topic start is the hard upper boundary for visible decoding
-- text terminators inside that bounded range still end the rendered topic
-- the runtime page parser renders at most `15` visible lines per TDH page
+For a hotspot:
 
-When the leading control word is a valid in-range context id, it behaves as the
-runtime next-page target.
+1. Decode the opening caret through the nibble stream.
+2. Discard any unread high nibble of that byte and align to the next byte.
+3. Read an uncompressed **big-endian target context WORD**.
+4. Resume nibble decoding on the following byte, low nibble first.
+5. Read label text to its closing decoded caret. The closing caret is a
+   control, not visible label text; subsequent text resumes at the current
+   nibble cursor, without another target WORD.
 
-Alias discovery is intentionally separate from visible decoding. Some legacy
-alias markers sit beyond a topic's visible boundary, so the reader performs a
-second unbounded runtime-stream scan only for alias positions. Bytes found by
-that scan must not leak into the rendered text of the preceding topic.
+The target WORD must not pass through the nibble alphabet. It is a context
+index in this same file, not a character pair or an absolute file address.
+A zero target is a literal-caret control: consume the target WORD, append
+`5Eh` as visible text and resume normal decoding. It does not end the page,
+create a clickable destination or rewind the WORD into the nibble stream.
+This represents, for example, the Pascal pointer operator `^`.
 
-## 4. TFH Outer Layout
+Inside a nonzero-target label, only a decoded caret ends the field. NUL,
+CR/LF and TAB are raw label bytes, not the outer text controls. Continue
+decoding through an embedded NUL or line break until the closing caret;
+EOF is not an alternative delimiter. All decoded label bytes count toward
+the native fit test, including bytes after NUL.
+
+The native display and carried-prefix buffers are C strings. An embedded
+NUL therefore ends the visible string without ending the encoded label.
+If the label fits, the row's visible text stops at that NUL; subsequent
+bytes appended on the same row remain invisible. If the label must be
+carried, the prefix copy retains only its bytes before NUL. Text following
+the closing caret resumes normal decoding and can then follow that copied
+prefix visibly. A CR/LF after the closing caret remains a hard row break.
+Within a label, CR/LF and TAB before NUL are retained bytes rather than
+row breaks or tab expansion. Oversized labels can exceed native buffers;
+their memory-overflow behavior is not a portable display rule.
+
+## 7. Screen layout
+
+The verified TD 1.0/1.5, Profiler and TD DOS 4/5 line buffer has a `31h` limit including
+one leading margin cell: **48 visible columns**. The native page loop requests
+at most **15 rows**, including blank rows.
+
+- Ordinary text exceeding the width wraps at the last preceding space;
+  carry the following word to the next row.
+- A hotspot that does not fit moves as a whole to the next row.
+- TD 1.0/1.5 and Profiler let a hotspot finish at visible column 48 without
+  inspecting the symbol after its closing caret.
+- TD DOS 4/5 let a hotspot finish at visible column 48 when the
+  symbol following its closing caret is SPACE; otherwise it reserves another
+  cell and ends by 47. This lookahead remains in the normal text stream.
+- Trailing row spaces are not displayed.
+- A leading encoded CR/LF is a real blank native row and counts toward 15.
+
+The text prefix WORD `DFF0h` is not a page header: low-first nibble decoding
+of bytes `DF F0` produces literal CR (`F D 0`) and then literal LF from
+the following nibble/byte sequence. Do not universally strip a leading row.
+
+Older line routines can leave hotspot coordinates on their previous row
+when subsequent ordinary text causes a word wrap. Thus native hotspot spans
+need not fit the final trimmed row: a multiword label can appear across two
+rows while its stored-in-memory span still refers to the first. These spans
+are runtime products, not additional coordinate fields in the file. Their
+reflow must be distinguished from decoding an incorrect target WORD.
+
+The label's decoded characters still identify the link across a word wrap.
+To retain their positions, use zero-based, half-open character ranges
+`[a, b)` on the row buffer before wrapping. Let `h` be the retained head
+length and `q` the start of the carried text. For a space break at position
+`k`, `h = k` and `q = k+1`; for a hard 48-cell break, `h = q = 48`.
+
+- The current-row fragment is `[a, min(b, h))`, if nonempty.
+- The next-row fragment is `[max(a, q)-q, b-q)`, if nonempty.
+- Both fragments retain the same uncompressed target WORD.
+- The discarded wrap space has no output cell. Suffixes/punctuation outside
+  `[a, b)` do not become part of the link.
+- Repeat the range intersections if the carried text wraps again. Only
+  ranges intersecting displayed rows/cells belong to the visible screen.
+
+For example, a label at one-based columns 40–48 containing `byte list`
+splits at the space in column 44 into current-row columns 40–43 (`byte`)
+and next-row columns 1–4 (`list`). A following period remains ordinary text.
+These coordinates are derived display state, not bytes stored in a page.
+An embedded label NUL can likewise leave native coordinates beyond the
+visible C string. Intersect such spans with its displayed cells; neither
+hidden bytes nor cells below the screen-row limit have visible positions.
+
+## 8. Byte examples
+
+### 8.1 A short text page
 
 ```text
-┌──────────────────────────────────────────┐  +0x0000
-│ ContextCount (WORD)                      │
-├──────────────────────────────────────────┤  +0x0002
-│ SizeTable[ContextCount] (WORD each)      │  big-endian block sizes
-├──────────────────────────────────────────┤  +SeparatorOffset
-│ SeparatorWord = 0x0000                   │
-├──────────────────────────────────────────┤
-│ Runtime blocks                           │  cumulative variable-size blocks
-└──────────────────────────────────────────┘
+00 00 1F 14 0D
+^^^^  ^^^^^^^^
+Next  text
 ```
 
-For the known TFH sample, `ContextCount = 0x016B` (`363`).
+`Next = 0`. Text nibbles are `F,1,4,1,D,0`: literal `41h` (A),
+dictionary `65h` (e), NUL, then unused padding. Visible text is `Ae`.
 
-### 4.1 TFH Block Addressing
+### 8.2 Stored map and final-page availability
 
-The runtime block base is the separator offset itself:
+| Original | N | B | WORD at B | Cumulative end of stored deltas |
+| --- | ---: | ---: | --- | ---: |
+| TFH, CRC32 `EDCB6DAB` | 363 | 728 (`02D8h`) | `0000h` | 67,256 |
+| TFH, CRC32 `C7CCE043` | 366 | 734 (`02DEh`) | `2C00h` | 68,980 |
+
+In the first file, context 363 is unavailable even though 159 bytes remain
+(a two-byte page WORD plus 157 encoded bytes).
+In the second, context 366 is available; its 258-byte record reaches EOF at
+69,238. Those residual lengths are sample properties, not fixed trailer sizes.
+
+The same overlapping slot enables genuine final pages in older TDH:
+
+| CRC32 | N | B | WORD at B | Final page start | File size |
+| --- | ---: | ---: | --- | ---: | ---: |
+| `A6E139F2` | 596 | 1,194 | `0001h` | 125,593 | 125,805 |
+| `F126AD2C` | 538 | 1,078 | `0001h` | 114,591 | 114,748 |
+| `4B5D33CE` | 537 | 1,076 | `0001h` | 142,333 | 142,478 |
+
+For `A6E139F2`, a hotspot in context 55 contains target WORD `0254h`
+(596), addressing the final Hardware breakpoint page by the same signed
+cumulative formula. These are not fixed trailer records.
+
+### 8.3 NUL inside a closed hotspot label
 
 ```text
-block_start(0) = separator_offset
-block_start(n) = separator_offset + sum(size[i] for i = 0 .. n-1)
+00 00 EF 05 00 0B 1F F4 00 2F F4 5E 0F 00
 ```
 
-Known sample detail:
+The page WORD is zero. `EF 05` decodes the opening caret and leaves a
+padding high nibble, discarded before reading target `000Bh` (11).
+The remaining nibble stream decodes `41h 00h 42h 5Eh 00h`: label bytes
+`A NUL B`, closing caret, then the outer page terminator. The visible row
+is `A`; `B` is still part of the encoded label, not another page or prose.
+The three raw label bytes affect the fit test, but only column 1 is visible.
 
-- context `0` is a one-byte sentinel block
-- context `1` therefore starts one byte after the separator word
+## 9. Validation and unspecified fields
 
-### 4.2 TFH Topic Block
+Check header/map reads, signed cumulative starts, page WORDs and literal
+escapes against file bounds. Distinguish absent contexts, empty text pages,
+overlapping contexts and offsets that contain no data. A missing target must
+not be replaced by a neighboring context or a similar title.
 
-Each TFH block consists of:
+For an addressed page, require both bytes of its next-context WORD. A literal
+escape requires its two raw data nibbles; a caret requires a complete aligned
+target WORD. A nonzero hotspot label must reach its closing caret, including
+when it contains NUL or CR/LF. Those bytes do not replace the delimiter.
+EOF before a valid terminal control or the requested
+screen-row limit is an incomplete text stream, not an implicit page end.
+Slot zero is opaque data and must not be checked as an encoded text page.
 
-1. one leading big-endian control word
-2. visible text stream starting at block byte `+2`
+No complete-file length or checksum is stored in these fields. Unaddressed
+tail bytes can exist when the overlapping map slot is unavailable. Removing
+such bytes does not prove a text-page truncation. Likewise, removing an entire
+unreferenced last record can be indistinguishable from an unused runtime EOF
+slot; an offset at EOF contains no page header. Detecting arbitrary whole-file
+damage requires a trusted external length/digest, not a fabricated terminator
+or guessed page. The screen-row cap is a valid decode stop even if later
+bytes contain additional text.
 
-When that control word is a valid in-range context id, it behaves as the
-runtime next-page target.
-
-## 5. Shared Text And Hotspot Layer
-
-### 5.1 Nibble Packing
-
-Text is decoded low nibble first, then high nibble.
-
-Known nibble values:
-
-| Nibble | Meaning |
-|--------|---------|
-| `0x0` | skip / no output |
-| `0x1` | `e` |
-| `0x2` | `t` |
-| `0x3` | `r` |
-| `0x4` | `o` |
-| `0x5` | `i` |
-| `0x6` | `n` |
-| `0x7` | `a` |
-| `0x8` | `s` |
-| `0x9` | `l` |
-| `0xA` | `c` |
-| `0xB` | `h` |
-| `0xC` | space |
-| `0xD` | `^` hotspot/control marker |
-| `0xE` | special marker class (`<E>` in the current reader) |
-| `0xF` | literal byte from the next two raw nibbles as `low + high * 16` |
-
-### 5.2 Hotspots
-
-In the decoded stream, `^` starts a hotspot block:
-
-1. align to the next byte boundary
-2. read one big-endian target context word
-3. decode visible hotspot label text until the next `^`
-
-### 5.3 Line Layout
-
-The runtime renders one screen line at a time with a width of `0x31` (`49`)
-columns.
-
-- CR/LF sequences terminate the current line
-- ordinary text wraps at spaces before column `49`
-- hotspot labels are kept intact; if a label does not fit near the right edge,
-  it moves to the next line instead of being split
-
-## 6. Relationship To THELP
-
-TDH and TFH are separate Borland runtime-help containers, not THELP variants.
-They should not be decoded by the THELP record parser even though they are used
-by Borland DOS tools and also carry topic text, links, and next-page behavior.
+Unknown application profiles, their complete context namespaces,
+unsafe oversized-label buffer behavior and additional attribute controls are not
+specified by this document. There is no basis for inferring them from a
+filename extension alone.

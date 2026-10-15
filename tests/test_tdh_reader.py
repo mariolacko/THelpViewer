@@ -88,8 +88,8 @@ def test_tdh_sample_families_split_at_pre_separator_runtime_width():
     assert legacy_document.metadata["tdh_decode"]["runtime_table_word_count"] - legacy_pre_separator_words == 12
 
     assert later_pre_separator_words == 596
-    assert later_document.metadata["tdh_decode"]["runtime_table_word_count"] == 596
-    assert later_document.metadata["tdh_decode"]["runtime_table_word_count"] == later_pre_separator_words
+    assert later_document.metadata["tdh_decode"]["runtime_table_word_count"] == 597
+    assert later_document.metadata["tdh_decode"]["runtime_table_word_count"] == later_pre_separator_words + 1
 
 
 def test_tdh_reader_preserves_probe_metadata():
@@ -97,10 +97,9 @@ def test_tdh_reader_preserves_probe_metadata():
     probe = probe_tdh_binary(data)
 
     assert probe is not None
-    assert probe.table_byte_size == 0x0206
-    assert probe.table_word_count == 259
-    assert probe.left_table_offset == 0x0002
-    assert probe.right_table_offset == 0x0208
+    assert probe.table_byte_size == 0x040C
+    assert probe.table_word_count == 518
+    assert probe.table_offset == 0x0002
     assert probe.separator_offset == 0x040E
     assert probe.separator_word == 1
     assert probe.encoded_payload_offset == 0x410
@@ -135,27 +134,26 @@ def test_tdh_reader_preserves_probe_metadata():
 
     alias_metadata = document.metadata["tdh_decode"]
     redirected_topics = [topic for topic in document.topics if topic.redirect_context is not None]
-    assert alias_metadata["embedded_alias_context_count"] + alias_metadata["text_alias_context_count"] == len(redirected_topics)
+    assert alias_metadata["embedded_alias_context_count"] == len(redirected_topics)
     assert alias_metadata["out_of_range_page_word_context_count"] >= len(redirected_topics)
     assert alias_metadata["remaining_unresolved_alias_context_count"] == (
         alias_metadata["out_of_range_page_word_context_count"] - len(redirected_topics)
     )
     assert len(alias_metadata["out_of_range_page_word_contexts"]) == alias_metadata["out_of_range_page_word_context_count"]
     assert len(alias_metadata["embedded_alias_contexts"]) == alias_metadata["embedded_alias_context_count"]
-    assert len(alias_metadata["text_alias_contexts"]) == alias_metadata["text_alias_context_count"]
     assert len(alias_metadata["remaining_unresolved_alias_contexts"]) == alias_metadata["remaining_unresolved_alias_context_count"]
     assert alias_metadata["out_of_range_page_word_contexts"] == [519, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529]
-    assert alias_metadata["embedded_alias_contexts"] == [519, 520, 521, 522, 523, 524, 525, 526, 527, 529]
-    assert alias_metadata["text_alias_contexts"] == [528]
+    assert alias_metadata["embedded_alias_contexts"] == [519, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529]
+    assert "text_alias_contexts" not in alias_metadata
+    assert "text_alias_context_count" not in alias_metadata
     assert alias_metadata["remaining_unresolved_alias_contexts"] == []
     assert alias_metadata["empty_placeholder_contexts"] == []
     assert alias_metadata["embedded_alias_contexts"] == sorted(alias_metadata["embedded_alias_contexts"])
-    assert alias_metadata["text_alias_contexts"] == sorted(alias_metadata["text_alias_contexts"])
     assert alias_metadata["remaining_unresolved_alias_contexts"] == sorted(alias_metadata["remaining_unresolved_alias_contexts"])
-    assert set(alias_metadata["embedded_alias_contexts"]) | set(alias_metadata["text_alias_contexts"]) == {
+    assert set(alias_metadata["embedded_alias_contexts"]) == {
         topic.context_id for topic in redirected_topics
     }
-    assert set(alias_metadata["embedded_alias_contexts"]) | set(alias_metadata["text_alias_contexts"]) | set(alias_metadata["remaining_unresolved_alias_contexts"]) == set(alias_metadata["out_of_range_page_word_contexts"])
+    assert set(alias_metadata["embedded_alias_contexts"]) | set(alias_metadata["remaining_unresolved_alias_contexts"]) == set(alias_metadata["out_of_range_page_word_contexts"])
 
     assembler = next(topic for topic in document.topics if topic.context_id == 387)
     assert assembler.uhf_content[0] == "The syntax for assembler statements closely"
@@ -235,14 +233,14 @@ def test_tdh_reader_preserves_probe_metadata():
         "",
         "When you supply an expression to be displayed,",
         "Turbo Debugger displays it in a suitable format",
-        "based on what type of data it is.  If you wish to",
-        "change the default display format for an",
+        "based on what type of data it is.  If you wish",
+        "to change the default display format for an",
         "expression, place a comma at the end of the",
         "expression, then supply an optional repeat count",
         "followed by an optional format letter.  You can",
         "only supply a repeat count for pointers or",
-        "arrays.  If you use a format control on the wrong",
-        "data type, it has no effect.",
+        "arrays.  If you use a format control on the",
+        "wrong data type, it has no effect.",
     ]
     assert expression_format.positional_keywords == []
 
@@ -286,9 +284,9 @@ def test_tdh_reader_preserves_probe_metadata():
         "Usually, you use tabs for each level of",
         "control-structure nesting in your source code.",
         "If your source code has deeply nested control",
-        "structures, you can use a small tab value (like 2",
-        "or 3) so that your source doesn't disappear off",
-        "the right side of module and file windows.",
+        "structures, you can use a small tab value (like",
+        "2 or 3) so that your source doesn't disappear",
+        "off the right side of module and file windows.",
     ]
     assert tab_width.next_context == 395
     assert tab_width.positional_keywords == []
@@ -315,18 +313,18 @@ def test_tdh_reader_preserves_probe_metadata():
         "installed the hardware device driver supplied on",
         "the distribution disk; this will speed up global",
         "breakpoints.  If you have a hardware debugger",
-        "board, see if the vendor supplies a device driver",
-        "that lets it work with Turbo Debugger.",
+        "board, see if the vendor supplies a device",
+        "driver that lets it work with Turbo Debugger.",
     ]
 
     expression_true_global = next(topic for topic in document.topics if topic.context_id == 83)
     assert expression_true_global.uhf_content == [
         "",
         "The Expression True Global option allows you to",
-        "set a breakpoint that occurs when the value of an",
-        "expression becomes true.  You will be prompted",
-        "for the expression that must become true in order",
-        "for your program to stop.",
+        "set a breakpoint that occurs when the value of",
+        "an expression becomes true.  You will be",
+        "prompted for the expression that must become",
+        "true in order for your program to stop.",
         "",
         "Your program will execute more slowly if you set",
         "any of these breakpoints.",
@@ -351,16 +349,16 @@ def test_tdh_reader_preserves_probe_metadata():
 
     binary_operators = next(topic for topic in document.topics if topic.context_id == 391)
     assert binary_operators.uhf_content[10] == "         ^"
-    assert binary_operators.uhf_content[14] == "^"
+    assert binary_operators.uhf_content[-1] == "lowest   ||"
 
     assert 521 in function_keys.alias_contexts
-    assert 520 in next(topic for topic in document.topics if topic.context_id == 424).alias_contexts
+    assert 520 in next(topic for topic in document.topics if topic.context_id == 425).alias_contexts
     assert 522 in next(topic for topic in document.topics if topic.context_id == 314).alias_contexts
-    assert 527 in expression_format.alias_contexts
+    assert 527 in character_format.alias_contexts
     assert 528 in next(topic for topic in document.topics if topic.context_id == 328).alias_contexts
 
-    alias_toggle_breakpoint = next(topic for topic in document.topics if topic.context_id == 520)
-    assert alias_toggle_breakpoint.redirect_context == 424
+    alias_serial_port = next(topic for topic in document.topics if topic.context_id == 520)
+    assert alias_serial_port.redirect_context == 425
 
     alias_move_left = next(topic for topic in document.topics if topic.context_id == 521)
     assert alias_move_left.redirect_context == 380
@@ -381,7 +379,7 @@ def test_tdh_reader_preserves_probe_metadata():
     assert alias_symbol_table.redirect_context == 294
 
     alias_character_format = next(topic for topic in document.topics if topic.context_id == 527)
-    assert alias_character_format.redirect_context == 392
+    assert alias_character_format.redirect_context == 393
 
     alias_selected_character = next(topic for topic in document.topics if topic.context_id == 528)
     assert alias_selected_character.redirect_context == 328
@@ -410,6 +408,7 @@ def test_structurally_valid_but_truncated_tdh_raises_clean_value_error():
     separator_offset = 2 + header_word + header_word
 
     data[0:2] = header_word.to_bytes(2, "big")
+    data[2:4] = (1).to_bytes(2, "big")
     data[separator_offset:separator_offset + 2] = (1).to_bytes(2, "big")
     data[separator_offset + 2] = 0xA0
     data[separator_offset + 3:separator_offset + 7] = b"\xCC\xCC\xCC\xCC"
@@ -427,10 +426,9 @@ def test_tdh_2x_sample_exposes_late_context_range():
     probe = probe_tdh_binary(data)
 
     assert probe is not None
-    assert probe.table_byte_size == 0x0254
-    assert probe.table_word_count == 298
-    assert probe.left_table_offset == 0x0002
-    assert probe.right_table_offset == 0x0256
+    assert probe.table_byte_size == 0x04A8
+    assert probe.table_word_count == 596
+    assert probe.table_offset == 0x0002
     assert probe.separator_offset == 0x04AA
     assert probe.separator_word == 1
     assert probe.encoded_payload_offset == 0x04AC
@@ -443,13 +441,13 @@ def test_tdh_2x_sample_exposes_late_context_range():
     assert document.format_name == "tdh"
     assert document.metadata["format_status"] == "decoded"
     assert document.metadata["help_contents_topic_id"] == 1
-    assert document.metadata["tdh_decode"]["runtime_context_count"] == 596
-    assert document.metadata["tdh_decode"]["runtime_table_word_count"] == 596
+    assert document.metadata["tdh_decode"]["runtime_context_count"] == 597
+    assert document.metadata["tdh_decode"]["runtime_table_word_count"] == 597
     assert document.metadata["tdh_decode"]["runtime_block_offset"] == 0x04AA
     assert document.metadata["tdh_decode"]["empty_placeholder_context_count"] == 1
     assert document.metadata["tdh_decode"]["empty_placeholder_contexts"] == [537]
     assert document.metadata["tdh_probe"]["payload_lead_byte"] == "0xAE"
-    assert len(document.topics) == 596
+    assert len(document.topics) == 597
     assert document.topics[0].names[0] == "Context 0"
     assert document.topics[1].uhf_content[0].strip() == "HELP INDEX"
 
@@ -512,14 +510,14 @@ def test_tdh_2x_sample_exposes_late_context_range():
         "[link:topic=79]F7  Trace Into[/link]        [link:topic=80]F8  Step Over[/link]",
         "[link:topic=81]F9  Run[/link]               [link:topic=387]F10 Command menu[/link]",
         "",
-        "The function keys are combined with Alt, Ctrl, or",
-        "Shift to invoke still more commands:",
+        "The function keys are combined with Alt, Ctrl,",
+        "or Shift to invoke still more commands:",
         "",
     ]
 
     expression = next(topic for topic in document.topics if topic.context_id == 477)
-    assert expression.uhf_content[0] == "An assembler expression can contain the following"
-    assert expression.uhf_content[1] == "elements:"
+    assert expression.uhf_content[0] == "An assembler expression can contain the"
+    assert expression.uhf_content[1] == "following elements:"
     assert [
         (keyword.target_context, keyword.line, keyword.first_column, keyword.last_column)
         for keyword in expression.positional_keywords[:4]
@@ -559,7 +557,8 @@ def test_tfh_shape_is_detected_as_profiler_help():
     probe = probe_tfh_binary(data)
     assert probe is not None
     assert probe.format_name == "tfh"
-    assert probe.table_byte_size == 0x016B
+    assert probe.table_byte_size == 0x02D6
+    assert probe.table_word_count == 363
     assert probe.separator_word == 0
     assert probe.encoded_payload_offset == 0x02DA
     assert probe.payload_lead_byte == 0x96
@@ -571,21 +570,22 @@ def test_tfh_shape_is_detected_as_profiler_help():
     assert document.format_name == "tfh"
     assert document.metadata["format"] == "tfh"
     assert document.metadata["format_status"] == "decoded"
-    assert document.metadata["display_width"] == 49
+    assert document.metadata["display_width"] == 48
     assert document.metadata["help_contents_topic_id"] == 1
     assert document.metadata["tdh_probe"]["payload_lead_byte"] == "0x96"
-    assert document.metadata["tfh_partial_decode"]["runtime_block_offset"] == 0x02D8
-    assert document.metadata["tfh_partial_decode"]["control_word_counts"]["0x0000"] == 308
-    assert document.metadata["tfh_partial_decode"]["control_word_counts"]["0x009D"] == 22
-    assert document.metadata["tfh_partial_decode"]["control_word_counts"]["0x014E"] == 5
-    assert document.metadata["tfh_partial_decode"]["control_word_counts"]["<short>"] == 1
-    assert document.metadata["tfh_partial_decode"]["control_word_zero_count"] == 308
-    assert document.metadata["tfh_partial_decode"]["control_word_context_range_count"] == 54
-    assert document.metadata["tfh_partial_decode"]["text_lead_word_counts"]["0xDFF0"] == 329
-    assert document.metadata["tfh_partial_decode"]["text_lead_word_counts"]["0x4FB5"] == 14
-    assert document.metadata["tfh_partial_decode"]["text_lead_word_zero_count"] == 0
-    assert document.metadata["tfh_partial_decode"]["text_lead_word_context_range_count"] == 0
-    assert document.metadata["tfh_partial_decode"]["trimmed_synthetic_leading_blank_topics"] == 329
+    decode = document.metadata["tfh_decode"]
+    assert decode["runtime_block_offset"] == 0x02D8
+    assert decode["control_word_counts"]["0x0000"] == 308
+    assert decode["control_word_counts"]["0x009D"] == 22
+    assert decode["control_word_counts"]["0x014E"] == 5
+    assert decode["control_word_counts"]["<short>"] == 1
+    assert decode["control_word_zero_count"] == 308
+    assert decode["control_word_context_range_count"] == 54
+    assert decode["text_lead_word_counts"]["0xDFF0"] == 329
+    assert decode["text_lead_word_counts"]["0x4FB5"] == 14
+    assert decode["text_lead_word_zero_count"] == 0
+    assert decode["text_lead_word_context_range_count"] == 0
+    assert decode["trimmed_synthetic_leading_blank_topics"] == 329
     assert len(document.topics) == 363
     assert len(document.contents) == 7
     assert all(
@@ -603,7 +603,7 @@ def test_tfh_handler_detection_does_not_depend_on_tfh_suffix():
     assert handler is not None
     assert handler.name == "tfh"
     document = TdhHelpReader(source_name="TFHELP.BIN", source_path=Path("TFHELP.BIN")).read_bytes(data)
-    assert max(len(line) for topic in document.topics for line in topic.raw_lines) == 49
+    assert max(len(line) for topic in document.topics for line in topic.raw_lines) == 48
     assert document.contents[0].label == "Help on Help"
     assert document.contents[0].topic_id == 2
     assert document.topics[0].names[0] == "Context 0"

@@ -33,7 +33,7 @@ def test_m602_binary_tail_resolves_all_raw_link_targets():
         TopicRecord(
             context_id=topic["context_id"],
             raw_lines=list(topic["raw_lines"]),
-            sequential_keywords=list(topic["sequential_keywords"]),
+            positional_keywords=list(topic["positional_keywords"]),
             index_terms=[topic["title"]],
         )
         for topic in parsed_topics
@@ -65,15 +65,16 @@ def test_m602_output_keeps_links_and_dos_glyphs():
     assert sum(line.count("[link:topic=") for line in all_lines) == 406
 
     topic_2 = document.topics[1].uhf_content
-    assert "Základní obrazovku tvoří dva [link:topic=14]panely[/link]," in topic_2
-    assert "Pod panely je umístěn [link:topic=20]povelový řádek[/link] a" in topic_2
+    assert topic_2[0] == " Základní obrazovka ▄"
+    assert "Základní obrazovku tvoří dva [link:topic=14]panely[/link], které poskytují informace o " in topic_2
+    assert any("Pod panely je umístěn [link:topic=20]povelový řádek[/link] a" in row for row in topic_2)
     assert "[[↕]" in all_text
     assert "▲" in all_text
     assert "▼" in all_text
 
 
 def test_m602_json_links_target_existing_topics():
-    payload = HelpJsonRenderer(_m602_document(), display_encoding="utf-8").render_document()
+    payload = HelpJsonRenderer(_m602_document(), display_encoding="kamenicky").render_document()
     topics = payload["topics"]
     topic_ids = {int(topic_id) for topic_id in topics}
     all_text = "\n".join(

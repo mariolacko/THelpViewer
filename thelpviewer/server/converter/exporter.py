@@ -10,6 +10,7 @@ import shutil
 from typing import Callable
 
 from .base import HelpDocument
+from .readers.source_containers import unpack_dos_backup
 from .codepages import decode_bytes, guess_display_encoding, is_czech_encoding_hint
 from thelpviewer.help_database import ConverterSpec, load_help_manifest, lookup_help_database_entry
 from .writers.html import HelpHtmlRenderer
@@ -65,6 +66,10 @@ def _call_manifest_target(dotted: str, args: str, path: Path, data: bytes):
 
 
 def _converter_spec_matches(spec: ConverterSpec, path: Path, data: bytes) -> bool:
+    try:
+        data, _container = unpack_dos_backup(data)
+    except ValueError:
+        return False
     extension_ok = not spec.extensions or path.suffix.lower() in spec.extensions
 
     has_predicate = bool(spec.matcher or spec.detector)
@@ -84,18 +89,24 @@ def _converter_spec_matches(spec: ConverterSpec, path: Path, data: bytes) -> boo
 
 
 def _load_converter_spec_document(spec: ConverterSpec, path: Path, data: bytes) -> HelpDocument:
+    data, container = unpack_dos_backup(data)
     if spec.loader:
-        return _call_manifest_target(spec.loader, "path_data", path, data)
-
-    reader_cls = _resolve_dotted_path(spec.reader)
-    match spec.reader_init:
-        case "path":
-            reader = reader_cls(path)
-        case "none":
-            reader = reader_cls()
-        case _:
-            reader = reader_cls(source_name=path.name, source_path=path)
-    return reader.read_bytes(data)
+        document = _call_manifest_target(spec.loader, "path_data", path, data)
+    else:
+        reader_cls = _resolve_dotted_path(spec.reader)
+        match spec.reader_init:
+            case "none":
+                reader = reader_cls()
+            case _:
+                reader = reader_cls(source_name=path.name, source_path=path)
+        document = reader.read_bytes(data)
+    if container:
+        document.metadata["source_container"] = container
+        keys = list(document.metadata.get("transport_metadata_keys") or [])
+        if "source_container" not in keys:
+            keys.append("source_container")
+        document.metadata["transport_metadata_keys"] = keys
+    return document
 
 
 def _build_format_handlers() -> tuple[FormatHandler, ...]:
@@ -298,7 +309,7 @@ def iter_help_files(root: str | Path) -> list[Path]:
 
     paths: list[Path] = []
     for path, handler in detected:
-        if handler.source_kind == "source" and path.with_suffix("") in compiled_stems:
+        if handler.source_kind in {"source", "index"} and path.with_suffix("") in compiled_stems:
             continue
         paths.append(path)
 

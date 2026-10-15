@@ -1,6 +1,6 @@
 # Help Source Text Format (HLX/TXT)
 
-> Created: 2026-03-29 · Last updated: 2026-03-29
+> Created: 2026-03-29 · Last updated: 2026-10-11
 
 Text format used as input for help file compilers and as output from
 decompilers. Based on the original Borland TVHC source format, extended
@@ -17,10 +17,10 @@ starting with `;` or `.`) and inline cross-reference markup (`{text:target}`).
 
 Two main use cases:
 
-| Use case      | Flow                             | Tools                                        |
-|---------------|----------------------------------|----------------------------------------------|
-| Compilation   | `.txt` / `.hlx` → binary `.hlp` | `python/compiler/tvhc.py`, `python/compiler/thelp_compile.py`, `TVHC.PAS`, `HL.EXE` |
-| Decompilation | binary `.hlp` → `.hlx`         | `python/decompiler/hldc.py`, `HLDC.PAS`      |
+| Use case | Flow |
+| --- | --- |
+| Compilation | Source directives → binary HELP records |
+| Decompilation | Binary HELP records → a textual representation |
 
 File extensions are conventional: `.txt` for source, `.hlx` for decompiled
 output, `.hlp` / `.tph` for compiled binary.
@@ -98,8 +98,13 @@ Multiple aliases can share the same topic, with auto-incrementing numbers:
 
 This assigns: `FileOpen=3`, `OpenFile=4`, `FFileOpen=5`.
 
-**Used by:** FBHF compiler (`TVHC.PAS`, `python/compiler/tvhc.py`), Python decompiler output.  
-**Not used by:** Pascal HLDC decompiler (uses `;SCREEN` only for THELP/S602).
+In native TVHC, the `TOPIC` command is case-insensitive; predefined APP
+names use their fixed contexts without consuming the automatic counter.
+Symbol lookup folds ASCII letters only and rejects a second definition of
+the same name. Distinct names may reuse a numeric context: the latest
+indexed position owns that number, while other aliases of an earlier object
+remain live. See the full [TVHC source grammar](TurboVision%20FBHF.md#24-tvhc-source-text-format)
+for tokenization, numbering and byte limits.
 
 ### 3.4 Screen Delimiters
 
@@ -142,9 +147,8 @@ Meaning:
 ` ;COMMENT ALIASCTX` is deliberately stored in comment namespace so the
 file does not invent a new pseudo-directive in the original HL.EXE syntax.
 
-` ;TEXTCOMPLETE` is a THelp Viewer round-trip extension. It is consumed by
-`thelp_compile.py` and emitted by `hldc.py`; it is not part of Borland's
-documented source syntax.
+` ;TEXTCOMPLETE` belongs to the extended round-trip dialect; it is not
+part of Borland's documented source syntax.
 
 ### 3.5 Keyword / Cross-Reference Directives (THELP only)
 
@@ -153,8 +157,9 @@ documented source syntax.
 ;KEYWORD 432
 ```
 
-Borland THELP stores hyperlinks as positional **keyword records** — they are
-NOT inline in the text. Each keyword specifies:
+THELP keyword records contain either explicit screen coordinates (older
+variants) or ordered target WORDs paired with inline delimiters (newer
+variants). The source directives represent those binary fields:
 
 | Field       | Meaning                                          |
 |-------------|--------------------------------------------------|
@@ -167,8 +172,10 @@ The number after `;KEYWORD` is the format-specific variant:
 - `;KEYWORD4` — positional keyword (format < 5), with `AT (row,col-col)`
   and optional `NAV (left,right,up,down)` button indices for exact rebuild
 
-**Important:** THELP text itself contains NO link markers. The keyword
-record tells the help viewer which screen positions are clickable.
+**Binary distinction:** old THELP keyword records store clickable coordinates.
+THELP format 5 and later also pair ordered target WORDs with `02h` inline
+text delimiters. The `;KEYWORD` source directive represents those target WORDs,
+not an assertion that every binary variant lacks delimiters.
 
 ### 3.6 Inline Cross-References (FBHF and S602)
 
@@ -195,6 +202,13 @@ If text and target are the same, the `:alias` part can be omitted in FBHF:
 
 Spaces in cross-reference text are stored as `$FF` bytes in the FBHF
 binary format. The decompiler converts them back to spaces.
+
+TVHC escapes a literal opening brace with `{{`; its mutable scan cursor
+governs longer brace runs. An unterminated reference is a compiler error.
+Unresolved forward references retain the WORD `FFFFh` and cause a warning;
+their target must not be inferred from the displayed label. Target bytes,
+including whitespace, are preserved before ASCII-only case-insensitive
+symbol lookup.
 
 ---
 
@@ -223,6 +237,12 @@ The TVHC compiler groups consecutive lines into paragraphs:
 Lines of the same wrap type are merged into a single paragraph.
 A change in wrap type starts a new paragraph.
 
+The DOS TVHC compiler reads CRLF physical lines of at most 253 text bytes
+and uses a 4096-byte paragraph buffer, counting prepended CRs and appended
+line separators. A standalone `1Ah` line terminates source; `1Ah` followed
+by more text is a character cell. These native TVHC limits do not define
+the separate extended `;SCREEN` dialect's source-line or buffer limits.
+
 ### 4.3 Special Characters
 
 | Character | Meaning                                           |
@@ -241,18 +261,15 @@ Source files can be in:
 - **Kamenický (KEYBCS2)** — Czech/Slovak DOS (Software602)
 - **UTF-8** — when decompiled with `--from ENC --to utf-8`
 
-The `--from` / `--to` flags control encoding conversion during
-decompilation. Raw (no conversion) output preserves original bytes.
+The source dialect has no universal byte-order mark or encoding field.
+The parser needs an explicit character-set agreement with its producer.
 
 ---
 
 ## 5. THELP Round-Trip Notes
 
-The modern Python THELP toolchain is capable of byte-identical
-decompile → compile round-trip for the known Borland samples in this
-repository. To achieve that, the `.hlx` format preserves several pieces
-of binary information that are not part of the minimal Borland source
-syntax:
+The extended source dialect can retain binary fields not represented in
+minimal Borland source syntax:
 
 | Data preserved             | Directive / encoding |
 |---------------------------|----------------------|
@@ -267,60 +284,10 @@ syntax:
 Without these details a semantic rebuild is possible, but a byte-for-byte
 rebuild is not guaranteed.
 
-## 6. Format Differences: Python vs Pascal Decompiler
+## 6. Dialect boundaries
 
-The two decompilers produce slightly different output for the same input:
-
-| Feature             | Python (`hldc.py`)              | Pascal (`HLDC.PAS`)              |
-|---------------------|---------------------------------|----------------------------------|
-| Line endings        | LF or CRLF output               | CR+LF                           |
-| FBHF support        | Yes (full)                      | No                               |
-| Screen numbering    | 0-based (S602)                  | 1-based (S602)                   |
-| `.topic` directive  | Yes (FBHF)                      | No                               |
-| Title underline     | No (S602)                       | Yes, `▀▀▀` line (S602)          |
-| S602 blank lines    | Collapsed with text             | Preserved with blank lines       |
-| Trailing spaces     | Stripped                        | Preserved (padded to line length)|
-| THELP exact round-trip metadata | Yes                  | Partially preserved              |
-| S602 `{}` links     | Identical format                | Identical format                 |
-| Rebuild capability  | FBHF: yes, THELP: yes, S602: no | THELP text output for HL.EXE, S602: no |
-
-Both decompilers produce the same `{link text:target}` syntax for S602
-inline links and the same `;KEYWORD` syntax for THELP keyword records.
-
----
-
-## 7. Compilation Workflow
-
-### 6.1 Creating an FBHF Help File
-
-1. Write a `.txt` source file with `.topic` directives and `{xref}` markup
-2. Compile: `python3 python/compiler/tvhc.py source.txt output.hlp [output.pas]`
-3. The optional `.pas` file contains `hcXXX` context constants
-
-Alternatively, use the original Turbo Pascal compiler:
-`TVHC source.txt output.hlp [output.pas]`
-
-Both produce byte-identical output.
-
-### 6.2 Roundtrip (decompile → edit → recompile)
-
-Supported for FBHF and THELP:
-
-```
-python3 python/decompiler/hldc.py input.hlp decompiled.hlx
-# edit decompiled.hlx
-python3 python/compiler/tvhc.py decompiled.hlx output.hlp       # FBHF
-python3 python/compiler/thelp_compile.py decompiled.hlx output.hlp  # THELP
-```
-
-For THELP, byte-identical rebuild requires keeping the round-trip
-directives listed above. If you want a source file intended primarily for
-Borland `HL.EXE`, stick to the documented subset and avoid relying on
-` ;TEXTCOMPLETE`.
-
-Software602 compilation is not currently supported by any tool in this
-project.
-
----
-
-*Part of the THelp Viewer project. See [Formats.md](../Formats.md) for binary format documentation.*
+The `.topic`/brace-cross-reference dialect is based on TVHC. Semicolon
+screen/keyword directives represent THELP or Software602 records. Extended
+round-trip directives preserve original binary fields but are not universally
+accepted by the historical compilers. Do not confuse these text files with
+[compiled binary HLX](Borland%20HLX%20Binary.md).

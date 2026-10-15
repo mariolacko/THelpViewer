@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .base import HelpDocument
-from .bundle_types import BundleDocumentVariant, BundleSourceGroup
-from .readers import game_cheater_bundle, scorpion_bundle
+from ..base import HelpDocument
+from ..bundle_types import BundleDocumentVariant, BundleSourceGroup
+from ..readers import game_cheater_bundle, scorpion_bundle
 
 
 BUNDLE_GROUP_PROVIDERS = (

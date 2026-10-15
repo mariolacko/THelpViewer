@@ -17,6 +17,7 @@ from .scorpion_reader import (
     scorpion_version_hint_from_path,
     strip_legacy_container_suffix,
 )
+from .scorpion_screens import legacy_screens
 
 
 SCORPION_V3_SECTION_BUNDLES = (
@@ -581,6 +582,8 @@ def _merge_sco_category_documents(
         index_entries=index_entries,
         contents=contents,
         metadata=metadata,
+        fonts={name: font for document in documents for name, font in document.fonts.items()},
+        text_screens={name: screen for document in documents for name, screen in document.text_screens.items()},
     )
 
 
@@ -597,7 +600,27 @@ def _build_sco_manual_documents(source_paths: tuple[Path, ...], documents: tuple
 
 
 def _build_sco_program_documents(source_paths: tuple[Path, ...], documents: tuple[HelpDocument, ...]) -> HelpDocument:
-    return _merge_sco_category_documents(source_paths, documents, "program")
+    document = _merge_sco_category_documents(source_paths, documents, "program")
+    version = _sco_version_number(source_paths[0])
+    fonts, screens, deferred = legacy_screens(source_paths[0].parent, version or 0)
+    document.fonts.update(fonts)
+    if deferred:
+        document.metadata["scorpion_unconverted_screen_names"] = deferred
+        _append_metadata_transport_key(document.metadata, "scorpion_unconverted_screen_names")
+    if screens:
+        nodes = []
+        next_id = max(topic.context_id for topic in document.topics) + 1
+        for index, (name, screen) in enumerate(screens):
+            screen_id = f"legacy-screen-{index}"
+            context_id = next_id + index
+            document.text_screens[screen_id] = screen
+            document.topics.append(TopicRecord(context_id, [encode_scorpion_text(line) for line in screen.text], names=[name],
+                                              uhf_content=[f"[screen:{screen_id}]"], alias_strings=[name]))
+            document.index_entries.append(IndexEntry(label=encode_scorpion_text(name), context_id=context_id))
+            nodes.append(ContentNode(label=name, topic_id=context_id))
+        document.contents[0].children.append(ContentNode(label="Obrazovky programu", children=nodes))
+        document.metadata["parsed_topic_count"] = len(document.topics)
+    return document
 
 
 SCORPION_SCO_CATEGORY_BUILDERS = {

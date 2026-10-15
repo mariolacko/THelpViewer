@@ -1,393 +1,331 @@
 # Software602 M602 HelpSystem Format
 
-> Created: 2026-04-03 · Last updated: 2026-04-03
+> Created: 2026-04-03 · Last updated: 2026-10-12
 
-Used by: Software602 products (primarily M602 Manager).  
-File extension: `.HLP`.
+Used by: Manažer 602, classic HelpSystem variant. File extension: `.HLP`.
+All offsets below are absolute byte offsets unless explicitly stated otherwise.
+The described directory and record grammar are verified for the 2.00 file.
+Other releases may have different layouts; a matching stamp alone does not
+establish compatibility.
 
-This document describes the classic `M602 HelpSystem` variant only.
+## 1. File layout and signature
 
-## 3.1 File Layout
+| Region | Offset | Size | Encoding |
+|--------|--------|------|----------|
+| Signature | `0000h` | 27 bytes | Unencrypted |
+| Topic records | `001Bh` onward | Ranges stored in the directory | Every byte XOR `FAh` |
+| Topic directory | `D` | `8 * N` bytes | Unencrypted |
+| Footer | `file_size - 6` | 6 bytes | Unencrypted |
 
-```
-┌──────────────────────────────────┐  Offset 0
-│  Header (27 bytes, unencrypted)  │
-├──────────────────────────────────┤  Offset 27
-│  Encrypted body (XOR $FA)        │
-│    Record 0                      │
-│    Record 1                      │
-│    ...                           │
-│    Record N                      │
-│    [Binary index / padding]      │
-└──────────────────────────────────┘
-```
-
-## 3.2 Header (27 bytes)
-
-```
-$1A  "(c) Software602 HelpSystem"
-```
-
-| Offset | Size | Content                           |
-|--------|------|-----------------------------------|
-| 0      | 1    | `$1A` (DOS end-of-file marker)    |
-| 1      | 26   | `(c) Software602 HelpSystem`      |
-
-Detection: first bytes match `$1A(c) Software602 HelpSystem`.
-
-### 3.2.1 Integer Endianness
-
-Unless stated otherwise, multi-byte numeric values in the classic M602 format
-are stored as little-endian integers, matching DOS/x86 conventions.
-
-This document still spells some values out byte-by-byte where that is more
-useful for reverse-engineering, for example hyperlink targets stored as
-`ctx_lo, ctx_hi`.
-
-No confirmed big-endian numeric fields have been observed in `M602_200.HLP`.
-
-## 3.3 Body Encryption
-
-All bytes after the 27-byte header are XOR-encrypted with constant key `$FA`:
+The signature is exactly:
 
 ```text
-plaintext_byte = encrypted_byte XOR $FA
+1A 28 63 29 20 53 6F 66 74 77 61 72 65 36 30 32
+20 48 65 6C 70 53 79 73 74 65 6D
+   (c) Software602 HelpSystem
 ```
 
-XOR is symmetric, so decryption = encryption.
+No topic count, charset or record count occurs in this signature. `1Ah`
+is part of the stamp, not the end of the binary file.
 
-## 3.4 Record Format
+## 2. Footer and directory addressing
 
-```
-┌────────────────────────────┐
-│  Length (1 byte)           │  0–255
-├────────────────────────────┤
-│  Content (Length bytes)    │
-└────────────────────────────┘
-```
+The footer occupies the final six bytes:
 
-Records are concatenated sequentially. Trailing `$0D` bytes in content are
-stripped.
+| Footer-relative offset | Size | Type | Meaning |
+|------------------------|------|------|---------|
+| `+0` | 2 | WORD, little-endian | `N`: number of topic-directory entries |
+| `+2` | 4 | DWORD, little-endian | Declared complete file size, including footer |
 
-Record types are determined by content pattern, not by a dedicated type field.
-
-| Pattern                                   | Type      |
-|-------------------------------------------|-----------|
-| `$01` + text + `$DC`, no `$DF`, [1]≠`$02` | Title     |
-| `$01` + bytes containing `$DF`            | Separator |
-| Anything else                             | Body text |
-
-Body records may also start with `$01`. In observed `M602_200.HLP` this is an
-internal line prefix, not a visible CP437 smiley. Strip one leading `$01` from
-body records before parsing visible text and links. A body record containing
-only `$01` is a blank line. Do not treat `$01` bytes inside the two raw target
-bytes after a link as text or markup.
-
-## 3.5 Title Records
-
-Mark the beginning of a new help topic.
-
-```
-┌─────┬──────────────────────┬──────┐
-│ $01 │  Title text bytes    │ $DC  │
-└─────┴──────────────────────┴──────┘
-```
-
-- First byte: `$01` marker
-- Last byte: `$DC` title terminator
-- Must not contain `$DF`
-- Second byte must not be `$02`
-- Title text is in Kamenický encoding
-
-## 3.6 Separator Records
-
-Visual dividers between topics or sections.
-
-```
-┌─────┬─────┬─────┬─────┬───┐
-│ $01 │ $DF │ $DF │ $DF │...│
-└─────┴─────┴─────┴─────┴───┘
-```
-
-`$DF` renders as `▀` in CP437/Kamenický.
-
-## 3.7 Hyperlink Encoding
-
-Links can appear inside any body record:
-
-```
-┌─────┬──────────────────┬─────┬────────┬────────┐
-│ $02 │  Link text bytes │ $02 │ ctx_lo │ ctx_hi │
-└─────┴──────────────────┴─────┴────────┴────────┘
-```
-
-| Field     | Size | Description                     |
-|-----------|------|---------------------------------|
-| `$02`     | 1    | Link start marker               |
-| Link text | var  | Display text                    |
-| `$02`     | 1    | Link end marker                 |
-| ctx_lo    | 1    | Context ID low byte             |
-| ctx_hi    | 1    | Context ID high byte            |
-
-Raw target = `ctx_lo + (ctx_hi * 256)`.
-
-Equivalently, this is one 16-bit little-endian value assembled from the two
-bytes `ctx_lo, ctx_hi`.
-
-### 3.7.1 Link Target Semantics
-
-Despite the field names above, the two bytes after the closing `$02` are not a
-topic number. They are also **not** reliably decodable as a direct offset into
-the decrypted record stream; that earlier hypothesis produces wrong topic
-destinations for multiple real links.
-
-Observed behavior in `M602_200.HLP`:
-
-- raw targets form a small number of numeric families (for example low bytes
-  `00`, `07`, `0B`, `13`, `79`, `9C`)
-- the same visible hotspot label can appear with different raw target values
-  when the help contains duplicate topic titles
-- the exact destination is stored in the unencrypted binary tail at the end of
-  the file
-
-### 3.7.2 Binary Tail Link Index
-
-After the XOR `$FA` record stream ends, classic M602 appends an unencrypted
-binary tail. In `M602_200.HLP` the tail starts at file offset `$21C4F`
-(`138351` decimal).
-
-Observed size in `M602_200.HLP`:
-
-- total tail size: `$064E` (`1614`) bytes
-- tail header size: `6` bytes
-- tail entry size: `8` bytes
-- total tail entries: `201`
-
-The tail begins with a 6-byte header:
+Compute the directory start:
 
 ```text
-0F 27 1B 00 00 00
+D = file_size - 6 - 8 * N
 ```
 
-Observed interpretation:
+Validate the declared size against the actual input size and require
+`D >= 27`. Do not decrypt the footer or directory. There is no separate
+six-byte directory header and no eight-byte sentinel entry.
 
-- byte `0` = root/pivot count candidate (`15` in `M602_200.HLP`)
-- bytes `1..5` = still not fully decoded
-
-Immediately after the 6-byte header follows a flat array of 8-byte entries.
+For the 139,965-byte 2.00 file:
 
 ```text
-┌──────────────┬────────────────────┬───────────────────────┐
-│ delta        │ raw_target_swapped │ target_offset         │
-│ uint16 LE    │ uint16 LE          │ uint32 LE             │
-└──────────────┴────────────────────┴───────────────────────┘
+footer = C9 00 BD 22 02 00
+N      = 00C9h = 201
+size   = 000222BDh = 139965
+D      = 222BDh - 6 - 8 * 00C9h = 21C6Fh = 138351
 ```
 
-Equivalent split of the same `target_offset` field:
+The directory has 201 entries (1,608 bytes) and the footer has six bytes.
+Neither `N` nor the first directory byte is a text-record count or pivot count.
+
+## 3. Eight-byte topic-directory entry
+
+Entry `i` starts at `D + 8 * i`, for `0 <= i < N`.
+
+| Entry-relative offset | Size | Type | Meaning |
+|-----------------------|------|------|---------|
+| `+0` | 2 | WORD, little-endian | Native application help context |
+| `+2` | 4 | DWORD, little-endian | Absolute topic-record offset `P` |
+| `+6` | 2 | WORD, little-endian | Encrypted topic size `S`, including record-length bytes |
+
+The payload is exactly `[P, P + S)`. Require `P >= 27` and
+`P + S <= D`, using wider arithmetic for validation. Parse every record
+inside that range; a length byte cannot borrow bytes from the next range or
+from the directory.
+
+The stored size is **not** a delta to another directory entry. Entry order
+need not match physical payload order. The original lookup scans the
+directory forward; the first matching context wins. Multiple contexts can
+refer to the same payload. Gaps outside indexed ranges are not topic text.
+A zero count produces no lookup entries; a zero size has no payload bytes.
+The inspected native reader caps the read size at 6,000 bytes after issuing
+its damaged-file warning. That is a runtime buffer limit, not a smaller
+on-disk integer field; it must not change the directory/footer addressing.
+
+Examples from the 2.00 directory:
+
+| Entry bytes | Native context | Offset | Size |
+|-------------|----------------|--------|------|
+| `0F 27 1B 00 00 00 35 00` | `270Fh` = 9999 | `001Bh` | `0035h` = 53 |
+| `00 00 50 00 00 00 A2 01` | `0000h` | `0050h` | `01A2h` = 418 |
+| `0A 00 F2 01 00 00 B9 02` | `000Ah` | `01F2h` | `02B9h` = 697 |
+| `0D EB D1 1B 02 00 9E 00` | `EB0Dh` | `00021BD1h` | `009Eh` = 158 |
+
+The first entry is the real error topic “Chyba”, not a directory header.
+The last topic ends at `21BD1h + 009Eh = 21C6Fh`, before the directory.
+Its trailing size WORD `9E 00` is immediately followed by the footer
+`C9 00 BD 22 02 00`; interpreting all eight bytes as one sentinel obscures
+the last topic's actual size.
+
+## 4. Record encryption and boundaries
+
+A topic contains concatenated Pascal-style byte strings. Both the length
+byte and the payload bytes are XOR-encrypted with `FAh`:
 
 ```text
-┌──────────────┬────────────────────┬──────────────────┬──────────────────┐
-│ delta        │ raw_target_swapped │ target_offset_lo │ target_offset_hi │
-│ uint16 LE    │ uint16 LE          │ uint16 LE        │ uint16 LE        │
-└──────────────┴────────────────────┴──────────────────┴──────────────────┘
+L = input[position] XOR FAh
+payload[j] = input[position + 1 + j] XOR FAh, 0 <= j < L
+next_position = position + 1 + L
 ```
 
-Observed entry count in `M602_200.HLP`:
+`L` is an unsigned byte, 0–255. The one-byte prefix counts payload bytes,
+not visible character cells. Hyperlink delimiters and operands count toward
+`L`. There is no escaping for the XOR key: an encrypted zero byte may decode
+to a perfectly valid `FAh` glyph, and its frequency does not delimit the index.
 
-- `201` total 8-byte entries in the tail
-- entries `0..199` resolve real help link targets
-- entry `200` is a final sentinel row, not a normal topic lookup row
-- the first real row points to topic `2`, so topic `1` ("Chyba") has no tail
-  lookup row
+Each observed 2.00 record ends with one `0Dh` carriage-return terminator,
+included in `L`. The original string-copy routine copies `L + 1` bytes
+(prefix and payload), advances the source by that amount and decrements the
+copied length **once**. It does not strip a run of CRs. A second CR immediately
+before the suffix is a literal screen cell. A target operand equal to `0Dh`
+is still binary data: identify the actual suffix and parse complete operands
+before it, rather than stripping arbitrary bytes from a target.
 
-### 3.7.3 Finding The Tail Start
-
-For `M602_200.HLP` the start of the binary tail does not need to be found
-heuristically. The file ends with an 8-byte sentinel:
+Observed examples:
 
 ```text
-9E 00 C9 00 BD 22 02 00
+plain title:     09 01 43 68 79 62 61 20 DC 0D
+encrypted:      F3 FB B9 92 83 98 9B DA 26 F7
+visible title:  Chyba  (the final DC is a block decoration)
+
+plain blank:    02 01 0D
+encrypted:      F8 FB F7
 ```
 
-Interpretation:
+The 2.00 file has 3,363 records inside its indexed ranges, with no zero-length
+records. No standalone text-record-count field is established.
+The native decrement is unconditional. A zero `L` underflows the copied
+byte length to `FFh`, making subsequent reads depend on unrelated memory;
+it is not an empty row. A safe decoder must not follow those reads. A non-CR
+last byte would also be removed, but no such terminator variant is established
+by the sample. Require a complete suffix for this grammar and never use
+malformed strings to read outside the topic. A genuine empty displayed string
+has `L = 1`, with CR as its only payload byte; a hard blank row has `01 0D`.
 
-- bytes `2..3` = total count of 8-byte tail entries, little-endian
-  (`$00C9` = `201`)
-- bytes `4..7` = absolute EOF offset, little-endian
-  (`$000222BD` = `139965`, exactly the file size)
+## 5. Row markers, titles and separators
 
-So the tail start can be computed backwards from EOF:
+A leading `01h` distinguishes a hard row from ordinary wrapping text.
+The original reader replaces this leading byte with a space in the display
+string. Ordinary records can be concatenated with a space and wrapped to the
+current viewport width; a following hard row terminates that concatenation.
+The stored record length is not a fixed viewport width. `01h` is special only
+at the start of the emitted row; the same byte elsewhere is a literal cell.
+
+Typical first rows are:
 
 ```text
-tail_start = file_size - 6 - (entry_count * 8)
+01 <title bytes> DC 0D
+01 DF DF DF ... DF 0D
 ```
 
-For `M602_200.HLP`:
+`DCh` and `DFh` are lower-half and upper-half block glyphs. These authored
+title/underline patterns do not define topic boundaries: only the directory's
+offset and size do. The same glyphs in body text, or inside two-byte link
+operands, must not start or end a topic.
+
+### Raw-byte row assembly and wrapping
+
+Let `R[i]` be the complete decoded payload of record `i` after removing its
+single suffix. Let `W` be the view's current horizontal size (the verified
+split routine uses its low unsigned byte). No `W` field occurs in the file.
+The following sequence precedes hotspot removal and character decoding:
+
+1. Take the next record as `current`.
+2. If its first byte is `01h`, emit it immediately without wrapping.
+3. Otherwise, while another record is available and that next record does
+   not begin with `01h`, append **one ASCII space**, then that whole record.
+4. After each such append, while the encoded length exceeds `W`, find a cut:
+
+   - inspect one-based position `W`; search backward for `20h`, down to 1;
+   - if no space is found there, search forward from `W` to the first `20h`;
+   - if no forward space exists, use the complete current length;
+   - emit the prefix **including** the space at the cut, then remove exactly
+     that prefix from `current` and repeat if needed.
+5. When the next record is hard or there is no next record, emit the remainder
+   and resume at step 1. An unjoined final soft record is not separately wrapped.
+6. For each emitted row, remove complete hotspots as described below and
+   replace a leading `01h` with `20h`. Do not trim other spaces or title art.
+
+This is byte-length wrapping, not visible-cell wrapping: link delimiters and
+the two context bytes count before removal. Label underscores remain `5Fh`
+during the split search and become spaces only during hotspot decoding.
+Only ASCII `20h` is a split point; internal CR, TAB and NBSP are not split
+instructions. Spaces already present at record ends remain, in addition to
+the inserted separator. There is no whitespace collapsing or forced split
+inside an unbroken word. Hard rows and long words can exceed the viewport.
+
+The original concatenation uses 255-byte Pascal short strings: a sum beyond
+255 retains only the prefix that fits. It must not be mistaken for a smaller
+on-disk row/topic field or an end-of-topic marker. Wider safe buffers can
+retain the complete source but must explicitly distinguish that behavior
+from native short-string truncation.
+
+For `W = 10`, source soft rows `one two three 0D` and `four five six 0D`
+produce `one two `, `three `, `four five `, `six`. Both trailing cut spaces
+and the inserted record separator are actual display bytes. A following
+hard row `01 0D` is a separate single-space row.
+
+## 6. Inline hyperlinks
+
+Within a decoded display record:
 
 ```text
-tail_start = $222BD - 6 - ($00C9 * 8) = $21C4F
+02 <label bytes> 02 context_hi context_lo
 ```
 
-which matches the observed binary tail start.
+| Component | Size | Meaning |
+|-----------|------|---------|
+| First `02h` | 1 | Start of hotspot |
+| Label | Variable | Visible bytes, ending at the next `02h` |
+| Second `02h` | 1 | End of hotspot label |
+| `context_hi` | 1 | High byte of the native context |
+| `context_lo` | 1 | Low byte of the native context |
 
-This means `hlx2html` no longer needs the old FA-density heuristic as the
-primary detector for compiled M602 `.HLP`; it can derive the tail start exactly
-from the final sentinel and the fixed 6-byte tail header size.
+The native target is `(context_hi << 8) | context_lo`: **big-endian** in the
+inline record, but little-endian in the directory WORD. Alternatively, a
+decoder may read inline operands as an LE raw code and compare it with each
+directory context after swapping its bytes. Those two numeric conventions
+must not be mixed.
 
-### 3.7.4 Text Record Count
+In a label, `5Fh` (underscore) becomes `20h` (space). Keep all label
+cells, including final padding. Outside a label, underscores remain literal.
+The two delimiters and the two target bytes do not occupy display cells.
+After consuming a target, resume at the following byte. Require a closing
+delimiter and both operand bytes before the record suffix. Neither the suffix
+nor bytes from a following Pascal string complete a truncated operand.
 
-The number of XOR text records before the binary tail is still not known as an
-explicit header field.
+Hotspot rows and columns are one-based. After removing the opening delimiter,
+the native start column is the current string position; after removing the
+closing delimiter/operand, the end column is the preceding visible label
+cell. The row is assigned when the emitted string is stored. Adjacent links
+with equal contexts are still separate hotspots. An empty label has end less
+than start and contributes no clickable cell.
 
-For `M602_200.HLP`, sequential parsing yields:
+Because wrapping precedes decoding, unusual padding/space-containing labels
+can be cut inside a hotspot. The original label scan then runs beyond the
+emitted string length looking for its closing delimiter; that adjacent-memory
+behavior is not a valid bounded file grammar. An independent safe decoder
+can lex complete hotspots within their original records first, retain a
+raw-byte-to-cell map, apply the same cut positions and carry the target to
+each visible label fragment. Do not invent a target or erase text at a cut.
 
-- `3363` text records before the first binary-tail record candidate
-- `3364` total parsed records if the first binary-tail candidate record is also counted
-- `201` title records
-- `201` separator records
-- `2961` body-text records
-- `0` zero-length records observed in this sample
-
-No explicit 16-bit or 32-bit field equal to `3363` or `3364` has been found in
-the file so far. Current evidence suggests that the compiled file stores enough
-information to derive the tail start exactly, but not an obvious standalone
-`text_record_count` field.
-
-### 3.7.5 Decoding Tail Entries
-
-For regular lookup rows, decoding works as follows:
-
-1. `raw_target_swapped` stores the same two target bytes as the inline body
-   link, but in reversed order.
-   Example: inline target `$1979` is stored in body bytes as `79 19`
-   (`ctx_lo, ctx_hi`), while the tail index stores the same target bytes as
-   `19 79`. If those tail bytes are read as a normal little-endian `uint16`,
-   the temporary numeric value is `$7919`, so the decoder must swap the bytes
-   back before comparing it with the inline raw target.
-2. `target_offset = target_offset_lo + (target_offset_hi << 16)`.
-3. `target_offset` is an absolute file offset of the destination topic title
-   record.
-4. Map that absolute file offset back to the parsed topic/context.
-
-For regular lookup rows, `delta` is also meaningful:
+For native context `7919h`:
 
 ```text
-delta = current_target_offset - previous_target_offset
+inline operands:    79 19
+directory WORD:     19 79
+native numeric ID:  7919h
+LE raw-inline ID:   1979h
 ```
 
-with the implicit initial `previous_target_offset` equal to the first byte after
-the 27-byte file header (`$001B`).
+A full example targeting native context `000Ah`:
 
-Examples:
+```text
+02 50 72 A0 63 65 02 00 0A
+   P  r  á  c  e
+```
 
-- first lookup row: `A2 01 0A 00 F2 01 00 00`
-  `target_offset = $01F2`, previous offset = `$001B`, so
-  `delta = $01F2 - $001B = $01A2`
-- row for topic `120`: `47 0D 1E 79 8C AA 01 00`
-  previous topic offset = `$019D45`, current target offset = `$01AA8C`, so
-  `delta = $0D47`
+This is the visible link “Práce”; look up WORD `000Ah` in the directory.
+The operands are not physical topic ordinals and are not payload offsets.
 
-Examples from `M602_200.HLP`:
+### Lookup and unavailable contexts
 
-| Stored entry bytes              | Raw target | Target file offset | Target context |
-|---------------------------------|------------|--------------------|----------------|
-| `A2 01 0A 00 F2 01 00 00`       | `$0A00`    | `$01F2`            | `3`            |
-| `44 08 29 A0 00 A4 00 00`       | `$29A0`    | `$A400`            | `45`           |
-| `47 0D 1E 79 8C AA 01 00`       | `$1E79`    | `$01AA8C`          | `120`          |
-| `DC 10 F7 07 68 BB 01 00`       | `$F707`    | `$01BB68`          | `121`          |
+1. Scan entries in stored order for the requested native context.
+2. Read exactly the matching entry's payload at its stored absolute offset.
+3. If absent, scan for native context `270Fh` (decimal 9999), the error page.
+4. If neither exists, lookup has no topic.
 
-The final tail row is special:
+This fallback is an application-defined context, not a title-matching
+algorithm or an assumption that the first topic is always the error screen.
+Duplicate captions do not affect destination lookup.
 
-| Stored entry bytes              | Meaning                        |
-|---------------------------------|--------------------------------|
-| `9E 00 C9 00 BD 22 02 00`       | sentinel: count + EOF pointer  |
+## 7. Character encoding
 
-Observed interpretation of the final row:
+The verified Czech file uses Kamenický (KEYBCS2); the stamp has no encoding
+selector. `20h`–`7Eh` are ASCII. Decode character cells only after separating
+record/row markers, hyperlink delimiters and their operands.
 
-- `delta = $009E`
-- `raw_target_swapped = $00C9` -> reused here as total tail-entry count
-- `target_offset = $000222BD` -> exact EOF offset
+High-byte map, in order from column `0` to `F`:
 
-This exact tail index resolves all `119` unique inline raw targets observed in
-`samples/602/M602_200.HLP`, without needing label/title heuristics.
+| High nibble | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | A | B | C | D | E | F |
+|-------------|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 8 | Č | ü | é | ď | ä | Ď | Ť | č | ě | Ě | Ĺ | Í | ľ | ĺ | Ä | Á |
+| 9 | É | ž | Ž | ô | ö | Ó | ů | Ú | ý | Ö | Ü | Š | Ľ | Ý | Ř | ť |
+| A | á | í | ó | ú | ň | Ň | Ů | Ô | š | ř | ŕ | Ŕ | ¼ | § | « | » |
+| B | ░ | ▒ | ▓ | │ | ┤ | ╡ | ╢ | ╖ | ╕ | ╣ | ║ | ╗ | ╝ | ╜ | ╛ | ┐ |
+| C | └ | ┴ | ┬ | ├ | ─ | ┼ | ╞ | ╟ | ╚ | ╔ | ╩ | ╦ | ╠ | ═ | ╬ | ╧ |
+| D | ╨ | ╤ | ╥ | ╙ | ╘ | ╒ | ╓ | ╫ | ╪ | ┘ | ┌ | █ | ▄ | ▌ | ▐ | ▀ |
+| E | α | ß | Γ | π | Σ | σ | µ | τ | Φ | Θ | Ω | δ | ∞ | φ | ε | ∩ |
+| F | ≡ | ± | ≥ | ≤ | ⌠ | ⌡ | ÷ | ≈ | ° | ∙ | · | √ | ⁿ | ² | ■ | NBSP |
 
-If the binary tail is unavailable, `hlx2html` can still fall back to visible
-label/title matching, but that is only a compatibility heuristic for source-only
-HLX dumps, not the canonical decoder for compiled M602 `.HLP`.
+Low OEM glyphs occur in visible body text: `12h` = ↕, `1Eh` = ▲,
+`1Fh` = ▼. They are not extra link/format controls. After record and hotspot
+processing, bytes are literal screen cells: an internal CR does not start a
+new row, TAB does not expand and NUL does not terminate a Pascal string.
+The ordinary OEM transcription has `00h` = blank, `09h` = ○, `0Ah` = ◙,
+`0Dh` = ♪ and `7Fh` = ⌂. An alternate application-loaded font can change
+their pixel appearance; there is no font selection field in this stamp.
 
-## 3.8 Character Encoding
+## 8. Decoder procedure and validation
 
-Bytes `$20`–`$7E` are standard ASCII. Bytes `$80`–`$FF` use Kamenický
-(KEYBCS2), a Czech/Slovak DOS encoding.
+1. Match the entire 27-byte stamp.
+2. Read the unencrypted footer, validate its file size and locate the directory.
+3. Read all `N` eight-byte entries, retaining native context, offset and size.
+4. Validate each indexed byte range independently. Do not infer size from the
+   next entry or require sorted offsets.
+5. XOR-decode length-prefixed records within each indexed range. Reject a
+   record that would cross its range end.
+6. Identify the record terminator separately from binary operands; extract
+   complete hotspots, substitute underscores only inside labels and preserve
+   their cell widths.
+7. Assemble hard/soft rows using the raw-byte procedure above and project
+   complete source hotspots onto emitted cells. Decode visible cells using
+   the known charset, keeping layout separate from storage addressing.
+8. Resolve native contexts through the directory, including its first entry
+   and the defined 9999 fallback. Do not guess destinations from visible text.
 
-Selected mappings:
-
-| Byte | Char | Byte | Char | Byte | Char | Byte | Char |
-|------|------|------|------|------|------|------|------|
-| $80  | Č    | $88  | ě    | $90  | É    | $98  | ý    |
-| $81  | ü    | $89  | Ě    | $91  | ž    | $99  | Ö    |
-| $82  | é    | $8A  | ó    | $92  | Ž    | $9A  | Ü    |
-| $84  | ä    | $8B  | ö    | $97  | Š    | $9B  | Ř    |
-| $85  | ů    | $8E  | Ä    | $9C  | ř    | $9D  | Ý    |
-| $87  | č    | $8F  | Ć    | $9F  | ť    | $A0  | á    |
-| $A1  | í    | $A2  | ó    | $A3  | ú    | $A4  | ň    |
-| $A5  | Ň    | $A8  | š    | $A9  | ř    | $B5  | Á    |
-
-Low CP437 graphic bytes can appear as visible text after record/link parsing.
-Observed examples in body text are `$12` = `↕`, `$1E` = `▲`, and `$1F` = `▼`.
-They are display glyphs, not additional formatting controls.
-
-## 3.9 Topic Structure
-
-Topics are implicit; there is no separate topic table in the XOR text stream.
-
-Observed parsing rule:
-
-1. A title record starts a new topic.
-2. The following separator record belongs to the same topic and acts as the
-   visible underline below the title.
-3. All subsequent body records belong to that topic until the next title record
-   or the binary tail start.
-
-In `M602_200.HLP` this yields:
-
-- `201` topics
-- 1-based topic numbering in parse order
-- `context_id = 1` for the first topic, `context_id = 201` for the last topic
-- every observed topic begins with exactly two visible lines:
-  title text, then a separator line made of `$DF`
-
-Practical consequences for parsers:
-
-- `context_id` can be assigned sequentially in parse order
-- a topic's `start_offset` is the body-stream offset of its title record
-- a topic's `end_offset` is the next topic's `start_offset`, or the start of
-  the binary tail for the last topic
-- inline hyperlink targets are not topic numbers; they must be resolved through
-  the binary tail index described above
-
-Observed special case in `M602_200.HLP`:
-
-- topic `1` is the error/help-fallback screen `Chyba`
-- the first normal tail lookup row points to topic `2`, not topic `1`
-
-This suggests that the first error screen is handled slightly differently from
-the rest of the help topics in the compiled tail index.
-
-## 3.10 What We Still Do Not Know
-
-The following points are still open:
-
-- the exact meaning of tail-header bytes `1..5` in
-  `0F 27 1B 00 00 00`
-- whether header byte `0F` is definitely a root/pivot count used by the
-  original M602 viewer, or whether it has a slightly different role
-- whether the number of XOR text records is stored anywhere explicitly in the
-  `.HLP`, or only derivable by sequential parsing
-- the exact semantic role of the final 8-byte sentinel row beyond the confirmed
-  `entry_count + EOF` information
-- whether all classic M602 `.HLP` files use the same tail layout, or whether
-  there are older/newer sub-variants with a different header or sentinel shape
-- whether `M602X.EXE` uses this tail strictly as a flat lookup table, or as a
-  remnant of a higher-level search structure that is only partly visible in the
-  compiled `.HLP`
+Unknowns include charset selection in other releases, other HelpSystem
+variants, non-CR terminator variants and alternate screen-font appearance.
+The verified footer/directory
+layout has no unexplained header/pivot bytes.

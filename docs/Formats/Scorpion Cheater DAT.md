@@ -6,13 +6,11 @@ The same modern Allegro-backed DAT family is used by v15, v16, v21, and v22.
 Files: `CHEATY.DAT`, `NAVODY.DAT`, `PROGRAM.DAT`, `VTIPY.DAT`,
 `EASTER.DAT`, and v21 `TEXTY.DAT`.
 
-## Status
+## Container identity
 
-Modern DOS Scorpion DAT files are password-protected Allegro datafiles. The
-reader implements the container, old-crypt header handling, Allegro LZSS
-decompression, Kamenicky / KEYBCS2 article decoding, inline text attributes, and
-source line breaks. `ICONA.DAT` in v23 is a Windows icon resource, not an
-article DAT.
+The Allegro-backed DOS DAT family uses password-protected Allegro datafiles
+with per-object LZSS compression and Kamenický/KEYBCS2 article text.
+`ICONA.DAT` is a Windows icon resource, not an article container.
 
 ## Corpus
 
@@ -42,13 +40,12 @@ objects before article/resource filtering.
 | `NAVODY.DAT` | 47 | 46 | Walkthroughs and guides |
 | `PROGRAM.DAT` | 26 | 25 | Program/editorial/help text plus non-topic resources such as fonts and screens |
 | `VTIPY.DAT` | 17 | 16 | Jokes |
-| `ICONA.DAT` | - | - | Windows icon resource, excluded from article export |
+| `ICONA.DAT` | - | - | Windows icon resource, not an Allegro article container |
 
 ## Allegro Container
 
-The generic Allegro parser is intentionally independent from Scorpion's
-Cheater. Scorpion-specific code passes the password `akrab` and enables
-per-object old-crypt password reset.
+Scorpion uses old-crypt password `akrab` and restarts the password cursor
+at each compressed object payload.
 
 The root layout after the first four old-crypt bytes is standard Allegro:
 
@@ -74,9 +71,91 @@ payload[packed_length]
 
 `unpacked_size < 0` means that `payload` is Allegro LZSS-compressed and should
 decompress to `-unpacked_size` bytes. In the modern corpus all `DATA` objects
-use this path.
+use this path. With a nonnegative `unpacked_size`, both lengths must be equal;
+zero denotes an empty object only when `packed_length` is also zero. It is
+not an unspecified-size flag for a populated object.
 
 The last object is usually Allegro grabber metadata named `GrabberInfo`.
+
+## Old-crypt and object decompression
+
+For password bytes `p = 61 6B 72 61 62` (ASCII `akrab`):
+
+```text
+mask = XOR(p[i] << (8*(i mod 4)), for each password byte)
+decoded_magic = u32be(raw_magic) XOR mask
+```
+
+Here `mask = 61726B03h`, so raw `12 1E 03 2D` becomes `slh.`.
+The uncompressed root contains `ALL.` at offset 4 and a big-endian object
+count at offset 8. Property and object headers are not encrypted.
+
+Before an object type, zero or more properties have this layout:
+
+| Relative offset | Size | Meaning |
+| --- | ---: | --- |
+| `+0` | 4 | ASCII `prop` |
+| `+4` | 4 | Property ID: `NAME`, `DATE`, `ORIG`, etc. |
+| `+8` | 4 | Big-endian property byte length |
+| `+12` | length | Raw property value |
+
+The following object header is:
+
+| Relative offset | Size | Meaning |
+| --- | ---: | --- |
+| `+0` | 4 | ASCII type, for example `DATA` |
+| `+4` | 4 | Big-endian nonnegative packed byte length |
+| `+8` | 4 | Big-endian signed unpacked length; negative selects LZSS |
+| `+12` | packed length | Object payload |
+
+For Scorpion old-crypt LZSS, initialize a zero-filled 4096-byte circular
+dictionary, write cursor 4078, and password cursor zero per object.
+Read flag bytes LSB-first, eight tokens per flag. XOR **only flag bytes**
+with the next repeating password byte; literal and match bytes are not XORed.
+
+- Flag bit 1: read one literal; append it and write it to the dictionary.
+- Flag bit 0: read `a,b`; source index is `a | ((b & F0h) << 4)`,
+  length is `(b & 0Fh)+3`. Copy that many dictionary bytes to output
+  and dictionary.
+- Dictionary cursors wrap with `& 0FFFh`. Update after each copied byte
+  so overlapping matches can consume newly written bytes.
+- Stop at the absolute declared unpacked length; input exhaustion before that
+  many output bytes is truncation.
+
+### Container boundaries and validation
+
+The object count includes actual objects, not the preceding `prop` entries.
+Every property header, property value, object header and packed payload must
+fit in its containing object-list byte range. `packed_length` is nonnegative
+and is the physical distance to the next object's property/type header; never
+extend a short LZSS stream into that following object to satisfy its logical
+length. All declared root objects must exist, and the completed list must end
+at the container's end.
+
+An Allegro `FILE` object contains a big-endian 32-bit child count followed by
+child objects with the same grammar. Parse that list inside the decoded FILE
+payload, not in the parent's remaining bytes. Its property/payload bounds and
+final position are relative to this decoded range. A parent's compressed or
+uncompressed length is validated before parsing its children.
+
+With a known logical length, a final match token can be limited to the bytes
+still requested. Unread packed bytes inside that object's declared physical
+range are skipped at chunk close; they are not an extra article or another
+object. Conversely, a partial flag/literal or two-byte match that cannot
+supply the remaining decoded bytes is incomplete. A zero-length resource is
+valid; a nonzero-length resource containing no packed data is not.
+
+Example without password encryption:
+
+```text
+44 41 54 41  00 00 00 04  FF FF FF FD  07 41 42 43
+DATA         packed=4    unpacked=-3  flags, A B C
+```
+
+This object expands to three bytes. Replacing `FF FF FF FD` by
+`FF FF FF FC` declares four decoded bytes but still supplies only three:
+the physical header/payload fits, yet the LZSS object is truncated. Returning
+the three-byte prefix as a complete object would lose source data.
 
 ## Article Stream
 
@@ -143,118 +222,27 @@ through `0xEC` select colors 1 through 6, `0xED` resets to the default color,
 and `0xEE` through `0xF5` select colors 8 through 15. `0xF7` temporarily sets
 the background to blue / CGA 1 and `0xF6` restores the black background.
 
-### Attribute Audit
+### Attribute state and ambiguous character values
 
-The current corpus audit counts only decoded article streams. Fonts, executable
-helpers, screen banks, and other filtered resources are excluded. An occurrence
-is counted again when the same historical article is included in another
-version, so the totals measure the amount of source data affected rather than
-the number of distinct articles.
+Foreground controls `E7..EC` map to CGA 1..6, and `EE..F5` to CGA 8..15.
+`ED` restores the default foreground. Background controls are independent:
+`F7` selects CGA 1, `E5` selects CGA 7, and legacy `F6` restores black.
+The Allegro-backed DAT text also uses `E6` as background reset.
 
-After the corpus, web, and DOSBox comparison described below, no unresolved
-inline attribute bytes remain in any supported version family:
+For example, `F7 F0 NANCY F6 ED` displays bright-green text on dark blue.
+A block-art sequence `F5 DC E5 DC DB DB F6` changes the background to gray
+while retaining white foreground.
 
-| Version family | Releases | Unresolved bytes | Distinct | Occurrences |
-|---|---|---|---:|---:|
-| v3.x | 3, 3.5 | none | 0 | 0 |
-| v4-v5 | 4, 5 | none | 0 | 0 |
-| v6-v8 | 6, 7, 8 shareware | none | 0 | 0 |
-| v10-v14 | 10, 11, 12, 13, 14 | none | 0 | 0 |
-| modern DAT | 15, 16, 21, 22, 23 | none | 0 | 0 |
+Some byte values collide with text characters. Two v15/v16 TOPGUN records
+store `kampa E5 ,`, where the intended word appears to be `kampaň,`.
+Whether this is an escaped literal or malformed inherited text is not fully
+established. Do not derive a universal grammar from an alphanumeric-neighbor
+heuristic. Likewise, v3-family `EE` can occur inside words such as
+`D EE F EE N D EE R`; this case needs to be distinguished from a color control.
 
-The unresolved union is empty. The final audited control was `0xE5`, with 11
-raw occurrences: nine in inherited `R010` block artwork and two in the same
-v15/v16 `TOPGUN / 9011` text.
+### Other text bytes
 
-The v4/v5 `Starfighter 3000` article contains a self-describing color legend.
-It is stronger evidence than the migrated website because the byte and its
-written color name occur in the same original DOS record:
-
-| Sequence | Written legend | Mapping |
-|---|---|---|
-| `F0 G ED` | `G = zelený` | green |
-| `F4 Y ED` | `Y = žlutý` | yellow |
-| `F2 R ED` | `R = červený` | red |
-| `EF B ED` | `B = modrý` | blue |
-| `F3 M ED` | `M = fialový` | magenta |
-| `F1 C ED` | `C = světle modrý` | light blue / cyan |
-| `EC O ED` | `O = oranžový` | orange |
-
-Modern `Alone in the Dark 2` independently agrees with Cheater.cz for `F0`
-green (`SAVE0.ITD`), `F5` white (offsets), and `F4` yellow (replacement
-bytes). Modern `Chaos Engine` agrees for `F1` light blue, `F5` white, and `F0`
-green.
-
-A direct DOSBox Staging run of Scorpions Cheater 14 resolves `0xE8` and
-`0xE9`, and also fixes the palette indexes previously assigned to `0xF0` and
-`0xF1`. Topic `[4078]`, `FIFA Soccer '96`, stores
-`E9 VANCOUVER E8 (USA) ED` and displays `VANCOUVER` in cyan and `(USA)` in
-green. The same screen shows `F0 XPLAY ED` in bright green and `F1 1) ED` in
-bright cyan. The captured VGA colors are `#00AA00`, `#00AAAA`, `#55FF55`, and
-`#55FFFF`, corresponding to CGA foreground indexes 2, 3, 10, and 11. The
-`O programu` screen also shows `F2 >> ED` as `#FF5555`, confirming CGA 12.
-
-A direct DOSBox run of v5 resolves `0xEB`. In `Battle Beast` topic `[0101]`,
-the source stores `EB YOYOYO` and displays `YOYOYO` as `#AA00AA`, dark
-magenta / CGA 5. Later releases reformat the same cheat: v10 stores `F0
-YOYOYO`, so its bright-green rendering does not describe the v5 byte. The
-same v5 capture set independently shows `EB world 6/4 =103546` in `Super
-Frog` as dark magenta while the preceding password rows remain white. The
-`0xEB -> CGA 5` mapping removes all unresolved controls from the v3.x family.
-
-A direct DOSBox run of v10 resolves the remaining foreground controls used by
-the legacy families. In `DATATEXT.SCD / R001`, `EF` draws the grid in
-`#5555FF` / CGA 9, `EE` draws the inset frame in `#555555` / CGA 8, and `E7`
-draws its shadow lines in `#0000AA` / CGA 1. The same topic stores its large
-scorpion picture between `EA` transitions and displays it as `#AA0000` / CGA
-4. Together with the earlier observations, this confirms the continuous
-foreground sequence from `E7` through `F5`, with `ED` reserved as reset.
-
-The v5 `Sword of Sodan` sequence is `F7 F0 NANCY F6 ED`. Its screenshot shows
-`NANCY` in bright green on a dark-blue rectangular background. V10
-`DATATEXT.SCD / R002` independently stores both hex-table rows as
-`F7 F1 ... F6` and displays bright-cyan text on the same dark-blue background.
-Therefore `F7` begins a CGA 1 background span and `F6` ends it; the foreground
-control inside the pair remains independent.
-
-Modern `PROGRAM.DAT / R201` contains the same two inherited hex-table rows,
-but stores `E6` where v10 stores the closing `F6`. Modern `R010` also ends its
-colored block-art row with `E6`. The modern reader therefore treats `E6` as
-the version-specific blue-background reset.
-
-A direct DOSBox run of v14 resolves `E5`. The relevant `R010` source sequence
-is `F5 DC E5 DC DB DB F6`: `F5` selects white foreground, then `E5` changes
-the upper half of the following `DC` cell to `#AAAAAA` / CGA 7 while its lower
-half remains white. Thus `E5` starts a gray-background span and `F6` ends it.
-The two non-art occurrences are `kampa E5 ,` in identical v15/v16 `TOPGUN`
-records. Since the surrounding text requires `kampaň,` and the preceding byte
-is a letter rather than block art, the reader conservatively restores literal
-`ň` only when `E5` follows an alphanumeric character and precedes punctuation.
-
-`0xF8` is not a formatting control in the decoded article corpus. All 36 text
-occurrences are literal degree signs in v21-v23 `NAVODY.DAT`, in phrases such
-as `otočila se o 180°`. The reader preserves these as literal text.
-
-Web comparison limitations:
-
-- Cheater.cz preserves useful named spans such as `zelena`, `modra`, `bila`,
-  and `zluta`. These validate the modern foreground controls when the local and
-  web article versions have the same byte-level formatting.
-- The same article can be reformatted between DOS releases. For example,
-  `SAVE0.ITD` uses `F5` in v3.5-v7 but `F0` from v10 onward; the current web
-  page matches the later `F0` version. A textual match alone is therefore not
-  enough to infer an older byte meaning.
-- Cheater.cz exports some styles as classes such as `c2`, `c3`, `c5`,
-  and `c6`. These classes are absent from both the current stylesheet and the
-  archived 2018 `css-clanek-old.css`, so their actual colors cannot be
-  recovered from the public CSS.
-- `0xE9` demonstrates that the generated `cN` class is not a stable byte map:
-  it becomes `c2` in `Colonization`, `c3` in `Chaos Engine`, and `c5` in
-  `Eye of the Beholder 3`.
-- ASCII-art colors and frame attributes are generally lost on the website;
-  direct DOSBox captures were required to finish their mapping.
-
-Additional byte-level fixes that are now handled in the reader:
+Additional byte interpretations:
 
 | Byte | Meaning |
 |---:|---|
@@ -263,7 +251,7 @@ Additional byte-level fixes that are now handled in the reader:
 | `0xFC` | literal `ü` |
 | `0xFD` | literal `ř` |
 | `0xFE` | hard space separator |
-| `0xFF` | non-breaking / layout space, normalized to plain space in UHF output |
+| `0xFF` | non-breaking / layout space, not an ordinary breakable space |
 
 ## Non-text Resources
 
@@ -279,18 +267,9 @@ bitmaps. They are part of the article text stream and use the original DOS
 - inline attribute controls select the foreground and background CGA colors
 - every source line is one row of the picture
 
-The converter transfers this artwork directly to standard UHF2. It preserves
-the leading spaces on block/box-art rows, emits the characters as Unicode,
-converts the attributes to `[fg]`, `[bg]`, or `[color:fg:bg]` spans, and exports
-`metadata.display.cols = 80`. The viewer therefore uses fixed, non-wrapping
-topic layout and reconstructs the picture without embedding a raster image.
-
-This Unicode reconstruction is not yet pixel-exact for glyphs redefined by the
-program's external `FONT.SCO`. For example, the v10/v14 `PROGRAM / R001`
-scorpion artwork stores bytes `0xD2` and `0x99`. A normal CP437 mapping displays
-them as `╥` and `Ö`, but the original custom DOS font draws a curved tail
-fragment and a filled picture fragment instead. These are unresolved custom
-font glyph mappings, not inline formatting controls.
+The source is character cells plus attributes, not a raster image. Bytes such
+as `D2` and `99` can be redefined by the selected bitmap font; ordinary
+CP437 Unicode names do not establish their visible glyph shape.
 
 This applies only to artwork embedded in readable article streams. It does not
 automatically decode the separate resource records and files described below.
@@ -316,7 +295,22 @@ used for normal text.
 #### v4-v8: uncompressed `FA.SCO`..`FF.SCO` and `FOK.SCO`
 
 Each file is 4223 bytes. The final 4096 bytes are the complete raw 8 x 16 font;
-the preceding 127-byte program-specific header includes the font description.
+the preceding 127 bytes form a DOS COM font installer and metadata. In the
+verified v4–v8 files:
+
+| File offset | Size | Meaning |
+|---:|---:|---|
+| `00` | 2 | `EB 67`: jump to installer at file offset `69` |
+| `02` | 1 | `90`: NOP |
+| `03..68` | 102 | Metadata/padding; glyph height at `0C` is 16; other fields unverified |
+| `69..7E` | 22 | BIOS font installer and DOS return |
+| `7F` | 4096 | 256 consecutive 16-byte glyphs |
+
+Loaded as a COM at segment offset `0100`, the installer sets AX=`1110`,
+BH=`byte[010C]` (16 scanlines), BL=0 (font block), CX=`0100` (256 glyphs),
+DX=0 (first glyph) and BP=`017F` (bitmap address). `INT 10h` loads this
+ES:BP font, followed by `INT 20h` to return. This is an executable font
+installer, not a file with a 127-byte bitmap header to pass to the BIOS.
 Extraction therefore needs no decompressor:
 
 ```text
@@ -324,8 +318,9 @@ font = file_bytes[len(file_bytes) - 4096 :]
 assert len(font) == 4096
 ```
 
-Using the final 4096 bytes instead of a hard-coded `0x7F` offset also makes the
-extractor fail less dangerously if another release adds header metadata.
+This framing is verified for the 4223-byte files only: the bitmap begins at
+offset `0x7F`. A different length/header requires its own profile; do not
+silently treat an arbitrary file's last 4096 bytes as a font.
 
 #### v10-v14: compressed `FONT.SCO`
 
@@ -343,15 +338,17 @@ The record offsets in the shared file are `0`, `1451`, `2940`, `4348`, `5850`,
 `7573`, and `9070`. The corresponding compressed payload lengths are `1444`,
 `1482`, `1401`, `1495`, `1716`, `1490`, and `1461` bytes.
 
-Do not decode these payloads with the v6-v14 text-library LZHUF routine. The
-framing resembles the `SCR`/`CHT`/`HLP` resources, but that decoder reaches a
-4096-byte output before consuming the complete record and produces invalid
-glyphs. Zero-filled or space-filled LZSS dictionaries and the common `F=18`
-and `F=60` LZHUF variants have all been rejected. The exact font-specific
-decompressor or post-processing stage is still unresolved. A converter must
-therefore either preserve these seven compressed records losslessly or use a
-verified font recovered from the running DOS program; it must not publish the
-current text-LZHUF probe output as a bitmap font.
+Each payload uses the same adaptive-Huffman/LZSS decoder as the text and
+text-screen blocks, specified below. There is no font-specific transform.
+NUL bytes are ordinary Huffman literals: their leaf at initial tree index
+zero must be updated too. Skipping that update desynchronizes the tree and
+produces plausible but incorrect glyph bytes very early in a font.
+
+Records are numbered `0` through `6`: `0` is the standard/restoration font,
+then `1` through `6` are the selectable A through F fonts. The program
+installs index `1` before its initial text screen. For v4–v8 the corresponding
+default font is `FA.SCO`, not `FOK.SCO`. Screen templates and article artwork
+inherit the selected font; their names do not independently select fonts.
 
 #### v16 and v21-v23: Allegro DAT font records
 
@@ -360,7 +357,10 @@ current text-LZHUF probe output as a bitmap font.
 `akrab`, then Allegro object LZSS decompression using the negative unpacked
 size. The resulting payload of every font record is already the complete raw
 4096-byte 8 x 16 font described above; no additional font codec is applied.
-Version 15 does not contain these font records in the current corpus.
+Version 15 uses positional names instead: `obr4`..`obr10` are `FONT1`..`FONT7`,
+`obr11` is `FONTKRUH`, and `obr12` is `FONTOK`. All nine decoded resources
+are byte-identical to the corresponding version-16 resources. These `obr*`
+records are fonts, not 80×25 screens.
 
 The modern records also confirm why a normal CP437 Unicode conversion cannot
 reconstruct every inline picture. For example, glyph byte `0xD2` is a curved
@@ -376,30 +376,82 @@ streams. The current corpus confirms two distinct decoded layouts:
   two bytes per cell. Each cell contains a CP437/Kamenicky character followed
   by its VGA text attribute. These resources include complete title/menu
   screens with the CHEATER logo, version, authors, menu labels, and controls.
-  They can be represented in UHF as fixed 80-column text plus foreground and
-  background spans.
+  `SCR*.SCD` starts at offset zero with the LE uint32 unpacked size `4000`.
+  `SCREENS.SCO` contains eight consecutive records, each with a three-byte
+  `SCR` marker followed by that size and one compressed payload. There is no
+  count field or per-record compressed length. Glyph and attribute layout is
+  the same as the modern text-screen cells below. The v6 `SCR1`, `SCR2` and
+  `SCR6` attributes include bit 7. The file has no flag selecting its meaning;
+  the active VGA attribute-controller mode determines blink versus background
+  intensity, as described below. Never discard the bit.
 - `SCR*.SCX`, `SP.SCX`, and `XMAS.SCX` use LZHUF too, but decode to a four-byte
   little-endian `width, height` header followed by one indexed pixel byte per
   pixel. Observed files decode to `640 x 480` plus 307200 pixel indexes. They
   are raster screens, not ASCII art. Their original VGA palette still needs to
-  be identified before a faithful image export can be added to a future UHF
-  asset/attachment layer.
+  be identified to assign original colors to the pixel indexes.
 
 Besides article streams, modern DAT files also ship non-text resource records.
-These are excluded from the topic list and surfaced separately in bundle
-metadata. Simple convenience fields still expose
-`scorpion_resource_record_count` and `scorpion_resource_record_names`.
+They are not article records merely because their object type is `DATA`.
 
-Observed families in the current corpus:
+#### Modern text-screen cells
 
-- `obr*`, `obrview`, `xicht`, `pirat`, `egg`, `scroll` — compressed 80x25 text-mode screens, ASCII-art, and TheDraw-like presentation assets
+A complete text screen is exactly 4000 decoded bytes. There is no header:
+
+```text
+offset = (y * 80 + x) * 2
+byte[offset]     = glyph index in the selected 256-glyph bitmap font
+byte[offset+1]   = VGA text attribute
+foreground      = attribute & 0x0F
+background      = (attribute >> 4) & 0x07
+```
+
+Coordinates start at `(0,0)` and rows run top-to-bottom. Spaces and zero
+glyphs are cells too; do not trim the native margins or parse text-style
+bytes such as `F0` as commands. A cell `F0 1E` draws font glyph 240 with
+yellow foreground (CGA index 14) and blue background (index 1).
+
+Attribute bit 7 depends on the native VGA blink/bright-background mode.
+With blink enabled, background is `(attribute >> 4) & 7`; bit 7 marks a
+blinking foreground. During the hidden phase, keep the background and omit
+only the glyph's foreground pixels. With blink disabled, background is
+`(attribute >> 4) & 15`, and bit 7 supplies its intensity bit. For example
+`44 87` is blinking gray `D` on black in the first mode, but static gray `D`
+on dark-gray background in the second. No bit in the stored screen itself
+chooses between these meanings. Standard DOS text mode uses blinking;
+an inherited alternative VGA mode must be recorded separately by a decoder.
+All observed modern screen cells have bit 7 clear; v6 templates retain it
+on DEMO/registration captions. The other colors use the ordinary 16-color
+CGA palette (black/blue/green/cyan/red/magenta/brown/light-gray followed by
+the bright variants).
+
+`PROGRAM.DAT` resource bindings differ by layout:
+
+| Screen role/name (v16, v21–v23) | Positional name in v15 |
+|---|---|
+| `_main` | `obr1` |
+| `egg` | `obr3` |
+| `obr1`..`obr4` | `obr15`..`obr18` |
+| `obrview` | `obr19` |
+| `scroll` | `obr21` |
+| `xicht` | `obr24` |
+| `pirat` (v21–v23) | absent |
+
+The native font selection values are `1`..`7` for `FONT1`..`FONT7`,
+`8` for `FONTKRUH`, and `0` for `FONTOK`. The program initializes the
+selected value to `1`. Screen backgrounds inherit the selected font;
+the default resource view therefore uses `FONT1`, not a Unicode/font
+guess based on its caption. These objects include background templates:
+version/date fields and live menus can be filled by the program afterward,
+and are not missing bytes in the stored screen.
+
+Observed resource families in the current corpus:
+
+- `_main`, selected `obr*`, `obrview`, `xicht`, `pirat`, `egg`, `scroll` —
+  the complete text-cell screens identified above; a name prefix alone does
+  not distinguish screens, fonts, text indexes and version/date metadata
 - `FONT1..FONT7`, `FONTKRUH`, `FONTOK` — Allegro-compressed objects whose
   decoded payloads are raw 4096-byte 8 x 16 bitmap fonts
 - `datum*`, `rok*`, `seznam*`, `verze*`, `library*`, `Librar`, `update_ini` — metadata / library helper records
-
-The richest modern bundle for this purpose is `v23 PROGRAM.DAT`, which still
-contains 23 non-topic resource records including fonts and `obr*` assets. These
-records are the obvious candidates for a future UHF2 asset/attachment layer.
 
 ## Index And Marker IDs
 
@@ -443,76 +495,8 @@ Modern DAT `seznam*` resources confirm the split:
 - `EASTER.DAT / seznamE` lists program pages (`R...`) plus numeric Easter-egg
   targets.
 
-This means a converter must not infer the content section from the first
-character alone. Use the current source file or parsed index role first, then
-use the bracketed target only as a stable local ID.
-
-## UHF2 Export Metadata
-
-Yes, but only through existing UHF2 fields.
-
-Modern Scorpion DAT exports keep the usual UHF metadata such as
-`metadata.source.filename`, `metadata.source.format`, `metadata.source.encoding`,
-the black DOS-like `metadata.ui` theme, and the lightweight non-topic resource
-summary fields `scorpion_resource_record_count` and
-`scorpion_resource_record_names`.
-
-The writer no longer emits extra Scorpion-only UHF keys for record inventories,
-Allegro object lists, or per-topic byte boundaries. When a source bundle has one
-clear source-wide date, it belongs in the existing `metadata.source.date` field
-instead of a new custom export key.
-
-## Viewer Defaults
-
-All supported Scorpions Cheater families, from v1 through the modern DAT
-releases, export the same black DOS-like UI theme through UHF `metadata.ui`.
-The help window therefore opens with a black background instead of the default
-cyan TurboVision pane. Inline Scorpion spans still use the DOS CGA color
-palette.
-
-## Reader Model
-
-The reader implementation is split by responsibility:
-
-- `thelpviewer/server/converter/readers/scorpion_reader.py`: Scorpion version/path
-  helpers, shared Scorpion text encoding/theme constants, and top-level
-  dispatch between modern DAT and legacy readers
-- `thelpviewer/server/converter/readers/scorpion_bundle.py`: Scorpion-only bundle
-  grouping and document variants; this is where v3 sections and v4-v14
-  multi-file category merges are assembled
-- `thelpviewer/server/converter/readers/allegro_dat.py`: generic Allegro DAT parser,
-  old-crypt support, and Allegro LZSS decompression
-- `thelpviewer/server/converter/readers/scorpion_dat_parser.py`: Scorpion password,
-  decoded `DATA` entries, records, and article slices
-- `thelpviewer/server/converter/readers/scorpion_dat_reader.py`: Kamenicky text rendering,
-  inline styles, Scorpion-specific byte fixes, topics, index entries, contents,
-  black-window UI metadata, and resource-record inventory
-- `thelpviewer/server/converter/readers/scorpion_legacy_reader.py`: shared legacy
-  primitives, RAR4 overlay parsing, PKLITE unpack handoff, text normalization,
-  SCO topic parsing, shared SCO text rendering, and non-text resource filtering
-- `thelpviewer/server/converter/readers/scorpion_legacy_v1x.py`: version-specific
-  v1.0 and v1.5 readers
-- `thelpviewer/server/converter/readers/scorpion_legacy_v3x.py`: version-specific
-  v3 and v3.5 readers
-- `thelpviewer/server/converter/readers/scorpion_legacy_v4x.py`: version-specific
-  v4-v5 SCO readers using the `SCORPION 00 01` Huffman text libraries
-- `thelpviewer/server/converter/readers/scorpion_legacy_v6x.py`: version-specific
-  v6-v14 SCO/SCD/SCX readers using LZHUF text libraries
-
-The Scorpion reader selects `decoded_payload` for compressed Allegro `DATA`
-objects. `stored_payload` is kept only as source metadata; it is not the article
-text stream.
-
-Generic writers do not contain Scorpion-specific logic. `bundle.py` asks the
-extension layer for optional source groups and document variants, and `json.py`
-only emits custom metadata named in `transport_metadata_keys`.
-
-Merged legacy SCO category bundles retain the source-validation counters in
-that allowlist, including `scorpion_sco_marker_topic_count`,
-`scorpion_sco_index_entry_count`, `scorpion_sco_index_header_count`,
-`scorpion_sco_index_status_counts`, and `scorpion_sco_index_flag_counts`.
-These fields must survive the merge so generated bundles can still be audited
-against the individual SCO index structures.
+The first target character alone does not identify the content section.
+Its namespace is scoped by the source library and parsed index role.
 
 ## Modern DAT Extractor Recipe
 
@@ -521,7 +505,6 @@ Allegro-backed branch used by v15, v16, v21, v22, and v23.
 
 Detection:
 
-- match the source path to a modern Scorpions Cheater version directory
 - accept article DAT names such as `CHEATY.DAT`, `NAVODY.DAT`, `PROGRAM.DAT`,
   `VTIPY.DAT`, `EASTER.DAT`, and v21 `TEXTY.DAT`
 - require raw bytes to start with `12 1E 03 2D`
@@ -551,9 +534,9 @@ Article extraction:
   `[L002]`, `[N001]`, `[R201]`
 - do not split on formatting/control tokens that are not real markers
 - the first non-empty content line after a marker is the topic title
-- keep the marker as an alias / source ID
-- render attribute bytes as UHF spans or strip them from plain text according
-  to the inline-format table above
+- retain the marker as the source's local article ID
+- interpret foreground/background state according to the inline-format table
+  before decoding remaining character bytes
 
 Resource handling:
 
@@ -604,8 +587,124 @@ documented DAT version.
 | `EASTER.DAT` | 10 | 9 | Easter eggs and bonus/misc articles |
 | `NAVODY.DAT` | 47 | 46 | Walkthroughs and guides |
 | `PROGRAM.DAT` | 26 | 25 | Program/editorial/help text |
-| `TEXTY.DAT` | 6 | 5 | Additional program/text articles |
+| `TEXTY.DAT` | 6 | 5 | SC 2000 text/catalog records, without DOS article markers |
 | `VTIPY.DAT` | 17 | 16 | Jokes |
+
+The v21 `TEXTY.DAT` has five DATA names: `kontakt`, `novezpra`, `oprogramu`,
+`spoluaut` and `txt`. The first four begin with angle-bracket controls such
+as `<!K=1><!M=1>Kontakt<!M!>`; they are not ordinary DOS `[Rnnn]` articles.
+The `txt` record starts with an SC 2000 catalog heading and uses `#` title
+lines followed by comma-separated resource descriptors. This is a different
+text grammar inside the same Allegro container. Its control operands,
+links and catalog-field meanings are not established here. Container
+decompression alone does not determine how those records should be displayed.
+
+##### SC 2000 companion text: observed byte syntax
+
+The four prose objects are CR/LF byte text with inline ASCII tokens bounded
+by adjacent `3C 21` (`<!`) and `3E` (`>`). A space between `<` and `!`
+changes the byte sequence: the explanatory examples spelled `< !J=1>` in
+`novezpra` are ordinary source text, not active `<!J=1>` tokens. An apparent
+DOS marker such as `[R010]` inside this angle-bracket grammar does not switch
+the object to the separate DOS article grammar. Observed token forms are:
+
+| Token prefix | Observed forms | Established meaning |
+| --- | --- | --- |
+| `K` | `<!K=1>`, `<!K=3>` | Integer operand; display semantics unknown |
+| `M` | `<!M=1>`, `<!M=2>`, `<!M=4>`, `<!M!>` | Font macro; end form restores the previous font; exact macro table unknown |
+| `F` | `<!F=9>`, `<!F=10>`, `<!F=13>` | Font selector, not the DOS foreground-color alphabet; selector 20 is described as Wingdings; exact font resources unknown |
+| `L` | `<!L=40,63,665,63,1>`, `<!L=40,64,665,64,1>` | Five comma-separated integers; coordinate/attribute semantics unverified |
+| `U` | `<!U>`, `<!U!>` | Underline start/end; must be ended before the physical row ends |
+| `J` | `<!J=1>`, `<!J!>` | Justified text start/end; exact wrapping/font metrics unknown |
+| `B` | `<!B=4>` | Integer operand; behavior unverified |
+| `X` | `<!X=1,2>`, `<!X!1>` through `<!X=11,5>`, `<!X!11>` | Relative text link: zone number, destination page; end form repeats the zone number; native page-to-text binding unknown |
+| `?` | `<!?>` | REM: skip its physical row; not a page-break command |
+
+These meanings are explicitly described in the embedded `novezpra` text.
+The `!` forms are not XML closing tags, and `<!?>` is not an ordinary
+letter-named command. A scanner must preserve unknown tokens and bytes;
+recognizing an `X` token alone does not establish a text-row destination.
+The graphical consumer uses an 800 x 600 pixel display; pagination depends
+on its chosen font and wrapping, not a fixed count of DOS text rows. Related
+documented controls (not present in these four prose objects) are:
+
+- `<!A=zone,file,page>` / `<!A!zone>`: text link to a page in another file.
+- `<!Z=zone,x1,y1,x2,y2,page>`: absolute rectangular link zone.
+- `<!O=...>`: absolute picture placement; its complete operand order is
+  not established here. An X coordinate of `999` centers the picture.
+- `<!W=filename,x>`: picture at the current text row; `999` centers it.
+- `<!PP=directory>` and `<!PT=directory>`: picture/text default directory.
+- `<!H=x1,x2,color>`: relative horizontal separator.
+- `C`: centering; the embedded description requires the tag at the
+  beginning of the physical row, but does not specify its complete operand
+  syntax. Exact horizontal bounds/font metrics are also unknown.
+- `<!S>`: text/picture shadow; the description places it before a row, word
+  or picture. The description also mentions using `<!S>` to end text
+  shadowing; its exact toggle/state behavior is unverified.
+- `<!BB=color>`: persistent color according to the embedded description;
+  the numeric color table and its interaction with `B` are unknown.
+- `<!DT=zone>` / `<!DT!zone>`: text Back zone; the end form repeats the
+  zone number.
+- `<!DP=zone,x1,y1,x2,y2>`: absolute rectangular Back zone. Coordinate
+  bounds and history behavior require the consumer.
+
+The embedded description calls byte `FEh` a text terminator, but its complete
+recognition rule is unverified. In the retained `spoluaut` object, relative
+decoded offset 665 (0299h) contains `FE 73 70 B0 9A 6E B0` inside a physical
+prose row; more rows follow, and offset 1592 (0638h), the final byte, is also
+`FE`. This could involve source defects or an encoding/font-specific rule;
+the bytes alone do not establish which. Do not use the first `FE` to truncate
+an Allegro DATA object: container extraction uses the declared decoded size.
+The separate catalog's observed tail rule is specified below.
+
+The documented `M!` behavior is to restore the preceding font, not always
+the default font. Do not map `F` numerals directly to VGA palette colors.
+The DOS control-byte alphabet above does not establish this grammar's font
+or character assignment. For example, `spoluaut` uses `F8h` inside the word
+`Spoluato<F8h>i` at decoded offset 20 (0014h), where interpreting it as the
+DOS degree-sign glyph would not recover the intended prose. Its prefix is
+`<!K=3>`, whereas the other three objects begin `<!K=1>`. The numeric `K`
+mapping has not been established. The title bytes fit Windows-1250, but
+the later paragraph also has `ADh`, `B0h`, `B1h`, `D8h` and `FEh` in words
+where one Windows-1250 pass does not recover ordinary Czech text. The font,
+encoding and possible source-defect boundaries remain unknown. Do not infer
+the prose encoding from the catalog's Windows-1250 text.
+
+The `txt` catalog uses physical CR/LF lines and Windows-1250 text. Stop at
+the first `FEh`; the observed tail contains two `FEh` bytes followed by CR/LF.
+`#` (`23h`) introduces a title;
+commas inside such a title are literal text, not descriptor separators.
+Following item lines have observed forms such as:
+
+```text
+#1000 Miglia
+--,1,4,0005-01,1000MIGL.COM,Trainer +8
+#101st Airbone in Normandy
+--,0,1,*,[B007],
+```
+
+Trailing empty fields are significant syntactically; they must not be
+discarded by a field splitter. The first field is a two-byte form such as
+`--`, `-*`, `-!` or `-b`. The next fields contain `0`/`1` and an alphanumeric
+one-byte value. Remaining operands can include an archive-like identifier,
+a literal filename, a bracketed DOS article ID or a description. Their
+complete type/flag/lookup rules are not established by these examples.
+The native cheat-export routine writes `#title` followed by
+`-*,0,1,*,[marker],` from the CHEATY library. Thus six-field rows with type
+`1`, resource address `*` and a bracketed four-byte marker use the CHEATY
+namespace. The same marker in a joke or Easter library is not that target.
+Rows naming `LIB`-style archive/member locations do not by themselves
+establish a filesystem path to an attachment.
+
+Short lines such as `-!,US Navy Fighters` have a different shape from the
+six-field item rows; do not pad them with invented fields or interpret the
+title after the comma as a DOS numeric context. The short form names another
+catalog title verbatim. Repeated title captions must retain distinct physical
+rows; resolving a caption without the original consumer's duplicate-selection
+rule can be ambiguous. Other observed rows contain
+seven fields, for example `-*,1,4,0029-05,trainer,zip,`. Whether the comma
+between `trainer` and `zip` is malformed source or meaningful to the native
+consumer is unknown; do not silently replace it with a period.
 
 #### v22
 
@@ -619,8 +718,6 @@ documented DAT version.
 
 ### Legacy v1.x
 
-Source modules: `scorpion_legacy_reader.py` and `scorpion_legacy_v1x.py`.
-
 Observed files:
 
 | Version | File | Contains / status |
@@ -633,7 +730,6 @@ Observed files:
 
 Detection:
 
-- version directory resolves to `Scorpions Cheater 1`
 - accepted suffix is `.DAT`
 - file starts as a DOS MZ executable or otherwise contains an embedded RAR4
   signature `52 61 72 21 1A 07 00`
@@ -666,18 +762,10 @@ Text extraction:
 - internal blank lines are preserved; only leading/trailing empty rows are
   trimmed from a topic or section
 
-Export:
-
-- create overview, `O programu`, `Ovládání`, and parsed sample cheat topics
-- use the parsed topic order from the string stream
-- keep RAR member names, overlay offset, and parsed member name as source
-  metadata
-
 #### v1.5 `CHEATER.EXE`
 
 Detection:
 
-- version directory resolves to `Scorpions Cheater 1.5`
 - accepted suffix is `.EXE`
 - `CS.EXE` is skipped; it is not a help corpus file for this branch
 - the useful corpus is in `CHEATER.EXE`, typically PKLITE-packed
@@ -685,8 +773,7 @@ Detection:
 Container extraction:
 
 1. Detect DOS MZ and PKLITE in the executable header.
-2. Unpack PKLITE. The current implementation delegates this step to `deark`
-   with module `pklite`.
+2. Unpack the PKLITE stream to recover the original executable image.
 3. Use the unpacked EXE payload as the string-table source.
 
 Text extraction:
@@ -705,17 +792,7 @@ Text extraction:
   normalization and a small override table for known corpus typos
 - internal blank lines are preserved by the section normalizer
 
-Export:
-
-- create overview, `O programu`, `Menu pro tisk`, `Ovládání`, optional
-  `Seznam her`, and parsed cheat topics
-- store directory counts for `new`, `renovated`, and `plain`
-- add resolved directory aliases to matching cheat topics
-
 ### Legacy v3.x
-
-Source modules: `scorpion_legacy_reader.py`, `scorpion_legacy_v3x.py`, and
-`scorpion_bundle.py`.
 
 Observed files:
 
@@ -741,8 +818,6 @@ name:
 
 Detection and archive extraction:
 
-- version directories resolve to `Scorpions Cheater 3` or `Scorpions Cheater
-  3.5`
 - accepted suffix is `.DAT`
 - find a RAR4 overlay either after the computed MZ payload or by scanning for
   `52 61 72 21 1A 07 00`
@@ -762,30 +837,16 @@ Topic parsing:
 - `SCC.SC` order is applied first for cheat topics; manuals, remaining cheats,
   jokes, and other parsed topics follow in source order
 
-Context IDs:
-
-- digit-only cheat markers use their numeric value directly
-- other sections add a section offset to the marker value
-- manuals use base `0x100000`
-- jokes use base `0x200000`
-- index/other use base `0x300000`
-- non-digit cheat markers use base `0x400000`
-
-Export:
-
-- one parsed document initially contains all sections under `Návody`, `Cheaty`,
-  `Vtipy`, and `Další`
-- bundle variants split that document into three UHF files:
-  `navody.json.gz`, `cheaty.json.gz`, and `vtipy.json.gz`
-- `SCC.SC` is not exported as its own final article file
+The marker string is the source article identifier. It does not contain a
+numeric section-offset scheme or a JSON/bundle filename.
 
 The `MULTI.*` classification is also supported by web copies of individual
 entries. `ALONE IN THE DARK II` and `CHAOS ENGINE` both resolve to Cheater.cz
 `cheat` articles, and `CLOCKWISER` appears as a cheat/password list rather than
 as a walkthrough.
 
-The v3 reader also handles legacy formatting attribute bytes that would decode
-as visible Kamenicky glyphs. Web copies of the same texts show normal prose and
+The v3 text contains formatting attribute bytes that would otherwise decode
+as visible Kamenický glyphs. Web copies of the same texts show normal prose and
 code lists without these symbols; for example `THE LEGεND OF KYRANDIA` is the
 plain title `Legend of Kyrandia`, and the cave map embedded after `Plánek
 jeskyně` is an image in the web article rather than printable `Φ` / `≡`
@@ -804,9 +865,6 @@ Other nearby high bytes in this branch, such as `±`, `≥`, `≤`, `⌠`, and `
 follow the same attribute-control pattern around codes and labels.
 
 ### Legacy v4.x / v5.x SCO
-
-Source modules: `scorpion_legacy_reader.py`, `scorpion_legacy_v4x.py`, and
-`scorpion_bundle.py`.
 
 Versions 4 and 5 are the verified external `.SCO` library branch. Text
 libraries begin with:
@@ -893,49 +951,35 @@ walkthrough namespace in this library, but `O` contains both spells and maps,
 and later DAT releases reuse `N`, `O`, and `P` for ordinary cheat blocks. Keep
 the explicit parenthesized label and the source-library role.
 
-Index stream handling:
+Index stream roles:
 
-- `DATAA.SCO` with index entries is the cheat index and exports as
-  `Index cheatů`
-- `DATAB.SCO` with index entries, or any index whose first line contains
-  `[FÓRŮ]`, is the joke index and exports as `Index vtipů`
-- index rows whose label starts with `SEZNAM` are headers, not game entries
-- all parsed index rows are kept in metadata as `scorpion_sco_index_entries`
+- `DATAA.SCO` contains the cheat index.
+- `DATAB.SCO` or a header containing `[FÓRŮ]` identifies a joke index.
+- Rows whose label starts with `SEZNAM` are headers, not game entries.
 
 Verified v4 file roles:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `DATAA.SCO`, `DATA1.SCO`..`DATA6.SCO` | merged to `cheaty.json.gz` | Cheat index plus cheat topic streams |
-| `DATAB.SCO`, `DATAV1.SCO` | merged to `vtipy.json.gz` | Joke index plus jokes |
-| `DATAN1.SCO` | `navody.json.gz` | Manuals/walkthroughs |
-| `DATAHELP.SCO`, `DATATEXT.SCO` | merged to `program.json.gz` | Program/help text |
-| `FA.SCO`..`FF.SCO`, `FOK.SCO` | skipped | Font/resource files; headers contain strings such as `SCORPIONS CHEATER 4.0 font A` |
-| `SLEEPER.SCO` | skipped | DOS executable/helper |
-| `SPELDATA.SCO` | skipped | Binary resource, not a `SCORPION 00 01` text library |
+| File(s) | Contains |
+|---|---|
+| `DATAA.SCO`, `DATA1.SCO`..`DATA6.SCO` | Cheat index plus cheat topic streams |
+| `DATAB.SCO`, `DATAV1.SCO` | Joke index plus jokes |
+| `DATAN1.SCO` | Manuals/walkthroughs |
+| `DATAHELP.SCO`, `DATATEXT.SCO` | Program/help text |
+| `FA.SCO`..`FF.SCO`, `FOK.SCO` | Font/resource files; headers contain strings such as `SCORPIONS CHEATER 4.0 font A` |
+| `SLEEPER.SCO` | DOS executable/helper |
+| `SPELDATA.SCO` | Binary resource, not a `SCORPION 00 01` text library |
 
 Verified v5 file roles:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `DATAA.SCO`, `DATA1.SCO`..`DATA7.SCO` | merged to `cheaty.json.gz` | Cheat index plus cheat topic streams |
-| `DATAB.SCO`, `DATAV1.SCO` | merged to `vtipy.json.gz` | Joke index plus jokes |
-| `DATAN1.SCO` | `navody.json.gz` | Manuals/walkthroughs |
-| `DATAHELP.SCO`, `DATATEXT.SCO` | merged to `program.json.gz` | Program/help text |
-| `FA.SCO`..`FF.SCO`, `FOK.SCO` | skipped | Font/resource files |
-| `SLEEPER.SCO` | skipped | DOS executable/helper |
-| `SPELDATA.SCO` | skipped | Binary resource, not a `SCORPION 00 01` text library |
-
-Export:
-
-- legacy SCO/SCD exports are category bundles: `cheaty`, `vtipy`, `navody`,
-  and `program`
-- index files such as `DATAA` and `DATAB` are source members of the category
-  bundle, not standalone final bundles
-- topic titles are retitled from parsed index entries by matching the index
-  `target_id` to the article marker, e.g. `0002`, `N030`, or `R001`
-- the category merge is implemented in `scorpion_bundle.py`, not in generic
-  bundle or JSON writers
+| File(s) | Contains |
+|---|---|
+| `DATAA.SCO`, `DATA1.SCO`..`DATA7.SCO` | Cheat index plus cheat topic streams |
+| `DATAB.SCO`, `DATAV1.SCO` | Joke index plus jokes |
+| `DATAN1.SCO` | Manuals/walkthroughs |
+| `DATAHELP.SCO`, `DATATEXT.SCO` | Program/help text |
+| `FA.SCO`..`FF.SCO`, `FOK.SCO` | Font/resource files |
+| `SLEEPER.SCO` | DOS executable/helper |
+| `SPELDATA.SCO` | Binary resource, not a `SCORPION 00 01` text library |
 
 Non-text/resource filtering for this branch:
 
@@ -952,9 +996,6 @@ Non-text/resource filtering for this branch:
 
 ### Legacy v6.x-v14.x SCO/SCD/SCX Profiles
 
-Source module: `scorpion_legacy_v6x.py`, sharing the same SCO/SCD base reader
-as v4/v5.
-
 These releases keep the broader SCO family but change the library naming and
 introduce `.SCD` / `.SCX` split resources.
 
@@ -967,6 +1008,67 @@ Text compression is the classic Okumura `lzhuf` stream:
 - the ring buffer is initialized with ASCII spaces
 - matches are encoded as symbol `256..313` plus a position code whose upper
   6 bits use the fixed `p_len` / `p_code` table from `lzhuf.c`
+
+#### Adaptive tree and position decoding
+
+All compressed bits are read MSB first. Initialize 314 literal/match leaves
+and 313 internal nodes; arrays are `freq[628]`, `child[627]` and
+`parent[941]`. For `i=0..313`, set `freq[i]=1`, `child[i]=627+i` and
+`parent[627+i]=i`. Then, with `j=0`, for `i=314..626`, set
+`freq[i]=freq[j]+freq[j+1]`, `child[i]=j`, `parent[j]=parent[j+1]=i`,
+and advance `j` by 2. Root is 626; set `parent[626]=0` and the frequency
+sentinel `freq[627]=65535`.
+
+Decode a symbol by starting at `child[626]`. While this value is below 627,
+read one bit `b` and replace the value with `child[value+b]`. Subtract 627
+to obtain a symbol `0..313`, then update the adaptive tree:
+
+1. If root frequency is 32768, reconstruct the tree as described below.
+2. Set `node=parent[627+symbol]`. Execute the body at least once, **including
+   when this initial node is zero**.
+3. Increment `freq[node]`. If it exceeds `freq[node+1]`, find the last later
+   node with strictly smaller frequency, exchange frequencies and `child`
+   values, and update parent pointers for both exchanged children (and their
+   right siblings when an exchanged child is an internal-node pair). Continue
+   from the later exchanged node.
+4. Replace `node` with `parent[node]`; repeat until this new value is zero.
+
+Reconstruction retains the leaves in their current order, replacing each
+frequency with `(frequency+1)//2`. Rebuild internal nodes in ascending
+frequency order from consecutive pairs, inserting a new sum after equal
+frequencies and before larger ones. Move corresponding `child` entries
+with frequencies. Finally rebuild every parent pointer from the child array.
+The 65535 sentinel and root-parent zero remain unchanged.
+
+Symbols below 256 are literal bytes. Other symbols encode a match length
+`symbol-253`, ranging from 3 to 60. The ring has 4096 positions and starts
+writing at 4036; initialize preceding positions `0..4035` to byte `20`.
+Read the match position using this fixed prefix table:
+
+| Upper position value | Prefix length | Left-aligned prefix byte |
+|---|---:|---|
+| `0` | 3 | `00` |
+| `1..3` | 4 | `20,30,40` |
+| `4..11` | 5 | `50..88`, step `08` |
+| `12..23` | 6 | `90..BC`, step `04` |
+| `24..47` | 7 | `C0..EE`, step `02` |
+| `48..63` | 8 | `F0..FF`, step `01` |
+
+Read an eight-bit value `v`. Select the row/prefix whose interval contains
+`v` (interval width `2^(8-prefix_length)`). For this upper value `u`, read
+`prefix_length-2` more bits, shifting each into `v`. The decoded position is
+`(u<<6)|(v&63)`. Copy the match from
+`(write_position-position-1)&4095`, advancing both source and write positions
+with wraparound. Copy byte by byte so overlapping matches work.
+
+The LE uint32 header is the logical output length. Stop at that length, even
+if the last match describes more bytes; its symbol and position have already
+been consumed. The native routine may physically finish that match, but those
+additional bytes are not part of the declared resource. Unused low bits of
+the last compressed byte are padding. A bit-reader may fetch an extra byte
+for lookahead, including zero at EOF; it must not consume invented EOF bits
+to produce missing output. NUL literals in binary resources are data, not
+terminators.
 
 For `.SCD` libraries the file starts directly with one LZHUF block. For
 v10-v14 `.SCO` text libraries, blocks are concatenated and each block is
@@ -987,115 +1089,112 @@ offset starts with the next known prefix; otherwise continue at
 The decoded v6-v14 text streams still contain the same inline attribute bytes
 as the v3/v4 SCO family. In Kamenicky text these appear as glyphs such as `φ`,
 `≡`, `⌠`, `⌡`, `±`, `Θ`, `≥`, `√`, and `ε`; v10 `DATATEXT.SCD` also uses
-them around box-drawing tables. For v10-v14 the extractor renders the resolved
-attribute controls as UHF inline spans using the same foreground map as the
-modern DAT reader: `0xE7` through `0xEC` as CGA 1 through 6 and `0xEE` through
+them around box-drawing tables. The foreground map is shared with modern DAT: `0xE7` through `0xEC` as CGA 1 through 6 and `0xEE` through
 `0xF5` as CGA 8 through 15. `0xED` / `φ` closes the current foreground span.
 `0xF7` begins a blue-background span and `0xF6` ends it. Modern DAT streams
 also use `0xE6` as the background reset. `0xF8` is preserved as a literal
 degree sign. `0xE5` begins a gray-background span, except for the conservative
 literal-`ň` text case documented above.
 
-`0xEE` / `ε` is restored to literal `E` only when it is embedded between two
-alphanumeric characters, for example `DεFεNDεR` -> `DEFENDER`. If `ε` appears
-next to a box border or as a line/list attribute, it is treated as a formatting
-control instead.
+A literal-E interpretation of `EE` inside words is an extraction hypothesis,
+not an established escape instruction. Standalone `EE` follows the dark-gray
+foreground rule.
 
 Observed v6 shareware files:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `DATAA.SCD`, `DATA1.SCD`..`DATA7.SCD` | decoded and merged to `cheaty.json.gz` | Cheat index plus cheat topic streams |
-| `DATAB.SCD`, `DATAV1.SCD` | decoded and merged to `vtipy.json.gz` | Joke index plus jokes |
-| `DATAN1.SCD` | `navody.json.gz` | Manuals/walkthroughs |
-| `DATATEXT.SCD` | `program.json.gz` | Program/help text |
-| `FA.SCO`..`FF.SCO`, `FOK.SCO` | skipped | Font/resource files |
-| `SCR1.SCD`..`SCR6.SCD` | skipped | Screen/resource banks |
-| `SLEEPER.SCO` | skipped | DOS executable/helper |
+| File(s) | Contains |
+|---|---|
+| `DATAA.SCD`, `DATA1.SCD`..`DATA7.SCD` | Cheat index plus cheat topic streams |
+| `DATAB.SCD`, `DATAV1.SCD` | Joke index plus jokes |
+| `DATAN1.SCD` | Manuals/walkthroughs |
+| `DATATEXT.SCD` | Program/help text |
+| `FA.SCO`..`FF.SCO`, `FOK.SCO` | Font/resource files |
+| `SCR1.SCD`..`SCR6.SCD` | Screen/resource banks |
+| `SLEEPER.SCO` | DOS executable/helper |
 
 Observed v7 shareware files:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `DATAA.SCD`, `DATA1.SCD`..`DATA8.SCD` | decoded and merged to `cheaty.json.gz` | Cheat index plus cheat topic streams |
-| `DATAB.SCD`, `DATAV1.SCD` | decoded and merged to `vtipy.json.gz` | Joke index plus jokes |
-| `DATAN1.SCD` | `navody.json.gz` | Manuals/walkthroughs |
-| `DATATEXT.SCD` | `program.json.gz` | Program/help text |
-| `FA.SCO`..`FF.SCO`, `FOK.SCO` | skipped | Font/resource files |
-| `DRIVER.SCO`, `SLEEPER.SCO` | skipped | DOS executable/helper files |
-| `SCR1.SCD`, `SCR2.SCD`, `SCR4.SCD`..`SCR6.SCD`, `SP.SCX` | skipped | Screen/resource banks |
+| File(s) | Contains |
+|---|---|
+| `DATAA.SCD`, `DATA1.SCD`..`DATA8.SCD` | Cheat index plus cheat topic streams |
+| `DATAB.SCD`, `DATAV1.SCD` | Joke index plus jokes |
+| `DATAN1.SCD` | Manuals/walkthroughs |
+| `DATATEXT.SCD` | Program/help text |
+| `FA.SCO`..`FF.SCO`, `FOK.SCO` | Font/resource files |
+| `DRIVER.SCO`, `SLEEPER.SCO` | DOS executable/helper files |
+| `SCR1.SCD`, `SCR2.SCD`, `SCR4.SCD`..`SCR6.SCD`, `SP.SCX` | Screen/resource banks |
 
 Observed v8 shareware files:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `DATAA.SCD`, `DATA1.SCD`..`DATA9.SCD` | decoded and merged to `cheaty.json.gz` | Cheat index plus cheat topic streams |
-| `DATAB.SCD`, `DATAV1.SCD` | decoded and merged to `vtipy.json.gz` | Joke index plus jokes |
-| `DATAN1.SCD` | `navody.json.gz` | Manuals/walkthroughs |
-| `DATATEXT.SCD` | `program.json.gz` | Program/help text |
-| `FA.SCO`..`FF.SCO`, `FOK.SCO` | skipped | Font/resource files |
-| `DRIVER.SCO`, `SLEEPER.SCO` | skipped | DOS executable/helper files |
-| `SCR1.SCD`, `SCR2.SCD`, `SCR4.SCD`..`SCR6.SCD`, `SP.SCX` | skipped | Screen/resource banks |
+| File(s) | Contains |
+|---|---|
+| `DATAA.SCD`, `DATA1.SCD`..`DATA9.SCD` | Cheat index plus cheat topic streams |
+| `DATAB.SCD`, `DATAV1.SCD` | Joke index plus jokes |
+| `DATAN1.SCD` | Manuals/walkthroughs |
+| `DATATEXT.SCD` | Program/help text |
+| `FA.SCO`..`FF.SCO`, `FOK.SCO` | Font/resource files |
+| `DRIVER.SCO`, `SLEEPER.SCO` | DOS executable/helper files |
+| `SCR1.SCD`, `SCR2.SCD`, `SCR4.SCD`..`SCR6.SCD`, `SP.SCX` | Screen/resource banks |
 
 Observed v10 files:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `CHEATS.SCO` | `cheaty.json.gz` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
-| `HELPS.SCO` | `navody.json.gz` | Concatenated `HLP` blocks: manual/help index followed by manuals |
-| `JOKES.SCO` | `vtipy.json.gz` | Concatenated `JOK` blocks: joke index followed by jokes |
-| `DATATEXT.SCD` | `program.json.gz` | Program/help text |
-| `FONT.SCO` | skipped | Font resource |
-| `DRIVER.SCO`, `SLEEPER.SCO` | skipped | DOS executable/helper files |
-| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX`, `XMAS.SCX` | skipped | Screen/resource banks |
+| File(s) | Contains |
+|---|---|
+| `CHEATS.SCO` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
+| `HELPS.SCO` | Concatenated `HLP` blocks: manual/help index followed by manuals |
+| `JOKES.SCO` | Concatenated `JOK` blocks: joke index followed by jokes |
+| `DATATEXT.SCD` | Program/help text |
+| `FONT.SCO` | Font resource |
+| `DRIVER.SCO`, `SLEEPER.SCO` | DOS executable/helper files |
+| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX`, `XMAS.SCX` | Screen/resource banks |
 
 Observed v11 files:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `CHEATS.SCO` | `cheaty.json.gz` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
-| `JOKES.SCO` | `vtipy.json.gz` | Concatenated `JOK` blocks: joke index followed by jokes |
-| `NAVODY2.SCO`, `NAVODY3.SCO` | merged to `navody.json.gz` | Concatenated `HLP` / `HLPnnn` manual blocks |
-| `DATATEXT.SCD` | `program.json.gz` | Program/help text |
-| `FONT.SCO` | skipped | Font resource |
-| `DRIVER.SCO`, `SLEEPER.SCO` | skipped | DOS executable/helper files |
-| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX`, `XMAS.SCX` | skipped | Screen/resource banks |
+| File(s) | Contains |
+|---|---|
+| `CHEATS.SCO` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
+| `JOKES.SCO` | Concatenated `JOK` blocks: joke index followed by jokes |
+| `NAVODY2.SCO`, `NAVODY3.SCO` | Concatenated `HLP` / `HLPnnn` manual blocks |
+| `DATATEXT.SCD` | Program/help text |
+| `FONT.SCO` | Font resource |
+| `DRIVER.SCO`, `SLEEPER.SCO` | DOS executable/helper files |
+| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX`, `XMAS.SCX` | Screen/resource banks |
 
 Observed v12 files:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `CHEATS.SCO` | `cheaty.json.gz` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
-| `JOKES.SCO` | `vtipy.json.gz` | Concatenated `JOK` blocks: joke index followed by jokes |
-| `NAVODY2.SCO`, `NAVODY3.SCO`, `NAVODY4.SCO` | merged to `navody.json.gz` | Concatenated `HLP` / `HLPnnn` manual blocks |
-| `DATATEXT.SCD` | `program.json.gz` | Program/help text |
-| `FONT.SCO` | skipped | Font resource |
-| `DRIVER.SCO`, `SLEEPER.SCO` | skipped | DOS executable/helper files |
-| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX` | skipped | Screen/resource banks |
+| File(s) | Contains |
+|---|---|
+| `CHEATS.SCO` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
+| `JOKES.SCO` | Concatenated `JOK` blocks: joke index followed by jokes |
+| `NAVODY2.SCO`, `NAVODY3.SCO`, `NAVODY4.SCO` | Concatenated `HLP` / `HLPnnn` manual blocks |
+| `DATATEXT.SCD` | Program/help text |
+| `FONT.SCO` | Font resource |
+| `DRIVER.SCO`, `SLEEPER.SCO` | DOS executable/helper files |
+| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX` | Screen/resource banks |
 
 Observed v13 files:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `CHEATS.SCO` | `cheaty.json.gz` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
-| `JOKES.SCO` | `vtipy.json.gz` | Concatenated `JOK` blocks: joke index followed by jokes |
-| `NAVODY2.SCO`, `NAVODY3.SCO`, `NAVODY4.SCO` | merged to `navody.json.gz` | Concatenated `HLP` / `HLPnnn` manual blocks |
-| `DATATEXT.SCD` | `program.json.gz` | Program/help text |
-| `FONT.SCO` | skipped | Font resource |
-| `DRIVER.SCO`, `SLEEPER.SCO` | skipped | DOS executable/helper files |
-| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX` | skipped | Screen/resource banks |
+| File(s) | Contains |
+|---|---|
+| `CHEATS.SCO` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
+| `JOKES.SCO` | Concatenated `JOK` blocks: joke index followed by jokes |
+| `NAVODY2.SCO`, `NAVODY3.SCO`, `NAVODY4.SCO` | Concatenated `HLP` / `HLPnnn` manual blocks |
+| `DATATEXT.SCD` | Program/help text |
+| `FONT.SCO` | Font resource |
+| `DRIVER.SCO`, `SLEEPER.SCO` | DOS executable/helper files |
+| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX` | Screen/resource banks |
 
 Observed v14 files:
 
-| File(s) | Export/status | Contains |
-|---|---|---|
-| `CHEATS.SCO` | `cheaty.json.gz` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
-| `JOKES.SCO` | `vtipy.json.gz` | Concatenated `JOK` blocks: joke index followed by jokes |
-| `NAVODY2.SCO`, `NAVODY3.SCO`, `NAVODY4.SCO` | merged to `navody.json.gz` | Concatenated `HLP` / `HLPnnn` manual blocks |
-| `DATATEXT.SCD` | `program.json.gz` | Program/help text |
-| `FONT.SCO` | skipped | Font resource |
-| `DRIVER.SCO`, `SLEEPER.SCO` | skipped | DOS executable/helper files |
-| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX` | skipped | Screen/resource banks |
+| File(s) | Contains |
+|---|---|
+| `CHEATS.SCO` | Concatenated `CHT` blocks: cheat index followed by cheat topics |
+| `JOKES.SCO` | Concatenated `JOK` blocks: joke index followed by jokes |
+| `NAVODY2.SCO`, `NAVODY3.SCO`, `NAVODY4.SCO` | Concatenated `HLP` / `HLPnnn` manual blocks |
+| `DATATEXT.SCD` | Program/help text |
+| `FONT.SCO` | Font resource |
+| `DRIVER.SCO`, `SLEEPER.SCO` | DOS executable/helper files |
+| `SCREENS.SCO`, `SCR001.SCX`..`SCR003.SCX` | Screen/resource banks |
 
 Extractor guidance:
 
@@ -1105,16 +1204,9 @@ Extractor guidance:
 - otherwise try LZHUF:
   - `.SCD`: one direct LZHUF block at file offset `0`
   - `.SCO`: one or more prefixed LZHUF blocks as described above
-- accept the decoded output only if it contains marker topics, at least five
-  index entries, or enough Scorpion/help vocabulary to be readable
-- merge related decoded files by category after they produce real text:
-  - `DATAA` + numeric `DATA*` -> `cheaty`
-  - `DATAB` + `DATAV*` -> `vtipy`
-  - `DATAN*`, `HELPS`, and `NAVODY*` -> `navody`
-  - `DATAHELP` + `DATATEXT` -> `program`
-- use index `target_id` values to retitle matching marker topics across all
-  merged source files; for example the index in `NAVODY2.SCO` also names
-  topics stored in `NAVODY3.SCO` and `NAVODY4.SCO`
+- index target IDs can address articles in other libraries of the same
+  release; for example `NAVODY2.SCO` also indexes articles in `NAVODY3.SCO`
+  and `NAVODY4.SCO`
 
 ## References
 

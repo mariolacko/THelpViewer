@@ -1,5 +1,3 @@
-import re
-
 from thelpviewer.server.converter.readers.thelp import ThelpHelpReader
 
 
@@ -59,30 +57,16 @@ def test_sequential_hotspot_table_cells_are_restored_to_rows():
         + "\u2550" * 9
         + "\u2555"
     )
-    cells = [
-        "[link:topic=2087]   [[ ]  [/link]\u2502",
-        "[link:topic=2086]   ( )  [/link]\u2502",
-        "[link:topic=2085]   .    [/link]\u2502",
-        "[link:topic=2085]   ->   [/link]\u2502",
-        "[link:topic=2082]   ++   [/link]\u2502",
-        "[link:topic=2082]   --   [/link]\u2502",
-        "[link:topic=2081]   &    [/link]\u2502",
-    ]
-
-    restored = ThelpHelpReader._restore_sequential_hotspot_tables(
-        [header, *cells, "tail"]
-    )
+    cells = [b"\2   [ ]  \2\xb3", b"\2   ( )  \2\xb3", b"\2   .    \2\xb3",
+             b"\2   ->   \2\xb3", b"\2   ++   \2\xb3", b"\2   --   \2\xb3", b"\2   &    \2\xb3"]
+    restored = ThelpHelpReader._wrap_text_lines([header.encode("cp437"), *cells, b" tail"], 76)
 
     assert restored == [
-        header,
-        cells[0] + "".join(f" {cell}" for cell in cells[1:]),
-        "tail",
+        header.encode("cp437"),
+        b" ".join(cells) + b" ",
+        b" tail",
     ]
-    visible_row = re.sub(
-        r"\[link:[^\]]+\]|\[/link\]",
-        "",
-        restored[1],
-    ).replace("[[", "[")
+    visible_row = restored[1].replace(b"\2", b"").decode("cp437")
     assert [idx for idx, char in enumerate(visible_row) if char == "\u2502"] == [
         8,
         18,
@@ -95,21 +79,15 @@ def test_sequential_hotspot_table_cells_are_restored_to_rows():
 
 
 def test_sequential_hotspot_table_restores_inside_link_separators_and_partial_row():
-    header = " " + "\u2550" * 5 + "\u2564" + "\u2550" * 5 + "\u2564" + "\u2550" * 5 + "\u2555"
-    cells = [
-        "[link:topic=1]  alpha\u2502[/link]",
-        "[link:topic=2]  beta \u2502[/link]",
-        "[link:topic=3]  gamma\u2502[/link]",
-        "[link:topic=4]  omega\u2502[/link]",
-    ]
-
-    restored = ThelpHelpReader._restore_sequential_hotspot_tables([header, *cells, "tail"])
+    header = b" ======\xd1======\xd1======\xb8"
+    cells = [b"\2  alpha\xb3\2", b"\2  beta \xb3\2", b"\2  gamma\xb3\2", b"\2  omega\xb3\2"]
+    restored = ThelpHelpReader._wrap_text_lines([header, *cells, b" tail"], 26)
 
     assert restored == [
         header,
-        f"{cells[0]} {cells[1]} {cells[2]}",
-        cells[3],
-        "tail",
+        b" ".join(cells[:3]) + b" ",
+        cells[3] + b" ",
+        b" tail",
     ]
 
 
