@@ -12,8 +12,12 @@ user's problem; these rules exist to prevent regressions, not to add process.
   materially change the result. Define what "done" means for complex work.
 - Make surgical edits. Do not reformat or refactor unrelated code, add a
   framework for a one-off need, or overwrite existing user changes.
-- Preserve APIs, configuration, environment variables and file paths unless
-  the user explicitly requests a break. Check callers before changing them.
+- Prefer the current design over backward compatibility. When an intentional
+  fix/refactor changes APIs, configuration, paths or URLs, update callers,
+  tests, catalogs and documentation together; do not retain old aliases,
+  redirect routes or compatibility branches. Keep genuine source-format
+  identities/cross-file links and protect permanent user data. Do not change
+  a correct path merely to make it different.
 - Test the intended behavior, not just implementation details. Verify the
   result before reporting success; explicitly report failed or unverified work.
 - Run Python tests with `PYTHONDONTWRITEBYTECODE=1` and pytest's
@@ -38,29 +42,50 @@ user's problem; these rules exist to prevent regressions, not to add process.
    `search_text`/`query`/URLs following comparable products. Add CRC32
    `entries` for known source files with the correct product, title, encoding
    and language. Do not invent metadata that has not been verified.
+   Register additional verified revisions too; compare CRCs before copying so
+   exact duplicates do not create another edition. Each new CRC entry keeps
+   `sources` provenance in the same provider/query shape as product sources:
+   verified release/download pages, portable `search_text`, fallback `query`
+   and exact `archive_members`. Downloader jobs consume both family and
+   edition queries; do not add retrieval metadata that providers ignore.
 3. `archive_members` is the downloader's exact extraction list, **not** the
    converter's input list. Select the files needed for conversion and any
    required licence notices; do not extract unused companion files. Explain
    retained non-converted files in the downloader or format documentation.
 4. Reuse an existing reader when the format matches. For a new format, add a
-   reader and register it in the manifest. Write `docs/Formats/<Format>.md` as
-   a specification of the original format first: evidence, structure,
-   encoding, controls, links, limits and a small example. Separate confirmed
-   facts from converter behavior and unresolved observations.
+   reader and register it in the manifest. Every `docs/Formats/<Format>.md`
+   datasheet must be a self-contained technical specification from which an
+   independent decoder can be written: byte offsets, field sizes/types,
+   endianness, addressing, encoding/compression, controls, links, boundaries,
+   algorithms and byte examples. Mark unknown fields and unverified rules
+   explicitly; retain technical variant differences, not a history of changes.
+   Do not put our release/fix history, support status, test counts, module paths
+   or UHF mapping in datasheets. Keep these in `CHANGELOG.md`, converter
+   documentation or private `* RE Notes.md`, not among source-format fields.
 5. Build the affected group, rebuild `data/helps/catalog.json`, and verify the
    source-to-bundle mapping, titles, topic counts, cross-file links and Help
    Files menu. Test downloader selection and conversion with representative
    files. Build groups select product roots; opt-in groups need explicit roots
    so broad groups such as `microsoft` do not select or remove them.
 
+Keep source-format decoders and their font/layout/container helpers in
+`converter/readers/`, output orchestration in `converter/writers/`, and shared
+document/UHF models and cross-layer contracts at the converter root.
+
 The Help Files menu groups catalog entries by `product_name`, then `version`.
 Releases of one product use the same version-free `menu_label`, with the
 release in `default_version` or inferred from `collection_prefixes`. Do not
-repeat the release in both menu levels. Keep existing bundle paths stable
-when only changing menu metadata, so saved HELP links keep working.
+repeat the release in both menu levels. Use one canonical bundle layout in CLI
+and server builds. Correct paths when needed; do not maintain old HELP URLs as
+aliases. Reader-verified logical database names are real link identities, not
+backward-compatibility aliases.
 
 ## Server content storage
 
+- Group server feature logic in `server/accounts/`, `server/dos/` and
+  `server/midi/`; keep HTTP adapters in `server/routes/` and common transfers in
+  `server/downloader/`. Stores coordinate explicit modules/components, not mixin
+  chains or dynamic forwarding. Keep small shared modules at the server root.
 - Versioned application JSON belongs in `thelpviewer/config/`; converter and
   downloader modules belong in `thelpviewer/server/`. Server jobs call their
   Python APIs directly. `.env` and Docker Compose stay at the project root;
@@ -68,15 +93,26 @@ when only changing menu metadata, so saved HELP links keep working.
 - Permanent storage is `data/`: original HELP in `data/sources/`, published
   UHF in `data/helps/`, documents in `data/docs/`, accounts/statistics/settings
   databases and private DOS overlays/media in `data/dos/users/<id>/`.
-  HTTP URLs and product/release-relative paths stay stable.
+  HTTP URLs and product/release-relative paths follow the current canonical
+  layout; rebuild catalogs/indexes after an intentional layout change.
 - Cache new HELP/DOS downloads under `var/downloads/help/` and
   `var/downloads/dos/`. Shared generated DOS C is `var/dos/c/`; downloaded
   tracks/covers/catalog are `var/midi/`. Never include `data/` in a rebuild or
   cache cleanup target. Upgrade with the old server stopped; migration verifies
   copies, refuses conflicts and archives originals in `data/migration-backups/`.
 - Server download/build jobs call Python modules, not CLI subprocesses.
-  Selections use manifest IDs; an empty selection means none. Publish staged
+  Selections use manifest IDs; an empty selection means none except DOS
+  sources explicitly marked `required` in the manifest. Publish staged
   HELP only after validation, preserving unselected content and a backup.
+- HELP Packages, DOS Packages and MIDI Sources are separate dialogs derived
+  from TVPackagesDialog, sharing layout/workflow, not a mode-switching window.
+  Keep product/package descriptions in their configuration manifests. HELP
+  installation IDs are product:version, using the same metadata as Help Files; do not fall back
+  to installing/removing an entire product when one edition was selected.
+- In package dialogs the checkbox below the right pane selects only its
+  category/source; bottom Select All/Deselect All buttons span every group of
+  that dialog. Keep domain pipelines separate; reuse source-manifest validation
+  and atomic JSON storage rather than copying configuration I/O into stores.
 
 ## Turbo Vision JS
 

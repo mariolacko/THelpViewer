@@ -4,6 +4,900 @@
 
 ### 2.1 development
 
+- Reconcile Account/Login, shared package dialogs and Downloads documentation
+  with the current APIs and controls. Correct the format index/Sidekick link;
+  distinguish historical compiler experiments from current converter commands.
+  Update account migration/browser fixtures for credential metadata and the
+  security API. Record the full-suite result and unresolved Turbo Basic/local
+  corpus prerequisites in TODO, alongside graphics, external links and shutdown.
+- Add Account's New password mnemonic (Alt+P) through the linked TVLabel.
+- Add account-owned named Passkeys: list, add another authenticator and rename
+  existing keys without changing their cryptographic identity. Suggest an
+  editable OS/browser label at registration; preserve old unnamed credentials.
+  Add optional password creation/change and Login's password alternative:
+  validate matching entries, 15–128-character passphrases and basic weak values;
+  store only salted scrypt hashes and throttle online guessing. Credential
+  changes require a recent verified Passkey session; changing a password
+  revokes other sessions. Keep account IDs, roles and private DOS files intact.
+  Compose the expanded Account/Login from shared TVision controls, with masked
+  inputs and no new layout CSS. Existing accounts remain passwordless until opt-in.
+- Add eleven optional DOS development/office packages: Open Watcom C/C++ and
+  Fortran, Free Pascal 1.0.10, FreeBASIC, NASM, JWasm, DJGPP with RHIDE,
+  Microsoft Word 5.5, As-Easy-As 5.7, Ability Plus 3.0 and VisiCalc.
+  Prepare compiler environments/examples and Word's VGA driver without
+  interactive installation. Retain licence notices and leave existing package
+  selections/private disks unchanged. Use 64 MiB DOS memory for development.
+  Share bounded KWAJ/SZDD expansion for Microsoft's original software archives
+  and case-insensitive archive member exclusions; expanded collections obey
+  the configured shared-disk quota rather than the compressed download limit.
+- Mark UTILS and Volkov Commander as required in the DOS manifest. Keep them
+  checked and non-editable through individual/category/global selection;
+  enforce the same rule in API requests, disk configuration and rebuilds.
+  Align language flags with plain-text space padding, removing the special
+  annotation markup/CSS. Shorten package titles and widen DOS Packages to
+  90 columns so names, installed markers and flags fit without scrolling.
+- Restore package dialog geometry through changeBounds and the shared
+  growMode/calcBounds rules so its controls follow the window size. Respect
+  hidden cluster state during redraw; the MIDI-only control no longer covers
+  lower DOS categories such as Antivirus.
+- Mark Quadrax as Slovak and remove the separate Volkov Commander source
+  package. Keep the runnable Volkov Commander and its original BSD licence
+  notice without installing assembly source files. Prune removed manifest IDs
+  from saved DOS intent, without deleting files or accepting unknown API IDs.
+- Size HELP/DOS Packages to 82/90 columns, move Description one row lower and
+  align the Groups pane bottom with its Select/Deselect checkbox. Keep MIDI
+  at 94 columns. Show useful descriptions without repeated name/status text;
+  distinguish verified HELP editions through manifest-owned version descriptions.
+- Schedule downloads across three regular source lanes plus urgent playback,
+  limiting each site and its subdomains to one transfer. Skip busy sources,
+  guard redirected response bodies and retain HTTP 429 cooldowns between jobs.
+  Existing failed source-conflict, encoding and invalid-file errors are not
+  silently treated as successful downloads.
+- Add optional original DOS Vlak 2.01, DOS Manažer 2.20, Text602 3.1,
+  Manager602 2.0 and operator-supplied Calc602 packages with prepared runtime
+  layouts. Calc602 excludes saved settings and working/test documents. Add language metadata
+  and Unicode flags at the end of DOS package names; mixed/unknown languages
+  use a globe. Package selection and private disks remain unchanged.
+- Compact all package dialogs by removing the three heading rows. Add a
+  shared Select / Deselect All checkbox below the right pane for its current
+  category/source; the bottom Select All / Deselect All buttons now span every
+  group of that dialog. MIDI global selection also enables/disables providers;
+  selecting all albums includes future albums. Keep selection, confirmation
+  and per-type Apply semantics independent between the three windows.
+- Share DOS/MIDI source-manifest structure/ID validation and reuse one DOS
+  configuration loader for choices, installation and rebuild. Share atomic
+  JSON settings publication across HELP/DOS selection, MIDI, server settings
+  and migration metadata, cleaning temporary files on failure and retaining
+  live settings. Keep domain-specific installation pipelines separate.
+- Expand DOS Packages to 14 populated categories and 55 packages. Add Winter
+  Challenge, Summer Challenge, Lotus: The Ultimate Challenge and the shareware
+  first episodes of Duke Nukum, Duke Nukem II, Crystal Caves and Bio Menace.
+  Add DOS Navigator 2, DOSZip, TDE, BIEW, GrafX2 and DOSMid from the FreeDOS
+  repository, keeping documentation, licences and supplied source archives.
+  All new entries are opt-in; no installed or private files are moved.
+- Add optional DOS packages for Cannon Fodder 1/2, Commander Keen episodes
+  2–6 and Keen Dreams alongside the existing episode 1, and Catacomb, Catacomb
+  II, Catacomb 3-D and The Catacomb Abyss. Verify archive members and launch
+  commands; extract DOS game data/manuals, not portable Windows emulators.
+  Existing installations and private disks are unchanged until Apply.
+  Shared archive recipes validate selected DOS paths after member filtering;
+  irrelevant host-only filenames do not block a safe game-only selection.
+  Nested-archive input is materialized only for rules that actually need it;
+  host extraction traversal/symlink guards remain in place.
+- Share TVPackagesDialog layout/workflow between three separate HELP Packages,
+  DOS Packages and MIDI Sources windows, without a mode selector. Each menu
+  entry opens its own dialog; switching windows retains independent drafts;
+  keep shared selection controls, descriptions, confirmations and
+  shared download progress. HELP groups follow Help Files menu product names;
+  edition IDs select exact versions through download, staged conversion and
+  removal. Keep published siblings, originals and private data; failed requests
+  are not installation receipts. Update API clients without old selection aliases.
+  Add manifest-owned HELP product descriptions beside DOS descriptions.
+  Keep dynamic TVLabel mnemonic markup when its text changes;
+  use standard horizontal scrolling for long group names.
+- Reopening HELP/DOS Packages now checks the published HELP catalog and DOS
+  installation receipt instead of treating a failed saved request as installed.
+  Running targets and explicit Retry remain separate from installed state.
+- Verify 7zz/7z, unar, lsar and DOSBox during Docker image construction. Document
+  verifying the actual runtime image, not only updated bind-mounted source files.
+- Bound retained HELP, DOS and MIDI backups to two per type by default.
+  Administrators can set 1–100 in Server Configuration; successful publication
+  or rebuild rotates only that type (DOS package changes and base rebuilds share
+  a limit). Failed/partial rebuilds keep recovery copies; migration archives,
+  private disk revisions and download caches are not automatic cleanup targets.
+- Clarify maintenance cleanup boundaries: active download caches live in
+  `var/downloads/`, not the obsolete root directory. Distinguish removable,
+  verified migration/HELP recovery copies from permanent sources, published
+  content, databases, private disks and operational migration metadata.
+- Place source-format helpers under converter readers: Software602 graphics,
+  Turbo Vision topics, DOS BACKUP containers, and Windows Help binary/text
+  decoding. Keep bundle dispatch with writers and administrator HTTP guards
+  with routes. Update manifest targets, imports and documentation without old
+  module aliases; conversion algorithms, source data and published URLs are unchanged.
+- Split server account, DOS and MIDI responsibilities into dedicated packages:
+  account profiles/registration/Passkeys/sessions; shared DOS installation,
+  archive recipes/private overlays/media; and MIDI source discovery/catalog/
+  container decoding. Keep explicit coordinating stores and one shared downloader,
+  update all consumers and tests, and remove the former flat modules without
+  compatibility shims. API URLs, disk quotas and persistent data paths are unchanged.
+- Reset the shared download counter after a successful batch and remove the
+  percentage from the menu caption, retaining the down-arrow/history menu.
+  Start later work and retries at zero without counting completed history;
+  keep concurrent work and public/private progress scoped correctly. Finished
+  rows retain 100% in Completed downloads and the finished dialog gauge.
+- Normalize RIFF/RMID and counted DOS MIDI containers to bounded Standard MIDI
+  payloads before publishing music. Validate MIDI headers/track boundaries,
+  exclude source trailers, and name an invalid ZIP member in the download error.
+  Accept albums up to 4,096 ZIP entries while retaining 2 MiB/file and 128 MiB
+  expanded MIDI limits. Show ready-track counts and a download-error count when
+  opening a partially downloaded library, not another album's raw error.
+- Encode Unicode/space-containing download URLs as UTF-8 HTTP addresses in the
+  shared HELP/DOS/MIDI transport, including form actions and redirects. Preserve
+  existing percent escapes, query separators and POST fields; retain public-peer,
+  HTTPS and configured-host checks. Do not rename source titles or catalog IDs.
+- Wrap the complete failed-download label, error and notice with the same text
+  wrapping as MessageBox. Size the dialog from its rows and wrap buttons on narrow
+  screens instead of truncating album names or cutting error messages at three rows.
+- Submit on-demand MIDI playback directly to the shared downloader, ahead of
+  waiting work, with a named per-track queue row. One reserved urgent worker can
+  fetch the selected song while the serial HELP/DOS/background queue is busy;
+  newer waiting playback requests go first. Promote existing queued transfers
+  without duplicating requests or cancelling their callers. Keep selection,
+  album and cache validation; MIDI rebuild/source changes wait for active playback
+  downloads before moving generated data. Refresh the shared download menu as
+  soon as playback enqueues missing music.
+- Wrap all MessageBox text within the visible character-cell width, including
+  long HTTP 429 messages, unbroken words and embedded newlines. Resize the window
+  from the wrapped rows, wrap buttons on narrow screens and center dialogs in the
+  visible desktop area; do not truncate download errors in a single text row.
+- Add shared system-clipboard commands `cmCut`, `cmCopy`, `cmPaste` and
+  `clipCut`/`clipCopy`/`clipPaste` to input lines and editors. Support Turbo Pascal
+  Ctrl+Insert, Shift+Delete and Shift+Insert alongside native OS Ctrl/Cmd+C/X/V.
+  Keep native editable clipboard events in the TVEvent flow without replacing
+  browser undo or paste-permission handling. Validate pasted input, respect length
+  limits, reject stale asynchronous edits, and never cut text before copying
+  succeeds. HELP/Docs remain read-only. Use the common clipboard writer for tokens;
+  do not poll, persist or send clipboard contents to the server.
+- Remove the bottom status row from HELP Packages, DOS Packages, Initial Content
+  Setup and MIDI Sources, shortening their windows by two rows. Show download and
+  installation progress only in shared Downloads/index progress windows; report
+  configuration failures and source warnings with standard MessageBoxes.
+- Add Copy to Clipboard as the Registration Token dialog's fourth action,
+  using a shared TVButton command. Copy the generated or selected token and
+  report success; if browser clipboard access is unavailable/denied, select
+  the input for manual Ctrl+C/Cmd+C instead. Disable Copy when no token is shown.
+- Remove completed rows from the Downloads dialog immediately, retaining only
+  waiting, running and failed work. Keep successful rows in the menu's Completed
+  downloads submenu, preserve the selected item during live removal, and swap
+  Hide with More/Less. Collapse the details pane when no pending rows remain.
+- Keep HELP Packages and DOS Packages modeless, like MIDI Sources, so switching
+  configuration windows preserves their open state and draft selections. Remove
+  backdrop-click closing from the shared TVDialog; modal confirmations still
+  block background input without treating it as Cancel or Close.
+- Replace the content-specific Applying Server Content window with one shared
+  Downloads dialog for HELP, DOS and MIDI, also opened through Show Downloads in
+  the download menu. Generalize TVIndexProgressDialog to TVProgressDialog; reuse
+  its gauges, More/Less and green TVListBox without extra HTML/CSS. Preserve
+  conversion/publication progress and archive/cache counters while showing the
+  common queue. Downloads is nonmodal and remains available after completion.
+- Restore usable Apply state after accepting a background installation and after
+  failures (including HTTP 429). While a job runs, Apply reopens its progress rather
+  than submitting a duplicate. Preserve draft selections across categories and
+  completion refreshes. Keep Apply disabled only during configuration loading,
+  submission or when configuration is invalid. Bound the DOS confirmation preview
+  for large selections. Register temporary dialogs through their TVDesktop owner
+  before opening so confirmations cannot remain beneath managed package windows;
+  do not serialize their runtime view IDs into workspace URLs.
+- Clicking a failed download opens a shared-view dialog with Retry, Remove and
+  Cancel. Retry repeats only failed parts of that HELP product, DOS package or
+  MIDI album, retaining successful work and unrelated selections/installations.
+  Remove forgets only the runtime queue entry, never caches or installed/private
+  files. Closing with [ ] or Escape changes nothing. Reject duplicate/busy or
+  deselected retries, preserve same-origin/admin boundaries and keep failures
+  visible when a source still cannot be downloaded or validated.
+- Keep the download menu caption strictly as a Unicode down arrow and percent,
+  including stopped/failed queues. Move successful rows into the first Completed
+  downloads submenu; leave waiting, running and failed rows in the main popup.
+  Retain access to completed queues after downloading ends. Preserve an open
+  nested menu, focus and scroll while rows move between lists. Report partial
+  stopped queues using their actual known progress, not an unconditional 100%.
+- Route HELP, DOS and MIDI transfers through one queued online downloader with
+  FIFO/priority execution, propagated task context, common bounded HTTP retries,
+  byte limits, redirect/public-peer validation and atomic cache writes. URL tasks
+  can include a cache destination and an extraction/install processor; nested
+  processing stays on the same worker. Retain format/provider-specific modules.
+  Add a live TVDownloadProgress menu between the account and clock, using the
+  shared TVMenuBox and scrollbar. Show pending/active/completed/failed packages,
+  grouped MIDI albums and retry countdowns without closing the open menu during
+  updates. Replace the player's separate automatic MIDI download dialog.
+  Hide private HELP/DOS entries from non-administrators. Closing the
+  menu does not cancel jobs; installation publication still uses existing staging.
+- Add an opt-in UTILS collection assembled through the shared downloader from
+  FreeDOS/DJGPP ZIP packages and the original UnARJ 2.41 archive recovered
+  from the administrator's DOSBox collection. Retain licences, available
+  sources and the unchanged UnARJ envelope; do not bundle registered keys or
+  assume RAR/ARCE are unrestricted freeware. Add configurable extraction
+  rules and assembled Borland split archives so Turbo Pascal 5.5, Turbo C 2.01
+  and Turbo C++ 1.01 are published as ready program/header/library/help trees,
+  not interactive installers. Run optional CP437 post-install BAT lines once
+  in a temporary DOSBox filesystem before publishing, with secure mode,
+  timeout, output validation and package-scoped writes. Include DOSBox and
+  unar in Docker for this workflow and classic ARC extraction.
+- DOS Packages now displays category icons and a shared Description box
+  following mouse/keyboard selection; Select All, Deselect All, Apply,
+  Refresh and Close share one row. Bulk marking affects only the current
+  category. Name pending new installs in the confirmation so a retained
+  package in another category cannot look like a download caused by removal.
+  Rename MIDI Sources and label its per-source Select All / Deselect All.
+  Retry package HTTP 429 responses with bounded Retry-After waits and progress;
+  repeated rate limits name the affected package. Verify pure DOS removal
+  never downloads or runs post-install scripts. Update native context help.
+- Reject an outdated DOS configuration API before enabling Apply: missing
+  category metadata now shows a server-restart explanation instead of an
+  applicable empty package selection. Keep HELP Packages unchanged. Verify
+  recovery after the matching API becomes available.
+  Do not reopen the combined first-run chooser on an existing HELP/DOS
+  installation after an interrupted job; retain completed setup state during
+  later installation attempts, including failures.
+- Keep HELP Packages and DOS Packages as separate dialogs. Give DOS Packages
+  a category TVListBox (Games, Programming, Antivirus, Utilities), a package
+  TVCheckBoxes pane and Select All for only the current category. Preserve
+  unsaved selections across category switches and submit the complete DOS
+  draft, without changing HELP choices. Add opt-in original Borland Museum
+  Turbo Pascal 3.02/5.5, Turbo C 2.01 and Turbo C++ 1.01 packages, and complete
+  ThunderBYTE 8.03 evaluation/Norton Michelangelo antivirus distributions.
+  Identify installer/evaluation editions explicitly and retain licence files;
+  do not classify NOD-iCE or restricted F-PROT preinstallation as abandonware.
+  Support generic validated `strip_components` for multi-disk distribution
+  layouts, rejecting traversal, short paths and resulting filename collisions.
+  Interpret ZIP Unix symlink mode bits only for Unix-created entries, avoiding
+  false rejection of ordinary legacy DOS ZIP files while retaining link checks.
+  Update native context help and server/DOS documentation.
+- Restore local MIDI cover availability after macOS/iCloud offloads image
+  files that Docker cannot hydrate. Include existing MIDI tracks, covers and
+  SQLite catalog/sidecars in the management script's host-side Docker
+  availability preflight, without deleting/rebuilding media or pinning paths.
+  Document incomplete HTTP image bodies caused by host placeholder I/O errors.
+- Identify the older Turbo Debugger CRC editions by release in their bundles
+  and catalog; disambiguate equal sibling HELP menu labels with bundle names
+  without dropping real files or guessing unknown versions. Use readable
+  archive names, rather than mirror UUIDs, in HELP download progress and pinned
+  WinWorld cache names; decode/sanitize direct-download filenames. Report
+  discovery, cache reuse, extraction, byte progress and rate-limit waits instead
+  of leaving a completed transfer on screen. Applying Server Content and MIDI
+  download progress share More/Less and a green TVListBox below the compact
+  view: HELP products show waiting/active/checked/warning markers and archive
+  counters; MIDI albums show ready/total percentages and completion ticks.
+- Preserve source-provider warnings in the HELP job API and details instead
+  of reporting unsuccessful provider checks as unqualified completions.
+- Split normal HELP and DOS package configuration into independent TVDialogs
+  backed by the same installer/progress views; changing one category preserves
+  the other and does not retry its failed jobs. Keep the combined first-run
+  chooser. MIDI configuration now has a source TVListBox on the left and game
+  soundtrack TVCheckBoxes on the right, with Enable, All/None and future-album
+  selection. Index unselected sources with progress without downloading their
+  music. Persist/filter album choices in downloads, playlist, priority requests
+  and file/cover serving, retaining caches and respecting choices on rebuild.
+  Paint the whole shared scrollable cluster, including blank rows, with its
+  normal palette instead of coloring only populated rows. Update context help.
+- Group all administrator configuration under the user menu's Configuration:
+  server settings, HELP/DOS installation, MIDI providers, users/tokens and
+  DOS/MIDI rebuilds. Keep personal Colors/Theme available to members and
+  remove their duplicate system-menu entries while signed in. Rebuild actions
+  open confirmation/progress directly, without opening Server Configuration,
+  and report standalone completion/errors in a shared MessageBox.
+  Add a TVCheckBoxes MIDI source selector with an admin/same-origin API,
+  permanent data/midi-settings.json selection and safe downloader handover.
+  Empty selection disables all sources; deselection retains cached MIDI/covers,
+  and rebuild respects the selection. Update native context help.
+- Extend the Docker host-side file-availability preflight beyond HELP to
+  accounts/settings metadata and shared/private DOS storage, including empty
+  first-run HELP installs. Abort before Compose on unreadable data. Document
+  iCloud placeholder recovery for local Admin and DOS Prompt without deleting,
+  rebuilding, moving or pinning their existing files.
+- Restore Microsoft SZ payloads split across installer disks through the
+  shared downloader extractor, preserving LZSS state between numbered parts.
+  Reject missing, damaged or ambiguous parts and bound decompression instead
+  of silently omitting recognized compressed files. Recover QuickC 2.50's
+  876-topic QC.HLP, register its CRC and executable retrieval provenance,
+  and rebuild its HELP collection without replacing unrelated content.
+  Document SZ/SZDD headers and continuation/compression rules.
+- Keep generated bundle sites' JS/CSS cache revisions synchronized with the
+  current viewer, including native TextScreen/font/blink and context-help
+  assets. Full source regeneration verifies the installed published content;
+  defer Cheater 21's four SC 2000 companion texts explicitly.
+- Keep SC 2000 angle-bracket prose separate from DOS article detection even
+  when it contains apparent `[Rnnn]` markers; do not publish guessed DOS
+  topics. Verify preservation of the four complete source payloads, including
+  an in-word `FEh`, and clarify text-end/encoding uncertainties and literal
+  spaced tag examples in the datasheet. Refresh the roadmap's implemented
+  server download/build features without claiming cancellation or SSE.
+- Preserve explicit DOS blink and bright-background modes in UHF TextScreen,
+  including byte-exact Base64 attribute bits and readable blink masks. Shared
+  TVTextScreen animates only flagged glyphs, respects reduced motion, and
+  releases timers/listeners on topic changes and window destruction. Add the
+  three v6 blink templates after existing resource topics, retaining their
+  aliases/IDs; use the standard blink-enabled DOS presentation profile.
+  Verify and apply original FA.SCO fonts to v4/v5 PROGRAM inline artwork.
+  Extend source-format/UHF documentation and native-byte/pixel regressions.
+- Correct Scorpion's shared LZHUF adaptive-tree update for NUL literals;
+  verify output against the original DOS decoder and reject payloads that
+  require synthetic EOF bits. Convert 53 legacy v6–v14 text screens and all
+  seven native FONT.SCO fonts into the existing PROGRAM bundle. Render
+  embedded PROGRAM block/box artwork in place with native glyph bytes and
+  the original default font, preserving article IDs, row cursors and links.
+  Keep three v6 blink-mode screens and indexed SCX palettes explicitly
+  deferred. Expand the technical compression/font specification.
+- Add UHF `TextScreen` character-cell resources and reusable Base64 bitmap
+  fonts. Cells retain native glyph bytes and indexes into existing UHF
+  palettes, not PNGs/RGB snapshots. Support readable cell triples and Base64
+  blocks: byte-exact DOS character/attribute pairs or independent glyph/FG/BG
+  bytes. Shared `TVTextScreen` renders the bits in
+  the standard HELP window with addressable rows, search text and managed
+  view ownership. Convert 48 modern Scorpion PROGRAM screens from versions
+  15, 16 and 21–23, grouping them in Contents without changing native article
+  IDs or inventing text/image associations. Validate font lengths, cells,
+  palette references and dimensions; document the native v15 resource names.
+- Keep explicit UHF source aliases separate from numeric article IDs during
+  inline/Contents/menu navigation, including external files and alias cursors.
+  `alias=0070` must not open article 70; a declared alias `70` can also differ
+  from article 70. Unloaded targets expose `?file=...&alias=...` and the server
+  resolves that namespace before redirecting to the canonical article/line.
+  Rebuild the search alias cache without dropping aliases that collide with
+  IDs. Added browser-helper/event, public-URL and cache-upgrade regressions.
+- Convert the SC 2000 `txt` catalog retained in v21 `TEXTY.DAT` through the
+  existing Allegro reader and HELP window. Index/Contents entries retain the
+  original row cursors, including duplicate captions. Preserve all native
+  descriptor fields and ambiguous comma rows; link the 1,800 cheat references
+  specifically to CHEATY and six exact title references within the catalog.
+  Do not invent links to missing LIB attachments or treat the four unverified
+  SC 2000 prose objects as DOS marker articles. Report their names separately
+  from actual resources. Added source-scoped link/cursor regressions.
+- Document SC 2000 companion text/catalog token boundaries, short title
+  references and ambiguous comma-bearing rows without inventing link or
+  encoding semantics. Track the remaining HELP audit scope separately from
+  the historical application roadmap and deferred graphics work.
+- Reject incomplete Scorpion/Allegro LZSS chunks and mismatched uncompressed
+  lengths instead of publishing partial articles or reading compressed bytes
+  as plain text. Validate objects before resource filtering, remove the
+  lenient placeholder option, and propagate errors for recognized DATs through
+  source selection so damaged files cannot silently disappear in a rebuild.
+  Added malformed-chunk/container, native-corpus and safe publication/retry
+  regressions; clarified length/boundary rules in the technical datasheet.
+- Retain Game-Cheater's embedded Pc-Fand help in its existing Nápověda bundle
+  so original links into that range can open their actual text. Resolve the
+  first physical name/mask match with native Latin2 byte folding, not the
+  nearest duplicate title or collapsed whitespace. Forward empty named
+  records to their following text through real source aliases, preserving
+  Index/Contents labels and skipping empty slots in page navigation. Hide
+  native leading description lines and open `root` as help Contents. Added
+  mask, literal-markup, alias/bundle and complete-source link regressions;
+  documented the byte lookup and display rules.
+- Preserve Game-Cheater's authored single/double frame glyphs instead of
+  rewriting every table below a double header. Follow Pc-Fand's signed
+  record count, including empty tables and unused slots; reject partial or
+  count-truncated records rather than clamping/deriving counts. Memo reads
+  distinguish absent/empty fields from invalid offsets, incomplete payloads,
+  pointers and cycles back to the first page. Incomplete index/memo pairs
+  fail conversion. Added page-edge, noncontiguous-chain, corpus and staged
+  publication/retry regressions; expanded the technical datasheet and removed
+  its obsolete standalone export script. Native topic/link identities remain.
+- Resolve older TDH overlapping contexts by complete consumed source-byte
+  ranges, including page headers, raw target WORDs and split literal nibbles.
+  Remove caption/substring-based alias ownership and its diagnostic fields;
+  all 11 TD 1.0 aliases retain their verified targets. Identical text on an
+  unrelated earlier page cannot steal a link, and unconsumed contexts remain
+  readable independently instead of receiving a guessed redirect. Added
+  duplicate-text, byte-boundary and unresolved-overlap regressions; native
+  text, hotspots and existing navigation are unchanged.
+- Correct runtime HELP hotspot boundaries against the original Profiler and
+  TD 4/5 line routines. Profiler allows a label to end at column 48 even
+  before NUL or CR/LF; newer TD retains its own lookahead reservation. A NUL
+  inside a label ends the visible C string, not the encoded label: consume
+  through its closing caret, preserve subsequent hard breaks and reject a
+  missing caret. Project links only onto displayed cells. Added native edge
+  vectors and full-reader regressions; existing TDH/TFH corpus output stays
+  intact and the byte-level datasheet now distinguishes the runtime profiles.
+- Preserve word separators across inline tags in flowing FreeDOS HTML text.
+  Defer collapsible whitespace at its original style/link boundary until the
+  next visible text, discard it at block boundaries, and retain non-breaking
+  and other Unicode spaces. The original memory-management heading now reads
+  `DOS Extenders:` rather than `DOSExtenders:`. Preformatted text, topic IDs,
+  index/Contents and all real link/fragment destinations stay intact. Added
+  parser-chunk, boundary/Unicode, corpus and real Chrome whitespace checks.
+- Preserve the destination line of genuine source context aliases in shared
+  UHF export, inline/index navigation and cross-file links. Alias jumps now
+  reach the native cursor inside the article instead of losing it at the
+  article heading; explicit line targets still override the alias. The public
+  server resolves symbolic as well as numeric aliases, retains QuickHelp's
+  context-case rules, and redirects to the canonical article with its line
+  without creating duplicate search/sitemap topics. Rebuild the old alias
+  search cache automatically; source HELP files and user data are unchanged.
+- Explicitly defer Windows HLP graphics and image-region links in `TODO.md`.
+  Keep the completed HC31 text reader and retained picture payloads unchanged;
+  remove the unfinished image/hotspot implementation rather than shipping it
+  as supported conversion.
+- Convert verified HC31 Windows HLP articles rather than showing only their
+  HLX keyword labels. Decode bounded paragraph metrics, tab stops, table
+  cells, font/style changes and native inline links through shared UHF.
+  Keywords now open actual native article IDs/cursor lines, including the
+  complete `\fonttbl` description, parameters and See Also links. Preserve
+  real context-hash/external identities, browse navigation and non-scrolling
+  headings; never redirect old keyword ordinals into unrelated articles.
+  Prefer a same-stem HLP over its index-only HLX in tree/server builds.
+  Safely interpret deterministic navigation macros without host execution.
+  This is an 80-cell text projection, not Windows pixel emulation: pictures
+  are explicit placeholders with retained payloads, and unsupported native
+  macros/undefined Symbol glyphs remain reported limitations. Added malformed
+  field/control, native-corpus, article/bundle/publication regressions and
+  expanded the byte-level Windows Help datasheet.
+- Retain Windows HLP originals instead of silently discarding them during
+  download. Pin Borland C++ 4.52's matching HLP/HLX pairs and register the
+  distinct 4.5 revisions with CRCs and retrieval provenance. Shared exact
+  archive-member selection also handles paths inside nested ISO images,
+  rejecting ambiguity and conflicting original-file copies. Added bounded
+  Windows Help container/B+ tree, LZ77/phrase and native article-record
+  decoding, shared with HLX. Independently verified all packet payloads and
+  real keyword destinations, including uncompressed HC31's 16-KiB logical
+  address stride. Document the binary structures and remaining pixel grammar.
+- Replaced compiled-HLX string/pointer guesses with its real Windows Help
+  keyword B+ tree. Read all declared branch/leaf records and ignore unused
+  header/page memory; validate bounds, counts, depth, cycles and leaf links.
+  Keep exact labels, occurrence counts and companion KWDATA addresses in
+  index-only bundles instead of fabricated articles, hotspots or Prev/Next.
+  Correct Windows ANSI/NBSP decoding without changing DOS glyphs. Added
+  independently enumerated corpus, malformed-tree and bundle regressions;
+  replaced the partial datasheet with the byte-level index specification.
+  Standalone indexes cannot supply article text without their companion HLP.
+- Corrected M602 display assembly against the original runtime instructions.
+  Preserve hard-row indentation and title/block art; join and wrap soft
+  records using raw-byte lengths and native cut spaces before decoding links.
+  Use shared positioned hotspots/UHF rendering, retaining all native targets
+  and adjacent equal links. Consume one CR suffix, keep literal OEM controls
+  and reject incomplete operands/zero-length or unterminated records. Safe
+  buffers preserve oversized text and wrapped label fragments instead of
+  reproducing native memory overreads or short-string loss. All 201 original
+  topics match 3,012 native rows and 406 hotspot coordinates at 78 cells;
+  titles, index and source bytes remain intact. Added native-vector, corpus,
+  control/bounds/overflow and publication regressions and expanded the datasheet.
+- Keep the shared application screen at viewport height while crawlable HTML
+  is still present. Long public HELP indexes or documents no longer enlarge
+  the desktop during startup and leave newly centered windows offscreen after
+  the HTML fallback is removed. Preserve the complete server-rendered text
+  and the existing window geometry/restoration flow; no file-specific fix.
+  Shared geometry restoration also bounds saved positions to the current
+  desktop, including a maximized window's normal restore position. Valid
+  positions and saved sizes stay intact on smaller screens or after a stale
+  offscreen layout; no local-storage reset is needed.
+- Verified Sidekick 2's native help roots: its nine-byte THELP header stores
+  context 0 with no text, while the original application's no-app Contents
+  and General commands select topic 101. Register that verified start through
+  the existing CRC-backed catalog metadata, keep the raw header, topics and
+  sentinel identities intact, and retain the generated index. Correct its
+  menu release to 2.0 and pin the byte-identical original download/member.
+  Pinned WinWorld editions now use the catalog's collection directory instead
+  of manufacturing another product/version path; family discovery is unchanged.
+  The shared viewer now prefers an available Contents tree over an arbitrary
+  first topic when a bundle has no index. Added native-header, source/bundle,
+  downloader and default/index/history regressions; expanded the datasheet.
+- Corrected THELP default Contents and page navigation. Pascal 4 format 2/1
+  uses its verified native context 100 and retains all 129 default aliases;
+  short headers with an unknown consumer binding no longer claim context 0.
+  Mark stored Contents consistently for legacy and sequential Text records.
+  Zero Up/Down words terminate page chains, while genuine topic-zero links
+  remain valid. Previous/Next now follow page contexts, not positioned
+  keyword-button indices. Preserve those indices in the lossless model and
+  all original text/targets. The shared browser alias normalizer also retains
+  numeric zero instead of treating it as an empty value; an actual topic 0
+  still takes precedence over an alias. Added default/alias/page/bundle regressions,
+  technical documentation and executable source provenance for Pascal 4.
+- Corrected THELP native context/alias resolution. Genuine aliases now open
+  their addressed Text record instead of disappearing or jumping to a
+  referring menu row. Use one primary/alias offset map for shared Contents.
+  Removed guessed hidden anchors and their duplicate renderer; retain missing
+  native links/index entries with explicit offset/failure diagnostics. Generic
+  index export and public link URLs keep reader-declared missing targets.
+  The existing Help Error MessageBox reports an unavailable destination while
+  preserving the current page and recording one broken-link event. Added
+  native alias/padding, source/bundle/index/navigation regressions and updated
+  the technical datasheet and application help.
+- Replaced THELP's border-derived table reconstruction with native sequential
+  byte-word flow. Join soft returns, keep authored spaces, treat each hotspot
+  as an indivisible word and preserve fixed rows/oversized text. Lay out before
+  example projection, using the source width/margin within the standard DOS
+  viewport; retain legacy positioned rows, native target/page identities and
+  lossless originals. Tables now use the same rule as other flowing text,
+  including cells without borders. Updated display-line index/fallback
+  coordinates, native vectors, source/bundle regressions and the technical
+  datasheet. Dynamic browser-resize and whole-stream page reflow are not added.
+- Corrected Pascal 7 THELP `14h` product-name substitution using the original
+  Turbo/Borland decoder routines instead of deleting supposed style markers.
+  Replace the complete placeholder, including its padding; use the native
+  description's Borland profile or the Turbo viewer default. Apply the rule
+  before example/hotspot interpretation, reset at each Text record and retain
+  the original RLE/token order. Keep lossless source bytes and native targets,
+  and preserve unverified control glyphs in other text variants. Added native
+  compression, source/bundle and corpus regressions and a byte-level datasheet.
+- Corrected THELP Turbo Example handling to use only native `05h` toggles,
+  process every inline/repeated delimiter and preserve indentation, blank
+  rows and positioned-link row numbers. Keep OEM hearts/triangles instead
+  of interpreting them as code markers; restore the Czech Pascal menu arrow
+  and remove leaked club glyphs from inline closing delimiters. Carry code
+  state through native linked pages rather than physical record order, and
+  let explicit markers override filename/heading heuristics. Added control,
+  continuation, link/bundle regressions and a byte-level technical description.
+  Rebuilt C++ bundles also use their already-verified manifest titles instead
+  of generic names or filename stems in the Help Files catalog.
+- Corrected THELP text decoding to consume the upper half of the last byte
+  instead of dropping final characters or line breaks when a record has no
+  end marker. Restore complete positioned link labels; all 93,142 physical
+  text records match an independent bounded C nibble reference. Preserve
+  native records/targets, treat zero-valued lookup entries as line breaks
+  and reject invalid repeat codes/tables and incomplete final operands.
+  Added grammar, corpus, link/bundle and staged failure/retry regressions
+  and expanded the technical format specification.
+- Bound THELP fields, NUL strings, counts and used compression operands to
+  their own records. Incomplete records/headers no longer return partial
+  HELP as opaque trailing data; retain verified all-space terminal padding.
+  Validate the administrative signature, known format/compression values,
+  prefix-compressed index lengths, IndexTags byte lengths and context offsets.
+  Cuts at a complete record boundary still fail if declared text lies beyond
+  EOF. Correct the
+  long format-4 FileHeader instead of reading it as five bytes and applying
+  invented geometry: Turbo C 2.x retains its stored 50×15 screen, Contents
+  context 100 and genuine context-zero alias. Added malformed/variant/
+  staged failure-retry/bundle regressions and expanded the technical datasheet.
+  Rebuilt TC bundles also pick up their already-registered edition titles.
+- Corrected NG MENU addressing using the original descriptor-offset field
+  and per-caption WORDs, with bounded shared/unsorted strings and an explicit
+  empty end descriptor. Preserve authored caption cells, padding, NBSPs,
+  duplicate/blank/symbol-only slots and See Also order instead of replacing
+  captions with child titles or removing labels without targets. Caption
+  carets and FFh stay literal, distinct from body escapes/RLE. Original NG
+  relocation/plain-output routines verify all 120 menus and 14,551 captions;
+  retain every source record/target. Added addressing, bounds, caption,
+  source-order, bundle and corpus regressions; documented the native table
+  and plain-caption grammar without format-specific viewer code.
+- Corrected NG text and SHORT link ranges against original Norton Guides
+  1.00/1.02/1.04 instructions. Use one byte-cell decoder rather than separate
+  raw/styled parsers: attributes replace each other and equal values toggle
+  back to normal, unknown escapes keep their folded character, and literal
+  OEM controls become glyphs instead of disappearing or breaking rows.
+  Preserve bounded numeric-operand results and all unsigned space runs.
+  SHORT links cover the entire row, including leading/inter-column padding
+  and descriptions; derived labels retain those words too. All 509,785 body
+  rows and 17,967,220 logical character/attribute cells are verified, with
+  original viewport and longer-tail captures. Keep every one of the 21,309
+  records and 36,265 positioned targets; no old IDs/paths or file-specific
+  fixes. Added native vectors, whole-row/glyph/bundle/corpus regressions and
+  expanded the pure technical datasheet. Shared viewer styling remains;
+  native hardware blink/theme and separate prompt grammars are not claimed.
+- Hardened Norton Guide/Expert Help records, MENU/SHORT/see-also tables,
+  declared strings and exact record-target pointers. Damaged guides now fail
+  staged conversion rather than publishing partial topics or guessing a new
+  root; existing HELP/catalog survive and retry works after repair. Preserve
+  valid empty records, shared/unsorted SHORT text, cycles, opaque padding and
+  LONG-next EOF terminals without removing source links. Standardized the NG
+  reader on supplied bytes and shared `read_path()`, fixing stale headers on
+  reuse and DOS BACKUP NG inputs that previously reopened the raw container.
+  All 58 originals and their 21,309 normalized topics remain unchanged.
+  Added malformed/empty/pointer/transport/staged regressions and a byte-level
+  datasheet with bounded decoding and explicit unknown fields.
+- Corrected TVHC source parsing: recognize case-insensitive topic commands
+  and native token spacing, reject symbol redefinitions/malformed headers
+  with source-line diagnostics, and honor numeric context replacement without
+  losing surviving aliases or old symbolic names. Match the original mutable
+  brace-escape cursor; unfinished references and source buffer/field overflows
+  now fail instead of publishing partial text. Keep unresolved FFFFh targets
+  with explicit diagnostics rather than silently dropping the references.
+  Only a standalone 1Ah ends input, not a literal arrow starting a text row.
+  Detect the first real command rather than quoted/embedded examples in other
+  help formats, including after long comment preambles. Full reconstruction
+  of the BP7 demo matches all 18,749 original bytes, 55 topics and 47 links.
+  Added source grammar, limits, replacement, exact-reference and staged
+  failure/retry regressions; expanded both source
+  datasheets with pure technical rules.
+- Corrected FBHF/TVHC paragraph rendering against the original HELPFILE.PAS
+  row algorithm and bounded native execution. Apply Wrap at the standard
+  viewer's 46-column width before normalizing non-breaking FFh cells;
+  preserve authored spacing and CR gaps without invented indentation or
+  terminal blank rows. Reuse the shared Turbo Vision paragraph layout and
+  positioned hotspots instead of inserting 02h controls into literal text.
+  Both reference samples match all 1,075 native rows and retain all 87 links.
+  Added wrapping/non-breaking/fixed/empty/range/literal-byte and corpus
+  regressions and staged-server failure/retry coverage; documented the byte
+  algorithm and its native Pascal boundary limits. Adaptive UHF reflow
+  remains separate work.
+- Verified Text602/Calc602's native HELP screen-font resources and literal
+  HelpViewer.Draw cells. Replace row-density glyph guessing and Kamenicky
+  fallback with the common Software602 font table: Czech/Slovak keyboard
+  charts, Greek/math symbols, blocks, shadows and even isolated frame pieces
+  now retain their proper glyphs. 98h is the upper half block, E7h is always
+  vertical; low bytes are not graphics-editor style selectors. Keep FFh's
+  non-breaking layout and exact link columns. Also correct the shared rounded
+  corner positions and small placeholder marks in K602/T6HLP. Added complete
+  high-table, context-independence, low-cell/link and real-chart tests; expanded
+  the technical font specification with verified resource layout and explicit
+  unknown/revision-dependent low pictograms.
+- Decoded Text602/Calc602's real native THelpTopic persistence: count-prefixed
+  Size/Wrap/Text paragraphs, not an 0Eh-delimited chunk grammar. Reuse one
+  bounded topic-field reader with FBHF. Remove numerical edge-control guesses,
+  punctuation/tail deletion, invented keyboard subtopics, caption link recovery
+  and ±3-column corrections. Native execution verifies all 12,207 rows and
+  2,235 one-based START-position links at 78 columns. Preserve authored titles,
+  rules, paragraph gaps, fixed/wrapped rows, non-breaking spaces and all links.
+  Text602 has 188 real objects (including one unindexed object); Calc602 275.
+  Use native contexts and genuine shared-slot aliases, with no old sequential
+  ID compatibility. Retain unindexed objects in a disjoint source-address
+  namespace. Added native-corpus/layout/range/label tests; rewrote the technical
+  datasheet and kept executable research separate. The font verification above
+  completes observed glyph mapping; adaptive UHF paragraph reflow and rare
+  untranscribed compound pictograms remain separate follow-up work.
+- Corrected Text602 3.10/Calc602's EOF lookup: its WORD counts anchor slots,
+  not bytes (360/280 slots, rather than only the first 90/70). Resolve links
+  through exact absolute topic-object addresses; removed fixed caption
+  maps, approximate `offset-33` addressing and unknown-context title guessing.
+  Validate full DWORDs, file/table sizes and every populated anchor. Keep the
+  index array out of text and restore omitted Calc602 errors, printing and
+  terminal screens. Added malformed/shared/duplicate/late-context and staged
+  rollback/retry tests; isolated superseded research assumptions in private
+  notes. The native paragraph decoding above completes the topic boundaries
+  and hotspot-position correction.
+- Corrected T602 3.00 T6HLP against the original reader/printer: contexts are
+  byte slots 0–255, not slots plus one, and zero-length Pascal rows preserve
+  authored paragraph gaps instead of acting as disposable NUL separators.
+  Restored title/underline/shadow blocks, keyboard glyphs, mathematical
+  characters and FEh shortcut dashes. 04h is italic, not bold; category changes
+  reset per row. Native execution matches all 3,360 stored rows and 95,759
+  font-byte/category cells, retaining 191 titles/index labels with corrected
+  IDs and no old-ID aliases. Validate empty/shared/unsorted directories and
+  exact topic/row bounds. K602 and T6HLP now share the verified graphics-font
+  decoder without changing K602 output or touching the separate 3.10/C602
+  THelpTopic format. Added native-corpus, malformed/empty/style and staged-server
+  rollback/retry tests; expanded the technical datasheet and converter notes.
+- Corrected M602's native directory against the original M602X.EXE reader:
+  entries are context/absolute offset/byte size, followed by a six-byte EOF
+  footer, not a six-byte header and delta/sentinel rows. The first error
+  context is indexed too, and the last topic ends before the directory.
+  Parse each stored range independently; reject incomplete records and links
+  instead of publishing partial text or guessing destinations from captions.
+  Native lookup keeps directory order, shared payloads and its 9999 error
+  fallback. Retained all 201 physical topics and 406 source links, restoring
+  padded hotspot cells in 15 topics. Removed FA-density scanning and false
+  root-count metadata. Added boundary/shared/order/fallback and staged-server
+  rollback/retry tests; rewrote the technical datasheet's fields, endianness,
+  examples and Kamenicky table, with research/mapping details kept separately.
+- Corrected K602's directory and context identities against the original
+  executable: 256 six-byte slots start at 000Fh, not 239 slots at 0075h.
+  The first 17 empty slots are not reserved header bytes; populated topics
+  now use their real byte-context IDs instead of IDs shifted down by 16.
+  No aliases retain the incorrect IDs. Replaced scan-until-invalid parsing
+  with exact directory/range checks, including unused size WORDs, empty and
+  shared topics. Damaged inputs cannot publish a shorter successful HELP.
+- Corrected K602's actual built-in graphics-font table rather than falling
+  back to Kamenicky: mathematical/Greek keyboard charts, native block/shadow
+  glyphs and FEh shortcut dashes now survive intact. Removed invisible-attribute
+  guesses for 96h/97h and invented 8D 0A newlines. Original printer execution
+  matches all 1,773 stored rows and 49,016 font-byte/category cells. 02h is bold,
+  04h is italic, and 13h is underline; shared UHF spans preserve those states.
+  Retained native IDs, all 115 titles and 92 index labels. The shared fixed-cell
+  viewer uses the native maximum width of 70 cells with horizontal overflow.
+  Unrepresented double-width/super/subscript selectors fail explicitly, and
+  untranscribed compound key glyphs remain visible replacement cells.
+  Added font/style/native-corpus and existing staged rollback/retry regressions;
+  expanded the datasheet with byte tables, font layout, controls and viewport
+  rules, keeping conversion/research notes separate. No per-format JS/CSS.
+- Corrected Microsoft BW03 against original CodeView reader instructions:
+  descriptor WORDs are stored Next/Prev indices, not a screen number and an
+  inferred next page; NUL ends the screen and RLE operands are literal video
+  cells. High-byte style selectors follow the stored dictionary rather than
+  hardwired E1h–F0h values. Native attribute 07h initializes each screen, with
+  standard OEM glyph decoding. Removed table-scanning guesses and unused duplicate decoders;
+  validate active tables, all navigation/payload ranges and complete repeats
+  without requiring 40 reserved slots or sorted/unique menu destinations.
+- Export BW03's formerly omitted plain-text command summary to standard
+  Contents/Index topics, preserving its separate NUL/form-feed grammar and
+  common page navigation. All 68 original indexed screens remain unchanged;
+  each inspected source gains its native summary. Added corpus, controls,
+  compact/shared/menu-order fixtures and real staged rollback/retry tests.
+  Expanded the datasheet with corrected fields, byte examples and summary
+  boundaries; implementation/research details remain in private RE notes.
+- Hardened QuickHelp LN section/topic/context bounds, Huffman trees,
+  dictionary/RLE expansion and text/attribute/link records. Corrupt topics now
+  fail with database/topic diagnostics instead of becoming empty HELP pages.
+  Huffman decoding is demand-driven and stops at exact OUTLEN, preserving
+  final-byte padding and handling a single-symbol tree without an infinite
+  loop. Corrected the datasheet's former NUL-termination rule: binary topics
+  end at OUTLEN and both block lengths must be positive. All 10,190 topics in
+  28 installed originals retain identical normalized output. Added malformed
+  data, valid compression and staged rollback/retry regressions.
+- Validated FBHF file lengths, stream-object types, TP6/BP7 index arrays,
+  topic/paragraph/reference bounds and native empty/sparse/shared indexes.
+  TVHC source aliases now retain their numeric identities and resolve to the
+  shared topic; predefined APP contexts and Word counter behavior follow the
+  original compiler. Name scanning respects DOS EOF. Global hotspot ranges
+  retain balanced clickable fragments across paragraph/CR boundaries.
+  Added field/truncation/alias tests and expanded the technical datasheet;
+  both available TP6/BP7 samples remain unchanged.
+- Made TDH/TFH block decoding uniformly strict: incomplete page headers,
+  literal escapes, hotspot target WORDs, labels/trailers and missing text
+  termination now fail instead of producing partial HELP. Removed the lax
+  TDH path and bypassed opaque context zero explicitly; valid native row
+  limits, EOF slots and unavailable tails remain intact. Added twelve-edition
+  truncation/control tests and real staged-server rollback/retry coverage;
+  published HELP/catalog are preserved when an input fails. Documented the
+  limits of structural validation without an external file digest. Corrected
+  TFH 1.0's unused-tail example to 159 total bytes: a two-byte page WORD plus
+  157 encoded bytes.
+- Fixed TDH/TFH hotspot reflow in the shared decoder: ordinary word wrapping
+  moves/splits the label ranges with their cells and retains each source
+  target, without title/CRC/file-specific rules. All six older TDH stale
+  spans now render complete clickable labels, including multiline byte list
+  and Breakpoint window links; native text remains unchanged. Oversized
+  pending labels obey the screen-row limit and do not emit phantom hotspots
+  below it. Added native/corrected-range, synthetic wrap and real-bundle
+  regressions, and documented the character-range algorithm separately from
+  the original runtime's stale coordinates.
+- Corrected older TDH 1.0/1.5/2.x decoding: 48 visible columns, dictionary
+  D/E NUL controls and the older hotspot fit rule. Bounded original TD
+  1.0/1.5 execution matches all 19,027 decoded rows and native hotspot spans
+  across four originals. Added the three real cumulative-end pages, restoring
+  2.x's Hardware breakpoint link. Zero-target carets consume their WORD and
+  display Pascal operators instead of truncating German help. Correct stream
+  boundaries also fix legacy alias owners. Added native-baseline, control and
+  bundle tests; documented six original stale hotspot spans as a remaining
+  UHF-reflow limitation, not a falsely passing bounds check.
+- Audited all 23 public format documents and separated source-format
+  specifications from converter mapping, support status and repair history.
+  Preserved implementation/research material in private RE notes and recorded
+  the datasheet rule in AGENTS.md. Added TDH/TFH byte layouts and decoder steps,
+  exact NG offsets and Allegro old-crypt/LZSS rules. Corrected Text602 binary
+  header offsets and anchor-prefix addressing, plus M602's tail offset and
+  first-row delta example against the original bytes. Undecoded HLX fields
+  remain explicitly unspecified, not presented as extraction heuristics.
+- Completed Profiler 1.01 TFH support: the overlapping base WORD enables its
+  genuine final page, yielding 367 contexts and all 325 intact hotspots.
+  Both TFH revisions now use 48-cell/NUL decoding verified against original
+  Profiler execution for all 5,622 native rows and hotspot spans. Malformed
+  maps and truncated text fail explicitly; context zero stays blank. Added
+  corpus/native-baseline/export tests and corrected the format specification.
+- Added six newer Turbo Debugger DOS/Windows/32-bit TDH editions: corrected
+  odd context-map counts, overlapping base WORDs, absent zero slots, real final
+  pages and native 48-cell hotspot wrapping. All 4,423 links resolve across
+  4,602 emitted topics, including TDW's genuine payload-overlap alias. Matching
+  original 4.0/5.0 DOS parser execution verifies text and hotspot cells;
+  existing older TDH/TFH layout baselines remain intact.
+- Registered distinct TASM 2.01, Profiler 1.01 and Sidekick 1.56b originals
+  without replacing existing editions or copying exact 2.0 duplicates.
+  CRC entries retain verified release/download pages, extraction members,
+  search texts and fallback queries through shared `SourceQuery` metadata.
+  Providers consume edition queries directly; pinned WinWorld selectors work
+  when family-page discovery fails and select only the specified archive
+  members. Successful Archive.org item downloads are not repeated per query.
+  Added bundled-TASM discovery for Debugger and Archive.org fallback for
+  Sidekick; database rebuild preserves provenance. Profiler 1.01 was retained
+  for runtime analysis before publication of its complete conversion.
+- Registered the English and German Debugger 1.5 HELP from separate images in
+  the German disk set with exact downloadable images and fallback search.
+  Pinned edition jobs retain their own collection root. Verified TASM 2.0's original CRC, added
+  retrieval metadata to the existing row and fixed its bundle-stem collision
+  so it no longer disappears behind another Assembler edition.
+- TDH Contents follows the native F1 context, not an English title. Verified
+  CRC language/home metadata override reader defaults, including German HELP.
+  Probe diagnostics report actual map WORD/byte sizes without fictitious
+  left/right tables. Server download orchestration invokes each provider/product
+  once while the provider handles all retained edition queries.
+- Public topic URLs now resolve genuine numeric UHF aliases through the shared
+  search index and canonicalize to the real topic, retaining target-line and
+  viewer options. This fixes source-context links for all HELP formats, not
+  only Sidekick Plus. Alias mappings are file-scoped, rebuilt/removed with
+  their bundle and do not duplicate search or sitemap entries; existing index
+  caches refresh automatically to populate them.
+- Sidekick Plus now resolves its three native common-group redirects through
+  standard UHF aliases. Corrected hotspot scopes (zero selects common help,
+  nonzero retains the current group), opaque pairing-tag detection and
+  row-local style resets; added native category toggles and OEM glyph handling.
+  Original reader execution confirms six remaining targets are absent in the
+  source, not parser-created failures; all 2,051 authored links remain intact.
+  All 11,554 source rows match original printer execution for text/category
+  cells. Runtime common-group binding is configurable, with no product/title
+  target heuristics; embedded application-string insertions fail explicitly.
+- Added a separate, structurally validated Sidekick Plus reader for paragraph
+  directories, group-relative screens, scoped hotspot tables and explicit
+  pages. The inspected original yields 1,165 distinct UHF topics, preserving
+  all 2,051 links and its shared-record alias. Contents/Index and local page
+  navigation reuse the common help viewer, without per-format JS/CSS. Six
+  source link targets remain absent; native redirects are resolved without
+  caption guessing. Added its datasheet,
+  CRC metadata and malformed-file/corpus regression tests.
+  Published the new Plus bundle through the selected Sidekick staged build;
+  all 233 other bundles and every Sidekick original remain byte-identical.
+- HelpPC now preserves native 80-column `^` heading centering, `%`/ordinary
+  margins and TAB stops after link controls are consumed. Verified all 17,742
+  nonempty source rows against execution of the original COM renderer,
+  including 1,075 headings. All 1,006 topics and 1,786 links are retained;
+  shared UHF spans and display metadata need no format-specific JS/CSS.
+  Handles escaped/unclosed tilde controls without rewriting originals,
+  rejects unsafe centered margins and retains ordinary text overruns.
+  Added runtime evidence, format limits and regression fixtures.
+- FreeDOS HTML HELP now resolves same-page, forward and cross-page fragments
+  to existing UHF topic/line targets through a two-pass bookmark map. All 112
+  available fragment targets resolve; 354 topics and all 4,132 real internal
+  links are retained. Named destinations no longer become 154 empty self-links.
+  Multiline preformatted bold/link markup is balanced on each UHF row,
+  preserving inline state without showing stray closing tags as text.
+  Added strict case-collision handling, corpus/edge-case regression tests and
+  updated the format specification; original bytes remain untouched.
+- Multi-page HELP now exposes Previous/Next in the shared status line through
+  TVEvent and real UHF navigation targets, following only the active topic.
+  Sidekick 1's terminal `More..` cue becomes a link only when its native page
+  separator proves a continuation; text/styles/spacing and context boundaries
+  stay intact. Contents still offers direct Page 2, Page 3, etc. selection.
+- Added a structurally detected Sidekick 1 `SK.HLP` reader: original contexts,
+  explicit intra-context pages, persistent attribute categories, OEM arrows and
+  bounded DOS EOF padding. The inspected local file now yields 67 contexts /
+  148 pages; the independent 1.56b runtime sample yields 72 / 179. Generated
+  continuation navigation has no invented cross-file links. Added its original
+  format/runtime-evidence datasheet and strict malformed-layout regression tests.
+  Sidekick Plus uses a separate reader; native palette choices live in the
+  executable, not the HLP.
+- Refreshed the selected local Sidekick library through the staged builder:
+  added its newly supported first-generation help and regenerated Sidekick 2
+  so its source-defined `<more>` continuation links use the current reader.
+  Other published products remain unchanged and the prior library is backed up.
+- Added MicroCalc paginated text HELP with runtime-verified highlight/reverse
+  colors, page-state resets and margins; added strictly validated DOS text HELP
+  and Turbo Prolog `h("…")` records without executing source code. The current
+  corpus gains 26 readable originals, including two validated DOS BACKUP
+  wrappers decoded in memory. Unknown binary HELP still fails detection.
+  Added original-format specifications and positive/negative conversion tests.
+- Bundle results/catalogs now count emitted UHF topics, not redirect-only
+  source contexts. TDH 1.0 consistently reports 519 topics while retaining
+  all 11 alias continuations; single-file, grouped and variant exports agree.
+- Removed compatibility-only CRC v1 snapshots and legacy filename/project
+  translations from database rebuild. New outputs copy the complete current v2
+  manifest. External links require verified source/database identities or exact
+  bundle paths; no stem-only or arbitrary-first-version compatibility fallback.
+- Repository rules now permit intentional URL/layout/API breaks and require
+  updating current callers/docs instead of retaining compatibility layers;
+  genuine original-format links and permanent user data remain protected.
+- QuickHelp now reads all concatenated LN databases using database-relative
+  offsets, recovering 378 omitted topics in four verified originals. Physical
+  bundle URLs and first-database IDs remain stable; catalogs include logical
+  database names, scoped aliases and context case-sensitivity. Invalid container
+  boundaries fail conversion rather than discarding the tail.
+- Whole-tree/server export retains the same publication paths and menu versions
+  as product-root exports for manifest-declared containers, fixing 78 moved
+  Scorpions/Game-Cheater bundles without special product-name exceptions.
+- External HELP links no longer confuse original filename extensions or report
+  success by opening an arbitrary first topic when the requested file/context
+  is absent. Real source links remain intact; defined navigation commands work.
+- CRC database rebuild preserves the complete shared manifest, including product
+  and release overrides and unknown metadata. Invalid/duplicate records abort
+  without overwriting; atomic publication retains the prior file on failure.
+- Corrected FBHF signature bytes, THELP signature length/raw-nibble order and
+  compiled-HLX corpus/fixture notes. The format index now distinguishes M602
+  from other Software602 encodings and documents unsupported original families.
+- Product-specific HELP installation now resolves verified CRC/file ownership
+  before archive-folder labels, so companion HELP cannot become the requested
+  product. Corrected the two verified TASM.TAH records to Turbo Assembler while
+  retaining their published paths.
+- Accept aggregate opens/active durations for content setup and progress in
+  statistics, without collecting selections or account data.
+- HELP / DOS Packages is directly available in the administrator menu. HELP
+  choices are individual manifest products (Pascal, C/C++, Assembler, etc.),
+  not entire vendors. Both selections use shared TVCheckBoxes with TVEvent
+  keyboard input, wheel/shared scrollbars and independent masks beyond 32 items.
+- Confirmed Apply installs checked missing products and uninstalls unchecked
+  installed HELP/DOS packages. HELP publishes a validated staged catalog;
+  DOS stages its shared disk and tracks exact package-owned files, retaining
+  shared ownership, original HELP, downloads and every private overlay/media.
+  Previous HELP/DOS generations remain recoverable; failed DOS publication
+  restores the prior shared disk and receipt. Legacy DOS ownership is recovered
+  only from available cached archives; unknown ownership fails without deleting.
+- DOS archive downloads are a downloader module, sharing public-network
+  transport, archive tools and atomic cache publication with HELP providers.
+  Removed the separate dos_sources adapter; HTTP(S)/HTTPS policies remain intact.
 - Consolidated versioned HELP/DOS/MIDI JSON configuration in thelpviewer/config/.
   Converter and downloader are server submodules; Python imports, manifest
   plugin names, shell adapters, Docker paths and documentation use that layout.
@@ -23,11 +917,11 @@
 - Added administrator server-content configuration with selectable HELP build
   groups and DOS packages. A fresh server opens setup after admin sign-in;
   confirmed selections launch background Python module jobs through the API.
-  Shared TVListBox/TVButton views and a TVBarGauge progress dialog need no
+  Shared TVCheckBoxes/TVButton views and a TVBarGauge progress dialog need no
   per-dialog HTML/CSS. Hide does not cancel the server operation.
 - HELP conversion stages output, validates and rebuilds the shared catalog,
   retains a previous-generation backup and activates only after success.
-  Unselected groups, original HELP sources and private DOS disks are retained.
+  Original HELP sources and private DOS disks are retained.
   The server refreshes display names and its full-text/SEO index afterwards.
 - Unified bounded public-network transport for HELP and DOS downloads,
   including HTML POST forms, redirects, actual-peer/private-address rejection

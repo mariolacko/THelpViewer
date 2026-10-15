@@ -49,6 +49,21 @@ Core widget hierarchy and infrastructure.
 - **TVImage** — `constructor(bounds)`, `setImage(src, alt)`. A shared bounded
   view for optional bitmap art; bounds still use `TVRect` character cells.
   The MIDI Player uses it for source-provided game/soundtrack cover images.
+- **TVTextScreen** — `constructor(bounds)`, `setData(screen)`, `getData()` and
+  `dataSize()`. A shared native character-cell view, not a bitmap-image
+  wrapper. Data contains `cols`, `rows`, flat `[glyph, fg, bg]` cells,
+  a bitmap font (`width`, `height`, decoded `Uint8Array data`), resolved
+  indexed `palette`, optional literal `text` rows and an explicit boolean
+  `blink` mask (one flag per cell). `draw()` owns its
+  canvas markup; `bindRoot()` paints glyph bits with palette colors.
+  UHF supplies Base64 font resources and palette references, decoded by
+  the HELP adapter. HELP owns row views explicitly, releases their roots on
+  navigation and uses the existing `TVWindow`/scrollbars. Pixel scaling
+  preserves character-grid dimensions; no PNG export or extra window type
+  is introduced. Blink hides only foreground pixels, with the background
+  unchanged. Reduced motion keeps glyphs visible; detaching/destroying the
+  view stops timers and removes preference listeners. Packed DOS bit-7 modes
+  are interpreted by the HELP adapter, not guessed by this shared view.
 - **TVLabel** — `constructor(bounds, text, link)`. The third argument is the
   target `TVInputLine` object; the browser renderer creates any native id/for
   pair internally. As in DOS Navigator's `TLabel`, `~F~` marks a mnemonic:
@@ -124,8 +139,20 @@ Core widget hierarchy and infrastructure.
 - **TVMenuController** — Browser boundary only: translates DOM click, hover
   and key events into `TVEvent` for the bound menu view. Status-line commands
   retain their separate command bridge.
+- **TVStatusLine** / **TVStatusItem** — Shared status-line command views.
+  The bundle application supplies Previous/Next items from the active HELP
+  topic's `nav.Prev`/`nav.Next` targets; `TVEvent` resolves the real UHF target
+  through the same window manager as inline links. No guessed page IDs or
+  format-specific DOM handlers are used.
 - **TVCheckBoxes** — Native checkbox group rendered with DOS `[ ]` / `[X]`
-  marks; supports click, Space, focus and disabled state.
+  marks; supports click, Space, focus and disabled state. Arrow/Home/End and
+  Page Up/Down move focus without toggling. Optional shared `hScrollBar` and
+  `vScrollBar` properties provide a framed scrolling cluster and wheel input;
+  `setItems()` replaces its option model without rediscovering child inputs.
+  Labels are plain text with optional mnemonic markup; DOS package names use
+  ordinary space padding before their language flags, not a separate column
+  control or styling. All cluster variants
+  retain `sfVisible` when drawn again, not only when state changes on a bound root.
 - **TVRadioButtons** — Native mutually exclusive radio group rendered with DOS
   `( )` / `(·)` marks. The renderer generates the native browser group name;
   it is not part of the public constructor.
@@ -138,7 +165,7 @@ Core widget hierarchy and infrastructure.
   width includes both `TVInfoBox` side characters, so the right border cannot
   be painted outside and clipped by the owning view.
 - **TVEditor** and **TVIndicator** — `TVEditor(bounds, hScrollBar, vScrollBar,
-  indicator, bufSize)` is a read-only document control with selection,
+  indicator, bufSize)` defaults to a read-only document control with selection,
   `find()`, `findNext()`, cursor position reporting and explicit lifecycle.
   Markdown Docs windows instantiate this pair instead of using a styled
   viewport alone. The editor owns one click-to-`TVEvent` bridge for document
@@ -146,6 +173,7 @@ Core widget hierarchy and infrastructure.
   callback, while other links continue through normal navigation. Docs windows
   retain their editor, and HELP windows retain a Find editor only after their
   first search; both are destroyed with their owning `TVWindow`.
+  `setReadOnly(false)` enables plain-text editing; HELP and Docs do not use it.
 - **TVScrollBar** — `TVScrollBar(bounds, options)` is the sole scrollbar view;
   `sbHorizontal`/`sbVertical` select its axis. It owns
   the original value/range/page-step/arrow-step state and the corresponding
@@ -200,6 +228,10 @@ Core widget hierarchy and infrastructure.
   `TVDialog` close control, ten-cell buttons and two-cell button gaps. The close
   control and Escape resolve to Cancel when available, otherwise No for a
   Yes/No prompt; they never return the default affirmative command.
+  Message text wraps at word boundaries within the available character columns;
+  long unbroken strings and explicit newlines are handled too. Height is computed
+  from the wrapped rows. Narrow screens wrap button rows as needed, and centering
+  uses the visible desktop area rather than an offscreen minimum desktop width.
 
 Dialogs are constructed without a desktop or DOM-root argument. The
 application inserts them into `TVDesktop`; registering a dialog with
@@ -212,6 +244,32 @@ Game windows follow the same composition rule: frames, buttons, labels,
 lists, status/info boxes and Hall of Fame are shared TVision views. Only the
 dynamically changing playfield is currently allowed to use game-specific
 markup.
+
+### System clipboard
+
+`TVInputLine` and `TVEditor` implement `clipCopy()`, `clipCut()`, `clipPaste()`
+and `insertText()` using the system clipboard, with `cmCut = 20`, `cmCopy = 21`
+and `cmPaste = 22` commands. Ctrl+Insert copies, Shift+Delete cuts and Shift+Insert
+pastes, as in the [Turbo Pascal 7 User's Guide](https://turbopascal.org/wp-content/uploads/Turbo_Pascal_Version_7.0_Users_Guide_1992.pdf).
+The native Ctrl+C/X/V (Windows/Linux) or Cmd+C/X/V (macOS) actions remain available.
+Their browser clipboard events enter the same `TVEvent(evCommand)` owner flow,
+while native editable-input actions keep browser undo and paste-permission handling.
+
+DOS shortcuts convert to these commands in shared controls, not individual dialogs.
+Input paste respects validators and maximum length and removes line breaks from
+single-line fields. Cut only changes text after the clipboard write succeeds;
+asynchronous Cut/Paste stops if the value, selection or focus has changed. An empty
+clipboard never deletes the selection. Read-only HELP/Docs permit Copy but not
+Cut/Paste; application-level Copy also handles selected HELP text without creating
+an extra editor. Editable editors insert plain text, not clipboard HTML.
+
+`writeClipboardText()` / `readClipboardText()` are the shared browser bridge;
+token Copy buttons use the same writer. Browser clipboard access is subject to
+[secure-context, permission and user-activation rules](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API).
+Reads happen only after a user clipboard action. Clipboard text is never polled,
+persisted or sent to the server. Errors use `messageBox(owner, options)`, which
+inserts the existing `TVMessageBox` into the owning desktop and destroys it after
+the response. No separate clipboard renderer or per-dialog clipboard listener exists.
 
 ### TVInfoBox
 
@@ -232,11 +290,11 @@ remove the bottom border or push it directly below the title.
 ### TVFrame, TVWindow & TVDialog
 
 The built-in UHF Help Contents/Index includes Account/Login, registration and
-tokens, Server Configuration/local rebuilds, DOS Prompt, Grid Viewer and Server
-Terminal. Their concrete view constructors own hc2280–hc2340; corresponding
+tokens, Server Configuration/content setup/rebuilds, DOS Prompt and Grid Viewer.
+Their concrete view constructors own hc2280–hc2340; corresponding
 account/DOS menu items also carry these contexts. F1 in DOS keyboard input goes
 to the emulator; F1 on its menu opens the native DOS Prompt help topic. Rebuild
-confirmation and progress use shared TVMessageBox/TVIndexProgressDialog objects,
+confirmation and progress use shared TVMessageBox/TVProgressDialog objects,
 with all commands handled through TVEvent and no dialog-specific HTML/CSS.
 
 - **TVFrame** — Generates dialog window markup (titlebar, body, footer, borders).
@@ -403,7 +461,10 @@ same command path as mouse selection.
 
 `TVCluster` keeps checkbox/radio selection and multi-check state in its
 options and value. The DOM input or button is mapped to its option when the
-view is resolved; `TVEvent.infoLong` reports that option to its owner. HELP
+view is resolved; `TVEvent.infoLong` reports that option to its owner.
+Checkbox values retain numeric masks for up to 31 options; larger configurable
+collections use BigInt masks so indices 32 and above cannot alias earlier
+choices. Radio values remain numeric indices. HELP
 window view/topic/line/tag state is stored on `TVHelpWindow`, not the element's
 dataset. URL restoration, context hints and menu availability read these
 objects. Browser attributes remain for view-to-element binding, generated
@@ -583,7 +644,10 @@ frame.
 | Class | Purpose |
 |-------|---------|
 | `TVAboutDialog` | About / splash screen |
-| `TVLoginDialog` | Administrator-issued Passkey enrollment, sign-in, sign-out and server session status |
+| `TVLoginDialog` | Passkey sign-in, optional password sign-in, registration entry, sign-out and server session status |
+| `TVAccountDialog` | Own profile/private disk usage, named Passkey list/add/rename and optional password setup |
+| `TVRegistrationDialog` / `TVAddUserDialog` | Token-based Passkey registration or administrator-created profile and enrollment invitation |
+| `TVUsersDialog` / `TVRegistrationTokenDialog` | Administrator user edits and one-hour invitation-token management |
 | `TVViewGalleryDialog` | Interactive gallery for shared labels, inputs, choices, list focus/activation and scrolling, static/framed information, a full-width 62-column Event log, buttons and source-sized message boxes |
 | `TVFileOpenDialog` | Keyboard-accessible virtual file picker for generated HELP bundles and Markdown documentation, with persistent history |
 | `TVChangeDirectoryDialog` | Turbo Vision-style virtual directory tree with Chdir, Revert and shared persistent History |
@@ -607,21 +671,42 @@ ordinary `TVLabel`, `TVInputLine`, `TVButton` and `TVStaticText` children.
 Their commands pass through `handleEvent()`. Registration requires an
 administrator-issued one-hour token; the first administrator instead uses the
 bootstrap token printed in the server log. The browser's WebAuthn API supplies
-credentials, while the server validates them and stores opaque sessions. There
-is no password field or tokenless public registration.
+credentials, while the server validates them and stores opaque sessions.
+Login also has a masked optional password field and a separate Password action;
+it works only after the account owner enables a password. There is no tokenless
+public registration. Account's shared TVListBox lists named Passkeys; owned input
+and button views add/rename keys and set a password entered twice. Its linked
+New password label uses Alt+P. Security actions save independently of profile
+Save/Cancel, and adding a key or setting a password reconfirms an existing
+Passkey. See [Accounts](Accounts.md#named-passkeys-and-optional-passwords).
 
 Both the bundle viewer and generated-page shell use one `buildAccountMenu()`
 and `TVApplicationMenuBar`, derived from the shared `TVMenuBar`. Anonymous
 visitors get a right-aligned Login action; signed-in visitors get their literal
-display name and a menu with Account/Passkey, Configuration → Colors and Sign
+display name and a menu with Account, Configuration → Colors and Sign
 Out. Colors are currently browser-local, not server-synced account settings.
-Admins additionally get Server Configuration and Registration Token there,
+Admins additionally get HELP Packages, DOS Packages, MIDI Sources, Server Configuration and Registration Token there,
 not under Help or the system menu. Authentication/name/role changes rebuild
 the menu; delayed session responses cannot restore a stale signed-in state.
 The standard Turbo Vision 2.0 `TMenuBar` lays out items from the left and has
 no per-item right alignment option; right alignment is our application-level
 `drawItem()` extension, retaining normal menu objects and TVEvent handling.
 Only the drawing primitive uses the minimal right-item layout CSS.
+
+`tv-content.js` composes three independent windows, `TVHelpPackagesDialog`,
+`TVDosPackagesDialog` and `TVMidiSourcesDialog`, from `TVPackagesDialog`.
+The base owns the group/source TVListBox, edition/package/album TVCheckBoxes,
+description, labels, buttons and scrollbars; there is no HELP/DOS/MIDI mode
+switch. Each instance retains its own draft across group/focus changes and
+sends only its content type's API field. First-run setup opens HELP Packages
+after administrator sign-in; the other types remain separate menu actions.
+The shared scrollable
+TVCluster primitive paints its entire bounded rectangle, including empty rows.
+Individual HELP products and DOS packages are
+installed or uninstalled only after a confirming `TVMessageBox`. The server
+job is followed by `TVProgressDialog`/`TVBarGauge`; hiding that dialog
+does not cancel server work. See [Server Content](Server%20Content.md) for
+permissions, API progress, ownership and retained backups.
 
 `TVColorsDialog` follows the Turbo Vision 2.0 `TColorDialog` 61×18 cell
 geometry from `colorsel.cpp`: Group and Item lists, 4×4 foreground and 4×2
@@ -653,8 +738,15 @@ parallel DOM key handler.
 - `openSelected()` — Open the highlighted result. The bundle app loads HELP
   results through its bundle loader and opens `context_hex`; Docs results use
   the existing document-window loader.
-- `TVIndexProgressDialog` composes two shared gauge views, static text and a
-  Hide button. It appears when the page detects index creation, even before
+- `TVProgressDialog(title, initialSummary)` composes
+  two shared gauge views, static text, a Hide button and optional More/Less list.
+  Its window construction is shared by index, rebuild and Downloads operations.
+  `updateDownloads` consumes the common queue; `setOperation` retains installation
+  progress while that queue changes. Downloads reuses one nonmodal instance through
+  the toolbar model. Its queue list excludes completed work (kept in the menu's
+  Completed downloads submenu) and preserves item selection as rows disappear.
+  Hide is on the left, More/Less on the right; an empty queue collapses the list.
+  The index instance appears when the page detects index creation, even before
   Search Topics is opened,
   displays file-count percentage from `/api/search/status`, and does not
   cancel the server-side index when hidden.
@@ -676,6 +768,14 @@ available without this API. Public `/?doc=<path>` and `/?file=<path>` URLs
 serve a crawler-readable HTML fallback and start the matching TVision document
 or HELP window directly in JavaScript, without a separate "Open in viewer"
 step. `/docs/<path>` remains the Markdown source loaded by the document window.
+The shared application grid has the viewport's fixed height: its desktop
+occupies the space between the menu and status line even while the complete
+HTML fallback is present. Long fallback text cannot change window-centering
+bounds before JavaScript removes it. Saved `#tv=` geometry uses the same bounds.
+The shared window resizer bounds locally saved positions to the current
+desktop after restoring sizes and enforcing their minimums. It preserves
+valid coordinates and saved sizes, and keeps a bounded normal-position
+snapshot for maximized windows. No stored settings are cleared.
 
 ### TVMidiPlayerDialog
 
@@ -936,6 +1036,21 @@ than a fixed number of cells, so wide buttons keep their lower-right shadow.
 Administrators edit accounts and per-user DOS capacities;
 server runtime settings are displayed read-only in a `TVListBox`. The default
 private quota is 64 MiB. `TVAccountDialog` shows saved private C usage/capacity.
+The shared account-menu builder groups administrator settings, packages,
+MIDI sources, users/tokens and rebuilds under Configuration in both shell and
+bundle pages. Colors/Theme remain available to members. Guest appearance
+entries remain in the system menu; signed-in pages do not duplicate them.
+Rebuild menu commands dispatch TVEvent without opening Server Configuration;
+the existing rebuild workflow supplies confirmation, progress and a completion
+MessageBox when running without that dialog visible.
+`TVMidiSourcesDialog` in `tv-content.js` inherits its provider TVListBox, album
+TVCheckBoxes, description and actions from `TVPackagesDialog`. Source/future-album
+checkboxes and Load albums are MIDI-specific; there is no bottom status row.
+It retains per-source unsaved drafts when the left list changes.
+List selection uses the existing viewer event/callback path; checkbox broadcasts
+and commands go through handleEvent(). Its own hcMidiSources context explains
+the provider/album admin API. Load albums uses the shared progress dialog and
+does not enable the indexed source or start its music downloads.
 Server Terminal and its HTTP/CLI launcher have been removed. `TVTerminal`
 remains a shared output view used by Widget Gallery, not a remote shell.
 Root menu popups clamp their horizontal position to the viewport, including

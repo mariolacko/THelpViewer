@@ -64,7 +64,8 @@ In particular, the currently downloaded Turbo Basic `TBHELP.TBH` files are
 rejected at header/compression parsing; their native profile remains unverified.
 They are separate from the supported MicroCalc example `.HLP` files. A selected
 product containing these inputs fails its staged build without replacing the
-published library. See [remaining verification work](../../TODO.md).
+published library. Remaining verification is tracked in the repository's
+`TODO.md`, which is not part of the public Docs catalog.
 
 The converter uses a pipeline architecture with automatic format detection:
 

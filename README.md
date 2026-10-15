@@ -17,22 +17,33 @@ interactive web application with authentic DOS look and feel.
 
 | Format | Products | Extension |
 |--------|----------|-----------|
-| **Borland THELP** | Turbo Pascal 4–7, Turbo C, TASM, Sidekick, Sprint | `.HLP`, `.TPH`, `.TCH`, `*.T?H` with THELP signature |
+| **Borland THELP** | Turbo Pascal 4–7, Turbo C, TASM, Sidekick 2, Sprint | `.HLP`, `.TPH`, `.TCH`, `*.T?H` with THELP signature |
 | **Borland TDH/TFH runtime help** | Turbo Debugger 1.0/2.x, Turbo Profiler | `.TDH`, `.TFH` |
+| **Borland Sidekick 1** | Screen contexts and paginated help, separate from THELP | `SK.HLP` |
+| **Borland Sidekick Plus** | Paragraph-addressed screen groups, redirects, hotspots and pages | `SKPLUS.HLP` |
 | **Microsoft BW03** | Older CodeView DOS / OS2 help (`CV.HLP`, `CVP.HLP`) | `.HLP` |
 | **Microsoft QuickHelp (LN)** | QuickBASIC, QuickC, MASM 6, PWB, LINK | `.HLP` |
 | **HelpPC 2.10** | Six linked DOS text databases | `.TXT` |
 | **FreeDOS HTML Help** | HHSTNDRD HTML page collection | `HHSTNDRD.ZIP` |
+| **MicroCalc text help** | Turbo Basic MicroCalc example, paginated and colored text | `.HLP` |
+| **DOS text help / Prolog help database** | Turbo Prolog main/example helps and `h("…")` display records | `.HLP` |
 | **Norton Guide** | Norton Guides and Expert Help databases | `.NG` |
 | **TurboVision FBHF** | Turbo Vision apps (TP6, BP7), TVHC compiler | `.HLP` |
 | **Software602 M602** | M602 Manager (XOR $FA encrypted) | `.HLP` |
-| **Software602 Text602** | Text602, Calc602 word processors | `.HLP` |
-| **HLX/HL6 text** | Decompiled text format (round-trip capable) | `.hlx`, `.hl6` |
+| **Software602 Text602** | Text602 word processor and Calc602 spreadsheet help | `.HLP` |
+| **Software602 K602** | Kartoteka602 database help | `.HLP` |
+| **HLX/HL6 text** | Directive-based compiler/decompiler source syntax | `.hlx`, `.hl6` |
+| **Windows Help HC31** | Native articles, tables and links in fixed-cell text; pictures and special Windows macros remain limited | `.HLP` with `3F 5F 03 00` magic |
 | **Scorpion's Cheater legacy / DAT (experimental)** | Scorpion's Cheater 1-23 (`legacy` 1-14, modern DAT 15-23) | `.exe`, `.dat`, `.sco`, `.scd`, `.scx` |
 | **Game-Cheater Pc-Fand** | Game-Cheater 9.02 cheat, company, URL, help and database tables | paired `.000`, `.T00` files |
 
 Borland TDH/TFH runtime help is decoded for the current known TDH 1.0, later
 TDH 2.x, and TFH sample families.
+
+Single-volume DOS BACKUP source wrappers are validated and removed in memory
+before inner-format detection. Original sources and their CRC32 identities
+remain unchanged. See the [format index](docs/FORMATS.md) for specifications
+and explicitly unsupported sample families.
 
 ## Quick Start
 
@@ -100,11 +111,17 @@ Useful Docker commands:
 The container image installs Python dependencies and 7-Zip for disk-image
 extraction, and
 docker-compose bind-mounts the whole repository into `/app`, so JS/CSS/docs/help
-data are never copied into the image. Docker startup reads HELP files at their
-original paths before mounting the repository. On macOS this also downloads
-files that have been offloaded to cloud storage, so Docker can read them through
-the bind mount. No second copy is created. If macOS offloads them again later,
-use `./thelp.sh docker start` to make them locally available again.
+data are never copied into the image. `./thelp.sh docker start` and
+`./thelp.sh docker restart` read HELP files, account/settings metadata, the shared DOS C
+and private DOS overlays/media at their original paths before invoking Compose.
+On macOS this also downloads files offloaded to cloud storage, so Docker can
+read them through the bind mount. No second copy, pinning, account reset or DOS
+rebuild is performed. These checks also run before first content setup, when
+no HELP catalog exists. Unreadable data aborts container startup with an error.
+Direct `docker compose` commands bypass the host-side availability check.
+If macOS offloads files again later, use `./thelp.sh docker start` to make them
+locally available again, then reload the page. See
+[cloud-backed storage recovery](docs/THelp%20Viewer/Server%20Content.md#macos-cloud-backed-storage).
 
 ### DOS Prompt
 
@@ -120,13 +137,22 @@ After an administrator confirms selected packages, the server prepares `var/dos/
 includes FreeDOS EDIT, Volkov Commander and DOS games. Run `EDIT`, `VC` or
 `TYPE C:\SOFTWARE.TXT` for game launch commands. Initialization shows a shared
 progress dialog. Additional trusted
-software sources use HTTPS, an allowed-host list,
-a required SHA-256 and ZIP or IMG extraction. `THELP_DOS_CONFIG_PATH` can select
+software sources use public HTTPS, optional SHA-256 verification and ZIP/IMG
+extraction. `THELP_DOS_CONFIG_PATH` can select
 another manifest. The shared disk is created only once: later restarts do not
 reinstall software or change the disk from an edited source list. Runtime
 memory/cycles changes still take effect after restarting the server. Use
-`python -m thelpviewer.tools.install_dos_sources` to explicitly add configured
-software to an existing disk, then restart the server.
+**Admin → Configuration → DOS Packages… → Apply** to install checked
+missing DOS packages or uninstall unchecked installed ones, with progress and
+recoverable backups. HELP Packages, DOS Packages and MIDI Sources open the
+three separate dialogs derived from a shared **TVPackagesDialog**. HELP has menu product
+groups on the left and independently installable versions on the right;
+DOS has categories/packages and MIDI has providers/albums. Switching windows
+keeps each dialog's draft; Apply changes only its type. Shared TVision checkboxes
+and scrollbars are used. The checkbox below the right pane selects that group;
+the bottom Select All / Deselect All buttons select all groups of that dialog.
+Original HELP, archives and private disks
+remain intact. The command-line adapter is still available for maintenance.
 
 Sign in through the existing Passkey dialog to keep a private C-drive overlay
 on the server as regular files with SQLite deletion/revision metadata.
@@ -233,7 +259,9 @@ THelpViewer/
 │   │   ├── downloader/     ←     providers, shared transport and archive extraction
 │   │   ├── app.py          ←     app setup, shared services and static mounts
 │   │   ├── config.py       ←     env-based runtime configuration
-│   │   ├── accounts.py     ←     Passkey accounts, tokens and sessions
+│   │   ├── accounts/       ←     profiles, named Passkeys, optional passwords and sessions
+│   │   ├── dos/            ←     shared disk, package extraction, overlays and media
+│   │   ├── midi/           ←     library orchestration, source discovery, catalog and formats
 │   │   ├── statistics.py   ←     aggregate counters and Hall of Fame storage
 │   │   ├── search_index.py ←     global HELP and Docs search index
 │   │   ├── routes/         ←     HTTP endpoints grouped by responsibility
@@ -242,7 +270,6 @@ THelpViewer/
 │   │   │   └── statistics.py ← statistics and Hall of Fame API
 │   │   └── __init__.py
 │   └── __init__.py         ←   application version
-├── downloads/              ← Legacy local downloader cache (not moved automatically)
 ├── data/                   ← Permanent data (included in backups, excluded from Git)
 │   ├── sources/<Product>/  ← Original HELP files and licence notices
 │   ├── helps/<Product>/    ← Published UHF bundles + catalog.json
@@ -257,7 +284,7 @@ THelpViewer/
 │   ├── dos/c/              ← Generated shared C disk
 │   └── midi/               ← Downloaded MIDI tracks, covers and catalog
 ├── docs/                   ← Version-controlled documentation sources
-│   ├── Formats.md          ←   binary format index
+│   ├── FORMATS.md          ←   binary/source format index
 │   ├── Formats/            ←   detailed format specifications
 │   │   ├── Borland THELP.md
 │   │   ├── Borland TDH.md
@@ -276,7 +303,7 @@ THelpViewer/
 ├── docker-compose.yml
 └── tools/
     ├── rebuild_help_database.py ← Rebuild the canonical help database from sources
-    └── rebuild_catalog.py       ← Rebuild helps/catalog.json from existing bundles
+    └── rebuild_catalog.py       ← Rebuild data/helps/catalog.json from existing bundles
 ```
 
 ## Features
@@ -346,6 +373,13 @@ output bundle groups, and the existing source metadata keyed by `crc32`. Product
 multiple releases without duplicating provider configuration. CRC entries are
 assigned to a family through `collection_prefixes` and expose the remaining
 collection suffix as the release version.
+
+`python3 tools/rebuild_help_database.py` merges discovered CRC records into the
+existing manifest; it retains products, providers, converters, build groups,
+explicit product/release overrides and records for originals not currently on
+disk. Invalid JSON/records or duplicate CRCs stop the rebuild without replacing
+the file. Publication is atomic. A new `--output` path starts from the configured
+complete version-2 manifest; old version-1 CRC snapshots are not supported.
 
 Encoding resolution uses this precedence: explicit parameter, CRC database
 entry, then payload autodetection. Bundle export also uses the database for
@@ -538,15 +572,21 @@ bootstrap token in the Docker logs. Find it with
 `docker compose logs --tail` may omit the startup line after later requests.
 If an account already exists, no bootstrap token is printed. In Login → Register, enter
 your name, email and token to create the first administrator Passkey. Signed-in
-admins gain User name → Registration Token to issue one-hour, single-use tokens
+admins gain User name → Configuration → Registration Token to issue one-hour, single-use tokens
 for other users, review still-valid tokens and revoke selected tokens. The
 Login appears on the right of the menu bar. After sign-in it becomes the user's
 display name with Account, Configuration and Sign Out. Colors currently
 remain browser-local; server configuration and tokens are admin-only.
-Account opens profile settings (display name, email and read-only role), not
-the Login dialog. Save updates only the signed-in user's profile and menu name.
-The stable username/account ID, Passkeys, sessions and private DOS files remain
-unchanged. Both the updated email and original username can be used to sign in;
+Account opens profile settings (first/last name, nickname, email and read-only
+role), not the Login dialog. Save updates only the signed-in user's profile and menu name.
+It also lists named Passkeys: add another authenticator or rename an owned key.
+New registrations suggest an editable system/browser label. An optional password
+can be set by entering it twice (15–128 characters); Login's Password button
+uses it instead of a Passkey. Credential changes require Passkey confirmation.
+Passwords use salted scrypt and rate-limited sign-in; a password change signs
+out other sessions. Existing accounts stay passwordless until explicitly enabled.
+Profile Save leaves the stable username/account ID, Passkeys, sessions and
+private DOS files unchanged. Both the updated email and original username can be used to sign in;
 email addresses are not verified mailboxes. Users cannot edit their role here.
 The local origin defaults to `http://localhost:5448`. On the public host, set
 `THELP_AUTH_ORIGIN=https://thelp.zdrojak.dev` in the same `.env` file as
@@ -572,8 +612,11 @@ the configured host and an exact same-origin write; ordinary members are denied.
 Previous data moves to `var/backups/` for recovery:
 DOS rebuild retains private overlays/source archives; MIDI rebuild stops the
 existing downloader before replacing tracks, covers and catalog and downloading
-the configured sources again. Keep backups deliberately; repeated rebuilds use
-disk space. The built-in Help Contents/Index documents these tools and accounts.
+the configured sources again. Successful jobs retain two backups per HELP,
+DOS or MIDI type by default; change **Retained backups per type** (1–100) in
+Server Configuration. DOS base/package changes share one limit. Failed/partial
+jobs preserve recovery copies; migration archives and private disk revisions
+remain separate. The built-in Help Contents/Index documents these tools and accounts.
 
 Passkey registration also requires the `webauthn` Python package in the Docker
 image. After updating the project or `requirements.txt`, use
@@ -586,11 +629,12 @@ packages. If the package is missing, Passkey endpoints return JSON HTTP 503.
 ### Format Specifications
 
 - [Format index](docs/FORMATS.md) — overview and comparison of all binary formats
-- [Borland THELP](docs/Formats/Borland%20THELP.md) — TP4–7, Turbo C, TASM, Sidekick, Sprint
+- [Borland THELP](docs/Formats/Borland%20THELP.md) — TP4–7, Turbo C, TASM, Sidekick 2, Sprint
 - [Borland TDH/TFH runtime help](docs/Formats/Borland%20TDH.md) — Turbo Debugger 1.0/2.x, Turbo Profiler
 - [TurboVision FBHF](docs/Formats/TurboVision%20FBHF.md) — TP6, BP7 THelpFile (TVHC compiler)
 - [Software602](docs/Formats/Software602.md) — M602, Text602, Calc602 help families
 - [Help source text format](docs/Formats/Help%20Source%20Text%20Format.md) — HLX/TXT decompiled-source specification
+- [Windows Help HC31](docs/Formats/Windows%20Help.md) — compound files, compression, article addressing, fonts and text/link commands
 - [HelpPC 2.10](docs/Formats/HelpPC%202.10.md) — keyed DOS text databases
 - [FreeDOS HTML Help](docs/Formats/FreeDOS%20HTML%20Help.md) — HHSTNDRD HTML archive
 
@@ -604,6 +648,22 @@ packages. If the package is missing, Passkey endpoints return JSON HTTP 503.
 The FastAPI docs catalog also exposes `README.md` and `CHANGELOG.md`
 virtually under `docs/THelp Viewer/`, so they appear in the viewer without
 duplicating files on disk.
+
+## Tests
+
+Install `requirements-dev.txt`, then run:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python -m pytest -p no:cacheprovider
+```
+
+Browser tests use Node.js and Chrome when available. Original-corpus and some
+browser regressions also require their source files and published HELP bundles;
+administrator package selections can make those prerequisites unavailable.
+Do not alter permanent content merely to satisfy a test fixture. The repository's
+`TODO.md` records the latest complete-suite result and unresolved format/fixture
+work; it is not published in the public Docs catalog. Keep repository
+bytecode/test caches out of commits.
 
 ## Requirements
 
