@@ -6,6 +6,7 @@ import json
 
 from fastapi.testclient import TestClient
 
+from thelpviewer.server.accounts.sessions import new_session
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
 
@@ -22,7 +23,7 @@ def test_admin_users_and_disk_limits(tmp_path):
     accounts.create_user("member", "Member")
     with accounts._connect() as database:
         ids = dict(database.execute("SELECT username,id FROM accounts"))
-        tokens = {name: accounts._new_session(database, ident) for name, ident in ids.items()}
+        tokens = {name: new_session(database, ident) for name, ident in ids.items()}
     change = {"email": "member@example.test", "role": "member",
               "active": True, "disk_capacity_mb": 1, "first_name": "Ján", "last_name": "Novák", "nickname": "JN"}
     with TestClient(app, base_url=config.auth_origin) as client:
@@ -105,7 +106,8 @@ def test_founder_identity_migrates_and_is_preserved_after_profile_changes(tmp_pa
     import uuid
     from contextlib import closing
     import pytest
-    from thelpviewer.server.accounts import AccountError, AccountStore
+    from thelpviewer.server.accounts.common import AccountError
+    from thelpviewer.server.accounts.store import AccountStore
     first, second = uuid.uuid4().hex, uuid.uuid4().hex
     with sqlite3.connect(tmp_path / "accounts.sqlite3") as database:
         database.execute("CREATE TABLE accounts (id TEXT PRIMARY KEY, username TEXT UNIQUE, display_name TEXT, "
@@ -114,7 +116,7 @@ def test_founder_identity_migrates_and_is_preserved_after_profile_changes(tmp_pa
         database.execute("INSERT INTO accounts (id, username, display_name, role) VALUES (?, 'second', 'Alpha', 'admin')", (second,))
     store = AccountStore(tmp_path)
     with closing(store._connect()) as database, database:
-        token = store._new_session(database, second)
+        token = new_session(database, second)
     users = store.list_users(token)
     assert users[0]["id"] == second  # Display sorting cannot select the founder.
     assert {row["id"] for row in users if row["protected_admin"]} == {first}
@@ -129,7 +131,7 @@ def test_founder_identity_migrates_and_is_preserved_after_profile_changes(tmp_pa
 def test_manifest_without_archive_hash_installs_and_reuses_download(tmp_path, monkeypatch):
     import io
     import zipfile
-    from thelpviewer.server.dos_prompt import DosPromptStore
+    from thelpviewer.server.dos.store import DosPromptStore
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w") as output:
         output.writestr("GAME.EXE", b"test software")
@@ -137,8 +139,8 @@ def test_manifest_without_archive_hash_installs_and_reuses_download(tmp_path, mo
     manifest.write_text(json.dumps({"sources": [{"id": "game", "url": "https://software.test/game.zip",
         "format": "zip", "target": "GAMES", "launch": "GAME"}], "software_catalog": ["Software"]}))
     calls = []
-    monkeypatch.setattr("thelpviewer.server.dos_prompt.fetch_dos_source",
-                        lambda *args: (calls.append(args[0]["url"]) or archive.getvalue()))
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source",
+                        lambda *args, **kwargs: (calls.append(args[0]["url"]) or archive.getvalue()))
     store = DosPromptStore(tmp_path / "dos", manifest)
     store.prepare()
     assert store.state == "ready", store.error

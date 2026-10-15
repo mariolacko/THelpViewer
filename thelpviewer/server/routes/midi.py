@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from ..midi_library import MidiLibrary
+from ..midi.library import MidiLibrary
 
 
 def create_midi_router(library: MidiLibrary) -> APIRouter:

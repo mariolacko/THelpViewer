@@ -11,9 +11,12 @@ import zipfile
 from fastapi.testclient import TestClient
 import pytest
 
+from thelpviewer.server.accounts.sessions import new_session
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
-from thelpviewer.server.dos_prompt import DosPromptStore, DosError, c_path
+from thelpviewer.server.dos.packages import configured_files
+from thelpviewer.server.dos.store import DosPromptStore
+from thelpviewer.server.dos.paths import DosError, c_path
 from thelpviewer.server.downloader.extractor import find_unar, find_sevenzip
 
 
@@ -24,6 +27,152 @@ def store_at(tmp_path):
     store.prepare()
     assert store.state == "ready", store.error
     return store
+
+
+def test_package_selection_uninstalls_only_owned_files_and_preserves_private_and_shared_files(tmp_path, monkeypatch):
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr("GAME.EXE", b"game")
+        archive.writestr("COMMON.DAT", b"shared")
+    archive_data = data.getvalue()
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *args, **kwargs: archive_data)
+    config = tmp_path / "dos.json"
+    sources = [{"id": ident, "url": f"https://games.test/{ident}.zip", "target": "GAMES", "format": "zip"}
+               for ident in ("one", "two")]
+    config.write_text(json.dumps({"sources": sources, "files": [{"path": "AUTOEXEC.BAT", "text": ["@echo off"]}]}))
+    store = DosPromptStore(tmp_path / "var" / "dos", config, users_dir=tmp_path / "data" / "dos" / "users",
+                           disk_dir=tmp_path / "var" / "dos" / "c")
+    store.configure(["one", "two"])
+    account = uuid.uuid4().hex
+    store.save(account, payload(store, files={"GAMES/SAVE.DAT": b"saved"}))
+    (store.disk_dir / "ADMIN.TXT").write_bytes(b"not package-owned")
+    store.configure(["two"])
+    assert store.files["GAMES/GAME.EXE"] == b"game"  # Shared ownership protects the surviving package.
+    assert store.overlay(account)[1] == {"GAMES/SAVE.DAT": b"saved"}
+    store.configure([])
+    assert "GAMES/GAME.EXE" not in store.files and "GAMES/COMMON.DAT" not in store.files
+    assert store.files["ADMIN.TXT"] == b"not package-owned"
+    assert store.files["AUTOEXEC.BAT"] == b"@echo off\r\n"
+    assert store.overlay(account)[1] == {"GAMES/SAVE.DAT": b"saved"}
+    assert (store.root.parent / store.backup / "c" / "GAMES/GAME.EXE").read_bytes() == b"game"
+    assert "two" not in json.loads(store.installed_path.read_text())
+
+
+def test_failed_package_publication_restores_original_disk_receipt_and_memory(tmp_path, monkeypatch):
+    store = store_at(tmp_path)
+    before = dict(store.files)
+    receipt = store.installed_path.read_bytes()
+    original = __import__("thelpviewer.server.dos.store", fromlist=["atomic_file"]).atomic_file
+    def fail_marker(path, contents):
+        if path == store.root / "base" / "installed.json":
+            raise OSError("metadata disk full")
+        original(path, contents)
+    monkeypatch.setattr("thelpviewer.server.dos.store.atomic_file", fail_marker)
+    with pytest.raises(DosError, match="disk full"):
+        store.configure([])
+    assert store.state == "ready" and not store.configuring
+    assert store.files == before
+    assert store.installed_path.read_bytes() == receipt
+    assert (store.disk_dir / "README.TXT").read_bytes() == before["README.TXT"]
+    assert not list(store.disk_dir.parent.glob(".dos-packages-*"))
+
+
+def test_required_packages_survive_empty_selection_initialization_and_rebuild(tmp_path, monkeypatch):
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr("PROGRAM.EXE", b"required program")
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *args, **kwargs: data.getvalue())
+    config = tmp_path / "dos.json"
+    config.write_text(json.dumps({"sources": [
+        {"id": "base-tool", "required": True, "enabled": False, "url": "https://tools.test/base.zip",
+         "format": "zip", "target": "TOOLS/BASE"},
+        {"id": "game", "url": "https://games.test/game.zip", "format": "zip", "target": "GAMES/ONE"},
+    ]}))
+    store = DosPromptStore(tmp_path / "dos", config)
+    store.prepare(source_ids=[])
+    assert store.state == "ready", store.error
+    assert store.files == {"TOOLS/BASE/PROGRAM.EXE": b"required program"}
+    store.configure(["game"])
+    assert "GAMES/ONE/PROGRAM.EXE" in store.files and "TOOLS/BASE/PROGRAM.EXE" in store.files
+    store.configure([])
+    assert store.files == {"TOOLS/BASE/PROGRAM.EXE": b"required program"}
+    assert "base-tool" in json.loads(store.installed_path.read_text())
+    store.source_selection = lambda: []  # Rebuild must apply the same manifest rule.
+    store.rebuild()
+    store._worker.join(5)
+    assert store.state == "ready", store.error
+    assert store.files == {"TOOLS/BASE/PROGRAM.EXE": b"required program"}
+
+
+def test_package_strip_components_merges_distribution_disks_after_member_selection(tmp_path):
+    store = store_at(tmp_path)
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        archive.writestr("Disk1/INSTALL.EXE", b"installer")
+        archive.writestr("Disk1/README", b"original documentation")
+        archive.writestr("Disk2/COMPILER.EXE", b"compiler")
+        archive.writestr("UNSELECTED.TXT", b"not part of the disks")
+    files = store._source_files(stream.getvalue(), {"format": "zip", "strip_components": 1,
+        "members": ["Disk1/*", "Disk2/*"]})
+    assert files == {"INSTALL.EXE": b"installer", "README": b"original documentation", "COMPILER.EXE": b"compiler"}
+
+
+@pytest.mark.parametrize("strip", [-1, True, 1.5, "1", 17])
+def test_package_strip_components_rejects_invalid_counts(tmp_path, strip):
+    with pytest.raises(DosError, match="component count"):
+        store_at(tmp_path)._source_files(b"", {"format": "zip", "strip_components": strip})
+
+
+@pytest.mark.parametrize("names,message", [
+    (["Disk1/FILE.TXT", "Disk2/file.txt"], "Duplicate DOS filename"),
+    (["FILE.TXT"], "too few components"),
+    (["../FILE.TXT"], "Invalid C drive path"),
+])
+def test_package_strip_components_rejects_collisions_short_paths_and_traversal(tmp_path, names, message):
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        for name in names:
+            archive.writestr(name, b"data")
+    with pytest.raises(DosError, match=message):
+        store_at(tmp_path)._source_files(stream.getvalue(), {"format": "zip", "strip_components": 1})
+
+
+@pytest.mark.parametrize("creator", [0, 3])
+def test_dos_zip_attributes_are_not_misread_as_unix_symlinks(tmp_path, creator):
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        entry = zipfile.ZipInfo("ANTI-VIR.DAT")
+        entry.create_system = creator
+        entry.external_attr = 0o122317 << 16
+        archive.writestr(entry, b"ordinary DOS file")
+    store = store_at(tmp_path)
+    if creator == 3:
+        with pytest.raises(DosError, match="symbolic link"):
+            store._source_files(stream.getvalue(), {"format": "zip"})
+    else:
+        assert store._source_files(stream.getvalue(), {"format": "zip"}) == {"ANTI-VIR.DAT": b"ordinary DOS file"}
+
+
+def test_legacy_package_ownership_requires_cached_archive_before_uninstall(tmp_path):
+    store = store_at(tmp_path)
+    config = json.loads(store.config_path.read_text())
+    config["sources"] = [{"id": "legacy", "url": "https://games.test/old.zip", "target": "GAMES/OLD", "format": "zip"}]
+    store.config_path.write_text(json.dumps(config))
+    receipt = {"legacy": "a" * 64, "_complete": True}
+    store.installed_path.write_text(json.dumps(receipt))
+    original = store.installed_path.read_bytes()
+    with pytest.raises(DosError, match="cached archive"):
+        store.configure([])
+    assert store.installed_path.read_bytes() == original and store.state == "ready"
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        archive.writestr("GAME.EXE", b"game")
+    cache = store.downloads_dir / ("a" * 64)
+    cache.parent.mkdir(); cache.write_bytes(stream.getvalue())
+    game = store.disk_dir / "GAMES/OLD/GAME.EXE"
+    game.parent.mkdir(); game.write_bytes(b"game")
+    store.configure([])
+    assert not game.exists() and cache.is_file()
 
 
 def payload(store, revision=0, files=None, deleted=None):
@@ -89,7 +238,7 @@ def test_finished_base_is_not_rebuilt_or_changed_on_later_starts(tmp_path, monke
     (base / "README.TXT").write_bytes(b"administrator-edited base")
     (base / "GAMES" / "README.TXT").unlink()
     store.config_path.write_text(json.dumps({"sources": [{"id": "later-added-source"}]}))
-    monkeypatch.setattr("thelpviewer.server.dos_prompt.fetch_dos_source", lambda *args: pytest.fail("Completed base must not download again"))
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *args, **kwargs: pytest.fail("Completed base must not download again"))
     reloaded = DosPromptStore(store.root, store.config_path)
     reloaded.prepare()
     assert reloaded.state == "ready", reloaded.error
@@ -136,7 +285,7 @@ def test_overlay_files_are_regular_files_and_sqlite_holds_only_metadata(tmp_path
 def test_legacy_sqlite_overlay_migrates_without_losing_files_or_deletions(tmp_path):
     store = store_at(tmp_path)
     account = uuid.uuid4().hex
-    user = store._user_dir(account)
+    user = store.overlays.user_dir(account)
     with sqlite3.connect(user / "overlay.sqlite3") as database:
         database.executescript("""
             CREATE TABLE files (name TEXT PRIMARY KEY, data BLOB NOT NULL);
@@ -159,7 +308,7 @@ def test_failed_snapshot_does_not_replace_the_last_saved_overlay(tmp_path, monke
     store.save(account, payload(store, files={"SAVE.DAT": b"old"}))
     def fail(*args):
         raise OSError("disk full")
-    monkeypatch.setattr("thelpviewer.server.dos_prompt._atomic_file", fail)
+    monkeypatch.setattr("thelpviewer.server.dos.overlay.atomic_file", fail)
     with pytest.raises(OSError, match="disk full"):
         store.save(account, payload(store, revision=1, files={"SAVE.DAT": b"new"}))
     assert store.overlay(account)[0:2] == (1, {"SAVE.DAT": b"old"})
@@ -260,7 +409,7 @@ def test_first_run_software_download_is_hash_checked_selected_and_resumable(tmp_
         "format": "zip", "target": "TOOLS", "members": ["BIN/*", "DOC/*"],
     }]}))
     fetched = []
-    monkeypatch.setattr("thelpviewer.server.dos_prompt.fetch_dos_source", lambda source, *args: fetched.append(source["url"]) or data)
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda source, *args, **kwargs: fetched.append(source["url"]) or data)
     store = DosPromptStore(tmp_path / "dos", config)
     store.prepare()
     assert store.state == "ready", store.error
@@ -292,7 +441,7 @@ def test_source_files_override_archive_on_fresh_install_and_remain_frozen(tmp_pa
     ]}
     manifest = tmp_path / "dos.json"
     manifest.write_text(json.dumps({"sources": [source]}))
-    monkeypatch.setattr("thelpviewer.server.dos_prompt.fetch_dos_source", lambda *args: archive_data)
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *args, **kwargs: archive_data)
     store = DosPromptStore(tmp_path / "dos", manifest)
     store.prepare()
     assert store.state == "ready", store.error
@@ -315,10 +464,9 @@ def test_source_files_override_archive_on_fresh_install_and_remain_frozen(tmp_pa
     [{"path": "a.txt", "text": []}, {"path": "A.TXT", "text": []}],
     [{"path": "X.BIN", "base64": base64.b64encode(bytes(101)).decode()}],
 ])
-def test_source_files_validate_names_contents_and_quota(tmp_path, entries):
-    store = DosPromptStore(tmp_path / "dos", None)
+def test_source_files_validate_names_contents_and_quota(entries):
     with pytest.raises(DosError):
-        store._configured_files({"files": entries}, 100)
+        configured_files({"files": entries}, 100)
 
 
 def test_root_recipe_overrides_package_recipe_and_can_resume_explicit_install(tmp_path, monkeypatch):
@@ -330,7 +478,7 @@ def test_root_recipe_overrides_package_recipe_and_can_resume_explicit_install(tm
     manifest.write_text(json.dumps({"files": [{"path": "APP/CONFIG.TXT", "text": ["root override"]}],
         "sources": [{"id": "app", "url": "https://example.test/app.zip", "format": "zip", "target": "APP",
             "sha256": hashlib.sha256(data).hexdigest(), "files": [{"path": "CONFIG.TXT", "text": ["package override"]}]}]}))
-    monkeypatch.setattr("thelpviewer.server.dos_prompt.fetch_dos_source", lambda *args: data)
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *args, **kwargs: data)
     store = DosPromptStore(tmp_path / "dos", manifest)
     store.prepare()
     assert store.state == "ready", store.error
@@ -444,8 +592,8 @@ def test_dos_api_binds_storage_and_media_to_session(tmp_path):
     with accounts._connect() as database:
         first = database.execute("SELECT id FROM accounts WHERE username='one'").fetchone()[0]
         second = database.execute("SELECT id FROM accounts WHERE username='two'").fetchone()[0]
-        first_token = accounts._new_session(database, first)
-        second_token = accounts._new_session(database, second)
+        first_token = new_session(database, first)
+        second_token = new_session(database, second)
     with TestClient(app) as client:
         assert client.get("/api/dos/bundle").status_code == 200
         assert client.put("/api/dos/overlay", json={}, headers={"Origin": "http://testserver"}).status_code == 401

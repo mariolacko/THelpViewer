@@ -13,6 +13,7 @@ import sys
 import tempfile
 
 from .collector import collect_help_files, copy_help_files, is_help_file_path
+from .http import report_progress
 
 
 MAX_EXTRACTION_DEPTH = 6
@@ -40,8 +41,10 @@ class ArchiveProbe:
 
 
 SZDD_SIGNATURE = b"SZDD\x88\xF0\x27\x33"
-QBASIC_SZ_SIGNATURE = b"SZ \x88\xF0\x27\x33\xD1"
+SZ_SIGNATURE = b"SZ \x88\xF0\x27\x33"
+QBASIC_SZ_SIGNATURE = SZ_SIGNATURE + b"\xD1"
 KWAJ_SIGNATURE = b"KWAJ\x88\xF0\x27\xD1"
+MAX_EXPANDED_PAYLOAD = 64 * 1024 * 1024
 ZIP_LOCAL_FILE_HEADER = b"PK\x03\x04"
 BORLAND_SPLIT_PART_RE = re.compile(r"^(?P<stem>.+)\.C(?P<series>[A-Z])(?P<part>\d+)$", re.I)
 
@@ -186,6 +189,7 @@ def _read_head(path: Path, size: int = 16) -> bytes:
 
 def extract_file(path: Path, dest: Path, tools: ExtractorTools) -> bool:
     """Extract one archive/image/container into ``dest`` using ``unar``."""
+    report_progress("Extracting", path.name)
     if not tools.available:
         print(f"    [error] Cannot extract {path.name}: no extractor available")
         return False
@@ -394,18 +398,30 @@ def _single_file_output_path(path: Path) -> Path:
     return path.with_name(f"{path.name}.expanded")
 
 
+class _IncompleteSzPayload(ValueError):
+    """The declared output requires more compressed bytes."""
+
+
 def _decompress_sz_payload(data: bytes) -> bytes:
     """Decompress an SZDD-style single-file payload."""
     if data.startswith(SZDD_SIGNATURE):
+        if len(data) < 14:
+            raise ValueError("Truncated SZDD header")
+        if data[8] != 0x41:
+            raise ValueError("Unsupported SZDD compression method")
         out_len = int.from_bytes(data[10:14], "little")
         payload = memoryview(data)[14:]
         pos = 4096 - 16
     elif data.startswith(QBASIC_SZ_SIGNATURE):
+        if len(data) < 12:
+            raise ValueError("Truncated Microsoft SZ header")
         out_len = int.from_bytes(data[8:12], "little")
         payload = memoryview(data)[12:]
         pos = 4096 - 18
     else:
         raise ValueError("Not an SZDD-style single-file payload")
+    if out_len > MAX_EXPANDED_PAYLOAD:
+        raise ValueError("Expanded Microsoft payload exceeds 64 MiB")
 
     window = bytearray(b"\x20" * 4096)
     output = bytearray()
@@ -413,14 +429,14 @@ def _decompress_sz_payload(data: bytes) -> bytes:
 
     while len(output) < out_len:
         if index >= len(payload):
-            raise ValueError("Unexpected end of compressed stream")
+            raise _IncompleteSzPayload("Unexpected end of compressed stream")
         control = payload[index]
         index += 1
         bit = 1
         while bit <= 0x80 and len(output) < out_len:
             if control & bit:
                 if index >= len(payload):
-                    raise ValueError("Missing literal byte")
+                    raise _IncompleteSzPayload("Missing literal byte")
                 value = payload[index]
                 index += 1
                 window[pos] = value
@@ -428,7 +444,7 @@ def _decompress_sz_payload(data: bytes) -> bytes:
                 pos = (pos + 1) & 0x0FFF
             else:
                 if index + 1 >= len(payload):
-                    raise ValueError("Missing match bytes")
+                    raise _IncompleteSzPayload("Missing match bytes")
                 match_pos = payload[index]
                 match_len = payload[index + 1]
                 index += 2
@@ -447,6 +463,57 @@ def _decompress_sz_payload(data: bytes) -> bytes:
     return bytes(output)
 
 
+def _expand_sz_file(path: Path, files: list[Path]) -> bytes:
+    """Decode SZ, joining numbered media parts only when the first is incomplete.
+
+    Microsoft floppies use NAME.HL$ followed by NAME.HL2, NAME.HL3, ... .
+    The first SZ/D1 header includes the complete output length; continuation
+    headers are the seven-byte SZ signature and the one-byte part number.
+    They interrupt one LZSS stream, not independent compressed files.
+    """
+    if path.stat().st_size > 2 * MAX_EXPANDED_PAYLOAD:
+        raise ValueError("Compressed Microsoft payload exceeds 128 MiB")
+    first = path.read_bytes()
+    try:
+        return _decompress_sz_payload(first)
+    except _IncompleteSzPayload:
+        if (not first.startswith(QBASIC_SZ_SIGNATURE) or len(path.suffix) != 4
+                or path.name[-1] not in "$_"):
+            raise
+
+    prefix = path.name[:-1].casefold()
+    parts: dict[int, list[Path]] = {1: [path]}
+    for candidate in files:
+        if candidate == path or candidate.name[:-1].casefold() != prefix:
+            continue
+        marker = candidate.name[-1]
+        if marker in "$_" and _read_head(candidate).startswith(QBASIC_SZ_SIGNATURE):
+            parts[1].append(candidate)
+        elif marker in "23456789":
+            parts.setdefault(int(marker), []).append(candidate)
+    if any(len(candidates) != 1 for candidates in parts.values()):
+        raise ValueError(f"Ambiguous Microsoft SZ parts for {path.name}")
+    if len(parts) == 1:
+        raise ValueError(f"Missing Microsoft SZ continuation part 2 for {path.name}")
+
+    combined = bytearray(first)
+    ordered = [path]
+    for number in range(2, max(parts) + 1):
+        if number not in parts:
+            raise ValueError(f"Missing Microsoft SZ continuation part {number} for {path.name}")
+        continuation = parts[number][0]
+        if continuation.stat().st_size + len(combined) > 2 * MAX_EXPANDED_PAYLOAD:
+            raise ValueError("Compressed Microsoft payload exceeds 128 MiB")
+        data = continuation.read_bytes()
+        if len(data) <= 8 or data[:8] != SZ_SIGNATURE + bytes([number]):
+            raise ValueError(f"Invalid Microsoft SZ continuation header: {continuation.name}")
+        combined.extend(data[8:])
+        ordered.append(continuation)
+    result = _decompress_sz_payload(bytes(combined))
+    print(f"    [assemble] {' + '.join(part.name for part in ordered)} -> {_single_file_output_path(path).name}")
+    return result
+
+
 def _extract_single_file_payload_with_unar(path: Path, tools: ExtractorTools) -> bytes | None:
     """Try to expand one single-file payload via ``unar`` first."""
     if not tools.unar:
@@ -463,10 +530,11 @@ def _extract_single_file_payload_with_unar(path: Path, tools: ExtractorTools) ->
 
 
 def expand_single_file_payloads(work_dir: Path, tools: ExtractorTools) -> None:
-    """Expand single-file compressed payloads discovered in one tree."""
-    for path in sorted(work_dir.rglob("*")):
-        if not path.is_file():
-            continue
+    """Expand Microsoft payloads, including files split across floppy images."""
+    if work_dir.is_symlink() or not _extraction_tree_is_safe(work_dir):
+        raise ValueError("Microsoft payload tree contains an unsafe symbolic link")
+    files = sorted(path for path in work_dir.rglob("*") if path.is_file())
+    for path in files:
         head = _read_head(path)
         if not _looks_like_single_file_payload(path, head):
             continue
@@ -477,14 +545,16 @@ def expand_single_file_payloads(work_dir: Path, tools: ExtractorTools) -> None:
             if head.startswith(KWAJ_SIGNATURE):
                 from pylibmspack import KwajFile
 
-                data = KwajFile(str(path)).read(max_size=64 * 1024 * 1024)
+                data = KwajFile(str(path)).read(max_size=MAX_EXPANDED_PAYLOAD)
+            elif head.startswith(SZDD_SIGNATURE) or head.startswith(QBASIC_SZ_SIGNATURE):
+                data = _expand_sz_file(path, files)
             else:
                 data = _extract_single_file_payload_with_unar(path, tools)
                 if data is None:
                     data = _decompress_sz_payload(path.read_bytes())
         except Exception as exc:
-            if head.startswith(KWAJ_SIGNATURE):
-                print(f"    [expand error] {path.name}: {exc}")
+            if head.startswith((KWAJ_SIGNATURE, SZDD_SIGNATURE, QBASIC_SZ_SIGNATURE)):
+                raise ValueError(f"Cannot expand {path.relative_to(work_dir)}: {exc}") from exc
             continue
         dest.write_bytes(data)
 
@@ -507,6 +577,7 @@ def collect_from_archive(
             return []
         extract_nested(tmp_path, tools)
         expand_single_file_payloads(tmp_path, tools)
+        report_progress("Collecting HELP files", archive.name)
         files = collect_help_files(tmp_path)
         if not files:
             return []
@@ -529,6 +600,14 @@ def collect_archive_members(
         if not extract_file(archive, work_dir, tools):
             raise ValueError(f"Cannot extract {archive.name}")
 
+        def matches_member(path: Path, needle: str) -> bool:
+            if "/" not in needle:
+                return fnmatch(path.name.casefold(), needle)
+            parts = path.relative_to(work_dir).as_posix().casefold().split("/")
+            # Nested archives add enclosing extraction directories. Match
+            # configured member paths at component boundaries, never substrings.
+            return any(fnmatch("/".join(parts[index:]), needle) for index in range(len(parts)))
+
         def find_members() -> tuple[list[Path], list[str]]:
             files = sorted(path for path in work_dir.rglob("*") if path.is_file())
             selected: list[Path] = []
@@ -537,10 +616,7 @@ def collect_archive_members(
                 needle = pattern.casefold().replace("\\", "/")
                 matches = [
                     path for path in files
-                    if fnmatch(
-                        (path.relative_to(work_dir).as_posix() if "/" in needle else path.name).casefold(),
-                        needle,
-                    )
+                    if matches_member(path, needle)
                 ]
                 if len(matches) != 1:
                     missing.append(pattern if not matches else f"{pattern} (ambiguous)")
@@ -555,4 +631,5 @@ def collect_archive_members(
             selected, missing = find_members()
         if missing:
             raise ValueError(f"Missing archive members: {', '.join(missing)}")
+        report_progress("Collecting HELP files", archive.name)
         return copy_help_files(selected, sources_dir / label, sources_dir)

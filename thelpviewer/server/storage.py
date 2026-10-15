@@ -11,6 +11,7 @@ import uuid
 
 from ..public_docs import is_public_doc_path
 from .config import PROJECT_ROOT
+from .json_storage import write_json
 
 
 def _digest(path: Path) -> str:
@@ -35,20 +36,6 @@ def _files(root: Path) -> dict[Path, Path]:
         elif not path.is_dir():
             raise ValueError(f"Storage migration refuses special files: {path}")
     return files
-
-
-def _atomic_json(path: Path, value) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as output:
-            output.write(json.dumps(value, indent=2).encode())
-            output.flush(); os.fsync(output.fileno())
-            temporary = Path(output.name)
-        os.replace(temporary, path)
-    finally:
-        if temporary and temporary.exists():
-            temporary.unlink()
 
 
 @contextmanager
@@ -123,7 +110,7 @@ def migrate_storage(config, *, project_root: Path = PROJECT_ROOT) -> dict:
                 or not Path(journal["backup"]).is_relative_to(Path("migration-backups"))):
             raise ValueError("Invalid storage migration journal")
         if normalized:
-            _atomic_json(journal_path, journal)
+            write_json(journal_path, journal)
         pending = [(source, target) for source, target in migration_plan(config, project_root)
                    if key(source) not in journal["completed"] and (source.exists() or source.is_symlink())]
         snapshots = {}
@@ -143,7 +130,7 @@ def migrate_storage(config, *, project_root: Path = PROJECT_ROOT) -> dict:
             snapshots[source] = {relative: _digest(path) for relative, path in files.items()}
         if not pending:
             return journal
-        _atomic_json(journal_path, journal)
+        write_json(journal_path, journal)
         for source, target in pending:
             target.parent.mkdir(parents=True, exist_ok=True)
             staging = Path(tempfile.mkdtemp(prefix=".storage-copy-", dir=target.parent))
@@ -178,7 +165,7 @@ def migrate_storage(config, *, project_root: Path = PROJECT_ROOT) -> dict:
                 backup.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(source), backup)
                 journal["completed"].append(key(source))
-                _atomic_json(journal_path, journal)
+                write_json(journal_path, journal)
             finally:
                 shutil.rmtree(staging)
         return journal
@@ -215,7 +202,7 @@ def publish_docs(source: Path | None, destination: Path) -> None:
                 if temporary.exists():
                     temporary.unlink()
         hashes[relative.as_posix()] = new_hash
-    _atomic_json(marker, hashes)
+    write_json(marker, hashes)
 
 
 def prepare_storage(config) -> None:

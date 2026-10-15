@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import tempfile
-import time
-import urllib.request
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 from .catalog import product_spec, products_for_source
 from .collector import copy_help_files
 from .extractor import ExtractorTools, extract_file
-from .http import DOWNLOAD_DELAY, USER_AGENT, fetch_html, get_opener, parse_anchors
+from .http import USER_AGENT, fetch_html, download_file, parse_anchors
 
 
 SOURCE_NAME = "slunecnice"
@@ -33,28 +31,8 @@ def find_download_url(html: str, page_url: str) -> str:
 
 
 def _download_archive(url: str, dest: Path, *, referer: str) -> Path:
-    if dest.exists():
-        print(f"    [skipped] {dest.name} (exists)")
-        return dest
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".tmp")
-    time.sleep(DOWNLOAD_DELAY)
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/zip,application/octet-stream,*/*;q=0.9",
-            "Referer": referer,
-        },
-    )
-    try:
-        with get_opener().open(request, timeout=120) as response:
-            tmp.write_bytes(response.read())
-        tmp.replace(dest)
-    except Exception:
-        tmp.unlink(missing_ok=True)
-        raise
-    return dest
+    return download_file(url, dest, headers={"User-Agent": USER_AGENT,
+        "Accept": "application/zip,application/octet-stream,*/*;q=0.9", "Referer": referer})
 
 
 def _collect_database_files(

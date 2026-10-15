@@ -1,4 +1,4 @@
-"""Passkey account and registration-token HTTP routes."""
+"""Account, Passkey, optional password and registration-token HTTP routes."""
 
 from __future__ import annotations
 
@@ -8,7 +8,10 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..accounts import AccountError, AccountStore, SESSION_LIFETIME
+from ..accounts.common import AccountError
+from ..accounts.passwords import PasswordRateLimit
+from ..accounts.store import AccountStore
+from ..accounts.sessions import SESSION_LIFETIME
 from ..config import AppConfig
 
 
@@ -33,6 +36,27 @@ class PasskeyLogin(BaseModel):
 class PasskeyAnswer(BaseModel):
     ceremony_id: str
     credential: dict
+
+
+class PasskeyCreation(PasskeyAnswer):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(default="Passkey", strict=True, min_length=1, max_length=80)
+
+
+class PasskeyName(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(strict=True, min_length=1, max_length=80)
+
+
+class PasswordUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(strict=True, min_length=15, max_length=128, repr=False)
+
+
+class PasswordLogin(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(strict=True, min_length=1, max_length=254)
+    password: str = Field(strict=True, min_length=1, max_length=128, repr=False)
 
 
 class ProfileUpdate(BaseModel):
@@ -74,6 +98,12 @@ def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
         )
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    def owner_token(request: Request) -> str:
+        token = request.cookies.get("thelp_session", "")
+        if not accounts.session_user(token):
+            raise HTTPException(status_code=403, detail="Sign-in required")
+        return token
 
     @router.get("/api/auth/session")
     def auth_session(request: Request) -> JSONResponse:
@@ -118,10 +148,10 @@ def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
             raise HTTPException(status_code=400, detail=str(error)) from None
 
     @router.post("/api/auth/passkey/enroll/verify")
-    def passkey_enroll_verify(data: PasskeyAnswer, request: Request) -> JSONResponse:
+    def passkey_enroll_verify(data: PasskeyCreation, request: Request) -> JSONResponse:
         origin, rp_id = auth_origin(request, require_post=True)
         try:
-            token = accounts.verify_registration(data.ceremony_id, data.credential, rp_id, origin)
+            token = accounts.verify_registration(data.ceremony_id, data.credential, rp_id, origin, data.name)
         except AccountError as error:
             raise HTTPException(status_code=400, detail=str(error)) from None
         return auth_response(token, origin)
@@ -138,10 +168,10 @@ def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
             raise HTTPException(status_code=400, detail=str(error)) from None
 
     @router.post("/api/auth/passkey/register/verify")
-    def passkey_register_verify(data: PasskeyAnswer, request: Request) -> JSONResponse:
+    def passkey_register_verify(data: PasskeyCreation, request: Request) -> JSONResponse:
         origin, rp_id = auth_origin(request, require_post=True)
         try:
-            token = accounts.verify_new_registration(data.ceremony_id, data.credential, rp_id, origin)
+            token = accounts.verify_new_registration(data.ceremony_id, data.credential, rp_id, origin, data.name)
         except AccountError as error:
             raise HTTPException(status_code=400, detail=str(error)) from None
         return auth_response(token, origin)
@@ -197,5 +227,67 @@ def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
         response = JSONResponse({"authenticated": False}, headers={"Cache-Control": "no-store"})
         response.delete_cookie("thelp_session", path="/")
         return response
+
+    @router.get("/api/auth/security")
+    def account_security(request: Request) -> JSONResponse:
+        auth_origin(request)
+        token = owner_token(request)
+        try:
+            data = accounts.security(token)
+        except AccountError as error:
+            raise HTTPException(status_code=403, detail=str(error)) from None
+        return JSONResponse(data, headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/auth/password")
+    def set_password(data: PasswordUpdate, request: Request) -> JSONResponse:
+        auth_origin(request, require_post=True)
+        token = owner_token(request)
+        try:
+            accounts.set_password(token, data.password)
+        except PasswordRateLimit as error:
+            raise HTTPException(status_code=429, detail=str(error), headers={"Retry-After": "30"}) from None
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+        return JSONResponse({"password_set": True}, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/auth/password/login")
+    def password_login(data: PasswordLogin, request: Request) -> JSONResponse:
+        origin, _rp_id = auth_origin(request, require_post=True)
+        try:
+            token = accounts.password_login(data.username, data.password, request.client.host if request.client else "")
+        except PasswordRateLimit as error:
+            raise HTTPException(status_code=429, detail=str(error), headers={"Retry-After": "900"}) from None
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+        return auth_response(token, origin)
+
+    @router.post("/api/auth/passkeys/options")
+    def add_passkey_options(request: Request) -> dict:
+        _origin, rp_id = auth_origin(request, require_post=True)
+        token = owner_token(request)
+        try:
+            return accounts.add_passkey_options(token, rp_id, "THelpViewer")
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+
+    @router.post("/api/auth/passkeys/verify")
+    def add_passkey_verify(data: PasskeyCreation, request: Request) -> JSONResponse:
+        origin, rp_id = auth_origin(request, require_post=True)
+        token = owner_token(request)
+        try:
+            accounts.verify_added_passkey(token, data.ceremony_id, data.credential, rp_id, origin, data.name)
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+        return JSONResponse({"created": True}, headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/auth/passkeys/{credential_id}")
+    def rename_passkey(credential_id: str, data: PasskeyName, request: Request) -> JSONResponse:
+        auth_origin(request, require_post=True)
+        token = owner_token(request)
+        try:
+            accounts.rename_passkey(token, credential_id, data.name)
+        except AccountError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from None
+        return JSONResponse({"renamed": True}, headers={"Cache-Control": "no-store"})
 
     return router

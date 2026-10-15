@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .. import __version__
 from ..public_docs import is_public_doc_path, public_doc_sources
-from .accounts import AccountStore
+from .accounts.store import AccountStore
 from .config import AppConfig, load_config
 from .routes.auth import create_auth_router
 from .routes.midi import create_midi_router
@@ -24,10 +24,12 @@ from .routes.statistics import create_statistics_router
 from .routes.settings import create_settings_router
 from .routes.rebuild import create_rebuild_router
 from .routes.content import create_content_router
+from .routes.downloads import create_downloads_router
+from .downloader.online import OnlineDownloader
 from .content import ContentService
 from .search_index import GlobalSearchIndex
-from .midi_library import MidiLibrary
-from .dos_prompt import DosPromptStore
+from .midi.library import MidiLibrary
+from .dos.store import DosPromptStore
 from .settings import ServerSettings
 from .statistics import StatisticsStore
 from .static_assets import ViewerAssets
@@ -85,6 +87,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if bootstrap_token:
             print(f"THelpViewer first administrator registration token (valid 1 hour): {bootstrap_token}", flush=True)
         yield
+        running_app.state.downloads.close()
 
     app = FastAPI(title="THelpViewer", version=__version__, lifespan=lifespan)
     app.state.config = config
@@ -95,11 +98,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         config.helps_dir, config.state_dir, config.docs_dir, config.virtual_docs
     )
     app.state.accounts = AccountStore(persistent / "development" if config.dev_auto_login else persistent)
-    app.state.midi_library = MidiLibrary(config.state_dir / "midi", config.midi_sources_path)
+    app.state.downloads = OnlineDownloader()
     app.state.server_settings = ServerSettings(persistent / "server-settings.json")
+    app.state.midi_library = MidiLibrary(config.state_dir / "midi", config.midi_sources_path,
+        selection_path=persistent / "midi-settings.json", downloads=app.state.downloads, settings=app.state.server_settings)
     app.state.dos_prompt = DosPromptStore(config.state_dir / "dos", config.dos_config_path,
         app.state.server_settings, app.state.accounts, (config.downloads_dir or config.state_dir / "downloads") / "dos",
-        users_dir=persistent / "dos" / "users", disk_dir=config.state_dir / "dos" / "c")
+        users_dir=persistent / "dos" / "users", disk_dir=config.state_dir / "dos" / "c", downloads=app.state.downloads)
     app.state.help_display_names = _help_display_names(config)
 
     def refresh_help_content():
@@ -162,9 +167,11 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(create_auth_router(config, app.state.accounts))
     app.include_router(create_midi_router(app.state.midi_library))
     app.include_router(create_dos_router(config, app.state.accounts, app.state.dos_prompt))
-    app.include_router(create_settings_router(config, app.state.accounts, app.state.server_settings, app.state.dos_prompt))
+    app.include_router(create_settings_router(config, app.state.accounts, app.state.server_settings,
+        app.state.dos_prompt, app.state.midi_library))
     app.include_router(create_rebuild_router(config, app.state.accounts, app.state.dos_prompt, app.state.midi_library))
     app.include_router(create_content_router(config, app.state.accounts, app.state.content))
+    app.include_router(create_downloads_router(config, app.state.accounts, app.state.downloads))
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:

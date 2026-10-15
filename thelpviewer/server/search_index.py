@@ -13,11 +13,13 @@ from contextlib import closing
 from pathlib import Path
 
 from ..public_docs import public_doc_sources
+from .converter.text_screen import screen_text_lines
 
 
 _TAG = re.compile(r"\[(?:/?[A-Za-z][^\]\n]*|rule)\]")
 _WORD = re.compile(r"\w+", re.UNICODE)
 _LOGGER = logging.getLogger(__name__)
+_HELP_INDEX_REVISION = "4"
 
 
 def _plain(value: object) -> str:
@@ -46,6 +48,58 @@ def _catalog_sources(helps_dir: Path) -> dict[str, str]:
     } if isinstance(catalog, list) else {}
 
 
+def _topic_records(bundle: dict):
+    topics = bundle.get("topics", {})
+    entries = topics.items() if isinstance(topics, dict) else enumerate(topics) if isinstance(topics, list) else ()
+    for key, topic in entries:
+        if isinstance(topic, dict):
+            yield str(topic.get("id", key)), topic
+
+
+def _alias_key(value: str, case_sensitive: bool = False) -> str:
+    value = value.strip()
+    if not case_sensitive:
+        return value.lower()
+    qualifier, separator, context = value.partition("!")
+    return qualifier.lower() + separator + context if separator else value
+
+
+def _topic_alias_rows(bundle: dict, file_path: str):
+    records = list(_topic_records(bundle))
+    seen: set[tuple[str, bool]] = set()
+    databases = bundle.get("metadata", {}).get("quickhelp_databases", [])
+    databases = databases if isinstance(databases, list) else []
+    for context_id, topic in records:
+        aliases = topic.get("aliases")
+        if not isinstance(aliases, dict):
+            continue
+        case_sensitive = any(isinstance(database, dict) and database.get("case_sensitive")
+                             and isinstance(database.get("first_topic_id"), int)
+                             and isinstance(database.get("topic_count"), int)
+                             and context_id.isdecimal()
+                             and database["first_topic_id"] <= int(context_id)
+                             < database["first_topic_id"] + database["topic_count"]
+                             for database in databases)
+        ids, strings = aliases.get("ids", []), aliases.get("strings", [])
+        values = [(value, False) for value in ids] if isinstance(ids, list) else []
+        values += [(value, bool(case_sensitive)) for value in strings if isinstance(value, str)] if isinstance(strings, list) else []
+        lines = aliases.get("lines", {})
+        for value, exact in values:
+            if isinstance(value, bool) or not isinstance(value, (int, str)):
+                continue
+            alias = _alias_key(str(value), exact)
+            # Store source aliases even when their spelling is a real UHF ID.
+            # The request's topic/alias namespace determines lookup priority.
+            # Duplicate aliases use the first definition in each namespace.
+            if not alias or (alias, exact) in seen:
+                continue
+            seen.add((alias, exact))
+            line = lines.get(str(value)) if isinstance(lines, dict) else None
+            if isinstance(line, bool) or not isinstance(line, int) or line < 1:
+                line = None
+            yield file_path, alias, context_id, line, int(exact)
+
+
 def _topic_rows(bundle: dict, file_path: str, help_name: str):
     terms: dict[str, list[str]] = {}
     for group in bundle.get("index", []):
@@ -54,15 +108,18 @@ def _topic_rows(bundle: dict, file_path: str, help_name: str):
         for entry in group.get("entries", []):
             if isinstance(entry, dict) and entry.get("topic_id") is not None and not entry.get("file"):
                 terms.setdefault(str(entry["topic_id"]), []).append(_plain(entry.get("label")))
-    topics = bundle.get("topics", {})
-    entries = topics.items() if isinstance(topics, dict) else enumerate(topics) if isinstance(topics, list) else ()
-    for key, topic in entries:
-        if not isinstance(topic, dict):
-            continue
-        context_id = str(topic.get("id", key))
+    for context_id, topic in _topic_records(bundle):
         title = _plain(topic.get("title")) or f"Topic {context_id}"
         content = topic.get("content")
-        lines = [_plain(line) for line in content] if isinstance(content, list) else []
+        lines = []
+        in_code = False
+        for line in content if isinstance(content, list) else []:
+            if isinstance(line, str) and re.fullmatch(r"\[code(?::[A-Za-z0-9_-]+)?\]", line, re.IGNORECASE):
+                in_code = True
+            elif line == "[/code]":
+                in_code = False
+            screen_lines = screen_text_lines(bundle, line) if isinstance(line, str) and not in_code else None
+            lines.extend(screen_lines if screen_lines is not None else [_plain(line)])
         lines = [line for line in lines if line]
         preview = " ".join(lines[:3])[:180]
         yield (
@@ -103,6 +160,16 @@ class GlobalSearchIndex:
             title, index_terms, body, preview UNINDEXED,
             tokenize='unicode61 remove_diacritics 2'
         )""")
+        alias_columns = [row[1] for row in connection.execute("PRAGMA table_info(topic_aliases)")]
+        if alias_columns and alias_columns != ["file_path", "alias", "context_id", "line", "case_sensitive"]:
+            # This is a rebuildable search cache, not account/user data.
+            connection.execute("DROP TABLE topic_aliases")
+            connection.execute("UPDATE files SET fingerprint = ''")
+        connection.execute("""CREATE TABLE IF NOT EXISTS topic_aliases (
+            file_path TEXT NOT NULL, alias TEXT NOT NULL, context_id TEXT NOT NULL,
+            line INTEGER, case_sensitive INTEGER NOT NULL,
+            PRIMARY KEY(file_path, alias, case_sensitive)
+        )""")
         connection.execute("""CREATE TABLE IF NOT EXISTS docs_files (
             doc_path TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, title TEXT NOT NULL
         )""")
@@ -127,7 +194,7 @@ class GlobalSearchIndex:
             except FileNotFoundError:
                 continue  # The source disappeared while scanning.
             name = names.get(relative) or ""
-            fingerprint = f"{stat.st_size}:{stat.st_mtime_ns}:{stat.st_ctime_ns}:{name}"
+            fingerprint = f"{_HELP_INDEX_REVISION}:{stat.st_size}:{stat.st_mtime_ns}:{stat.st_ctime_ns}:{name}"
             found[relative] = (path, fingerprint, name)
         return found
 
@@ -213,6 +280,7 @@ class GlobalSearchIndex:
     @staticmethod
     def _remove_indexed_source(connection: sqlite3.Connection, kind: str, relative: str) -> None:
         if kind == "help":
+            connection.execute("DELETE FROM topic_aliases WHERE file_path = ?", (relative,))
             connection.execute("DELETE FROM topics_fts WHERE file_path = ?", (relative,))
             connection.execute("DELETE FROM files WHERE file_path = ?", (relative,))
         else:
@@ -239,6 +307,10 @@ class GlobalSearchIndex:
                 connection.executemany(
                     "INSERT INTO topics_fts(file_path, help_name, context_id, title, index_terms, body, preview) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)", rows,
+                )
+                connection.executemany(
+                    "INSERT INTO topic_aliases(file_path, alias, context_id, line, case_sensitive) VALUES (?, ?, ?, ?, ?)",
+                    _topic_alias_rows(bundle, relative),
                 )
                 connection.execute(
                     "INSERT INTO files(file_path, fingerprint, help_name, topic_count) VALUES (?, ?, ?, ?)",
@@ -372,17 +444,27 @@ class GlobalSearchIndex:
                 "SELECT doc_path FROM docs_fts WHERE body != '' ORDER BY doc_path"
             ).fetchall()]
 
-    def topic(self, file_path: str, context_id: str) -> dict[str, str] | None:
+    def topic(self, file_path: str, context_id: str, *, alias_only: bool = False) -> dict[str, str | int] | None:
         if not self.status()["available"]:
             return None
         with closing(self._connect()) as connection:
-            row = connection.execute(
-                "SELECT help_name, title, body, preview FROM topics_fts "
+            row = None if alias_only else connection.execute(
+                "SELECT help_name, title, body, preview, context_id, NULL FROM topics_fts "
                 "WHERE file_path = ? AND context_id = ? LIMIT 1",
                 (file_path, context_id),
             ).fetchone()
+            if row is None:
+                row = connection.execute(
+                    "SELECT t.help_name, t.title, t.body, t.preview, t.context_id, a.line "
+                    "FROM topic_aliases AS a JOIN topics_fts AS t "
+                    "ON t.file_path = a.file_path AND t.context_id = a.context_id "
+                    "WHERE a.file_path = ? AND ((a.case_sensitive = 1 AND a.alias = ?) "
+                    "OR (a.case_sensitive = 0 AND a.alias = ?)) ORDER BY a.case_sensitive DESC LIMIT 1",
+                    (file_path, _alias_key(context_id, True), _alias_key(context_id)),
+                ).fetchone()
         return None if row is None else {
-            "help_name": row[0], "title": row[1], "body": row[2], "preview": row[3],
+            "help_name": row[0], "title": row[1], "body": row[2], "preview": row[3], "context_id": row[4],
+            **({"line": row[5]} if row[5] is not None else {}),
         }
 
     def sitemap_count(self) -> int:

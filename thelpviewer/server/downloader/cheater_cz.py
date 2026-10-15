@@ -5,14 +5,13 @@ from __future__ import annotations
 import re
 import tempfile
 import time
-import urllib.request
 from pathlib import Path
 from urllib.parse import quote_plus, urljoin
 
-from .catalog import ProductSpec, products_for_source
+from .catalog import ProductSpec, products_for_source, version_selected
 from .collector import copy_help_files
 from .extractor import ExtractorTools, expand_single_file_payloads, extract_file, extract_nested
-from .http import DOWNLOAD_DELAY, REQUEST_DELAY, USER_AGENT, fetch_html, get_opener
+from .http import REQUEST_DELAY, USER_AGENT, fetch_html, download_file
 
 
 SOURCE_NAME = "cheater_cz"
@@ -42,9 +41,7 @@ def _request_text(url: str, *, referer: str | None = None, encoding: str = "utf-
     }
     if referer:
         headers["Referer"] = referer
-    request = urllib.request.Request(url, headers=headers)
-    with get_opener().open(request, timeout=30) as resp:
-        return resp.read().decode(encoding, errors="replace")
+    return fetch_html(url, encoding=encoding, headers=headers)
 
 
 def get_versions(history_url: str) -> list[tuple[str, str]]:
@@ -81,40 +78,8 @@ def get_download_url(download_key: str, history_url: str) -> str:
 
 
 def _download_with_referer(url: str, dest: Path, *, referer: str) -> Path:
-    if dest.exists():
-        print(f"    [skipped] {dest.name} (exists)")
-        return dest
-
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".tmp")
-    time.sleep(DOWNLOAD_DELAY)
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/octet-stream,*/*;q=0.9",
-            "Accept-Language": "cs,en;q=0.9",
-            "Referer": referer,
-        },
-    )
-    with get_opener().open(request, timeout=120) as resp:
-        total = int(resp.headers.get("Content-Length") or 0)
-        done = 0
-        with tmp.open("wb") as fh:
-            while chunk := resp.read(65536):
-                fh.write(chunk)
-                done += len(chunk)
-                if total:
-                    print(
-                        f"\r    {dest.name}: {done * 100 // total:3d}%"
-                        f" ({done // 1024}kB/{total // 1024}kB)",
-                        end="",
-                        flush=True,
-                    )
-        if total:
-            print()
-    tmp.rename(dest)
-    return dest
+    return download_file(url, dest, headers={"User-Agent": USER_AGENT,
+        "Accept": "application/octet-stream,*/*;q=0.9", "Accept-Language": "cs,en;q=0.9", "Referer": referer})
 
 
 def _collect_scorpion_source_files(work_dir: Path, product: ProductSpec) -> list[Path]:
@@ -189,6 +154,8 @@ def run(
     collected: list[Path] = []
 
     for version_label, download_key in versions:
+        if not version_selected(product.key, version_label):
+            continue
         print(f"\n  --- {version_label} ---")
         try:
             archive_name = get_archive_name(download_key, history_url)

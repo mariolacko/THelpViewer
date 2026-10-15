@@ -8,7 +8,7 @@ import subprocess
 from fastapi.testclient import TestClient
 import pytest
 
-from thelpviewer.server.accounts import AccountStore
+from thelpviewer.server.accounts.store import AccountStore
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
 

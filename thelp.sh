@@ -615,20 +615,32 @@ docker_preflight() {
     return 0
 }
 
-ensure_docker_helps_readable() {
+ensure_docker_files_readable() {
     if [ ! -f "${HELPS_DIR}/catalog.json" ]; then
         echo "[thelp] no HELP catalog yet; an administrator configures content after sign-in."
-        return 0
     fi
-    echo "=== Check HELP files at original paths ==="
-    find "${HELPS_DIR}" -type f -exec cksum {} + >/dev/null
+    echo "=== Check HELP, account, DOS and MIDI files at original paths ==="
+    local directory
+    for directory in "${HELPS_DIR}" "${DATA_DIR}/development" "${DATA_DIR}/dos/users" "${STATE_DIR}/dos" "${STATE_DIR}/midi"; do
+        [ -d "${directory}" ] || continue
+        if ! find "${directory}" -type f -exec cksum {} + >/dev/null; then
+            echo "[thelp] cannot read server files under ${directory}; restore their local availability before starting Docker." >&2
+            return 1
+        fi
+    done
+    # Account/settings/statistics databases, keys and any SQLite sidecars.
+    # Read only files directly under data, never migration/build backups.
+    if [ -d "${DATA_DIR}" ] && ! find "${DATA_DIR}" -maxdepth 1 -type f -exec cksum {} + >/dev/null; then
+        echo "[thelp] cannot read permanent server metadata; restore its local availability before starting Docker." >&2
+        return 1
+    fi
 }
 
 if $do_start; then
     echo "=== Start Docker ==="
     cd "${SCRIPT_DIR}"
     docker_preflight || exit 1
-    ensure_docker_helps_readable || exit 1
+    ensure_docker_files_readable || exit 1
     export THELP_PORT="${PORT}"
     docker compose up -d --build
     echo ""
@@ -651,7 +663,7 @@ if $do_restart; then
     echo "=== Restart Docker ==="
     cd "${SCRIPT_DIR}"
     docker_preflight || exit 1
-    ensure_docker_helps_readable || exit 1
+    ensure_docker_files_readable || exit 1
     export THELP_PORT="${PORT}"
     docker compose down
     docker compose build --no-cache

@@ -97,6 +97,38 @@ def test_collect_archive_members_rejects_missing_files(tmp_path, monkeypatch):
         )
 
 
+@pytest.mark.parametrize("prefix", ["", "cd_iso__extracted/", "outer/cd_iso__extracted/"])
+def test_collect_archive_members_matches_nested_paths_at_component_boundaries(tmp_path, monkeypatch, prefix):
+    def fake_extract(_path, dest, _tools):
+        for relative, content in ((f"{prefix}BC45/BIN/BCW.HLP", b"selected"),
+                                  (f"{prefix}XBC45/BIN/BCW.HLP", b"not a component match"),
+                                  (f"{prefix}BC45/OTHER/BCW.HLP", b"wrong directory")):
+            path = dest / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        return True
+
+    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_file", fake_extract)
+    collected = collect_archive_members(tmp_path / "cd.7z", ("bc45\\bin\\bcw.hlp",),
+                                        "Borland", tmp_path / "sources", ExtractorTools(None, None, None))
+    assert len(collected) == 1 and collected[0].read_bytes() == b"selected"
+
+
+def test_collect_archive_members_rejects_ambiguous_nested_paths(tmp_path, monkeypatch):
+    def fake_extract(_path, dest, _tools):
+        for prefix in ("first_iso__extracted", "second_iso__extracted"):
+            path = dest / prefix / "BC45/BIN/BCW.HLP"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(prefix.encode("ascii"))
+        return True
+
+    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_file", fake_extract)
+    with pytest.raises(ValueError, match="ambiguous"):
+        collect_archive_members(tmp_path / "cd.7z", ("BC45/BIN/BCW.HLP",),
+                                "Borland", tmp_path / "sources", ExtractorTools(None, None, None))
+    assert not (tmp_path / "sources").exists()
+
+
 def test_expand_kwaj_help_payload(tmp_path):
     payload = b"LN\x02\x00test help"
     compressed = (

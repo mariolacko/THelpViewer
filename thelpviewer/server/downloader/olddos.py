@@ -8,7 +8,7 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from .catalog import ProductSpec, SourceQuery, products_for_source
+from .catalog import ProductSpec, SourceQuery, products_for_source, version_selected
 from .collector import detect_language
 from .extractor import ExtractorTools, collect_from_archive
 from .http import download_file, fetch_html, parse_anchors
@@ -158,6 +158,8 @@ def run(
         print(f"  Search: {source_query.search_text}")
 
         for entry in matching:
+            if not version_selected(product.key, entry["name"]):
+                continue
             print(f"    {entry['name']}")
             if dry_run:
                 print(f"      [dry-run] {entry['url']}")

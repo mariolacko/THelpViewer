@@ -3,11 +3,11 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from ..accounts import AccountStore
+from ..accounts.store import AccountStore
 from ..config import AppConfig
-from ..dos_prompt import DosPromptStore
-from ..midi_library import MidiLibrary
-from ..admin import require_administrator
+from ..dos.store import DosPromptStore
+from ..midi.library import MidiLibrary
+from .authorization import require_administrator
 
 
 def create_rebuild_router(config: AppConfig, accounts: AccountStore,

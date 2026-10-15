@@ -8,7 +8,8 @@ import time
 from fastapi.testclient import TestClient
 import pytest
 
-from thelpviewer.server.accounts import AccountError
+from thelpviewer.server.accounts.sessions import new_session
+from thelpviewer.server.accounts.common import AccountError
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
 
@@ -25,7 +26,7 @@ def test_admin_creates_member_and_bound_invitation_without_changing_session(tmp_
     store.create_user("admin", "Admin")
     with store._connect() as database:
         admin_id = database.execute("SELECT id FROM accounts WHERE username='admin'").fetchone()[0]
-        admin_token = store._new_session(database, admin_id)
+        admin_token = new_session(database, admin_id)
     payload = {"first_name": " Ján ", "last_name": " Novák ", "nickname": " JN ", "email": " JAN@EXAMPLE.TEST "}
     headers = {"Origin": config.auth_origin}
     with TestClient(app, base_url=config.auth_origin) as admin:
@@ -58,7 +59,7 @@ def test_admin_creates_member_and_bound_invitation_without_changing_session(tmp_
         with store._connect() as database:
             assert database.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 2
             assert database.execute("SELECT COUNT(*) FROM credentials WHERE account_id=?", (user["id"],)).fetchone()[0] == 0
-            member_token = store._new_session(database, user["id"])
+            member_token = new_session(database, user["id"])
         admin.cookies.set("thelp_session", member_token)
         assert admin.post("/api/admin/users", json=payload, headers=headers).status_code == 403
         admin.cookies.set("thelp_session", admin_token)
@@ -96,12 +97,12 @@ def test_admin_creates_member_and_bound_invitation_without_changing_session(tmp_
 
 
 def test_managed_invitation_is_bound_expiring_and_respects_disabled_account(tmp_path):
-    from thelpviewer.server.accounts import AccountStore
+    from thelpviewer.server.accounts.store import AccountStore
     store = AccountStore(tmp_path)
     store.create_user("admin", "Admin")
     with store._connect() as database:
         ident = database.execute("SELECT id FROM accounts WHERE username='admin'").fetchone()[0]
-        admin = store._new_session(database, ident)
+        admin = new_session(database, ident)
     first = store.create_managed_user(admin, "first@example.test", "First")
     second = store.create_managed_user(admin, "second@example.test", "Second")
     with pytest.raises(AccountError):
@@ -116,7 +117,7 @@ def test_managed_invitation_is_bound_expiring_and_respects_disabled_account(tmp_
 
 
 def test_self_registration_stores_profile_details_with_ceremony(tmp_path, monkeypatch):
-    from thelpviewer.server.accounts import AccountStore
+    from thelpviewer.server.accounts.store import AccountStore
     store = AccountStore(tmp_path)
     token = store.bootstrap_token()
     options = store.new_registration_options("Ján Novák", "jan@example.test", token, "example.test", "THelpViewer",

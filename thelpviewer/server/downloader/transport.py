@@ -3,15 +3,33 @@
 from http.cookiejar import CookieJar
 from http.client import HTTPConnection, HTTPSConnection
 from ipaddress import ip_address
-from urllib.parse import urlencode, urljoin, urlsplit
+from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, HTTPRedirectHandler, HTTPHandler, HTTPSHandler, ProxyHandler, Request, build_opener
+from urllib.error import HTTPError, URLError
+import time
 
 from bs4 import BeautifulSoup
 from soupsieve.util import SelectorSyntaxError
+from .cache import atomic_download
+from .online import defer_source, report_transfer, run_download, transfer_slot
+
+MAX_RETRY_AFTER = 300
+
+
+def retry_delay(headers: object, default: int) -> int:
+    """Bound a server's numeric Retry-After delay for all download clients."""
+    try:
+        value = int(getattr(headers, "get")("Retry-After", default))
+    except (AttributeError, TypeError, ValueError):
+        value = default
+    return min(max(value, 0), MAX_RETRY_AFTER)
 
 def public_url(url: str, *, https_only: bool = True) -> None:
+    if any(ord(char) < 32 or ord(char) == 127 for char in url):
+        raise ValueError("Download URLs must not contain control characters")
     parsed = urlsplit(url)
-    if (parsed.scheme not in ({"https"} if https_only else {"http", "https"}) or not parsed.hostname or parsed.username or parsed.password
+    if (parsed.scheme not in ({"https"} if https_only else {"http", "https"}) or not parsed.hostname
+            or parsed.username is not None or parsed.password is not None
             or parsed.hostname == "localhost" or parsed.hostname.endswith(".localhost")):
         raise ValueError("Downloads require public HTTPS URLs without credentials" if https_only
                          else "Downloads require public HTTP(S) URLs without credentials")
@@ -21,6 +39,20 @@ def public_url(url: str, *, https_only: bool = True) -> None:
         return  # The connection below also verifies the actual resolved peer.
     if not address.is_global:
         raise ValueError("Downloads must not access private network addresses")
+
+
+def _encoded_url(url: str) -> str:
+    """Convert an HTML IRI to a wire URL without re-encoding escapes/delimiters."""
+    public_url(url, https_only=False)
+    parsed = urlsplit(url)
+    if not parsed.netloc.isascii():
+        host = parsed.hostname.encode("idna").decode("ascii")
+        authority = f"{host}:{parsed.port}" if parsed.port is not None else host
+        url = urlunsplit((parsed.scheme, authority, parsed.path, parsed.query, parsed.fragment))
+    encoded = quote(url, safe=":/?#[]@!$&'()*+,;=%")
+    # IDNA can map Unicode host names to localhost or a private IP literal.
+    public_url(encoded, https_only=False)
+    return encoded
 
 
 class _PublicPeer:
@@ -55,16 +87,20 @@ class _PublicHTTPSHandler(HTTPSHandler):
 
 
 class _HTTPSRedirect(HTTPRedirectHandler):
-    def __init__(self, https_only=True):
+    def __init__(self, https_only=True, allowed_hosts=None):
         self.https_only = https_only
+        self.allowed_hosts = allowed_hosts
 
     def redirect_request(self, request, fp, code, message, headers, newurl):
+        newurl = _encoded_url(newurl)
         public_url(newurl, https_only=self.https_only or urlsplit(request.full_url).scheme == "https")
+        if self.allowed_hosts is not None and urlsplit(newurl).hostname not in self.allowed_hosts:
+            raise ValueError("Download redirected outside its configured hosts")
         return super().redirect_request(request, fp, code, message, headers, newurl)
 
 
-def create_opener(*, https_only=True):
-    return build_opener(ProxyHandler({}), _HTTPSRedirect(https_only), _PublicHTTPHandler(),
+def create_opener(*, https_only=True, allowed_hosts=None):
+    return build_opener(ProxyHandler({}), _HTTPSRedirect(https_only, allowed_hosts), _PublicHTTPHandler(),
                         _PublicHTTPSHandler(), HTTPCookieProcessor(CookieJar()))
 
 
@@ -84,7 +120,68 @@ def download_chunks(response, limit: int, on_progress=None):
         raise ValueError("Download is incomplete")
 
 
-def fetch_source(source: dict, limit: int, on_progress=None) -> bytes:
+def read_request(opener, request, limit, *, timeout=30, retries=3, retry_after=30,
+                 on_progress=None, on_status=None, phase="Downloading", destination=None):
+    """Queued, bounded GET/POST transfer, optionally atomically written to disk."""
+    if isinstance(request, Request):
+        request.full_url = _encoded_url(request.full_url)
+    else:
+        request = _encoded_url(request)
+    def status(value):
+        report_transfer(value)
+        if on_status:
+            on_status(value)
+    def progress(received, total):
+        report_transfer(phase, received, total)
+        if on_progress:
+            on_progress(received, total)
+    def transfer():
+        for attempt in range(retries):
+            status(phase)
+            try:
+                with opener.open(request, timeout=timeout) as response:
+                    final_url = getattr(response, "url", getattr(request, "full_url", request))
+                    with transfer_slot(final_url):
+                        chunks = download_chunks(response, limit, progress)
+                        if destination is None:
+                            data = b"".join(chunks)
+                        else:
+                            with atomic_download(destination) as output:
+                                for chunk in chunks:
+                                    output.write(chunk)
+                            data = destination
+                        return data, final_url, response.headers
+            except HTTPError as error:
+                retryable = error.code == 429 or 500 <= error.code < 600
+                delay = retry_delay(error.headers, retry_after) if error.code == 429 else 5
+                waiting = "Rate limited (HTTP 429), retry" if error.code == 429 else "Retrying"
+                if error.code == 429:
+                    defer_source(error.url, delay)
+                if not retryable or attempt == retries - 1:
+                    raise
+                error.close()
+            except (OSError, URLError):
+                if attempt == retries - 1:
+                    raise
+                delay, waiting = 5, "Retrying"
+            for remaining in range(delay, 0, -1):
+                status(f"{waiting} in {remaining}s")
+                time.sleep(1)
+        raise ValueError("Download needs at least one attempt")
+    return run_download(transfer, source=getattr(request, "full_url", request))
+
+
+def fetch_bytes(url, hosts, limit, *, on_progress=None, on_status=None, user_agent="THelpViewer downloader"):
+    public_url(url)
+    if urlsplit(url).hostname not in hosts:
+        raise ValueError("Download URL is outside its configured HTTPS hosts")
+    request = Request(url, headers={"User-Agent": user_agent})
+    data, _url, _headers = read_request(create_opener(allowed_hosts=hosts), request, limit,
+        on_progress=on_progress, on_status=on_status)
+    return data
+
+
+def fetch_source(source: dict, limit: int, on_progress=None, *, on_status=None) -> bytes:
     url = source["url"]
     selectors = source.get("download_forms", [])
     if (not isinstance(selectors, list) or len(selectors) > 3
@@ -96,9 +193,14 @@ def fetch_source(source: dict, limit: int, on_progress=None) -> bytes:
         public_url(address)
         request = Request(address, data=urlencode(fields).encode() if fields is not None else None,
                           headers={"User-Agent": "THelpViewer software downloader"})
-        with opener.open(request, timeout=30) as response:
-            contents = b"".join(download_chunks(response, limit, on_progress if download else None))
-            final_url = response.url
+        try:
+            contents, final_url, _headers = read_request(opener, request, limit,
+                on_progress=on_progress if download else None, on_status=on_status)
+        except HTTPError as error:
+            if error.code != 429:
+                raise
+            error.close()
+            raise ValueError(f"Download of {source.get('title', source.get('id', 'package'))} is rate limited (HTTP 429). Try again later; installed files are unchanged.") from None
         return bytes(contents), final_url
 
     data, url = fetch(url, download=not selectors)

@@ -6,16 +6,25 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from typing import Literal
 
-from ..accounts import AccountError, AccountStore
+from ..accounts.common import AccountError
+from ..accounts.store import AccountStore
 from ..config import AppConfig
-from ..settings import ServerSettings
-from ..dos_prompt import DosPromptStore
-from ..admin import require_administrator
+from ..settings import MAX_BACKUP_COUNT, ServerSettings
+from ..dos.store import DosPromptStore
+from ..midi.library import MidiLibrary
+from .authorization import require_administrator
 
 
 class SettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     dos_user_disk_mb: int = Field(strict=True, ge=1, le=256)
+    backup_count: int = Field(strict=True, ge=1, le=MAX_BACKUP_COUNT)
+
+
+class MidiSourcesUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    sources: list[str] = Field(max_length=100)
+    albums: dict[str, list[str] | None] = Field(max_length=100)
 
 
 class UserUpdate(BaseModel):
@@ -38,7 +47,7 @@ class UserCreate(BaseModel):
 
 
 def create_settings_router(config: AppConfig, accounts: AccountStore, settings: ServerSettings,
-                           dos: DosPromptStore) -> APIRouter:
+                           dos: DosPromptStore, midi: MidiLibrary) -> APIRouter:
     router = APIRouter(prefix="/api/admin")
 
     def administrator(request: Request, *, write: bool = False) -> str:
@@ -68,6 +77,37 @@ def create_settings_router(config: AppConfig, accounts: AccountStore, settings: 
     def write_settings(data: SettingsUpdate, request: Request) -> JSONResponse:
         administrator(request, write=True)
         return JSONResponse(settings.update(data.model_dump()), headers={"Cache-Control": "no-store"})
+
+    @router.get("/midi-sources")
+    def midi_sources(request: Request) -> JSONResponse:
+        administrator(request)
+        try:
+            return JSONResponse(midi.source_choices(), headers={"Cache-Control": "no-store"})
+        except (OSError, ValueError) as error:
+            raise HTTPException(status_code=503, detail=str(error)) from None
+
+    @router.put("/midi-sources", status_code=202)
+    def update_midi_sources(data: MidiSourcesUpdate, request: Request) -> JSONResponse:
+        administrator(request, write=True)
+        try:
+            midi.select_sources(data.sources, data.albums)
+        except (OSError, ValueError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
+        return JSONResponse(midi.source_choices(), status_code=202, headers={"Cache-Control": "no-store"})
+
+    @router.get("/midi-sources/status")
+    def midi_source_status(request: Request) -> JSONResponse:
+        administrator(request)
+        return JSONResponse(midi.rebuild_status(), headers={"Cache-Control": "no-store"})
+
+    @router.post("/midi-sources/{source_id}/index", status_code=202)
+    def index_midi_source(source_id: str, request: Request) -> JSONResponse:
+        administrator(request, write=True)
+        try:
+            midi.index_source(source_id)
+        except (OSError, ValueError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
+        return JSONResponse(midi.rebuild_status(), status_code=202, headers={"Cache-Control": "no-store"})
 
     @router.get("/users")
     def read_users(request: Request) -> JSONResponse:

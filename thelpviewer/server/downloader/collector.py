@@ -8,7 +8,6 @@ from pathlib import Path
 
 
 HELP_EXTENSIONS = {".hlp", ".tph", ".tch", ".tah", ".tdh", ".tfh", ".hlx", ".hl6", ".ng"}
-WINHELP_MAGIC = b"\x3f\x5f\x03\x00"
 
 SKIP_HELP_NAMES = {
     "CALC.HLP",
@@ -53,14 +52,6 @@ def detect_language(text: str) -> str | None:
     return None
 
 
-def is_winhelp(path: Path) -> bool:
-    """Return ``True`` for Windows help files that should be ignored here."""
-    try:
-        return path.read_bytes()[:4] == WINHELP_MAGIC
-    except OSError:
-        return False
-
-
 def is_help_file_path(path: Path) -> bool:
     """Return True for file names that can contain supported help payloads."""
     suffix = path.suffix.lower()
@@ -72,16 +63,13 @@ def is_help_file_path(path: Path) -> bool:
 
 
 def collect_help_files(work_dir: Path) -> list[Path]:
-    """Find all supported help files under one extracted work tree."""
+    """Find original HELP candidates; converter support is a separate check."""
     found: list[Path] = []
     for path in sorted(work_dir.rglob("*")):
         if not (path.is_file() and is_help_file_path(path)):
             continue
         if path.name.upper() in SKIP_HELP_NAMES:
             print(f"    [skipped] {path.name} (accessory)")
-            continue
-        if path.suffix.lower() == ".hlp" and is_winhelp(path):
-            print(f"    [skipped] {path.name} (Windows HLP)")
             continue
         found.append(path)
     return found
@@ -92,7 +80,9 @@ def copy_help_files(files: list[Path], target_dir: Path, sources_dir: Path) -> l
     copied: list[Path] = []
     for src in files:
         dest = target_dir / src.name.upper()
-        if dest.exists():
+        if dest.exists() or dest.is_symlink():
+            if not dest.is_file() or dest.is_symlink() or dest.read_bytes() != src.read_bytes():
+                raise ValueError(f"Conflicting original HELP source: {dest.relative_to(sources_dir)}")
             print(f"    [skipped] {dest.name} (exists)")
             continue
         target_dir.mkdir(parents=True, exist_ok=True)

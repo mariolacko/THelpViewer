@@ -8,9 +8,10 @@ import sqlite3
 
 import pytest
 
-from thelpviewer.server.accounts import AccountStore
+from thelpviewer.server.accounts.sessions import new_session
+from thelpviewer.server.accounts.store import AccountStore
 from thelpviewer.server.config import load_config
-from thelpviewer.server.dos_prompt import DosPromptStore
+from thelpviewer.server.dos.store import DosPromptStore
 from thelpviewer.server.storage import migrate_storage, publish_docs
 
 
@@ -30,8 +31,9 @@ def test_migration_preserves_accounts_tokens_private_disks_and_shared_base(tmp_p
     accounts.create_user("founder", "Founder")
     with accounts._connect() as database:
         ident = database.execute("SELECT id FROM accounts").fetchone()[0]
-        session = accounts._new_session(database, ident)
-        database.execute("INSERT INTO credentials VALUES (?, ?, ?, ?, ?, ?)",
+        session = new_session(database, ident)
+        database.execute("INSERT INTO credentials(credential_id,account_id,public_key,sign_count,device_type,backed_up) "
+                         "VALUES (?, ?, ?, ?, ?, ?)",
                          (b"passkey-id", ident, b"public-key", 3, "single_device", 0))
     token = accounts.issue_registration_token(session)
     original_key = (config.state_dir / "registration-tokens.key").read_bytes()
@@ -40,7 +42,7 @@ def test_migration_preserves_accounts_tokens_private_disks_and_shared_base(tmp_p
     base_id = store.base_id
     store.save(ident, {"base_id": base_id, "revision": 0, "directories": ["EMPTY"],
         "files": {"SAVE.DAT": base64.b64encode(b"private save").decode()}, "deleted": ["BASE.TXT"]})
-    media = store._user_dir(ident) / "media" / "saved.iso"
+    media = store.overlays.user_dir(ident) / "media" / "saved.iso"
     media.parent.mkdir(); media.write_bytes(b"private media")
     for name in ("sources", "helps"):
         path = tmp_path / name / "Product" / "fixture"
@@ -63,8 +65,8 @@ def test_migration_preserves_accounts_tokens_private_disks_and_shared_base(tmp_p
     new_store.prepare()
     assert new_store.base_id == base_id
     assert new_store.overlay(ident) == (1, {"SAVE.DAT": b"private save"}, ["BASE.TXT"], ["EMPTY"])
-    assert (new_store._user_dir(ident) / "c" / "1" / "EMPTY").is_dir()
-    assert (new_store._user_dir(ident) / "media" / "saved.iso").read_bytes() == b"private media"
+    assert (new_store.overlays.user_dir(ident) / "c" / "1" / "EMPTY").is_dir()
+    assert (new_store.overlays.user_dir(ident) / "media" / "saved.iso").read_bytes() == b"private media"
     assert (config.downloads_dir / "dos" / "archive").read_bytes() == b"cached download"
     assert not (config.state_dir / "dos" / "users").exists()
     assert (config.helps_dir / "Product" / "fixture").read_bytes() == b"original content"
@@ -75,7 +77,7 @@ def test_migration_preserves_accounts_tokens_private_disks_and_shared_base(tmp_p
     new_store.rebuild(); new_store._worker.join(5)
     assert new_store.state == "ready"
     assert new_store.overlay(ident)[1] == {"SAVE.DAT": b"private save"}
-    assert (new_store._user_dir(ident) / "media" / "saved.iso").is_file()
+    assert (new_store.overlays.user_dir(ident) / "media" / "saved.iso").is_file()
 
 
 def test_migration_preflight_conflict_changes_neither_source_nor_target(tmp_path):

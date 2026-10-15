@@ -6,10 +6,13 @@ import re
 import urllib.parse
 from pathlib import Path
 
-from .catalog import products_for_source
+from bs4 import BeautifulSoup
+
+from .catalog import products_for_source, version_selected
+from .cache import download_filename
 from .collector import detect_language
-from .extractor import ExtractorTools, collect_from_archive
-from .http import download_file, fetch_polite, parse_anchors
+from .extractor import ExtractorTools, collect_archive_members, collect_from_archive
+from .http import download_file, fetch_polite, parse_anchors, report_progress
 
 
 SOURCE_NAME = "winworld"
@@ -86,16 +89,18 @@ def get_file_records(version_url: str) -> list[tuple[str, str]]:
         if full in seen:
             continue
         seen.add(full)
-        filename = anchor.get("title") or href.split("/")[-1]
+        filename = anchor.get("title") or anchor.get("_text") or href.split("/")[-1]
         records.append((filename, full))
         print(f"    file: {filename}")
 
     return records
 
 
-def get_server_urls(download_page_url: str) -> list[tuple[str, str]]:
-    """Return all actual WinWorld mirror download URLs for one file page."""
+def get_download_info(download_page_url: str) -> tuple[str, list[tuple[str, str]]]:
+    """Read the release title and mirrors together, including pinned selectors."""
     html_text = fetch_polite(download_page_url)
+    heading = BeautifulSoup(html_text, "html.parser").find("h1")
+    title = heading.get_text(" ", strip=True) if heading else ""
     servers: list[tuple[str, str]] = []
     seen: set[str] = set()
 
@@ -109,7 +114,7 @@ def get_server_urls(download_page_url: str) -> list[tuple[str, str]]:
         seen.add(full)
         servers.append((anchor.get("_text", "").strip(), full))
 
-    return servers
+    return title, servers
 
 
 def process_version(
@@ -121,10 +126,15 @@ def process_version(
     extractor: ExtractorTools,
     dry_run: bool,
     failed: list[str],
+    *,
+    records: list[tuple[str, str]] | None = None,
+    archive_members: tuple[str, ...] = (),
+    collection_name: str = "",
 ) -> list[Path]:
     """Download one WinWorld version and collect help files from its archives."""
     print(f"\n  --- {version_name} ---")
-    records = get_file_records(version_url)
+    if records is None:
+        records = get_file_records(version_url)
     if not records:
         print("    No records found.")
         return []
@@ -138,19 +148,23 @@ def process_version(
             print(f"    [skipped] {filename}")
             continue
 
-        lang_code = detect_language(filename)
         if dry_run:
             print(f"      [dry-run] {dl_page_url}")
             print(f"      [search]   {version_name}")
             continue
 
-        servers = get_server_urls(dl_page_url)
+        title, servers = get_download_info(dl_page_url)
+        if re.fullmatch(r"[0-9a-f-]{36}", filename, re.I):
+            filename = title or (label + " " + version_name).strip()
+            if Path(filename).suffix.lower() not in {".zip", ".7z", ".rar", ".img", ".iso", ".gz", ".bz2", ".xz"}:
+                filename += ".archive"
+        lang_code = detect_language(filename)
         if not servers:
             print(f"      [error] No servers for {filename}")
             failed.append(f"{filename}: no servers")
             continue
 
-        safe_filename = re.sub(r"[^\w\-. ]", "_", filename).strip() or "archive"
+        safe_filename = download_filename(filename)
         archive_path = dl_dir / safe_filename
         downloaded = False
 
@@ -174,13 +188,13 @@ def process_version(
             failed.append(msg)
             continue
 
-        result = collect_from_archive(
-            archive_path,
-            f"{label} {safe_version}".strip(),
-            sources_dir,
-            extractor,
-            lang_code=lang_code,
-        )
+        target_label = collection_name or f"{label} {safe_version}".strip()
+        if archive_members:
+            result = collect_archive_members(archive_path, archive_members, target_label,
+                                             sources_dir, extractor)
+        else:
+            result = collect_from_archive(archive_path, target_label, sources_dir,
+                                          extractor, lang_code=lang_code)
         collected.extend(result)
         if not result:
             print("    No help files found.")
@@ -201,7 +215,7 @@ def run(
 
     for product in products_for_source(SOURCE_NAME, product_keys):
         source_query = product.sources[SOURCE_NAME]
-        if not source_query.slug:
+        if not source_query.slug and not source_query.direct_urls:
             continue
 
         print(f"\n{'=' * 60}")
@@ -209,13 +223,34 @@ def run(
         print(f"Search: {source_query.search_text}")
         print("=" * 60)
 
-        try:
-            versions = get_version_urls(source_query.slug)
-        except Exception as exc:
-            print(f"  [error] {exc}")
-            continue
+        versions = []
+        if source_query.slug:
+            try:
+                versions = [(name, url) for name, url in get_version_urls(source_query.slug)
+                            if version_selected(product.key, name, match_language=False)]
+            except Exception as exc:
+                print(f"  [error] {exc}")
+        # Edition records retain stable release and download-selector pages.
+        # Prefer their selector: it still works if product-page scraping fails.
+        pinned = [(url.rsplit('/', 1)[-1], url)
+                  for url in source_query.direct_urls
+                  if re.fullmatch(r"/download/[0-9a-f-]{36}", urllib.parse.urlparse(url).path, re.I)]
+        if not pinned:
+            versions.extend((product.default_version, url) for url in source_query.direct_urls)
+        else:
+            try:
+                all_collected.extend(process_version(
+                    product.default_version, "", product.label, dl_dir, sources_dir,
+                    extractor, dry_run, all_failed, records=pinned,
+                    archive_members=source_query.archive_members,
+                    collection_name=product.collection_prefixes[0] if not source_query.slug and len(product.collection_prefixes) == 1 else "",
+                ))
+            except Exception as exc:
+                all_failed.append(f"{product.label} {product.default_version}: {exc}")
 
         for version_name, version_url in versions:
+            if not version_selected(product.key, version_name or product.default_version, match_language=False):
+                continue
             try:
                 files = process_version(
                     version_name=version_name,
@@ -226,6 +261,8 @@ def run(
                     extractor=extractor,
                     dry_run=dry_run,
                     failed=all_failed,
+                    archive_members=source_query.archive_members,
+                    collection_name=product.collection_prefixes[0] if not source_query.slug and len(product.collection_prefixes) == 1 else "",
                 )
                 all_collected.extend(files)
             except Exception as exc:
@@ -236,6 +273,7 @@ def run(
         print(f"\n  {len(all_failed)} downloads failed (WinWorldPC rate limit?):")
         for item in all_failed:
             print(f"    {item}")
+            report_progress("Source warning", warning=item)
         print("  → Run the script again tomorrow, cached archives will be reused.")
 
     return all_collected

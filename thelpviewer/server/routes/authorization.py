@@ -1,4 +1,4 @@
-"""Shared session, role and same-origin guards for administrator APIs."""
+"""Shared HTTP session, role and same-origin guards for administrator APIs."""
 
 from urllib.parse import urlparse
 from fastapi import HTTPException

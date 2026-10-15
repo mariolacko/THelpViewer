@@ -9,7 +9,9 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 import pytest
 
-from thelpviewer.server.accounts import AccountError, AccountStore
+from thelpviewer.server.accounts.sessions import new_session
+from thelpviewer.server.accounts.common import AccountError
+from thelpviewer.server.accounts.store import AccountStore
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
 
@@ -24,8 +26,8 @@ def test_profile_preserves_identity_passkey_sessions_and_role(tmp_path):
         connection.execute("UPDATE accounts SET email='member@example.test' WHERE username='member'")
         connection.execute("INSERT INTO credentials(credential_id,account_id,public_key,sign_count) VALUES (?,?,?,0)",
                            (b"credential", ident, b"key"))
-        session = store._new_session(connection, ident)
-        other_session = store._new_session(connection, ident)
+        session = new_session(connection, ident)
+        other_session = new_session(connection, ident)
     user = store.update_profile(session, " NEW@EXAMPLE.TEST ",
                                 first_name=" Ján ", last_name=" Novák ", nickname=" Reader ")
     assert user == {"username": "old@example.test", "display_name": "Reader", "email": "new@example.test", "role": "admin",
@@ -68,7 +70,7 @@ def test_profile_api_requires_owner_session_origin_and_rejects_role_changes(tmp_
     store.create_user("reader", "Reader")
     with store._connect() as connection:
         ident = connection.execute("SELECT id FROM accounts WHERE username='reader'").fetchone()[0]
-        session = store._new_session(connection, ident)
+        session = new_session(connection, ident)
     payload = {"email": "reader@example.test",
                "first_name": "Reader", "last_name": "Two", "nickname": "RT"}
     with TestClient(app, base_url=config.auth_origin) as client:

@@ -2,13 +2,24 @@
 
 Production accounts are created by a signed-in administrator or with a valid
 one-hour registration token. Administrators invite new members to enroll their
-own Passkeys. Public registration without a token and password login do not exist. HELP browsing and global search
-remain public. The Login dialog opened by the right-aligned Login action is a real WebAuthn
-client. Server Terminal and its old ID/key workflow have been removed.
+own Passkeys. Public registration without a token is unavailable. Password login
+is an optional alternative, enabled only after its owner sets a password in
+Account. HELP browsing and global search remain public. The right-aligned Login
+action opens the shared Passkey/password client. Server Terminal and its old
+ID/key workflow have been removed.
 
-`thelpviewer/server/accounts.py` owns account storage and Passkey ceremonies;
+`thelpviewer/server/accounts/` separates account responsibilities:
+`store.py` owns the SQLite schema, profiles and administrative edits;
+`registration.py` owns bootstrap/registration tokens and enrollment invitations;
+`passkeys.py` owns WebAuthn challenges and credential verification;
+`passwords.py` owns password validation, salted scrypt and login throttling;
+`sessions.py` owns session creation, lookup and administrator authorization.
+`common.py` contains shared errors, profile validation and token hashing.
+The public `AccountStore` coordinates these modules without mixin inheritance.
 `thelpviewer/server/routes/auth.py` owns the HTTP endpoints, origin checks and
-session cookie. `app.py` only creates the store and registers the router.
+session cookie. `accounts/__main__.py` provides the account CLI. `app.py` only
+creates the store and registers the router. Database paths and schemas are
+independent of these Python module locations.
 
 ## Local development without Passkeys
 
@@ -49,7 +60,13 @@ local account ID persists, so its DOS overlay remains in `data/dos/users/<id>/`.
 It does not inherit any production account's private disk. Permanent HELP,
 statistics and server settings use `data/`; generated DOS/MIDI resources use `var/`.
 
-Return to Passkey-only mode with:
+In an iCloud-backed macOS checkout, the development database must be
+physically downloaded before Docker opens it. A `disk I/O error` is not a
+reason to delete accounts or relax the local-origin checks. The management
+script's Docker preflight restores existing account/DOS file availability;
+see [cloud-backed storage recovery](Server%20Content.md#macos-cloud-backed-storage).
+
+Return to normal authentication (without automatic development sign-in) with:
 
 ```sh
 docker compose -f docker-compose.yml up -d --force-recreate viewer
@@ -72,6 +89,9 @@ rejects all proxy headers. Anonymous requests and ordinary members receive 403.
 preparation or deleting anything. Closing a confirmation or choosing Cancel
 does not issue POST. The progress dialog's Hide button hides the view, not
 the server operation; selecting Rebuild again reconnects to an ongoing job.
+The menu actions open confirmation and progress directly, without opening
+Server Configuration. A shared MessageBox reports completion/errors when the
+configuration dialog is not open.
 
 DOS rebuild replaces only `var/dos/c/` and restarts normal initialisation
 from `dos-prompt.json`. User overlays/media under `data/dos/users/` and source
@@ -83,21 +103,27 @@ while DOS preparation is already running returns 409.
 MIDI rebuild cooperatively stops the downloader at the next source/track
 boundary, waiting for any in-flight HTTP/extraction/write to finish before
 moving `var/midi/`. It then recreates tracks, covers and `library.sqlite3`
-from `midi-sources.json`. Playback in the current browser stops first. No old
+from the MIDI Sources selection and `midi-sources.json`. Playback in the current browser stops first. No old
 writer is allowed to recreate obsolete files after the reset. Fresh catalog
 tracks can be prioritized/played as they download. A second simultaneous MIDI
 rebuild returns 409; failed downloads are reported in progress/catalog status.
 
 Old active directories move to unique `var/backups/dos-base-<id>/` and
-`var/backups/midi-<id>/` backups; they are not overwritten or silently purged.
-These backups are recoverable but retain their full disk usage. For manual
+`var/backups/midi-<id>/` backups. Successful jobs retain the configured newest
+copies (default two per type); DOS base/package changes share one limit.
+Failed/partial jobs keep recovery copies. Administrators change `backup_count`
+in Server Configuration; see [backup retention](Server%20Content.md#backup-retention).
+For manual
 recovery, stop the server, move the failed/new directory aside and restore the
 chosen backup to its original path before restarting. Do not merge generations
 while a worker runs. Accounts, statistics, server settings and private disks
 are not reset by either action. No automatic rollback is performed.
 
-Colors is available through the system menu and every signed-in user's
-Configuration menu, regardless of role. It remains a browser-local palette,
+Configuration also groups separate HELP Packages and DOS Packages dialogs,
+MIDI Sources, Users and Registration
+Token for administrators. Members still have Colors and Theme there. Guests
+use the system menu for appearance; signed-in users have no duplicate appearance
+entries there. Colors remains a browser-local palette,
 not a server-side/per-account synchronization feature.
 
 ## Production registration and sessions
@@ -141,6 +167,78 @@ update labels already saved in the browser's Passkey manager or verify ownership
 of the mailbox. Role is not editable in the profile; this is not a browser-based
 account/permission administration interface.
 
+### Named Passkeys and optional passwords
+
+Account shows the owner's Passkeys in a standard TVListBox. Select one, edit
+Passkey name and choose Rename; this changes only our label, not the key in
+the platform's password manager. Enter a name and choose Add Passkey to enroll
+another authenticator. Accounts support up to 20 keys; existing keys are
+excluded from a new registration to prevent duplicating the same credential.
+Registration suggests an editable label such as `Windows - Edge` or
+`macOS - Safari`. The OS/browser string is only a naming hint, not verified
+device identity: a synchronized Passkey can also work on another device.
+Old unnamed keys are retained as `Passkey 1`, etc., until renamed. Created and
+last-successful-use timestamps and backup state are stored per credential;
+unknown historical timestamps stay zero. No private keys are stored here.
+
+Enter New password and Repeat password, then Set password to opt into password
+login or replace an existing password. Alt+P focuses New password through its
+linked TVLabel. Passwords require 15–128 Unicode
+characters; a long unique passphrase is recommended. Spaces are preserved,
+Unicode is normalized to NFC, and control characters, common/predictable
+values and exact account identifiers are rejected. There are no mandatory
+uppercase/digit/symbol composition rules, automatic expiration, remote breach
+queries or plaintext password storage. This is a basic local weakness check,
+not a complete breached-password database or a strength guarantee.
+The length policy follows [NIST password guidance](https://pages.nist.gov/800-63-4/sp800-63b.html).
+
+The server stores a random 16-byte salt and 32-byte scrypt result with its
+parameters (`N=32768, r=8, p=3`, 32 MiB profile from the
+[OWASP storage guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)).
+Comparison uses constant-time HMAC comparison; at most two KDF operations run
+concurrently per process. No new Python package is required. Hashes are never
+included in profile, Users or security responses. Password fields are masked
+and cleared after submission/closing, and are not saved in workspace URLs.
+
+The UI reconfirms an existing Passkey before setting a password or adding a
+key. The server independently requires a Passkey-verified session no older
+than five minutes, not merely a 30-day login cookie or a password-only session.
+Existing sessions migrate without recent-verification status and must reconfirm.
+Local opt-in development sessions are the explicit existing exception, limited
+by the same freshness window. Adding a key binds the one-use challenge to the
+exact session and account; names and signatures are validated server-side.
+Closing/cancelling a platform prompt does not create a credential. Password
+changes invalidate other sessions and pending account ceremonies; the current
+reconfirmed session and Passkeys remain valid. Profile Save/Cancel is separate
+from these immediately saved security actions. There is no key deletion or
+password-recovery endpoint in this change.
+
+Login's Sign In continues to use WebAuthn. Password submits the optional password
+with the email/original username, using the same HttpOnly/Secure/SameSite cookie
+policy. Password attempts are limited to 10 per account in 15 minutes (aliases
+share the limit), and 120 per client address/window to bound spraying; KDF work
+is also bounded. Counters contain hashes of identifiers/addresses, not passwords
+or raw addresses, and expire after the window. A shared reverse proxy may share
+the client limit. Upstream rate limiting is still recommended. Unknown, disabled,
+passwordless and incorrect-password accounts use the same failure message and
+one KDF operation. A password lockout never disables Passkey login. Existing
+accounts remain passwordless; an administrator cannot set another user's
+password or list/rename/add their keys through this API.
+
+| API | Purpose |
+| --- | --- |
+| `GET /api/auth/security` | Owner's key labels/metadata and password-set flag |
+| `PUT /api/auth/password` | Set/change the owner's password after Passkey reconfirmation |
+| `POST /api/auth/password/login` | Opt-in password sign-in |
+| `POST /api/auth/passkeys/options` | Owner/session-bound new-key challenge |
+| `POST /api/auth/passkeys/verify` | Verify and store the named new key |
+| `PUT /api/auth/passkeys/{credential_id}` | Rename an owned key |
+
+Security responses are `no-store`. All writes require the configured Origin
+and host; owner IDs are derived from the session, never accepted from the body.
+Database migration adds metadata/hash/session-proof columns without rewriting
+account IDs, public keys, roles, invitations or private storage.
+
 ### Registration
 
 The account database is `THELP_DATA_DIR/accounts.sqlite3`, separate from the
@@ -173,10 +271,15 @@ After deploying this change, restart the server to print a new bootstrap token
 if no administrator exists; otherwise generate a new token while signed in as
 administrator.
 
-A signed-in administrator sees **User name → Registration Token**. Its
+A signed-in administrator sees **User name → Configuration → Registration Token**. Its
 Generate button issues a one-hour, single-use token to give privately to a new
 user. The dialog lists unexpired, unused tokens with their expiry. Selecting a
-row fills the token input for copying and enables **Delete**; deletion requires
+row fills the token input and enables **Copy to Clipboard** and **Delete**.
+The four buttons are Generate, Delete, Copy to Clipboard and Close. Copy is also
+available immediately after generating a token and copies only the value, not
+its expiry or list label. The status confirms success; if clipboard access is
+unavailable or denied, the input is selected for manual Ctrl+C/Cmd+C. Copy is
+disabled when no token value is displayed. Deletion requires
 confirmation and immediately revokes that token. Closing the confirmation
 MessageBox or pressing Escape keeps the token valid. The list is available after
 signing in again. Newly issued token values are encrypted in
@@ -246,7 +349,7 @@ registration messages.
 
 ## Administrator account management
 
-**User menu → Users** lists all accounts. Select one to edit first name, last name,
+**User menu → Configuration → Users** lists all accounts. Select one to edit first name, last name,
 nickname, email,
 role (Member/Administrator), enabled state and private C capacity (1–256 MiB).
 Leave capacity blank to inherit the server default, initially 64 MiB.
@@ -263,8 +366,9 @@ also protected. There is no account deletion endpoint.
 All user-management endpoints require an active administrator and writes
 require the exact configured origin. Ordinary users can edit only their own
 profile names/email; they cannot change role or capacity. Server Configuration also
-shows read-only environment/path settings and confirmed rebuild controls, with
-one blank character row between the runtime list and the rebuild/Users buttons.
+shows read-only environment/path settings and package/source/Users launchers,
+with one blank character row between the runtime list and those buttons.
+Rebuild actions are in Configuration and open confirmation/progress directly.
 
 The Users list spans 26 rows. Add User/Save and Refresh/Close form a 2×2 button
 matrix in the right-hand column, below the profile fields.

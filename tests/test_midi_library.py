@@ -2,6 +2,7 @@ import io
 import json
 from pathlib import Path
 import sqlite3
+import threading
 import zipfile
 
 import pytest
@@ -9,8 +10,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from thelpviewer.server.midi_library import MidiIndexParser, MidiLibrary
+from thelpviewer.server.midi.sources import MidiIndexParser
+from thelpviewer.server.midi.library import MidiLibrary
 from thelpviewer.server.routes.midi import create_midi_router
+from thelpviewer.server.downloader.online import OnlineDownloader
 
 
 MIDI = b"MThd\x00\x00\x00\x06\x00\x00\x00\x01\x00\x60MTrk\x00\x00\x00\x04\x00\xff\x2f\x00"
@@ -75,6 +78,102 @@ def test_html_extractors_use_only_json_rules():
     assert selectors.finish() == [{
         "href": "one.mid", "game": "Doom", "title": "E1M1", "sequencer": "Bobby Prince",
     }]
+
+
+def test_unicode_album_download_and_cover_use_shared_transport(tmp_path, monkeypatch):
+    title = "Space Quest: Chapter I – The Sarien Encounter"
+    manifest = tmp_path / "sources.json"
+    manifest.write_text(json.dumps({"sources": [{
+        "id": "archive", "name": "Archives", "pages": ["https://music.test/list"],
+        "allowed_hosts": ["music.test"], "extract": {"mode": "download_then_heading",
+            "download_link_text": "Download", "game_heading_tag": "h5", "game_prefix": "Game:", "href_pattern": r"\.zip$"},
+        "cover": {"mode": "zip_image", "extensions": [".png"]},
+    }]}), encoding="utf-8")
+    archive_buffer = io.BytesIO()
+    with zipfile.ZipFile(archive_buffer, "w") as archive:
+        archive.writestr("Theme.mid", MIDI)
+        archive.writestr("Cover.png", PNG)
+    responses = {
+        "https://music.test/list": f'<a href="Space%20Quest%20–%20Chapter%20I.zip">Download</a><h5>Game: {title}</h5>'.encode(),
+        "https://music.test/Space%20Quest%20%E2%80%93%20Chapter%20I.zip": archive_buffer.getvalue(),
+    }
+    calls = []
+    class Opener:
+        def open(self, request, timeout):
+            calls.append(request.full_url)
+            request.selector.encode("ascii")
+            data = io.BytesIO(responses[request.full_url])
+            data.url = request.full_url
+            data.headers = {"Content-Length": str(len(responses[request.full_url]))}
+            return data
+    monkeypatch.setattr("thelpviewer.server.downloader.transport.build_opener", lambda *args: Opener())
+    library = MidiLibrary(tmp_path / "midi", manifest)
+    try:
+        library.run_once(sleep=False)
+        catalog = library.catalog()
+        assert catalog["state"] == "ready" and catalog["downloaded"] == catalog["total"] == 1
+        track = catalog["tracks"][0]
+        assert track["game"] == title and track["cover"] and track["available"]
+        assert calls == list(responses)
+        # Store the original source identity; only the network representation changes.
+        assert library._items[0]["url"] == "https://music.test/Space%20Quest%20–%20Chapter%20I.zip"
+        assert library.file_path("archive", track["file"].rsplit("/", 1)[-1]).read_bytes() == MIDI
+    finally:
+        library.downloads.close()
+
+
+@pytest.mark.parametrize("count", [4, 384])
+def test_zip_albums_accept_supported_midi_containers_and_more_than_300_tracks(tmp_path, monkeypatch, count):
+    from test_midi_file import chunk, rmid
+    manifest = tmp_path / "sources.json"
+    manifest.write_text(json.dumps({"sources": [{
+        "id": "archive", "name": "Archives", "pages": ["https://music.test/list"],
+        "allowed_hosts": ["music.test"], "extract": {"mode": "download_then_heading",
+            "download_link_text": "Download", "game_heading_tag": "h5", "game_prefix": "Game:"},
+        "cover": {"mode": "zip_image", "extensions": [".png"]},
+    }]}))
+    data = io.BytesIO()
+    payloads = [MIDI, rmid(chunk(b"LIST", b"INFO"), chunk(b"data", MIDI)),
+        len(MIDI).to_bytes(2, "little") + MIDI + b"DOS metadata", MIDI + b"DOS metadata"]
+    with zipfile.ZipFile(data, "w") as archive:
+        for i in range(count):
+            archive.writestr(f"Album/Track {i:03d}.mid", payloads[i % len(payloads)])
+        archive.writestr("Album/Cover.png", PNG)
+    library = MidiLibrary(tmp_path / "midi", manifest)
+    monkeypatch.setattr(library, "_fetch", lambda url, *_args: (
+        b'<a href="album.zip">Download</a><h5>Game: Album</h5>' if url.endswith("/list") else data.getvalue()))
+    try:
+        library.run_once(sleep=False)
+        catalog = library.catalog()
+        assert catalog["state"] == "ready" and catalog["downloaded"] == catalog["total"] == count
+        assert all(track["cover"] for track in catalog["tracks"])
+        for track in catalog["tracks"]:
+            assert library.file_path("archive", track["file"].rsplit("/", 1)[-1]).read_bytes() == MIDI
+        assert library.downloads.snapshot()["percent"] == 0
+        assert all(row["percent"] == 100 for row in library.downloads.snapshot()["items"])
+    finally:
+        library.downloads.close()
+
+
+def test_invalid_midi_does_not_overwrite_cached_music_and_names_the_bad_zip_member(tmp_path, monkeypatch):
+    manifest = tmp_path / "sources.json"
+    manifest.write_text('{"sources": []}')
+    library = MidiLibrary(tmp_path / "midi", manifest)
+    try:
+        library._write_midi("test", "song.mid", MIDI)
+        with pytest.raises(ValueError, match="not Standard MIDI"):
+            library._write_midi("test", "song.mid", b"<html>not a MIDI</html>")
+        assert (library.root / "test" / "song.mid").read_bytes() == MIDI
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as archive:
+            archive.writestr("Album/not-music.mid", "(2/60)\r\n(2/4,3/104)")
+        monkeypatch.setattr(library, "_fetch", lambda *_args: data.getvalue())
+        with pytest.raises(ValueError, match="Album/not-music.mid: File is not Standard MIDI"):
+            library._download_item({"id": "test", "allowed_hosts": ["music.test"]},
+                {"id": "0" * 16, "kind": "zip", "url": "https://music.test/album.zip", "game": "Album"})
+        assert not list(library.root.rglob(".download-*"))
+    finally:
+        library.downloads.close()
 
 
 def test_configured_midi_and_zip_sources_download_resume_and_serve(tmp_path, monkeypatch):
@@ -194,10 +293,95 @@ def test_pending_tracks_can_jump_ahead_of_the_background_queue(tmp_path, monkeyp
     client = TestClient(app)
     assert client.post("/api/midi/priority/direct/not-an-id").status_code == 404
     library.run_once(sleep=False)
-    assert fetched[1:] == ["https://music.example/one.mid", "https://music.example/three.mid",
-                           "https://music.example/two.mid"]
+    assert sorted(fetched[1:]) == ["https://music.example/one.mid", "https://music.example/three.mid",
+                                 "https://music.example/two.mid"]
     assert library.catalog()["downloaded"] == 3
     assert client.post(f"/api/midi/priority/direct/{library._items[0]['id']}").json() == {"queued": True}
+
+
+def test_playback_download_is_shared_visible_first_and_does_not_wait_for_dos(tmp_path, monkeypatch):
+    manifest = tmp_path / "sources.json"
+    manifest.write_text(json.dumps({"sources": [{"id": "direct", "name": "Music", "pages": ["https://music.test/list"],
+        "allowed_hosts": ["music.test"], "extract": {"mode": "anchors", "href_pattern": r"\.mid$"}}]}))
+    downloads = OnlineDownloader()
+    library = MidiLibrary(tmp_path / "midi", manifest, downloads=downloads)
+    library._items = [{"id": "0000000000000001", "source_id": "direct", "kind": "midi", "game": "DOOM",
+        "title": "Selected song", "filename": "selected.mid", "url": "https://music.test/selected.mid", "sequencer": ""}]
+    library._save_catalog()
+    package_started, release_package = threading.Event(), threading.Event()
+    music_started, release_music = threading.Event(), threading.Event()
+    calls = []
+    def package():
+        downloads.update("dos", "large-package", state="running")
+        package_started.set()
+        assert release_package.wait(5)
+        downloads.update("dos", "large-package", state="done", percent=100)
+        downloads.finish("dos")
+    def fetch(url, hosts, limit):
+        calls.append(url)
+        music_started.set()
+        assert release_music.wait(5)
+        return MIDI
+    monkeypatch.setattr(library, "_fetch", fetch)
+    downloads.begin("dos", [{"id": "large-package", "label": "Large DOS package"}])
+    package_task = downloads.enqueue(package)
+    assert package_started.wait(5)
+    try:
+        ident = library._items[0]["id"]
+        assert library.prioritize("direct", ident)
+        assert music_started.wait(5)
+        first = library._play_tasks[("direct", ident)]
+        assert library.prioritize("direct", ident)
+        assert library._play_tasks[("direct", ident)] is first
+        row = downloads.snapshot(private=True)["items"][0]
+        assert row["id"] == f"midi:track:direct:{ident}" and row["state"] == "running"
+        assert "Selected song" in row["label"] and row["priority"] < 0
+        release_music.set()
+        assert first.result(timeout=5)
+        assert library.file_path("direct", "selected.mid").read_bytes() == MIDI
+        assert not package_task.done()
+        assert calls == ["https://music.test/selected.mid"]
+        assert downloads.snapshot()["items"][0]["state"] == "done"
+        assert library.prioritize("direct", ident)  # A cached replay performs no request.
+        assert len(calls) == 1
+    finally:
+        release_music.set(); release_package.set()
+        package_task.result(timeout=5)
+        downloads.close()
+
+
+def test_midi_source_change_waits_for_active_playback_writes(tmp_path, monkeypatch):
+    manifest = tmp_path / "sources.json"
+    manifest.write_text(json.dumps({"sources": [{"id": "direct", "name": "Music", "pages": ["https://music.test/list"],
+        "allowed_hosts": ["music.test"], "extract": {"mode": "anchors"}}]}))
+    downloads = OnlineDownloader()
+    library = MidiLibrary(tmp_path / "midi", manifest, selection_path=tmp_path / "selection.json", downloads=downloads)
+    library._items = [{"id": "0000000000000001", "source_id": "direct", "kind": "midi", "game": "DOOM",
+        "title": "Song", "filename": "song.mid", "url": "https://music.test/song.mid", "sequencer": ""}]
+    library._save_catalog()
+    entered, release = threading.Event(), threading.Event()
+    def fetch(url, hosts, limit):
+        entered.set()
+        assert release.wait(5)
+        return MIDI
+    monkeypatch.setattr(library, "_fetch", fetch)
+    try:
+        assert library.prioritize("direct", "0000000000000001")
+        assert entered.wait(5)
+        library.select_sources([], {})
+        assert library._resetting and library._worker.is_alive()
+        assert not library.prioritize("direct", "0000000000000001")
+        release.set()
+        library._worker.join(timeout=5)
+        assert not library._worker.is_alive() and not library._resetting
+        assert (library.root / "direct/song.mid").read_bytes() == MIDI  # Cached, not exposed while disabled.
+        assert library.file_path("direct", "song.mid") is None
+        assert not library._play_tasks
+    finally:
+        release.set()
+        if library._worker:
+            library._worker.join(timeout=5)
+        downloads.close()
 
 
 def test_pages_add_letters_without_redownloading_existing_page(tmp_path, monkeypatch):

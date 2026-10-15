@@ -6,6 +6,7 @@ from html import unescape
 from importlib import import_module
 import json
 import re
+import sqlite3
 import threading
 import time
 from urllib.parse import urlencode, urlsplit
@@ -19,13 +20,14 @@ from thelpviewer.server.config import load_config
 from thelpviewer.server.search_index import GlobalSearchIndex
 
 
-def _bundle(path, title, content):
+def _bundle(path, title, content, *, aliases=None):
     path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(path, "wt", encoding="utf-8") as output:
         json.dump({
             "uhf_version": "2.0",
             "metadata": {"name": title},
-            "topics": {"7": {"id": 7, "title": title, "content": content}},
+            "topics": {"7": {"id": 7, "title": title, "content": content,
+                              **({"aliases": {"ids": aliases}} if aliases is not None else {})}},
             "index": [{"group": "A", "entries": [{"label": "Indexed Alpha", "topic_id": 7}]}],
         }, output)
 
@@ -40,6 +42,176 @@ def _ready(client):
         assert 0 <= status["percent"] <= 100
         time.sleep(0.02)
     raise AssertionError("global index did not finish")
+
+
+def test_numeric_source_aliases_open_canonical_topics_without_duplicate_index_rows(tmp_path):
+    helps = tmp_path / "helps"
+    first, second = helps / "first.json.gz", helps / "second.json.gz"
+    _bundle(first, "First", ["Real primary text"], aliases=[17, 0, 7, 17, True, {}])
+    _bundle(second, "Second", ["Other primary text"], aliases=[17])
+    midi = tmp_path / "midi.json"
+    midi.write_text('{"sources": []}')
+    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+                     state_dir=tmp_path / "var", midi_sources_path=midi,
+                     public_base_url="https://help.example.test",
+                     statistics_path=tmp_path / "var" / "statistics.sqlite3")
+    with TestClient(create_app(config)) as client:
+        assert _ready(client)["topics"] == 2
+        index = client.app.state.global_search
+        assert index.topic("first.json.gz", "17")["context_id"] == "7"
+        assert index.topic("first.json.gz", "0")["title"] == "First"
+        assert index.topic("second.json.gz", "17")["title"] == "Second"
+        assert index.topic("absent.json.gz", "17") is None
+        parameters = {"file": "first.json.gz", "topic": "17", "line": "9", "slow": "1"}
+        redirect = client.get("/", params=parameters, follow_redirects=False)
+        assert redirect.status_code == 308
+        assert redirect.headers["location"] == "/?file=first.json.gz&topic=7&line=9&slow=1"
+        page = client.get("/", params=parameters)
+        assert page.status_code == 200 and "Real primary text" in page.text
+        assert 'rel="canonical" href="https://help.example.test/?file=first.json.gz&amp;topic=7"' in page.text
+        assert index.sitemap_count() == 2
+        assert [row[0] for row in index.file_topic_rows("first.json.gz")] == ["7"]
+        assert len(client.get("/api/search/global", params={"q": "primary"}).json()["results"]) == 2
+        assert "topic=17" not in client.get("/sitemap-1.xml").text
+
+        # Upgrade an old fingerprint without changing the source bytes: the
+        # alias mapping must be rebuilt, not left absent until a HELP changes.
+        before = first.read_bytes()
+        with sqlite3.connect(index.path) as connection:
+            fingerprint = connection.execute("SELECT fingerprint FROM files WHERE file_path = ?", ("first.json.gz",)).fetchone()[0]
+            connection.execute("UPDATE files SET fingerprint = ? WHERE file_path = ?", (fingerprint.partition(":")[2], "first.json.gz"))
+            connection.execute("DELETE FROM topic_aliases WHERE file_path = ?", ("first.json.gz",))
+        assert _ready(client)["topics"] == 2
+        assert first.read_bytes() == before
+        assert index.topic("first.json.gz", "17")["context_id"] == "7"
+
+        _bundle(first, "First updated", ["Changed primary text"], aliases=[])
+        assert _ready(client)["topics"] == 2
+        assert index.topic("first.json.gz", "17") is None
+        assert index.topic("second.json.gz", "17")["title"] == "Second"
+        assert client.get("/", params={"file": "first.json.gz", "topic": "17"}, follow_redirects=False).status_code == 404
+        second.unlink()
+        assert _ready(client)["topics"] == 1
+        assert index.topic("second.json.gz", "17") is None
+        with sqlite3.connect(index.path) as connection:
+            assert connection.execute("SELECT count(*) FROM topic_aliases").fetchone()[0] == 0
+
+
+def test_index_aliases_use_the_same_direct_id_priority_and_first_definition_as_viewer(tmp_path):
+    helps = tmp_path / "helps"
+    helps.mkdir()
+    with gzip.open(helps / "list.json.gz", "wt", encoding="utf-8") as output:
+        json.dump({"topics": [
+            {"id": 7, "title": "First", "content": ["First body"], "aliases": {"ids": [17, 8]}},
+            {"id": 8, "title": "Second", "content": ["Second body"], "aliases": {"ids": [17]}},
+        ]}, output)
+    index = GlobalSearchIndex(helps, tmp_path / "var")
+    deadline = time.monotonic() + 5
+    while index.status()["state"] != "ready":
+        assert time.monotonic() < deadline
+        time.sleep(0.02)
+    assert index.topic("list.json.gz", "17")["title"] == "First"
+    assert index.topic("list.json.gz", "8")["title"] == "Second"
+    assert index.sitemap_count() == 2
+
+
+def test_explicit_alias_public_urls_keep_numeric_aliases_distinct_from_real_ids(tmp_path):
+    helps = tmp_path / "helps"
+    helps.mkdir()
+    path = helps / "native.json.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as output:
+        json.dump({"topics": {
+            "0": {"id": 0, "title": "Zero ordinal", "content": ["Zero body"]},
+            "7": {"id": 7, "title": "Actual source destination", "content": ["a", "b", "c", "d"],
+                  "aliases": {"strings": ["0070", "70", "0"], "lines": {"0070": 2, "70": 3, "0": 4}}},
+            "70": {"id": 70, "title": "Seventy ordinal", "content": ["Seventy body"]},
+        }}, output)
+    midi = tmp_path / "midi.json"
+    midi.write_text('{"sources": []}')
+    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+                     state_dir=tmp_path / "state", midi_sources_path=midi,
+                     public_base_url="https://help.example.test",
+                     statistics_path=tmp_path / "state" / "statistics.sqlite3")
+    with TestClient(create_app(config)) as client:
+        assert _ready(client)["topics"] == 3
+        index = client.app.state.global_search
+        assert index.topic("native.json.gz", "70")["title"] == "Seventy ordinal"
+        assert index.topic("native.json.gz", "0")["title"] == "Zero ordinal"
+        for alias, line in [("0070", 2), ("70", 3), ("0", 4)]:
+            assert index.topic("native.json.gz", alias, alias_only=True)["context_id"] == "7"
+            params = {"file": "native.json.gz", "alias": alias}
+            redirect = client.get("/", params=params, follow_redirects=False)
+            assert redirect.status_code == 308
+            assert redirect.headers["location"] == f"/?file=native.json.gz&topic=7&line={line}"
+            page = client.get("/", params=params)
+            assert page.status_code == 200 and "Actual source destination" in page.text
+            assert 'canonical" href="https://help.example.test/?file=native.json.gz&amp;topic=7"' in page.text
+        assert index.topic("native.json.gz", "7", alias_only=True) is None
+        assert client.get("/", params={"file": "native.json.gz", "alias": "7"}).status_code == 404
+        assert client.get("/", params={"file": "native.json.gz", "topic": "70", "alias": "70"}).status_code == 404
+        assert index.sitemap_count() == 3
+        before = path.read_bytes()
+        with sqlite3.connect(index.path) as connection:
+            fingerprint = connection.execute("SELECT fingerprint FROM files WHERE file_path = 'native.json.gz'").fetchone()[0]
+            connection.execute("UPDATE files SET fingerprint = ? WHERE file_path = 'native.json.gz'",
+                               ("3:" + fingerprint.partition(":")[2],))
+            connection.execute("DELETE FROM topic_aliases WHERE alias IN ('70','0')")
+        assert _ready(client)["topics"] == 3
+        assert index.topic("native.json.gz", "70", alias_only=True)["context_id"] == "7"
+        assert path.read_bytes() == before
+
+
+def test_symbolic_alias_cursor_urls_case_sensitive_contexts_and_cache_upgrade(tmp_path):
+    helps = tmp_path / "helps"
+    helps.mkdir()
+    path = helps / "native.json.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as output:
+        json.dump({"metadata": {"quickhelp_databases": [
+            {"first_topic_id": 7, "topic_count": 1, "case_sensitive": True}]}, "topics": {
+            "0": {"id": 0, "title": "Native", "content": ["first", "second", "third"], "aliases": {
+                "strings": ["winhelp-hash:000004d2", "repeat", "bad-line"],
+                "lines": {"winhelp-hash:000004d2": 2, "bad-line": True}}},
+            "7": {"id": 7, "title": "Case", "content": ["one", "two", "three"], "aliases": {
+                "ids": [0, 17], "strings": ["CASE.HLP!Detail", "repeat"],
+                "lines": {"0": 3, "17": 2, "CASE.HLP!Detail": 3}}}}}, output)
+    state = tmp_path / "state"
+    state.mkdir()
+    with sqlite3.connect(state / "global-search.sqlite3") as connection:
+        connection.execute("CREATE TABLE topic_aliases (file_path TEXT, alias TEXT, context_id TEXT, PRIMARY KEY(file_path,alias))")
+    midi = tmp_path / "midi.json"
+    midi.write_text('{"sources": []}')
+    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+                     state_dir=state, midi_sources_path=midi, public_base_url="https://help.example.test",
+                     statistics_path=state / "statistics.sqlite3")
+    before = path.read_bytes()
+    with TestClient(create_app(config)) as client:
+        assert _ready(client)["topics"] == 2
+        index = client.app.state.global_search
+        assert index.topic("native.json.gz", "WINHELP-HASH:000004D2")["line"] == 2
+        assert index.topic("native.json.gz", "case.hlp!Detail")["line"] == 3
+        assert index.topic("native.json.gz", "case.hlp!detail") is None
+        assert index.topic("native.json.gz", "repeat")["context_id"] == "7"  # Exact namespace first.
+        assert index.topic("native.json.gz", "REPEAT")["context_id"] == "0"
+        assert "line" not in index.topic("native.json.gz", "0")  # Real ID wins.
+        assert "line" not in index.topic("native.json.gz", "bad-line")
+        assert index.topic("native.json.gz", "17")["line"] == 2
+        for alias, line in [("WINHELP-HASH:000004D2", 2), ("case.hlp!Detail", 3), ("17", 2)]:
+            target = "7" if alias in {"case.hlp!Detail", "17"} else "0"
+            parameters = {"file": "native.json.gz", "topic": alias}
+            redirect = client.get("/", params=parameters, follow_redirects=False)
+            assert redirect.status_code == 308
+            assert redirect.headers["location"] == f"/?file=native.json.gz&topic={target}&line={line}"
+            page = client.get("/", params=parameters)
+            assert page.status_code == 200
+            assert f'?file=native.json.gz&amp;topic={target}"' in page.text
+            override = client.get("/", params={**parameters, "line": "1"}, follow_redirects=False)
+            assert override.headers["location"] == f"/?file=native.json.gz&topic={target}&line=1"
+            for invalid in ("", "0", "-1", "text", "0" * 5000):
+                fallback = client.get("/", params={**parameters, "line": invalid}, follow_redirects=False)
+                assert fallback.headers["location"] == f"/?file=native.json.gz&topic={target}&line={line}"
+        assert client.get("/", params={"file": "native.json.gz", "topic": "missing"}).status_code == 404
+        assert index.sitemap_count() == 2
+        assert path.read_bytes() == before
 
 
 def test_global_search_builds_incrementally_and_removes_missing_help(tmp_path):

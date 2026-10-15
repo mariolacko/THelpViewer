@@ -1,6 +1,11 @@
-"""Compatibility facade over the shared JSON product manifest."""
+"""Shared HELP manifest catalog and request-scoped edition discovery."""
 
 from __future__ import annotations
+
+from dataclasses import replace
+from contextlib import contextmanager
+from contextvars import ContextVar
+import re
 
 from thelpviewer.help_database import (
     BuildGroupSpec,
@@ -8,6 +13,46 @@ from thelpviewer.help_database import (
     SourceQuery,
     load_help_manifest,
 )
+from ...help_packages import help_package_id
+
+
+_selected_packages = ContextVar("help_download_packages", default=None)
+
+
+@contextmanager
+def select_help_packages(package_ids):
+    token = _selected_packages.set(None if package_ids is None else frozenset(package_ids))
+    try:
+        yield
+    finally:
+        _selected_packages.reset(token)
+
+
+def version_selected(product_key: str, label: str, *, match_language=True) -> bool:
+    """Filter discovered release pages before requesting their archives."""
+    selected = _selected_packages.get()
+    if selected is None:
+        return True
+    versions = [ident.split(":", 1)[1] for ident in selected if ident.split(":", 1)[0] == product_key]
+    for version in versions:
+        if not version:
+            return True
+        number = re.search(r"\d+(?:\.(?:\d+|x))*", version, re.I)
+        if number:
+            wanted = number.group().lower().split(".")
+            for candidate in re.findall(r"\d+(?:\.\d+)*", label):
+                parts = candidate.split(".")
+                if all(part == "x" or int(part) == int(parts[index])
+                       for index, part in enumerate(wanted) if index < len(parts)) and (
+                       len(parts) >= len(wanted) or all(part in ("0", "x") for part in wanted[len(parts):])) and (
+                       "x" in wanted or all(int(part) == 0 for part in parts[len(wanted):])):
+                    language = re.search(r"\(([A-Z]{2})\)", version)
+                    if not match_language or not language or re.search(r"\b" + language.group(1) + r"\b", label, re.I) or (
+                            language.group(1) == "DE" and re.search(r"german|deutsch", label, re.I)):
+                        return True
+        elif version.casefold() in label.casefold():
+            return True
+    return False
 
 
 _MANIFEST = load_help_manifest()
@@ -106,18 +151,35 @@ def product_spec(key: str) -> ProductSpec:
 
 
 def products_for_source(source: str, selected_keys: list[str] | None = None) -> list[ProductSpec]:
-    """Return product specs supported by one source."""
-    wanted = set(selected_keys or PRODUCT_ORDER)
-    return [
-        product
-        for product in _MANIFEST.products
-        if product.key in wanted and source in product.sources
-    ]
+    """Return family and CRC-edition discovery jobs for one provider."""
+    wanted = set(PRODUCT_ORDER if selected_keys is None else selected_keys)
+    selected = _selected_packages.get()
+    jobs: list[ProductSpec] = []
+    for product in _MANIFEST.products:
+        if product.key not in wanted:
+            continue
+        if selected is not None and not any(ident.split(":", 1)[0] == product.key for ident in selected):
+            continue
+        queries: set[SourceQuery] = set()
+        if source in product.sources:
+            queries.add(product.sources[source])
+            jobs.append(product)
+        for entry in _MANIFEST.entries:
+            query = entry.sources.get(source) if entry.product_key == product.key and (
+                selected is None or help_package_id(product.key, entry.version or product.default_version) in selected) else None
+            if query is None or query in queries:
+                continue
+            queries.add(query)
+            jobs.append(replace(
+                product, sources={source: query}, default_version=entry.version,
+                collection_prefixes=(entry.collection,) if entry.collection else product.collection_prefixes,
+            ))
+    return jobs
 
 
 def supported_product_keys(source: str) -> list[str]:
     """Return product keys supported by one source."""
-    return [spec.key for spec in products_for_source(source)]
+    return list(dict.fromkeys(spec.key for spec in products_for_source(source)))
 
 
 __all__ = [
@@ -142,5 +204,7 @@ __all__ = [
     "normalize_build_group",
     "product_spec",
     "products_for_source",
+    "select_help_packages",
     "supported_product_keys",
+    "version_selected",
 ]

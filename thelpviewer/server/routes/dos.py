@@ -8,9 +8,10 @@ import gzip
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
-from ..accounts import AccountStore
+from ..accounts.store import AccountStore
 from ..config import AppConfig
-from ..dos_prompt import DosError, DosPromptStore
+from ..dos.store import DosPromptStore
+from ..dos.paths import DosError
 
 
 def _accepts_gzip(value: str) -> bool:

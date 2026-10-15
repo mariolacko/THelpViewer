@@ -1,6 +1,6 @@
 {
   "cycles": "auto",
-  "memory_mb": 16,
+  "memory_mb": 64,
   "max_c_bytes": 268435456,
   "max_media_bytes": 134217728,
   "allow_full_disk_fallback": false,
@@ -9,7 +9,7 @@
       "path": "AUTOEXEC.BAT",
       "text": [
         "@ECHO OFF",
-        "SET PATH=C:\\FREEDOS\\BIN;C:\\TOOLS\\VC;Z:\\",
+        "SET PATH=C:\\UTILS\\BIN;C:\\FREEDOS\\BIN;C:\\TOOLS\\VC;Z:\\",
         "vc"
       ]
     },
@@ -39,39 +39,760 @@
     "Change directory, then run the named program.",
     ""
   ],
+  "categories": [
+    {
+      "id": "games-platform",
+      "label": "Platform games",
+      "icon": "🎮"
+    },
+    {
+      "id": "games-action",
+      "label": "Action & shooters",
+      "icon": "🔫"
+    },
+    {
+      "id": "games-racing",
+      "label": "Racing",
+      "icon": "🏎️"
+    },
+    {
+      "id": "games-sports",
+      "label": "Sports",
+      "icon": "🏅"
+    },
+    {
+      "id": "games-puzzle",
+      "label": "Logic & puzzles",
+      "icon": "🧩"
+    },
+    {
+      "id": "games-strategy",
+      "label": "Strategy & board",
+      "icon": "♟️"
+    },
+    {
+      "id": "games-rpg",
+      "label": "Role-playing",
+      "icon": "🐉"
+    },
+    {
+      "id": "development",
+      "label": "Programming",
+      "icon": "💻"
+    },
+    {
+      "id": "editors",
+      "label": "Editors",
+      "icon": "📝"
+    },
+    {
+      "id": "office",
+      "label": "Office & spreadsheets",
+      "icon": "📊"
+    },
+    {
+      "id": "filemanagers",
+      "label": "File managers",
+      "icon": "🗂️"
+    },
+    {
+      "id": "archivers",
+      "label": "Archive tools",
+      "icon": "📦"
+    },
+    {
+      "id": "graphics",
+      "label": "Graphics",
+      "icon": "🎨"
+    },
+    {
+      "id": "audio",
+      "label": "Sound & music",
+      "icon": "🎵"
+    },
+    {
+      "id": "antivirus",
+      "label": "Antivirus",
+      "icon": "🛡️"
+    }
+  ],
   "sources": [
     {
+      "id": "freedos-watcom-c",
+      "category": "development",
+      "title": "Open Watcom C/C++ 1.9",
+      "language": "en",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/watcomc.zip",
+      "format": "zip",
+      "target": "DEV/WATCOMC",
+      "exclude_members": ["DEVEL/WATCOMC/H/NT/*", "DEVEL/WATCOMC/H/OS2/*", "DEVEL/WATCOMC/H/OS21X/*", "DEVEL/WATCOMC/H/WIN/*"],
+      "members": ["DEVEL/WATCOMC/BINW/WCC*.EXE", "DEVEL/WATCOMC/BINW/WPP*.EXE", "DEVEL/WATCOMC/BINW/WCL*.EXE", "DEVEL/WATCOMC/BINW/WASM*.EXE", "DEVEL/WATCOMC/BINW/WLINK.*", "DEVEL/WATCOMC/BINW/WLSYSTEM.LNK", "DEVEL/WATCOMC/BINW/WLIB.EXE", "DEVEL/WATCOMC/BINW/WMAKE.EXE", "DEVEL/WATCOMC/BINW/VI.EXE", "DEVEL/WATCOMC/BINW/*.IHP", "DEVEL/WATCOMC/BINW/WHELP.EXE", "DEVEL/WATCOMC/BINW/DOS4GW.EXE", "DEVEL/WATCOMC/BINW/LICENSE.D32", "DEVEL/WATCOMC/BINW/DOS4GW.DOC", "DEVEL/WATCOMC/H/*", "DEVEL/WATCOMC/LIB286/PL*.LIB", "DEVEL/WATCOMC/LIB286/MATH*.LIB", "DEVEL/WATCOMC/LIB286/CPLX*.LIB", "DEVEL/WATCOMC/LIB286/NOEMU*.LIB", "DEVEL/WATCOMC/LIB286/DOS/*", "DEVEL/WATCOMC/LIB386/PL*.LIB", "DEVEL/WATCOMC/LIB386/MATH*.LIB", "DEVEL/WATCOMC/LIB386/CPLX*.LIB", "DEVEL/WATCOMC/LIB386/NOEMU*.LIB", "DEVEL/WATCOMC/LIB386/DOS/*", "DEVEL/WATCOMC/LICENSE.TXT", "DEVEL/WATCOMC/README.TXT", "DEVEL/WATCOMC/EDDAT/*"],
+      "strip_components": 2,
+      "files": [
+        {"path": "START.BAT", "text": ["@ECHO OFF", "SET WATCOM=C:\\DEV\\WATCOMC", "SET PATH=%WATCOM%\\BINW;%PATH%", "SET INCLUDE=%WATCOM%\\H", "SET EDPATH=%WATCOM%\\EDDAT", "ECHO Open Watcom C/C++ environment ready.", "ECHO Try: WCL HELLO.C"]},
+        {"path": "HELLO.C", "text": ["#include <stdio.h>", "int main(void) { puts(\"Hello from Open Watcom C!\"); return 0; }"]}
+      ],
+      "launch": "CD \\DEV\\WATCOMC then START",
+      "license": "Sybase Open Watcom Public License 1.0; original LICENSE.TXT and DOS extender licence retained. Official FreeDOS package from Open Watcom.",
+      "description": "Compile 16-bit and 32-bit DOS C/C++ programs with WCL or WCL386. Includes DOS libraries, headers, compiler help and a small Hello World example; START sets the build environment.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-watcom-fortran",
+      "category": "development",
+      "title": "Open Watcom Fortran 1.9",
+      "language": "en",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/watcomf.zip",
+      "format": "zip",
+      "target": "DEV/WATCOMF",
+      "members": ["DEVEL/WATCOMF/BINW/WFC*.EXE", "DEVEL/WATCOMF/BINW/WFL*.EXE", "DEVEL/WATCOMF/BINW/WLINK.*", "DEVEL/WATCOMF/BINW/WLSYSTEM.LNK", "DEVEL/WATCOMF/BINW/WLIB.EXE", "DEVEL/WATCOMF/BINW/WMAKE.EXE", "DEVEL/WATCOMF/BINW/VI.EXE", "DEVEL/WATCOMF/BINW/*.IHP", "DEVEL/WATCOMF/BINW/WHELP.EXE", "DEVEL/WATCOMF/BINW/DOS4GW.EXE", "DEVEL/WATCOMF/BINW/LICENSE.D32", "DEVEL/WATCOMF/BINW/DOS4GW.DOC", "DEVEL/WATCOMF/LIB286/PL*.LIB", "DEVEL/WATCOMF/LIB286/MATH*.LIB", "DEVEL/WATCOMF/LIB286/NOEMU*.LIB", "DEVEL/WATCOMF/LIB286/DOS/*", "DEVEL/WATCOMF/LIB386/PL*.LIB", "DEVEL/WATCOMF/LIB386/MATH*.LIB", "DEVEL/WATCOMF/LIB386/NOEMU*.LIB", "DEVEL/WATCOMF/LIB386/DOS/*", "DEVEL/WATCOMF/SRC/FORTRAN/*", "DEVEL/WATCOMF/LICENSE.TXT", "DEVEL/WATCOMF/FREADME.TXT", "DEVEL/WATCOMF/EDDAT/*"],
+      "strip_components": 2,
+      "files": [
+        {"path": "START.BAT", "text": ["@ECHO OFF", "SET WATCOM=C:\\DEV\\WATCOMF", "SET PATH=%WATCOM%\\BINW;%PATH%", "SET FINCLUDE=%WATCOM%\\SRC\\FORTRAN\\DOS;%WATCOM%\\SRC\\FORTRAN", "SET EDPATH=%WATCOM%\\EDDAT", "ECHO Open Watcom Fortran environment ready.", "ECHO Try: WFL HELLO.FOR"]},
+        {"path": "HELLO.FOR", "text": ["      PROGRAM HELLO", "      PRINT *, 'Hello from Open Watcom Fortran!'", "      END"]}
+      ],
+      "launch": "CD \\DEV\\WATCOMF then START",
+      "license": "Sybase Open Watcom Public License 1.0; original compiler and DOS extender licence notices retained.",
+      "description": "Build numerical and scientific DOS programs in Fortran 77 using WFL or WFL386. Includes DOS runtime libraries, language help and a compile-ready example; START selects this compiler's environment.",
+      "post_install": []
+    },
+    {
+      "id": "freepascal-1010",
+      "category": "development",
+      "title": "Free Pascal 1.0.10",
+      "language": "en",
+      "enabled": false,
+      "url": "https://downloads.sourceforge.net/project/freepascal/OldFiles/RealOldFiles/1.0.10/dos1010.zip",
+      "format": "zip",
+      "target": "DEV/FPC",
+      "extract": [
+        {"archive": "basego32.zip", "format": "zip"},
+        {"archive": "idego32.zip", "format": "zip"},
+        {"archive": "asldgo32.zip", "format": "zip"},
+        {"archive": "ufclgo32.zip", "format": "zip"},
+        {"archive": "ugdbgo32.zip", "format": "zip"},
+        {"archive": "upzlgo32.zip", "format": "zip"},
+        {"archive": "ureggo32.zip", "format": "zip"},
+        {"archive": "uzipgo32.zip", "format": "zip"},
+        {"members": ["readme.txt", "whatsnew.txt"]}
+      ],
+      "files": [
+        {"path": "START.BAT", "text": ["@ECHO OFF", "SET PATH=C:\\DEV\\FPC\\BIN\\GO32V2;%PATH%", "ECHO Free Pascal environment ready. Try: FPC HELLO.PAS", "ECHO Run FP for the text-mode IDE."]},
+        {"path": "BIN/GO32V2/FPC.CFG", "text": ["-FuC:/DEV/FPC/UNITS/GO32V2/RTL", "-FuC:/DEV/FPC/UNITS/GO32V2/FCL", "-FDC:/DEV/FPC/BIN/GO32V2"]},
+        {"path": "HELLO.PAS", "text": ["program Hello;", "begin", "  WriteLn('Hello from Free Pascal!');", "end."]}
+      ],
+      "launch": "CD \\DEV\\FPC then START",
+      "license": "GPL compiler with runtime library licence exceptions; original licence texts retained in DOC/FPC. Original upstream release from the Free Pascal project's SourceForge archive.",
+      "description": "Compile Turbo Pascal and Object Pascal code into 32-bit DOS programs with a period-appropriate compiler. Includes the FP text IDE, runtime/FCL units, GNU assembler/linker and a Hello World example.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-freebasic",
+      "category": "development",
+      "title": "FreeBASIC 1.10.1",
+      "language": "en",
+      "enabled": false,
+      "format": "collection",
+      "archives": [
+        {"url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/fbc.zip", "format": "zip"},
+        {"url": "https://www.delorie.com/pub/djgpp/current/v2misc/csdpmi7b.zip", "format": "zip", "members": ["BIN/CWSDPMI.EXE", "BIN/*.DOC"], "strip_components": 1, "target": "DEVEL/FBC"}
+      ],
+      "target": "DEV/FBC",
+      "launch": "CD \\DEV\\FBC\\DEVEL\\FBC then START",
+      "files": [
+        {"path": "DEVEL/FBC/START.BAT", "text": ["@ECHO OFF", "SET PATH=C:\\DEV\\FBC\\DEVEL\\FBC;%PATH%", "ECHO FreeBASIC environment ready. Try: FBC HELLO.BAS"]},
+        {"path": "DEVEL/FBC/HELLO.BAS", "text": ["Print \"Hello from FreeBASIC!\""]}
+      ],
+      "license": "GPL-2.0 compiler with runtime library exceptions; complete FreeDOS package including original documentation, licences and SOURCE/FBC/SOURCES.ZIP.",
+      "description": "Compile BASIC into native 32-bit DOS programs, with QuickBASIC-compatible language mode and graphics libraries. Includes headers, libraries, original examples and source archive; START makes FBC available.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-nasm",
+      "category": "development",
+      "title": "NASM 3.02",
+      "language": "en",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/nasm.zip",
+      "format": "zip",
+      "target": "DEV/NASM",
+      "files": [
+        {"path": "START.BAT", "text": ["@ECHO OFF", "SET PATH=C:\\DEV\\NASM\\DEVEL\\NASM;%PATH%", "ECHO NASM environment ready. Try: NASM -f bin HELLO.ASM -o HELLO.COM"]},
+        {"path": "HELLO.ASM", "text": ["org 100h", "mov dx, message", "mov ah, 9", "int 21h", "ret", "message db 'Hello from NASM!', 13, 10, '$'"]}
+      ],
+      "launch": "CD \\DEV\\NASM then START",
+      "license": "BSD-2-Clause; complete official FreeDOS package including licence, manual, DOS DPMI runtime and supplied source archive.",
+      "description": "Assemble x86 code into COM binaries or object files using NASM, and inspect machine code with NDISASM. Includes the manual, DOS runtime and a tiny Hello World COM example.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-jwasm",
+      "category": "development",
+      "title": "JWasm 2.18",
+      "language": "en",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/jwasm.zip",
+      "format": "zip",
+      "target": "DEV/JWASM",
+      "files": [{"path": "START.BAT", "text": ["@ECHO OFF", "SET PATH=C:\\DEV\\JWASM\\DEVEL\\JWASM;%PATH%", "ECHO MASM-compatible assembler ready. Run JWASMR for help."]}],
+      "launch": "CD \\DEV\\JWASM then START",
+      "license": "Sybase Open Watcom Public License 1.0; complete FreeDOS package with original licence, sample assembly programs and supplied source archive.",
+      "description": "Assemble MASM-style source for 16-bit and 32-bit DOS targets. Offers real-mode JWASMR and protected-mode JWASMD, example programs and the original documentation.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-djgpp-rhide",
+      "category": "development",
+      "title": "DJGPP C/C++ + RHIDE",
+      "language": "en",
+      "enabled": false,
+      "format": "collection",
+      "target": "DJGPP",
+      "archives": [
+        {"url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/djgpp.zip", "format": "zip", "members": ["DEVEL/DJGPP/*"], "strip_components": 2},
+        {"url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/dj_bin.zip", "format": "zip", "members": ["DEVEL/DJGPP/*"], "strip_components": 2},
+        {"url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/dj_gcc.zip", "format": "zip", "members": ["DEVEL/DJGPP/*"], "strip_components": 2},
+        {"url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/dj_gpp.zip", "format": "zip", "members": ["DEVEL/DJGPP/*"], "strip_components": 2},
+        {"url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/dj_make.zip", "format": "zip", "members": ["DEVEL/DJGPP/*"], "strip_components": 2},
+        {"url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/devel/dj_rhide.zip", "format": "zip", "members": ["DEVEL/DJGPP/*"], "strip_components": 2},
+        {"url": "https://www.delorie.com/pub/djgpp/current/v2misc/csdpmi7b.zip", "format": "zip", "members": ["BIN/CWSDPMI.EXE", "BIN/*.DOC"]}
+      ],
+      "files": [
+        {"path": "DJGPP.ENV", "text": ["DJDIR=C:/DJGPP", "+LFN=n", "+TMPDIR=C:/DJGPP/TMP", "C_INCLUDE_PATH=C:/DJGPP/INCLUDE", "CPLUS_INCLUDE_PATH=C:/DJGPP/INCLUDE/CXX/4.71;C:/DJGPP/INCLUDE/CXX/4.71/DJGPP;C:/DJGPP/INCLUDE", "LIBRARY_PATH=C:/DJGPP/LIB;C:/DJGPP/LIB/GCC/DJGPP/4.71", "[rhide]", "+RHIDE_TYPED_LIBS_DJGPP.cc=stdcxx m", "+RHIDE_TYPED_LIBS_DJGPP.cxx=stdcxx m", "+RHIDE_TYPED_LIBS_DJGPP.cpp=stdcxx m"]},
+        {"path": "TMP/README.TXT", "text": ["Temporary compiler files. Keep this directory available."]},
+        {"path": "START.BAT", "text": ["@ECHO OFF", "SET DJGPP=C:\\DJGPP\\DJGPP.ENV", "SET LFN=n", "SET PATH=C:\\DJGPP\\BIN;%PATH%", "ECHO DJGPP GCC/C++ environment ready. Try: GCC HELLO.C -o HELLO.EXE", "ECHO Run RHIDE for the text-mode IDE."]},
+        {"path": "HELLO.C", "text": ["#include <stdio.h>", "int main(void) { puts(\"Hello from DJGPP!\"); return 0; }"]}
+      ],
+      "launch": "CD \\DJGPP then START",
+      "license": "GNU GPL and DJGPP runtime exceptions; original FreeDOS package licence/documentation trees retained. CWSDPMI runtime comes from the official DJGPP archive.",
+      "description": "Build 32-bit DOS C/C++ programs with GCC 4.7.1, GNU binutils and make, or edit projects in RHIDE 1.5. Includes the DJGPP environment, C/C++ libraries, DPMI runtime and an example.",
+      "post_install": []
+    },
+    {
+      "id": "microsoft-word-55",
+      "category": "office",
+      "title": "Microsoft Word 5.5 for DOS",
+      "language": "en-GB",
+      "enabled": false,
+      "url": "https://download.microsoft.com/download/word97win/Wd55_be/97/WIN98/EN-US/Wd55_ben.exe",
+      "format": "zip",
+      "expand": "microsoft",
+      "target": "OFFICE/WORD55",
+      "members": ["WORD.EX$", "WORD.OVL", "MW.HLP", "MAKEVID.EX$", "VGA.CS$", "VGA.GS$", "BIOSSAFE.CS$", "BIOSSAFE.KB$", "SPELL.OV$", "SPELL-BR.LEX", "THES-BR.LEX", "README.DOC", "WRD5READ.TXT", "WORD55.INF", "*.TBL", "*.KTD", "*.ST$", "*.GL$", "PRINT1/*", "PRINT2/*"],
+      "files": [{"path": "START.BAT", "text": ["@ECHO OFF", "WORD %1 %2 %3 %4"]}],
+      "launch": "CD \\OFFICE\\WORD55 then START",
+      "license": "Original Microsoft download of Word 5.5 for DOS; proprietary, not open source. Original readme and release information retained; no Windows or OS/2 installation is included.",
+      "description": "Write formatted documents in Microsoft's DOS word processor with pull-down menus, styles, spell-checking and a thesaurus. British English edition, prepared for VGA text mode without running interactive Setup.",
+      "post_install": ["@ECHO OFF", "MAKEVID SCREEN.VID -Lfr VGA.CSD -Lfs VGA.GSD"]
+    },
+    {
+      "id": "trius-as-easy-as-57",
+      "category": "office",
+      "title": "As-Easy-As 5.7",
+      "language": "en",
+      "enabled": false,
+      "url": "https://web.archive.org/web/20240527084029id_/http://www.triusinc.com/old_files/asa57.exe",
+      "format": "zip",
+      "target": "OFFICE/ASEASY",
+      "extract": [
+        {"archive": "ASEASY.570", "format": "archive"},
+        {"members": ["VENDOR.DOC", "FILE_ID.DIZ", "READ_ME.1ST", "VENDINFO.DIZ", "AGENT.DOC", "ORDER.DOC", "UPGRADE.DOC"]}
+      ],
+      "files": [{"path": "NOTICE.TXT", "text": ["AS-EASY-AS for DOS 5.7 - TRIUS, Inc.", "The publisher discontinued this product and released free full licences.", "Original publisher notice:", "https://web.archive.org/web/20240520072927/http://www.triusinc.com/forums/viewtopic.php?t=10", "Publisher-supplied serial number: 570-110-0424-3", "Original copyright and distribution notices are retained."]}],
+      "launch": "CD \\OFFICE\\ASEASY then ASEASY",
+      "license": "TRIUS proprietary freeware release; the publisher's free-licence announcement and original distribution notices are retained. Not public domain or open source.",
+      "description": "Work with Lotus-compatible WKS/WK1 spreadsheets, formulas, macros, statistical functions and graphs. The publisher's DOS 5.7 release is unpacked directly from its original ARC data archive.",
+      "post_install": []
+    },
+    {
+      "id": "ability-plus-30",
+      "category": "office",
+      "title": "Ability Plus 3.0",
+      "language": "en",
+      "enabled": false,
+      "url": "https://www.ability.com/xload/dos/AB3.ZIP",
+      "format": "zip",
+      "target": "OFFICE/ABILITY",
+      "launch": "CD \\OFFICE\\ABILITY then AB3",
+      "license": "Complete working historical DOS release supplied by Ability Software at https://www.ability.com/en/support/dos; proprietary, not open source. Original help and sample documentation retained.",
+      "description": "Switch between a word processor, spreadsheet, database, charts and communications in one DOS office suite. Includes the publisher's original AB3 launcher, examples and tutorial files.",
+      "post_install": []
+    },
+    {
+      "id": "visicalc-1981",
+      "category": "office",
+      "title": "VisiCalc (IBM PC, 1981)",
+      "language": "en",
+      "enabled": false,
+      "url": "https://web.archive.org/web/20241228113359id_/http://www.bricklin.com/anonymous/visicalc-executable.zip",
+      "format": "zip",
+      "target": "OFFICE/VISICALC",
+      "files": [{"path": "NOTICE.TXT", "text": ["VisiCalc for the IBM PC (1981)", "Original Lotus licence: personal, non-commercial use only.", "Not public domain; no unrestricted redistribution permission is implied.", "Read the original terms before use:", "https://bricklin.com/history/vclicense.htm", "Original author's download page: https://bricklin.com/history/vcexecutable.htm"]}],
+      "launch": "CD \\OFFICE\\VISICALC then VC",
+      "license": "Original IBM PC executable released by co-author Dan Bricklin under the Lotus VisiCalc licence for personal, non-commercial use, not public domain or unrestricted redistribution. See https://bricklin.com/history/vclicense.htm; preserved original download.",
+      "description": "Try the original IBM PC spreadsheet with instant recalculation and slash-key commands. It only sees the current directory; use /SQY to quit and save worksheets into the private C overlay.",
+      "post_install": []
+    },
+    {
+      "id": "software602-c602",
+      "category": "office",
+      "title": "Calc602",
+      "language": "cs",
+      "enabled": false,
+      "file": "c602-runtime.zip",
+      "format": "zip",
+      "target": "OFFICE/C602",
+      "launch": "CD \\OFFICE\\C602 then C602",
+      "license": "Operator-supplied original Software602 runtime, bundled with permission. Original program/help copyright notices retained; not labelled open source.",
+      "description": "Build spreadsheets with formulas, mathematical functions and graphs in Software602's graphical DOS interface. Includes original help, screen resources, fonts and printer drivers.",
+      "post_install": []
+    },
+    {
+      "id": "panda-vlak-201",
+      "category": "games-puzzle",
+      "title": "Vlak 2.01",
+      "language": "cs",
+      "enabled": false,
+      "url": "https://www.breatharian.eu/sw/vlak/dwn/Vlak201.zip",
+      "format": "zip",
+      "target": "GAMES/VLAK",
+      "launch": "CD \\GAMES\\VLAK then VLAK",
+      "license": "Unlicense for the author's original software; original documentation retained. See https://www.breatharian.eu/sw/vlak/index.html and https://www.breatharian.eu/Panda38/.",
+      "description": "Steer a growing train through 50 puzzle scenes, collect every object and reach the exit without hitting walls or your wagons. Miroslav Nemecek's DOS game with editable levels.",
+      "post_install": []
+    },
+    {
+      "id": "panda-dosman-220",
+      "category": "filemanagers",
+      "title": "DOS Manažer 2.20",
+      "language": "cs",
+      "enabled": false,
+      "url": "https://www.breatharian.eu/sw/dosman/DOSM_220.RAR",
+      "format": "archive",
+      "extract": [
+        {
+          "archive": "DOSMAN/DOSMAN.RAR",
+          "format": "archive",
+          "members": ["DOSMAN.EXE", "DOSMAN.HLP", "DOSMAN.INI", "DOSMAN.MNU", "DOSMAN.DIA", "CTI_MNE.TXT", "LICENCE.TXT", "FILEINFO"]
+        }
+      ],
+      "target": "TOOLS/DOSMAN",
+      "launch": "CD \\TOOLS\\DOSMAN then DOSMAN",
+      "license": "Author's freeware release, now Unlicense for his original work. Retains LICENCE.TXT and CTI_MNE.TXT; third-party shareware and installers are not installed. See https://www.breatharian.eu/sw/dosman/index.html.",
+      "description": "Miroslav Nemecek's file manager, from the author of Vlak: directory comparison, text and hex editing, a spreadsheet, database, calendar and high-precision calculator.",
+      "post_install": []
+    },
+    {
+      "id": "software602-t602-31",
+      "category": "office",
+      "title": "Text602 3.1",
+      "language": "cs",
+      "enabled": false,
+      "url": "https://www.osdos.net/download/t602/t602_31.exe",
+      "format": "archive",
+      "members": ["T602/*"],
+      "strip_components": 1,
+      "target": "OFFICE/T602",
+      "launch": "CD \\OFFICE\\T602 then T602",
+      "license": "Historical Software602 distribution from https://www.osdos.net/download.htm; original program documentation retained. Copyright remains with its owners; not labelled open source.",
+      "description": "Write formatted Czech and Slovak documents with multiple open files, spell-check dictionaries, fonts and printer drivers. Includes Text602's original help and sample documents.",
+      "post_install": []
+    },
+    {
+      "id": "software602-m602-20",
+      "category": "filemanagers",
+      "title": "Manager602 2.0",
+      "language": "cs",
+      "enabled": false,
+      "url": "https://download.sosej.cz/M602.zip",
+      "format": "zip",
+      "target": "TOOLS/M602",
+      "launch": "CD \\TOOLS\\M602 then M602",
+      "license": "Distributed as freeware by https://www.sosej.cz/Software/Jiny-software/Ostatni/M602; original Software602 copyright and help retained.",
+      "description": "Copy, move and inspect DOS files in two panels, browse the directory tree and use built-in viewing tools. Czech Software602 manager with its original help and display resources.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-dos-navigator-2",
+      "language": "en",
+      "category": "filemanagers",
+      "title": "DOS Navigator 2.14 beta",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/apps/dn2.zip",
+      "format": "zip",
+      "target": "TOOLS/DN2",
+      "launch": "CD \\TOOLS\\DN2\\APPS\\DN2 then DN",
+      "license": "DOS Navigator open-source licence, similar to BSD; original licence, documentation and supplied source archives retained.",
+      "description": "Manage two directory panels, work with archives and switch between built-in editors, viewers and tools in DOS Navigator's Turbo Vision desktop.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-doszip",
+      "language": "en",
+      "category": "filemanagers",
+      "title": "DOSZip Commander 2.68",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/apps/doszip.zip",
+      "format": "zip",
+      "target": "TOOLS/DOSZIP",
+      "launch": "CD \\TOOLS\\DOSZIP\\BIN then DZ",
+      "license": "GPL-2.0; complete FreeDOS package, licence and supplied source archive retained.",
+      "description": "Browse two file panels and pack or unpack ZIP archives without leaving the file manager. Includes long-filename support.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-tde",
+      "language": "en",
+      "category": "editors",
+      "title": "Thomson-Davis Editor 5.1w",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/edit/tde.zip",
+      "format": "zip",
+      "target": "TOOLS/TDE",
+      "launch": "CD \\TOOLS\\TDE\\BIN then TDER",
+      "license": "Public domain; complete FreeDOS distribution and documentation retained.",
+      "description": "Edit several text or binary files in separate windows. Use TDER for real-mode DOS, TDEP for protected mode, or TDV to view a file without editing.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-biew",
+      "language": "en",
+      "category": "editors",
+      "title": "BIEW / Beye 6.10a",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/edit/biew.zip",
+      "format": "zip",
+      "target": "TOOLS/BIEW",
+      "launch": "CD \\TOOLS\\BIEW\\BIN then BIEW",
+      "license": "GNU GPL; complete FreeDOS package, licence and supplied sources retained.",
+      "description": "Inspect executable files and edit raw bytes in hexadecimal. This DOS build requires an i686-capable CPU configuration.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-grafx2",
+      "language": "en",
+      "category": "graphics",
+      "title": "GrafX2 2.2",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/apps/grafx2.zip",
+      "format": "zip",
+      "target": "TOOLS/GRAFX2",
+      "launch": "CD \\TOOLS\\GRAFX2\\APPS\\GRAFX2\\BIN then GRAFX2",
+      "license": "GPL-2.0; complete FreeDOS package with original licence and supplied source archive.",
+      "description": "Draw 256-colour bitmap art with brushes, palettes and image effects. A DOS paint workspace rather than a file viewer.",
+      "post_install": []
+    },
+    {
+      "id": "freedos-dosmid",
+      "language": "en",
+      "category": "audio",
+      "title": "DOSMid 0.9.8",
+      "enabled": false,
+      "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/sound/dosmid.zip",
+      "format": "zip",
+      "target": "TOOLS/DOSMID",
+      "launch": "CD \\TOOLS\\DOSMID\\SOUND\\DOSMID then DOSMID",
+      "license": "BSD-2-Clause; complete FreeDOS package, licence, documentation and supplied sources retained.",
+      "description": "Play MIDI, RIFF MIDI and Doom MUS files from DOS through OPL, MPU-401 or other supported synthesizers.",
+      "post_install": []
+    },
+    {
+      "id": "ia-winter-challenge",
+      "language": "en",
+      "category": "games-sports",
+      "title": "Winter Challenge",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_Games_The_-_Winter_Challenge_1991/Games_The_-_Winter_Challenge_1991.zip",
+      "format": "zip",
+      "target": "GAMES/WINTER",
+      "members": [
+        "TGameWnC/WINTER/*"
+      ],
+      "strip_components": 2,
+      "launch": "CD \\GAMES\\WINTER then WINTER",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original game files retained.",
+      "description": "Train or compete in a winter tournament: downhill skiing, biathlon, bobsleigh, ski jumping and skating each need different timing and controls.",
+      "post_install": []
+    },
+    {
+      "id": "ia-summer-challenge",
+      "language": "en",
+      "category": "games-sports",
+      "title": "Summer Challenge",
+      "enabled": false,
+      "url": "https://archive.org/download/summer_challenge_1992/summer.zip",
+      "format": "zip",
+      "target": "GAMES/SUMMER",
+      "members": [
+        "DEFAULT.SGL",
+        "MUSIC.DRV",
+        "SAMPLE.DRV",
+        "SGDEF.BIN",
+        "SUMMER.EXE"
+      ],
+      "launch": "CD \\GAMES\\SUMMER then SUMMER",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original game files retained.",
+      "description": "Compete in summer athletics, cycling and equestrian events, practising individual disciplines or entering a tournament.",
+      "post_install": []
+    },
+    {
+      "id": "ia-lotus-ultimate-challenge",
+      "language": "en",
+      "category": "games-racing",
+      "title": "Lotus: The Ultimate Challenge",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_Lotus_-_The_Ultimate_Challenge_1993/Lotus_-_The_Ultimate_Challenge_1993.zip",
+      "format": "zip",
+      "target": "GAMES/LOTUS",
+      "members": [
+        "LotusThe/*"
+      ],
+      "strip_components": 1,
+      "launch": "CD \\GAMES\\LOTUS then LOTUS",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original game files retained.",
+      "description": "Race Lotus cars through changing weather, create custom tracks and challenge another driver in split-screen arcade races.",
+      "post_install": []
+    },
+    {
+      "id": "ia-duke-nukum-shareware",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Duke Nukum (shareware)",
+      "enabled": false,
+      "url": "https://archive.org/download/duke-nukum1-sw/duke1.zip",
+      "format": "zip",
+      "target": "GAMES/DUKE1",
+      "launch": "CD \\GAMES\\DUKE1 then DN1",
+      "license": "Original Apogee shareware episode; complete distribution documentation and ordering/licence files retained.",
+      "description": "Duke's original EGA adventure pits him against Dr. Proton's robots. Explore city levels, collect power-ups and find the exit; shareware episode 1.",
+      "post_install": []
+    },
+    {
+      "id": "ia-duke-nukem-2-shareware",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Duke Nukem II (shareware)",
+      "enabled": false,
+      "url": "https://archive.org/download/duke-nukem2-sw/duke2.zip",
+      "format": "zip",
+      "target": "GAMES/DUKE2",
+      "launch": "CD \\GAMES\\DUKE2 then NUKEM2",
+      "license": "Original Apogee shareware episode; complete distribution documentation and ordering/licence files retained.",
+      "description": "Fight through alien-filled platform levels with stronger weapons and destructible scenery in Duke's sequel; shareware episode 1.",
+      "post_install": []
+    },
+    {
+      "id": "ia-crystal-caves-shareware",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Crystal Caves (shareware)",
+      "enabled": false,
+      "url": "https://archive.org/download/Crystal-cave-sw1/crystal.zip",
+      "format": "zip",
+      "target": "GAMES/CRYSTAL",
+      "launch": "CD \\GAMES\\CRYSTAL then CC1",
+      "license": "Original Apogee shareware episode; complete distribution documentation and ordering/licence files retained.",
+      "description": "Help Mylo Steamwitz collect every crystal in puzzle-filled mines while avoiding traps and enemies; the first shareware episode.",
+      "post_install": []
+    },
+    {
+      "id": "ia-bio-menace-shareware",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Bio Menace (shareware)",
+      "enabled": false,
+      "url": "https://archive.org/download/biomenace1-sw/bmenace.zip",
+      "format": "zip",
+      "target": "GAMES/BIOMEN1",
+      "launch": "CD \\GAMES\\BIOMEN1 then BMENACE1",
+      "license": "Original Apogee shareware episode; complete distribution documentation and ordering/licence files retained.",
+      "description": "As Snake Logan, rescue hostages and fight mutant creatures in an EGA run-and-gun platform adventure; shareware episode 1.",
+      "post_install": []
+    },
+    {
+      "id": "utils",
+      "required": true,
+      "language": "mul",
+      "category": "archivers",
+      "title": "UTILS — DOS archive tools",
+      "enabled": false,
+      "format": "collection",
+      "target": "UTILS",
+      "description": "DOS command-line archive toolkit: create ZIP, ARJ and 7-Zip archives; unpack RAR, ARJ, LHA, CAB, TAR, GZIP, BZIP2 and ZOO formats.",
+      "archives": [
+        {
+          "title": "unzip",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/unzip.zip",
+          "format": "zip"
+        },
+        {
+          "title": "zip",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/zip.zip",
+          "format": "zip"
+        },
+        {
+          "title": "unrar",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/unrar.zip",
+          "format": "zip"
+        },
+        {
+          "title": "arj",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/arj.zip",
+          "format": "zip"
+        },
+        {
+          "title": "p7zip",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/p7zip.zip",
+          "format": "zip"
+        },
+        {
+          "title": "cabext",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/cabext.zip",
+          "format": "zip"
+        },
+        {
+          "title": "gzip",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/gzip.zip",
+          "format": "zip"
+        },
+        {
+          "title": "bz2",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/bz2.zip",
+          "format": "zip"
+        },
+        {
+          "title": "lha",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/lha.zip",
+          "format": "zip"
+        },
+        {
+          "title": "tar",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/tar.zip",
+          "format": "zip"
+        },
+        {
+          "title": "zoo",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/zoo.zip",
+          "format": "zip"
+        },
+        {
+          "title": "CWSDPMI runtime",
+          "url": "https://www.delorie.com/pub/djgpp/current/v2misc/csdpmi7b.zip",
+          "format": "zip"
+        },
+        {
+          "title": "CWSDPMI source",
+          "url": "https://www.delorie.com/pub/djgpp/current/v2misc/csdpmi7s.zip",
+          "format": "zip"
+        },
+        {
+          "title": "UnARJ 2.41",
+          "file": "UNARJ241.EXE",
+          "format": "archive",
+          "target": "UNARJ",
+          "retain_archive": "SOURCE/UNARJ/UNARJ241.EXE"
+        }
+      ],
+      "post_install": [
+        "@ECHO OFF",
+        "IF NOT EXIST BIN MD BIN",
+        "COPY ARCHIVER\\UNRAR\\UNRAR.EXE BIN\\UNRAR.EXE >NUL",
+        "COPY ARCHIVER\\LHA\\LHA.EXE BIN\\LHA.EXE >NUL",
+        "COPY ARCHIVER\\P7ZIP\\P7ZIP.EXE BIN\\7ZA.EXE >NUL",
+        "COPY ARCHIVER\\P7ZIP\\P7ZIPR.EXE BIN\\7ZR.EXE >NUL",
+        "COPY UNARJ\\UNARJ.EXE BIN\\UNARJ.EXE >NUL"
+      ],
+      "launch": "CD \\UTILS\\BIN then ZIP, UNZIP, UNRAR, UNARJ, ARJ or 7ZA",
+      "license": "Info-ZIP, GPL/LGPL, public-domain and original UnRAR/UnARJ terms; complete licence documents and provided sources retained. No RAR compressor or registered keys included"
+    },
+    {
       "id": "freedos-edit",
+      "language": "en",
+      "title": "FreeDOS EDIT",
+      "category": "editors",
       "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.3/base/edit.zip",
       "format": "zip",
       "target": "FREEDOS",
-      "members": ["BIN/*", "DOC/EDIT/*", "SOURCE/EDIT/*", "APPINFO/EDIT.LSM"],
-      "license": "FreeDOS EDIT (GPL-2.0); package includes COPYING and source archive"
+      "members": [
+        "BIN/*",
+        "DOC/EDIT/*",
+        "SOURCE/EDIT/*",
+        "APPINFO/EDIT.LSM"
+      ],
+      "license": "FreeDOS EDIT (GPL-2.0); package includes COPYING and source archive",
+      "description": "Edit AUTOEXEC.BAT, configuration files and source code in FreeDOS's menu-driven text editor.",
+      "post_install": []
     },
     {
       "id": "volkov-commander-405",
+      "required": true,
+      "language": "en",
+      "category": "filemanagers",
       "title": "Volkov Commander 4.05",
       "url": "https://vc.vvv.kyiv.ua/download/vc405sw.zip",
       "format": "zip",
       "target": "TOOLS/VC",
       "files": [
-        {"path": "START.BAT", "text": ["@ECHO OFF", "CD \\TOOLS\\VC", "VC"]}
+        {
+          "path": "LICENSE.TXT",
+          "text": [
+            "Copyright 1991-2000 Vsevolod V. Volkov",
+            "",
+            "Redistribution  and  use  in  source  and  binary  forms, with or",
+            "without   modification,   are   permitted   provided   that   the",
+            "following conditions are met:",
+            "",
+            "1. Redistributions of source code must retain the above copyright",
+            "notice, this list of conditions and the following disclaimer.",
+            "",
+            "2. Redistributions  in  binary  form  must  reproduce  the  above",
+            "copyright  notice, this  list  of  conditions  and  the following",
+            "disclaimer  in  the documentation and/or other materials provided",
+            "with the distribution.",
+            "",
+            "THIS   SOFTWARE   IS   PROVIDED  BY  THE  COPYRIGHT  HOLDERS  AND",
+            "CONTRIBUTORS 'AS  IS' AND  ANY  EXPRESS  OR  IMPLIED  WARRANTIES,",
+            "INCLUDING,  BUT  NOT  LIMITED  TO,  THE  IMPLIED  WARRANTIES   OF",
+            "MERCHANTABILITY   AND   FITNESS  FOR  A  PARTICULAR  PURPOSE  ARE",
+            "DISCLAIMED.   IN   NO   EVENT   SHALL  THE  COPYRIGHT  HOLDER  OR",
+            "CONTRIBUTORS  BE  LIABLE  FOR  ANY  DIRECT, INDIRECT, INCIDENTAL,",
+            "SPECIAL, EXEMPLARY, OR  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT",
+            "LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;  LOSS OF",
+            "USE, DATA, OR PROFITS; OR  BUSINESS I NTERRUPTION) HOWEVER CAUSED",
+            "AND  ON  ANY  THEORY  OF  LIABILITY, WHETHER  IN CONTRACT, STRICT",
+            "LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN",
+            "ANY  WAY  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE",
+            "POSSIBILITY OF SUCH DAMAGE."
+          ]
+        },
+        {
+          "path": "START.BAT",
+          "text": [
+            "@ECHO OFF",
+            "CD \\TOOLS\\VC",
+            "VC"
+          ]
+        }
       ],
-      "members": ["*.COM", "*.HLP", "*.INI", "*.EXT", "*.MNU", "*.TXT"],
+      "members": [
+        "*.COM",
+        "*.HLP",
+        "*.INI",
+        "*.EXT",
+        "*.MNU",
+        "*.TXT"
+      ],
       "launch": "CD \\TOOLS\\VC then VC",
-      "license": "BSD-2-Clause release on the author's site; licence included by volkov-commander-405-source"
-    },
-    {
-      "id": "volkov-commander-405-source",
-      "title": "Volkov Commander source and BSD licence",
-      "url": "https://vc.vvv.kyiv.ua/download/src/vc405.zip",
-      "format": "zip",
-      "target": "SOURCE/VC",
-      "members": ["*"],
-      "license": "BSD-2-Clause; includes LICENSE.TXT and original assembly source"
+      "license": "BSD-2-Clause release on the author's site; original copyright, conditions and disclaimer retained as LICENSE.TXT.",
+      "description": "A small, two-panel DOS file manager for copying, moving and comparing files, with configurable menus and file associations.",
+      "post_install": []
     },
     {
       "id": "norton-commander-40",
+      "language": "en",
+      "category": "filemanagers",
       "title": "Norton Commander 4.0",
       "enabled": false,
       "url": "https://winworldpc.com/download/4627e280-9ec2-b518-c39a-11c3a4e284a2/from/c3ae6ee2-8099-713d-3411-c3a6e280947e",
@@ -79,180 +800,969 @@
       "image_member": "Norton Commander 4.0 (3.5)/disk1.img",
       "target": "TOOLS/NC",
       "launch": "CD \\TOOLS\\NC then NC",
-      "license": "Commercial Symantec software; enable only with redistribution permission"
+      "license": "Commercial Symantec software; enable only with redistribution permission",
+      "description": "The classic two-panel file manager for navigating drives and organising files. Includes Norton Commander's own menus and online help.",
+      "post_install": []
+    },
+    {
+      "id": "borland-turbo-pascal-302",
+      "language": "en",
+      "category": "development",
+      "title": "Borland Turbo Pascal 3.02",
+      "enabled": false,
+      "url": "https://altd.embarcadero.com/download/museum/tp302.zip",
+      "format": "zip",
+      "target": "DEV/TP302",
+      "launch": "CD \\DEV\\TP302 then TURBO",
+      "license": "Original Borland/Embarcadero Museum download; historical freeware release, not public domain. All original files retained",
+      "description": "Write and compile Pascal programs in the early integrated Turbo editor. Includes the original example programs.",
+      "post_install": []
+    },
+    {
+      "id": "borland-turbo-pascal-55",
+      "language": "en",
+      "category": "development",
+      "title": "Borland Turbo Pascal 5.5",
+      "enabled": false,
+      "url": "https://altd.embarcadero.com/download/museum/tp55.zip",
+      "format": "zip",
+      "target": "DEV/TP55",
+      "launch": "CD \\DEV\\TP55\\BIN then TURBO or TPC",
+      "license": "Original Borland/Embarcadero Museum download; historical freeware release, not public domain. All original files retained",
+      "description": "Build Object Pascal programs with the Turbo IDE or TPC compiler. Includes object-oriented examples, online help and BGI graphics.",
+      "post_install": [],
+      "extract": [
+        {
+          "members": [
+            "Disk1/TURBO.EXE",
+            "Disk1/TPC.EXE",
+            "Disk1/TURBO.TPL",
+            "Disk1/THELP.COM"
+          ],
+          "target": "BIN",
+          "strip_components": 1
+        },
+        {
+          "members": [
+            "Disk1/README"
+          ],
+          "target": "DOC",
+          "strip_components": 1
+        },
+        {
+          "archive": "Disk1/HELP.ARC",
+          "format": "archive",
+          "target": "BIN"
+        },
+        {
+          "archive": "Disk2/UTILS.ARC",
+          "format": "archive",
+          "target": "BIN"
+        },
+        {
+          "archive": "Disk2/BGI.ARC",
+          "format": "archive",
+          "target": "BGI"
+        },
+        {
+          "archive": "Disk2/DEMOS.ARC",
+          "format": "archive",
+          "target": "DEMOS"
+        },
+        {
+          "archive": "Disk2/OOPDEMOS.ARC",
+          "format": "archive",
+          "target": "DEMOS/OOP"
+        },
+        {
+          "archive": "Disk2/DOC.ARC",
+          "format": "archive",
+          "target": "DOC"
+        },
+        {
+          "archive": "Disk2/TCALC.ARC",
+          "format": "archive",
+          "target": "DEMOS/TCALC"
+        },
+        {
+          "archive": "Disk1/TOUR.ARC",
+          "format": "archive",
+          "target": "TOUR"
+        },
+        {
+          "archive": "Disk2/TURBO3.ARC",
+          "format": "archive",
+          "target": "TURBO3"
+        }
+      ]
+    },
+    {
+      "id": "borland-turbo-c-201",
+      "language": "en",
+      "category": "development",
+      "title": "Borland Turbo C 2.01",
+      "enabled": false,
+      "url": "https://altd.embarcadero.com/download/museum/tc201.zip",
+      "format": "zip",
+      "target": "DEV/TC201",
+      "launch": "CD \\DEV\\TC201\\BIN then TC or TCC",
+      "license": "Original Borland/Embarcadero Museum download; historical freeware release, not public domain. All original files retained",
+      "description": "Develop C programs with the TC IDE or TCC command-line compiler. Includes headers, libraries, BGI graphics and sample C programs.",
+      "post_install": [
+        "@ECHO OFF",
+        "ECHO -IC:\\DEV\\TC201\\INCLUDE>BIN\\TURBOC.CFG",
+        "ECHO -LC:\\DEV\\TC201\\LIB>>BIN\\TURBOC.CFG"
+      ],
+      "extract": [
+        {
+          "members": [
+            "Disk*/*.COM",
+            "Disk1/TCHELP.TCH",
+            "Disk2/*.EXE"
+          ],
+          "target": "BIN",
+          "strip_components": 1
+        },
+        {
+          "members": [
+            "Disk*/*.H"
+          ],
+          "target": "INCLUDE",
+          "strip_components": 1
+        },
+        {
+          "members": [
+            "Disk*/*.LIB",
+            "Disk*/*.OBJ"
+          ],
+          "target": "LIB",
+          "strip_components": 1
+        },
+        {
+          "members": [
+            "Disk*/README",
+            "Disk*/*.DOC"
+          ],
+          "target": "DOC",
+          "strip_components": 1
+        },
+        {
+          "archive": "Disk1/BGI.ARC",
+          "format": "archive",
+          "target": "BGI"
+        },
+        {
+          "archive": "Disk1/EXAMPLES.ARC",
+          "format": "archive",
+          "target": "EXAMPLES"
+        },
+        {
+          "archive": "Disk1/STARTUP.ARC",
+          "format": "archive",
+          "target": "SOURCE"
+        },
+        {
+          "archive": "Disk1/MCALC.ARC",
+          "format": "archive",
+          "target": "EXAMPLES/MCALC"
+        }
+      ]
+    },
+    {
+      "id": "borland-turbo-cpp-101",
+      "language": "en",
+      "category": "development",
+      "title": "Borland Turbo C++ 1.01",
+      "enabled": false,
+      "url": "https://altd.embarcadero.com/download/museum/tcpp101.zip",
+      "format": "zip",
+      "target": "DEV/TCPP101",
+      "launch": "CD \\DEV\\TCPP101\\BIN then TC or TCC",
+      "license": "Original Borland/Embarcadero Museum download; historical freeware release, not public domain. All original files retained",
+      "description": "Explore early C++ with Borland's IDE and compiler, class libraries, startup sources and example programs.",
+      "post_install": [
+        "@ECHO OFF",
+        "ECHO -IC:\\DEV\\TCPP101\\INCLUDE>BIN\\TURBOC.CFG",
+        "ECHO -LC:\\DEV\\TCPP101\\LIB>>BIN\\TURBOC.CFG"
+      ],
+      "extract": [
+        {
+          "members": [
+            "README",
+            "FILELIST.DOC"
+          ],
+          "target": "DOC"
+        },
+        {
+          "archive": "BIN1.ZIP",
+          "format": "archive",
+          "target": "BIN"
+        },
+        {
+          "archive": "BIN2.ZIP",
+          "format": "archive",
+          "target": "BIN"
+        },
+        {
+          "archive": "TCC.ZIP",
+          "format": "archive",
+          "target": "BIN"
+        },
+        {
+          "archive": [
+            "TC.CA1",
+            "TC.CA2"
+          ],
+          "format": "borland-split",
+          "target": "BIN"
+        },
+        {
+          "archive": [
+            "HELP.CA1",
+            "HELP.CA2"
+          ],
+          "format": "borland-split",
+          "target": "BIN"
+        },
+        {
+          "archive": "CLIB.ZIP",
+          "format": "archive",
+          "target": "LIB"
+        },
+        {
+          "archive": "SLIB.ZIP",
+          "format": "archive",
+          "target": "LIB"
+        },
+        {
+          "archive": "HLIB.ZIP",
+          "format": "archive",
+          "target": "LIB"
+        },
+        {
+          "archive": "LLIB.ZIP",
+          "format": "archive",
+          "target": "LIB"
+        },
+        {
+          "archive": "MLIB.ZIP",
+          "format": "archive",
+          "target": "LIB"
+        },
+        {
+          "archive": "XLIB.ZIP",
+          "format": "archive",
+          "target": "LIB"
+        },
+        {
+          "archive": "CLASSLIB.ZIP",
+          "format": "archive",
+          "target": "LIB"
+        },
+        {
+          "archive": "INCLUDE.ZIP",
+          "format": "archive",
+          "target": "INCLUDE"
+        },
+        {
+          "archive": "CLASSINC.ZIP",
+          "format": "archive",
+          "target": "INCLUDE"
+        },
+        {
+          "archive": "CLASSSRC.ZIP",
+          "format": "archive",
+          "target": "SOURCE/CLASSES"
+        },
+        {
+          "archive": "STARTUP.ZIP",
+          "format": "archive",
+          "target": "SOURCE"
+        },
+        {
+          "archive": "CLASSEXM.ZIP",
+          "format": "archive",
+          "target": "EXAMPLES/CLASSES"
+        },
+        {
+          "archive": "EXAMPLES.ZIP",
+          "format": "archive",
+          "target": "EXAMPLES"
+        },
+        {
+          "archive": "BGI.ZIP",
+          "format": "archive",
+          "target": "BGI"
+        },
+        {
+          "archive": "TCALC.ZIP",
+          "format": "archive",
+          "target": "EXAMPLES/TCALC"
+        },
+        {
+          "archive": "TOUR.ZIP",
+          "format": "archive",
+          "target": "TOUR"
+        },
+        {
+          "archive": "DOC.ZIP",
+          "format": "archive",
+          "target": "DOC"
+        }
+      ]
+    },
+    {
+      "id": "thunderbyte-803",
+      "language": "en",
+      "category": "antivirus",
+      "title": "ThunderBYTE 8.03 (evaluation)",
+      "enabled": false,
+      "url": "https://dosdays.co.uk/media/anti_virus/tbdos803.zip",
+      "format": "zip",
+      "target": "TOOLS/TBAV",
+      "launch": "CD \\TOOLS\\TBAV then TBAV",
+      "license": "ESaSS LICENSE.TXT permits free redistribution of the complete, unchanged evaluation package. Not freeware; no registered keys included",
+      "notes": "Original evaluation utilities and documentation retained without modifications. Historical definitions only; not protection for the host or current malware",
+      "description": "Historical antivirus evaluation tools for scanning DOS files and investigating old malware. Not protection for today's host system.",
+      "post_install": []
+    },
+    {
+      "id": "norton-antivirus-michelangelo",
+      "language": "en",
+      "category": "antivirus",
+      "title": "Norton AntiVirus (Michelangelo)",
+      "enabled": false,
+      "url": "https://dosdays.co.uk/media/norton/navm.zip",
+      "format": "zip",
+      "target": "TOOLS/NAVM",
+      "launch": "CD \\TOOLS\\NAVM then NAV",
+      "license": "Original free Michelangelo-specific edition distributed by Symantec; complete NAV.EXE/NAV.DAT/NAV.HLP/READ.ME package, not the commercial full version",
+      "notes": "Historical single-virus tool, not current antivirus protection",
+      "description": "Symantec's limited Michelangelo-specific scanner, with its original data file and help. Not the full commercial Norton AntiVirus suite.",
+      "post_install": []
     },
     {
       "id": "bog-prince-of-persia",
+      "language": "en",
+      "category": "games-platform",
       "title": "Prince of Persia",
       "url": "https://www.bestoldgames.net/prince-of-persia",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["PRINCE/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "PRINCE/*"
+      ],
       "launch": "CD \\GAMES\\PRINCE then PRINCE",
-      "license": ""
+      "license": "",
+      "description": "Escape the palace before time runs out. Precise jumps, traps and sword duels stand between the prince and the princess.",
+      "post_install": []
     },
     {
       "id": "bog-wolfenstein-3d",
-      "title": "Wolfenstein 3D (shareware episode)",
+      "language": "en",
+      "category": "games-action",
+      "title": "Wolfenstein 3D (shareware)",
       "url": "https://www.bestoldgames.net/wolfenstein-3d",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["WOLF3D/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "WOLF3D/*"
+      ],
       "launch": "CD \\GAMES\\WOLF3D then WOLF3D",
-      "license": "Original shareware WL1 episode; retain VENDOR.DOC and ORDER.FRM"
+      "license": "Original shareware WL1 episode; retain VENDOR.DOC and ORDER.FRM",
+      "description": "Explore a Nazi fortress in first person, finding keys, secret rooms and supplies while fighting guards; the original shareware episode.",
+      "post_install": []
     },
     {
       "id": "bog-doom",
+      "language": "en",
+      "category": "games-action",
       "title": "DOOM (shareware episode)",
       "url": "https://www.bestoldgames.net/doom",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["DOOM/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "DOOM/*"
+      ],
       "launch": "CD \\GAMES\\DOOM then DOOM",
       "notes": "Run SETUP to enable Sound Blaster music and effects (port 220, IRQ 7, DMA 1); the archive's DEFAULT.CFG disables both",
-      "license": "Original shareware DOOM1.WAD episode, not the registered/commercial WAD"
+      "license": "Original shareware DOOM1.WAD episode, not the registered/commercial WAD",
+      "description": "Battle demons through the first DOOM episode using weapons, keys and hidden passages. Run SETUP to choose sound hardware.",
+      "post_install": []
     },
     {
       "id": "bog-battle-chess",
+      "language": "en",
+      "category": "games-strategy",
       "title": "Battle Chess",
       "url": "https://www.bestoldgames.net/battle-chess",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["BATCHESS/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "BATCHESS/*"
+      ],
       "launch": "CD \\GAMES\\BATCHESS then CHESS",
-      "license": ""
+      "license": "",
+      "description": "Play chess against the computer or another player, with animated battles whenever a piece is captured.",
+      "post_install": []
     },
     {
       "id": "bog-commander-keen",
+      "language": "en",
+      "category": "games-platform",
       "title": "Commander Keen 1 (shareware)",
       "url": "https://www.bestoldgames.net/commander-keen",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["KEEN1/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "KEEN1/*"
+      ],
       "launch": "CD \\GAMES\\KEEN1 then KEEN1",
-      "license": "Original shareware episode; duplicate root copy excluded, KEEN1.DOC and order files retained"
+      "license": "Original shareware episode; duplicate root copy excluded, KEEN1.DOC and order files retained",
+      "description": "Help Billy Blaze recover his spaceship parts on Mars, using a raygun and pogo stick; Commander Keen's first shareware episode.",
+      "post_install": []
+    },
+    {
+      "id": "ia-cannon-fodder",
+      "language": "en",
+      "category": "games-action",
+      "title": "Cannon Fodder",
+      "enabled": false,
+      "url": "https://archive.org/download/cannon-fodder.-7z/Cannon%20Fodder.7z",
+      "format": "archive",
+      "target": "GAMES/CANNON",
+      "extract": [
+        {
+          "members": [
+            "Cannon Fodder/_dosbox/_gamefiles/*"
+          ],
+          "strip_components": 3
+        },
+        {
+          "members": [
+            "Cannon Fodder/docs/*"
+          ],
+          "target": "DOC",
+          "strip_components": 2
+        }
+      ],
+      "files": [
+        {
+          "path": "START.BAT",
+          "text": [
+            "@ECHO OFF",
+            "CD \\GAMES\\CANNON",
+            "CF_ENG.EXE /F"
+          ]
+        }
+      ],
+      "launch": "CD \\GAMES\\CANNON then START",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original package documentation is retained.",
+      "description": "Lead a small squad through rescue and combat missions. Split teams, use vehicles and explosives, and keep experienced soldiers alive.",
+      "post_install": []
+    },
+    {
+      "id": "ia-cannon-fodder-2",
+      "language": "en",
+      "category": "games-action",
+      "title": "Cannon Fodder 2",
+      "enabled": false,
+      "url": "https://archive.org/download/cannon-fodder-2.7z/Cannon%20Fodder%202.7z",
+      "format": "archive",
+      "target": "GAMES/CANNON2",
+      "extract": [
+        {
+          "members": [
+            "Cannon Fodder 2/_dosbox/_gamefiles/*"
+          ],
+          "strip_components": 3
+        },
+        {
+          "members": [
+            "Cannon Fodder 2/docs/*"
+          ],
+          "target": "DOC",
+          "strip_components": 2
+        }
+      ],
+      "launch": "CD \\GAMES\\CANNON2 then CANNON",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original package documentation is retained.",
+      "description": "Command the squad across historical and alien battlefields in the tactical-action sequel. Balance direct shooting with team movement and limited supplies.",
+      "post_install": []
+    },
+    {
+      "id": "ia-commander-keen-2",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Commander Keen 2",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_Commander_Keen_2_-_The_Earth_Explodes_1990/Commander_Keen_2_-_The_Earth_Explodes_1990.zip",
+      "format": "zip",
+      "target": "GAMES/KEEN2",
+      "members": [
+        "CKeen2/*"
+      ],
+      "strip_components": 1,
+      "launch": "CD \\GAMES\\KEEN2 then KEEN2",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original package documentation is retained.",
+      "description": "Board the Vorticon mothership and disable the weapons aimed at Earth. The second Invasion of the Vorticons episode.",
+      "post_install": []
+    },
+    {
+      "id": "ia-commander-keen-3",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Commander Keen 3",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_Commander_Keen_3_-_Keen_Must_Die_1990/Commander_Keen_3_-_Keen_Must_Die_1990.zip",
+      "format": "zip",
+      "target": "GAMES/KEEN3",
+      "members": [
+        "CKeen3/*"
+      ],
+      "strip_components": 1,
+      "launch": "CD \\GAMES\\KEEN3 then KEEN3",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original package documentation is retained.",
+      "description": "Explore Vorticon VI and confront the Grand Intellect in the final Invasion of the Vorticons episode.",
+      "post_install": []
+    },
+    {
+      "id": "ia-commander-keen-4",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Commander Keen 4 (shareware)",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_Commander_Keen_4_-_Secret_of_the_Oracle_1991/Commander_Keen_4_-_Secret_of_the_Oracle_1991.zip",
+      "format": "zip",
+      "target": "GAMES/KEEN4",
+      "members": [
+        "CKeen4/*"
+      ],
+      "strip_components": 1,
+      "launch": "CD \\GAMES\\KEEN4 then KEEN4E",
+      "license": "Original shareware release; original documentation and distribution files retained.",
+      "description": "Search Gnosticus IV and rescue the eight Oracle Council members in the first Goodbye, Galaxy! episode; shareware.",
+      "post_install": []
+    },
+    {
+      "id": "ia-commander-keen-5",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Commander Keen 5",
+      "enabled": false,
+      "url": "https://archive.org/download/keen-5-e/Keen5E.zip",
+      "format": "zip",
+      "target": "GAMES/KEEN5",
+      "members": [
+        "Keen5E/KEEN5E/*"
+      ],
+      "strip_components": 2,
+      "launch": "CD \\GAMES\\KEEN5 then KEEN5E",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original package documentation is retained.",
+      "description": "Infiltrate the Shikadi space station and stop the Omegamatic in the second Goodbye, Galaxy! episode.",
+      "post_install": []
+    },
+    {
+      "id": "ia-commander-keen-6",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Commander Keen 6",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_Commander_Keen_6_-_Aliens_Ate_My_Baby_Sitter_1991/Commander_Keen_6_-_Aliens_Ate_My_Baby_Sitter_1991.zip",
+      "format": "zip",
+      "target": "GAMES/KEEN6",
+      "members": [
+        "CKeen6/*"
+      ],
+      "strip_components": 1,
+      "launch": "CD \\GAMES\\KEEN6 then KEEN6C",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original package documentation is retained.",
+      "description": "Travel across Fribbulus Xax to rescue Keen's babysitter from the Bloogs in the sixth DOS episode.",
+      "post_install": []
+    },
+    {
+      "id": "ia-commander-keen-dreams",
+      "language": "en",
+      "category": "games-platform",
+      "title": "Keen Dreams (shareware)",
+      "enabled": false,
+      "url": "https://archive.org/download/CommanderKeenKeenDreams/CommanderKeenInKeenDreamsV1.13Egasw1992softdiskPublishingaction.ZIP",
+      "format": "zip",
+      "target": "GAMES/KDREAMS",
+      "launch": "CD \\GAMES\\KDREAMS then KDREAMS",
+      "license": "Original shareware release; original documentation and distribution files retained.",
+      "description": "Escape a vegetable kingdom and defeat Boobus Tuber using flower-power projectiles. The original DOS dream adventure, not a modern remake.",
+      "post_install": []
+    },
+    {
+      "id": "ia-catacomb",
+      "language": "en",
+      "category": "games-action",
+      "title": "Catacomb",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_Catacomb_1990/Catacomb_1990.zip",
+      "format": "zip",
+      "target": "GAMES/CATACOMB",
+      "members": [
+        "Catacomb/*"
+      ],
+      "strip_components": 1,
+      "launch": "CD \\GAMES\\CATACOMB then CATACOMB",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original package documentation is retained.",
+      "description": "A top-down maze adventure: find keys and treasure, then clear a path through monsters with magical fireballs.",
+      "post_install": []
+    },
+    {
+      "id": "ia-catacomb-2",
+      "language": "en",
+      "category": "games-action",
+      "title": "Catacomb II",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_Catacomb_II_1991/Catacomb_II_1991.zip",
+      "format": "zip",
+      "target": "GAMES/CATACOM2",
+      "members": [
+        "Cataco2/*"
+      ],
+      "strip_components": 1,
+      "launch": "CD \\GAMES\\CATACOM2 then CATACOMB",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original package documentation is retained.",
+      "description": "Return to top-down maze exploration with new rooms, treasure and magical combat in Catacomb's sequel.",
+      "post_install": []
+    },
+    {
+      "id": "ia-catacomb-3d",
+      "language": "en",
+      "category": "games-action",
+      "title": "Catacomb 3-D",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_Catacomb_3-D_1992/Catacomb_3-D_1992.zip",
+      "format": "zip",
+      "target": "GAMES/CAT3D",
+      "members": [
+        "Cataco3D/*"
+      ],
+      "strip_components": 1,
+      "launch": "CD \\GAMES\\CAT3D then CAT3D",
+      "license": "Commercial DOS game; redistribution requires the operator's permission. Original package documentation is retained.",
+      "description": "See the catacombs through wizard Petton Everhail's eyes. An early EGA first-person action game with spell-based combat.",
+      "post_install": []
+    },
+    {
+      "id": "ia-catacomb-abyss",
+      "language": "en",
+      "category": "games-action",
+      "title": "The Catacomb Abyss (shareware)",
+      "enabled": false,
+      "url": "https://archive.org/download/msdos_The_Catacomb_Abyss_1992/The_Catacomb_Abyss_1992.zip",
+      "format": "zip",
+      "target": "GAMES/CATABYSS",
+      "members": [
+        "TheCatac/*"
+      ],
+      "strip_components": 1,
+      "launch": "CD \\GAMES\\CATABYSS then CATABYSS",
+      "license": "Original shareware release; original documentation and distribution files retained.",
+      "description": "Enter graveyards, crypts and catacombs in a first-person fantasy adventure, fighting monsters with magical missiles; shareware.",
+      "post_install": []
     },
     {
       "id": "bog-color-lines",
+      "language": "und",
+      "category": "games-puzzle",
       "title": "Color Lines",
       "url": "https://www.bestoldgames.net/color-lines",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["COLORLIN/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "COLORLIN/*"
+      ],
       "launch": "CD \\GAMES\\COLORLIN then LINES",
-      "license": "Gamos game; deployment administrator confirms permission to provide full versions"
+      "license": "Gamos game; deployment administrator confirms permission to provide full versions",
+      "description": "Place coloured balls into complete lines to clear space. Every move must leave room for the next balls to appear.",
+      "post_install": []
     },
     {
       "id": "bog-lemmings",
+      "language": "en",
+      "category": "games-puzzle",
       "title": "Lemmings",
       "url": "https://ia800806.us.archive.org/16/items/msdos_Lemmings_1991/Lemmings_1991.zip",
-      "format": "zip", "target": "GAMES", "members": ["LEMMINGS/*"],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "LEMMINGS/*"
+      ],
       "launch": "CD \\GAMES\\LEMMINGS then LEMMINGS",
       "notes": "DOS release from Internet Archive; the BestOldGames archive contains a Windows executable instead",
-      "license": ""
+      "license": "",
+      "description": "Assign workers to dig, climb, build or block paths so that enough lemmings reach the exit without falling into traps.",
+      "post_install": []
     },
     {
       "id": "bog-lost-vikings",
+      "language": "en",
+      "category": "games-platform",
       "title": "The Lost Vikings",
       "url": "https://www.bestoldgames.net/lost-vikings",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["LOSTVIKI/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "LOSTVIKI/*"
+      ],
       "launch": "CD \\GAMES\\LOSTVIKI then SETUP",
       "notes": "Run the original SETUP first, then VIKINGS; the unconfigured game reports copy protection failure",
-      "license": ""
+      "license": "",
+      "description": "Switch between three Vikings with complementary abilities and guide all of them through each platform puzzle. Run SETUP first.",
+      "post_install": []
     },
     {
       "id": "bog-quadrax",
+      "language": "sk",
+      "category": "games-puzzle",
       "title": "Quadrax",
       "url": "https://www.bestoldgames.net/quadrax",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["QUADRAX/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "QUADRAX/*"
+      ],
       "launch": "CD \\GAMES\\QUADRAX then QUADRAX",
-      "license": ""
+      "license": "",
+      "description": "Coordinate two explorers to move blocks, operate mechanisms and open a route out of each logic-puzzle room.",
+      "post_install": []
     },
     {
       "id": "bog-supaplex",
+      "language": "en",
+      "category": "games-puzzle",
       "title": "Supaplex",
       "url": "https://www.bestoldgames.net/supaplex",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["SUPAPLEX/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "SUPAPLEX/*"
+      ],
       "launch": "CD \\GAMES\\SUPAPLEX then SPFIX63",
-      "license": "Supaplex package includes SPFIX63 and its documentation; deployment permission confirmed by administrator"
+      "license": "Supaplex package includes SPFIX63 and its documentation; deployment permission confirmed by administrator",
+      "description": "Guide Murphy through circuit-board mazes, collecting Infotrons while avoiding enemies, falling objects and blocked routes.",
+      "post_install": []
     },
     {
       "id": "bog-tetris",
+      "language": "und",
+      "category": "games-puzzle",
       "title": "Tetris",
       "url": "https://www.bestoldgames.net/tetris",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["TETRIS/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "TETRIS/*"
+      ],
       "launch": "CD \\GAMES\\TETRIS then TETRIS",
-      "license": ""
+      "license": "",
+      "description": "Rotate and place falling tetrominoes to complete horizontal lines before the stack reaches the top.",
+      "post_install": []
     },
     {
       "id": "bog-incredible-machine",
-      "title": "The Incredible Machine (interactive demo)",
+      "language": "en",
+      "category": "games-puzzle",
+      "title": "The Incredible Machine (demo)",
       "url": "https://www.bestoldgames.net/the-incredible-machine",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["TIM/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "TIM/*"
+      ],
       "launch": "CD \\GAMES\\TIM then TIM",
-      "license": "Interactive demo, confirmed in TIM/TIM.TXT; this source does not provide the full game"
+      "license": "Interactive demo, confirmed in TIM/TIM.TXT; this source does not provide the full game",
+      "description": "Try physics-based construction puzzles by combining everyday objects into working contraptions; an interactive demo.",
+      "post_install": []
     },
     {
       "id": "bog-incredible-machine-2",
+      "language": "en",
+      "category": "games-puzzle",
       "title": "The Incredible Machine 2",
       "url": "https://www.bestoldgames.net/the-incredible-machine-2",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["TIM2/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "TIM2/*"
+      ],
       "launch": "CD \\GAMES\\TIM2 then TIM2",
-      "license": ""
+      "license": "",
+      "description": "Solve construction puzzles by arranging machines, gadgets and other objects into chain reactions that complete each task.",
+      "post_install": []
     },
     {
       "id": "bog-formula-one-grand-prix",
+      "language": "en",
+      "category": "games-racing",
       "title": "Formula One Grand Prix",
       "url": "https://www.bestoldgames.net/formula-one-grand-prix",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["F1GP/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "F1GP/*"
+      ],
       "launch": "CD \\GAMES\\F1GP then GP",
-      "license": ""
+      "license": "",
+      "description": "MicroProse's Formula One simulator combines car setup, practice sessions and circuit racing rather than arcade-style road driving.",
+      "post_install": []
     },
     {
       "id": "bog-grand-prix-2",
+      "language": "en",
+      "category": "games-racing",
       "title": "Grand Prix 2",
       "url": "https://www.bestoldgames.net/grand-prix-2",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["GP2/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "GP2/*"
+      ],
       "launch": "CD \\GAMES\\GP2 then GP2",
-      "license": ""
+      "license": "",
+      "description": "Drive the cars and circuits of the 1994 Formula One season in MicroProse's successor to Formula One Grand Prix.",
+      "post_install": []
     },
     {
       "id": "bog-ironman-super-offroad",
+      "language": "en",
+      "category": "games-racing",
       "title": "Ironman Super Off Road",
       "url": "https://www.bestoldgames.net/ironman-super-offroad",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["IRONMAN/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "IRONMAN/*"
+      ],
       "launch": "CD \\GAMES\\IRONMAN then IRONMAN",
-      "license": ""
+      "license": "",
+      "description": "Race off-road trucks around compact top-down tracks, taking jumps, collecting upgrades and competing simultaneously.",
+      "post_install": []
     },
     {
       "id": "bog-lamborghini",
+      "language": "en",
+      "category": "games-racing",
       "title": "Lamborghini: American Challenge",
       "url": "https://www.bestoldgames.net/lamborghini-american-challenge",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["LAC/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "LAC/*"
+      ],
       "launch": "CD \\GAMES\\LAC then LAC",
-      "license": ""
+      "license": "",
+      "description": "Drive a Lamborghini through arcade road races across American cities and highways.",
+      "post_install": []
     },
     {
       "id": "bog-dungeon-master",
+      "language": "en",
+      "category": "games-rpg",
       "title": "Dungeon Master",
       "url": "https://www.bestoldgames.net/dungeon-master",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["DMASTER/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "DMASTER/*"
+      ],
       "launch": "CD \\GAMES\\DMASTER then DM",
-      "license": ""
+      "license": "",
+      "description": "Guide a party through a first-person dungeon, combining real-time combat, spell casting and environmental puzzles.",
+      "post_install": []
     },
     {
       "id": "bog-dungeon-master-2",
+      "language": "en",
+      "category": "games-rpg",
       "title": "Dungeon Master 2: Skullkeep",
       "url": "https://www.bestoldgames.net/dungeon-master-2",
-      "download_forms": ["form#form-download", "form.do-download"],
-      "format": "zip", "target": "GAMES", "members": ["DMASTER2/*"],
+      "download_forms": [
+        "form#form-download",
+        "form.do-download"
+      ],
+      "format": "zip",
+      "target": "GAMES",
+      "members": [
+        "DMASTER2/*"
+      ],
       "launch": "CD \\GAMES\\DMASTER2 then DM2",
-      "license": ""
+      "license": "",
+      "description": "Return to party-based dungeon exploration in Skullkeep, solving mechanisms and combining combat with magic.",
+      "post_install": []
     }
   ]
 }

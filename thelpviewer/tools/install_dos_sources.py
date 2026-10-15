@@ -1,7 +1,7 @@
 """Explicitly add configured software to an existing shared C without overwrites."""
 
 from thelpviewer.server.config import load_config
-from thelpviewer.server.dos_prompt import DosPromptStore
+from thelpviewer.server.dos.store import DosPromptStore
 from thelpviewer.server.settings import ServerSettings
 from thelpviewer.server.storage import prepare_storage
 

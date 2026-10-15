@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .catalog import products_for_source
+from .cache import download_filename
 from .extractor import ExtractorTools, collect_archive_members
 from .http import download_file
 
@@ -43,7 +44,7 @@ def run(
             ):
                 print("  [skipped] All selected files already exist")
                 continue
-            archive_path = dl_dir / f"direct_{product.key}_{filename}"
+            archive_path = dl_dir / f"direct_{product.key}_{download_filename(filename)}"
             try:
                 download_file(url, archive_path)
                 collected.extend(

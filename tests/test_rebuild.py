@@ -12,10 +12,12 @@ import zipfile
 from fastapi.testclient import TestClient
 import pytest
 
+from thelpviewer.server.accounts.sessions import new_session
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
-from thelpviewer.server.dos_prompt import DosError, DosPromptStore
-from thelpviewer.server.midi_library import MidiLibrary
+from thelpviewer.server.dos.store import DosPromptStore
+from thelpviewer.server.dos.paths import DosError
+from thelpviewer.server.midi.library import MidiLibrary
 from test_midi_library import MIDI
 
 
@@ -143,7 +145,7 @@ def test_rebuild_routes_require_admin_origin_and_explicit_post(tmp_path):
         accounts.create_user("member")
         with accounts._connect() as database:
             ident = database.execute("SELECT id FROM accounts WHERE username='member'").fetchone()[0]
-            token = accounts._new_session(database, ident)
+            token = new_session(database, ident)
         client.cookies.set("thelp_session", token)
         assert client.post("/api/admin/rebuild/dos", headers={"Origin": config.auth_origin}).status_code == 403
 
@@ -155,8 +157,8 @@ def test_rebuild_routes_require_admin_origin_and_explicit_post(tmp_path):
     with accounts._connect() as database:
         admin_id = database.execute("SELECT id FROM accounts WHERE username='production-admin'").fetchone()[0]
         member_id = database.execute("SELECT id FROM accounts WHERE username='production-member'").fetchone()[0]
-        admin = accounts._new_session(database, admin_id)
-        member = accounts._new_session(database, member_id)
+        admin = new_session(database, admin_id)
+        member = new_session(database, member_id)
     with TestClient(production, base_url="http://help.example.test") as client:
         for resource in ("dos", "midi"):
             url = f"/api/admin/rebuild/{resource}"

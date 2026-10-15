@@ -1,0 +1,673 @@
+"""Shared queue, priority, nested pipelines, progress and access boundaries."""
+
+from contextvars import ContextVar
+import io
+import threading
+import time
+from types import SimpleNamespace
+
+from fastapi.testclient import TestClient
+import pytest
+
+from thelpviewer.server.app import create_app
+from thelpviewer.server.downloader.online import OnlineDownloader, source_key
+from thelpviewer.server.downloader.transport import read_request, fetch_bytes, _HTTPSRedirect
+from test_server_content import config_for, admin_session
+
+
+def wait_downloads(downloads):
+    deadline = time.monotonic() + 5
+    while downloads.snapshot(private=True)["active"] and time.monotonic() < deadline:
+        time.sleep(.01)
+    assert not downloads.snapshot(private=True)["active"]
+
+
+def test_failed_group_retry_only_reopens_failed_units_and_preserves_other_rows():
+    downloads = OnlineDownloader()
+    downloads.begin("midi", [{"id": "one", "group": "album", "label": "Album"},
+        {"id": "two", "group": "album", "label": "Album"},
+        {"id": "other", "group": "another", "label": "Another"}])
+    downloads.update("midi", "one", state="done", percent=100)
+    for key in ("two", "other"):
+        downloads.update("midi", key, state="error", error="offline")
+    downloads.finish("midi")
+    entered, release = threading.Event(), threading.Event()
+    def prepare(group, failed):
+        assert group == "album" and failed == ["two"]
+        def retry():
+            entered.set()
+            assert release.wait(5)
+            downloads.update("midi", "two", state="done", percent=100, error="")
+        return retry
+    downloads.register_retry("midi", prepare)
+    assert downloads.snapshot()["items"][0]["retryable"]
+    downloads.act("midi:album", "retry")
+    assert entered.wait(5)
+    with pytest.raises(ValueError):
+        downloads.act("midi:album", "retry")
+    assert downloads.snapshot()["items"][1]["error"] == "offline"
+    release.set()
+    wait_downloads(downloads)
+    assert [row["state"] for row in downloads.snapshot()["items"]] == ["done", "error"]
+    downloads.act("midi:another", "remove")
+    assert [row["id"] for row in downloads.snapshot()["items"]] == ["midi:album"]
+    with pytest.raises(ValueError):
+        downloads.act("midi:album", "remove")  # Only failed rows can be removed.
+    downloads.close()
+
+
+def test_retry_validation_and_repeated_failure_leave_a_failed_row():
+    downloads = OnlineDownloader()
+    downloads.begin("dos", [{"id": "one", "label": "One"}])
+    downloads.update("dos", "one", state="error", error="original")
+    downloads.finish("dos")
+    def reject(*_args):
+        raise ValueError("no longer selected")
+    downloads.register_retry("dos", reject)
+    with pytest.raises(ValueError, match="no longer selected"):
+        downloads.act("dos:one", "retry")
+    assert downloads.snapshot(private=True)["items"][0]["error"] == "original"
+    downloads.register_retry("dos", lambda *_args: lambda: (_ for _ in ()).throw(ValueError("still offline")))
+    downloads.act("dos:one", "retry")
+    wait_downloads(downloads)
+    row = downloads.snapshot(private=True)["items"][0]
+    assert row["state"] == "error" and row["error"] == "still offline" and row["retryable"]
+    downloads.close()
+
+
+def test_stale_retry_cannot_finish_or_mark_a_replacement_job_failed():
+    downloads = OnlineDownloader()
+    downloads.begin("midi", [{"id": "one", "label": "One"}])
+    downloads.update("midi", "one", state="error", error="offline")
+    downloads.finish("midi")
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    def retry():
+        entered.set()
+        assert release.wait(5)
+        finished.set()
+        raise ValueError("old attempt")
+    downloads.register_retry("midi", lambda *_args: retry)
+    downloads.act("midi:one", "retry")
+    assert entered.wait(5)
+    downloads.begin("midi", [{"id": "one", "label": "New One"}])
+    downloads.update("midi", "one", state="running", phase="New operation")
+    release.set()
+    assert finished.wait(5)
+    deadline = time.monotonic() + 5
+    while downloads.retry_in_progress("midi") and time.monotonic() < deadline:
+        time.sleep(.01)
+    row = downloads.snapshot()["items"][0]
+    assert row["state"] == "running" and not row["error"] and downloads.snapshot()["active"]
+    downloads.finish("midi")
+    downloads.close()
+
+
+def test_public_midi_action_accepts_configured_https_origin_behind_tls_proxy(tmp_path):
+    config = config_for(tmp_path)
+    app = create_app(config)
+    with TestClient(app, base_url="http://testserver") as client:
+        downloads = app.state.downloads
+        downloads.begin("midi", [{"id": "provider:album", "label": "Album"}])
+        downloads.update("midi", "provider:album", state="error", error="offline")
+        downloads.finish("midi")
+        response = client.post("/api/downloads/action", json={"id": "midi:provider:album", "action": "remove"},
+            headers={"Origin": config.auth_origin})
+        assert response.status_code == 202
+        assert not downloads.snapshot()["items"]
+
+
+def test_failed_download_actions_require_origin_and_private_admin_session(tmp_path):
+    config = config_for(tmp_path)
+    app = create_app(config)
+    with TestClient(app, base_url=config.auth_origin) as client:
+        downloads = app.state.downloads
+        for kind, key in (("dos", "one"), ("midi", "provider:album"), ("midi", "page")):
+            downloads.begin(kind, [{"id": key, "label": key}], replace=False)
+            downloads.update(kind, key, state="error", error="offline")
+            downloads.finish(kind)
+        headers = {"Origin": config.auth_origin}
+        assert client.post("/api/downloads/action", json={"id": "dos:one", "action": "remove"}, headers=headers).status_code == 403
+        assert client.post("/api/downloads/action", json={"id": "midi:page", "action": "retry"}, headers=headers).status_code == 403
+        for bad in ({}, {"Origin": "https://evil.test"}, {**headers, "Sec-Fetch-Site": "cross-site"}):
+            assert client.post("/api/downloads/action", json={"id": "midi:provider:album", "action": "remove"}, headers=bad).status_code == 403
+        response = client.post("/api/downloads/action", json={"id": "midi:provider:album", "action": "remove"}, headers=headers)
+        assert response.status_code == 202 and response.headers["cache-control"] == "no-store"
+        admin_session(app, client)
+        assert client.post("/api/downloads/action", json={"id": "dos:one", "action": "delete-files"}, headers=headers).status_code == 422
+        assert client.post("/api/downloads/action", json={"id": "dos:one", "action": "retry", "url": "https://evil.test"}, headers=headers).status_code == 422
+        assert client.post("/api/downloads/action", json={"id": "dos:one", "action": "remove"}, headers=headers).status_code == 202
+        assert client.post("/api/downloads/action", json={"id": "dos:unknown", "action": "retry"}, headers=headers).status_code == 409
+
+
+def test_midi_retry_downloads_only_failed_tracks_of_the_chosen_album(tmp_path, monkeypatch):
+    import json
+    from thelpviewer.server.midi.library import MidiLibrary
+    from test_midi_library import MIDI
+    path = tmp_path / "midi.json"
+    path.write_text(json.dumps({"sources": [{"id": "source", "name": "Source",
+        "pages": ["https://music.test/index"], "allowed_hosts": ["music.test"],
+        "extract": {"mode": "anchors"}, "request_delay_seconds": 0}]}))
+    selection = tmp_path / "selection.json"
+    library = MidiLibrary(tmp_path / "midi", path, selection_path=selection)
+    calls = []
+    repaired = False
+    def fetch(url, *_args):
+        calls.append(url)
+        if url.endswith("index"):
+            return b'<a href="/good.mid">Good</a><a href="/bad.mid">Bad</a><a href="/other.mid">Other</a>'
+        if "good.mid" in url or repaired:
+            return MIDI
+        raise ValueError("offline")
+    monkeypatch.setattr(library, "_fetch", fetch)
+    library.run_once(sleep=False)
+    for item in library._items:
+        item["game"] = "Chosen" if "other.mid" not in item["url"] else "Another"
+    # The runtime queue now groups the two albums, retaining successful units.
+    library.run_once(sleep=False)
+    rows = library.downloads.snapshot()["items"]
+    target = next(row for row in rows if "Chosen" in row["label"])
+    calls.clear(); repaired = True
+    library.downloads.act(target["id"], "retry")
+    wait_downloads(library.downloads)
+    assert calls == ["https://music.test/bad.mid"]
+    assert [row["state"] for row in library.downloads.snapshot()["items"]] == ["done", "error"]
+    assert library.catalog()["downloaded"] == 2
+    selection.write_text('{"sources": [], "albums": {}}')
+    other = next(row for row in library.downloads.snapshot()["items"] if row["state"] == "error")
+    with pytest.raises(ValueError, match="no longer selected"):
+        library.downloads.act(other["id"], "retry")
+    assert len(calls) == 1
+    library.downloads.close()
+
+
+def test_dos_retry_preserves_installed_packages_and_private_data(tmp_path, monkeypatch):
+    import json
+    import zipfile
+    from thelpviewer.server.dos.paths import DosError
+    config = config_for(tmp_path)
+    app = create_app(config)
+    calls, fail = [], False
+    def fetch(source, _limit, *_args, **_kwargs):
+        calls.append(source["id"])
+        if fail:
+            raise ValueError("offline")
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as output:
+            output.writestr("GAME.EXE", source["id"].encode())
+        return payload.getvalue()
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    content, dos = app.state.content, app.state.dos_prompt
+    content._save_selection({"configured": True, "help_packages": [], "dos_packages": ["two"]})
+    dos.configure(["one"])
+    fail = True
+    with pytest.raises(DosError, match="offline"):
+        dos.configure(["two"])  # Failed pending removal must not delete One on retry.
+    private = dos.users_dir / "sentinel.dat"
+    private.parent.mkdir(parents=True, exist_ok=True)
+    private.write_bytes(b"private saved game")
+    selection = content.path.read_bytes()
+    app.state.downloads.begin("dos", [{"id": "unrelated", "label": "Unrelated"}], replace=False)
+    app.state.downloads.update("dos", "unrelated", state="error", error="another failure")
+    app.state.downloads.finish("dos")
+    calls.clear(); fail = False
+    app.state.downloads.act("dos:two", "retry")
+    wait_downloads(app.state.downloads)
+    assert calls == ["two"]
+    assert dos.files["GAMES/ONE/GAME.EXE"] == b"one" and dos.files["GAMES/TWO/GAME.EXE"] == b"two"
+    assert private.read_bytes() == b"private saved game" and content.path.read_bytes() == selection
+    rows = {row["id"]: row for row in app.state.downloads.snapshot(private=True)["items"]}
+    assert rows["dos:two"]["state"] == "done" and rows["dos:unrelated"]["state"] == "error"
+    app.state.downloads.act("dos:unrelated", "remove")
+    assert private.is_file() and dos.disk_dir.is_dir()
+    assert json.loads(dos.installed_path.read_text())["_complete"]
+    app.state.downloads.close()
+
+
+def test_help_retry_rechecks_only_failed_provider_and_preserves_other_products(tmp_path, monkeypatch):
+    import importlib
+    import zipfile
+    from thelpviewer.server.converter.build import build_help_groups
+    from thelpviewer.server.downloader.catalog import all_sources, supported_product_keys, SOURCE_RUNNERS
+    config = config_for(tmp_path)
+    other = config.sources_dir / "FreeDOS HTML Help 1.1.1a" / "HHSTNDRD.ZIP"
+    other.parent.mkdir(parents=True)
+    with zipfile.ZipFile(other, "w") as output:
+        output.writestr("help/index.htm", "<title>Contents</title><p>FreeDOS help</p>")
+    build_help_groups(["dos-reference"], config.sources_dir, config.helps_dir)
+    published = {path: path.read_bytes() for path in config.helps_dir.rglob("*.json.gz")}
+    app = create_app(config)
+    content = app.state.content
+    content._save_selection({"configured": True, "help_packages": ["helppc:"], "dos_packages": []})
+    selection = content.path.read_bytes()
+    provider = next(key for key in all_sources() if "helppc" in supported_product_keys(key))
+    calls = []
+    def run(*, product_keys, sources_dir, **_kwargs):
+        calls.extend(product_keys)
+        path = sources_dir / "HelpPC 2.10" / "C.TXT"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"@C language\r\n:ReferenceTopic\r\n%Reference help\r\n")
+        return [path]
+    monkeypatch.setattr(importlib.import_module(SOURCE_RUNNERS[provider]), "run", run)
+    downloads = app.state.downloads
+    downloads.begin("help", [{"id": provider + ":helppc:", "group": "helppc:", "label": "HelpPC"},
+        {"id": "other", "group": "another", "label": "Another"}])
+    for key in (provider + ":helppc:", "other"):
+        downloads.update("help", key, state="error", error="offline")
+    downloads.finish("help")
+    downloads.act("help:helppc:", "retry")
+    wait_downloads(downloads)
+    assert calls == ["helppc"] and content.status()["state"] == "ready", content.status()
+    assert (config.helps_dir / "HelpPC 2.10/c.json.gz").is_file()
+    assert all(path.read_bytes() == data for path, data in published.items())
+    assert content.path.read_bytes() == selection
+    assert [row["state"] for row in downloads.snapshot(private=True)["items"]] == ["done", "error"]
+    downloads.close()
+
+
+def test_unkeyed_pipeline_fifo_priority_and_context_without_nested_deadlock():
+    downloader = OnlineDownloader()
+    entered, release = threading.Event(), threading.Event()
+    order, threads = [], []
+    value = ContextVar("test_download_context", default="missing")
+    def first():
+        entered.set()
+        assert release.wait(5)
+        order.append("first")
+    blocker = downloader.enqueue(first)
+    assert entered.wait(5)
+    def task(name):
+        order.append(name)
+        threads.append(threading.current_thread().ident)
+        return downloader.call(value.get)
+    value.set("HELP")
+    help_task = downloader.enqueue(lambda: task("help"))
+    value.set("DOS")
+    dos_task = downloader.enqueue(lambda: task("dos"))
+    value.set("MIDI")
+    priority = downloader.enqueue(lambda: task("priority-midi"), priority=0)
+    release.set()
+    blocker.result(timeout=5)
+    assert [priority.result(timeout=5), help_task.result(timeout=5), dos_task.result(timeout=5)] == ["MIDI", "HELP", "DOS"]
+    assert order == ["first", "priority-midi", "help", "dos"] and len(threads) == 3
+    downloader.close()
+
+
+def test_failed_task_does_not_block_later_tasks():
+    downloader = OnlineDownloader()
+    failed = downloader.enqueue(lambda: (_ for _ in ()).throw(ValueError("source failed")))
+    next_task = downloader.enqueue(lambda: b"next archive")
+    with pytest.raises(ValueError, match="source failed"):
+        failed.result(timeout=5)
+    assert next_task.result(timeout=5) == b"next archive"
+    downloader.close()
+
+
+def test_source_queue_skips_busy_mirrors_without_starting_parallel_downloads():
+    downloads = OnlineDownloader()
+    entered, release, other = threading.Event(), threading.Event(), threading.Event()
+    calls = []
+    def first():
+        entered.set()
+        assert release.wait(5)
+    running = downloads.enqueue(first, source="https://archive.org/first.zip")
+    assert entered.wait(5)
+    waiting = [downloads.enqueue(lambda index=index: calls.append(index),
+        source=f"https://ia{index}.us.archive.org/{index}.zip") for index in range(10)]
+    independent = downloads.enqueue(other.set, source="https://www.breatharian.eu/program.zip")
+    urgent = downloads.enqueue(lambda: calls.append("urgent"), priority=-10,
+        source="https://archive.org/selected.mid")
+    try:
+        assert other.wait(5) and not calls and not urgent.done()
+        release.set()
+        running.result(5); independent.result(5); urgent.result(5)
+        for task in waiting:
+            task.result(5)
+        assert calls[0] == "urgent" and set(calls) == {*range(10), "urgent"}
+        assert source_key("https://archive.org/a") == source_key("https://ia8000.us.archive.org/b")
+    finally:
+        release.set()
+        downloads.close()
+
+
+def test_source_cooldown_does_not_block_another_source_or_disappear_after_failure():
+    downloads = OnlineDownloader()
+    completed = threading.Event()
+    downloads.defer_source("https://archive.org/failed.zip", .15)
+    task = downloads.enqueue(lambda: "retry", source="https://ia801.us.archive.org/other.zip")
+    independent = downloads.enqueue(completed.set, source="https://downloads.example.net/item.zip")
+    try:
+        assert completed.wait(5) and not task.done()
+        assert task.result(5) == "retry"
+        independent.result(5)
+    finally:
+        downloads.close()
+
+
+def test_redirected_response_bodies_share_the_destination_source_limit():
+    downloads = OnlineDownloader()
+    opened_twice, entered, release = threading.Event(), threading.Event(), threading.Event()
+    calls, opened = [], []
+    class Response(io.BytesIO):
+        headers = {}
+        url = "https://ia8000.us.archive.org/download/file.zip"
+        def read(self, size):
+            if not self.tell():
+                calls.append(threading.current_thread().name)
+                entered.set()
+                assert release.wait(5)
+            return super().read(size)
+    class Opener:
+        def open(self, *_args, **_kwargs):
+            opened.append(True)
+            if len(opened) == 2:
+                opened_twice.set()
+            return Response(b"archive")
+    try:
+        with downloads.activate():
+            tasks = [downloads.enqueue(lambda url=url: read_request(Opener(), url, 100), source=url)
+                for url in ("https://first.test/download", "https://second.test/download")]
+        assert entered.wait(5) and opened_twice.wait(5)
+        assert len(calls) == 1
+        release.set()
+        assert all(task.result(5)[0] == b"archive" for task in tasks)
+    finally:
+        release.set()
+        downloads.close()
+
+
+def test_regular_downloads_have_a_global_bound_of_three_distinct_sources():
+    downloads = OnlineDownloader()
+    release, full = threading.Event(), threading.Event()
+    active = []
+    lock = threading.Lock()
+    def operation(index):
+        with lock:
+            active.append(index)
+            if len(active) == 3:
+                full.set()
+        assert release.wait(5)
+    tasks = [downloads.enqueue(lambda index=index: operation(index),
+        source=f"https://source{index}.test/file.zip") for index in range(6)]
+    try:
+        assert full.wait(5) and len(active) == 3
+        release.set()
+        for task in tasks:
+            task.result(5)
+    finally:
+        release.set()
+        downloads.close()
+
+
+def test_urgent_playback_promotes_the_same_future_while_a_package_is_running():
+    downloads = OnlineDownloader()
+    entered, release = threading.Event(), threading.Event()
+    context = ContextVar("urgent_test_context", default="background")
+    calls = []
+    def package():
+        entered.set()
+        assert release.wait(5)
+        return "package finished"
+    package_task = downloads.enqueue(package)
+    assert entered.wait(5)
+    def music():
+        calls.append(threading.current_thread().name)
+        return downloads.call(context.get)
+    pending = downloads.enqueue(music, identity=("midi", "track"))
+    context.set("selected song")
+    selected = downloads.enqueue(lambda: pytest.fail("Duplicate transfer"), priority=-10, identity=("midi", "track"))
+    try:
+        assert selected is pending
+        assert selected.result(timeout=5) == "selected song"
+        assert not package_task.done()
+        assert calls == ["thelp-urgent-downloader"]
+    finally:
+        release.set()
+        assert package_task.result(timeout=5) == "package finished"
+        downloads.close()
+
+
+def test_newest_waiting_playback_goes_to_the_front_and_shutdown_cancels_it():
+    downloads = OnlineDownloader()
+    entered, release = threading.Event(), threading.Event()
+    order = []
+    def active():
+        entered.set()
+        assert release.wait(5)
+    current = downloads.enqueue(active, priority=-10)
+    assert entered.wait(5)
+    old = downloads.enqueue(lambda: order.append("older"), priority=-10)
+    new = downloads.enqueue(lambda: order.append("newer"), priority=-10)
+    release.set()
+    current.result(timeout=5); new.result(timeout=5); old.result(timeout=5)
+    assert order == ["newer", "older"]
+    entered.clear(); release.clear()
+    current = downloads.enqueue(active, priority=-10)
+    assert entered.wait(5)
+    waiting = downloads.enqueue(lambda: pytest.fail("Cancelled urgent task ran"), priority=-10)
+    downloads.close()
+    assert waiting.cancelled()
+    release.set()
+    current.result(timeout=5)
+
+
+def test_shutdown_cancels_waiting_work_not_the_current_transfer():
+    downloader = OnlineDownloader()
+    entered, release = threading.Event(), threading.Event()
+    def active():
+        entered.set()
+        assert release.wait(5)
+        return "finished current request"
+    current = downloader.enqueue(active)
+    assert entered.wait(5)
+    pending = downloader.enqueue(lambda: "must not run")
+    downloader.close()
+    assert pending.cancelled()
+    release.set()
+    assert current.result(timeout=5) == "finished current request"
+
+
+def test_preparation_failure_is_visible_even_without_an_active_file():
+    downloads = OnlineDownloader()
+    downloads.begin("dos", [])
+    downloads.finish("dos", error="Invalid package configuration")
+    status = downloads.snapshot(private=True)
+    assert status["errors"] == 1 and status["items"][0]["error"] == "Invalid package configuration"
+    assert not downloads.snapshot()["items"]
+    downloads.close()
+
+
+def test_completed_files_do_not_claim_finished_publication():
+    downloads = OnlineDownloader()
+    downloads.begin("dos", [{"id": "one", "label": "One"}])
+    downloads.update("dos", "one", state="done", percent=100)
+    assert downloads.snapshot(private=True)["percent"] == 99
+    downloads.finish("dos")
+    assert not downloads.snapshot(private=True)["active"]
+    assert downloads.snapshot(private=True)["percent"] == 0
+    downloads.close()
+
+
+def test_completed_counter_resets_and_a_new_batch_excludes_history():
+    downloads = OnlineDownloader()
+    try:
+        assert downloads.snapshot() == {"active": False, "percent": 0, "errors": 0, "items": []}
+        downloads.begin("midi", [{"id": str(i), "label": f"Old song {i}"} for i in range(100)])
+        for i in range(100):
+            downloads.update("midi", str(i), state="done", percent=100)
+        downloads.finish("midi")
+        finished = downloads.snapshot()
+        assert not finished["active"] and finished["percent"] == 0
+        assert len(finished["items"]) == 100 and all(item["percent"] == 100 for item in finished["items"])
+        downloads.begin("midi", [{"id": "new", "label": "New song"}], replace=False)
+        assert downloads.snapshot()["active"] and downloads.snapshot()["percent"] == 0
+        downloads.update("midi", "new", state="running", received=50, bytes_total=100)
+        assert downloads.snapshot()["percent"] == 50
+        downloads.update("midi", "new", state="done", percent=100)
+        downloads.finish("midi")
+        assert downloads.snapshot()["percent"] == 0 and len(downloads.snapshot()["items"]) == 101
+        # Re-requesting a known identity also starts fresh, not at its previous 100%.
+        downloads.begin("midi", [{"id": "new", "label": "New song"}], replace=False)
+        assert downloads.snapshot()["percent"] == 0
+        assert next(row for row in downloads.snapshot()["items"] if row["id"] == "midi:new")["state"] == "pending"
+    finally:
+        downloads.close()
+
+
+def test_public_midi_counter_restarts_while_private_packages_continue():
+    downloads = OnlineDownloader()
+    try:
+        downloads.begin("dos", [{"id": "package", "label": "DOS package"}])
+        downloads.update("dos", "package", state="running", percent=50)
+        downloads.begin("midi", [{"id": "old", "label": "Old song"}])
+        downloads.update("midi", "old", state="done", percent=100)
+        downloads.finish("midi")
+        assert downloads.snapshot()["percent"] == 0
+        assert downloads.snapshot(private=True)["percent"] == 75
+        downloads.begin("midi", [{"id": "new", "label": "New song"}], replace=False)
+        assert downloads.snapshot()["active"] and downloads.snapshot()["percent"] == 0
+        downloads.update("midi", "new", state="running", percent=50)
+        assert downloads.snapshot()["percent"] == 50
+        downloads.update("dos", "package", state="done", percent=100)
+        downloads.finish("dos")
+        assert downloads.snapshot(private=True)["active"] and downloads.snapshot(private=True)["percent"] == 75
+        downloads.update("midi", "new", state="done", percent=100)
+        downloads.finish("midi")
+        assert downloads.snapshot(private=True)["percent"] == 0
+    finally:
+        downloads.close()
+
+
+def test_retry_counter_counts_only_retried_work_not_successful_history():
+    downloads = OnlineDownloader()
+    entered, release = threading.Event(), threading.Event()
+    try:
+        downloads.begin("midi", [{"id": "good", "group": "album", "label": "Album"},
+                                  {"id": "failed", "group": "album", "label": "Album"}])
+        downloads.update("midi", "good", state="done", percent=100)
+        downloads.update("midi", "failed", state="error", error="Offline")
+        downloads.finish("midi")
+        assert downloads.snapshot()["percent"] == 50
+        def retry():
+            entered.set()
+            assert release.wait(5)
+            downloads.update("midi", "failed", state="done", percent=100, error="")
+        downloads.register_retry("midi", lambda *_args: retry)
+        downloads.act("midi:album", "retry")
+        assert entered.wait(5)
+        assert downloads.snapshot()["percent"] == 0 and downloads.snapshot()["active"]
+        release.set()
+        wait_downloads(downloads)
+        assert downloads.snapshot()["percent"] == 0 and downloads.snapshot()["items"][0]["percent"] == 100
+    finally:
+        release.set()
+        downloads.close()
+
+
+def test_url_task_can_cache_and_process_on_the_same_worker(tmp_path, monkeypatch):
+    downloader = OnlineDownloader()
+    calls, workers = [], []
+    def fetch(source, limit, progress, **kwargs):
+        calls.append(source["url"])
+        workers.append(threading.current_thread().ident)
+        progress(7, 7)
+        return b"archive"
+    monkeypatch.setattr("thelpviewer.server.downloader.transport.fetch_source", fetch)
+    def process(data):
+        workers.append(threading.current_thread().ident)
+        return downloader.call(lambda: data.upper())
+    cache = tmp_path / "cache.zip"
+    for _ in range(2):
+        future = downloader.submit({"url": "https://packages.test/file.zip"}, 1000,
+            kind="dos", key="tools", label="Tools", destination=cache, process=process)
+        assert future.result(timeout=5) == b"ARCHIVE"
+    assert calls == ["https://packages.test/file.zip"] and cache.read_bytes() == b"archive"
+    status = downloader.snapshot(private=True)
+    assert not status["active"] and status["items"][0]["percent"] == 100
+    assert len(workers) == 3 and workers[0] == workers[1]
+    downloader.close()
+
+
+def test_shared_progress_groups_albums_and_hides_private_packages():
+    downloads = OnlineDownloader()
+    downloads.begin("dos", [{"id": "compiler", "label": "Compiler"}])
+    downloads.begin("midi", [{"id": "one", "group": "doom", "label": "DOOM"},
+                             {"id": "two", "group": "doom", "label": "DOOM"}])
+    downloads.update("dos", "compiler", state="running", received=5, bytes_total=10)
+    downloads.update("midi", "one", state="done", percent=100)
+    public = downloads.snapshot()
+    assert public["active"] and public["percent"] == 50
+    assert len(public["items"]) == 1 and public["items"][0]["percent"] == 50
+    assert public["items"][0]["total"] == 2
+    assert len(downloads.snapshot(private=True)["items"]) == 2
+    downloads.update("midi", "two", state="error", error="HTTP 429")
+    downloads.finish("midi")
+    assert not downloads.snapshot()["active"] and downloads.snapshot()["errors"] == 1
+    assert downloads.snapshot()["percent"] == 50  # Failed work is not reported as 100% complete.
+    downloads.close()
+
+
+def test_shared_transfer_is_atomic_and_preserves_previous_cache_on_failure(tmp_path):
+    destination = tmp_path / "file.zip"
+    destination.write_bytes(b"previous")
+    response = io.BytesIO(b"truncated")
+    response.headers = {"Content-Length": "100"}
+    with pytest.raises(ValueError, match="incomplete"):
+        read_request(SimpleNamespace(open=lambda *_args, **_kwargs: response), "https://packages.test/file.zip",
+                     1000, destination=destination)
+    assert destination.read_bytes() == b"previous" and not list(tmp_path.glob(".download-*"))
+
+
+def test_midi_uses_common_public_peer_and_host_boundary(monkeypatch):
+    def opener(**kwargs):
+        assert kwargs["allowed_hosts"] == {"music.test"}
+        response = io.BytesIO(b"MThd")
+        response.headers = {"Content-Length": "4"}
+        return SimpleNamespace(open=lambda *_args, **_kwargs: response)
+    monkeypatch.setattr("thelpviewer.server.downloader.transport.create_opener", opener)
+    assert fetch_bytes("https://music.test/track.mid", {"music.test"}, 100) == b"MThd"
+    with pytest.raises(ValueError, match="configured"):
+        fetch_bytes("https://outside.test/track.mid", {"music.test"}, 100)
+    from urllib.request import Request
+    with pytest.raises(ValueError, match="configured"):
+        _HTTPSRedirect(allowed_hosts={"music.test"}).redirect_request(Request("https://music.test/track.mid"),
+            None, 302, "Found", {}, "https://outside.test/track.mid")
+
+
+def test_shared_queue_api_is_read_only_and_admin_scoped(tmp_path):
+    config = config_for(tmp_path)
+    app = create_app(config)
+    assert app.state.downloads is app.state.dos_prompt.downloads is app.state.midi_library.downloads
+    with TestClient(app, base_url=config.auth_origin) as client:
+        downloads = app.state.downloads
+        downloads.begin("dos", [{"id": "compiler", "label": "Compiler"}])
+        downloads.begin("midi", [{"id": "song", "label": "DOOM"}])
+        response = client.get("/api/downloads")
+        assert response.headers["Cache-Control"] == "no-store"
+        assert {row["kind"] for row in response.json()["items"]} == {"midi"}
+        admin_session(app, client)
+        assert {row["kind"] for row in client.get("/api/downloads").json()["items"]} == {"dos", "midi"}
+        assert client.post("/api/downloads", json={"url": "https://outside.test"}).status_code == 405
+
+
+@pytest.mark.parametrize("provider", ["cheater_cz", "slunecnice"])
+def test_referer_providers_use_shared_queued_atomic_transfer(tmp_path, monkeypatch, provider):
+    import importlib
+    from thelpviewer.server.downloader import http
+    module = importlib.import_module("thelpviewer.server.downloader." + provider)
+    requests, threads, progress = [], [], []
+    def open_response(request, **kwargs):
+        requests.append(request)
+        threads.append(threading.current_thread().name)
+        response = io.BytesIO(b"archive")
+        response.headers = {"Content-Length": "7"}
+        return response
+    monkeypatch.setattr(http, "get_opener", lambda: SimpleNamespace(open=open_response))
+    monkeypatch.setattr(http.time, "sleep", lambda _: None)
+    download = module._download_with_referer if provider == "cheater_cz" else module._download_archive
+    destination = tmp_path / "source.zip"
+    with http.observe_downloads(progress.append):
+        assert download("https://provider.test/source.zip", destination, referer="https://provider.test/page") == destination
+    assert requests[0].get_header("Referer") == "https://provider.test/page"
+    assert destination.read_bytes() == b"archive"
+    assert len(threads) == 1 and threads[0].startswith("thelp-online-downloader-")
+    assert progress[-1]["phase"] == "Downloaded" and progress[-1]["downloaded_size"] == 7

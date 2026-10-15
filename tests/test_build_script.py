@@ -9,6 +9,8 @@ import sys
 from urllib.request import urlopen
 import time
 
+import pytest
+
 from test_browser_smoke import _free_port
 
 
@@ -100,3 +102,67 @@ def test_with_dos_reference_builds_default_and_reference_sources_together(tmp_pa
     }
     assert not (helps / "tables.json.gz").exists()
     assert unrelated_bundle.is_file()
+
+
+@pytest.mark.parametrize("action", ["start", "restart"])
+@pytest.mark.parametrize("catalog_exists", [False, True])
+def test_docker_preflight_reads_accounts_dos_and_midi_even_without_help_catalog(tmp_path, action, catalog_exists):
+    script = Path(__file__).resolve().parents[1] / "thelp.sh"
+    data, state, binaries = tmp_path / "data", tmp_path / "var", tmp_path / "bin"
+    binaries.mkdir()
+    reads, calls = tmp_path / "reads", tmp_path / "docker-calls"
+    docker = binaries / "docker"
+    docker.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$THELP_TEST_DOCKER_CALLS"\n')
+    docker.chmod(0o755)
+    cksum = binaries / "cksum"
+    cksum.write_text('#!/bin/sh\nprintf "%s\\n" "$@" >> "$THELP_TEST_READS"\n')
+    cksum.chmod(0o755)
+    paths = [data / "development/accounts.sqlite3", data / "accounts.sqlite3",
+             data / "accounts.sqlite3-wal", data / "server-settings.json", data / "content-settings.json",
+             data / "dos/users/owner/overlay.json", data / "dos/users/owner/files/SAVE.DAT",
+             state / "dos/installed.json", state / "dos/c/AUTOEXEC.BAT", state / "dos/c/GAMES/GAME.EXE",
+             state / "midi/library.sqlite3", state / "midi/library.sqlite3-wal",
+             state / "midi/covers/cover.jpg", state / "midi/source/track.mid"]
+    excluded = [data / "migration-backups/old/accounts.sqlite3", state / "backups/old/installed.json",
+                state / "downloads/dos/archive.zip"]
+    if catalog_exists:
+        paths += [data / "helps/catalog.json", data / "helps/product/help.json.gz"]
+    for path in paths + excluded:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"retained original")
+    result = subprocess.run([str(script), "docker", action], capture_output=True, text=True,
+        env={**os.environ, "THELP_PYTHON": sys.executable, "THELP_DATA_DIR": str(data),
+             "THELP_STATE_DIR": str(state), "THELP_HELPS_DIR": str(data / "helps"),
+             "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
+             "THELP_TEST_READS": str(reads), "THELP_TEST_DOCKER_CALLS": str(calls)}, timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert set(reads.read_text().splitlines()) == {str(path) for path in paths}
+    assert "compose up -d" in calls.read_text()
+    assert all(path.read_bytes() == b"retained original" for path in paths + excluded)
+
+
+@pytest.mark.parametrize("unreadable", ["development/accounts.sqlite3", "../var/dos/installed.json",
+    "../var/midi/covers/cover.jpg", "../var/midi/source/track.mid"])
+def test_unreadable_runtime_data_aborts_before_docker_start(tmp_path, unreadable):
+    script = Path(__file__).resolve().parents[1] / "thelp.sh"
+    data, state, binaries = tmp_path / "data", tmp_path / "var", tmp_path / "bin"
+    binaries.mkdir()
+    path = (data / unreadable).resolve()
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"never replace account or disk data")
+    calls = tmp_path / "docker-calls"
+    docker = binaries / "docker"
+    docker.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$THELP_TEST_DOCKER_CALLS"\n')
+    docker.chmod(0o755)
+    cksum = binaries / "cksum"
+    cksum.write_text('#!/bin/sh\nexit 1\n')
+    cksum.chmod(0o755)
+    result = subprocess.run([str(script), "docker", "start"], capture_output=True, text=True,
+        env={**os.environ, "THELP_PYTHON": sys.executable, "THELP_DATA_DIR": str(data),
+             "THELP_STATE_DIR": str(state), "THELP_HELPS_DIR": str(data / "helps"),
+             "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
+             "THELP_TEST_DOCKER_CALLS": str(calls)}, timeout=15)
+    assert result.returncode != 0
+    assert "restore their local availability" in result.stderr
+    assert calls.read_text() == "info\n"
+    assert path.read_bytes() == b"never replace account or disk data"

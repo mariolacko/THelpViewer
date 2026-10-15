@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-import tempfile
 import threading
+
+from .json_storage import write_json
+
+DEFAULT_BACKUP_COUNT = 2
+MAX_BACKUP_COUNT = 100
+DEFAULT_SETTINGS = {"dos_user_disk_mb": 64, "backup_count": DEFAULT_BACKUP_COUNT}
+
+
+def validate_backup_count(value: int) -> int:
+    if type(value) is not int or not 1 <= value <= MAX_BACKUP_COUNT:
+        raise ValueError(f"Backup count must be 1–{MAX_BACKUP_COUNT}")
+    return value
 
 
 class ServerSettings:
@@ -16,25 +26,23 @@ class ServerSettings:
 
     @staticmethod
     def validate(values: dict) -> dict:
-        if not isinstance(values, dict) or set(values) != {"dos_user_disk_mb"}:
-            raise ValueError("Expected DOS user disk capacity")
+        if not isinstance(values, dict) or set(values) != DEFAULT_SETTINGS.keys():
+            raise ValueError("Expected DOS user disk capacity and backup count")
         capacity = values["dos_user_disk_mb"]
         if type(capacity) is not int or not 1 <= capacity <= 256:
             raise ValueError("DOS user disk capacity must be 1–256 MiB")
-        return {"dos_user_disk_mb": capacity}
+        return {"dos_user_disk_mb": capacity, "backup_count": validate_backup_count(values["backup_count"])}
 
     def get(self) -> dict:
         with self._lock:
             if not self.path.exists():
-                return {"dos_user_disk_mb": 64}
-            return self.validate(json.loads(self.path.read_text(encoding="utf-8")))
+                return dict(DEFAULT_SETTINGS)
+            return self.validate({**DEFAULT_SETTINGS, **json.loads(self.path.read_text(encoding="utf-8"))})
 
     def update(self, values: dict) -> dict:
-        values = self.validate(values)
+        if not isinstance(values, dict):
+            raise ValueError("Expected server settings")
         with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(dir=self.path.parent, delete=False) as output:
-                output.write(json.dumps(values).encode("utf-8"))
-                temporary = Path(output.name)
-            os.replace(temporary, self.path)
+            values = self.validate({**self.get(), **values})
+            write_json(self.path, values)
         return values

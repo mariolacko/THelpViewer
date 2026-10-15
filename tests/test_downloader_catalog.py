@@ -58,13 +58,17 @@ def test_manifest_drives_sources_products_and_conversion_files():
     manifest = load_help_manifest()
 
     assert manifest.version == 2
-    assert [converter.name for converter in manifest.converters[:5]] == [
+    assert [converter.name for converter in manifest.converters[:6]] == [
         "fbhf-source",
         "hlx",
         "hlx",
+        "winhelp",
         "hlx",
         "norton-guide",
     ]
+    assert manifest.converters[2].source_kind == "index"
+    assert manifest.converters[3].source_kind == "compiled"
+    assert manifest.converters[3].reader == "thelpviewer.server.converter.readers.winhelp:WinHelpReader"
     assert manifest.converters[0].reader == "thelpviewer.server.converter.readers.fbhf:FBHFSourceReader"
     assert SOURCE_RUNNERS["cheater_cz"] == "thelpviewer.server.downloader.cheater_cz"
     assert SOURCE_RUNNERS["direct"] == "thelpviewer.server.downloader.direct"
@@ -103,6 +107,49 @@ def test_manifest_drives_sources_products_and_conversion_files():
     assert turbo_pascal_entries
     assert {entry.product_key for entry in turbo_pascal_entries} == {"tp"}
     assert any(entry.version == "7.1" for entry in turbo_pascal_entries)
+    assembler_entries = product_entries("tasm")
+    assert {entry.crc32 for entry in assembler_entries} == {0x07E89446, 0x9AC3E64A, 0xC517BD6D}
+    assert all(entry.filenames == ("TASM.TAH",) for entry in assembler_entries)
+
+
+def test_discovered_revisions_retain_retrieval_pages_and_fallback_queries():
+    manifest = load_help_manifest()
+    for crc in (0x07E89446, 0xC517BD6D, 0xC7CCE043, 0x0EA517F6, 0xBBF9DEFB, 0x7C2A5934,
+                0x77B4692D, 0x1A84ACE2, 0x7D23BEE7, 0x86079353):
+        entry = manifest.entry_map[crc]
+        assert entry.version and entry.product_key
+        origin = entry.sources["winworld"]
+        assert origin.search_text and entry.filenames == origin.archive_members
+        assert any("/product/" in url for url in origin.direct_urls)
+        assert any("/download/" in url for url in origin.direct_urls)
+        fallback = entry.sources["archiveorg"]
+        assert fallback.search_text and "mediatype:software" in fallback.query
+    assert product_spec("td").sources["winworld"].slug == "turbo-assembler"
+    assert "Turbo Assembler" in product_spec("td").sources["archiveorg"].query
+    assert product_spec("sk").sources["archiveorg"].query
+    debugger15 = manifest.entry_map[0xF126AD2C]
+    assert debugger15.version == "1.5" and debugger15.language == "en"
+    assert debugger15.sources["direct"].archive_members == ("TDHELP.TDH",)
+    assert debugger15.sources["archiveorg"].direct_urls
+    assert debugger15.sources["direct"].direct_urls[0].endswith("/Disk2-Utilities.img")
+    german15 = manifest.entry_map[0x4B5D33CE]
+    assert german15.version == "1.5" and german15.language == "de"
+    assert german15.sources["direct"].direct_urls[0].endswith("/Disk4-Hilfe.img")
+
+
+def test_source_product_metadata_uses_crc_then_filename_before_folder():
+    from pathlib import Path
+    from thelpviewer.server.converter.writers.bundle import _product_metadata_for_source
+    manifest = load_help_manifest()
+    folder = "Borland Turbo Assembler 4.x"
+    assert _product_metadata_for_source(Path("TDHELP.TDH"), folder, None)[0] == "td"
+    assert _product_metadata_for_source(Path("TD32HELP.TDH"), folder, None)[0] == "td"
+    assert _product_metadata_for_source(Path("TASM.TAH"), folder, None) == (
+        "tasm", "Borland Turbo Assembler", "4.x")
+    # TCHELP is shared by C and C++; an unrelated archive name proves neither.
+    assert _product_metadata_for_source(Path("TCHELP.TCH"), folder, None)[0] == ""
+    crc_entry = manifest.entry_map[0x9AC3E64A]
+    assert _product_metadata_for_source(Path("RENAMED.HLP"), "Borland C++ 3.0", crc_entry)[0] == "tasm"
 
 
 def test_pinned_dos_sources_select_only_the_intended_files():

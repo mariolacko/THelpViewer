@@ -48,7 +48,7 @@ def create_public_router(
         query_parameters = list(parameters.items())
         query_parameters.extend(
             (key, value) for key, value in request.query_params.multi_items()
-            if key not in ("file", "topic", "doc")
+            if key not in ("file", "topic", "alias", "doc") and key not in parameters
         )
         query = urlencode(query_parameters)
         if request.url.query != query:
@@ -86,19 +86,24 @@ def create_public_router(
         page = page.replace(desktop, desktop + f'<main id="tv-public-fallback">{content}</main>', 1)
         return Response(verified_html(page), media_type="text/html")
 
-    def public_topic(file_path: str, request: Request, topic: str = "") -> Response:
+    def public_topic(file_path: str, request: Request, topic: str = "", *, alias_only: bool = False) -> Response:
         if len(file_path) > 512 or len(topic) > 64:
             raise HTTPException(status_code=404)
         unavailable = index_unavailable("help", file_path)
         if unavailable is not None:
             return unavailable
-        entry = search_index.topic(file_path, topic)
+        entry = search_index.topic(file_path, topic, alias_only=alias_only)
         if entry is None or not entry["body"]:
             unavailable = index_unavailable("help", file_path, pending=True)
             if unavailable is not None:
                 return unavailable
             raise HTTPException(status_code=404)
-        redirect = canonical_redirect(request, {"file": file_path, "topic": topic})
+        topic = entry["context_id"]
+        parameters = {"file": file_path, "topic": topic}
+        requested_line = request.query_params.get("line", "")
+        if entry.get("line") and not re.fullmatch(r"0*[1-9][0-9]*", requested_line):
+            parameters["line"] = str(entry["line"])
+        redirect = canonical_redirect(request, parameters)
         if redirect is not None:
             return redirect
         url = public_base(request) + "/?" + urlencode({"file": file_path, "topic": topic})
@@ -167,7 +172,7 @@ def create_public_router(
         return public_viewer_page(f'{entry["title"]} — THelpViewer Docs', entry["preview"], url, content)
 
     @router.get("/")
-    def index(request: Request, file: str = "", topic: str = "", doc: str = "") -> Response:
+    def index(request: Request, file: str = "", topic: str = "", alias: str = "", doc: str = "") -> Response:
         if request.query_params.get("server_error"):
             if not config.index_path.is_file():
                 raise HTTPException(status_code=404)
@@ -179,8 +184,12 @@ def create_public_router(
         if doc:
             return public_document(doc, request)
         if file:
-            return public_topic(file, request, topic) if topic else public_file(file, request)
-        if topic or any(key in request.query_params for key in ("file", "topic", "doc")):
+            if topic and alias:
+                raise HTTPException(status_code=404)
+            if topic or alias:
+                return public_topic(file, request, topic or alias, alias_only=bool(alias))
+            return public_file(file, request)
+        if topic or alias or any(key in request.query_params for key in ("file", "topic", "alias", "doc")):
             raise HTTPException(status_code=404)
         if not config.index_path.is_file():
             raise HTTPException(status_code=404)

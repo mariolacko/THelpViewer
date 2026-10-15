@@ -7,8 +7,8 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from .catalog import ProductSpec, SourceQuery, products_for_source
-from .collector import HELP_EXTENSIONS, detect_language, is_winhelp
+from .catalog import ProductSpec, SourceQuery, products_for_source, version_selected
+from .collector import HELP_EXTENSIONS, detect_language
 from .extractor import ExtractorTools, collect_archive_members, collect_from_archive
 from .http import download_file, fetch_json
 
@@ -163,7 +163,7 @@ def pick_download_files(files: list[dict], identifier: str) -> list[tuple[str, s
         if ext in HELP_EXTENSIONS:
             direct_help.append((name, size))
             continue
-        if ext in archive_exts or ext in {".img", ".ima", ".dsk", ".flp"}:
+        if ext in archive_exts or ext in {".iso", ".img", ".ima", ".dsk", ".flp"}:
             if size > 0:
                 archives.append((name, size))
 
@@ -178,10 +178,11 @@ def pick_download_files(files: list[dict], identifier: str) -> list[tuple[str, s
     archives_7z = [(name, size) for name, size in archives if name.lower().endswith(".7z")]
     archives_zip = [(name, size) for name, size in archives if name.lower().endswith(".zip")]
     archives_rar = [(name, size) for name, size in archives if name.lower().endswith(".rar")]
+    archives_iso = [(name, size) for name, size in archives if name.lower().endswith(".iso")]
     archives_img = [
         (name, size) for name, size in archives if Path(name).suffix.lower() in {".img", ".ima", ".dsk", ".flp"}
     ]
-    chosen = archives_7z or archives_zip or archives_rar or archives_img
+    chosen = archives_7z or archives_zip or archives_rar or archives_iso or archives_img
     chosen.sort(key=lambda item: item[1])
     limit = 6 if chosen is archives_img else 20
     for name, _size in chosen[:limit]:
@@ -244,10 +245,6 @@ def process_item(
                 continue
             try:
                 download_file(url, dest)
-                if ext == ".hlp" and is_winhelp(dest):
-                    print(f"    [skipped] {filename} (Windows HLP)")
-                    dest.unlink(missing_ok=True)
-                    continue
                 collected.append(dest)
                 print(f"    ✓ {dest.relative_to(sources_dir)}")
             except Exception as exc:
@@ -297,6 +294,7 @@ def run(
     """Run the Archive.org provider for selected logical products."""
     all_collected: list[Path] = []
     all_failed: list[str] = []
+    seen_items: set[tuple[str, str]] = set()
 
     for product in products_for_source(SOURCE_NAME, product_keys):
         source_query = product.sources[SOURCE_NAME]
@@ -331,6 +329,12 @@ def run(
         print(f"  Found: {len(items)}, relevant: {len(relevant)}")
 
         for item in relevant:
+            if not (product.default_version and version_selected(product.key, product.default_version)) and not version_selected(
+                    product.key, str(item.get("title", "")) + " " + item["identifier"]):
+                continue
+            identity = (product.key, item["identifier"])
+            if identity in seen_items:
+                continue
             try:
                 files = process_item(
                     item=item,
@@ -343,6 +347,8 @@ def run(
                     failed=all_failed,
                 )
                 all_collected.extend(files)
+                if files or dry_run:
+                    seen_items.add(identity)
             except Exception as exc:
                 identifier = item.get("identifier", "?")
                 print(f"  [error] {identifier}: {exc}")

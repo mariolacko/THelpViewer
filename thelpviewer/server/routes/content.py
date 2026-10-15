@@ -4,13 +4,13 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..admin import require_administrator
+from .authorization import require_administrator
 
 
 class ContentSelection(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    help_groups: list[str] = Field(max_length=100)
-    dos_packages: list[str] = Field(max_length=100)
+    help_packages: list[str] | None = Field(default=None, max_length=500)
+    dos_packages: list[str] | None = Field(default=None, max_length=100)
 
 
 def create_content_router(config, accounts, content):
@@ -33,7 +33,7 @@ def create_content_router(config, accounts, content):
     def install(data: ContentSelection, request: Request):
         require_administrator(config, accounts, request, write=True)
         try:
-            status = content.start(data.help_groups, data.dos_packages)
+            status = content.start(data.help_packages, data.dos_packages)
         except (ValueError, OSError) as error:
             raise HTTPException(status_code=409, detail=str(error)) from None
         return JSONResponse(status, status_code=202, headers={"Cache-Control": "no-store"})
