@@ -281,6 +281,34 @@ const resizer = new TestResizer(windowElement);
 if (!resizeHandle.listeners.has("mousedown") || !moveHandle.listeners.has("mousedown") || !window.listeners.has("beforeunload")) {
     throw new Error("resizer did not bind its resources");
 }
+const readStoredState = resizer.readStoredState;
+for (const [state, expectedLeft, expectedTop] of [
+    [{ left: 16, top: 32, cols: 70, rows: 20 }, 16, 32],
+    [{ left: 424, top: 6069, cols: 70, rows: 20 }, 424, 475],
+    [{ left: 9999, top: 9999, cols: 70, rows: 20 }, 720, 475],
+    [{ left: 9999, top: 9999, cols: 70, rows: 20,
+        restore: { left: 24, top: 48, cols: 60, rows: 18 } }, 24, 48],
+    [{ left: 0, top: 0, cols: 70, rows: 20, maximized: true,
+        restore: { left: 9999, top: 9999, cols: 70, rows: 20 } }, 720, 475],
+]) {
+    resizer.readStoredState = () => state;
+    if (!resizer.restoreState() || resizer.restoreSnapshot.left !== expectedLeft
+        || resizer.restoreSnapshot.top !== expectedTop) {
+        throw new Error("saved window geometry was not constrained to its desktop");
+    }
+    if (state.maximized) { resizer.restore(false); }
+    if (resizer.captureGeometry().left !== expectedLeft || resizer.captureGeometry().top !== expectedTop) {
+        throw new Error("restored/maximized window lost its constrained restore position");
+    }
+}
+desktop.clientWidth = 40; desktop.clientHeight = 20;
+resizer.readStoredState = () => ({ left: 100, top: 100, cols: 70, rows: 20 });
+resizer.restoreState();
+if (resizer.restoreSnapshot.left !== 0 || resizer.restoreSnapshot.top !== 0) {
+    throw new Error("oversized window produced negative restore bounds");
+}
+desktop.clientWidth = 800; desktop.clientHeight = 500;
+resizer.readStoredState = readStoredState;
 resizer.setMoveFrame(true);
 if (!windowElement.classList.contains("is-moving")) {
     throw new Error("move frame state was not preserved");
@@ -376,7 +404,7 @@ def test_help_windows_use_the_tvision_window_and_scroller_hierarchy():
     assert "this.viewer = this.initViewer(this.getExtent(), bundle)" in source
     assert "this.insert(this.viewer)" in source
     assert "const windowView = new TVHelpWindow(" in bundle
-    assert "helpWindow.setContent(contentHTML)" in bundle
+    assert "helpWindow.setContent(contentHTML, textScreens)" in bundle
     assert "viewport.innerHTML = contentHTML" not in bundle
     assert "TVHelpViewer," in source
     assert "TVHelpWindow," in source

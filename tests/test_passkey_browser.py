@@ -18,6 +18,9 @@ def test_passkey_enrollment_and_login_in_browser():
         state = Path(state_dir)
         helps = state / "helps"
         helps.mkdir()
+        empty = state / "empty.json"
+        empty.write_text('{"sources": []}')
+        (state / "content-settings.json").write_text('{"configured":true,"help_groups":[],"dos_packages":[]}')
         port = _free_port()
         app_url = f"http://localhost:{port}/"
         server = subprocess.Popen(
@@ -26,6 +29,7 @@ def test_passkey_enrollment_and_login_in_browser():
             cwd=Path.cwd(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
             env={**os.environ, "THELP_STATE_DIR": state_dir, "THELP_HELPS_DIR": str(helps),
                  "THELP_STATISTICS_PATH": str(state / "statistics.sqlite3"),
+                 "THELP_MIDI_SOURCES_PATH": str(empty), "THELP_DOS_CONFIG_PATH": str(empty),
                  "THELP_AUTH_ORIGIN": app_url.rstrip("/")},
         )
         try:
@@ -34,7 +38,7 @@ def test_passkey_enrollment_and_login_in_browser():
             assert re.fullmatch(r"[A-Z2-9]{5}(?:-[A-Z2-9]{5}){4}", bootstrap)
             with tempfile.TemporaryDirectory(prefix="thelp-passkey-chrome-") as profile_dir:
                 chrome = subprocess.Popen(
-                    [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu",
+                    [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--window-size=1280,900",
                      "--disable-dev-shm-usage", "--no-first-run", "--no-default-browser-check",
                      "--remote-debugging-port=0", f"--user-data-dir={profile_dir}", "about:blank"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -79,7 +83,7 @@ async function run() {
     await send('Page.enable');
     await send('Runtime.enable');
     await send('WebAuthn.enable');
-    await send('WebAuthn.addVirtualAuthenticator', { options: {
+    const firstAuthenticator = await send('WebAuthn.addVirtualAuthenticator', { options: {
         protocol: 'ctap2', transport: 'internal', hasResidentKey: true,
         hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true,
     } });
@@ -168,6 +172,68 @@ async function run() {
     const tokenMenu = await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
         .some((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token')`);
     if (!tokenMenu) { throw new Error('Admin registration-token menu is missing'); }
+    // Manage actual credentials through the account's shared TVision controls.
+    const waitSecurity = async expression => evaluate(`new Promise((resolve,reject)=>{
+        const end=Date.now()+15000;const check=()=>{if(${expression}){resolve(true);return;}
+        if(Date.now()>end){reject(Error('Account security did not finish: '+window.securityDialog?.status?.text));return;}
+        setTimeout(check,30);};check();})`,true);
+    await evaluate(`document.querySelector('[data-tv-command="account-profile"]').click()`);
+    await waitSecurity(`(window.securityDialog=document.querySelector('.tv-account-window')?.closest('.tv-dialog-overlay')?._tvView)
+        && !securityDialog.saveButton.disabled && securityDialog.selectedPasskey`);
+    if(!await evaluate(`securityDialog.selectedPasskey.name===securityDialog.passkeyName.getData()
+        && securityDialog.selectedPasskey.name!=='Passkey'`))throw Error('Registration did not save its suggested key name');
+    await evaluate(`void securityDialog.firstNameInput.focus()`);
+    await send('Input.dispatchKeyEvent', {type:'keyDown',key:'p',code:'KeyP',modifiers:1});
+    await send('Input.dispatchKeyEvent', {type:'keyUp',key:'p',code:'KeyP',modifiers:1});
+    if(!await evaluate(`document.activeElement===securityDialog.passwordInput.root`))throw Error('Alt+P did not focus New password');
+    await evaluate(`(()=>{
+        if(securityDialog.passwordInput.root.type!=='password'||securityDialog.repeatPassword.root.type!=='password')throw Error('Unmasked account password');
+        securityDialog.passkeyName.setData('Windows - Edge');
+        securityDialog.renamePasskeyButton.root.click();
+    })()`);
+    await waitSecurity(`securityDialog.status.text==='Passkey renamed.'`);
+    await evaluate(`(()=>{
+        securityDialog.passwordInput.setData('short');securityDialog.repeatPassword.setData('short');
+        securityDialog.passwordButton.root.click();
+        if(!securityDialog.status.text.includes('15-128'))throw Error('Weak password accepted by the dialog');
+        securityDialog.passwordInput.setData('Moonlit rivers carry 42 boats!');
+        securityDialog.repeatPassword.setData('Moonlit rivers carry 42 boats!');
+        securityDialog.passwordButton.root.click();
+    })()`);
+    await waitSecurity(`securityDialog.status.text.includes('Password saved.')`);
+    // The existing key confirms the session, then a second real authenticator
+    // creates the new key. This models adding another device, not a mock key.
+    await send('Runtime.addBinding',{name:'testPreparePasskeyDevice'});
+    const switchDevice = async event => {
+        const message=JSON.parse(String(event.data));
+        if(message.method!=='Runtime.bindingCalled'||message.params.name!=='testPreparePasskeyDevice')return;
+        await send('WebAuthn.removeVirtualAuthenticator',{authenticatorId:firstAuthenticator.authenticatorId});
+        await send('WebAuthn.addVirtualAuthenticator',{options:{protocol:'ctap2',transport:'internal',
+            hasResidentKey:true,hasUserVerification:true,isUserVerified:true,automaticPresenceSimulation:true}});
+        await evaluate(`window.testPasskeyDeviceReady()`);
+    };
+    socket.addEventListener('message',switchDevice);
+    await evaluate(`(()=>{
+        window.accountOriginalCreate=navigator.credentials.create.bind(navigator.credentials);
+        navigator.credentials.create=async options=>{
+            await new Promise(resolve=>{window.testPasskeyDeviceReady=resolve;window.testPreparePasskeyDevice('ready');});
+            return window.accountOriginalCreate(options);
+        };
+        securityDialog.passkeyName.setData('macOS - Safari');securityDialog.addPasskeyButton.root.click();
+    })()`);
+    await waitSecurity(`securityDialog.status.text==='New Passkey added.'`);
+    socket.removeEventListener('message',switchDevice);
+    await send('Runtime.removeBinding',{name:'testPreparePasskeyDevice'});
+    await evaluate(`navigator.credentials.create=window.accountOriginalCreate`);
+    const security=await evaluate(`fetch('/api/auth/security').then(r=>r.json())`,true);
+    if(!security.password_set||security.passkeys.length!==2
+        ||!security.passkeys.some(key=>key.name==='Windows - Edge')||!security.passkeys.some(key=>key.name==='macOS - Safari')){
+        throw Error('Named Passkeys/password were not saved: '+JSON.stringify(security));
+    }
+    if(!await evaluate(`!securityDialog.passwordInput.getData()&&!securityDialog.repeatPassword.getData()`))throw Error('Account retained password text');
+    if(process.env.THELP_ACCOUNT_SCREENSHOT){const shot=await send('Page.captureScreenshot',{format:'png'});
+        require('node:fs').writeFileSync(process.env.THELP_ACCOUNT_SCREENSHOT,Buffer.from(shot.data,'base64'));}
+    await evaluate(`securityDialog.close()`);
     const accountTitle=await evaluate(`document.querySelector('.tv-menu-right > .tv-menu-root > .tv-menu-button')?.textContent`);
     if(accountTitle!=='Test User')throw new Error('Authenticated user name missing from top menu: '+accountTitle);
     await evaluate(`(()=>{window.accountTestLogin=document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView;
@@ -198,6 +264,10 @@ async function run() {
     await evaluate(`document.querySelector('.tv-server-configuration-window [data-tv-command="server-settings-cancel"]').click()`);
     await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
         .find((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token').click()`);
+    await evaluate(`(() => {
+        const dialog = accountTestLogin.owner.dialogManager.get('registration-token');
+        if (!dialog.copyButton?.disabled) { throw new Error('Copy must be disabled before a token is available'); }
+    })()`);
     await evaluate(`document.querySelector('.tv-registration-token-window [data-tv-command="token-generate"]').click()`);
     const issuedToken = await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 5000;
@@ -212,6 +282,37 @@ async function run() {
     if (!/^[A-Z2-9]{5}(?:-[A-Z2-9]{5}){4}$/.test(issuedToken)) {
         throw new Error('Generated registration token has the wrong format');
     }
+    await send('Browser.grantPermissions', { origin: new URL(appUrl).origin,
+        permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
+    const copyPoint = await evaluate(`(() => {
+        const dialog = accountTestLogin.owner.dialogManager.get('registration-token');
+        const buttons = dialog.content.children.filter(view => view instanceof window.THelpViewerTV.TVButton);
+        const body = dialog.content.root.getBoundingClientRect();
+        if (buttons.length !== 4 || dialog.copyButton.disabled) { throw new Error('Token dialog lacks four usable buttons'); }
+        buttons.forEach((button, index) => {
+            const rect = button.root.getBoundingClientRect();
+            if (rect.left < body.left || rect.right > body.right || rect.bottom > body.bottom
+                    || (index && rect.left <= buttons[index - 1].root.getBoundingClientRect().right)) {
+                throw new Error('Token dialog buttons overlap or leave the client area');
+            }
+        });
+        const rect = dialog.copyButton.root.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 4 };
+    })()`);
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...copyPoint, button: 'left', clickCount: 1 });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...copyPoint, button: 'left', clickCount: 1 });
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 3000;
+        const check = () => {
+            const dialog = accountTestLogin.owner.dialogManager.get('registration-token');
+            if (dialog.status.text === 'Token copied to clipboard.') { resolve(); return; }
+            if (Date.now() > deadline) { reject(new Error('Copy button did not confirm clipboard success')); return; }
+            setTimeout(check, 20);
+        }; check();
+    })`, true);
+    if (!await evaluate(`navigator.clipboard.readText().then(text => text === ${JSON.stringify(issuedToken)})`, true)) {
+        throw new Error('Clipboard does not contain exactly the generated token');
+    }
     await evaluate(`document.querySelector('.tv-registration-token-window [data-tv-command="token-close"]').click()`);
     await evaluate(`Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
         .find((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token').click()`);
@@ -221,7 +322,8 @@ async function run() {
             const dialog = document.querySelector('.tv-registration-token-window');
             const row = dialog?.querySelector('.tv-vlist-item');
             const remove = dialog?.querySelector('[data-tv-command="token-delete"]');
-            if (row?.textContent.includes(${JSON.stringify(issuedToken)}) && remove?.disabled) {
+            const copy = dialog?.closest('.tv-dialog-overlay')._tvView.copyButton;
+            if (row?.textContent.includes(${JSON.stringify(issuedToken)}) && remove?.disabled && copy?.disabled) {
                 resolve(true); return;
             }
             if (Date.now() > deadline) { reject(new Error('Issued token was not listed after reopening')); return; }
@@ -237,6 +339,9 @@ async function run() {
         }
         if (dialog.querySelector('.tv-input-line').value !== ${JSON.stringify(issuedToken)}) {
             throw new Error('Selected token did not appear in the input');
+        }
+        if (dialog.closest('.tv-dialog-overlay')._tvView.copyButton.disabled) {
+            throw new Error('Copy stayed disabled after selecting a token');
         }
         dialog.querySelector('[data-tv-command="token-delete"]').click();
     })()`);
@@ -298,6 +403,28 @@ async function run() {
         };
         check();
     })`, true);
+    await evaluate(`(async () => {
+        const dialog = accountTestLogin.owner.dialogManager.get('registration-token');
+        if (!dialog.copyButton.disabled) { throw new Error('Deleted token remains copyable'); }
+        const descriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+        Object.defineProperty(navigator, 'clipboard', { configurable: true,
+            value: { writeText: () => Promise.reject(new Error('Permission denied')) } });
+        try {
+            dialog.token.setData('TEST-COPY');
+            await dialog.copyToken();
+            if (!dialog.status.text.includes('Ctrl+C or Cmd+C') || document.activeElement !== dialog.token.root
+                    || dialog.token.root.selectionStart !== 0 || dialog.token.root.selectionEnd !== 9) {
+                throw new Error('Clipboard rejection did not provide selected manual-copy fallback');
+            }
+            Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+            await dialog.copyToken();
+            if (!dialog.status.text.includes('Ctrl+C or Cmd+C')) { throw new Error('Missing clipboard API was not handled'); }
+        } finally {
+            if (descriptor) { Object.defineProperty(navigator, 'clipboard', descriptor); }
+            else { delete navigator.clipboard; }
+            dialog.token.setData('');
+        }
+    })()`, true);
     await evaluate(`document.querySelector('.tv-registration-token-window [data-tv-command="token-close"]').click()`);
     await evaluate(`document.querySelector('[data-tv-command="account-logout"]').click()`);
     await evaluate(`new Promise((resolve, reject) => {
@@ -307,7 +434,7 @@ async function run() {
                 ?._tvView?.status?.root?.textContent || '';
             const tokenMenu = Array.from(document.querySelectorAll('[data-tv-command="account-registration-token"]'))
                 .some((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token');
-            if (status.includes('Sign in, or register') && !tokenMenu) { resolve(true); return; }
+            if (status.includes('Sign In uses a Passkey') && !tokenMenu) { resolve(true); return; }
             if (Date.now() > deadline) {
                 fetch('/api/auth/session').then(r=>r.json()).then(session=>reject(new Error('Passkey sign-out failed: '+status+' authenticated='+session.authenticated)));
                 return;
@@ -320,6 +447,11 @@ async function run() {
         .some((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token')`);
     if (tokenMenuAfterSignOut) { throw new Error('Admin registration-token menu remained after sign-out'); }
     if(await evaluate(`document.querySelector('.tv-menu-right [data-tv-command="account-login"]')?.textContent.replaceAll('~','')`)!=='Login')throw new Error('Guest Login menu was not restored');
+    await evaluate(`(()=>{const dialog=document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView;
+        dialog.username.setData('test@example.test');dialog.passwordInput.setData('Moonlit rivers carry 42 boats!');
+        dialog.dialog.querySelector('[data-tv-command="login-password"]').click();})()`);
+    await waitSecurity(`document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView.status.text.includes('Signed in as Test User')`);
+    await evaluate(`document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView.signOut()`,true);
     await evaluate(`(() => {
         const dialog = document.querySelector('.tv-login-window');
         dialog.querySelector('.tv-input-line').value = 'test@example.test';

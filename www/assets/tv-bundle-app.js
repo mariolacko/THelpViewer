@@ -24,8 +24,11 @@ const {
     TVAddUserDialog,
     TVRegistrationTokenDialog,
     TVServerConfigurationDialog,
-    TVContentSetupDialog,
+    TVHelpPackagesDialog,
+    TVDosPackagesDialog,
+    TVMidiSourcesDialog,
     TVApplicationMenuBar,
+    TVDownloadProgress,
     buildAccountMenu,
     TVPuzzleDialog,
     TVCalendarDialog,
@@ -61,6 +64,7 @@ const {
     TVView,
     TVGroup,
     TVStaticText,
+    TVTextScreen,
     TVPercentGauge,
     TVBarGauge,
     TVPoint,
@@ -420,6 +424,10 @@ function applyWindowGeometry(element, geometry, dialog = false) {
     const rows = Math.max(1, Number(geometry[3]) || 1);
     const maximized = Boolean(Number(geometry[4]));
     if (dialog) {
+        const view = TVView._fromElement(element);
+        if (view instanceof TVDialog) {
+            view.changeBounds(new TVRect(view.bounds.x1, view.bounds.y1, view.bounds.x1 + cols, view.bounds.y1 + rows));
+        }
         element.style.setProperty("--tv-dialog-left", `${left}px`);
         element.style.setProperty("--tv-dialog-top", `${top}px`);
         element.style.setProperty("--tv-dialog-width", `${cols}ch`);
@@ -594,43 +602,35 @@ function normalizeSourceFileName(value) {
     return String(value || "").trim().toLowerCase();
 }
 
-function normalizeSourceFileStem(value) {
-    const normalized = normalizeSourceFileName(value);
-    if (!normalized) {
-        return "";
-    }
-    const name = normalized.split(/[\\/]/).pop() || normalized;
-    return name.replace(/\.[^.]+$/, "");
-}
-
 function preferredCatalogEntry(entries, preferredBundle = null) {
     if (!entries.length) {
         return null;
     }
+    if (entries.length === 1) { return entries[0]; }
     const preferredFile = String((preferredBundle || {})._catalogFile || "").trim();
     const preferredEntry = preferredFile && Array.isArray(catalogData)
         ? catalogData.find((entry) => normalizeSourceFileName(entry.file || "") === normalizeSourceFileName(preferredFile))
         : null;
     if (!preferredEntry) {
-        return entries[0];
+        return null;
     }
 
     const preferredGroup = normalizeSourceFileName(preferredEntry.group || "");
     const sameGroup = preferredGroup
-        ? entries.find((entry) => normalizeSourceFileName(entry.group || "") === preferredGroup)
-        : null;
-    if (sameGroup) {
-        return sameGroup;
+        ? entries.filter((entry) => normalizeSourceFileName(entry.group || "") === preferredGroup)
+        : [];
+    if (sameGroup.length === 1) {
+        return sameGroup[0];
     }
 
     const preferredProduct = normalizeSourceFileName(preferredEntry.product || "");
     const preferredVersion = normalizeSourceFileName(preferredEntry.version || "");
-    const sameProductVersion = entries.find((entry) =>
+    const sameProductVersion = entries.filter((entry) =>
         preferredProduct
         && normalizeSourceFileName(entry.product || "") === preferredProduct
         && normalizeSourceFileName(entry.version || "") === preferredVersion
     );
-    return sameProductVersion || entries[0];
+    return sameProductVersion.length === 1 ? sameProductVersion[0] : null;
 }
 
 function findCatalogEntryBySourceFile(sourceFile, preferredBundle = null) {
@@ -652,22 +652,11 @@ function findCatalogEntryBySourceFile(sourceFile, preferredBundle = null) {
         }
         return values;
     };
-    // Check explicit source files and the source_files array
-    let matches = catalogData.filter((entry) => sourceFiles(entry).some((value) => normalizeSourceFileName(value) === wanted));
-    let found = preferredCatalogEntry(matches, preferredBundle);
-    if (found) { return found; }
-
-    // Check bundle file path (catalog entry 'file')
-    found = catalogData.find((entry) => normalizeSourceFileName(entry.file || "") === wanted) || null;
-    if (found) { return found; }
-
-    const wantedStem = normalizeSourceFileStem(sourceFile);
-    if (!wantedStem) { return null; }
-
-    matches = catalogData.filter((entry) =>
-        sourceFiles(entry).some((value) => normalizeSourceFileStem(value) === wantedStem)
-        || normalizeSourceFileStem(entry.file || "") === wantedStem
-    );
+    // Only reader/catalog-verified filenames are identities. An original
+    // MISC.HLP must never fall back to an unrelated MISC.TXT/bundle stem.
+    const direct = catalogData.find((entry) => normalizeSourceFileName(entry.file || "") === wanted);
+    if (direct) { return direct; }
+    const matches = catalogData.filter((entry) => sourceFiles(entry).some((value) => normalizeSourceFileName(value) === wanted));
     return preferredCatalogEntry(matches, preferredBundle);
 }
 
@@ -711,47 +700,6 @@ function bundleHeaderLabel(bundle) {
     const title = bundleTitle(bundle);
     const sourceName = bundleSourceName(bundle);
     return sourceName ? `${title} (${sourceName})` : title;
-}
-
-function formatHlxControlBytes(values) {
-    if (!Array.isArray(values)) {
-        return "";
-    }
-    return values
-        .map((value) => Number.parseInt(value, 10))
-        .filter((value) => Number.isInteger(value) && value >= 0)
-        .slice(0, 3)
-        .map((value) => `0x${value.toString(16).toUpperCase()}`)
-        .join(" ");
-}
-
-function bundleDiagnosticItems(bundle) {
-    if (bundleSourceFormat(bundle) !== "hlx") {
-        return [];
-    }
-
-    const metadata = bundle && typeof bundle === "object" ? (bundle.metadata || {}) : {};
-    const items = [];
-
-    if (typeof metadata.hlx_kind === "string" && metadata.hlx_kind.trim()) {
-        items.push({ label: "Kind", value: metadata.hlx_kind.trim() });
-    }
-    if (typeof metadata.hlx_family === "string" && metadata.hlx_family.trim()) {
-        items.push({ label: "Family", value: metadata.hlx_family.trim() });
-    }
-    if (Number.isInteger(metadata.pointer_count)) {
-        items.push({ label: "Ptrs", value: String(metadata.pointer_count) });
-    }
-    const controlBytes = formatHlxControlBytes(metadata.control_byte_dominant);
-    if (controlBytes) {
-        items.push({ label: "Ctrl", value: controlBytes });
-    }
-    return items;
-}
-
-function renderBundleDiagnostics(bundle) {
-    void bundle;
-    return "";
 }
 
 function wrapBundleContent(bundle, contentHTML) {
@@ -833,7 +781,13 @@ function normalizeDirectTopicRef(bundle, ref) {
 }
 
 function normalizeTopicAlias(value) {
-    return String(value || "").trim().toLowerCase();
+    return String(value ?? "").trim().toLowerCase();
+}
+
+function caseSensitiveTopicAliasKey(value) {
+    const alias = String(value ?? "").trim();
+    const qualifier = alias.indexOf("!");
+    return qualifier < 0 ? alias : alias.slice(0, qualifier).toLowerCase() + alias.slice(qualifier);
 }
 
 function bundleAliasMap(bundle) {
@@ -842,18 +796,26 @@ function bundleAliasMap(bundle) {
     }
 
     const aliasMap = new Map();
+    const exactAliases = new Map();
+    const databases = Array.isArray(bundle.metadata?.quickhelp_databases) ? bundle.metadata.quickhelp_databases : [];
     const topics = bundle.topics && typeof bundle.topics === "object" ? bundle.topics : {};
     for (const [rawKey, topic] of Object.entries(topics)) {
         const resolvedTopic = normalizeDirectTopicRef(bundle, rawKey)
             || (topic && topic.id != null ? normalizeDirectTopicRef(bundle, topic.id) : null)
             || String(rawKey).trim();
         const aliases = topic && typeof topic === "object" ? topic.aliases : null;
+        const caseSensitive = databases.some((database) => database.case_sensitive
+            && Number(resolvedTopic) >= database.first_topic_id
+            && Number(resolvedTopic) < database.first_topic_id + database.topic_count);
         const addAlias = (value) => {
-            const normalized = normalizeTopicAlias(value);
-            if (!normalized || aliasMap.has(normalized)) {
+            const exact = caseSensitive && typeof value === "string";
+            const map = exact ? exactAliases : aliasMap;
+            const normalized = exact ? caseSensitiveTopicAliasKey(value) : normalizeTopicAlias(value);
+            if (!normalized || map.has(normalized)) {
                 return;
             }
-            aliasMap.set(normalized, resolvedTopic);
+            const line = aliases?.lines?.[String(value)];
+            map.set(normalized, { topic: resolvedTopic, line: Number.isInteger(line) && line > 0 ? line : null });
         };
 
         if (aliases && typeof aliases === "object") {
@@ -865,19 +827,28 @@ function bundleAliasMap(bundle) {
     }
 
     bundle._topicAliasMap = aliasMap;
+    bundle._caseSensitiveTopicAliasMap = exactAliases;
     return aliasMap;
 }
 
-function normalizeTopicRef(bundle, ref) {
-    const direct = normalizeDirectTopicRef(bundle, ref);
+function normalizeTopicTarget(bundle, ref, lineNumber = null, aliasOnly = false) {
+    const explicitLine = Number(lineNumber);
+    const line = Number.isInteger(explicitLine) && explicitLine > 0 ? explicitLine : null;
+    const direct = aliasOnly ? null : normalizeDirectTopicRef(bundle, ref);
     if (direct) {
-        return direct;
+        return { topic: direct, line };
     }
     const alias = normalizeTopicAlias(ref);
     if (!alias) {
         return null;
     }
-    return bundleAliasMap(bundle).get(alias) || null;
+    const aliases = bundleAliasMap(bundle);
+    const target = bundle._caseSensitiveTopicAliasMap?.get(caseSensitiveTopicAliasKey(ref)) || aliases.get(alias);
+    return target ? { topic: target.topic, line: line ?? target.line } : null;
+}
+
+function normalizeTopicRef(bundle, ref) {
+    return normalizeTopicTarget(bundle, ref)?.topic ?? null;
 }
 
 function flattenUhfIndexEntries(bundle) {
@@ -952,19 +923,26 @@ function resolveMissingSourceTopicFallback(bundle, sourceFile, topicRef) {
         return null;
     }
 
-    const normalizedSource = normalizeSourceFileName(sourceFile);
     const normalizedTopic = normalizeTopicAlias(topicRef);
     if (!normalizedTopic) {
         return null;
     }
-    if (/(^|[!:])(?:[a-z0-9_.-]+\.)?contents$/.test(normalizedTopic)) {
+    if (normalizedTopic === "-9996" || /(^|!)hv$/.test(normalizedTopic)) {
+        const qualifier = normalizedTopic.includes("!")
+            ? normalizedTopic.slice(0, normalizedTopic.indexOf("!")) : normalizeSourceFileName(sourceFile);
+        const databases = Array.isArray(bundle.metadata?.quickhelp_databases) ? bundle.metadata.quickhelp_databases : [];
+        const database = databases.find((item) =>
+            normalizeSourceFileName(item.name) === qualifier);
+        if (database) {
+            const topics = bundleTopicList(bundle).filter((topic) => Number(topic.id) >= database.first_topic_id
+                && Number(topic.id) < database.first_topic_id + database.topic_count);
+            const home = topics.find((topic) => topic.is_help_contents) || topics[0];
+            if (home) { return { type: "topic", ref: String(home.id) }; }
+        }
         return { type: "contents" };
     }
-    if (/(^|[!:])(?:[a-z0-9_.-]+\.)?index$/.test(normalizedTopic)) {
+    if (normalizedTopic === "-9997" || /(^|!)vx$/.test(normalizedTopic)) {
         return { type: "index" };
-    }
-    if ((normalizedSource === "qc.hlp" || normalizedSource === "qc") && /\.lst(?:v\d+)?(?:$|[!:])/.test(normalizedTopic)) {
-        return { type: "contents" };
     }
     return null;
 }
@@ -1444,13 +1422,20 @@ function bundleTargetUrl(bundle, target, currentTopic = null) {
     if (!file || file === CONTEXT_HELP_BUNDLE_FILE) { return "#"; }
     const destination = file === bundle?._catalogFile ? bundle : bundleCache.get(file);
     const ref = target.bundleTopic ?? target.topicAlias ?? (target.sourceFile ? null : currentTopic?.id);
-    const topic = destination ? normalizeTopicRef(destination, ref)
-        : (/^-?\d+$/.test(String(ref ?? "")) ? String(Number(ref)) : null);
+    const rawRef = String(ref ?? "").trim();
+    const aliasOnly = target.bundleTopic == null && target.topicAlias != null;
+    const resolved = destination ? normalizeTopicTarget(destination, ref, target.topicLine, aliasOnly) : null;
     const params = { file };
-    if (topic) {
-        params.topic = topic;
-        if (Number(target.topicLine) > 0) { params.line = String(target.topicLine); }
+    if (resolved) {
+        params.topic = resolved.topic;
+    } else if (rawRef) {
+        // Keep the namespace and spelling until the target bundle is loaded.
+        // A numeric source alias is not an ordinal UHF topic id.
+        params[aliasOnly ? "alias" : "topic"] = aliasOnly ? rawRef
+            : (/^-?\d+$/.test(rawRef) ? String(Number(rawRef)) : rawRef);
     }
+    const line = resolved?.line ?? target.topicLine;
+    if (Number(line) > 0) { params.line = String(line); }
     return viewerUrl(params);
 }
 
@@ -1633,12 +1618,72 @@ function bundleFrozenRows(bundle, topic) {
     return Math.max(0, Number((bundle.metadata || {}).frozen_rows) || 0);
 }
 
+function uhfTextScreenForLine(bundle, line) {
+    const match = String(line).match(/^\[screen:([A-Za-z0-9_-]{1,64})\]$/);
+    const screen = match && bundle?.text_screens?.[match[1]];
+    const sourceFont = screen && bundle?.fonts?.[screen.font];
+    if (!screen || !sourceFont || !Number.isInteger(screen.cols) || screen.cols < 1 || screen.cols > 512
+        || !Number.isInteger(screen.rows) || screen.rows < 1 || screen.rows > 512
+        || typeof screen.palette !== "string" || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(screen.palette)) { return null; }
+    const { width, height, data } = sourceFont;
+    if (!Number.isInteger(width) || width < 1 || width > 32
+        || !Number.isInteger(height) || height < 1 || height > 64
+        || screen.cols * width * screen.rows * height > 16777216) { return null; }
+    const decode = (data, size) => {
+        if (typeof data !== "string" || data.length !== Math.ceil(size / 3) * 4
+            || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) { return null; }
+        let bytes;
+        try { bytes = atob(data); } catch (_) { return null; }
+        return bytes.length === size ? Uint8Array.from(bytes, byte => byte.charCodeAt(0)) : null;
+    };
+    const fontData = decode(data, 256 * height * Math.ceil(width / 8));
+    if (!fontData) { return null; }
+    let cells = screen.cells;
+    let blink = screen.blink;
+    const count = screen.cols * screen.rows;
+    if (Array.isArray(cells)) {
+        if (cells.length !== count || screen.data !== undefined || screen.cell_format !== undefined) { return null; }
+    } else {
+        if (cells !== undefined || !["dos-text", "dos-text-blink", "dos-text-bright", "glyph-fg-bg"].includes(screen.cell_format)) { return null; }
+        const dos = screen.cell_format.startsWith("dos-text"), stride = dos ? 2 : 3;
+        if (dos && blink !== undefined) { return null; }
+        const packed = decode(screen.data, count * stride);
+        if (!packed) { return null; }
+        cells = [];
+        if (screen.cell_format === "dos-text-blink") { blink = []; }
+        for (let i = 0; i < packed.length; i += stride) {
+            if (screen.cell_format === "dos-text" && (packed[i + 1] & 0x80)) { return null; }
+            if (screen.cell_format === "dos-text-blink") { blink.push(Boolean(packed[i + 1] & 0x80)); }
+            cells.push(dos ? [packed[i], packed[i + 1] & 15,
+                (packed[i + 1] >> 4) & (screen.cell_format === "dos-text-bright" ? 15 : 7)]
+                : [packed[i], packed[i + 1], packed[i + 2]]);
+        }
+    }
+    if (blink !== undefined && (!Array.isArray(blink) || blink.length !== count
+        || blink.some(flag => typeof flag !== "boolean"))) { return null; }
+    const palette = {};
+    for (const cell of cells) {
+        if (!Array.isArray(cell) || cell.length !== 3
+            || cell.some(value => !Number.isInteger(value) || value < 0 || value > 255)) { return null; }
+        for (const index of cell.slice(1)) {
+            if (!Object.prototype.hasOwnProperty.call(palette, index)) {
+                palette[index] = resolveUhfColor(bundle, `${screen.palette}:${index}`);
+                if (!palette[index]) { return null; }
+            }
+        }
+    }
+    const text = screen.text || Array(screen.rows).fill("");
+    if (!Array.isArray(text) || text.length !== screen.rows
+        || text.some(row => typeof row !== "string" || /[\r\n]/.test(row))) { return null; }
+    return { ...screen, cells, blink, text, palette, font: { width, height, data: fontData } };
+}
+
 function wrapTopicLineMarkup(lineNumber, html, extraClass = "") {
     const classSuffix = extraClass ? ` ${extraClass}` : "";
     return `<span class="tv-topic-line${classSuffix}" data-tv-line="${lineNumber}">${html}</span>`;
 }
 
-function renderUhfTopicLines(topic, bundle) {
+function renderUhfTopicLines(topic, bundle, textScreens = []) {
     const lines = [];
     const content = Array.isArray(topic && topic.content) ? topic.content : [];
     const downTarget = topic && topic.nav && topic.nav.Down
@@ -1660,6 +1705,20 @@ function renderUhfTopicLines(topic, bundle) {
         if (line === "[rule]") {
             lineNumber += 1;
             lines.push(wrapTopicLineMarkup(lineNumber, renderUhfRule(bundle), "tv-topic-line-rule"));
+            return;
+        }
+        const screen = !inCodeBlock && uhfTextScreenForLine(bundle, raw);
+        if (screen) {
+            for (let row = 0; row < screen.rows; row += 1) {
+                const view = new TVTextScreen(new TVRect());
+                view.setData({ ...screen, rows: 1,
+                    cells: screen.cells.slice(row * screen.cols, (row + 1) * screen.cols),
+                    blink: screen.blink?.slice(row * screen.cols, (row + 1) * screen.cols),
+                    text: [screen.text[row]] });
+                textScreens.push(view);
+                lineNumber += 1;
+                lines.push(wrapTopicLineMarkup(lineNumber, view.draw()));
+            }
             return;
         }
         if (!inCodeBlock && raw.trim().toLowerCase() === "<more>" && downTarget) {
@@ -1728,8 +1787,8 @@ function renderTopicTags(topic) {
     return `<div class="tv-topic-tags">${links.join("\n")}</div>`;
 }
 
-function renderUhfTopic(topic, bundle) {
-    const lines = renderUhfTopicLines(topic, bundle);
+function renderUhfTopic(topic, bundle, textScreens = []) {
+    const lines = renderUhfTopicLines(topic, bundle, textScreens);
     const title = bundleTopicTitle(bundle, topic);
     const metadata = bundle && typeof bundle === "object" ? (bundle.metadata || {}) : {};
     const titleHTML = title && metadata.show_topic_titles === true
@@ -1802,7 +1861,8 @@ function buildUhfSearchIndex(bundle) {
             if (inCodeBlock || line === "[rule]") {
                 return;
             }
-            const compact = normalizeSearchText(line);
+            const screen = uhfTextScreenForLine(bundle, line);
+            const compact = screen ? screen.text.join("\n").replace(/\s+/g, " ").trim() : normalizeSearchText(line);
             if (compact) {
                 bodyLines.push(compact);
             }
@@ -1986,7 +2046,7 @@ class TVWelcomeDialog extends TVDialog {
 
 // ── Window rendering ────────────────────────────────────────────────
 
-function buildWindow(bundle, contentHTML, caption) {
+function buildWindow(bundle, contentHTML, caption, textScreens = []) {
     const w = bundleWindowSpec(bundle);
     const windowView = new TVHelpWindow(
         new TVRect(0, 0, w.cols, w.rows),
@@ -1995,7 +2055,7 @@ function buildWindow(bundle, contentHTML, caption) {
         wnNoNumber,
     );
     windowView.minSize = new TVPoint(w.min_cols, w.min_rows);
-    windowView.setContent(contentHTML);
+    windowView.setContent(contentHTML, textScreens);
     const windowEl = TVView._fromHTML(windowView.draw());
     windowView.resolve(windowEl);
     windowEl._tvWindowView = windowView;
@@ -2168,7 +2228,9 @@ function findTopicByHex(bundle, contextHex) {
 }
 
 function renderTopicContent(bundle, topic) {
-    return renderUhfTopic(topic, bundle);
+    const textScreens = [];
+    const markup = renderUhfTopic(topic, bundle, textScreens);
+    return textScreens.length ? { markup, textScreens } : markup;
 }
 
 // ── Window manager ──────────────────────────────────────────────────
@@ -2201,6 +2263,7 @@ class BundleWindowManager {
     constructor(desktop, onNavigate) {
         this.desktop = desktop;
         this.onNavigate = onNavigate || null;
+        this.onError = null;
         this.dialogManager = null;
         this.openWindows = new Map(); // source_name → DOM element
         this.scrollbars = [];
@@ -2214,9 +2277,12 @@ class BundleWindowManager {
     }
 
     showIndex(bundle) {
-        // If the UHF2 bundle has no index entries, show the first available topic
-        // instead of an empty index page.
+        // Prefer the reader's contents when there is no alphabetical index.
         if (!bundleHasIndexEntries(bundle)) {
+            if (Array.isArray(bundle.contents) && bundle.contents.length) {
+                this.showContents(bundle);
+                return;
+            }
             const fallback = bundleFirstTopicRef(bundle);
             if (fallback) {
                 this.showTopic(bundle, fallback);
@@ -2234,8 +2300,9 @@ class BundleWindowManager {
         if (this.onNavigate) { this.onNavigate("Index"); }
     }
 
-    showTopic(bundle, contextHex, lineNumber = null) {
-        const normalized = normalizeTopicRef(bundle, contextHex);
+    showTopic(bundle, contextHex, lineNumber = null, aliasOnly = false) {
+        const target = normalizeTopicTarget(bundle, contextHex, lineNumber, aliasOnly);
+        const normalized = target?.topic;
         const topic = normalized ? ((bundle.topics && bundle.topics[normalized]) || null) : null;
         if (!topic) {
             console.warn(`Topic not found: ${contextHex}`);
@@ -2244,7 +2311,7 @@ class BundleWindowManager {
         this._pushHistory();
         this.currentBundle = bundle;
         this.currentContextHex = normalized;
-        this.currentLineNumber = this._normalizeLineNumber(lineNumber);
+        this.currentLineNumber = target.line;
         this.currentView = "topic";
         this.currentTag = null;
         const contentHTML = wrapBundleContent(bundle, renderTopicContent(bundle, topic));
@@ -2310,7 +2377,7 @@ class BundleWindowManager {
         return true;
     }
 
-    async openSourceTopic(sourceFile, topicRef, lineNumber = null, fallbackBundle = null) {
+    async openSourceTopic(sourceFile, topicRef, lineNumber = null, fallbackBundle = null, aliasOnly = false) {
         const showFallback = (bundle, fallback) => {
             if (!bundle || !fallback) {
                 return false;
@@ -2332,26 +2399,21 @@ class BundleWindowManager {
 
         const entry = findCatalogEntryBySourceFile(sourceFile, fallbackBundle || this.currentBundle);
         if (!entry) {
-            if (showFallback(fallbackBundle, resolveMissingSourceTopicFallback(fallbackBundle, sourceFile, topicRef))) {
-                return true;
-            }
             console.warn(`Bundle not found for source file: ${sourceFile}`);
             return false;
         }
         const bundle = await loadBundle(entry.file);
         const normalizedTopic = topicRef != null ? String(topicRef).trim() : "";
-        const resolvedTopic = normalizedTopic ? normalizeTopicRef(bundle, normalizedTopic) : null;
+        const resolvedTopic = normalizedTopic ? normalizeTopicTarget(bundle, normalizedTopic, lineNumber, aliasOnly) : null;
         if (resolvedTopic) {
-            this.showTopic(bundle, resolvedTopic, lineNumber);
+            return this.showTopic(bundle, resolvedTopic.topic, resolvedTopic.line);
+        }
+        if (!aliasOnly && showFallback(bundle, resolveMissingSourceTopicFallback(bundle, sourceFile, normalizedTopic))) {
             return true;
         }
-        if (showFallback(bundle, resolveMissingSourceTopicFallback(bundle, sourceFile, normalizedTopic))) {
-            return true;
-        }
-        const fallback = bundleTopicFallbackRef(bundle);
-        if (fallback) {
-            this.showTopic(bundle, fallback, lineNumber);
-            return true;
+        if (normalizedTopic) {
+            console.warn(`Topic not found in ${sourceFile}: ${normalizedTopic}`);
+            return false;
         }
         this.showContents(bundle);
         return true;
@@ -2452,6 +2514,8 @@ class BundleWindowManager {
     }
 
     _openWindow(bundle, contentHTML, caption) {
+        const textScreens = contentHTML?.textScreens || [];
+        contentHTML = contentHTML?.markup ?? contentHTML;
         const renderStartedAt = performance.now();
         const key = bundleWindowKey(bundle);
         const applyStateData = (windowEl) => {
@@ -2476,7 +2540,7 @@ class BundleWindowManager {
                 helpWindow.findEditor.destroy();
                 helpWindow.findEditor = null;
             }
-            helpWindow.setContent(contentHTML);
+            helpWindow.setContent(contentHTML, textScreens);
             helpWindow.title = caption;
             const captionEl = existing.querySelector(".tv-window-caption");
             if (captionEl) {
@@ -2491,7 +2555,7 @@ class BundleWindowManager {
             return existing;
         }
 
-        const windowEl = buildWindow(bundle, contentHTML, caption);
+        const windowEl = buildWindow(bundle, contentHTML, caption, textScreens);
         this.desktop.appendChild(windowEl);
         bindCloseButtons(windowEl);
         this.openWindows.set(key, windowEl);
@@ -2602,13 +2666,14 @@ class BundleWindowManager {
         const currentBundle = windowEl._tvWindowView.bundle;
         const sourceFile = target.sourceFile || "";
         const lineNumber = this._normalizeLineNumber(target.topicLine);
-        const topicRef = (target.bundleTopic || target.topicAlias || "").trim();
+        const topicRef = String(target.bundleTopic ?? target.topicAlias ?? "").trim();
+        const aliasOnly = target.bundleTopic == null && target.topicAlias != null;
         try {
             let opened = false;
             if (sourceFile) {
-                opened = await this.openSourceTopic(sourceFile, topicRef, lineNumber, currentBundle);
+                opened = await this.openSourceTopic(sourceFile, topicRef, lineNumber, currentBundle, aliasOnly);
             } else if (topicRef) {
-                opened = this.showTopic(currentBundle, topicRef, lineNumber);
+                opened = this.showTopic(currentBundle, topicRef, lineNumber, aliasOnly);
             } else if (lineNumber) {
                 this._pushHistory();
                 this._focusTopicLine(windowEl, lineNumber);
@@ -2617,10 +2682,14 @@ class BundleWindowManager {
                 if (this.onNavigate) { this.onNavigate(""); }
                 opened = true;
             }
-            recordStatisticsEvent({ event: "link", result: opened ? "internal" : "broken" });
+            if (!opened) {
+                throw new Error(`Cannot open HELP topic ${topicRef || "(unspecified)"}${sourceFile ? ` in ${sourceFile}` : ""}.`);
+            }
+            recordStatisticsEvent({ event: "link", result: "internal" });
         } catch (error) {
             console.error("Failed to open linked topic", error);
             recordStatisticsEvent({ event: "link", result: "broken" });
+            await this.onError?.(error);
         }
     }
 
@@ -2797,11 +2866,29 @@ function buildGroupedMenuItems(entries, renderItem) {
     return items;
 }
 
-function catalogMenuEntryButton(entry) {
+function catalogMenuEntryButton(entry, label = entry.menu_name || entry.name) {
     return withMenuAction(
-        new TVBundleMenuItem(entry.menu_name || entry.name, "bundle-open"),
+        new TVBundleMenuItem(label, "bundle-open"),
         { value: entry.file, bundleLabel: bundleLoadingLabel(entry) },
     );
+}
+
+function catalogMenuEntryButtons(entries) {
+    const groups = new Map();
+    entries.forEach((entry) => {
+        const label = String(entry.menu_name || entry.name).trim().toLocaleLowerCase();
+        if (!groups.has(label)) { groups.set(label, []); }
+        groups.get(label).push(entry);
+    });
+    return entries.map((entry) => {
+        const label = entry.menu_name || entry.name;
+        const peers = groups.get(String(label).trim().toLocaleLowerCase());
+        if (peers.length < 2) { return catalogMenuEntryButton(entry); }
+        const basename = String(entry.file).split("/").pop();
+        const sameBasename = peers.filter((peer) => String(peer.file).split("/").pop() === basename).length > 1;
+        const qualifier = sameBasename ? entry.file : basename.replace(/\.json\.gz$/i, "");
+        return catalogMenuEntryButton(entry, `${label} (${qualifier})`);
+    });
 }
 
 function catalogProductLabel(entry) {
@@ -2836,32 +2923,32 @@ function buildCatalogMenuItems(catalog) {
     catalog.forEach((entry) => {
         const product = catalogProductLabel(entry);
         if (!product) {
-            directItems.push(catalogMenuEntryButton(entry));
+            directItems.push(entry);
             return;
         }
 
         const productNode = catalogTreeNode(productMap, products, product);
         const version = catalogVersionLabel(entry);
         if (!version) {
-            productNode.direct.push(catalogMenuEntryButton(entry));
+            productNode.direct.push(entry);
             return;
         }
 
         const versionNode = catalogTreeNode(productNode.versionMap, productNode.versions, version);
-        versionNode.direct.push(catalogMenuEntryButton(entry));
+        versionNode.direct.push(entry);
     });
 
-    const items = [openItem, changeDirectoryItem, renderMenuPopupSeparator(), ...directItems];
+    const items = [openItem, changeDirectoryItem, renderMenuPopupSeparator(), ...catalogMenuEntryButtons(directItems)];
     if (directItems.length && products.length) {
         items.push(renderMenuPopupSeparator());
     }
     products.forEach((productNode) => {
-        const productItems = [...productNode.direct];
+        const productItems = catalogMenuEntryButtons(productNode.direct);
         if (productItems.length && productNode.versions.length) {
             productItems.push(renderMenuPopupSeparator());
         }
         productNode.versions.forEach((versionNode) => {
-            productItems.push(renderMenuSubmenu(versionNode.key, versionNode.direct));
+            productItems.push(renderMenuSubmenu(versionNode.key, catalogMenuEntryButtons(versionNode.direct)));
         });
         items.push(renderMenuSubmenu(productNode.key, productItems));
     });
@@ -3116,7 +3203,7 @@ function renderMarkdown(md) {
 
 // ── Menu bar for bundle page ────────────────────────────────────────
 
-function buildBundleMenuBar(catalog, activeBundle = null, session = null, dosWindow = null) {
+function buildBundleMenuBar(catalog, activeBundle = null, session = null, dosWindow = null, downloadProgress) {
     const menuBar = document.querySelector("[data-tv-menu-bar]");
     if (!menuBar) { return; }
     const dialogItem = (label, name) => withMenuAction(
@@ -3136,7 +3223,7 @@ function buildBundleMenuBar(catalog, activeBundle = null, session = null, dosWin
         dialogItem("Ascii ~T~able", "ascii"),
         dialogItem("~C~alculator", "calc"),
         dialogItem("~M~IDI Player", "midi"),
-        dialogItem("C~o~lors", "colors"),
+        ...(!session?.authenticated ? [dialogItem("C~o~lors", "colors")] : []),
         dialogItem("~W~idget Gallery", "widgets"),
         dialogItem("~G~rid Viewer", "grid"),
         new TVMenuItem("DOS ~P~rompt", "dos-open", 0, hcDosPrompt),
@@ -3144,12 +3231,12 @@ function buildBundleMenuBar(catalog, activeBundle = null, session = null, dosWin
         dialogItem("System ~I~nformation", "systeminfo"),
         NewLine(),
         renderMenuSubmenu("~S~creen saver", saverItems, hcSystemMenu),
-        NewLine(),
-        ...[["~L~ight Theme", "light"], ["~D~ark Theme", "dark"], ["A~u~to Theme", "auto"]]
-            .map(([label, theme]) => withMenuAction(
-                new TVMenuItem(label, "theme-set"),
-                { value: theme },
-            )),
+        ...(!session?.authenticated ? [
+            NewLine(),
+            new TVMenuItem("~L~ight Theme", "theme-light"),
+            new TVMenuItem("~D~ark Theme", "theme-dark"),
+            new TVMenuItem("A~u~to Theme", "theme-auto"),
+        ] : []),
     ];
 
     const findItem = new TVMenuItem("~F~ind", "find", kbCtrlF, hcNoContext, "Ctrl-F");
@@ -3235,7 +3322,7 @@ function buildBundleMenuBar(catalog, activeBundle = null, session = null, dosWin
 
     const accountItem = buildAccountMenu(session);
     topItems.push(accountItem);
-    const menuView = new TVApplicationMenuBar(new TVRect(), menuFromItems(topItems), accountItem);
+    const menuView = new TVApplicationMenuBar(new TVRect(), menuFromItems(topItems), accountItem, downloadProgress);
     menuBar.innerHTML = menuView.draw()
         + '<div class="tv-menu-clock" data-tv-clock>00:00:00</div>';
     menuView.bindRoot(menuBar);
@@ -3265,6 +3352,7 @@ class TVBundleApp extends TVProgram {
         this.statisticsTargets = new Map();
         this.isAdmin = false;
         this.authSession = null;
+        this.downloadProgress = new TVDownloadProgress();
     }
 
     handleEvent(event) {
@@ -3319,7 +3407,11 @@ class TVBundleApp extends TVProgram {
             ? (control.param && typeof control.param === "object" ? control.param.value : control.param)
             : "") ?? "";
         let handled = true;
-        if (event.command === "context-help") {
+        if (event.command === "downloads-show") {
+            this.downloadProgress.showDialog(this.desktopView);
+        } else if (event.command === "downloads-failed") {
+            void this.downloadProgress.failedItem(control, this.desktopView);
+        } else if (event.command === "context-help") {
             recordStatisticsEvent({ event: "tool_open", name: "context-help" });
             this.helpController?.request();
         } else if (event.command === "context-help-index") {
@@ -3341,7 +3433,6 @@ class TVBundleApp extends TVProgram {
         } else if (String(event.command).startsWith("account-")) {
             if (["account-rebuild-dos", "account-rebuild-midi"].includes(event.command)) {
                 if (this.isAdmin) {
-                    this.dialogManager.open("server-configuration");
                     this.serverConfigDialog?.handleEvent(new TVEvent(TV.evCommand, {
                         command: event.command.replace("account-", "server-"),
                     }));
@@ -3350,13 +3441,13 @@ class TVBundleApp extends TVProgram {
             }
             const name = event.command === "account-login" ? "login"
                 : event.command === "account-profile" ? "account" : event.command.slice(8);
-            if (["server-configuration", "content-setup", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
+            if (["server-configuration", "help-packages", "dos-packages", "midi-sources", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
             this.dialogManager.open(name);
         } else if (event.command === "dialog-open") {
             this.dialogManager.open(value);
-        } else if (event.command === "theme-set") {
-            recordStatisticsEvent({ event: "tool_open", name: `theme-${value || "default"}` });
-            applyThemeAndSyncPalette(value || "default", true);
+        } else if (["theme-light", "theme-dark", "theme-auto"].includes(event.command)) {
+            recordStatisticsEvent({ event: "tool_open", name: event.command });
+            applyThemeAndSyncPalette(event.command.slice(6), true);
             this.dialogManager.applyActiveStates();
             fillBorders();
         } else if (event.command === "bundle-open") {
@@ -3375,6 +3466,8 @@ class TVBundleApp extends TVProgram {
             }
         } else if (event.command === "bundle-back") {
             this.windowManager?.goBack();
+        } else if (event.command === "bundle-navigation") {
+            void this._navigateHelpPage(value);
         } else if (event.command === "bundle-index") {
             if (this.windowManager?.currentBundle) {
                 this.windowManager.showIndex(this.windowManager.currentBundle);
@@ -3399,16 +3492,18 @@ class TVBundleApp extends TVProgram {
         if (!action || !this.windowManager?.currentBundle) { return; }
         const sourceFile = action.sourceFile || "";
         const lineNumber = this.windowManager._normalizeLineNumber(action.topicLine);
-        const topicRef = String(action.bundleTopic || action.topicAlias || "").trim();
+        const topicRef = String(action.bundleTopic ?? action.topicAlias ?? "").trim();
+        const aliasOnly = action.bundleTopic == null && action.topicAlias != null;
         if (sourceFile) {
             await this.windowManager.openSourceTopic(
                 sourceFile,
                 topicRef,
                 lineNumber,
                 this.windowManager.currentBundle,
+                aliasOnly,
             );
         } else if (topicRef) {
-            this.windowManager.showTopic(this.windowManager.currentBundle, topicRef, lineNumber);
+            this.windowManager.showTopic(this.windowManager.currentBundle, topicRef, lineNumber, aliasOnly);
         }
     }
 
@@ -3594,6 +3689,7 @@ class TVBundleApp extends TVProgram {
             this._scheduleUrlStateSync();
         });
         this.windowManager.dialogManager = this.dialogManager;
+        this.windowManager.onError = (error) => this._showError("Help Error", error);
         this._bindUrlStateSync();
 
         // Register standard dialogs
@@ -3608,14 +3704,21 @@ class TVBundleApp extends TVProgram {
         const registrationDialog = this._registerDialog("registration", () => new TVRegistrationDialog());
         this._registerDialog("registration-token", () => new TVRegistrationTokenDialog());
         this.serverConfigDialog = this._registerDialog("server-configuration", () => new TVServerConfigurationDialog());
-        this.contentDialog = this._registerDialog("content-setup", () => new TVContentSetupDialog());
-        this.contentDialog.onBeforeInstall = async () => {
-            if (this.dosWindow) {
-                await this._closeDosPrompt();
-                if (this.dosWindow) { throw new Error("Save and close DOS Prompt before installing packages."); }
-            }
+        this.helpPackagesDialog = this._registerDialog("help-packages", () => new TVHelpPackagesDialog());
+        this.dosPackagesDialog = this._registerDialog("dos-packages", () => new TVDosPackagesDialog());
+        this.midiSourcesDialog = this._registerDialog("midi-sources", () => new TVMidiSourcesDialog());
+        this.midiSourcesDialog.onMidiApplied = () => {
+            this.midiDialog?.stopPlayback();
+            if (this.midiDialog) { this.midiDialog.pendingPlay = null; void this.midiDialog.refreshCatalog(); }
         };
-        this.contentDialog.onInstalled = () => this._loadCatalog(false);
+        this.dosPackagesDialog.onBeforeInstall = async () => {
+                if (this.dosWindow) {
+                    await this._closeDosPrompt();
+                    if (this.dosWindow) { throw new Error("Save and close DOS Prompt before installing packages."); }
+                }
+        };
+        this.helpPackagesDialog.onInstalled = () => this._loadCatalog(false);
+        this.dosPackagesDialog.onInstalled = () => this._loadCatalog(false);
         this.serverConfigDialog.onBeforeRebuild = async (resource) => {
             if (resource === "dos" && this.dosWindow) {
                 await this._closeDosPrompt();
@@ -3684,15 +3787,35 @@ class TVBundleApp extends TVProgram {
 
         // Show a usable File/Open command immediately, then replace the menus
         // with their complete catalog-backed contents when loading finishes.
-        this.menuState = buildBundleMenuBar([], null, this.authSession);
+        this.menuState = buildBundleMenuBar([], null, this.authSession, null, this.downloadProgress);
         fillBorders();
         this._bindMenus();
         void this._refreshAuthSession();
+        this.downloadProgress.start(() => this.menuController?.menuView);
         this._catalogReady = this._loadCatalog();
 
         // Layout
         this.desktopView.startLayout();
 
+    }
+
+    _activeHelpWindow() {
+        const target = String(this.dialogManager?.activeTarget || "");
+        const windowEl = this.dialogManager?.windows.get(target);
+        return target.startsWith("help:") && windowEl?.isConnected
+            && windowEl._tvWindowView?.bundle ? windowEl : null;
+    }
+
+    _navigateHelpPage(direction) {
+        if (direction !== "Prev" && direction !== "Next") { return; }
+        const windowEl = this._activeHelpWindow();
+        const view = windowEl?._tvWindowView;
+        if (view?.currentView !== "topic") { return; }
+        const topic = findTopicByHex(view.bundle, view.currentTopic);
+        const target = buildBundleTargetData(topic?.nav?.[direction]);
+        if (Object.keys(target).length) {
+            return this.windowManager?._openTopicTarget(windowEl, target);
+        }
     }
 
     _updateStatusLine() {
@@ -3704,6 +3827,14 @@ class TVBundleApp extends TVProgram {
         const items = [];
         if (hasHelpWindow) {
             items.push(NewStatusKey(renderHotkeyMarkup("~B~ack"), 0, "bundle-back"));
+            const view = this._activeHelpWindow()?._tvWindowView;
+            const topic = view?.currentView === "topic"
+                ? findTopicByHex(view.bundle, view.currentTopic) : null;
+            for (const [direction, label] of [["Prev", "Previous"], ["Next", "Next"]]) {
+                if (Object.keys(buildBundleTargetData(topic?.nav?.[direction])).length) {
+                    items.push(NewStatusKey(label, 0, "bundle-navigation", direction));
+                }
+            }
             if (currentBundle && bundleCanShowIndex(currentBundle)) {
                 items.push(NewStatusKey(renderHotkeyMarkup("~I~ndex"), 0, "bundle-index"));
             }
@@ -3915,7 +4046,7 @@ class TVBundleApp extends TVProgram {
         }
 
         this.dialogManager.dialogs.forEach((dialog, name) => {
-            if (name === "welcome" || !dialog || !dialog.isOpen()) { return; }
+            if (name === "welcome" || !dialog || !dialog.isOpen() || name === dialog.viewId) { return; }
             const item = {
                 t: "dlg",
                 name,
@@ -4375,7 +4506,7 @@ class TVBundleApp extends TVProgram {
                 this.fileOpenDialog?.setDirectory(directory);
             });
         }
-        this.menuState = buildBundleMenuBar(catalogData, null, this.authSession, this.dosWindow);
+        this.menuState = buildBundleMenuBar(catalogData, null, this.authSession, this.dosWindow, this.downloadProgress);
         fillBorders();
         this._bindMenus();
         if (startup) {
@@ -4396,7 +4527,7 @@ class TVBundleApp extends TVProgram {
             return;
         }
         this._menuBundleKey = nextKey;
-        this.menuState = buildBundleMenuBar(catalogData, hasContentsMenu ? currentBundle : null, this.authSession, this.dosWindow);
+        this.menuState = buildBundleMenuBar(catalogData, hasContentsMenu ? currentBundle : null, this.authSession, this.dosWindow, this.downloadProgress);
         fillBorders();
         this._bindMenus();
     }
@@ -4413,7 +4544,11 @@ class TVBundleApp extends TVProgram {
             void this._closeDosPrompt(false);
         }
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
-        if (!nextAdmin) { this.contentDialog?.close(); this.contentDialog?.progress?.close(); }
+        if (!nextAdmin) {
+            for (const name of ["help-packages", "dos-packages", "midi-sources"]) { this.dialogManager?.get(name)?.close(); }
+            this.dialogManager?.get("downloads")?.close();
+            this.dialogManager?.get("midi-source-progress")?.close();
+        }
         if (!session?.authenticated) { this.dialogManager?.get("account")?.close(); }
         if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); this.dialogManager?.get("users")?.close(); this.dialogManager?.get("add-user")?.close(); }
         const nextSession = session?.authenticated && session.user ? session : null;
@@ -4422,14 +4557,15 @@ class TVBundleApp extends TVProgram {
         this.isAdmin = nextAdmin;
         this._menuBundleKey = null;
         const currentBundle = this.windowManager?.currentBundle || null;
-        this.menuState = buildBundleMenuBar(catalogData || [], currentBundle, this.authSession, this.dosWindow);
+        this.menuState = buildBundleMenuBar(catalogData || [], currentBundle, this.authSession, this.dosWindow, this.downloadProgress);
         fillBorders();
         this._bindMenus();
         if (nextAdmin) {
             void Promise.resolve(this._catalogReady).then(() => {
-                if (this.isAdmin) { return this.contentDialog?.checkFirstRun(); }
+                if (this.isAdmin) { return this.helpPackagesDialog?.checkFirstRun(); }
             });
         }
+        void this.downloadProgress.refresh();
     }
 
     async _handleUrlState() {
@@ -4444,15 +4580,16 @@ class TVBundleApp extends TVProgram {
             const publicFile = publicDoc ? null : url.searchParams.get("file");
             const file = publicFile || url.searchParams.get("search_file");
             const topic = url.searchParams.get("topic") || url.searchParams.get("search_topic");
+            const alias = url.searchParams.get("alias");
             const line = url.searchParams.get("line");
             const doc = publicDoc || url.searchParams.get("search_doc");
             const canOpenFile = publicFile || (catalogData || []).some((candidate) => candidate.file === file);
-            if (!hashState && file && (topic || publicFile) && canOpenFile) {
+            if (!hashState && file && (topic || alias || publicFile) && canOpenFile) {
                 try {
                     const bundle = await loadBundle(file);
                     this.dialogManager.get("welcome")?.destroy();
                     this._updateSearchData(bundle);
-                    if (topic) { this.windowManager.showTopic(bundle, topic, line); }
+                    if (topic || alias) { this.windowManager.showTopic(bundle, topic || alias, line, !topic && alias != null); }
                     else { this.windowManager.showDefault(bundle); }
                     document.getElementById("tv-public-fallback")?.remove();
                 } catch (error) {

@@ -374,6 +374,9 @@ let activeThemePreset = "default";
 let activeColorPalette = null;
 let measuredCell = null;
 const HOST_WINDOW_TOKEN = "__host__";
+const cmCut = 20;
+const cmCopy = 21;
+const cmPaste = 22;
 const TV_COMMANDS = Object.freeze({
     MENU: "menu",
     CLOSE: "close",
@@ -428,6 +431,10 @@ const TV_HELP_CONTEXTS = Object.freeze({
     hcRegistration: 2290,
     hcRegistrationTokens: 2300,
     hcServerConfiguration: 2310,
+    hcHelpPackages: 2311,
+    hcDosPackages: 2312,
+    hcMidiSources: 2315,
+    hcDownloads: 2316,
     hcDosPrompt: 2320,
     hcUsers: 2350,
     hcGridDemo: 2340,
@@ -963,6 +970,21 @@ function escapeHtml(text) {
         .replace(/"/g, "&quot;");
 }
 
+function wrapTextLines(text, columns) {
+    const width = Math.max(1, Math.floor(columns));
+    return String(text).split(/\r\n|\r|\n/).flatMap((line) => {
+        const chars = Array.from(line), rows = [];
+        while (chars.length > width) {
+            const space = chars.slice(0, width + 1).lastIndexOf(" ");
+            const count = space > 0 ? space : width;
+            rows.push(chars.splice(0, count).join(""));
+            if (chars[0] === " ") { chars.shift(); }
+        }
+        rows.push(chars.join(""));
+        return rows;
+    });
+}
+
 function renderHotkeyMarkup(text) {
     const value = String(text ?? "");
     const parts = [];
@@ -1249,6 +1271,9 @@ const sbHandleKeyboard = 0x0002;
 const kbNoKey = 0x0000;
 const kbCtrlF = 0x0006;
 const kbCtrlL = 0x000c;
+const kbCtrlIns = 0x0400;
+const kbShiftIns = 0x0500;
+const kbShiftDel = 0x0700;
 const kbF1 = 0x3b00;
 const kbF3 = 0x3d00;
 const kbF5 = 0x3f00;
@@ -1259,6 +1284,11 @@ const kbAlt0 = 0x8100;
 
 function getKeyCode(event) {
     if (!event || event.metaKey) { return kbNoKey; }
+    if (!event.altKey && event.key === "Insert") {
+        if (event.ctrlKey && !event.shiftKey) { return kbCtrlIns; }
+        if (event.shiftKey && !event.ctrlKey) { return kbShiftIns; }
+    }
+    if (event.key === "Delete" && event.shiftKey && !event.ctrlKey && !event.altKey) { return kbShiftDel; }
     if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key?.length === 1) {
         const code = event.key.toUpperCase().charCodeAt(0);
         return code >= 0x40 && code <= 0x5f ? code - 0x40 : kbNoKey;
@@ -1274,6 +1304,61 @@ function getKeyCode(event) {
         if (event.key === "F6") { return event.shiftKey ? kbShiftF6 : kbF6; }
     }
     return kbNoKey;
+}
+
+function clipboardKeyCommand(event) {
+    switch (getKeyCode(event)) {
+        case kbCtrlIns: return cmCopy;
+        case kbShiftIns: return cmPaste;
+        case kbShiftDel: return cmCut;
+        default: return 0;
+    }
+}
+
+async function writeClipboardText(text) {
+    if (!navigator.clipboard?.writeText) { throw new Error("System clipboard is unavailable in this browser."); }
+    await navigator.clipboard.writeText(String(text));
+}
+
+async function readClipboardText() {
+    if (!navigator.clipboard?.readText) { throw new Error("System clipboard is unavailable in this browser."); }
+    return navigator.clipboard.readText();
+}
+
+async function messageBox(owner, options) {
+    let desktop = owner;
+    while (desktop && !(desktop instanceof TVDesktop)) { desktop = desktop.owner; }
+    desktop ||= owner.topView()?.firstThat?.((view) => view instanceof TVDesktop)
+        || owner.root?.closest?.(".tv-desktop")?._tvView;
+    if (!(desktop instanceof TVDesktop)) { return; }
+    const box = new TVMessageBox();
+    desktop.insert(box);
+    try { return await box.show(options); }
+    finally { box.destroy(); }
+}
+
+function handleClipboardEvent(view, event) {
+    const native = event.nativeEvent;
+    if (event.what === evKeyDown && native?.defaultPrevented) { return false; }
+    const command = event.what === evKeyDown ? clipboardKeyCommand(native)
+        : event.what === evCommand ? event.command : 0;
+    const method = command === cmCopy ? "clipCopy" : command === cmCut ? "clipCut"
+        : command === cmPaste ? "clipPaste" : "";
+    if (!method || typeof view[method] !== "function") { return false; }
+    if (event.what === evKeyDown) { event.what = evCommand; event.command = command; }
+    // Native editable-input clipboard actions preserve the browser's undo stack
+    // and paste permission flow. Input broadcasts still pass through validators.
+    if (native?.clipboardData && (view instanceof TVInputLine || (view instanceof TVEditor && command !== cmCopy))) {
+        if (view.disabled || (command !== cmCopy && (view.readOnly || view.root?.readOnly))) { native.preventDefault(); }
+    } else {
+        native?.preventDefault();
+        void view[method](native).catch((error) => {
+            void messageBox(view, { title: "Clipboard", type: TVMessageBox.MF_ERROR,
+                lines: [error.message, "Use your system's Copy/Paste shortcut or browser menu."] });
+        });
+    }
+    view.clearEvent(event);
+    return true;
 }
 
 const disabledCommands = new Set();
@@ -1732,6 +1817,125 @@ class TVStaticText extends TVView {
 
 }
 
+class TVTextScreen extends TVView {
+    constructor(bounds) {
+        super(bounds);
+        this.screen = null;
+        this._blinkTimer = null;
+        this._blinkVisible = true;
+        this._motionQuery = null;
+        this._onMotionChange = () => this._updateBlinkTimer();
+        this.eventMask = 0;
+    }
+
+    setData(screen) {
+        if (!screen || !Number.isInteger(screen.cols) || screen.cols < 1 || screen.cols > 512
+            || !Number.isInteger(screen.rows) || screen.rows < 1 || screen.rows > 512
+            || !Array.isArray(screen.cells) || screen.cells.length !== screen.cols * screen.rows) {
+            throw new TypeError("Invalid TVTextScreen dimensions/cells");
+        }
+        const font = screen.font;
+        if (!font || !Number.isInteger(font.width) || font.width < 1 || font.width > 32
+            || !Number.isInteger(font.height) || font.height < 1 || font.height > 64
+            || !(font.data instanceof Uint8Array)
+            || font.data.length !== 256 * font.height * Math.ceil(font.width / 8)) {
+            throw new TypeError("Invalid TVTextScreen bitmap font");
+        }
+        if (screen.cells.some(cell => !Array.isArray(cell) || cell.length !== 3
+            || cell.some(value => !Number.isInteger(value) || value < 0 || value > 255)
+            || cell.slice(1).some(index => typeof screen.palette?.[index] !== "string"))) {
+            throw new TypeError("Invalid TVTextScreen glyph/palette index");
+        }
+        if (screen.blink !== undefined && (!Array.isArray(screen.blink)
+            || screen.blink.length !== screen.cells.length || screen.blink.some(flag => typeof flag !== "boolean"))) {
+            throw new TypeError("Invalid TVTextScreen blink mask");
+        }
+        if (screen.cols * font.width * screen.rows * font.height > 16777216) {
+            throw new TypeError("TVTextScreen bitmap is too large");
+        }
+        this._stopBlink();
+        this.screen = screen;
+        this._paint();
+        this._startBlink();
+        return this;
+    }
+
+    getData() { return this.screen; }
+    dataSize() { return this.screen ? this.screen.cells.length * 3 + (this.screen.blink?.length || 0) : 0; }
+
+    draw() {
+        if (!this.screen) { return ""; }
+        const { cols, rows, font, text = [] } = this.screen;
+        const bounds = TVView._viewBoundsStyle(this);
+        const style = bounds || `width:${cols}ch;height:${rows}em`;
+        return `<canvas class="tv-text-screen" ${attrsToString(this._drawAttrs())}`
+            + ` width="${cols * font.width}" height="${rows * font.height}" style="${escapeHtml(style)}"`
+            + ` role="img" aria-label="${escapeHtml(text.join("\n"))}">${escapeHtml(text.join("\n"))}</canvas>`;
+    }
+
+    bindRoot(root) {
+        this._stopBlink();
+        super.bindRoot(root);
+        this._paint();
+        this._startBlink();
+        return this;
+    }
+
+    destroy() { this.bindRoot(null); }
+
+    _stopBlink() {
+        if (this._blinkTimer !== null) { window.clearInterval(this._blinkTimer); }
+        this._blinkTimer = null;
+        this._blinkVisible = true;
+        this._motionQuery?.removeEventListener("change", this._onMotionChange);
+        this._motionQuery = null;
+    }
+
+    _startBlink() {
+        if (!this.root || !this.screen?.blink?.some(Boolean) || typeof window === "undefined") { return; }
+        this._motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)") || null;
+        this._motionQuery?.addEventListener("change", this._onMotionChange);
+        this._updateBlinkTimer();
+    }
+
+    _updateBlinkTimer() {
+        if (this._blinkTimer !== null) { window.clearInterval(this._blinkTimer); }
+        this._blinkTimer = null;
+        this._blinkVisible = true;
+        this._paint();
+        if (!this.root || !this.screen?.blink?.some(Boolean) || this._motionQuery?.matches) { return; }
+        // VGA text blink changes phase every 16 frames at the standard 70 Hz.
+        this._blinkTimer = window.setInterval(() => {
+            if (!this.root || this.root.isConnected === false) { this._stopBlink(); return; }
+            this._blinkVisible = !this._blinkVisible;
+            this._paint();
+        }, 16000 / 70);
+    }
+
+    _paint() {
+        if (!this.root || !this.screen) { return; }
+        const context = this.root.getContext?.("2d");
+        if (!context) { return; }
+        const { cols, rows, cells, font, palette } = this.screen;
+        this.root.width = cols * font.width;
+        this.root.height = rows * font.height;
+        const stride = Math.ceil(font.width / 8);
+        cells.forEach(([glyph, fg, bg], index) => {
+            const x = (index % cols) * font.width, y = Math.floor(index / cols) * font.height;
+            context.fillStyle = palette[bg];
+            context.fillRect(x, y, font.width, font.height);
+            if (this.screen.blink?.[index] && !this._blinkVisible) { return; }
+            context.fillStyle = palette[fg];
+            for (let row = 0; row < font.height; row += 1) {
+                for (let bit = 0; bit < font.width; bit += 1) {
+                    const byte = font.data[(glyph * font.height + row) * stride + Math.floor(bit / 8)];
+                    if (byte & (0x80 >> (bit % 8))) { context.fillRect(x + bit, y + row, 1, 1); }
+                }
+            }
+        });
+    }
+}
+
 class TVImage extends TVView {
     constructor(bounds) {
         if (!(bounds instanceof TVRect)) {
@@ -1849,6 +2053,12 @@ class TVLabel extends TVStaticText {
         this.link = link instanceof TVView ? link : null;
     }
 
+    setText(text) {
+        this.text = String(text ?? "");
+        this.drawView();
+        return this;
+    }
+
     draw() {
         const tag = this.link ? "label" : "span";
         const cls = ["tv-static-text", "tv-label", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
@@ -1951,6 +2161,25 @@ class TVInputLine extends TVView {
         this.disabled = false;
         this.secret = false;
         this.validator = null;
+        this.onClipboardEvent = (nativeEvent) => this.dispatchEvent(new TVEvent(evCommand, {
+            command: { copy: cmCopy, cut: cmCut, paste: cmPaste }[nativeEvent.type], infoPtr: this, nativeEvent,
+        }));
+        this.onInputKeyDown = (nativeEvent) => {
+            if (clipboardKeyCommand(nativeEvent)) { this.dispatchEvent(new TVEvent(evKeyDown, { infoPtr: this, nativeEvent })); }
+        };
+    }
+
+    bindRoot(root) {
+        if (this.root) {
+            for (const type of ["copy", "cut", "paste"]) { this.root.removeEventListener(type, this.onClipboardEvent); }
+            this.root.removeEventListener("keydown", this.onInputKeyDown);
+        }
+        super.bindRoot(root);
+        if (this.root) {
+            for (const type of ["copy", "cut", "paste"]) { this.root.addEventListener(type, this.onClipboardEvent); }
+            this.root.addEventListener("keydown", this.onInputKeyDown);
+        }
+        return this;
     }
 
     setData(value) {
@@ -1974,6 +2203,7 @@ class TVInputLine extends TVView {
     }
 
     handleEvent(event) {
+        if ((event.what === evKeyDown || event.what === evCommand) && handleClipboardEvent(this, event)) { return; }
         if (event.what !== evBroadcast || event.infoPtr !== this
             || event.nativeEvent?.type !== "input" || !this.validator) { return; }
         const formatted = this.validator.format?.(this.root.value) ?? this.root.value;
@@ -1983,6 +2213,50 @@ class TVInputLine extends TVView {
         }
         if (formatted !== this.root.value) { this.root.value = formatted; }
         this.data = this.root.value;
+    }
+
+    async clipCopy() {
+        const start = this.root?.selectionStart, end = this.root?.selectionEnd;
+        if (this.disabled || start == null || end == null || start === end) { return false; }
+        await writeClipboardText(this.getData().slice(start, end));
+        return true;
+    }
+
+    async clipCut() {
+        if (this.disabled || !this.root || this.root.readOnly) { return false; }
+        const root = this.root, value = this.getData(), start = root.selectionStart, end = root.selectionEnd;
+        const focus = document.activeElement;
+        if (!await this.clipCopy()) { return false; }
+        if (root !== this.root || !root.isConnected || this.disabled || root.readOnly || this.getData() !== value
+            || document.activeElement !== focus || root.selectionStart !== start || root.selectionEnd !== end) { return false; }
+        return this.insertText("");
+    }
+
+    async clipPaste() {
+        if (this.disabled || !this.root || this.root.readOnly) { return false; }
+        const root = this.root, value = this.getData(), start = root.selectionStart, end = root.selectionEnd;
+        const focus = document.activeElement;
+        const text = await readClipboardText();
+        if (!text.replace(/[\r\n]/g, "")) { return false; }
+        if (root !== this.root || !root.isConnected || this.disabled || root.readOnly || this.getData() !== value
+            || document.activeElement !== focus || root.selectionStart !== start || root.selectionEnd !== end) { return false; }
+        return this.insertText(text);
+    }
+
+    insertText(text) {
+        if (this.disabled || !this.root || this.root.readOnly) { return false; }
+        const value = this.getData(), start = this.root.selectionStart, end = this.root.selectionEnd;
+        if (start == null || end == null) { return false; }
+        const inserted = String(text).replace(/[\r\n]/g, "").slice(0, Math.max(0, this.maxLen - value.length + end - start));
+        const candidate = value.slice(0, start) + inserted + value.slice(end);
+        const formatted = this.validator?.format?.(candidate) ?? candidate;
+        if (this.validator?.isValidInput && !this.validator.isValidInput(formatted, false)) { return false; }
+        this.setData(formatted);
+        const position = Math.min(this.data.length, (this.validator?.format?.(value.slice(0, start) + inserted)
+            ?? value.slice(0, start) + inserted).length);
+        this.root.setSelectionRange(position, position);
+        this.root.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: inserted ? "insertFromPaste" : "deleteByCut", data: inserted }));
+        return true;
     }
 
     focus() {
@@ -2527,6 +2801,12 @@ class TVEditor extends TVView {
         this.lastMatchEnd = 0;
         this.onSelectionChange = () => this.updateIndicator();
         this.onLink = null;
+        this.onEditorKeyDown = (nativeEvent) => {
+            if (clipboardKeyCommand(nativeEvent)) { this.dispatchEvent(new TVEvent(evKeyDown, { infoPtr: this, nativeEvent })); }
+        };
+        this.onClipboardEvent = (nativeEvent) => this.dispatchEvent(new TVEvent(evCommand, {
+            command: { copy: cmCopy, cut: cmCut, paste: cmPaste }[nativeEvent.type], infoPtr: this, nativeEvent,
+        }));
         this.onContentClick = (nativeEvent) => {
             this.dispatchEvent(new TVEvent(evMouseDown, { infoPtr: this, nativeEvent }));
         };
@@ -2537,15 +2817,20 @@ class TVEditor extends TVView {
             this.root.removeEventListener("keyup", this.onSelectionChange);
             this.root.removeEventListener("mouseup", this.onSelectionChange);
             this.root.removeEventListener("click", this.onContentClick);
+            this.root.removeEventListener("keydown", this.onEditorKeyDown);
+            for (const type of ["copy", "cut", "paste"]) { this.root.removeEventListener(type, this.onClipboardEvent); }
             document.removeEventListener("selectionchange", this.onSelectionChange);
         }
         super.bindRoot(root);
         if (this.root) {
             this.root.setAttribute("role", "document");
             this.root.setAttribute("aria-readonly", this.readOnly ? "true" : "false");
+            this.root.setAttribute("contenteditable", this.readOnly ? "false" : "plaintext-only");
             if (!this.root.hasAttribute("tabindex")) { this.root.tabIndex = 0; }
             this.root.addEventListener("keyup", this.onSelectionChange);
             this.root.addEventListener("mouseup", this.onSelectionChange);
+            this.root.addEventListener("keydown", this.onEditorKeyDown);
+            for (const type of ["copy", "cut", "paste"]) { this.root.addEventListener(type, this.onClipboardEvent); }
             if (this.onLink) { this.root.addEventListener("click", this.onContentClick); }
             document.addEventListener("selectionchange", this.onSelectionChange);
         }
@@ -2554,6 +2839,7 @@ class TVEditor extends TVView {
     }
 
     handleEvent(event) {
+        if ((event.what === evKeyDown || event.what === evCommand) && handleClipboardEvent(this, event)) { return; }
         if (event.what !== evMouseDown || event.nativeEvent?.type !== "click" || !this.onLink) { return; }
         const link = event.nativeEvent.target?.closest?.("a[href]");
         if (!link || !this.root?.contains(link) || !this.onLink(link)) { return; }
@@ -2564,7 +2850,60 @@ class TVEditor extends TVView {
     setReadOnly(readOnly = true) {
         this.readOnly = Boolean(readOnly);
         this.root?.setAttribute("aria-readonly", this.readOnly ? "true" : "false");
+        this.root?.setAttribute("contenteditable", this.readOnly ? "false" : "plaintext-only");
         return this;
+    }
+
+    async clipCopy(nativeEvent = null) {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || !this.root?.contains(selection.anchorNode)
+            || !this.root.contains(selection.focusNode)) { return false; }
+        const text = selection.toString();
+        if (nativeEvent?.clipboardData) { nativeEvent.clipboardData.setData("text/plain", text); }
+        else { await writeClipboardText(text); }
+        return true;
+    }
+
+    _selectionRange() {
+        const selection = window.getSelection();
+        return selection?.rangeCount && this.root?.contains(selection.anchorNode) && this.root.contains(selection.focusNode)
+            ? selection.getRangeAt(0).cloneRange() : null;
+    }
+
+    async clipCut() {
+        if (this.readOnly) { return false; }
+        const range = this._selectionRange(), root = this.root, text = root?.textContent;
+        const focus = document.activeElement;
+        if (!range || range.collapsed || !await this.clipCopy()) { return false; }
+        const current = this._selectionRange();
+        if (this.readOnly || root !== this.root || !root.isConnected || document.activeElement !== focus || text !== root.textContent || !current
+            || current.compareBoundaryPoints(Range.START_TO_START, range) || current.compareBoundaryPoints(Range.END_TO_END, range)) { return false; }
+        return this.insertText("");
+    }
+
+    async clipPaste() {
+        if (this.readOnly) { return false; }
+        const range = this._selectionRange(), root = this.root, text = root?.textContent;
+        const focus = document.activeElement;
+        if (!range) { return false; }
+        const inserted = await readClipboardText(), current = this._selectionRange();
+        if (!inserted) { return false; }
+        if (this.readOnly || root !== this.root || !root.isConnected || document.activeElement !== focus || text !== root.textContent || !current
+            || current.compareBoundaryPoints(Range.START_TO_START, range) || current.compareBoundaryPoints(Range.END_TO_END, range)) { return false; }
+        return this.insertText(inserted);
+    }
+
+    insertText(text) {
+        const range = this._selectionRange();
+        if (this.readOnly || !range) { return false; }
+        const inserted = String(text).slice(0, Math.max(0, this.bufSize - this.root.textContent.length + range.toString().length));
+        range.deleteContents();
+        const node = document.createTextNode(inserted);
+        range.insertNode(node); range.setStartAfter(node); range.collapse(true);
+        const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        this.root.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: inserted ? "insertFromPaste" : "deleteByCut", data: inserted }));
+        this.updateIndicator();
+        return true;
     }
 
     selectionOffset() {
@@ -2634,6 +2973,8 @@ class TVEditor extends TVView {
         this.root.removeEventListener("keyup", this.onSelectionChange);
         this.root.removeEventListener("mouseup", this.onSelectionChange);
         this.root.removeEventListener("click", this.onContentClick);
+        this.root.removeEventListener("keydown", this.onEditorKeyDown);
+        for (const type of ["copy", "cut", "paste"]) { this.root.removeEventListener(type, this.onClipboardEvent); }
         document.removeEventListener("selectionchange", this.onSelectionChange);
         this.root = null;
     }
@@ -3570,7 +3911,7 @@ class TVMenuView extends TVView {
         });
     }
 
-    openSubmenu(toggle, { focusFirst = true } = {}) {
+    openSubmenu(toggle, { focusFirst = true, scrollTop = null } = {}) {
         const { root: submenuRoot, popup } = this.submenuControls.get(toggle) || {};
         if (!submenuRoot || !popup) { return false; }
         this.closeSubmenusOutsidePath(submenuRoot, popup);
@@ -3582,6 +3923,7 @@ class TVMenuView extends TVView {
         requestAnimationFrame(() => {
             fitMenuPopupToViewport(submenuRoot, popup);
             fillBorders(popup);
+            if (scrollTop !== null) { popup.querySelector(".tv-menu-popup-body").scrollTop = scrollTop; }
             if (focusFirst) {
                 const remembered = this.lastSelection.get(popup);
                 if (remembered && this.menuItems(popup).includes(remembered)) {
@@ -3826,11 +4168,62 @@ class TVMenuView extends TVView {
         target.disabled = item.disabled;
         target.setAttribute("aria-disabled", item.disabled ? "true" : "false");
         target.classList.toggle("is-disabled", item.disabled);
+        target.innerHTML = this._drawItemName(item)
+            + (target.classList.contains("tv-submenu-toggle") ? '<span class="tv-submenu-arrow">►</span>' : "")
+            + (!(item.subMenu instanceof TVMenu) && item.param ? `<span class="tv-menu-hotkey">${escapeHtml(item.param)}</span>` : "");
         if (item.disabled) {
             target.classList.remove("is-menu-selected");
             target.tabIndex = -1;
             if (this.selectedElement === target) { this.selectedElement = null; }
         }
+    }
+
+    setSubMenu(item, menu) {
+        if (!(item instanceof TVMenuItem) || !(menu instanceof TVMenu)) { return; }
+        const root = this.rootByItem.get(item);
+        const popup = root && this.rootControls.get(root)?.popup;
+        item.subMenu = menu;
+        if (!popup) { return; }
+        const open = this.activeRoot === root;
+        const selected = this.selectedElement?._tvMenuItem;
+        const focused = this.selectedElement === document.activeElement;
+        const scroll = popup.querySelector(".tv-menu-popup-body")?.scrollTop || 0;
+        const path = [];
+        let active = this.activePopup;
+        while (open && active && active !== popup) {
+            const controls = this.submenuByPopup.get(active);
+            if (!controls) { break; }
+            path.unshift({ item: controls.toggle._tvMenuItem, scroll: active.querySelector(".tv-menu-popup-body").scrollTop });
+            active = controls.parentPopup;
+        }
+        [popup, ...popup.querySelectorAll(".tv-menu-popup")].forEach((child) => child._tvMenuPopupScrollbar?.destroy());
+        popup.outerHTML = new TVMenuBox(new TVRect(), menu).draw();
+        this.bindRoot(this.root);
+        fillBorders(root);
+        if (open) {
+            this.activePopup = this.rootControls.get(root).popup;
+            this.activePopup.hidden = false;
+            fitMenuPopupToViewport(root, this.activePopup);
+            this.activePopup.querySelector(".tv-menu-popup-body").scrollTop = scroll;
+            for (const entry of path) {
+                const toggle = this.itemElements.get(entry.item);
+                if (!toggle || entry.item.disabled || !this.openSubmenu(toggle, { focusFirst: false, scrollTop: entry.scroll })) { break; }
+            }
+            const element = this.itemElements.get(selected);
+            if (element?.closest(".tv-menu-popup") === this.activePopup) {
+                this.markSelected(element, false); if (focused) { element.focus({ preventScroll: true }); }
+            }
+        }
+    }
+
+    layoutSubMenu(item) {
+        const topRoot = this.rootByItem.get(item), controls = this.submenuControls.get(this.itemElements.get(item));
+        const root = topRoot || controls?.root, popup = topRoot ? this.rootControls.get(topRoot)?.popup : controls?.popup;
+        if (!popup || popup.hidden) { return; }
+        const body = popup.querySelector(".tv-menu-popup-body"), scroll = body.scrollTop;
+        fitMenuPopupToViewport(root, popup);
+        fillBorders(popup);
+        body.scrollTop = scroll;
     }
 
     drawItem(item, view = "popup") {
@@ -4482,14 +4875,30 @@ class TVCluster extends TVView {
         }
         super(bounds);
         this.options = Array.isArray(options) ? options : [];
-        this.value = 0;
+        this.value = this.options.length > 31 ? 0n : 0;
         this.sel = 0;
-        this.enableMask = this.options.reduce((mask, _option, index) => mask | (1 << index), 0);
+        this.enableMask = this.options.reduce((mask, _option, index) => mask | this.bit(index), this.value);
         this.eventMask |= evBroadcast;
         this.type = "checkbox";
         this.itemClass = "tv-checkbox-item";
         this.markClass = "tv-checkbox-mark";
         this.choiceElements = [];
+        this.hScrollBar = null;
+        this.vScrollBar = null;
+        this.viewport = null;
+        this.scrollbarWidget = null;
+    }
+
+    bit(index) { return this.options.length > 31 ? 1n << BigInt(index) : 1 << index; }
+
+    setItems(options = []) {
+        this.options = Array.isArray(options) ? options : [];
+        this.value = this.type === "radio" ? 0 : (this.options.length > 31 ? 0n : 0);
+        this.sel = 0;
+        this.enableMask = this.options.reduce((mask, _option, index) => mask | this.bit(index),
+            this.options.length > 31 ? 0n : 0);
+        this.drawView();
+        return this;
     }
 
     draw() {
@@ -4505,31 +4914,64 @@ class TVCluster extends TVView {
             const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
             return `<label class="${className}"><input ${inputAttrs}><span class="${this.markClass}" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
         }).join("");
-        const attrs = attrsToString(this._drawAttrs());
+        const attrs = attrsToString(this._drawAttrs({ hidden: !this.getState(sfVisible) }));
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
-        return `<div${style} ${attrs}>${items}</div>`;
+        const scrollable = this.hScrollBar || this.vScrollBar;
+        const content = scrollable
+            ? `<div class="tv-cluster-viewport" data-tv-viewport>${items}</div>${this.vScrollBar?.draw() || ""}${this.hScrollBar?.draw() || ""}`
+            : items;
+        return `<div class="tv-cluster${scrollable ? " has-scrollbars" : ""}"${scrollable ? " data-tv-scroll-frame" : ""}${style} ${attrs}>${content}</div>`;
     }
 
-    buttonState(item) { return (this.enableMask & (1 << item)) !== 0; }
+    bindRoot(root) {
+        this.scrollbarWidget?.destroy();
+        super.bindRoot(root);
+        this.viewport = this._query(".tv-cluster-viewport");
+        this.scrollbarWidget = this.viewport ? (this.vScrollBar || this.hScrollBar)?.bindRoot(root) : null;
+        this.updateScrollbar();
+        return this;
+    }
+
+    updateScrollbar() {
+        this.root?.classList.toggle("is-h-scrollable", Boolean(this.hScrollBar && this.viewport
+            && this.viewport.scrollWidth > this.viewport.clientWidth + 1));
+        this.scrollbarWidget?.refresh();
+    }
+
+    destroy() { this.scrollbarWidget?.destroy(); }
+
+    focus() { this.choiceElements[this.sel]?.focus({ preventScroll: true }); return this.setState(sfFocused, true); }
+
+    buttonState(item) { return Boolean(this.enableMask & this.bit(item)); }
 
     mark(item) {
-        return this.type === "radio" ? this.value === item : (this.value & (1 << item)) !== 0;
+        return this.type === "radio" ? this.value === item : Boolean(this.value & this.bit(item));
     }
 
     movedTo(item) {
-        if (Number.isInteger(item) && item >= 0 && item < this.options.length) { this.sel = item; }
+        if (Number.isInteger(item) && item >= 0 && item < this.options.length) {
+            const changed = this.sel !== item;
+            this.sel = item;
+            if (this.type === "checkbox") {
+                this.choiceElements.forEach((input, index) => { input.tabIndex = index === item ? 0 : -1; });
+            }
+            if (changed) {
+                this.dispatchEvent(new TVEvent(evBroadcast, { command: "cluster-moved-to", infoPtr: this, infoLong: item }));
+            }
+        }
     }
 
     press(item) {
-        if (!this.buttonState(item)) { return; }
+        if (!this.buttonState(item) || this.options[item]?.disabled) { return; }
         this.movedTo(item);
         if (this.type === "radio") { this.value = item; }
-        else { this.value ^= 1 << item; }
+        else { this.value ^= this.bit(item); }
         this.syncInputs();
     }
 
     setButtonState(mask, enable) {
+        if (this.options.length > 31) { mask = BigInt(mask); }
         this.enableMask = enable ? (this.enableMask | mask) : (this.enableMask & ~mask);
         this.syncInputs();
     }
@@ -4537,14 +4979,15 @@ class TVCluster extends TVView {
     getData() { return this.value; }
 
     setData(value) {
-        this.value = Math.max(0, Number(value) || 0);
+        this.value = this.type !== "radio" && this.options.length > 31
+            ? (BigInt(value || 0) < 0n ? 0n : BigInt(value || 0)) : Math.max(0, Number(value) || 0);
         this.syncInputs();
         return this;
     }
 
     syncInputs() {
         if (!this.root) { return; }
-        Array.from(this.root.querySelectorAll(".tv-choice-input")).forEach((input, index) => {
+        this.choiceElements.filter((input) => input.classList.contains("tv-choice-input")).forEach((input, index) => {
             input.checked = this.mark(index);
             input.disabled = !this.buttonState(index) || Boolean(this.options[index]?.disabled);
             input.parentElement?.classList.toggle("is-disabled", input.disabled);
@@ -4560,14 +5003,51 @@ class TVCluster extends TVView {
         this.choiceElements.forEach((element, index) => { element._tvChoiceIndex = index; });
         this.options.forEach((option, index) => {
             if (option.checked) {
-                this.value = this.type === "radio" ? index : (this.value | (1 << index));
+                this.value = this.type === "radio" ? index : (this.value | this.bit(index));
             }
         });
         this.syncInputs();
+        this.movedTo(this.sel);
+        this.updateScrollbar();
         return this;
     }
 
     handleEvent(event) {
+        if (event.what === evKeyDown && this.type === "checkbox") {
+            const native = event.nativeEvent;
+            const index = native?.target?._tvChoiceIndex;
+            if (!Number.isInteger(index) || !this.root?.contains(native.target)) { return; }
+            if (native.key === " " || native.key === "Enter") {
+                native.preventDefault();
+                this.press(index);
+                event.what = evBroadcast;
+                event.command = "cluster-press";
+                event.infoLong = index;
+                return;
+            }
+            const page = Math.max(1, Math.floor((this.viewport?.clientHeight || 0) / measureCells().height));
+            const destinations = { ArrowDown: index + 1, ArrowRight: index + 1, ArrowUp: index - 1,
+                ArrowLeft: index - 1, Home: 0, End: this.options.length - 1,
+                PageDown: index + page, PageUp: index - page };
+            if (!(native.key in destinations)) { return; }
+            native.preventDefault();
+            let next = Math.max(0, Math.min(this.options.length - 1, destinations[native.key]));
+            const step = next < index ? -1 : 1;
+            while (next >= 0 && next < this.options.length && (!this.buttonState(next) || this.options[next].disabled)) { next += step; }
+            if (next >= 0 && next < this.options.length) {
+                this.movedTo(next);
+                this.focus();
+                const input = this.choiceElements[next];
+                if (this.viewport && input) {
+                    const row = input.parentElement.getBoundingClientRect(), viewport = this.viewport.getBoundingClientRect();
+                    if (row.top < viewport.top) { this.viewport.scrollTop -= viewport.top - row.top; }
+                    else if (row.bottom > viewport.bottom) { this.viewport.scrollTop += row.bottom - viewport.bottom; }
+                    this.updateScrollbar();
+                }
+            }
+            this.clearEvent(event);
+            return;
+        }
         if (event.what !== evBroadcast || event.nativeEvent?.type !== "change") { return; }
         const input = event.nativeEvent.target;
         if (!this.root?.contains(input) || !input.matches?.(".tv-choice-input")) { return; }
@@ -4579,10 +5059,11 @@ class TVCluster extends TVView {
         }
         this.movedTo(index);
         if (this.type === "radio") { this.value = index; }
-        else if (input.checked) { this.value |= 1 << index; }
-        else { this.value &= ~(1 << index); }
+        else if (input.checked) { this.value |= this.bit(index); }
+        else { this.value &= ~this.bit(index); }
         this.syncInputs();
         event.infoLong = index;
+        event.command = "cluster-press";
     }
 }
 
@@ -4596,6 +5077,7 @@ class TVRadioButtons extends TVCluster {
     constructor(bounds, options = []) {
         super(bounds, options);
         this.type = "radio";
+        this.value = 0;
         this.viewId = `tv-radio-${++tvChoiceGroupId}`;
         this.itemClass = "tv-radio-item";
         this.markClass = "tv-radio-mark";
@@ -4633,7 +5115,7 @@ class TVMultiCheckBoxes extends TVCluster {
         const attrs = attrsToString(this._drawAttrs());
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
-        return `<div${style} ${attrs}>${items}</div>`;
+        return `<div${style}${this.getState(sfVisible) ? "" : " hidden"} ${attrs}>${items}</div>`;
     }
 
     cycle(index, button = null) {
@@ -5209,10 +5691,6 @@ class TVDialog extends TVWindow {
     handleEvent(event) {
         super.handleEvent(event);
         if (event.what === evMouseDown && event.infoPtr === this) {
-            if (event.nativeEvent?.target === this.overlay) {
-                event.what = evCommand;
-                event.command = "dialog-close";
-            }
             const control = event.nativeEvent?.target?.closest?.("button");
             const command = this.titlebar?.contains(control) ? this.frame.titleCommand(control) : "";
             if (command) {
@@ -5272,8 +5750,12 @@ class TVDialog extends TVWindow {
     }
 
     setHelpCtx(helpCtx) {
+        const previous = this.helpCtx;
         super.setHelpCtx(helpCtx);
         setElementHelpContext(this.dialog, this.helpCtx);
+        if (this.manager && previous !== this.helpCtx && this.isOpen() && this.manager.activeTarget === this.managerName) {
+            this.manager.onChange?.();
+        }
         return this;
     }
 
@@ -5308,6 +5790,9 @@ class TVDialog extends TVWindow {
         if (!(this.owner instanceof TVDesktop) || !this.overlay.isConnected) {
             throw new Error("TVDialog must be inserted into TVDesktop before open()");
         }
+        // Temporary dialogs (including MessageBox) need the same owner stack,
+        // activation and focus rules as dialogs registered by the application.
+        if (!this.manager) { this.owner.dialogManager.register(this.viewId, this); }
         const wasOpen = this.isOpen();
         if (!wasOpen) {
             this.previousFocus = document.activeElement instanceof HTMLElement
@@ -5438,8 +5923,11 @@ class TVDialog extends TVWindow {
     center() {
         const width = this.dialog.offsetWidth;
         const height = this.dialog.offsetHeight;
-        const left = Math.max(0, Math.floor((this.overlay.clientWidth - width) / 2));
-        const top = Math.max(0, Math.floor((this.overlay.clientHeight - height) / 2));
+        const rect = this.overlay.getBoundingClientRect?.();
+        const visibleWidth = Math.min(this.overlay.clientWidth, (window.innerWidth || this.overlay.clientWidth) - (rect?.left || 0));
+        const visibleHeight = Math.min(this.overlay.clientHeight, (window.innerHeight || this.overlay.clientHeight) - (rect?.top || 0));
+        const left = Math.max(0, Math.floor((visibleWidth - width) / 2));
+        const top = Math.max(0, Math.floor((visibleHeight - height) / 2));
         this.dialog.style.setProperty("--tv-dialog-left", `${left}px`);
         this.dialog.style.setProperty("--tv-dialog-top", `${top}px`);
     }
@@ -5457,14 +5945,6 @@ class TVDialog extends TVWindow {
 
     bindCommonClose(onClose = () => this.close()) {
         this.closeAction = onClose;
-        if (!this._commonCloseBound) {
-            this._commonCloseBound = true;
-            this.overlay.addEventListener("click", (event) => {
-                if (event.target === this.overlay) {
-                    this.dispatchDomEvent(evMouseDown, event);
-                }
-            });
-        }
     }
 
     bindDrag() {
@@ -5973,36 +6453,46 @@ class TVMessageBox extends TVDialog {
         const boxTitle = title !== undefined ? title : TVMessageBox.TITLES[type];
         this.title = String(boxTitle ?? "");
         this.frame.drawTitle();
-        const messageLines = Array.isArray(lines) && lines.length ? lines.map((line) => String(line)) : [""];
+        const sourceLines = (Array.isArray(lines) && lines.length ? lines : [""])
+            .flatMap((line) => String(line).split(/\r\n|\r|\n/));
         const requestedButtons = TVMessageBox.BUTTON_DEFS.filter(b => (buttons & b.flag) !== 0);
         const btnDefs = requestedButtons.length
             ? requestedButtons
             : TVMessageBox.BUTTON_DEFS.filter(b => b.cmd === "ok");
         const buttonWidth = 10;
         const buttonGap = 2;
-        const buttonsWidth = btnDefs.length * buttonWidth + Math.max(0, btnDefs.length - 1) * buttonGap;
-        const textWidth = Math.max(...messageLines.map((line) => Array.from(line).length), 0);
-        const width = Math.max(42, Math.min(70, textWidth) + 6, btnDefs.length * 13);
-        const height = messageLines.length + 6;
-        const buttonsY = height - 4;
+        const textWidth = Math.max(...sourceLines.map((line) => Array.from(line).length), 0);
+        const cellWidth = measureCells().width;
+        const visibleWidth = Math.min(this.overlay.clientWidth || 78 * cellWidth, window.innerWidth || 78 * cellWidth);
+        const availableWidth = Math.max(12, Math.floor(visibleWidth / cellWidth) - 2);
+        const width = Math.min(availableWidth, Math.max(42, Math.min(70, textWidth) + 6, btnDefs.length * 13));
+        const columns = width - 5;
+        const messageLines = sourceLines.flatMap((line) => wrapTextLines(line, columns));
+        const buttonsPerRow = Math.max(1, Math.min(btnDefs.length, Math.floor((width - 2 + buttonGap) / (buttonWidth + buttonGap))));
+        const buttonRows = Math.ceil(btnDefs.length / buttonsPerRow);
+        const height = messageLines.length + 4 + 2 * buttonRows;
+        const buttonsY = messageLines.length + 2;
         this.changeBounds(new TVRect(this.bounds.x1, this.bounds.y1, this.bounds.x1 + width, this.bounds.y1 + height));
         this.bodyView.setBounds(new TVRect(0, 0, width - 2, height - 2));
         this.contentView.setBounds(new TVRect(2, 1, width - 3, buttonsY));
-        this.buttonsView.setBounds(new TVRect(0, buttonsY, width - 2, buttonsY + 2));
+        this.buttonsView.setBounds(new TVRect(0, buttonsY, width - 2, buttonsY + 2 * buttonRows));
         this.contentView.children.slice().forEach((view) => this.contentView.remove(view));
         this.buttonsView.children.slice().forEach((view) => this.buttonsView.remove(view));
         this.messageViews = messageLines.map((line, index) => (
             new TVStaticText(new TVRect(0, index, width - 5, index + 1), `\x03${line}`)
         ));
-        const startX = Math.max(0, Math.floor((width - 2 - buttonsWidth) / 2));
-        this.buttonViews = btnDefs.map((definition, index) => (
-            new TVButton(
-                new TVRect(startX + index * (buttonWidth + buttonGap), 0, startX + index * (buttonWidth + buttonGap) + buttonWidth, 2),
+        this.buttonViews = btnDefs.map((definition, index) => {
+            const row = Math.floor(index / buttonsPerRow), column = index % buttonsPerRow;
+            const rowCount = Math.min(buttonsPerRow, btnDefs.length - row * buttonsPerRow);
+            const rowWidth = rowCount * buttonWidth + Math.max(0, rowCount - 1) * buttonGap;
+            const startX = Math.max(0, Math.floor((width - 2 - rowWidth) / 2)) + column * (buttonWidth + buttonGap);
+            return new TVButton(
+                new TVRect(startX, row * 2, startX + buttonWidth, row * 2 + 2),
                 definition.label,
                 "msgbox-cmd",
                 index === 0 ? bfDefault : bfNormal,
-            ).setValue(definition.cmd)
-        ));
+            ).setValue(definition.cmd);
+        });
         this.contentView.insertAll(this.messageViews);
         this.buttonsView.insertAll(this.buttonViews);
         this.drawContent();
@@ -6467,6 +6957,26 @@ class TVProgram extends TVGroup {
         this.menuBar = null;
         this.statusLine = null;
     }
+
+    handleEvent(event) {
+        super.handleEvent(event);
+        const target = TVView._fromElement(document.activeElement);
+        if (event.what === evCommand && [cmCut, cmCopy, cmPaste].includes(event.command)
+            && (target instanceof TVInputLine || target instanceof TVEditor)) {
+            target.handleEvent(event);
+        } else if ((event.what === evKeyDown && clipboardKeyCommand(event.nativeEvent) === cmCopy)
+            || (event.what === evCommand && event.command === cmCopy)) {
+            handleClipboardEvent(this, event);
+        }
+    }
+
+    async clipCopy() {
+        const selection = window.getSelection(), desktop = this.firstThat((view) => view instanceof TVDesktop);
+        if (!selection || selection.isCollapsed || !desktop?.root?.contains(selection.anchorNode)
+            || !desktop.root.contains(selection.focusNode)) { return false; }
+        await writeClipboardText(selection.toString());
+        return true;
+    }
 }
 
 class TVDesktop extends TVGroup {
@@ -6545,6 +7055,9 @@ Object.assign(TV, {
     evKeyDown,
     evCommand,
     evBroadcast,
+    cmCut,
+    cmCopy,
+    cmPaste,
     cmUpdateGauge,
     cmResetGauge,
     cmAddGauge,
@@ -6597,6 +7110,9 @@ Object.assign(TV, {
     kbNoKey,
     kbCtrlF,
     kbCtrlL,
+    kbCtrlIns,
+    kbShiftIns,
+    kbShiftDel,
     kbF1,
     kbF3,
     kbF5,
@@ -6605,6 +7121,9 @@ Object.assign(TV, {
     kbAltF3,
     kbAlt0,
     getKeyCode,
+    writeClipboardText,
+    readClipboardText,
+    messageBox,
     TVEvent,
     COLOR_GROUPS,
     buildDefaultColorPalette,
@@ -6626,6 +7145,7 @@ Object.assign(TV, {
     fillDesktopPatterns,
     updateClocks,
     escapeHtml,
+    wrapTextLines,
     renderHotkeyMarkup,
     displayCp437Char,
     bindCloseButtons,
@@ -6643,6 +7163,7 @@ Object.assign(TV, {
     TVView,
     TVStaticText,
     TVImage,
+    TVTextScreen,
     TVPercentGauge,
     TVBarGauge,
     TVLabel,

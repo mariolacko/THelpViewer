@@ -27,142 +27,464 @@
       "label": "Using THelpViewer",
       "topic_id": 1000,
       "children": [
-        {"label": "HELP files", "topic_id": 1200},
-        {"label": "Documents", "topic_id": 1300},
-        {"label": "Search", "topic_id": 1400},
-        {"label": "Windows", "topic_id": 1600}
+        {
+          "label": "HELP files",
+          "topic_id": 1200
+        },
+        {
+          "label": "Documents",
+          "topic_id": 1300
+        },
+        {
+          "label": "Search",
+          "topic_id": 1400
+        },
+        {
+          "label": "Clipboard",
+          "topic_id": 2090
+        },
+        {
+          "label": "Windows",
+          "topic_id": 1600
+        }
       ]
     },
     {
       "label": "Dialogs and tools",
       "topic_id": 2090,
       "children": [
-        {"label": "Open a File", "topic_id": 2010},
-        {"label": "Change Directory", "topic_id": 2020},
-        {"label": "Find", "topic_id": 2030},
-        {"label": "Colors", "topic_id": 2040},
-        {"label": "Widget Gallery", "topic_id": 2050},
-        {"label": "CD/MIDI Player", "topic_id": 2060},
-        {"label": "Server Statistics", "topic_id": 2260},
-        {"label": "System Information", "topic_id": 2270},
-        {"label": "DOS Prompt", "topic_id": 2320},
-        {"label": "Grid Viewer", "topic_id": 2340}
+        {
+          "label": "Open a File",
+          "topic_id": 2010
+        },
+        {
+          "label": "Change Directory",
+          "topic_id": 2020
+        },
+        {
+          "label": "Find",
+          "topic_id": 2030
+        },
+        {
+          "label": "Colors",
+          "topic_id": 2040
+        },
+        {
+          "label": "Widget Gallery",
+          "topic_id": 2050
+        },
+        {
+          "label": "CD/MIDI Player",
+          "topic_id": 2060
+        },
+        {
+          "label": "Server Statistics",
+          "topic_id": 2260
+        },
+        {
+          "label": "System Information",
+          "topic_id": 2270
+        },
+        {
+          "label": "DOS Prompt",
+          "topic_id": 2320
+        },
+        {
+          "label": "Grid Viewer",
+          "topic_id": 2340
+        }
       ]
     },
     {
       "label": "Accounts and configuration",
       "topic_id": 2280,
       "children": [
-        {"label": "Registration", "topic_id": 2290},
-        {"label": "Registration Token", "topic_id": 2300},
-        {"label": "Users", "topic_id": 2350},
-        {"label": "Server Configuration and Rebuild", "topic_id": 2310},
-        {"label": "Colors", "topic_id": 2040}
+        {
+          "label": "Registration",
+          "topic_id": 2290
+        },
+        {
+          "label": "Registration Token",
+          "topic_id": 2300
+        },
+        {
+          "label": "Users",
+          "topic_id": 2350
+        },
+        {
+          "label": "Server Configuration and Rebuild",
+          "topic_id": 2310
+        },
+        {
+          "label": "HELP Packages",
+          "topic_id": 2311
+        },
+        {
+          "label": "DOS Packages",
+          "topic_id": 2312
+        },
+        {
+          "label": "MIDI Sources",
+          "topic_id": 2315
+        },
+        {
+          "label": "Downloads",
+          "topic_id": 2316
+        },
+        {
+          "label": "Colors",
+          "topic_id": 2040
+        }
       ]
     },
     {
       "label": "Games",
       "topic_id": 1500,
       "children": [
-        {"label": "Puzzle", "topic_id": 2140},
-        {"label": "Tetris", "topic_id": 2150},
-        {"label": "Mines", "topic_id": 2160},
-        {"label": "BreakOut", "topic_id": 2170},
-        {"label": "Sokoban", "topic_id": 2180},
-        {"label": "Lines", "topic_id": 2190},
-        {"label": "Reversi", "topic_id": 2200},
-        {"label": "Ludo", "topic_id": 2210},
-        {"label": "Mastermind", "topic_id": 2220},
-        {"label": "Snake", "topic_id": 2230},
-        {"label": "Tower of Hanoi", "topic_id": 2240},
-        {"label": "Tron Light Cycles", "topic_id": 2250}
+        {
+          "label": "Puzzle",
+          "topic_id": 2140
+        },
+        {
+          "label": "Tetris",
+          "topic_id": 2150
+        },
+        {
+          "label": "Mines",
+          "topic_id": 2160
+        },
+        {
+          "label": "BreakOut",
+          "topic_id": 2170
+        },
+        {
+          "label": "Sokoban",
+          "topic_id": 2180
+        },
+        {
+          "label": "Lines",
+          "topic_id": 2190
+        },
+        {
+          "label": "Reversi",
+          "topic_id": 2200
+        },
+        {
+          "label": "Ludo",
+          "topic_id": 2210
+        },
+        {
+          "label": "Mastermind",
+          "topic_id": 2220
+        },
+        {
+          "label": "Snake",
+          "topic_id": 2230
+        },
+        {
+          "label": "Tower of Hanoi",
+          "topic_id": 2240
+        },
+        {
+          "label": "Tron Light Cycles",
+          "topic_id": 2250
+        }
       ]
     }
   ],
   "index": [
-    {"group": "A", "entries": [
-      {"label": "About", "topic_id": 2000},
-      {"label": "Account", "topic_id": 2280},
-      {"label": "ASCII Table", "topic_id": 2110}
-    ]},
-    {"group": "B", "entries": [
-      {"label": "BreakOut", "topic_id": 2170}
-    ]},
-    {"group": "C", "entries": [
-      {"label": "Calculator", "topic_id": 2120},
-      {"label": "Calendar", "topic_id": 2100},
-      {"label": "CD/MIDI Player", "topic_id": 2060},
-      {"label": "Change Directory", "topic_id": 2020},
-      {"label": "Colors", "topic_id": 2040},
-      {"label": "Context Help", "topic_id": 1700}
-    ]},
-    {"group": "D", "entries": [
-      {"label": "Dialog", "topic_id": 2090},
-      {"label": "Document viewer", "topic_id": 2080},
-      {"label": "Documents", "topic_id": 1300},
-      {"label": "DOS Prompt", "topic_id": 2320}
-    ]},
-    {"group": "F", "entries": [
-      {"label": "Find", "topic_id": 2030}
-    ]},
-    {"group": "G", "entries": [
-      {"label": "Games", "topic_id": 1500},
-      {"label": "Grid Viewer", "topic_id": 2340}
-    ]},
-    {"group": "H", "entries": [
-      {"label": "HELP files", "topic_id": 1200},
-      {"label": "HELP viewer", "topic_id": 2070}
-    ]},
-    {"group": "L", "entries": [
-      {"label": "Lines", "topic_id": 2190},
-      {"label": "Login", "topic_id": 2280},
-      {"label": "Ludo", "topic_id": 2210}
-    ]},
-    {"group": "M", "entries": [
-      {"label": "Mastermind", "topic_id": 2220},
-      {"label": "Mines", "topic_id": 2160}
-    ]},
-    {"group": "O", "entries": [
-      {"label": "Open a File", "topic_id": 2010}
-    ]},
-    {"group": "P", "entries": [
-      {"label": "Puzzle", "topic_id": 2140}
-    ]},
-    {"group": "R", "entries": [
-      {"label": "Rebuild DOS C / MIDI", "topic_id": 2310},
-      {"label": "Registration", "topic_id": 2290},
-      {"label": "Registration Token", "topic_id": 2300},
-      {"label": "Reversi", "topic_id": 2200}
-    ]},
-    {"group": "S", "entries": [
-      {"label": "Screen saver", "topic_id": 2130},
-      {"label": "Search", "topic_id": 1400},
-      {"label": "Server Configuration", "topic_id": 2310},
-      {"label": "Server Statistics", "topic_id": 2260},
-      {"label": "Snake", "topic_id": 2230},
-      {"label": "Sokoban", "topic_id": 2180},
-      {"label": "System Information", "topic_id": 2270},
-      {"label": "System menu", "topic_id": 1100}
-    ]},
-    {"group": "T", "entries": [
-      {"label": "Tetris", "topic_id": 2150},
-      {"label": "THelpViewer", "topic_id": 1000},
-      {"label": "Tower of Hanoi", "topic_id": 2240},
-      {"label": "Tron Light Cycles", "topic_id": 2250}
-    ]},
-    {"group": "U", "entries": [
-      {"label": "Users", "topic_id": 2350}
-    ]},
-    {"group": "W", "entries": [
-      {"label": "Widget Gallery", "topic_id": 2050},
-      {"label": "Windows", "topic_id": 1600}
-    ]}
+    {
+      "group": "A",
+      "entries": [
+        {
+          "label": "About",
+          "topic_id": 2000
+        },
+        {
+          "label": "Account",
+          "topic_id": 2280
+        },
+        {
+          "label": "ASCII Table",
+          "topic_id": 2110
+        }
+      ]
+    },
+    {
+      "group": "B",
+      "entries": [
+        {
+          "label": "BreakOut",
+          "topic_id": 2170
+        }
+      ]
+    },
+    {
+      "group": "C",
+      "entries": [
+        {
+          "label": "Calculator",
+          "topic_id": 2120
+        },
+        {
+          "label": "Calendar",
+          "topic_id": 2100
+        },
+        {
+          "label": "CD/MIDI Player",
+          "topic_id": 2060
+        },
+        {
+          "label": "Change Directory",
+          "topic_id": 2020
+        },
+        {
+          "label": "Clipboard",
+          "topic_id": 2090
+        },
+        {
+          "label": "Colors",
+          "topic_id": 2040
+        },
+        {
+          "label": "Context Help",
+          "topic_id": 1700
+        }
+      ]
+    },
+    {
+      "group": "D",
+      "entries": [
+        {
+          "label": "Dialog",
+          "topic_id": 2090
+        },
+        {
+          "label": "Document viewer",
+          "topic_id": 2080
+        },
+        {
+          "label": "Documents",
+          "topic_id": 1300
+        },
+        {
+          "label": "DOS Packages",
+          "topic_id": 2312
+        },
+        {
+          "label": "DOS Prompt",
+          "topic_id": 2320
+        },
+        {
+          "label": "Downloads",
+          "topic_id": 2316
+        }
+      ]
+    },
+    {
+      "group": "F",
+      "entries": [
+        {
+          "label": "Find",
+          "topic_id": 2030
+        }
+      ]
+    },
+    {
+      "group": "G",
+      "entries": [
+        {
+          "label": "Games",
+          "topic_id": 1500
+        },
+        {
+          "label": "Grid Viewer",
+          "topic_id": 2340
+        }
+      ]
+    },
+    {
+      "group": "H",
+      "entries": [
+        {
+          "label": "HELP files",
+          "topic_id": 1200
+        },
+        {
+          "label": "HELP Packages",
+          "topic_id": 2311
+        },
+        {
+          "label": "HELP viewer",
+          "topic_id": 2070
+        }
+      ]
+    },
+    {
+      "group": "L",
+      "entries": [
+        {
+          "label": "Lines",
+          "topic_id": 2190
+        },
+        {
+          "label": "Login",
+          "topic_id": 2280
+        },
+        {
+          "label": "Ludo",
+          "topic_id": 2210
+        }
+      ]
+    },
+    {
+      "group": "M",
+      "entries": [
+        {
+          "label": "Mastermind",
+          "topic_id": 2220
+        },
+        {
+          "label": "MIDI Sources",
+          "topic_id": 2315
+        },
+        {
+          "label": "Mines",
+          "topic_id": 2160
+        }
+      ]
+    },
+    {
+      "group": "O",
+      "entries": [
+        {
+          "label": "Open a File",
+          "topic_id": 2010
+        }
+      ]
+    },
+    {
+      "group": "P",
+      "entries": [
+        {
+          "label": "Puzzle",
+          "topic_id": 2140
+        }
+      ]
+    },
+    {
+      "group": "R",
+      "entries": [
+        {
+          "label": "Rebuild DOS C / MIDI",
+          "topic_id": 2310
+        },
+        {
+          "label": "Registration",
+          "topic_id": 2290
+        },
+        {
+          "label": "Registration Token",
+          "topic_id": 2300
+        },
+        {
+          "label": "Reversi",
+          "topic_id": 2200
+        }
+      ]
+    },
+    {
+      "group": "S",
+      "entries": [
+        {
+          "label": "Screen saver",
+          "topic_id": 2130
+        },
+        {
+          "label": "Search",
+          "topic_id": 1400
+        },
+        {
+          "label": "Server Configuration",
+          "topic_id": 2310
+        },
+        {
+          "label": "Server Statistics",
+          "topic_id": 2260
+        },
+        {
+          "label": "Snake",
+          "topic_id": 2230
+        },
+        {
+          "label": "Sokoban",
+          "topic_id": 2180
+        },
+        {
+          "label": "System Information",
+          "topic_id": 2270
+        },
+        {
+          "label": "System menu",
+          "topic_id": 1100
+        }
+      ]
+    },
+    {
+      "group": "T",
+      "entries": [
+        {
+          "label": "Tetris",
+          "topic_id": 2150
+        },
+        {
+          "label": "THelpViewer",
+          "topic_id": 1000
+        },
+        {
+          "label": "Tower of Hanoi",
+          "topic_id": 2240
+        },
+        {
+          "label": "Tron Light Cycles",
+          "topic_id": 2250
+        }
+      ]
+    },
+    {
+      "group": "U",
+      "entries": [
+        {
+          "label": "Users",
+          "topic_id": 2350
+        }
+      ]
+    },
+    {
+      "group": "W",
+      "entries": [
+        {
+          "label": "Widget Gallery",
+          "topic_id": 2050
+        },
+        {
+          "label": "Windows",
+          "topic_id": 1600
+        }
+      ]
+    }
   ],
   "topics": {
     "1000": {
       "id": 1000,
       "title": "THelpViewer",
-      "aliases": {"ids": [], "strings": ["application", "contents"]},
+      "aliases": {
+        "ids": [],
+        "strings": [
+          "application",
+          "contents"
+        ]
+      },
       "content": [
         "[b]THelpViewer context-sensitive help[/b]",
         "",
@@ -179,6 +501,9 @@
         "│ F6 / Shift-F6    │ Select next or previous window             │",
         "│ Alt-F3           │ Close the active window                    │",
         "└──────────────────┴────────────────────────────────────────────┘",
+        "",
+        "[link:topic=2090]Clipboard[/link]: Ctrl+Ins copies, Shift+Del cuts, Shift+Ins pastes.",
+        "Use Cmd+C/X/V on macOS or Ctrl+C/X/V on Windows/Linux too.",
         "",
         "Topics:",
         "  [link:topic=1200]HELP files[/link]   [link:topic=1300]Documents[/link]   [link:topic=1400]Search[/link]",
@@ -336,7 +661,7 @@
         "attribute. Default restores the selected item. Reset All restores the",
         "complete Turbo Vision palette.",
         "All users may edit colors, not only administrators. Open Colors from",
-        "the system menu or Account > Configuration. The palette is saved in",
+        "your user menu > Configuration (guests use the system menu). Saved in",
         "this browser, not synchronized between accounts or devices."
       ]
     },
@@ -358,9 +683,19 @@
         "control playback; clicking the progress bar seeks within the song.",
         "More reveals the track list, Filter with history and Random next",
         "track. A finished song starts the next one in order or at random.",
+        "Administrators choose providers in [link:topic=2315]Configuration > MIDI Sources[/link].",
         "A cloud symbol at the row's end marks a track not downloaded yet.",
         "Playing it prioritizes its download; background downloading resumes",
-        "afterwards. The download progress dialog can be hidden.",
+        "afterwards. The requested track goes to the front of the shared queue",
+        "and can download during a HELP/DOS transfer. Repeated requests do not",
+        "start duplicate transfers. [link:topic=2316]Downloads[/link] beside the clock shows progress.",
+        "Open that menu for the shared package and MIDI album queue.",
+        "It does not create an additional automatic MIDI progress window.",
+        "Closing the menu does not stop downloading. ZIP track totals may grow",
+        "after extracting their members.",
+        "RIFF/RMID and counted DOS MIDI are decoded to playable Standard MIDI.",
+        "A partial library shows ready tracks and the download-error count.",
+        "See Downloads for the failed album/member; other music remains usable.",
         "The server caches tracks, covers and the catalog under var/midi.",
         "Playback statistics count plays and actual time, excluding pauses.",
         "Local admins may rebuild this library from midi-sources.json.",
@@ -373,7 +708,17 @@
       "content": [
         "Links open topics or companion HELP files. Use Back, Index, Contents",
         "and Search from the status line or menus. The viewer renders UHF 2.0",
-        "links, styles, fixed-width text and source-defined colors."
+        "links, styles, fixed-width text and source-defined colors.",
+        "Native TextScreens keep original glyphs and palette colors with",
+        "embedded fonts; they share this window and its scrollbars.",
+        "Native blink attributes are retained; reduced motion keeps them visible.",
+        "Native aliases open their real topic. If a link has no destination,",
+        "Help Error explains the failure and the current page stays open.",
+        "Previous and Next follow the active topic's defined continuation.",
+        "They appear only when another page exists, not for hotspot selection.",
+        "A file without an index opens its available Contents before a topic.",
+        "In multi-page Sidekick help, click More.. to continue or use Content",
+        "to select Page 2, Page 3 and later pages directly."
       ]
     },
     "2080": {
@@ -381,7 +726,9 @@
       "title": "Document viewer",
       "content": [
         "Markdown is displayed through the read-only Editor palette. The lower",
-        "left indicator reports RO plus the current line and column."
+        "left indicator reports RO plus the current line and column.",
+        "Select text and press Ctrl+Ins or your system's Copy shortcut.",
+        "Cut and Paste cannot change this read-only document."
       ]
     },
     "2090": {
@@ -390,6 +737,16 @@
       "content": [
         "Tab and Shift-Tab move focus. Enter activates the default button and",
         "Escape closes the dialog unless its active control reserves Escape.",
+        "Clicking outside a dialog never closes it; modal dialogs block input.",
+        "",
+        "[b]System clipboard[/b]",
+        "Copy: Ctrl+Ins. Cut: Shift+Del. Paste: Shift+Ins.",
+        "macOS: Cmd+C/X/V. Windows/Linux: Ctrl+C/X/V.",
+        "These work in shared input fields; Paste respects format and length.",
+        "Selected HELP/Docs text can be copied but cannot be cut or replaced.",
+        "Browser permissions may limit clipboard access. Use native shortcuts",
+        "or the browser menu if requested. Clipboard text is never sent to",
+        "the server or saved in application data.",
         "",
         "Common dialogs:",
         "  [link:topic=2010]Open a File[/link]       [link:topic=2020]Change Directory[/link]",
@@ -577,10 +934,22 @@
         "Email is validated before Save. Save updates the menu and closes",
         "the dialog. Cancel/close does not save. Role is shown, not editable.",
         "Private C shows saved overlay usage and capacity (excluding common games).",
-        "Username, Passkey, sessions and private DOS files remain unchanged.",
+        "Profile Save preserves username, Passkeys, sessions and private DOS files.",
+        "Account also lists your named Passkeys. Select one, edit its name and",
+        "press Rename, or enter a name and Add Passkey for another authenticator.",
+        "Registration suggests an editable OS/browser name, not device identity.",
+        "Synchronized keys may work on several devices. Old keys can be renamed.",
+        "Set an optional password by entering it twice (15-128 characters).",
+        "Alt+P focuses New password.",
+        "Use a long, unique passphrase; basic predictable values are rejected.",
+        "Setting a password or adding a key asks for existing Passkey confirmation.",
+        "Security actions save immediately, independently of profile Save/Cancel.",
+        "Changing a password signs out other sessions, not your current session.",
         "The new email or original username works for login; email is unverified.",
         "Enter your email or legacy username, press Sign In and approve the",
-        "Passkey prompt. HELP browsing/search do not require an account.",
+        "Passkey prompt, or enter your password and press Password if enabled.",
+        "Passwords are optional, stored as salted hashes and rate limited.",
+        "HELP browsing/search do not require an account.",
         "Passkeys belong to a hostname: a production key cannot sign in on",
         "localhost. Use a browser supporting WebAuthn, such as Safari/Chrome.",
         "The explicit local Docker development mode signs in automatically",
@@ -598,6 +967,7 @@
       "content": [
         "Open Login > Register. Enter first/last name, nickname, email and token",
         "in XXXXX-XXXXX-XXXXX-XXXXX-XXXXX form, then approve Passkey creation.",
+        "Passkey name suggests your system and browser; edit it if needed.",
         "The token is single-use and expires after one hour. An administrator",
         "creates it; on a server with no accounts, the first-admin token is",
         "printed in the server/Docker startup log.",
@@ -611,9 +981,12 @@
       "id": 2300,
       "title": "Registration Token",
       "content": [
-        "An administrator opens Account > Registration Token. Generate makes",
+        "Admin > Configuration > Registration Token opens this tool. Generate makes",
         "a one-hour token. The list below shows unused, unexpired tokens and",
-        "their expiry. Select a row to copy its token or enable Delete.",
+        "their expiry. Select a row to enable Copy to Clipboard and Delete.",
+        "Copy is also available immediately after Generate. It copies just",
+        "the token value. The status confirms success; if the browser refuses,",
+        "the input is selected for manual Ctrl+C or Cmd+C. No token disables Copy.",
         "Delete requires confirmation. Cancel, Escape or the MessageBox close",
         "control leaves the token valid. Share tokens privately, not in URLs.",
         "New token values can be read after signing in again; the server",
@@ -626,36 +999,228 @@
       "title": "Server Configuration and Rebuild",
       "content": [
         "Server Configuration contains the default quota and runtime settings.",
+        "Retained backups per type sets 1-100 copies; the default is 2.",
+        "After a successful job, older copies of that type are deleted.",
+        "HELP, DOS (rebuilds and package changes) and MIDI have separate limits.",
+        "A lower limit applies after the next successful job, not while saving.",
+        "Failed/partial rebuilds retain recovery copies. Cleanup errors are logged.",
+        "Migration archives and private disk revisions are not rotated by this setting.",
         "Host, paths and source files are read-only, configured on the server.",
-        "HELP / DOS packages selects server content from the manifests.",
+        "Admin > Configuration groups server settings, packages and appearance.",
+        "[link:topic=2311]HELP Packages[/link], [link:topic=2312]DOS Packages[/link] and [link:topic=2315]MIDI Sources[/link] open separate dialogs.",
+        "[link:topic=2315]MIDI Sources[/link] selects the server MIDI providers.",
+        "Choose Pascal, C/C++, Assembler and other groups on the left.",
         "Click or Space toggles a selection; arrows move without toggling.",
-        "Install requires confirmation and runs downloads/conversion through API.",
-        "Fresh servers open this configuration after administrator sign-in.",
-        "Empty selections install nothing. Closing configuration changes nothing.",
-        "Unselected HELP/DOS content and private disks are kept, not uninstalled.",
+        "Apply confirms installation/uninstallation and runs it through the API.",
+        "Fresh servers open HELP Packages after administrator sign-in.",
+        "Unchecked installed editions/packages are uninstalled after confirmation.",
+        "Empty selection removes optional packages; Close changes nothing.",
+        "Original HELP, downloads and private DOS files/media are kept.",
+        "Arrows, Page Up/Down, wheel and shared scrollbars move long checkbox panes.",
         "HELP is in data/helps; originals in data/sources; Docs in data/docs.",
         "Shared generated DOS C is var/dos/c; downloaded MIDI is var/midi.",
         "Archives use var/downloads/help and var/downloads/dos. Private C is under",
         "data/dos/users/<account-id> and is permanent, not cache.",
         "HELP publication retains a .helps-previous-* sibling backup. Failed",
         "conversion leaves live HELP unchanged. Retry failed jobs explicitly.",
+        "DOS changes stage shared C, record exact package ownership and keep a",
+        "var/backups/dos-packages-* snapshot. Failed publication restores C.",
         "Users sets individual quotas and roles; blank uses the server default.",
         "An administrator sets the private DOS overlay capacity per user:",
         "1-256 MiB, default 64 MiB. Shared C software is excluded. Lowering",
         "the quota does not delete saved files; restart DOS to reload limits.",
         "Signed-in administrators have Rebuild DOS C and Rebuild MIDI",
         "under the user Configuration menu. Both require confirmation.",
+        "They open confirmation/progress directly, not Server Configuration.",
         "DOS rebuild replaces the shared base using dos-prompt.json. It keeps",
         "private overlays and cached source archives. The current browser's",
         "DOS window is saved/closed first. Restart DOS in any other open tabs.",
         "MIDI rebuild stops the old downloader, replaces tracks/covers/catalog",
-        "and downloads the configured sources again from midi-sources.json.",
-        "Previous active data is moved to var/backups, not permanently erased.",
-        "Keep or remove these backups deliberately: repeated rebuilds use space.",
+        "and downloads only the selected sources from midi-sources.json.",
+        "Previous active data is moved to var/backups for recovery.",
+        "Successful jobs rotate older backups using Retained backups per type.",
         "The progress dialog shows the current phase/file. Hide only hides the",
         "dialog; the server continues. Selecting Rebuild again shows that job.",
         "Download failures are reported; a backup remains for manual recovery.",
         "[link:topic=2320]DOS Prompt[/link]  [link:topic=2060]MIDI Player[/link]"
+      ]
+    },
+    "2311": {
+      "id": 2311,
+      "title": "HELP Packages",
+      "content": [
+        "Left: product groups as in Help Files. Right: individual HELP versions.",
+        "Versions are installed and removed independently; other releases stay intact.",
+        "HELP Packages is a separate window, sharing its base with DOS and MIDI.",
+        "Switching windows keeps each draft. Apply changes only HELP.",
+        "Description explains the highlighted HELP product from its manifest.",
+        "Select / Deselect All below the right pane affects the current group.",
+        "The bottom Select All / Deselect All buttons affect every HELP group.",
+        "Space/click toggles [X]; arrows move without toggling. * means installed.",
+        "The complete scrollable pane uses its normal palette, even below rows.",
+        "Switching to another window keeps this dialog and its draft open.",
+        "No bottom status row: use Downloads for progress and MessageBox for errors.",
+        "Apply confirms installation/uninstallation and shows server progress.",
+        "Downloads > More expands the green list of unfinished work.",
+        "Percentages show progress; ! marks failure. Completed rows disappear.",
+        "New/cached archive counts and downloaded MiB are shown below.",
+        "A completed download is not final publication: wait for the job to finish.",
+        "Reopening after a failure checks only published HELP, not the failed request.",
+        "While a job runs its requested target is shown; * marks real installations.",
+        "Download, extraction and rate-limit waits show their real phase and name.",
+        "Only HELP is changed; DOS selection and its pending jobs are preserved.",
+        "Empty selection removes listed published HELP, not originals/downloads.",
+        "Close/Cancel or closing confirmation does not save. Hide on progress",
+        "hides the dialog without cancelling server work. Backups are retained.",
+        "[link:topic=2312]DOS Packages[/link]  [link:topic=2310]Configuration[/link]"
+      ]
+    },
+    "2312": {
+      "id": 2312,
+      "title": "DOS Packages",
+      "content": [
+        "DOS Packages is a separate window, sharing its base with HELP and MIDI.",
+        "Switching windows keeps each draft. Apply changes only DOS.",
+        "Admin > Configuration > DOS Packages edits only shared DOS software.",
+        "Choose a category on the left; its package checkboxes appear on the right.",
+        "Category icons identify game genres, programming, editors, file managers,",
+        "archive tools, graphics, sound and antivirus.",
+        "Select / Deselect All below Packages affects only this category.",
+        "The bottom Select All / Deselect All buttons affect all DOS categories.",
+        "The Description box follows the selected package by mouse or arrows.",
+        "Spaces align flags after short names; the entire row scrolls together.",
+        "UTILS and Volkov Commander are required and cannot be unchecked.",
+        "Deselect All clears optional packages only, including through the API.",
+        "Quadrax is Slovak. Volkov Commander is offered without its sources.",
+        "A globe means a mixed or unverified language, not a guessed country.",
+        "All action buttons share one row. Apply previews new package names.",
+        "No bottom status row: progress is in Downloads; errors use MessageBox.",
+        "Switching categories keeps all unsaved selections. Apply includes them all.",
+        "Switching windows leaves this dialog open and keeps its draft too.",
+        "Apply is disabled only while loading/submitting or with invalid settings.",
+        "During a background job it opens Downloads, without submitting twice.",
+        "Draft changes remain selected after completion; Apply them afterwards.",
+        "A failed job releases Apply so you can change selection and try again.",
+        "Reopening checks the installed disk receipt, not a failed saved request.",
+        "Each TVCheckBoxes row is a manifest package; * marks installed ones.",
+        "Space/click toggles [X]. Arrows, wheel and shared scrollbars move",
+        "the list. Its normal palette fills the whole pane, including blank rows.",
+        "Apply confirms installation/uninstallation and shows progress.",
+        "HELP selection is kept; a failed HELP job is not retried by this action.",
+        "Empty selection retains required packages. Private DOS overlays,",
+        "original files, caches and recoverable backups stay intact.",
+        "The current DOS window saves/closes before changes; other tabs must",
+        "restart DOS afterward. Close or closing confirmation changes nothing.",
+        "Programming includes ready-to-run Borland Museum compilers and help.",
+        "Also available: Open Watcom C/C++ and Fortran, Free Pascal, FreeBASIC,",
+        "NASM, JWasm and DJGPP with RHIDE. Run START for their environments.",
+        "Office offers Word 5.5, As-Easy-As, Ability Plus and original VisiCalc.",
+        "These are optional downloads, not changes to existing private disks.",
+        "Original licences apply; VisiCalc is personal/non-commercial only.",
+        "TYPE C:\\SOFTWARE.TXT lists installed software and launch commands.",
+        "Games include Cannon Fodder 1/2, the six DOS Commander Keen episodes",
+        "plus Keen Dreams, and Catacomb, II, 3-D and The Catacomb Abyss.",
+        "New optional packages are unchecked until you select and Apply them.",
+        "Winter Challenge, Summer Challenge and Lotus are also available,",
+        "with shareware Duke Nukum, Duke Nukem II, Crystal Caves and Bio Menace.",
+        "Tools include DOS Navigator 2, DOSZip, TDE, BIEW, GrafX2 and DOSMid.",
+        "Czech packages include Vlak, DOS Manazer, Text602, Calc602 and Manager602.",
+        "UTILS includes ZIP/UnZip, UnRAR, UnARJ, ARJ, 7-Zip and other tools.",
+        "Required licences and available sources are kept with these tools.",
+        "Optional post-install BAT runs once on the server, in isolated DOSBox.",
+        "HTTP 429 is an upstream rate limit. Wait/retry is shown in progress;",
+        "a pure uninstall does not download. Other categories may still install.",
+        "Antivirus entries retain original licences; evaluation is not freeware.",
+        "Historical antivirus definitions do not protect your actual computer.",
+        "[link:topic=2311]HELP Packages[/link]  [link:topic=2320]DOS Prompt[/link]"
+      ]
+    },
+    "2315": {
+      "id": 2315,
+      "title": "MIDI Sources",
+      "content": [
+        "MIDI Sources is a separate window, sharing its base with HELP and DOS.",
+        "Switching windows keeps each draft. Apply changes only MIDI sources/albums.",
+        "Admin > Configuration > MIDI Sources selects server download providers.",
+        "The left TVListBox selects the provider being edited; Enable source",
+        "includes it. The right TVCheckBoxes selects game soundtrack albums.",
+        "Switching sources keeps every unsaved draft. Space toggles albums.",
+        "Switching windows keeps this dialog open without discarding its draft.",
+        "No bottom status row: shared progress dialogs and MessageBoxes report work.",
+        "The checkbox below Albums affects only the current source's albums.",
+        "The bottom Select All / Deselect All buttons affect all sources/albums,",
+        "including enabling/disabling providers. All includes future albums.",
+        "Toggling an album",
+        "switches to an explicit selection. Both panes fill all blank rows.",
+        "Load albums indexes an unindexed source with a progress dialog.",
+        "This does not enable the source or download its music. Hide does not",
+        "cancel server work. A failed index can be retried.",
+        "Apply requires confirmation and saves source and album selections.",
+        "Cancel or closing confirmation changes nothing. Empty selection",
+        "disables all MIDI providers; it does not fall back to every source.",
+        "Selections are saved permanently in data/midi-settings.json.",
+        "Provider URLs/extraction rules remain in midi-sources.json.",
+        "The old downloader finishes its in-flight write before resuming with",
+        "the new selection. Cached MIDI, covers and index rows are kept.",
+        "Unselected albums/sources leave the playlist and download queue; their",
+        "track/cover links and priority download requests are disabled.",
+        "Selecting them again reuses their cache. Playback stops after Apply.",
+        "Rebuild MIDI uses the same selection but replaces generated files",
+        "with a recoverable backup. Members cannot change server sources.",
+        "[link:topic=2060]MIDI Player[/link]  [link:topic=2310]Configuration/Rebuild[/link]"
+      ]
+    },
+    "2316": {
+      "id": 2316,
+      "title": "Downloads",
+      "content": [
+        "The percentage beside your account and clock opens the download queue.",
+        "HELP packages, DOS packages and MIDI share one online downloader.",
+        "The caption contains the Unicode down arrow and current percent.",
+        "When a batch finishes, its counter resets and only the arrow remains.",
+        "The next batch or retry starts at 0%, not the previous history total.",
+        "The first submenu, Completed downloads, contains successful rows.",
+        "Show Downloads opens the shared nonmodal progress dialog for HELP,",
+        "DOS packages and MIDI albums. Package Apply opens that same dialog.",
+        "More/Less reveals its green list of waiting, running and failed work.",
+        "Completed rows leave the list but remain in Completed downloads.",
+        "Hide is on the left; More/Less is on the right. An empty list collapses.",
+        "The dialog stays available after work",
+        "finishes. Hide or [ ] hides the dialog without cancelling downloads.",
+        "Conversion/publication retains its own phase and overall progress.",
+        "Waiting, running and failed rows remain in the main menu.",
+        "Missing music requested for playback gets its own named row at the front.",
+        "One urgent worker can fetch it during a running HELP/DOS transfer.",
+        "Newer waiting songs go first, without bypassing a source's limit.",
+        "Click a failed row for Retry, Remove or Cancel.",
+        "The failure dialog wraps the full name, error and notice without",
+        "truncating them; its buttons wrap when the screen is narrow.",
+        "Retry repeats failed parts only, keeping successful work.",
+        "Remove only clears the queue row;",
+        "cached, installed and private files and selections are kept.",
+        "Closing [ ] or pressing Escape cancels without making a change.",
+        "Retry is unavailable during the current operation or for generic",
+        "preparation errors. Deselected content cannot be retried. A source",
+        "that is still unavailable or invalid will remain failed.",
+        "A dot means waiting; a down arrow active; a tick finished; ! failed.",
+        "The menu scrolls when its list is taller than the available desktop.",
+        "MIDI requests are grouped into source/album rows, not thousands of tracks.",
+        "Percentages use known work items and current file bytes when available.",
+        "Source discovery can change the known amount of work. HTTP 429 waits",
+        "show a retry countdown; repeated failures do not erase installed files.",
+        "Three regular workers can use different sources at the same time.",
+        "Each site and its subdomains share one transfer, including playback.",
+        "HTTP 429 cooldowns pause that source, not unrelated downloads.",
+        "A separate urgent worker fetches music requested for playback.",
+        "Current transfers are not aborted by a priority playback request.",
+        "Closing the menu does not cancel the server operation. Completed",
+        "rows stay accessible at 100%; only an empty queue hides the caption.",
+        "Partial/failed queues keep their real progress, not an automatic 100%.",
+        "Only administrators see HELP/DOS packages. MIDI progress is public.",
+        "The queue is runtime state, not permanent download history. Server",
+        "restart clears it; downloaded caches and private data are retained.",
+        "[link:topic=2311]HELP Packages[/link]  [link:topic=2312]DOS Packages[/link]",
+        "[link:topic=2315]MIDI Sources[/link]  [link:topic=2060]MIDI Player[/link]"
       ]
     },
     "2320": {
@@ -699,6 +1264,18 @@
         "[link:topic=2280]Account[/link]  [link:topic=2310]Configuration/Rebuild[/link]"
       ]
     },
+    "2340": {
+      "id": 2340,
+      "title": "Grid Viewer",
+      "content": [
+        "TVGridView adds columns and optional headers to row-based lists.",
+        "Arrow keys select cells. Shared vertical/horizontal scrollbars show",
+        "content that does not fit. Hide headers toggles the column titles.",
+        "This tool exercises the shared grid object with TVision inheritance",
+        "examples. It does not edit the underlying application objects.",
+        "[link:topic=2050]Widget Gallery[/link]"
+      ]
+    },
     "2350": {
       "id": 2350,
       "title": "Users",
@@ -725,18 +1302,6 @@
         "Its name, email and private disk capacity can still be changed.",
         "No account is automatically promoted. Members cannot access this tool.",
         "[link:topic=2280]Account[/link]  [link:topic=2310]Server Configuration[/link]"
-      ]
-    },
-    "2340": {
-      "id": 2340,
-      "title": "Grid Viewer",
-      "content": [
-        "TVGridView adds columns and optional headers to row-based lists.",
-        "Arrow keys select cells. Shared vertical/horizontal scrollbars show",
-        "content that does not fit. Hide headers toggles the column titles.",
-        "This tool exercises the shared grid object with TVision inheritance",
-        "examples. It does not edit the underlying application objects.",
-        "[link:topic=2050]Widget Gallery[/link]"
       ]
     }
   }

@@ -7,11 +7,20 @@ const {
     TVRect,
     TVView,
     TVStaticText,
+    TVGroup,
+    TVDialog,
+    TVButton,
+    TVMessageBox,
+    TVProgressDialog,
+    bfDefault,
+    sfModal,
+    sfDisabled,
     TVMenu,
     TVMenuBar,
     NewLine,
     NewSubMenu,
     TVMenuItem,
+    TVSubMenu,
     TVStatusItem,
     NewStatusKey,
     TVStatusLine,
@@ -20,6 +29,7 @@ const {
     TVProgram,
     TVEvent,
     escapeHtml,
+    wrapTextLines,
     renderHotkeyMarkup,
     fillBorders,
     updateWindowFrameState,
@@ -38,7 +48,9 @@ const {
     TVAddUserDialog,
     TVRegistrationTokenDialog,
     TVServerConfigurationDialog,
-    TVContentSetupDialog,
+    TVHelpPackagesDialog,
+    TVDosPackagesDialog,
+    TVMidiSourcesDialog,
     TVContextHelpWindow,
     TVPuzzleDialog,
     TVHanoiDialog,
@@ -75,6 +87,9 @@ const {
     hcColors,
     hcRegistrationTokens,
     hcServerConfiguration,
+    hcHelpPackages,
+    hcDosPackages,
+    hcMidiSources,
     hcUsers,
 } = TV_HELP_CONTEXTS;
 
@@ -96,11 +111,184 @@ function pageSubMenu(name, items, helpCtx = hcNoContext) {
     return NewSubMenu(name, helpCtx, pageMenu(items));
 }
 
+class TVDownloadActionDialog extends TVDialog {
+    constructor(item) {
+        const width = Math.min(72, Math.max(20, Math.floor(window.innerWidth / measureCells().width) - 2));
+        const label = `${item.kind.toUpperCase()}: ${item.label}`;
+        const notice = "Remove only clears this queue entry; files are kept."
+            + (item.retryable ? "" : "\nRetry is unavailable while work runs or for this operation.");
+        const lines = wrapTextLines([label, "", item.error || "Download failed.", "", notice].join("\n"), width - 6);
+        const buttonWidth = 14, buttonGap = 3;
+        const buttonsPerRow = Math.max(1, Math.min(3, Math.floor((width - 2 + buttonGap) / (buttonWidth + buttonGap))));
+        const buttonRows = Math.ceil(3 / buttonsPerRow);
+        const buttonsY = lines.length + 2;
+        const height = lines.length + 4 + 2 * buttonRows;
+        super(new TVRect(0, 0, width, height), "Download failed");
+        this.setHelpCtx(TV_HELP_CONTEXTS.hcDownloads);
+        this.setState(sfModal, true);
+        const buttons = ["~R~etry", "Re~m~ove", "~C~ancel"].map((title, index) => {
+            const row = Math.floor(index / buttonsPerRow), column = index % buttonsPerRow;
+            const count = Math.min(buttonsPerRow, 3 - row * buttonsPerRow);
+            const rowWidth = count * buttonWidth + (count - 1) * buttonGap;
+            const x = Math.floor((width - 2 - rowWidth) / 2) + column * (buttonWidth + buttonGap);
+            const y = buttonsY + row * 2;
+            return new TVButton(new TVRect(x, y, x + buttonWidth, y + 2), title,
+                ["download-retry", "download-remove", "download-cancel"][index], index === 0 ? bfDefault : 0);
+        });
+        this.retryButton = buttons[0];
+        this.retryButton.setState(sfDisabled, !item.retryable);
+        this.insert(new TVGroup(new TVRect(0, 0, width - 2, height - 2)).insertAll([
+            new TVStaticText(new TVRect(2, 1, width - 4, lines.length + 1), lines.join("\n")),
+            ...buttons,
+        ]));
+        this.bindCommonClose(() => this.dismiss("cancel"));
+        this.bindDrag();
+        this.resolveAction = null;
+    }
+    show() {
+        super.open();
+        return new Promise((resolve) => { this.resolveAction = resolve; });
+    }
+    dismiss(action) {
+        const resolve = this.resolveAction;
+        this.resolveAction = null;
+        super.close();
+        resolve?.(action);
+    }
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evCommand && ["download-retry", "download-remove", "download-cancel"].includes(event.command)) {
+            this.dismiss(event.command.slice(9));
+            this.clearEvent(event);
+        }
+    }
+    destroy() { this.dismiss("cancel"); super.destroy(); }
+}
+
+class TVDownloadProgress extends TVSubMenu {
+    constructor() {
+        super("↓", 0, TV_HELP_CONTEXTS.hcDownloads);
+        this.status = { active: false, errors: 0, percent: 0, items: [] };
+        this.rows = new Map();
+        this.completed = new TVSubMenu("Completed downloads (0)", 0, this.helpCtx);
+        this.showItem = new TVMenuItem("~S~how Downloads...", "downloads-show", 0, this.helpCtx);
+        this.dialog = null;
+        this.signature = "";
+        this.pollTimer = null;
+        this.getMenuView = null;
+        this.stopped = false;
+        this.requestSerial = 0;
+        this.actionPending = false;
+    }
+
+    update(status, view) {
+        this.status = status;
+        const showPercent = status.active || (status.percent > 0 && status.percent < 100);
+        this.name = showPercent ? `↓ ${status.percent}%` : "↓";
+        const width = Math.max(12, Math.min(64, Math.floor(window.innerWidth / (measureCells().width || 8)) - 18));
+        const signature = width + ":" + status.items.map((item) => `${item.id}:${item.state === "done"}`).join("|");
+        const changed = signature !== this.signature;
+        const items = status.items.map((item) => {
+            const marker = item.state === "done" ? "✓" : item.state === "error" ? "!" : item.state === "running" ? "↓" : "·";
+            const label = `${item.kind.toUpperCase()}: ${item.label}`;
+            const title = `${marker} ${label.length > width ? label.slice(0, width - 1) + "…" : label}`;
+            const row = this.rows.get(item.id) || new TVMenuItem("", "", 0, this.helpCtx);
+            const wait = /in (\d+)s$/.exec(item.phase || "");
+            row.name = title; row.param = item.state === "error" ? "Failed" : wait ? `Wait ${wait[1]}s` : `${item.percent}%`;
+            row.command = item.state === "error" ? "downloads-failed" : "";
+            this.rows.set(item.id, row);
+            return row;
+        });
+        if (changed) {
+            this.signature = signature;
+            this.rows = new Map(status.items.map((item, index) => [item.id, items[index]]));
+            const completed = items.filter((_item, index) => status.items[index].state === "done");
+            const pending = items.filter((_item, index) => status.items[index].state !== "done");
+            this.completed.name = `Completed downloads (${completed.length})`;
+            this.completed.setDisabled(!completed.length);
+            this.completed.subMenu = pageMenu(completed);
+            const menu = pageMenu([this.completed, this.showItem, ...(pending.length ? [NewLine(), ...pending] : [])]);
+            if (view) { view.setSubMenu(this, menu); } else { this.subMenu = menu; }
+        }
+        view?.updateItem(this);
+        view?.updateItem(this.completed);
+        items.forEach((item) => view?.updateItem(item));
+        view?.showDownloads();
+        view?.layoutSubMenu(this);
+        view?.layoutSubMenu(this.completed);
+        if (this.dialog && !this.dialog.destroyed) { this.dialog.updateDownloads(status); }
+    }
+
+    showDialog(desktop) {
+        if (!this.dialog || this.dialog.destroyed) {
+            this.dialog = new TVProgressDialog("Downloads", "Preparing downloads...");
+            this.dialog.setHelpCtx(this.helpCtx);
+            this.dialog.setState(sfModal, false);
+            desktop.dialogManager.register("downloads", this.dialog);
+        }
+        this.dialog.updateDownloads(this.status);
+        this.dialog.open();
+        return this.dialog;
+    }
+
+    async failedItem(control, desktop) {
+        if (this.actionPending || !desktop) { return; }
+        const id = [...this.rows].find(([_id, row]) => row === control)?.[0];
+        const item = this.status.items.find((row) => row.id === id && row.state === "error");
+        if (!item) { return; }
+        this.actionPending = true;
+        const dialog = new TVDownloadActionDialog(item);
+        desktop.dialogManager.register("download-action", dialog);
+        try {
+            const action = await dialog.show();
+            if (action === "cancel") { return; }
+            await TVLoginDialog.request("/api/downloads/action", "POST", { id, action });
+            await this.refresh();
+        } catch (error) {
+            const box = new TVMessageBox(); desktop.dialogManager.register("download-error", box);
+            try { await box.show({ title: "Download", type: TVMessageBox.MF_ERROR, lines: [error.message] }); }
+            finally { box.destroy(); }
+        } finally {
+            dialog.destroy();
+            this.actionPending = false;
+        }
+    }
+
+    start(getMenuView) {
+        if (this.getMenuView) { return; }
+        this.getMenuView = getMenuView;
+        this.stopped = false;
+        void this.refresh();
+        window.addEventListener("pagehide", () => this.stop());
+        window.addEventListener("pageshow", (event) => { if (event.persisted) { this.stopped = false; void this.refresh(); } });
+    }
+
+    stop() { this.stopped = true; this.requestSerial += 1; window.clearTimeout(this.pollTimer); }
+
+    async refresh() {
+        const serial = ++this.requestSerial;
+        window.clearTimeout(this.pollTimer);
+        try {
+            const response = await fetch("/api/downloads", { cache: "no-store" });
+            if (serial !== this.requestSerial) { return; }
+            if (response.status === 404) { this.stop(); return; }
+            if (!response.ok) { throw new Error("Downloader status unavailable"); }
+            const status = await response.json();
+            if (serial !== this.requestSerial) { return; }
+            if (!this.stopped) { this.update(status, this.getMenuView?.()); }
+        } catch { /* A temporary network failure does not stop server work. */ }
+        if (!this.stopped && serial === this.requestSerial) { this.pollTimer = window.setTimeout(() => void this.refresh(), this.status.active ? 1000 : 5000); }
+    }
+}
+
 // Application extension: classic TMenuBar has no right-aligned item option.
 class TVApplicationMenuBar extends TVMenuBar {
-    constructor(bounds, menu, rightItem) {
-        super(bounds, menu);
+    constructor(bounds, menu, rightItem, downloadItem = new TVDownloadProgress()) {
+        const items = menu.entries();
+        items.splice(items.indexOf(rightItem) + 1, 0, downloadItem);
+        super(bounds, pageMenu(items));
         this.rightItem = rightItem;
+        this.downloadItem = downloadItem;
     }
     _drawItemName(item) {
         return item === this.rightItem && item.subMenu instanceof TVMenu
@@ -109,11 +297,27 @@ class TVApplicationMenuBar extends TVMenuBar {
     menuMnemonic(item) {
         return item === this.rightItem && item.subMenu instanceof TVMenu ? "" : super.menuMnemonic(item);
     }
-    drawItem(item, view = "bar") {
-        const markup = super.drawItem(item, view);
-        return view === "bar" && item === this.rightItem
-            ? `<div class="tv-menu-right">${markup}</div>` : markup;
+    draw() {
+        const left = this.menu.entries().filter((item) => item !== this.rightItem && item !== this.downloadItem);
+        return `<nav class="tv-menu-items">${left.map((item) => this.drawItem(item, "bar")).join("")}`
+            + `<div class="tv-menu-right">${this.drawItem(this.rightItem, "bar")}${this.drawItem(this.downloadItem, "bar")}</div></nav>`;
     }
+    bindRoot(root) {
+        super.bindRoot(root);
+        this.downloadItem.update(this.downloadItem.status, this);
+        this.showDownloads();
+        return this;
+    }
+    showDownloads() {
+        const root = this.rootByItem.get(this.downloadItem);
+        if (!root) { return; }
+        // Finished rows remain accessible through the Completed downloads submenu.
+        root.hidden = !this.downloadItem.status.items.length && !this.downloadItem.status.active
+            && !this.downloadItem.status.errors && this.activeRoot !== root;
+        this.menuRoots = this.menuRoots.filter((item) => !item.hidden);
+        if (!root.hidden && !this.menuRoots.includes(root)) { this.menuRoots.push(root); }
+    }
+    refresh() { super.refresh(); if (this.downloadItem) { this.showDownloads(); } }
 }
 
 function buildAccountMenu(session) {
@@ -123,22 +327,33 @@ function buildAccountMenu(session) {
     return pageSubMenu(String(user.display_name || user.username), [
         new TVMenuItem("~A~ccount", "account-profile", 0, hcAccount),
         pageSubMenu("~C~onfiguration", [
+            ...(admin ? [
+                new TVMenuItem("~S~erver Configuration", "account-server-configuration", 0, hcServerConfiguration),
+                new TVMenuItem("~H~ELP Packages...", "account-help-packages", 0, hcHelpPackages),
+                new TVMenuItem("~D~OS Packages...", "account-dos-packages", 0, hcDosPackages),
+                new TVMenuItem("~M~IDI Sources...", "account-midi-sources", 0, hcMidiSources),
+                new TVMenuItem("~U~sers", "account-users", 0, hcUsers),
+                new TVMenuItem("~R~egistration Token", "account-registration-token", 0, hcRegistrationTokens),
+                NewLine(),
+            ] : []),
             new TVMenuItem("~C~olors", "account-colors", 0, hcColors),
-            ...(admin ? [new TVMenuItem("~S~erver Configuration", "account-server-configuration", 0, hcServerConfiguration)] : []),
+            pageSubMenu("~T~heme", [
+                new TVMenuItem("~L~ight", "theme-light"),
+                new TVMenuItem("~D~ark", "theme-dark"),
+                new TVMenuItem("~A~uto", "theme-auto"),
+            ], hcColors),
             ...(admin ? [
                 NewLine(),
-                new TVMenuItem("Rebuild ~D~OS C...", "account-rebuild-dos", 0, hcServerConfiguration),
-                new TVMenuItem("Rebuild ~M~IDI...", "account-rebuild-midi", 0, hcServerConfiguration),
+                new TVMenuItem("Re~b~uild DOS C...", "account-rebuild-dos", 0, hcServerConfiguration),
+                new TVMenuItem("Rebuild M~I~DI...", "account-rebuild-midi", 0, hcServerConfiguration),
             ] : []),
-        ], hcAccount),
-        ...(admin ? [new TVMenuItem("~R~egistration Token", "account-registration-token", 0, hcRegistrationTokens)] : []),
-        ...(admin ? [new TVMenuItem("~U~sers", "account-users", 0, hcUsers)] : []),
+        ], admin ? hcServerConfiguration : hcColors),
         NewLine(),
         new TVMenuItem("Sign ~O~ut", "account-logout"),
     ], hcAccount);
 }
 
-function buildPageMenuBar(root, context, session = null) {
+function buildPageMenuBar(root, context, session = null, downloadProgress = root._tvMenuView?.downloadItem) {
     const dialog = (name, title) => pageMenuItem(title, "dialog-open", name);
     const savers = [
         pageMenuItem("~S~tars", "saver-start", "stars"),
@@ -158,16 +373,18 @@ function buildPageMenuBar(root, context, session = null) {
         dialog("ascii", "Ascii ~T~able"),
         dialog("calc", "~C~alculator"),
         dialog("midi", "~M~IDI Player"),
-        dialog("colors", "C~o~lors"),
+        ...(!session?.authenticated ? [dialog("colors", "C~o~lors")] : []),
         dialog("widgets", "~W~idget Gallery"),
         dialog("grid", "~G~rid Viewer"),
         dialog("systeminfo", "System ~I~nformation"),
         NewLine(),
         pageSubMenu("~S~creen saver", savers, hcSystemMenu),
-        NewLine(),
-        pageMenuItem("~L~ight Theme", "theme-set", "light"),
-        pageMenuItem("~D~ark Theme", "theme-set", "dark"),
-        pageMenuItem("A~u~to Theme", "theme-set", "auto"),
+        ...(!session?.authenticated ? [
+            NewLine(),
+            new TVMenuItem("~L~ight Theme", "theme-light"),
+            new TVMenuItem("~D~ark Theme", "theme-dark"),
+            new TVMenuItem("A~u~to Theme", "theme-auto"),
+        ] : []),
     ];
     const top = [
         pageSubMenu("~≡~", system, hcSystemMenu),
@@ -179,7 +396,7 @@ function buildPageMenuBar(root, context, session = null) {
     }
     const accountItem = buildAccountMenu(session);
     top.push(accountItem);
-    const menuBar = new TVApplicationMenuBar(new TVRect(), pageMenu(top), accountItem);
+    const menuBar = new TVApplicationMenuBar(new TVRect(), pageMenu(top), accountItem, downloadProgress);
     root.innerHTML = menuBar.draw()
         + '<div class="tv-menu-clock" data-tv-clock>00:00:00</div>';
     menuBar.bindRoot(root);
@@ -461,13 +678,19 @@ class TurboVisionWindowResizer {
         if (!current) {
             return false;
         }
+        this.windowElement.classList.remove("is-maximized");
         this.restoreSnapshot = restore || current;
         this.applyGeometry(this.restoreSnapshot);
         this.enforceMinimumSize();
+        if (this.desktop) {
+            const geometry = this.captureGeometry();
+            geometry.left = this.clamp(geometry.left, 0, Math.max(0, this.desktop.clientWidth - this.windowElement.offsetWidth));
+            geometry.top = this.clamp(geometry.top, 0, Math.max(0, this.desktop.clientHeight - this.windowElement.offsetHeight));
+            this.restoreSnapshot = geometry;
+            this.applyGeometry(geometry);
+        }
         if (state.maximized) {
             this.maximize(false);
-        } else {
-            this.windowElement.classList.remove("is-maximized");
         }
         fillBorders();
         return true;
@@ -694,13 +917,16 @@ class TVApplication extends TVProgram {
             ? (control.param && typeof control.param === "object" ? control.param.value : control.param)
             : "") ?? "";
         let handled = true;
-        if (event.command === "account-logout") {
+        if (event.command === "downloads-show") {
+            this.downloadProgress?.showDialog(this.desktopView);
+        } else if (event.command === "downloads-failed") {
+            void this.downloadProgress?.failedItem(control, this.desktopView);
+        } else if (event.command === "account-logout") {
             this.dialogManager.open("login");
             this.dialogManager.get("login")?.handleEvent(new TVEvent(evCommand, { command: "login-sign-out" }));
         } else if (String(event.command).startsWith("account-")) {
             if (["account-rebuild-dos", "account-rebuild-midi"].includes(event.command)) {
                 if (this.isAdmin) {
-                    this.dialogManager.open("server-configuration");
                     this.serverConfigDialog?.handleEvent(new TVEvent(evCommand, {
                         command: event.command.replace("account-", "server-"),
                     }));
@@ -709,12 +935,12 @@ class TVApplication extends TVProgram {
             }
             const name = event.command === "account-login" ? "login"
                 : event.command === "account-profile" ? "account" : event.command.slice(8);
-            if (["server-configuration", "content-setup", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
+            if (["server-configuration", "help-packages", "dos-packages", "midi-sources", "registration-token", "users", "add-user"].includes(name) && !this.isAdmin) { this.clearEvent(event); return; }
             this.dialogManager.open(name);
         } else if (event.command === "dialog-open") {
             this.dialogManager.open(value);
-        } else if (event.command === "theme-set") {
-            applyThemeAndSyncPalette(value || "default", true);
+        } else if (["theme-light", "theme-dark", "theme-auto"].includes(event.command)) {
+            applyThemeAndSyncPalette(event.command.slice(6), true);
             this.dialogManager.applyActiveStates();
             fillBorders();
         } else if (event.command === "context-help") {
@@ -796,18 +1022,23 @@ class TVApplication extends TVProgram {
 
     _setAuthSession(session) {
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
-        if (!nextAdmin) { this.contentDialog?.close(); this.contentDialog?.progress?.close(); }
+        if (!nextAdmin) {
+            for (const name of ["help-packages", "dos-packages", "midi-sources"]) { this.dialogManager?.get(name)?.close(); }
+            this.dialogManager?.get("downloads")?.close();
+            this.dialogManager?.get("midi-source-progress")?.close();
+        }
         if (!session?.authenticated) { this.dialogManager?.get("account")?.close(); }
         if (!nextAdmin) { this.serverConfigDialog?.close(); this.dialogManager?.get("registration-token")?.close(); this.dialogManager?.get("users")?.close(); this.dialogManager?.get("add-user")?.close(); }
         const nextSession = session?.authenticated && session.user ? session : null;
         if (JSON.stringify(nextSession) === JSON.stringify(this.authSession)) { return; }
         this.authSession = nextSession;
         this.isAdmin = nextAdmin;
-        if (nextAdmin) { void this.contentDialog?.checkFirstRun(); }
+        if (nextAdmin) { void this.helpPackagesDialog?.checkFirstRun(); }
         const menuBar = document.querySelector("[data-tv-menu-bar]");
         if (menuBar) {
-            buildPageMenuBar(menuBar, new TVAppContext(), this.authSession);
+            buildPageMenuBar(menuBar, new TVAppContext(), this.authSession, this.downloadProgress);
             this.menus?.refresh();
+            void this.downloadProgress?.refresh();
         }
     }
 
@@ -848,6 +1079,8 @@ class TVApplication extends TVProgram {
         } : {});
         this.menus = new TurboVisionMenus(this.dialogManager);
         this.menus.commandTarget = this;
+        this.downloadProgress = this.menus.menuView?.downloadItem;
+        this.downloadProgress?.start(() => this.menus.menuView);
         if (hostWindow && this.boundHostWindow !== hostWindow) {
             this.boundHostWindow = hostWindow;
             hostWindow.addEventListener("mousedown", (event) => {
@@ -868,7 +1101,14 @@ class TVApplication extends TVProgram {
         const registrationDialog = this.registerDialog("registration", () => new TVRegistrationDialog());
         this.registerDialog("registration-token", () => new TVRegistrationTokenDialog());
         this.serverConfigDialog = this.registerDialog("server-configuration", () => new TVServerConfigurationDialog());
-        this.contentDialog = this.registerDialog("content-setup", () => new TVContentSetupDialog());
+        this.helpPackagesDialog = this.registerDialog("help-packages", () => new TVHelpPackagesDialog());
+        this.registerDialog("dos-packages", () => new TVDosPackagesDialog());
+        this.midiSourcesDialog = this.registerDialog("midi-sources", () => new TVMidiSourcesDialog());
+        this.midiSourcesDialog.onMidiApplied = () => {
+            const player = this.dialogManager.get("midi");
+            player?.stopPlayback();
+            if (player) { player.pendingPlay = null; void player.refreshCatalog(); }
+        };
         this.serverConfigDialog.onBeforeRebuild = (resource) => {
             if (resource === "midi") {
                 const player = this.dialogManager.get("midi");
@@ -922,6 +1162,7 @@ class TVApplication extends TVProgram {
 
 
 Object.assign(TV, {
+    TVDownloadProgress,
     TVApplicationMenuBar,
     buildAccountMenu,
     TVPageStatusLine,

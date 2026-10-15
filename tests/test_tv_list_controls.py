@@ -493,6 +493,8 @@ const source = fs.readFileSync(process.argv[1], 'utf8');
 global.TVRect = class {};
 global.TVView = class { constructor() { this.root = null; } };
 global.evBroadcast = 0x0200;
+global.evKeyDown = 0x0010;
+global.evCommand = 0x0100;
 const start = source.indexOf('class TVPXPictureValidator');
 const end = source.indexOf('\nclass TVGroup extends', start);
 eval(source.slice(start, end)
@@ -524,6 +526,8 @@ const source = fs.readFileSync(process.argv[1], 'utf8');
 global.TVRect = class {};
 global.TVView = class { constructor() { this.root = null; } };
 global.evBroadcast = 0x0200;
+global.evKeyDown = 0x0010;
+global.evCommand = 0x0100;
 const start = source.indexOf('class TVFilterValidator');
 const end = source.indexOf('\nclass TVGroup extends', start);
 eval(source.slice(start, end)
@@ -595,8 +599,10 @@ global.attrsToString = (attrs = {}) => Object.entries(attrs)
     .map(([key, value]) => value === true ? key : `${key}="${escapeHtml(value)}"`)
     .join(" ");
 global.TVRect = class {};
+global.sfVisible = 0x02;
 global.TVView = class {
-    constructor() { this.viewId = "test-view"; }
+    constructor() { this.viewId = "test-view"; this.state = sfVisible; }
+    getState(mask) { return (this.state & mask) !== 0; }
     static _roleClassNames(value = "") { return value; }
     static _viewBoundsStyle() { return ""; }
     _drawAttrs(attrs = {}) { return attrs; }
@@ -605,7 +611,7 @@ global.evBroadcast = 0x0200;
 const choiceStart = source.indexOf("let tvChoiceGroupId");
 const choiceEnd = source.indexOf("\nclass TVButton extends", choiceStart);
 eval(source.slice(choiceStart, choiceEnd)
-    + "\nglobalThis.TestChecks = TVCheckBoxes; globalThis.TestRadios = TVRadioButtons;");
+    + "\nglobalThis.TestChecks = TVCheckBoxes; globalThis.TestRadios = TVRadioButtons; globalThis.TestMulti = TVMultiCheckBoxes;");
 
 const checks = new TestChecks(new TVRect(), [
         { label: "One < two", checked: true, value: "one" },
@@ -620,7 +626,11 @@ if (!checks.includes("One &lt; two") || !checks.includes("tv-checkbox-mark")) {
 if (!checks.includes('class="tv-checkbox-item is-disabled"')) {
     throw new Error("disabled checkbox does not expose its palette state");
 }
-
+for (const View of [TestChecks, TestRadios, TestMulti]) {
+    const view = new View(new TVRect(), [{label:'Text'}]);
+    view.state = 0;
+    if (!/\bhidden\b/.test(view.draw())) { throw new Error('Hidden cluster reappeared during draw'); }
+}
 const radios = new TestRadios(new TVRect(), [{ label: "A", checked: true }, { label: "B" }]).draw();
 const radioNames = Array.from(radios.matchAll(/name="([^"]+)"/g), (match) => match[1]);
 if ((radios.match(/type="radio"/g) || []).length !== 2

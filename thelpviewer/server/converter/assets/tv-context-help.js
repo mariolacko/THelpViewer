@@ -57,6 +57,10 @@ const {
     hcRegistration,
     hcRegistrationTokens,
     hcServerConfiguration,
+    hcHelpPackages,
+    hcDosPackages,
+    hcMidiSources,
+    hcDownloads,
     hcDosPrompt,
     hcUsers,
     hcGridDemo,
@@ -64,7 +68,7 @@ const {
 
 const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcApplication]: { title: "THelpViewer", text: "Use the menu bar to open HELP files, documentation, tools and games.\n\nF10 activates the menu bar. F1 opens help for the current view. F6 and Shift-F6 cycle windows." },
-    [hcSystemMenu]: { title: "System menu", text: "The system menu contains utilities, Colors, Widget Gallery, System Information, screen savers and theme selection. About is available from the Help menu." },
+    [hcSystemMenu]: { title: "System menu", text: "The system menu contains utilities, Widget Gallery, System Information and screen savers. Signed-in users find Colors/Theme in their Configuration menu; guests use the system menu. About is available from Help." },
     [hcHelpFiles]: { title: "Help Files", text: "Open installs a HELP or Docs file. Catalog submenus open a source directly. The viewer preserves links between related files when the target exists." },
     [hcDocuments]: { title: "Documents", text: "Documentation opens in a read-only Editor-style window. Use Ctrl-F to find text and Ctrl-L to find the next occurrence." },
     [hcSearch]: { title: "Search", text: "Choose server-wide Search all HELP/Docs or Find in active window. Search Topics shows topics and their source; Find Again repeats the active window's query. The server builds a persistent global index." },
@@ -77,10 +81,10 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcFind]: { title: "Find", text: "Choose Search all HELP/Docs or Find in active window. Alt-F focuses the input through its label. The arrow opens previous queries; Escape or its close control dismisses history." },
     [hcColors]: { title: "Colors", text: "All users can edit colors. Default restores one item; Reset All restores the complete palette. Colors are saved in this browser, not synchronized between accounts/devices." },
     [hcWidgetGallery]: { title: "Widget Gallery", text: "Exercises shared labels, inputs, lists, clusters, scrollbars, buttons, static text, terminal and message-box components." },
-    [hcMidiPlayer]: { title: "CD/MIDI Player", text: "Play game MIDI with a SoundFont synthesizer and available cover art. Click the progress bar to seek. More reveals tracks, Filter/history and Random next track. A cloud marks missing downloads; playing prioritizes them. Local admins can rebuild the MIDI library." },
-    [hcHelpViewer]: { title: "HELP viewer", text: "Links open topics or external companion HELP files. Use Back, Index, Contents and Search from the status line or menus." },
+    [hcMidiPlayer]: { title: "CD/MIDI Player", text: "Play game MIDI with a SoundFont synthesizer and available cover art. RIFF/RMID and counted DOS MIDI are decoded to Standard MIDI. Click the progress bar to seek. More reveals tracks, Filter/history and Random next track. A cloud marks missing downloads; playing prioritizes them. A partial library shows ready tracks and the download-error count; Downloads contains album/member errors while other music remains usable. Downloads beside the account/clock shows the shared queue and album percentages without a separate automatic window. Closing the menu does not stop downloading. Local admins can rebuild the MIDI library." },
+    [hcHelpViewer]: { title: "HELP viewer", text: "Links open topics or external companion HELP files. Use Back, Index, Contents and Search from the status line or menus. Native TextScreens keep original glyphs and palette colors with embedded fonts in the same window." },
     [hcDocumentViewer]: { title: "Document viewer", text: "Markdown is displayed with the read-only Editor palette. The lower-left indicator reports the current line and column." },
-    [hcDialog]: { title: "Dialog", text: "Tab and Shift-Tab move focus. Enter activates the default button and Escape closes the dialog unless the control uses Escape itself." },
+    [hcDialog]: { title: "Dialog and Clipboard", text: "Tab and Shift-Tab move focus. Enter activates the default button and Escape closes the dialog unless the control uses Escape itself. Clicking outside never closes a dialog; a modal dialog blocks background mouse input. System clipboard: Ctrl+Ins copies, Shift+Del cuts, Shift+Ins pastes. Native Cmd+C/X/V on macOS and Ctrl+C/X/V on Windows/Linux also work. Input Paste respects validators and length. HELP/Docs permit Copy only. Clipboard contents are never sent to the server." },
     [hcCalendar]: { title: "Calendar", text: "Browse months and years with the arrow controls. Date calculations use Gregorian leap-year rules." },
     [hcAsciiTable]: { title: "ASCII Table", text: "Shows character codes and glyphs using the configured DOS code page presentation." },
     [hcCalculator]: { title: "Calculator", text: "Use number and operation buttons or the keyboard. Escape is reserved by the calculator and does not close it." },
@@ -99,16 +103,20 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcTron]: { title: "Tron Light Cycles", text: "Steer both cycles simultaneously and avoid every trail. The timer pauses while the game window is inactive." },
     [hcStatistics]: { title: "Server Statistics", text: "Browses aggregate visits, active viewing intervals for HELP files, documents, dialogs and games, search and link outcomes, environment and coarse performance intervals. Target time pauses when another window or browser tab becomes active. No search text, exact timing, IP address, cookie, visitor ID, full referrer or raw user agent is stored." },
     [hcSystemInformation]: { title: "System Information", text: "Shows local application, browser, display, locale, storage and capability information plus server status and catalog counts. Opening it does not submit these details to statistics." },
-    [hcAccount]: { title: "Account and Login", text: "Login accepts a validated email or legacy username and signs in with a Passkey. Account edits first/last name, nickname and validated email; nickname or name labels the menu. Role is read-only; private C usage/capacity is shown. Save updates the menu; Cancel does not save. Username, Passkeys and DOS files remain unchanged. Admins can manage Users and rebuild DOS/MIDI; Colors is available to regular users." },
+    [hcAccount]: { title: "Account and Login", text: "Login accepts an email/username with a Passkey or optional password. Account edits names/email, lists named Passkeys and can add/rename keys or set a 15-128-character password. New credentials require Passkey confirmation; password changes sign out other sessions. Security actions save separately from profile Save/Cancel. Role is read-only; private C usage/capacity is shown. User IDs, keys and private DOS files are preserved." },
     [hcRegistration]: { title: "Registration", text: "Enter first/last name, nickname, validated email and a single-use one-hour token, then approve your own Passkey creation. Administrator-created accounts retain their prepared profile and use a bound invitation. On success a MessageBox confirms registration; OK closes Register and Login. The first-admin token is printed in the server log." },
-    [hcRegistrationTokens]: { title: "Registration Token", text: "Administrators generate one-hour tokens, select them from the valid-token list and confirm Delete to revoke them. Cancel, Escape or closing the confirmation keeps a token valid." },
-    [hcServerConfiguration]: { title: "Server Configuration and Rebuild", text: "Set private DOS quotas and select HELP groups/DOS packages. Fresh servers open setup after admin sign-in. Confirmed Install downloads/converts on the server; empty selections mean none. Permanent HELP, Docs, accounts and private DOS data live under data/. Generated shared C is var/dos/c; downloads/MIDI stay under var/. Rebuild DOS/MIDI preserves private data and requires confirmation. Hide does not cancel the server job." },
+    [hcRegistrationTokens]: { title: "Registration Token", text: "Administrators generate one-hour tokens and select them from the valid-token list. Copy to Clipboard copies the generated or selected token value; it is disabled without a token. The status confirms success or selects the input for manual Ctrl+C/Cmd+C if browser clipboard access fails. Delete requires confirmation to revoke a token. Cancel, Escape or closing the confirmation keeps it valid." },
+    [hcServerConfiguration]: { title: "Server Configuration and Rebuild", text: "Admin > Configuration groups settings, separate HELP/DOS/MIDI dialogs, users and rebuilds. Package Apply confirms every group of the edited content type and keeps originals, caches and private DOS data. The right-pane checkbox affects its current group; bottom Select All/Deselect All span that dialog. Rebuild opens confirmation/progress directly. Permanent data is under data/; generated shared C is var/dos/c." },
+    [hcMidiSources]: { title: "MIDI Sources", text: "Choose a provider on the left and soundtrack albums on the right. The checkbox below Albums selects/clears that provider's albums; selecting all includes future albums. Bottom Select All/Deselect All affect every source and album, including enabling/disabling providers. Load albums indexes a provider without downloading music. Drafts survive window/source changes. Apply confirms changes; Close or cancelling confirmation saves nothing. Caches are retained; progress/errors use shared dialogs." },
+    [hcHelpPackages]: { title: "HELP Packages", text: "Choose HELP versions by product group. The checkbox below the right pane selects/clears this group; bottom Select All/Deselect All span every HELP group. Description explains the highlighted edition. Apply confirms installation/removal of all groups; Close or cancelling confirmation changes nothing. Other dialogs keep independent drafts. Only HELP changes; originals, caches, published siblings and private DOS data are kept. Progress is in Downloads; errors use MessageBox." },
+    [hcDosPackages]: { title: "DOS Packages", text: "Choose DOS categories on the left and packages on the right. The checkbox below Packages selects/clears this category; bottom Select All/Deselect All span all DOS categories. Required packages (UTILS and Volkov Commander) remain checked and cannot be uninstalled. Description follows the highlighted package; spaces align language flags after short names, scrolling with the text. Apply confirms all changes without modifying HELP/MIDI settings; while a job runs it shows Downloads, without a duplicate submission. Drafts survive window/category changes and completion. Private disks, caches and backups are kept. Close changes nothing." },
+    [hcDownloads]: { title: "Downloads", text: "The Unicode down arrow and current percentage beside the account/clock opens the shared queue. Successful completion resets the counter and leaves only the arrow. New batches and retries start at 0%, excluding finished history. Completed downloads is the first submenu; its rows keep 100%. Show Downloads opens the same nonmodal progress dialog as Package Apply. More/Less shows waiting, running and failed HELP/DOS/MIDI groups; completed rows disappear from the list. Hide is on the left and More/Less on the right; Hide does not cancel work. Click a failed menu row for Retry, Remove or Cancel. The full name, error and notice wrap without truncation; buttons wrap on narrow screens. Retry repeats failed parts only; Remove clears only the queue entry, keeping files and selections. Closing [ ] or Escape changes nothing. Busy/deselected operations cannot be retried. Three regular lanes use different sources; each source permits one transfer, also for urgent playback. HTTP 429 waits affect that source only. Only administrators see HELP/DOS entries." },
     [hcDosPrompt]: { title: "DOS Prompt", text: "Run text/graphics DOS programs in a shared TVWindow using Worker DOSBox. C files load on demand; signed-in users save private overlays. Alt-Enter is native fullscreen, Alt-Pause pauses, Ctrl-Alt-R confirms restart and Ctrl-Alt-M opens the DOS menu. Zoom 2x enlarges the window. Host mounts are blocked. F1 goes to DOS; request this help from its menu." },
     [hcUsers]: { title: "Users and Add User", text: "Administrators manage profiles, validated emails, roles, enabled accounts and DOS capacity. Four buttons form a 2x2 block beside the extended list. Add User shares the registration-profile form: Create makes a member and a copyable one-hour, account-bound invitation without changing the admin session. The user opens Login > Register in their own browser to enroll a Passkey. Blank capacity inherits 64 MiB. Founding/last administrators remain protected; no Passkeys or DOS files are deleted." },
     [hcGridDemo]: { title: "Grid Viewer", text: "TVGridView displays rows and columns with optional headers and shared horizontal/vertical scrollbars. Arrow keys select cells; Hide headers toggles titles." },
 });
 
-const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20261010k";
+const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20261015k";
 let contextHelpBundlePromise = null;
 
 function loadContextHelpBundle() {
@@ -222,6 +230,7 @@ class TVHelpViewer extends TVScroller {
         super(bounds);
         this.bundle = bundle;
         this.content = String(content || "");
+        this.textScreens = [];
         this.onContentClick = (nativeEvent) => {
             this.dispatchEvent(new TVEvent(evMouseDown, { infoPtr: this, nativeEvent }));
         };
@@ -232,6 +241,7 @@ class TVHelpViewer extends TVScroller {
         this.root?.removeEventListener("click", this.onContentClick);
         super.bindRoot(root);
         this.root?.addEventListener("click", this.onContentClick);
+        this.textScreens.forEach(view => view.resolve(this.root));
         return this;
     }
 
@@ -258,10 +268,14 @@ class TVHelpViewer extends TVScroller {
         return `<div class="tv-help-viewer" ${attrs}>${this.content}</div>`;
     }
 
-    setContent(content) {
+    setContent(content, textScreens = []) {
+        this.textScreens.forEach(view => { view.bindRoot(null); view.owner = null; });
+        this.textScreens = textScreens;
+        this.textScreens.forEach(view => { view.owner = this; });
         this.content = String(content || "");
         if (!this.root) { return; }
         this.root.innerHTML = this.content;
+        this.textScreens.forEach(view => view.resolve(this.root));
         const viewport = this.root.closest("[data-tv-viewport]");
         if (viewport) {
             viewport.scrollTop = 0;
@@ -274,6 +288,8 @@ class TVHelpViewer extends TVScroller {
     }
 
     destroy() {
+        this.textScreens.forEach(view => { view.bindRoot(null); view.owner = null; });
+        this.textScreens = [];
         this.root?.removeEventListener("click", this.onContentClick);
         super.destroy();
         this.viewport = null;
@@ -301,8 +317,8 @@ class TVHelpWindow extends TVWindow {
         return new TVHelpViewer(bounds, bundle);
     }
 
-    setContent(content) {
-        this.viewer.setContent(content);
+    setContent(content, textScreens = []) {
+        this.viewer.setContent(content, textScreens);
     }
 
     handleEvent(event) {

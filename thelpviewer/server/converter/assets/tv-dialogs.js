@@ -44,6 +44,7 @@ const {
     bfNormal,
     bfDefault,
     TVMessageBox,
+    writeClipboardText,
     normalizeSearchText,
     fillBorders,
     MONTH_NAMES,
@@ -225,21 +226,25 @@ class TVLoginDialog extends TVDialog {
     static viewName = "login";
 
     constructor() {
-        const username = new TVInputLine(new TVRect(2, 2, 45, 3), 254).setValidator(new TVEmailValidator(false, true));
-        const signIn = new TVButton(new TVRect(2, 5, 15, 7), "~S~ign In", "login-sign-in", bfDefault);
-        const register = new TVButton(new TVRect(16, 5, 29, 7), "~R~egister", "login-register", bfNormal);
-        const signOut = new TVButton(new TVRect(30, 5, 43, 7), "Sign ~O~ut", "login-sign-out", bfNormal);
-        const close = new TVButton(new TVRect(44, 5, 57, 7), "~C~lose", "login-close", bfNormal);
-        const status = new TVStaticText(new TVRect(2, 8, 56, 10), "Checking account status...");
-        super(new TVRect(0, 0, 60, 13), "Login");
+        const username = new TVInputLine(new TVRect(2, 2, 59, 3), 254).setValidator(new TVEmailValidator(false, true));
+        const password = new TVInputLine(new TVRect(2, 5, 59, 6), 256).setSecret();
+        const signIn = new TVButton(new TVRect(2, 7, 15, 9), "~S~ign In", "login-sign-in", bfDefault);
+        const passwordSignIn = new TVButton(new TVRect(16, 7, 29, 9), "~P~assword", "login-password", bfNormal);
+        const register = new TVButton(new TVRect(31, 7, 44, 9), "~R~egister", "login-register", bfNormal);
+        const signOut = new TVButton(new TVRect(24, 10, 39, 12), "Sign ~O~ut", "login-sign-out", bfNormal);
+        const close = new TVButton(new TVRect(46, 7, 59, 9), "~C~lose", "login-close", bfNormal);
+        const status = new TVStaticText(new TVRect(2, 13, 59, 15), "Checking account status...");
+        super(new TVRect(0, 0, 64, 18), "Login");
         this.setHelpCtx(hcAccount);
-        this.insert(new TVGroup(new TVRect(0, 0, 58, 11)).insertAll([
+        this.insert(new TVGroup(new TVRect(0, 0, 62, 16)).insertAll([
             new TVLabel(new TVRect(2, 1, 25, 2), "~E~mail or username", username), username,
-            signIn, register, signOut, close, status,
+            new TVLabel(new TVRect(2, 4, 59, 5), "Pass~w~ord (optional)", password), password,
+            signIn, passwordSignIn, register, signOut, close, status,
         ]));
         this.username = username;
+        this.passwordInput = password;
         this.status = status;
-        this.actions = [signIn, register, signOut];
+        this.actions = [signIn, passwordSignIn, register, signOut];
         this.onRegister = null;
         this.onSessionChange = null;
         this.sessionRequestVersion = 0;
@@ -285,6 +290,52 @@ class TVLoginDialog extends TVDialog {
         return TVLoginDialog.request(path, "POST", body);
     }
 
+    static defaultPasskeyName() {
+        const ua = navigator.userAgent || "";
+        const platform = navigator.userAgentData?.platform || navigator.platform || "";
+        const system = /Android/.test(ua) ? "Android" : /iPhone/.test(ua) ? "iOS"
+            : /iPad/.test(ua) || (/Mac/.test(platform) && navigator.maxTouchPoints > 1) ? "iPadOS"
+            : /Win/.test(platform) ? "Windows" : /Mac/.test(platform) ? "macOS"
+            : /CrOS/.test(ua) ? "ChromeOS" : /Linux/.test(platform) ? "Linux" : "Passkey";
+        const browser = /Edg\//.test(ua) ? "Edge" : /Firefox|FxiOS/.test(ua) ? "Firefox"
+            : /Chrome|CriOS/.test(ua) ? "Chrome" : /Safari/.test(ua) ? "Safari" : "Browser";
+        return `${system} - ${browser}`;
+    }
+
+    static async createCredential(options) {
+        if (!window.isSecureContext || !navigator.credentials?.create) {
+            throw new Error("Passkeys require HTTPS or localhost and a compatible browser.");
+        }
+        const decode = TVLoginDialog.decodeBase64Url;
+        options.challenge = decode(options.challenge);
+        options.user.id = decode(options.user.id);
+        options.excludeCredentials = (options.excludeCredentials || []).map(entry => ({ ...entry, id: decode(entry.id) }));
+        if (options.rp?.id !== window.location.hostname) {
+            throw new Error(`Passkey domain ${options.rp?.id || "?"} does not match this site`);
+        }
+        const credential = await navigator.credentials.create({ publicKey: options });
+        if (!credential) { throw new Error("Passkey operation was cancelled."); }
+        return TVLoginDialog.credentialAnswer(credential, true);
+    }
+
+    static async authenticate(username) {
+        if (!window.isSecureContext || !navigator.credentials?.get) {
+            throw new Error("Passkeys require HTTPS or localhost and a compatible browser.");
+        }
+        const prefix = "/api/auth/passkey/login";
+        const request = await TVLoginDialog.post(`${prefix}/options`, { username });
+        const options = request.options;
+        options.challenge = TVLoginDialog.decodeBase64Url(options.challenge);
+        options.allowCredentials = (options.allowCredentials || []).map(entry => ({
+            ...entry, id: TVLoginDialog.decodeBase64Url(entry.id),
+        }));
+        const credential = await navigator.credentials.get({ publicKey: options });
+        if (!credential) { throw new Error("Passkey operation was cancelled."); }
+        return TVLoginDialog.post(`${prefix}/verify`, {
+            ceremony_id: request.ceremony_id, credential: TVLoginDialog.credentialAnswer(credential, false),
+        });
+    }
+
     static credentialAnswer(credential, registering) {
         const encode = TVLoginDialog.encodeBase64Url;
         const response = {
@@ -313,9 +364,12 @@ class TVLoginDialog extends TVDialog {
 
     open() {
         super.open();
+        this.passwordInput.setData("");
         this.username.focus();
         void this.refreshSession();
     }
+
+    close() { this.passwordInput.setData(""); super.close(); }
 
     async refreshSession() {
         const version = ++this.sessionRequestVersion;
@@ -336,7 +390,7 @@ class TVLoginDialog extends TVDialog {
             ? "Passkey login is not configured for this host."
             : data.authenticated
                 ? `Signed in as ${data.user.display_name} (${data.user.username}).`
-                : "Sign in, or register with an invitation token.");
+                : "Sign In uses a Passkey; Password uses your optional password.\nRegister with an invitation token.");
     }
 
     async passkey() {
@@ -354,25 +408,29 @@ class TVLoginDialog extends TVDialog {
         }
         this.actions.forEach((button) => button.setState(sfDisabled, true));
         try {
-            const prefix = "/api/auth/passkey/login";
-            const request = await TVLoginDialog.post(`${prefix}/options`, { username });
-            const options = request.options;
-            const decode = TVLoginDialog.decodeBase64Url;
-            options.challenge = decode(options.challenge);
-            options.allowCredentials = (options.allowCredentials || []).map(
-                (entry) => ({ ...entry, id: decode(entry.id) }),
-            );
-            const credential = await navigator.credentials.get({ publicKey: options });
-            if (!credential) { throw new Error("Passkey operation was cancelled."); }
-            await TVLoginDialog.post(`${prefix}/verify`, {
-                ceremony_id: request.ceremony_id,
-                credential: TVLoginDialog.credentialAnswer(credential, false),
-            });
+            await TVLoginDialog.authenticate(username);
             await this.refreshSession();
         } catch (error) {
             this.status.setText(error?.message || "Passkey operation failed.");
         } finally {
             this.actions.forEach((button) => button.setState(sfDisabled, false));
+        }
+    }
+
+    async passwordLogin() {
+        if (!this.username.valid() || !this.passwordInput.getData()) {
+            this.status.setText("Enter your email/username and password."); return;
+        }
+        this.actions.forEach(button => button.setState(sfDisabled, true));
+        try {
+            await TVLoginDialog.post("/api/auth/password/login", {
+                username: this.username.getData().trim(), password: this.passwordInput.getData(),
+            });
+            await this.refreshSession();
+        } catch (error) { this.status.setText(error.message); }
+        finally {
+            this.passwordInput.setData("");
+            this.actions.forEach(button => button.setState(sfDisabled, false));
         }
     }
 
@@ -391,6 +449,7 @@ class TVLoginDialog extends TVDialog {
         super.handleEvent(event);
         if (event.what !== evCommand) { return; }
         if (event.command === "login-sign-in") { void this.passkey(); }
+        else if (event.command === "login-password") { void this.passwordLogin(); }
         else if (event.command === "login-register") { this.onRegister?.(); }
         else if (event.command === "login-sign-out") { void this.signOut(); }
         else if (event.command === "login-close") { this.close(); }
@@ -403,25 +462,42 @@ class TVAccountDialog extends TVDialog {
     static viewName = "account";
 
     constructor() {
-        super(new TVRect(0, 0, 60, 22), "Account");
+        super(new TVRect(0, 0, 94, 28), "Account");
         this.setHelpCtx(hcAccount);
-        this.firstNameInput = new TVInputLine(new TVRect(2, 2, 27, 3), 100);
-        this.lastNameInput = new TVInputLine(new TVRect(30, 2, 56, 3), 100);
-        this.nicknameInput = new TVInputLine(new TVRect(2, 5, 56, 6), 100);
-        this.emailInput = new TVInputLine(new TVRect(2, 8, 56, 9), 254).setValidator(new TVEmailValidator());
-        this.identity = new TVStaticText(new TVRect(2, 10, 56, 12), "");
-        this.disk = new TVStaticText(new TVRect(2, 13, 56, 14), "");
-        this.status = new TVStaticText(new TVRect(2, 18, 56, 20), "");
-        this.saveButton = new TVButton(new TVRect(13, 15, 27, 17), "~S~ave", "account-save", bfDefault);
-        this.insert(new TVGroup(new TVRect(0, 0, 58, 20)).insertAll([
-            new TVLabel(new TVRect(2, 1, 27, 2), "~F~irst name", this.firstNameInput), this.firstNameInput,
-            new TVLabel(new TVRect(30, 1, 56, 2), "~L~ast name", this.lastNameInput), this.lastNameInput,
-            new TVLabel(new TVRect(2, 4, 56, 5), "N~i~ckname", this.nicknameInput), this.nicknameInput,
-            new TVLabel(new TVRect(2, 7, 56, 8), "~E~mail", this.emailInput), this.emailInput,
+        this.firstNameInput = new TVInputLine(new TVRect(2, 2, 20, 3), 100);
+        this.lastNameInput = new TVInputLine(new TVRect(23, 2, 41, 3), 100);
+        this.nicknameInput = new TVInputLine(new TVRect(2, 5, 41, 6), 100);
+        this.emailInput = new TVInputLine(new TVRect(2, 8, 41, 9), 254).setValidator(new TVEmailValidator());
+        this.identity = new TVStaticText(new TVRect(2, 10, 41, 12), "");
+        this.disk = new TVStaticText(new TVRect(2, 13, 41, 15), "");
+        this.passwordInput = new TVInputLine(new TVRect(45, 2, 88, 3), 256).setSecret();
+        this.repeatPassword = new TVInputLine(new TVRect(45, 5, 88, 6), 256).setSecret();
+        this.passwordButton = new TVButton(new TVRect(45, 7, 65, 9), "Set pass~w~ord", "account-password");
+        this.passwordStatus = new TVStaticText(new TVRect(67, 7, 88, 9), "");
+        this.passkeys = new TVListBox(new TVRect(45, 11, 88, 17));
+        this.passkeyName = new TVInputLine(new TVRect(45, 19, 88, 20), 80);
+        this.addPasskeyButton = new TVButton(new TVRect(45, 21, 65, 23), "~A~dd Passkey", "account-passkey-add");
+        this.renamePasskeyButton = new TVButton(new TVRect(68, 21, 88, 23), "~R~ename", "account-passkey-rename");
+        this.status = new TVStaticText(new TVRect(2, 24, 88, 26), "");
+        this.saveButton = new TVButton(new TVRect(2, 21, 20, 23), "~S~ave", "account-save", bfDefault);
+        this.securityButtons = [this.passwordButton, this.addPasskeyButton, this.renamePasskeyButton];
+        this.insert(new TVGroup(new TVRect(0, 0, 92, 26)).insertAll([
+            new TVLabel(new TVRect(2, 1, 20, 2), "~F~irst name", this.firstNameInput), this.firstNameInput,
+            new TVLabel(new TVRect(23, 1, 41, 2), "~L~ast name", this.lastNameInput), this.lastNameInput,
+            new TVLabel(new TVRect(2, 4, 41, 5), "N~i~ckname", this.nicknameInput), this.nicknameInput,
+            new TVLabel(new TVRect(2, 7, 41, 8), "~E~mail", this.emailInput), this.emailInput,
             this.identity, this.disk, this.saveButton,
-            new TVButton(new TVRect(30, 15, 44, 17), "~C~ancel", "account-cancel", bfNormal),
+            new TVStaticText(new TVRect(2, 16, 41, 20), "Password is optional: 15-128 characters.\nUse a long, unique passphrase.\nPasskey confirms sign-in changes.\nSecurity saves separately from profile."),
+            new TVLabel(new TVRect(45, 1, 88, 2), "New ~p~assword", this.passwordInput), this.passwordInput,
+            new TVLabel(new TVRect(45, 4, 88, 5), "Repea~t~ password", this.repeatPassword), this.repeatPassword,
+            this.passwordButton, this.passwordStatus,
+            new TVLabel(new TVRect(45, 10, 88, 11), "Pass~k~eys", this.passkeys), this.passkeys,
+            new TVLabel(new TVRect(45, 18, 88, 19), "Passkey ~n~ame", this.passkeyName), this.passkeyName,
+            this.addPasskeyButton, this.renamePasskeyButton,
+            new TVButton(new TVRect(23, 21, 41, 23), "~C~ancel", "account-cancel", bfNormal),
             this.status,
         ]));
+        this.passkeys.bind({ onSelect: key => this.selectPasskey(key) });
         this.requestVersion = 0;
         this.onSessionChange = null;
         this.bindCommonClose(() => this.close());
@@ -436,12 +512,20 @@ class TVAccountDialog extends TVDialog {
         this.emailInput.setData("");
         this.identity.setText("");
         this.disk.setText("Private C: loading usage...");
+        this.passwordInput.setData("");
+        this.repeatPassword.setData("");
+        this.passkeys.newList([]);
+        this.selectPasskey(null);
+        this.securityButtons.forEach(button => button.setState(sfDisabled, true));
         this.firstNameInput.focus();
         void this.loadProfile();
     }
 
     close() {
         this.requestVersion += 1;
+        this.securityBusy = false;
+        this.passwordInput.setData("");
+        this.repeatPassword.setData("");
         super.close();
     }
 
@@ -460,7 +544,9 @@ class TVAccountDialog extends TVDialog {
             this.nicknameInput.setData(session.user.nickname || "");
             this.emailInput.setData(session.user.email || "");
             this.identity.setText(`Username: ${session.user.username}\nRole: ${session.user.role === "admin" ? "Administrator" : "Member"}`);
-            this.status.setText("Passkey and private DOS files stay unchanged.");
+            await this.loadSecurity(version);
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            this.status.setText("Profile and sign-in settings are saved separately. Private DOS files stay unchanged.");
             this.saveButton.setState(sfDisabled, false);
             try {
                 const disk = await TVLoginDialog.request("/api/dos/usage");
@@ -472,6 +558,78 @@ class TVAccountDialog extends TVDialog {
             }
         } catch (error) {
             if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
+        }
+    }
+
+    selectPasskey(key) {
+        this.selectedPasskey = key || null;
+        this.passkeyName.setData(key?.name || TVLoginDialog.defaultPasskeyName());
+        this.renamePasskeyButton.setState(sfDisabled, this.securityBusy || !key);
+    }
+
+    async loadSecurity(version = this.requestVersion) {
+        const data = await TVLoginDialog.request("/api/auth/security");
+        if (version !== this.requestVersion || !this.isOpen()) { return; }
+        this.passwordStatus.setText(data.password_set ? "Password is set" : "No password set");
+        const selected = this.selectedPasskey?.id;
+        const rows = data.passkeys.map(key => ({ ...key, label: key.name }));
+        this.passkeys.newList(rows);
+        const index = Math.max(0, rows.findIndex(key => key.id === selected));
+        this.passkeys.select(index);
+        this.selectPasskey(rows[index]);
+        this.passwordButton.setState(sfDisabled, false);
+        this.addPasskeyButton.setState(sfDisabled, false);
+    }
+
+    async changeSecurity(command) {
+        if (this.securityBusy) { return; }
+        const name = this.passkeyName.getData().trim();
+        const password = this.passwordInput.getData();
+        if (command === "account-password" && (Array.from(password).length < 15 || Array.from(password).length > 128
+                || password !== this.repeatPassword.getData())) {
+            this.status.setText("Use 15-128 characters and enter the same password twice.");
+            this.passwordInput.focus(); return;
+        }
+        if (command !== "account-password" && (!name || name.length > 80)) {
+            this.status.setText("Enter a Passkey name (1-80 characters)."); this.passkeyName.focus(); return;
+        }
+        if (command === "account-passkey-rename" && !this.selectedPasskey) { return; }
+        const key = this.selectedPasskey;
+        const version = this.requestVersion;
+        this.securityBusy = true;
+        this.securityButtons.forEach(button => button.setState(sfDisabled, true));
+        this.saveButton.setState(sfDisabled, true);
+        try {
+            if (command === "account-passkey-rename") {
+                await TVLoginDialog.request(`/api/auth/passkeys/${encodeURIComponent(key.id)}`, "PUT", { name });
+            } else {
+                this.status.setText("Confirm your identity with an existing Passkey...");
+                if (!this.session?.development) { await TVLoginDialog.authenticate(this.session.user.username); }
+                if (version !== this.requestVersion || !this.isOpen()) { return; }
+                if (command === "account-password") {
+                    await TVLoginDialog.request("/api/auth/password", "PUT", { password });
+                } else {
+                    const request = await TVLoginDialog.post("/api/auth/passkeys/options");
+                    const credential = await TVLoginDialog.createCredential(request.options);
+                    if (version !== this.requestVersion || !this.isOpen()) { return; }
+                    await TVLoginDialog.post("/api/auth/passkeys/verify", { ceremony_id: request.ceremony_id, credential, name });
+                }
+            }
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            await this.loadSecurity(version);
+            if (version !== this.requestVersion || !this.isOpen()) { return; }
+            this.status.setText(command === "account-password" ? "Password saved. Other sessions were signed out."
+                : command === "account-passkey-add" ? "New Passkey added." : "Passkey renamed.");
+        } catch (error) {
+            if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
+        } finally {
+            if (version === this.requestVersion && this.isOpen()) {
+                this.passwordInput.setData(""); this.repeatPassword.setData("");
+                this.securityBusy = false;
+                this.securityButtons.forEach(button => button.setState(sfDisabled, false));
+                this.renamePasskeyButton.setState(sfDisabled, !this.selectedPasskey);
+                this.saveButton.setState(sfDisabled, false);
+            }
         }
     }
 
@@ -504,6 +662,9 @@ class TVAccountDialog extends TVDialog {
         if (event.what !== evCommand) { return; }
         switch (event.command) {
             case "account-save": void this.saveProfile(); break;
+            case "account-password":
+            case "account-passkey-add":
+            case "account-passkey-rename": void this.changeSecurity(event.command); break;
             case "account-cancel": this.close(); break;
             default: return;
         }
@@ -647,7 +808,9 @@ class TVRegistrationDialog extends TVDialog {
         const email = new TVInputLine(new TVRect(2, 8, 56, 9), 254).setValidator(new TVEmailValidator());
         const token = withToken ? new TVInputLine(new TVRect(2, 11, 56, 12), 128)
             .setValidator(new TVPXPictureValidator("!!!!!-!!!!!-!!!!!-!!!!!-!!!!!", true)) : null;
-        const row = withToken ? 14 : 11;
+        const passkeyName = withToken ? new TVInputLine(new TVRect(2, 14, 56, 15), 80)
+            .setData(TVLoginDialog.defaultPasskeyName()) : null;
+        const row = withToken ? 17 : 11;
         const register = new TVButton(new TVRect(13, row, 28, row + 2), withToken ? "~R~egister" : "~C~reate", "register-confirm", bfDefault);
         const cancel = new TVButton(new TVRect(30, row, 45, row + 2), "C~a~ncel", "register-cancel", bfNormal);
         const status = new TVStaticText(new TVRect(2, row + 3, 56, row + 5), withToken
@@ -661,6 +824,7 @@ class TVRegistrationDialog extends TVDialog {
             new TVLabel(new TVRect(2, 4, 56, 5), "N~i~ckname", nickname), nickname,
             new TVLabel(new TVRect(2, 7, 56, 8), "~E~mail", email), email,
             ...(token ? [new TVLabel(new TVRect(2, 10, 56, 11), "Registration ~t~oken", token), token] : []),
+            ...(passkeyName ? [new TVLabel(new TVRect(2, 13, 56, 14), "~P~asskey name", passkeyName), passkeyName] : []),
             register, cancel, status,
         ]));
         this.name = name;
@@ -668,6 +832,7 @@ class TVRegistrationDialog extends TVDialog {
         this.nickname = nickname;
         this.email = email;
         this.token = token;
+        this.passkeyName = passkeyName;
         this.status = status;
         this.registerButton = register;
         this.onSessionChange = null;
@@ -704,6 +869,9 @@ class TVRegistrationDialog extends TVDialog {
             this.status.setText("Use a token in XXXXX-XXXXX-XXXXX-XXXXX-XXXXX format.");
             return;
         }
+        if (!this.passkeyName.getData().trim()) {
+            this.status.setText("Enter a name for your Passkey."); this.passkeyName.focus(); return;
+        }
         if (!window.isSecureContext || !navigator.credentials?.create) {
             this.status.setText("Passkeys require HTTPS or localhost and a compatible browser.");
             return;
@@ -721,23 +889,12 @@ class TVRegistrationDialog extends TVDialog {
                 this.lastName.setData(request.profile.last_name || "");
                 this.nickname.setData(request.profile.nickname || "");
             }
-            const options = request.options;
-            const decode = TVLoginDialog.decodeBase64Url;
-            options.challenge = decode(options.challenge);
-            options.user.id = decode(options.user.id);
-            options.excludeCredentials = (options.excludeCredentials || []).map(
-                (entry) => ({ ...entry, id: decode(entry.id) }),
-            );
-            if (options.rp?.id !== window.location.hostname) {
-                throw new Error(`Passkey domain ${options.rp?.id || "?"} does not match this site`);
-            }
             stage = "Passkey creation";
-            const credential = await navigator.credentials.create({ publicKey: options });
-            if (!credential) { throw new Error("Passkey operation was cancelled."); }
+            const credential = await TVLoginDialog.createCredential(request.options);
             stage = "Passkey verification";
             const verified = await TVLoginDialog.post(`${request.enrollment ? "/api/auth/passkey/enroll" : prefix}/verify`, {
                 ceremony_id: request.ceremony_id,
-                credential: TVLoginDialog.credentialAnswer(credential, true),
+                credential, name: this.passkeyName.getData().trim(),
             });
             if (!verified.authenticated) { throw new Error("Registration was not confirmed by the server."); }
             this.token.setData("");
@@ -861,17 +1018,19 @@ class TVRegistrationTokenDialog extends TVDialog {
 
     constructor() {
         const token = new TVInputLine(new TVRect(2, 2, 71, 3), 128);
-        const generate = new TVButton(new TVRect(9, 4, 25, 6), "~G~enerate", "token-generate", bfDefault);
-        const remove = new TVButton(new TVRect(29, 4, 45, 6), "~D~elete", "token-delete", bfNormal)
+        const generate = new TVButton(new TVRect(2, 4, 18, 6), "~G~enerate", "token-generate", bfDefault);
+        const remove = new TVButton(new TVRect(20, 4, 34, 6), "~D~elete", "token-delete", bfNormal)
             .setState(sfDisabled, true);
-        const close = new TVButton(new TVRect(49, 4, 65, 6), "~C~lose", "token-close", bfNormal);
+        const copy = new TVButton(new TVRect(36, 4, 58, 6), "Cop~y~ to Clipboard", "token-copy", bfNormal)
+            .setState(sfDisabled, true);
+        const close = new TVButton(new TVRect(60, 4, 72, 6), "~C~lose", "token-close", bfNormal);
         const tokens = new TVListBox(new TVRect(2, 8, 71, 16));
         const status = new TVStaticText(new TVRect(2, 17, 71, 18), "Loading valid tokens...");
         super(new TVRect(0, 0, 76, 21), "Registration Token");
         this.setHelpCtx(hcRegistrationTokens);
         this.insert(new TVGroup(new TVRect(0, 0, 74, 19)).insertAll([
             new TVLabel(new TVRect(2, 1, 30, 2), "Token", token), token,
-            generate, remove, close,
+            generate, remove, copy, close,
             new TVStaticText(new TVRect(2, 7, 71, 8), "Valid registration tokens"),
             tokens, status,
         ]));
@@ -880,6 +1039,7 @@ class TVRegistrationTokenDialog extends TVDialog {
         this.status = status;
         this.generateButton = generate;
         this.deleteButton = remove;
+        this.copyButton = copy;
         this.confirmBox = null;
         this.refreshVersion = 0;
         this.tokens.bind({
@@ -904,12 +1064,14 @@ class TVRegistrationTokenDialog extends TVDialog {
         this.token.setData("");
         this.tokens.newList([]);
         this.deleteButton.setState(sfDisabled, true);
+        this.copyButton.setState(sfDisabled, true);
         super.close();
     }
 
     selectToken(item) {
         this.token.setData(item?.token || "");
         this.deleteButton.setState(sfDisabled, !item);
+        this.copyButton.setState(sfDisabled, !item?.token);
         if (item) {
             this.status.setText(item.token
                 ? `Valid until ${new Date(item.expires_at * 1000).toLocaleString()}.`
@@ -928,8 +1090,8 @@ class TVRegistrationTokenDialog extends TVDialog {
             }));
             this.tokens.newList(rows);
             this.tokens.select(-1);
-            this.deleteButton.setState(sfDisabled, true);
-            this.status.setText(rows.length ? `${rows.length} valid token(s). Select one to view or delete.` : "No valid tokens.");
+            this.selectToken(null);
+            this.status.setText(rows.length ? `${rows.length} valid token(s). Select one to copy or delete.` : "No valid tokens.");
             return true;
         } catch (error) {
             if (version === this.refreshVersion && this.isOpen()) {
@@ -947,6 +1109,7 @@ class TVRegistrationTokenDialog extends TVDialog {
             const listed = await this.refreshTokens();
             if (!this.isOpen()) { return; }
             this.token.setData(data.token);
+            this.copyButton.setState(sfDisabled, !data.token);
             this.token.focus();
             this.token.selectAll();
             this.status.setText(listed
@@ -956,6 +1119,23 @@ class TVRegistrationTokenDialog extends TVDialog {
             this.status.setText(error?.message || "Could not create token.");
         } finally {
             this.generateButton.setState(sfDisabled, false);
+        }
+    }
+
+    async copyToken() {
+        const token = this.token.getData();
+        if (!token) { return; }
+        const version = this.refreshVersion;
+        try {
+            await writeClipboardText(token);
+            if (version === this.refreshVersion && this.isOpen() && this.token.getData() === token) {
+                this.status.setText("Token copied to clipboard.");
+            }
+        } catch {
+            if (version === this.refreshVersion && this.isOpen() && this.token.getData() === token) {
+                this.token.focus(); this.token.selectAll();
+                this.status.setText("Could not copy automatically. Token selected; press Ctrl+C or Cmd+C.");
+            }
         }
     }
 
@@ -977,7 +1157,7 @@ class TVRegistrationTokenDialog extends TVDialog {
             await TVLoginDialog.request(`/api/auth/registration-tokens/${encodeURIComponent(selected.id)}`, "DELETE");
             if (!this.isOpen()) { return; }
             await this.refreshTokens();
-            this.token.setData("");
+            this.selectToken(null);
             this.status.setText("Registration token deleted.");
         } catch (error) {
             this.status.setText(error?.message || "Could not delete token.");
@@ -990,6 +1170,7 @@ class TVRegistrationTokenDialog extends TVDialog {
         if (event.what !== evCommand) { return; }
         if (event.command === "token-generate") { void this.generateToken(); }
         else if (event.command === "token-delete") { void this.deleteToken(); }
+        else if (event.command === "token-copy") { void this.copyToken(); }
         else if (event.command === "token-close") { this.close(); }
         else { return; }
         this.clearEvent(event);
@@ -1002,21 +1183,26 @@ class TVServerConfigurationDialog extends TVDialog {
     constructor() {
         super(new TVRect(0, 0, 84, 27), "Server Configuration");
         this.setHelpCtx(hcServerConfiguration);
-        this.capacity = new TVInputLine(new TVRect(2, 2, 10, 3), 3);
+        this.capacity = new TVInputLine(new TVRect(2, 2, 10, 3), 3)
+            .setValidator(new TVFilterValidator("0123456789"));
+        this.backupCount = new TVInputLine(new TVRect(43, 2, 51, 3), 3)
+            .setValidator(new TVFilterValidator("0123456789"));
         this.runtime = new TVListBox(new TVRect(2, 8, 78, 17));
         this.status = new TVStaticText(new TVRect(2, 23, 78, 25), "");
         this.saveButton = new TVButton(new TVRect(2, 20, 15, 22), "~S~ave", "server-settings-save", bfDefault);
         this.insert(new TVGroup(new TVRect(0, 0, 82, 25)).insertAll([
-            new TVLabel(new TVRect(2, 1, 50, 2), "~D~OS private overlay per user (MiB)", this.capacity),
+            new TVLabel(new TVRect(2, 1, 40, 2), "~D~OS private overlay per user (MiB)", this.capacity),
             this.capacity,
-            new TVStaticText(new TVRect(2, 4, 78, 6), "1–256 MiB; default 64. User overrides are set in Users.\nShared C files are excluded. No saved files are deleted."),
+            new TVLabel(new TVRect(43, 1, 78, 2), "Retained ~b~ackups per type", this.backupCount), this.backupCount,
+            new TVStaticText(new TVRect(2, 4, 78, 7), "Private C: 1–256 MiB, default 64. Shared files are excluded.\nBackups: 1–100 per HELP/DOS/MIDI; default 2, after successful jobs.\nLowering the C quota never deletes saved user files."),
             new TVLabel(new TVRect(2, 7, 78, 8), "Runtime settings (read-only; environment/configuration files)", this.runtime), this.runtime,
-            new TVButton(new TVRect(2, 18, 25, 20), "Rebuild ~D~OS C...", "server-rebuild-dos"),
-            new TVButton(new TVRect(28, 18, 51, 20), "Rebuild ~M~IDI...", "server-rebuild-midi"),
-            new TVButton(new TVRect(54, 18, 78, 20), "~U~sers", "account-users"),
+            new TVButton(new TVRect(2, 18, 25, 20), "~H~ELP Packages...", "account-help-packages"),
+            new TVButton(new TVRect(28, 18, 51, 20), "DOS ~P~ackages...", "account-dos-packages"),
+            new TVButton(new TVRect(54, 18, 78, 20), "~M~IDI Sources...", "account-midi-sources"),
             this.saveButton,
             new TVButton(new TVRect(18, 20, 31, 22), "~C~ancel", "server-settings-cancel", bfNormal),
-            new TVButton(new TVRect(36, 20, 78, 22), "HELP / DOS ~p~ackages...", "account-content-setup"),
+            new TVButton(new TVRect(36, 20, 55, 22), "C~o~lors...", "account-colors"),
+            new TVButton(new TVRect(58, 20, 78, 22), "~U~sers", "account-users"),
             this.status,
         ]));
         this.requestVersion = 0;
@@ -1030,6 +1216,7 @@ class TVServerConfigurationDialog extends TVDialog {
     open() {
         super.open();
         this.capacity.setData("");
+        this.backupCount.setData("");
         this.capacity.focus();
         void this.loadSettings();
     }
@@ -1047,9 +1234,10 @@ class TVServerConfigurationDialog extends TVDialog {
             const data = await TVLoginDialog.request("/api/admin/settings");
             if (version !== this.requestVersion || !this.isOpen()) { return; }
             this.capacity.setData(String(data.dos_user_disk_mb));
+            this.backupCount.setData(String(data.backup_count));
             this.capacity.selectAll();
             this.runtime.newList(Object.entries(data.runtime || {}).map(([key, value]) => ({ label: `${key}: ${value}` })));
-            this.status.setText("Default for users without an individual capacity override.");
+            this.status.setText("Backup retention applies after the next successful build/rebuild.");
             this.saveButton.setState(sfDisabled, false);
         } catch (error) {
             if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
@@ -1065,12 +1253,19 @@ class TVServerConfigurationDialog extends TVDialog {
             this.capacity.focus();
             return;
         }
+        const backupValue = this.backupCount.getData().trim();
+        const backupCount = Number(backupValue);
+        if (!/^\d{1,3}$/.test(backupValue) || backupCount < 1 || backupCount > 100) {
+            this.status.setText("Enter a backup count between 1 and 100.");
+            this.backupCount.focus();
+            return;
+        }
         const version = ++this.requestVersion;
         this.saveButton.setState(sfDisabled, true);
         try {
-            await TVLoginDialog.request("/api/admin/settings", "PUT", { dos_user_disk_mb: capacity });
+            await TVLoginDialog.request("/api/admin/settings", "PUT", { dos_user_disk_mb: capacity, backup_count: backupCount });
             if (version === this.requestVersion && this.isOpen()) {
-                this.status.setText("Saved. Restart open DOS sessions to reload capacity.");
+                this.status.setText("Saved. Backup count applies to the next successful build/rebuild.\nRestart open DOS sessions to reload capacity.");
             }
         } catch (error) {
             if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
@@ -1098,6 +1293,7 @@ class TVServerConfigurationDialog extends TVDialog {
         this.rebuildTask = task;
         const path = `/api/admin/rebuild/${resource}`;
         const title = resource === "dos" ? "Rebuild DOS C" : "Rebuild MIDI";
+        let result = "", failed = false;
         try {
             let status = await TVLoginDialog.request(path);
             if (!status.rebuilding) {
@@ -1125,7 +1321,7 @@ class TVServerConfigurationDialog extends TVDialog {
                 this.onRebuildStarted?.(resource);
             }
             this.saveButton.setState(sfDisabled, true);
-            const progress = new TVIndexProgressDialog(title, "Preparing rebuild...");
+            const progress = new TVProgressDialog(title, "Preparing rebuild...");
             progress.setHelpCtx(hcServerConfiguration);
             task.progress = progress;
             this.owner.insert(progress);
@@ -1138,18 +1334,29 @@ class TVServerConfigurationDialog extends TVDialog {
                 this.status.setText(`${title}: ${status.percent || 0}% · ${status.phase || status.state}`);
                 if (["error", "partial"].includes(status.state)) { throw new Error(status.error || "Some rebuild downloads failed."); }
                 if (status.state === "ready" && !status.rebuilding) {
-                    this.status.setText(`Rebuilt. Backup: ${status.backup || "none (no previous data)"}`);
+                    result = `Rebuilt. Backup: ${status.backup || "none (no previous data)"}`;
+                    this.status.setText(result);
                     break;
                 }
                 await new Promise((resolve) => setTimeout(resolve, 1000));
                 status = await TVLoginDialog.request(path);
             }
         } catch (error) {
+            result = error.message;
+            failed = true;
             this.status.setText(error.message);
         } finally {
             task.progress?.destroy();
             this.rebuildTask = null;
             this.saveButton.setState(sfDisabled, false);
+        }
+        if (result && !this.destroyed && !this.isOpen()) {
+            const box = new TVMessageBox();
+            this.owner.insert(box);
+            try {
+                await box.show({ title, type: failed ? TVMessageBox.MF_ERROR : TVMessageBox.MF_INFORMATION,
+                    lines: [result], buttons: TVMessageBox.MF_OK_BUTTON });
+            } finally { box.destroy(); }
         }
     }
 }
@@ -3540,10 +3747,6 @@ class TVMidiPlayerDialog extends TVDialog {
         this.pendingPlay = null;
         this.catalogTimer = null;
         this.catalogPending = false;
-        this.lastCatalog = null;
-        this.downloadProgress = null;
-        this.downloadDismissed = false;
-        this.downloadCloseTimer = null;
         this.cache = new Map();
         this.loadSerial = 0;
         this.isPlaying = false;
@@ -3645,14 +3848,12 @@ class TVMidiPlayerDialog extends TVDialog {
         if (this.catalogTimer) { clearTimeout(this.catalogTimer); }
         this.catalogTimer = null;
         this.pendingPlay = null;
-        this.clearDownloadProgress();
         this.stopPlayback();
         super.close();
     }
 
     open() {
         this.historyWindow.hide();
-        this.downloadDismissed = false;
         super.open();
         // Start fetching the large SoundFont while the player is being browsed.
         // Playback still resumes Web Audio from the user's Play/click gesture.
@@ -3681,25 +3882,6 @@ class TVMidiPlayerDialog extends TVDialog {
         }
     }
 
-    showDownloadProgress(status) {
-        if (this.downloadDismissed || !(this.owner instanceof TV.TVDesktop)) { return; }
-        if (this.downloadCloseTimer) { clearTimeout(this.downloadCloseTimer); this.downloadCloseTimer = null; }
-        if (!this.downloadProgress || this.downloadProgress.destroyed) {
-            this.downloadProgress = new TVMidiDownloadProgressDialog();
-            this.downloadProgress.onHide = () => { this.downloadDismissed = true; };
-            this.owner.insert(this.downloadProgress);
-        }
-        this.downloadProgress.update(status);
-        if (!this.downloadProgress.isOpen()) { this.downloadProgress.open(); }
-    }
-
-    clearDownloadProgress() {
-        if (this.downloadCloseTimer) { clearTimeout(this.downloadCloseTimer); }
-        this.downloadCloseTimer = null;
-        this.downloadProgress?.destroy();
-        this.downloadProgress = null;
-    }
-
     async refreshCatalog() {
         if (!this.isOpen() || this.catalogPending) { return; }
         this.catalogPending = true;
@@ -3708,7 +3890,6 @@ class TVMidiPlayerDialog extends TVDialog {
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
             const catalog = await response.json();
             if (!this.isOpen()) { return; }
-            this.lastCatalog = catalog;
             const tracks = Array.isArray(catalog.tracks) ? catalog.tracks : [];
             if (tracks.length !== this.allTracks.length || tracks.some((track, index) =>
                 track.id !== this.allTracks[index]?.id || track.available !== this.allTracks[index]?.available
@@ -3720,16 +3901,12 @@ class TVMidiPlayerDialog extends TVDialog {
                 if (catalog.state === "downloading") {
                     this.setStatus(`Downloading game MIDI: ${catalog.downloaded}/${catalog.total}...`);
                 } else if (catalog.state === "error" || catalog.state === "partial") {
-                    this.setStatus(catalog.errors?.[0] || "Some MIDI downloads failed; restart to retry.");
+                    const errors = catalog.errors?.length || 1;
+                    this.setStatus(tracks.length ? `${catalog.downloaded}/${catalog.total} ready · ${errors} download errors`
+                        : "MIDI catalog failed; see Downloads.");
                 } else {
                     this.setStatus(tracks.length ? `${catalog.downloaded} game MIDI tracks ready.` : "No game MIDI tracks available.");
                 }
-            }
-            if (catalog.state === "downloading") {
-                this.showDownloadProgress(catalog);
-            } else if (this.downloadProgress && !this.downloadCloseTimer) {
-                this.downloadProgress.update(catalog);
-                this.downloadCloseTimer = setTimeout(() => { this.clearDownloadProgress(); }, 650);
             }
             if (this.pendingPlay) {
                 const wanted = this.pendingPlay;
@@ -3862,19 +4039,23 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 
     async prioritizeTrack(track) {
-        this.pendingPlay = { id: track.id, itemId: track.item_id };
+        const pending = { id: track.id, itemId: track.item_id };
+        this.pendingPlay = pending;
         this.setStatus(`Downloading ${track.title} first...`);
-        this.downloadDismissed = false;
         try {
             const response = await fetch(`/api/midi/priority/${encodeURIComponent(track.source_id)}/${encodeURIComponent(track.item_id)}`, {
                 method: "POST",
             });
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            void this.topView().downloadProgress?.refresh();
         } catch (error) {
-            this.pendingPlay = null;
-            this.setStatus(`Cannot queue MIDI download: ${error.message}`);
+            if (this.pendingPlay === pending) {
+                this.pendingPlay = null;
+                this.setStatus(`Cannot queue MIDI download: ${error.message}`);
+            }
             return;
         }
+        if (this.pendingPlay !== pending) { return; }
         if (this.catalogTimer) { clearTimeout(this.catalogTimer); }
         this.catalogTimer = setTimeout(() => { void this.refreshCatalog(); }, 300);
     }
@@ -4666,19 +4847,27 @@ class TVSearchResultsList extends TVListBox {
     }
 }
 
-class TVIndexProgressDialog extends TVDialog {
-    static viewName = "index-progress";
+class TVProgressDialog extends TVDialog {
+    static viewName = "progress";
 
-    constructor(title = "Building Global Index", initialSummary = "Preparing HELP files and Docs...") {
+    constructor(title = "Progress", initialSummary = "Preparing...") {
         super(new TVRect(0, 0, 46, 10), title);
         this.setState(sfModal, true);
         this.summary = new TVStaticText(new TVRect(2, 1, 42, 2), initialSummary);
         this.file = new TVStaticText(new TVRect(2, 4, 42, 5), "");
         this.bar = new TVBarGauge(new TVRect(2, 2, 42, 3), 100);
         this.percent = new TVPercentGauge(new TVRect(19, 3, 26, 4), 100);
+        this.moreButton = new TVButton(new TVRect(29, 6, 41, 8), "~M~ore", "progress-more");
+        this.hideButton = new TVButton(new TVRect(17, 6, 29, 8), "~H~ide", "progress-hide", bfDefault);
+        this.detailsCaption = new TVStaticText(new TVRect(2, 8, 42, 9), "");
+        this.details = new TVListBox(new TVRect(2, 9, 42, 22));
+        this.moreButton.hide(); this.detailsCaption.hide(); this.details.hide();
+        this.detailsExpanded = false;
+        this.downloadStatus = null;
+        this.operationStatus = null;
         this.insert(new TVGroup(new TVRect(0, 0, 44, 8)).insertAll([
             this.summary, this.bar, this.percent, this.file,
-            new TVButton(new TVRect(17, 6, 29, 8), "~H~ide", "index-hide", bfDefault),
+            this.moreButton, this.hideButton, this.detailsCaption, this.details,
         ]));
         this.onHide = null;
         this.bindCommonClose(() => this.hideProgress());
@@ -4688,10 +4877,58 @@ class TVIndexProgressDialog extends TVDialog {
     update(status) {
         const percent = Math.max(0, Math.min(100, Number(status.percent) || 0));
         const skipped = Array.isArray(status.warnings) ? status.warnings.length : 0;
-        this.summary.setText(`${status.processed || 0} / ${status.total || 0} files checked${skipped ? ` · ${skipped} skipped` : ""}`);
+        this.summary.setText(`${status.phase ? status.phase + ": " : ""}${status.processed || 0} / ${status.total || 0}${skipped ? ` · ${skipped} skipped` : ""}`);
         this.file.setText(String(status.file || "").slice(-40));
         this.bar.updateView(percent);
         this.percent.updateView(percent);
+    }
+
+    updateDownloads(status) {
+        this.downloadStatus = status;
+        const rows = status.items || [];
+        const current = rows.find((item) => item.state === "running");
+        if (!this.operationStatus) {
+            const completed = !status.active && rows.length > 0 && rows.every((item) => item.state === "done");
+            this.update({ percent: completed ? 100 : status.percent, processed: rows.filter((item) => ["done", "error"].includes(item.state)).length,
+                total: rows.length, file: current?.label || "", phase: status.active ? "Downloading" : status.errors ? "Finished with errors" : "Finished" });
+        }
+        const counts = this.operationStatus?.downloads;
+        const pending = rows.filter((item) => item.state !== "done");
+        this.setDetails(pending.map((item) => ({ id: item.id, name: `${item.kind.toUpperCase()}: ${item.label}`,
+            marker: item.state === "error" ? "!" : `${item.percent}%` })),
+            counts ? `${counts.new_files || 0} new · ${counts.cached_files || 0} cached · ${((counts.bytes || 0) / 1048576).toFixed(1)} MiB`
+                : `${pending.length} packages/albums · ${status.errors || 0} failed`);
+    }
+
+    setOperation(status) {
+        this.operationStatus = status?.state === "building" ? status : null;
+        if (this.operationStatus) { this.update(status); }
+        if (this.downloadStatus) { this.updateDownloads(this.downloadStatus); }
+    }
+
+    setDetails(rows, caption) {
+        const items = rows.map((row) => ({ id: row.id, label: `${Array.from(row.name || "").slice(0, 32).join("").padEnd(32)} ${String(row.marker).padStart(4)}` }));
+        const selectedId = this.details.selectedItem()?.id;
+        const selectedIndex = items.findIndex((item) => item.id === selectedId);
+        const value = this.details.scrollbarWidget?.value || 0;
+        this.details.setItems(items, selectedIndex >= 0 ? selectedIndex
+            : Math.min(Math.max(0, this.details.selectedIndex), items.length - 1));
+        this.details.scrollbarWidget?.setValue(value);
+        this.detailsCaption.setText(caption);
+        this.moreButton.setState(sfVisible, items.length > 0);
+        this.hideButton.locate(new TVRect(items.length ? 3 : 17, 6, items.length ? 15 : 29, 8));
+        if (!items.length && this.detailsExpanded) { this.toggleDetails(false); }
+    }
+
+    toggleDetails(expanded = !this.detailsExpanded) {
+        this.detailsExpanded = Boolean(expanded);
+        this.details.setState(sfVisible, this.detailsExpanded);
+        this.detailsCaption.setState(sfVisible, this.detailsExpanded);
+        this.moreButton.setTitle(this.detailsExpanded ? "~L~ess" : "~M~ore");
+        this.content.locate(new TVRect(0, 0, 44, this.detailsExpanded ? 24 : 8));
+        this.locate(new TVRect(0, 0, 46, this.detailsExpanded ? 26 : 10));
+        if (this.isOpen() && !this.hasPosition) { this.center(); }
+        this.details.updateScrollbar();
     }
 
     hideProgress() {
@@ -4701,29 +4938,13 @@ class TVIndexProgressDialog extends TVDialog {
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what === evCommand && event.command === "index-hide") {
+        if (event.what === evCommand && event.command === "progress-hide") {
             this.hideProgress();
             this.clearEvent(event);
+        } else if (event.what === evCommand && event.command === "progress-more") {
+            this.toggleDetails();
+            this.clearEvent(event);
         }
-    }
-}
-
-class TVMidiDownloadProgressDialog extends TVIndexProgressDialog {
-    static viewName = "midi-download-progress";
-
-    constructor() {
-        super("Downloading Game MIDI", "Preparing game MIDI files...");
-    }
-
-    update(status) {
-        const downloaded = Number(status.downloaded) || 0;
-        const total = Number(status.total) || 0;
-        const percent = status.state === "ready" ? 100
-            : total ? Math.max(0, Math.min(100, Math.floor(100 * downloaded / total))) : 0;
-        this.summary.setText(`${downloaded} / ${total} MIDI tracks ready`);
-        this.file.setText(String(status.current || "").slice(-40));
-        this.bar.updateView(percent);
-        this.percent.updateView(percent);
     }
 }
 
@@ -4955,7 +5176,8 @@ class TVSearchDialog extends TVDialog {
     showIndexProgress(status) {
         if (this.progressDismissed || !(this.owner instanceof TV.TVDesktop)) { return; }
         if (!this.indexProgress || this.indexProgress.destroyed) {
-            this.indexProgress = new TVIndexProgressDialog();
+            this.indexProgress = new TVProgressDialog("Building Global Index", "Preparing HELP files and Docs...");
+            this.indexProgress.setHelpCtx(hcSearch);
             this.indexProgress.onHide = () => { this.progressDismissed = true; };
             this.owner.insert(this.indexProgress);
         }
@@ -5138,7 +5360,7 @@ Object.assign(TV, {
     TVAddUserDialog,
     TVRegistrationTokenDialog,
     TVServerConfigurationDialog,
-    TVIndexProgressDialog,
+    TVProgressDialog,
     TVViewGalleryDialog,
     TVHistory,
     TVHistoryViewer,

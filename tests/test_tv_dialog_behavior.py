@@ -366,9 +366,11 @@ managedDialog.instance.bindCommonClose(() => {
 });
 manager.register("managed-dialog", managedDialog.instance);
 managedDialog.instance.open();
-managedDialog.overlay.listeners.get("click")({ target: managedDialog.overlay, type: "click" });
-if (dialogCloseCalls !== 1 || !managedDialog.overlay.hidden) {
-    throw new Error("overlay click did not close through the dialog event path");
+managedDialog.instance.dispatchEvent(new TV.TVEvent(TV.evMouseDown, {
+    infoPtr: managedDialog.instance, nativeEvent: { target: managedDialog.overlay, type: "click" },
+}));
+if (dialogCloseCalls !== 0 || managedDialog.overlay.hidden) {
+    throw new Error("overlay click closed a Turbo Vision dialog");
 }
 managedDialog.instance.open();
 if (managedDialog.closeButton.hidden) {
@@ -381,11 +383,11 @@ if (managedDialog.closeButton.hidden
     throw new Error("inactive dialog close control is not visible and passive");
 }
 TV.updateWindowFrameState(managedDialog.dialogElement, true, { dialog: true });
-if (!manager.dispatchCommand(TV.TV_COMMANDS.CLOSE) || dialogCloseCalls !== 2 || managedCloseCommands !== 1) {
+if (!manager.dispatchCommand(TV.TV_COMMANDS.CLOSE) || dialogCloseCalls !== 1 || managedCloseCommands !== 1) {
     throw new Error("active dialog did not receive Close");
 }
 managedDialog.instance.open();
-if (!manager.dispatchCommand(TV.TV_COMMANDS.CANCEL) || dialogCloseCalls !== 3 || managedCloseCommands !== 2) {
+if (!manager.dispatchCommand(TV.TV_COMMANDS.CANCEL) || dialogCloseCalls !== 2 || managedCloseCommands !== 2) {
     throw new Error("active dialog did not receive Cancel through its command path");
 }
 managedDialog.instance.destroy();
@@ -399,7 +401,8 @@ if (managedDialog.overlay.isConnected || !managedDialog.overlay.hidden) {
 
 const secondWindow = new FakeElement("second-window");
 manager.registerWindow("second", secondWindow);
-if (!manager.dispatchCommand(TV.TV_COMMANDS.NEXT) || manager.activeTarget !== "viewer") {
+const expectedNext = manager.openTargets()[0];
+if (!manager.dispatchCommand(TV.TV_COMMANDS.NEXT) || manager.activeTarget !== expectedNext) {
     throw new Error("Next did not cycle to the following managed target");
 }
 if (!manager.dispatchCommand(TV.TV_COMMANDS.PREVIOUS) || manager.activeTarget !== "second") {

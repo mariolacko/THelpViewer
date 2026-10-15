@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import shutil
@@ -52,6 +53,25 @@ def _wait_for_file(path: Path, timeout: float = 10.0) -> str:
     raise TimeoutError(f"file did not appear: {path}")
 
 
+def _wait_for_search_index(url: str, timeout: float = 300.0) -> None:
+    """Prepare the full-corpus fixture before the timed UI assertions."""
+    deadline = time.monotonic() + timeout
+    status = {}
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(url, timeout=2.0) as response:
+                status = json.load(response)
+        except OSError:
+            pass
+        else:
+            if status.get("state") == "ready" and status.get("available"):
+                return
+            if status.get("state") == "error":
+                raise RuntimeError(f"search index fixture failed: {status}")
+        time.sleep(0.25)
+    raise TimeoutError(f"search index fixture did not become ready: {url}: {status}")
+
+
 @pytest.mark.skipif(NODE is None or CHROME is None, reason="Node.js and Chrome are required")
 def test_real_browser_menu_focus_and_dynamic_command_state():
     external_url = os.environ.get("THELP_BROWSER_BASE_URL", "").rstrip("/")
@@ -90,6 +110,7 @@ def test_real_browser_menu_focus_and_dynamic_command_state():
         )
     try:
         _wait_for_url(app_url + "healthz")
+        _wait_for_search_index(app_url + "api/search/status")
         with tempfile.TemporaryDirectory(prefix="thelpviewer-chrome-") as profile_dir:
             chrome = subprocess.Popen(
                 [
@@ -181,6 +202,22 @@ async function run() {
         await send('Input.dispatchMouseEvent', {
             type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1,
         });
+    };
+    const assertWindowOnDesktop = async (selector, label) => {
+        const bounds = await evaluate(`document.fonts.ready.then(() =>
+            new Promise(resolve => requestAnimationFrame(() => {
+                const desktop = document.querySelector('.tv-desktop').getBoundingClientRect();
+                const window = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+                const status = document.querySelector('.tv-status-line').getBoundingClientRect();
+                resolve({ window: window.toJSON(), desktop: desktop.toJSON(),
+                    status: status.toJSON(), viewportHeight: innerHeight });
+            })))`, true);
+        const { window: windowBounds, desktop, status, viewportHeight } = bounds;
+        if (windowBounds.top < desktop.top - 1 || windowBounds.bottom > desktop.bottom + 1
+            || windowBounds.left < desktop.left - 1 || windowBounds.right > desktop.right + 1
+            || status.bottom > viewportHeight + 1 || desktop.bottom > status.top + 1) {
+            throw new Error(`${label} opened outside the desktop: ${JSON.stringify(bounds)}`);
+        }
     };
 
     await send("Page.enable");
@@ -1117,7 +1154,7 @@ async function run() {
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 3000;
         const check = () => {
-            const progress = document.querySelector('.tv-index-progress-window');
+            const progress = document.querySelector('.tv-progress-window');
             if (progress && !progress.closest('.tv-dialog-overlay').hidden
                 && progress.textContent.includes('1 / 2') && progress.textContent.includes('37')) {
                 resolve(true); return;
@@ -1128,9 +1165,9 @@ async function run() {
         check();
     })`, true);
     const indexProgress = await evaluate(`(() => {
-        const dialog = document.querySelector('.tv-index-progress-window');
+        const dialog = document.querySelector('.tv-progress-window');
         const view = dialog?.closest('.tv-dialog-overlay')?._tvView;
-        const button = dialog?.querySelector('button[data-tv-command="index-hide"]');
+        const button = dialog?.querySelector('button[data-tv-command="progress-hide"]');
         const file = view?.file.root;
         const client = dialog?.querySelector('.tv-dialog-client');
         return {
@@ -1154,7 +1191,7 @@ async function run() {
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 3000;
         const check = () => {
-            const progress = document.querySelector('.tv-index-progress-window');
+            const progress = document.querySelector('.tv-progress-window');
             if (progress?.querySelector('[data-tv-bar-gauge]')?.textContent === '█'.repeat(40)
                 && progress.querySelector('.tv-percent-gauge')?.textContent.includes('100')) {
                 resolve(true); return;
@@ -1168,7 +1205,7 @@ async function run() {
         const deadline = Date.now() + 3000;
         const check = () => {
             const result = document.querySelector('.tv-search-window .tv-search-result');
-            const progress = document.querySelector('.tv-index-progress-window');
+            const progress = document.querySelector('.tv-progress-window');
             if (result?.textContent.includes('Global Vista topic')
                 && (!progress || progress.closest('.tv-dialog-overlay').hidden)) {
                 resolve(true); return;
@@ -1180,7 +1217,7 @@ async function run() {
     })`, true);
     const globalSearchResult = await evaluate(`(() => {
         const result = document.querySelector('.tv-search-window .tv-search-result');
-        const progress = document.querySelector('.tv-index-progress-window');
+        const progress = document.querySelector('.tv-progress-window');
         const state = { result: result?.textContent, progressClosed: !progress || progress.closest('.tv-dialog-overlay').hidden };
         return state;
     })()`);
@@ -1214,7 +1251,7 @@ async function run() {
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 3000;
         const check = () => {
-            const progress = document.querySelector('.tv-index-progress-window');
+            const progress = document.querySelector('.tv-progress-window');
             if (progress && !progress.closest('.tv-dialog-overlay').hidden
                 && progress.textContent.includes('0 / 2')
                 && progress.querySelector('[data-tv-bar-gauge]')?.textContent === '░'.repeat(40)) {
@@ -1229,7 +1266,7 @@ async function run() {
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 3000;
         const check = () => {
-            const progress = document.querySelector('.tv-index-progress-window');
+            const progress = document.querySelector('.tv-progress-window');
             if (progress?.querySelector('[data-tv-bar-gauge]')?.textContent === '█'.repeat(40)) {
                 resolve(true); return;
             }
@@ -1241,7 +1278,7 @@ async function run() {
     await evaluate(`new Promise((resolve, reject) => {
         const deadline = Date.now() + 3000;
         const check = () => {
-            const progress = document.querySelector('.tv-index-progress-window');
+            const progress = document.querySelector('.tv-progress-window');
             if (!progress || progress.closest('.tv-dialog-overlay').hidden) { resolve(true); return; }
             if (Date.now() > deadline) { reject(new Error('Startup index progress stayed open')); return; }
             setTimeout(check, 30);
@@ -1997,6 +2034,13 @@ async function run() {
     }
     await evaluate(`__tvMenuItem('dialog-open', 'Change dir...').click()`);
     await pause();
+    // Test overflow independently of how many HELP products are installed.
+    await evaluate(`(() => {
+        const view = document.querySelector('.tv-change-dir-window').closest('.tv-dialog-overlay')._tvView;
+        view.directoryList.setTree([...view.directoryTree, ...Array.from({length: 40}, (_, index) => ({
+            key: 'scroll-test-' + index, path: 'scroll-test-' + index, label: 'Test directory ' + index,
+        }))], view.currentDirectory, {expandAll: true});
+    })()`);
     const changeDirectoryWheelTarget = await evaluate(`(() => {
         const viewport = document.querySelector(
             '.tv-change-dir-window .tv-dialog-client > .tv-group > .tv-vlist-viewer > .tv-vlist-viewport'
@@ -2032,6 +2076,10 @@ async function run() {
             changeDirectoryWheelTarget, changeDirectoryWheelAfter,
         })}`);
     }
+    await evaluate(`(() => {
+        const view = document.querySelector('.tv-change-dir-window').closest('.tv-dialog-overlay')._tvView;
+        view.directoryList.setTree(view.directoryTree, view.currentDirectory, {expandAll: true});
+    })()`);
     const changeDirectoryHistoryInitial = await evaluate(`(() => {
         const button = document.querySelector('[data-tv-change-dir-history]');
         const popup = document.querySelector('[data-tv-change-dir-history-popup]');
@@ -3594,9 +3642,9 @@ async function run() {
     await evaluate(`__tvMenuItem('dialog-open', 'Ludo').click()`);
     await pause();
     const ludoGeometry = await evaluate(`(() => {
-        const progress = document.querySelector('.tv-index-progress-window');
+        const progress = document.querySelector('.tv-progress-window');
         if (progress && !progress.closest('.tv-dialog-overlay').hidden) {
-            progress.querySelector('[data-tv-command="index-hide"]')?.click();
+            progress.querySelector('[data-tv-command="progress-hide"]')?.click();
         }
         const dialog = document.querySelector('.tv-ludo-window');
         const group = dialog?.querySelector('.tv-dialog-client > .tv-group');
@@ -4061,7 +4109,7 @@ async function run() {
     while (true) {
         const status = await (await fetch(appUrl + 'api/search/status')).json();
         if (status.state === 'ready') { break; }
-        if (Date.now() > indexDeadline) { throw new Error('Public index did not become ready'); }
+        if (Date.now() > indexDeadline) { throw new Error(`Public index did not become ready: ${JSON.stringify(status)}`); }
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
     await send('Page.navigate', { url: appUrl });
@@ -4122,6 +4170,7 @@ async function run() {
     if (publicDocUrl !== '?doc=README.md') {
         throw new Error(`Public Docs URL was not preserved: ${publicDocUrl}`);
     }
+    await assertWindowOnDesktop('.tv-doc-window', 'Public Docs');
     await send('Page.navigate', {
         url: appUrl + '?file=' + encodeURIComponent('Norton Guides/vista.json.gz') + '&topic=378',
     });
@@ -4140,6 +4189,7 @@ async function run() {
     if (!publicHelpUrl.includes('topic=378')) {
         throw new Error(`Public HELP URL was not preserved: ${publicHelpUrl}`);
     }
+    await assertWindowOnDesktop('[data-tv-bundle-window]', 'Public HELP topic');
     await send('Page.navigate', {
         url: appUrl + '?file=' + encodeURIComponent('Norton Guides/vista.json.gz'),
     });
@@ -4154,6 +4204,7 @@ async function run() {
         };
         check();
     })`, true);
+    await assertWindowOnDesktop('[data-tv-bundle-window]', 'Public HELP overview');
     const crawlableTopics = await evaluate(`(() => {
         const help = document.querySelector('[data-tv-bundle-window]');
         const index = document.querySelector('[data-tv-command="bundle-index"]');

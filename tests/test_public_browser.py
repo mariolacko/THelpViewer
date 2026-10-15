@@ -192,9 +192,12 @@ async function run() {
                     return new Response(JSON.stringify({ user }));
                 }
                 if (String(url) === '/api/admin/settings') {
-                    return new Response(JSON.stringify({ dos_user_disk_mb: 64, runtime: { host: '0.0.0.0', port: 5448 } }));
+                    return new Response(JSON.stringify({ dos_user_disk_mb: 64, backup_count: 2, runtime: { host: '0.0.0.0', port: 5448 } }));
                 }
                 if (String(url) === '/api/auth/session') { return new Response(JSON.stringify(session)); }
+                if (String(url) === '/api/auth/security') {
+                    return new Response(JSON.stringify({ passkeys: [], password_set: false }));
+                }
                 if (String(url) === '/api/auth/profile') {
                     saved = JSON.parse(options.body);
                     return new Response(JSON.stringify({ user: { ...session.user, ...saved, display_name: saved.nickname } }));
@@ -326,9 +329,9 @@ async function run() {
                     throw new Error('Server configuration controls did not load');
                 }
                 const actions = settings.children[0].children.filter(child => child instanceof TV.TVButton
-                    && ['server-rebuild-dos', 'server-rebuild-midi', 'account-users'].includes(child.command));
+                    && ['account-help-packages', 'account-dos-packages', 'account-midi-sources'].includes(child.command));
                 if (actions.length !== 3 || actions.some(button => button.bounds.y1 !== 18)) {
-                    throw new Error('Server action row was not moved down');
+                    throw new Error('Server configuration launchers do not fit their action row');
                 }
                 for (const button of actions) {
                     const shadow = button.root.querySelector('.tv-dialog-button-shadow');
@@ -337,7 +340,7 @@ async function run() {
                     }
                 }
                 if (!(settings.owner.owner instanceof TV.TVProgram)) { throw new Error('Desktop is not owned by the application'); }
-                actions.find(button => button.command === 'account-users').root.click();
+                settings.children[0].children.find(button => button.command === 'account-users').root.click();
                 if (!users.isOpen() || manager.activeTarget !== 'users') { throw new Error('Server Configuration Users button does nothing'); }
                 await users.refreshUsers();
                 const add = users.children[0].children.find(button => button.command === 'account-add-user');

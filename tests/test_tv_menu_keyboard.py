@@ -68,7 +68,14 @@ const guestAccount=TV.buildAccountMenu(null);
 if(guestAccount.command!=='account-login'||guestAccount.subMenu)throw new Error('Guest account item is not Login');
 for(const role of ['member','admin']){
  const account=TV.buildAccountMenu({authenticated:true,user:{username:'test',display_name:'Test ~<Name>~',role}});
- const commands=account.subMenu.entries().flatMap(item=>[item.command,...(item.subMenu?.entries()||[]).map(child=>child.command)]);
+ const collect=menu=>menu.entries().flatMap(item=>[item.command,...(item.subMenu?collect(item.subMenu):[])]);
+ const commands=collect(account.subMenu);
+ const configuration=account.subMenu.entries().find(item=>item.name.replaceAll('~','')==='Configuration');
+ const settings=collect(configuration.subMenu);
+ const adminSettings=['account-server-configuration','account-help-packages','account-dos-packages','account-midi-sources','account-users','account-registration-token','account-rebuild-dos','account-rebuild-midi'];
+ if(adminSettings.some(command=>settings.includes(command)!==(role==='admin')))throw new Error('Server controls are not grouped under Configuration');
+ if(account.subMenu.entries().some(item=>adminSettings.includes(item.command)))throw new Error('Server controls remain outside Configuration');
+ if(!['account-colors','theme-light','theme-dark','theme-auto'].every(command=>settings.includes(command)))throw new Error('Personal appearance configuration missing');
  if(commands.includes('account-server-configuration')!==(role==='admin')||commands.includes('account-registration-token')!==(role==='admin'))throw new Error('Account role visibility is incorrect');
  if(!commands.includes('account-colors')||!commands.includes('account-logout'))throw new Error('User configuration/sign-out missing');
  if(commands.includes('account-rebuild-dos')!==(role==='admin')||commands.includes('account-rebuild-midi')!==(role==='admin')||commands.includes('account-users')!==(role==='admin'))throw new Error('Administrator menu permissions are incorrect');
@@ -400,8 +407,8 @@ def test_shell_and_bundle_use_the_shared_menu_controller():
     assert "new TVMenuController" in bundle
     assert "menuController.refresh()" in bundle
     assert "class TVApplicationMenuBar extends TVMenuBar" in shell
-    assert "new TVApplicationMenuBar(new TVRect(), pageMenu(top), accountItem)" in shell
-    assert "new TVApplicationMenuBar(new TVRect(), menuFromItems(topItems), accountItem)" in bundle
+    assert "new TVApplicationMenuBar(new TVRect(), pageMenu(top), accountItem, downloadProgress)" in shell
+    assert "new TVApplicationMenuBar(new TVRect(), menuFromItems(topItems), accountItem, downloadProgress)" in bundle
     assert "class TVMenuBar extends TVMenuView" not in shell
     assert "renderMenuRoot" not in bundle
     assert "new TVMenu([" not in shell + bundle

@@ -9,9 +9,10 @@ import tempfile
 
 import pytest
 
+from thelpviewer.server.accounts.sessions import new_session
 from test_browser_smoke import CHROME, NODE, _free_port, _wait_for_file, _wait_for_url
-from thelpviewer.server.accounts import AccountStore
-from thelpviewer.server.dos_prompt import DosPromptStore
+from thelpviewer.server.accounts.store import AccountStore
+from thelpviewer.server.dos.store import DosPromptStore
 from test_dos_prompt import floppy_image, cd_image
 
 
@@ -20,15 +21,30 @@ from test_dos_prompt import floppy_image, cd_image
 def test_dos_prompt_real_runtime_save_restart_and_secure_mounts(blocked_worker):
     with tempfile.TemporaryDirectory(prefix="thelp-dos-browser-") as temporary:
         root = Path(temporary)
-        (root / "config.json").write_text('{"sources": [], "allow_full_disk_fallback": true, "files": [{"path":"README.TXT","text":["Shared test disk"]}]}')
+        # DOS interaction must not race a modal rebuild of the developer's
+        # unrelated full HELP library. Index behavior has separate coverage.
+        helps = root / "helps"
+        helps.mkdir()
+        (helps / "catalog.json").write_text("[]\n", encoding="utf-8")
+        docs = root / "docs"
+        docs.mkdir()
+        (root / "config.json").write_text('{"sources": [], "memory_mb":64, "max_c_bytes":268435456, "allow_full_disk_fallback": true, "files": [{"path":"README.TXT","text":["Shared test disk"]}]}')
         accounts = AccountStore(root / "var")
         accounts.create_user("player")
+        # This fixture is an already configured DOS server, not first-run setup.
+        (root / "var" / "content-settings.json").write_text(json.dumps({
+            "configured": True, "help_groups": [], "dos_packages": [],
+        }), encoding="utf-8")
         with accounts._connect() as database:
             ident = database.execute("SELECT id FROM accounts WHERE username='player'").fetchone()[0]
-            token = accounts._new_session(database, ident)
+            token = new_session(database, ident)
         store = DosPromptStore(root / "var" / "dos", root / "config.json")
         store.prepare()
         extra_game = os.environ.get("THELP_DOS_TEST_GAME", "")
+        extra_software = os.environ.get("THELP_DOS_TEST_SOFTWARE", "")
+        if extra_software:
+            prepared = Path(os.environ["THELP_DOS_TEST_C_DIR"])
+            shutil.copytree(prepared / extra_software, store.disk_dir / extra_software, dirs_exist_ok=True)
         audio_test = extra_game == "DOOM" and os.environ.get("THELP_DOS_TEST_AUDIO") == "1"
         if os.environ.get("THELP_DOS_TEST_INSTALLED_GAMES") == "1" or extra_game:
             # Optional local smoke test against the actually prepared public disk.
@@ -62,6 +78,7 @@ def test_dos_prompt_real_runtime_save_restart_and_secure_mounts(blocked_worker):
             [sys.executable, "-m", "uvicorn", "thelpviewer.server.app:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "info"],
             stdout=server_log, stderr=subprocess.DEVNULL,
             env={**os.environ, "THELP_STATE_DIR": str(root / "var"),
+                "THELP_HELPS_DIR": str(helps), "THELP_DOCS_DIR": str(docs),
                 "THELP_STATISTICS_PATH": str(root / "var" / "statistics.sqlite3"),
                 "THELP_DOS_CONFIG_PATH": str(root / "config.json"),
                 "THELP_MIDI_SOURCES_PATH": str(root / "config.json"),
@@ -76,7 +93,7 @@ def test_dos_prompt_real_runtime_save_restart_and_secure_mounts(blocked_worker):
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             debugging = _wait_for_file(root / "chrome" / "DevToolsActivePort").splitlines()[0]
             script = r'''
-const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame, gameCommand, audioTest] = process.argv.slice(1);
+const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame, gameCommand, audioTest, softwarePath, softwareCommand, screenshotPath, softwareOutput] = process.argv.slice(1);
 (async () => {
  const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, {method:'PUT'})).json();
  const socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -166,6 +183,30 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    await new Promise(r=>setTimeout(r,250));
   }
   window.dosCommand=command;
+  if(${JSON.stringify(softwarePath)}){
+   await command('cd '+String.fromCharCode(92)+${JSON.stringify(softwarePath)}.replaceAll('/',String.fromCharCode(92)).toLowerCase());
+   const before=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+   const commands=${JSON.stringify(softwareCommand)};
+   for(const line of (commands.startsWith('[')?JSON.parse(commands):[commands])){await command(line);}
+   await new Promise(resolve=>setTimeout(resolve,2000));
+   if(${JSON.stringify(softwareOutput)}){
+    const output=await Promise.race([
+     dos.view.ci.fsReadFile('drive_c/'+${JSON.stringify(softwarePath)}+'/'+${JSON.stringify(softwareOutput)}),
+     new Promise((_,reject)=>setTimeout(()=>reject(Error('Missing software output: '+${JSON.stringify(softwareOutput)})),5000))
+    ]);
+    if(!output.length)throw Error('Software produced empty output');
+    return {smokeOnly:true,software:${JSON.stringify(softwarePath)},outputBytes:output.length,
+     outputText:${JSON.stringify(softwareOutput)}.endsWith('.LOG')?new TextDecoder().decode(output):undefined};
+   }
+   const running=await dos.view.ci.getRunningProgram();
+   const after=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+   const changed=after.some((value,index)=>index%4!==3&&value!==before[index]);
+   if(!changed||!running||running.toUpperCase().includes('COMMAND.COM')){
+    let log='';try{log=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/'+${JSON.stringify(softwarePath)}+'/BUILD.LOG'));}catch{}
+    throw Error('Software did not start: '+running+' '+log);
+   }
+   return {smokeOnly:true,software:${JSON.stringify(softwarePath)},running,rendered:true};
+  }
   let audibleSamples=0;
   const playSound=dos.playSound.bind(dos);
   dos.playSound=samples=>{if(samples.some(value=>Math.abs(value)>0.001))audibleSamples+=samples.length;playSound(samples);};
@@ -256,13 +297,16 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   const deleted=!(await dos.view.ci.fsTree()).nodes.find(node=>node.name==='drive_c').nodes.some(node=>node.name.toUpperCase()==='README.TXT');
   return {frameOkay,bottomOkay,allBlack,nestedLoaded,rendered,graphics,paused,restored,deleted,mounted,cdMounted,revision,account:dos.session.account,mount};
  })()`);
- if(result.smokeOnly){console.log(JSON.stringify(result));socket.close();return;}
+ if(result.smokeOnly){
+  if(screenshotPath){const capture=await send('Page.captureScreenshot',{format:'png'});require('node:fs').writeFileSync(screenshotPath,Buffer.from(capture.data,'base64'));}
+  console.log(JSON.stringify(result));socket.close();return;
+ }
  if(!result.frameOkay||!result.bottomOkay||!result.allBlack||!result.nestedLoaded||!result.rendered||!result.paused||!result.restored||!result.deleted||!result.mounted||!result.cdMounted||result.revision<1||result.account!=='player'||errors.length){throw new Error(JSON.stringify({result,errors}));}
  await evaluate(`(()=>{
   const before=dos.root._tvResizer.captureGeometry(),r=dos.root.getBoundingClientRect();
   document.querySelector('[data-tv-command="dos-zoom"]').click();
   const after=dos.root.getBoundingClientRect(),desktop=dos.root._tvResizer.desktop.getBoundingClientRect();
-  if(!dos.zoomGeometry||after.width<r.width||after.height<r.height||after.right>desktop.right+1||after.bottom>desktop.bottom+1)throw new Error('DOS zoom failed to fit the desktop');
+  if(!dos.zoomGeometry||after.width<r.width||after.height<r.height||after.right>desktop.right+1||after.bottom>desktop.bottom+1)throw new Error('DOS zoom failed to fit the desktop: '+JSON.stringify({before,window:r.toJSON(),after:after.toJSON(),desktop:desktop.toJSON(),zoomGeometry:dos.zoomGeometry}));
   if(!document.querySelector('[data-tv-command="dos-zoom"]').textContent.includes('Zoom back'))throw new Error('DOS zoom menu did not update');
   document.querySelector('[data-tv-command="dos-zoom"]').click();
   if(dos.zoomGeometry||JSON.stringify(dos.root._tvResizer.captureGeometry())!==JSON.stringify(before))throw new Error('DOS Zoom back did not restore geometry');
@@ -367,9 +411,12 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
                 sources = json.loads(Path("thelpviewer/config/dos-prompt.json").read_text())["sources"]
                 launch = next(source["launch"] for source in sources if f"\\GAMES\\{extra_game} then " in source.get("launch", ""))
                 game_command = launch.split(" then ", 1)[1]
-            result = subprocess.run([NODE, "-e", script, debugging, url, token, media_id, cd_id, str(blocked_worker).lower(), installed_games, extra_game, game_command, str(audio_test).lower()], capture_output=True, text=True, timeout=90)
+            result = subprocess.run([NODE, "-e", script, debugging, url, token, media_id, cd_id, str(blocked_worker).lower(), installed_games, extra_game, game_command, str(audio_test).lower(),
+                extra_software, os.environ.get("THELP_DOS_TEST_SOFTWARE_COMMAND", "start"), os.environ.get("THELP_DOS_TEST_SCREENSHOT", ""), os.environ.get("THELP_DOS_TEST_SOFTWARE_OUTPUT", "")], capture_output=True, text=True, timeout=90)
             assert result.returncode == 0, result.stderr
-            if not blocked_worker and not extra_game:
+            if extra_software:
+                print(result.stdout)
+            if not blocked_worker and not extra_game and not extra_software:
                 trace = (root / "server.log").read_text()
                 assert "name=GFX.COM" in trace
                 assert "name=UNUSED.DAT" not in trace
