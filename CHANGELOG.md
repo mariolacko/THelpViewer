@@ -4,6 +4,10 @@
 
 ### 2.1 development
 
+- Set the menu clock immediately when the shared application menu binds its
+  new root. F1 in Downloads and other menu rebuilds no longer briefly display
+  `00:00:00` while waiting for the next periodic clock update; bundle and
+  generated-page shells use the same behavior.
 - Align restart/Retry and MIDI availability documentation with the current
   implementation. Record the production inventory audit and the outstanding
   legacy MIDI-cache validation/normalization work in TODO; no repair of those

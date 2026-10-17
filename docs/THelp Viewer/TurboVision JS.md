@@ -722,6 +722,9 @@ The standard Turbo Vision 2.0 `TMenuBar` lays out items from the left and has
 no per-item right alignment option; right alignment is our application-level
 `drawItem()` extension, retaining normal menu objects and TVEvent handling.
 Only the drawing primitive uses the minimal right-item layout CSS.
+`TVApplicationMenuBar.bindRoot()` updates the menu clock synchronously after
+binding. Menu rebuilds (including opening F1 help from Downloads) show the
+current time immediately, independently of the desktop's one-second timer.
 
 `tv-content.js` composes three independent windows, `TVHelpPackagesDialog`,
 `TVDosPackagesDialog` and `TVMidiSourcesDialog`, from `TVPackagesDialog`.

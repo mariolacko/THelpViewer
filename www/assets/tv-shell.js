@@ -33,6 +33,7 @@ const {
     renderHotkeyMarkup,
     fillBorders,
     updateWindowFrameState,
+    updateClocks,
     bindCloseButtons,
     applyThemeAndSyncPalette,
     initializeTVTheme,
@@ -317,6 +318,7 @@ class TVApplicationMenuBar extends TVMenuBar {
     }
     bindRoot(root) {
         super.bindRoot(root);
+        updateClocks();
         this.downloadItem.update(this.downloadItem.status, this);
         this.showDownloads();
         this.setIndexStatus(this.indexStatus);

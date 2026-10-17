@@ -16,7 +16,7 @@ from test_browser_smoke import CHROME, NODE, _free_port, _wait_for_file, _wait_f
 @pytest.mark.skipif(NODE is None or CHROME is None, reason="Node.js and Chrome are required")
 def test_public_diagnostic_topics_and_skipped_source_warning_in_browser():
     with tempfile.TemporaryDirectory(prefix="thelp-public-browser-") as temporary:
-        state = Path(temporary)
+        state = Path(temporary).resolve()
         helps = state / "helps"
         (helps / "References").mkdir(parents=True)
         topics = {
@@ -46,7 +46,7 @@ def test_public_diagnostic_topics_and_skipped_source_warning_in_browser():
             [sys.executable, "-m", "uvicorn", "thelpviewer.server.app:app", "--host", "127.0.0.1",
              "--port", str(port), "--log-level", "warning"],
             cwd=Path.cwd(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            env={**os.environ, "THELP_STATE_DIR": temporary, "THELP_HELPS_DIR": str(helps),
+            env={**os.environ, "THELP_STATE_DIR": str(state), "THELP_HELPS_DIR": str(helps),
                  "THELP_STATISTICS_PATH": str(state / "statistics.sqlite3"),
                  "THELP_MIDI_SOURCES_PATH": str(midi), "THELP_DOCS_DIR": str(state / "docs"),
                  "THELP_README_PATH": str(state / "README.md"),
@@ -127,6 +127,65 @@ async function run() {
             })()`);
             if (!valid) { throw new Error('Diagnostic topic became a website error'); }
         }
+        // Opening F1 help rebuilds the menu to add Contents. Disable the
+        // periodic tick so a zero clock cannot be hidden by the next second.
+        await evaluate(`(async () => {
+            const TV = window.THelpViewerTV;
+            const menuRoot = document.querySelector('[data-tv-menu-bar]');
+            const app = document.querySelector('[data-tv-bundle-desktop]')._tvView.owner;
+            const menu = menuRoot._tvMenuView, downloads = menu.downloadItem;
+            const RealDate = window.Date;
+            downloads.stop();
+            clearInterval(app.desktopView.clockTimer);
+            window.Date = class extends RealDate {
+                constructor(...args) { super(...(args.length ? args : [2026,9,17,12,34,56])); }
+            };
+            TV.updateClocks();
+            const before = menuRoot.querySelector('[data-tv-clock]');
+            const zeroClocks = [];
+            const observer = new MutationObserver(() => {
+                if (menuRoot.querySelector('[data-tv-clock]')?.textContent === '00:00:00') {
+                    zeroClocks.push('00:00:00');
+                }
+            });
+            observer.observe(menuRoot, {childList:true,subtree:true,characterData:true});
+            try {
+                downloads.update({active:true,percent:25,errors:0,items:[{
+                    id:'midi:test',kind:'midi',label:'Test song',state:'running',
+                    percent:25,stage:'download',stage_percent:25,phase:'Downloading',
+                }]}, menu);
+                menu.itemElements.get(downloads).click();
+                await new Promise(requestAnimationFrame);
+                if (!menu.activeRoot || menu.getHelpCtx() !== TV.TV_HELP_CONTEXTS.hcDownloads) {
+                    throw new Error('Downloads menu was not active before F1');
+                }
+                document.dispatchEvent(new KeyboardEvent('keydown', {
+                    key:'F1',code:'F1',bubbles:true,cancelable:true,
+                }));
+                await new Promise((resolve,reject) => {
+                    const deadline = RealDate.now()+5000;
+                    const check = () => {
+                        const help = Array.from(document.querySelectorAll('[data-tv-bundle-window]'))
+                            .find(root => root._tvWindowView?.currentTopic === '2316');
+                        if (help && menuRoot._tvMenuView !== menu) { resolve(); return; }
+                        if (RealDate.now()>deadline) { reject(new Error('Downloads F1 did not rebuild the menu/open help')); return; }
+                        setTimeout(check,20);
+                    }; check();
+                });
+                await new Promise(requestAnimationFrame);
+                const clock = menuRoot.querySelector('[data-tv-clock]');
+                if (clock === before || clock.textContent !== '12:34:56' || zeroClocks.length) {
+                    throw new Error('Clock reset while opening Downloads help: '+JSON.stringify({
+                        text:clock.textContent,zeroClocks,
+                    }));
+                }
+            } finally {
+                observer.disconnect();
+                window.Date = RealDate;
+                TV.updateClocks();
+                app.desktopView.clockTimer = setInterval(TV.updateClocks,1000);
+            }
+        })()`);
         // Restore the application's own help through the same desktop URL as
         // a shared Downloads-help link, not the generated-page fallback view.
         const helpState = {v:1,a:0,z:[0],w:[{t:'h',f:'../assets/tv-context-help.json',

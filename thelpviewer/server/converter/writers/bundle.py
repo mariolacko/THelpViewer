@@ -577,7 +577,7 @@ def _render_bundle_index_html() -> str:
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-content.js?v=20261016g"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20261010b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20261017a"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20261017b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-dos.js?v=20261010b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20261016w"></script>
 </head>

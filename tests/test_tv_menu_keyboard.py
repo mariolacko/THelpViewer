@@ -106,6 +106,24 @@ for(const role of ['member','admin']){
  if(!commands.includes('account-colors'))throw new Error('Colors is unavailable to a local member');
 }
 
+const RealDate = global.Date, queryElements = document.querySelectorAll;
+const clock = new FakeElement();
+clock.textContent = "00:00:00";
+global.Date = class extends RealDate {
+    constructor(...args) { super(...(args.length ? args : [2026, 9, 17, 12, 34, 56])); }
+};
+document.querySelectorAll = (selector) => selector === "[data-tv-clock]" ? [clock] : queryElements(selector);
+try {
+    const downloads = new TV.TVSubMenu("↓");
+    downloads.status = {items:[]}; downloads.update = () => {};
+    const menu = new TV.TVApplicationMenuBar(new TV.TVRect(), TV.NewMenu(guestAccount), guestAccount, downloads);
+    menu.bindRoot(new FakeElement());
+    if (clock.textContent !== "12:34:56") throw new Error("Menu clock awaits a periodic tick after binding");
+    clock.textContent = "00:00:00";
+    menu.bindRoot(new FakeElement());
+    if (clock.textContent !== "12:34:56") throw new Error("Menu rebinding reset the clock");
+} finally { global.Date = RealDate; document.querySelectorAll = queryElements; }
+
 const linkedSecond = TV.NewItem("~S~econd", "F4", TV.kbF3, "second", 20);
 const linkedFirst = TV.NewItem("~F~irst", "F3", TV.kbF3, "first", 10, linkedSecond);
 const linkedMenu = TV.NewMenu(linkedFirst);
