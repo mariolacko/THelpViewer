@@ -637,6 +637,8 @@ class MidiLibrary:
         sources = self._sources()
         active = {str(source["id"]): source for source in sources}
         albums = self._album_selection()
+        with self._lock:
+            pending = {key for key, task in self._play_tasks.items() if not task.done()}
         tracks: list[dict[str, object]] = []
         for item in self._items:
             source_id = str(item["source_id"])
@@ -654,6 +656,8 @@ class MidiLibrary:
                     "game": str(item["game"]), "credit": str(item["game"] or source_id),
                     "sequencer": str(item["sequencer"]),
                     "available": available,
+                    "download_error": "" if available or (source_id, str(item["id"])) in pending else str(
+                        member.get("error") or item.get("download_error") or ""),
                     "file": f"/api/midi/files/{source_id}/{filename}" if available else "",
                     "source_url": str(item["url"]),
                     "cover": (

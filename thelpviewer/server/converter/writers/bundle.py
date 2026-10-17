@@ -571,9 +571,9 @@ def _render_bundle_index_html() -> str:
 <link rel="icon" type="image/svg+xml" href="{SITE_ASSET_DIR_NAME}/thelp-icon.svg">
 <link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20261015c">
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20261017f"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20261017f"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20261017g"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20261016t"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20261017g"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-content.js?v=20261016g"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20261010b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20261010b"></script>

@@ -3801,7 +3801,7 @@ class TVMidiPlayerDialog extends TVDialog {
         this.allTracks = [];
         this.pendingPlay = null;
         this.catalogTimer = null;
-        this.catalogPending = false;
+        this.catalogPending = null;
         this.cache = new Map();
         this.loadSerial = 0;
         this.isPlaying = false;
@@ -3902,7 +3902,8 @@ class TVMidiPlayerDialog extends TVDialog {
         this.historyWindow.hide();
         if (this.catalogTimer) { clearTimeout(this.catalogTimer); }
         this.catalogTimer = null;
-        this.pendingPlay = null;
+        this.catalogPending?.abort();
+        this.catalogPending = null;
         this.stopPlayback();
         super.close();
     }
@@ -3937,14 +3938,26 @@ class TVMidiPlayerDialog extends TVDialog {
         }
     }
 
+    scheduleCatalogRefresh(delay) {
+        if (this.catalogTimer) { clearTimeout(this.catalogTimer); }
+        this.catalogTimer = this.isOpen() ? setTimeout(() => {
+            this.catalogTimer = null;
+            void this.refreshCatalog();
+        }, delay) : null;
+    }
+
     async refreshCatalog() {
         if (!this.isOpen() || this.catalogPending) { return; }
-        this.catalogPending = true;
+        if (this.catalogTimer) { clearTimeout(this.catalogTimer); this.catalogTimer = null; }
+        const request = new AbortController();
+        this.catalogPending = request;
+        let poll = false;
         try {
-            const response = await fetch("/api/midi/catalog", { cache: "no-store" });
+            const response = await fetch("/api/midi/catalog", { cache: "no-store", signal: request.signal });
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
             const catalog = await response.json();
-            if (!this.isOpen()) { return; }
+            if (!this.isOpen() || this.catalogPending !== request) { return; }
+            poll = catalog.state === "downloading";
             const tracks = Array.isArray(catalog.tracks) ? catalog.tracks : [];
             if (tracks.length !== this.allTracks.length || tracks.some((track, index) =>
                 track.id !== this.allTracks[index]?.id || track.available !== this.allTracks[index]?.available
@@ -3952,7 +3965,7 @@ class TVMidiPlayerDialog extends TVDialog {
                 this.allTracks = tracks;
                 this.applyFilter();
             }
-            if (!this.isPlaying && !this.pausedPosition) {
+            if (!this.isPlaying && !this.isLoading && !this.pausedPosition) {
                 if (catalog.state === "downloading") {
                     this.setStatus(`Downloading game MIDI: ${catalog.downloaded}/${catalog.total}...`);
                 } else if (catalog.state === "error" || catalog.state === "partial") {
@@ -3963,30 +3976,36 @@ class TVMidiPlayerDialog extends TVDialog {
                     this.setStatus(tracks.length ? `${catalog.downloaded} game MIDI tracks ready.` : "No game MIDI tracks available.");
                 }
             }
-            if (this.pendingPlay) {
+            if (this.pendingPlay?.queued) {
                 const wanted = this.pendingPlay;
-                const ready = tracks.find((track) => track.id === wanted.id && track.available)
-                    || tracks.find((track) => track.item_id === wanted.itemId && track.available);
+                const candidates = tracks.filter((track) => track.source_id === wanted.sourceId
+                    && track.item_id === wanted.itemId);
+                const selected = candidates.find((track) => track.id === wanted.id);
+                // An undiscovered ZIP starts as one album placeholder. Once
+                // expanded, play its first available member, never another source.
+                const ready = selected?.available ? selected : wanted.id === wanted.itemId
+                    ? candidates.find((track) => track.available) : null;
                 if (ready) {
                     this.pendingPlay = null;
                     const index = this.tracks.findIndex((track) => track.id === ready.id);
                     if (index >= 0) { this.selectTrack(index); }
                     void this.playTrack(ready, index >= 0 ? String(index + 1).padStart(2, "0") : "--");
+                } else {
+                    const error = selected?.download_error || candidates.find((track) => track.download_error)?.download_error;
+                    if (error) { this.stopPlayback(`MIDI download failed: ${error}`); }
+                    else if (!candidates.length) { this.stopPlayback("The selected MIDI is no longer in the catalog."); }
                 }
             }
-            if (catalog.state === "downloading") {
-                this.catalogTimer = setTimeout(() => { void this.refreshCatalog(); }, this.pendingPlay ? 1000 : 3000);
-            }
         } catch (error) {
-            if (this.isOpen()) {
+            if (this.isOpen() && this.catalogPending === request && !request.signal.aborted) {
                 this.setStatus(`MIDI catalog unavailable: ${error.message}`);
-                this.catalogTimer = setTimeout(() => {
-                    this.catalogTimer = null;
-                    void this.refreshCatalog();
-                }, 3000);
+                poll = true;
             }
         } finally {
-            this.catalogPending = false;
+            if (this.catalogPending === request) {
+                this.catalogPending = null;
+                if (this.pendingPlay || poll) { this.scheduleCatalogRefresh(this.pendingPlay ? 1000 : 3000); }
+            }
         }
     }
 
@@ -4094,25 +4113,32 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 
     async prioritizeTrack(track) {
-        const pending = { id: track.id, itemId: track.item_id };
+        const pending = { id: track.id, sourceId: track.source_id, itemId: track.item_id, queued: false };
         this.pendingPlay = pending;
+        this.isLoading = true;
+        this.playButton.setState(sfDisabled, true);
         this.setStatus(`Downloading ${track.title} first...`);
+        // Unlock Web Audio in the original user gesture, not a later poll.
+        // Source downloads still belong exclusively to the server's shared queue.
+        void this.synth.ensureContext().catch((error) => {
+            if (this.pendingPlay === pending) { this.stopPlayback(`MIDI synthesizer: ${error.message}`); }
+        });
         try {
             const response = await fetch(`/api/midi/priority/${encodeURIComponent(track.source_id)}/${encodeURIComponent(track.item_id)}`, {
                 method: "POST",
             });
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+            if (this.pendingPlay !== pending) { return; }
+            pending.queued = true;
             void this.topView().downloadProgress?.refresh();
         } catch (error) {
             if (this.pendingPlay === pending) {
-                this.pendingPlay = null;
-                this.setStatus(`Cannot queue MIDI download: ${error.message}`);
+                this.stopPlayback(`Cannot queue MIDI download: ${error.message}`);
             }
             return;
         }
         if (this.pendingPlay !== pending) { return; }
-        if (this.catalogTimer) { clearTimeout(this.catalogTimer); }
-        this.catalogTimer = setTimeout(() => { void this.refreshCatalog(); }, 300);
+        this.scheduleCatalogRefresh(300);
     }
 
     async playTrack(track, number) {
@@ -4185,6 +4211,7 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 
     pausePlayback() {
+        this.pendingPlay = null;
         this.pausePlaybackStats();
         this.isPlaying = false;
         this.isLoading = false;
@@ -4201,6 +4228,7 @@ class TVMidiPlayerDialog extends TVDialog {
     }
 
     stopPlayback(message = "Stopped.") {
+        this.pendingPlay = null;
         this.finishPlaybackStats();
         this.loadSerial += 1;
         this.isPlaying = false;

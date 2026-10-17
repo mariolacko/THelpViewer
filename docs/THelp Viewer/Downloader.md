@@ -176,6 +176,20 @@ an urgent request promote its waiting Future without cancelling the caller or
 starting another copy of the same request. Context follows a promoted job too.
 MIDI playback requests retain selection and album checks, skip cached files,
 and enqueue the catalog item directly rather than using a private priority stack.
+The player waits for the requested `source_id` + `item_id` (and exact member ID,
+once known), independently of the library-wide `state`. A ready/partial library
+can still have an urgent playback download in progress. Catalog rows expose
+`download_error` for unavailable tracks; an active priority retry suppresses its
+previous error until that attempt finishes. Valid members remain playable when
+another ZIP member fails. An undiscovered album placeholder resolves to its
+first available member, never a matching ID from another provider.
+
+The Play gesture starts/resumes Web Audio while the server queues the download.
+The player keeps one catalog request and scheduled refresh, and starts the track
+when its file becomes available. Stop/Pause, a new playback request or closing
+the player cancels pending auto-play, not the shared server download. Closing
+also aborts the catalog request; stale responses cannot modify a reopened player.
+Per-track errors end the wait and remain retryable through Play or Downloads.
 
 Task context follows the queued operation, so progress does not leak between
 HELP, DOS and MIDI threads. Planned rows use `begin`, `update` and `finish`;

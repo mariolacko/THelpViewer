@@ -7,6 +7,12 @@
 - Preserve typed values in every TVInputLine, not only inputs with validators,
   when shared views are redrawn/rebound. Passkey Rename keeps unsaved profile
   fields intact and does not submit them; profile Save remains separate.
+- Separate MIDI playback waiting from the whole library's download state.
+  Poll the requested source/album until its track is ready, report per-track
+  failures, and unlock Web Audio from the original Play gesture. Stop/Pause,
+  changing playback and closing the player discard pending auto-play; stale
+  catalog/priority responses cannot restart it or overwrite a reopened player.
+  All source downloads continue through the shared server downloader.
 - Keep the DOS client aspect ratio during horizontal/vertical corner resizing,
   using the active video dimensions and character-grid frame rounding. Route
   resize proposals through TVEvent; other windows retain free resizing. Fit

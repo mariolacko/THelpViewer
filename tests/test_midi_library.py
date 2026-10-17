@@ -638,8 +638,14 @@ def test_playback_download_is_shared_visible_first_and_does_not_wait_for_dos(tmp
     assert package_started.wait(5)
     try:
         ident = library._items[0]["id"]
+        library._state = "partial"
+        library._items[0]["download_error"] = "Previous attempt failed"
         assert library.prioritize("direct", ident)
         assert music_started.wait(5)
+        waiting = library.catalog()
+        assert waiting["state"] == "partial"
+        assert not waiting["tracks"][0]["available"]
+        assert waiting["tracks"][0]["download_error"] == ""
         first = library._play_tasks[("direct", ident)]
         assert library.prioritize("direct", ident)
         assert library._play_tasks[("direct", ident)] is first
@@ -649,6 +655,8 @@ def test_playback_download_is_shared_visible_first_and_does_not_wait_for_dos(tmp
         release_music.set()
         assert first.result(timeout=5)
         assert library.file_path("direct", "selected.mid").read_bytes() == MIDI
+        assert library.catalog()["tracks"][0]["available"]
+        assert library.catalog()["tracks"][0]["download_error"] == ""
         assert not package_task.done()
         assert calls == ["https://music.test/selected.mid"]
         assert downloads.snapshot()["items"][0]["state"] == "done"
@@ -658,6 +666,30 @@ def test_playback_download_is_shared_visible_first_and_does_not_wait_for_dos(tmp
         release_music.set(); release_package.set()
         package_task.result(timeout=5)
         downloads.close()
+
+
+def test_catalog_exposes_priority_download_failure_without_global_refresh(tmp_path, monkeypatch):
+    manifest = tmp_path / "sources.json"
+    manifest.write_text(json.dumps({"sources": [{"id": "direct", "name": "Music", "pages": ["https://music.test/list"],
+        "allowed_hosts": ["music.test"], "extract": {"mode": "anchors"}}]}))
+    library = MidiLibrary(tmp_path / "midi", manifest)
+    item = {"id": "0000000000000001", "source_id": "direct", "kind": "midi", "game": "DOOM",
+        "title": "Song", "filename": "song.mid", "url": "https://music.test/song.mid", "sequencer": ""}
+    library._items = [item]
+    library._state = "ready"
+    def fail(*args):
+        raise ValueError("Invalid source MIDI")
+    monkeypatch.setattr(library, "_fetch", fail)
+    try:
+        assert library.prioritize("direct", item["id"])
+        with pytest.raises(ValueError, match="Invalid source MIDI"):
+            library._play_tasks[("direct", item["id"])].result(timeout=5)
+        catalog = library.catalog()
+        assert catalog["state"] == "ready"  # Library lifecycle is not the playback job's state.
+        assert not catalog["tracks"][0]["available"]
+        assert catalog["tracks"][0]["download_error"] == "Invalid source MIDI"
+    finally:
+        library.downloads.close()
 
 
 def test_midi_source_change_waits_for_active_playback_writes(tmp_path, monkeypatch):

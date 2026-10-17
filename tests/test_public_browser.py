@@ -96,8 +96,8 @@ async function run() {
         pending.set(id, { resolve, reject });
         socket.send(JSON.stringify({ id, method, params }));
     });
-    const evaluate = async (expression) => {
-        const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+    const evaluate = async (expression, userGesture = false) => {
+        const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture });
         if (result.exceptionDetails) {
             throw new Error((result.exceptionDetails.exception?.description || result.exceptionDetails.text) + '\\n' + browserErrors.join('\\n'));
         }
@@ -571,6 +571,96 @@ async function run() {
                 if (manager.get('terminal') || TV.TVServerTerminalDialog) { throw new Error('Removed terminal still exists'); }
             } finally { window.fetch = originalFetch; account.close(); }
         })()`);
+        await evaluate(`(async () => {
+            const app = document.querySelector('[data-tv-bundle-desktop]')._tvView.owner;
+            const player = app.dialogManager.get('midi');
+            const originalFetch = window.fetch;
+            const id = '1111111111111111';
+            const data = 'data:audio/midi;base64,' + btoa(String.fromCharCode(...[
+                77,84,104,100,0,0,0,6,0,0,0,1,0,96,
+                77,84,114,107,0,0,0,23,
+                0,255,81,3,7,161,32,0,192,0,0,144,60,100,
+                176,0,128,60,0,0,255,47,0,
+            ]));
+            const pending = {id,item_id:id,source_id:'wanted',title:'Requested song',game:'Game',
+                sequencer:'',available:false,file:'',cover:''};
+            const other = {...pending,id:id+':other.mid',source_id:'other',available:true,file:data+'#other'};
+            let polls = 0, priorities = 0, complete = false, failure = '';
+            let holdCatalog = false, releaseCatalog = null, priorityRelease = null;
+            window.fetch = async (url, options) => {
+                if (String(url) === '/api/midi/catalog') {
+                    if (holdCatalog) {
+                        return new Promise(resolve => { releaseCatalog = () => resolve(new Response(JSON.stringify({
+                            state:'ready',downloaded:0,total:0,tracks:[],errors:[],
+                        }))); }); // Intentionally ignores AbortSignal: stale results must still be rejected.
+                    }
+                    polls++;
+                    const ready = complete || polls >= 3 && !failure;
+                    return new Response(JSON.stringify({state:'partial',downloaded:ready?2:1,total:2,errors:['unrelated album'],
+                        tracks:[other,{...pending,...(ready?{id:id+':theme.mid',available:true,file:data}:{}),download_error:failure}]}));
+                }
+                if (String(url).startsWith('/api/midi/priority/')) {
+                    priorities++;
+                    if (priorityRelease) { await priorityRelease; }
+                    return new Response('{}');
+                }
+                return originalFetch(url,options);
+            };
+            const until = (condition) => new Promise((resolve,reject) => {
+                const deadline = Date.now()+15000;
+                const check = () => {
+                    if (condition()) { resolve(); return; }
+                    if (Date.now()>deadline) { reject(new Error('MIDI condition timed out: '+player.displayView.statusView.root.textContent)); return; }
+                    setTimeout(check,30);
+                }; check();
+            });
+            try {
+                player.open();
+                await until(() => !player.catalogPending);
+                player.selectTrack(1);
+                await player.playSelected();
+                if (!player.isLoading || !player.pendingPlay || !player.synth.context) {
+                    throw new Error('Queued Play did not start its own wait/audio context');
+                }
+                await until(() => player.isPlaying);
+                await new Promise(resolve => setTimeout(resolve,600));
+                if (polls<3 || priorities!==1 || player.activeTrackFile!==data || player.pendingPlay
+                    || player.synth.synth.getPlayerCurrentTick()<=0 || player.synth.context.state!=='running') {
+                    throw new Error('Partial catalog prevented requested MIDI playback or selected another source');
+                }
+                player.pausePlayback();
+                const tick = player.synth.synth.getPlayerCurrentTick();
+                await player.playSelected();
+                if (!player.isPlaying || player.synth.synth.getPlayerCurrentTick()<tick) {
+                    throw new Error('Pause/resume restarted playback');
+                }
+                player.stopPlayback();
+                // A delayed priority acknowledgement must not undo Stop.
+                let acknowledge;
+                priorityRelease = new Promise(resolve => { acknowledge=resolve; });
+                player.allTracks=[pending]; player.applyFilter();
+                const request = player.playSelected();
+                player.stopPlayback(); acknowledge(); await request; priorityRelease=null;
+                complete=true;
+                await player.refreshCatalog();
+                if (player.pendingPlay || player.isPlaying || player.isLoading) { throw new Error('Stop allowed late auto-play'); }
+                // An album error must stop waiting even while the global state is partial.
+                complete=false; failure='Invalid source MIDI';
+                player.allTracks=[pending]; player.applyFilter();
+                await player.playSelected(); await player.refreshCatalog();
+                if (player.pendingPlay || player.isLoading || !player.displayView.statusView.root.textContent.includes(failure)) {
+                    throw new Error('Per-track failure was hidden by global catalog state');
+                }
+                // An old catalog response cannot clear a newly reopened player's catalog.
+                holdCatalog=true;
+                const stale=player.refreshCatalog();
+                await until(() => releaseCatalog);
+                player.close(); holdCatalog=false; failure=''; complete=true;
+                player.open(); await until(() => !player.catalogPending);
+                releaseCatalog(); await stale;
+                if (player.allTracks.length!==2) { throw new Error('Closed player applied a stale catalog response'); }
+            } finally { player.close(); window.fetch=originalFetch; }
+        })()`, true);
         await send('Page.navigate', { url: appUrl + '?topic=719&file=References/diagnostics.json.gz&line=1#bookmark' });
         await wait(`document.querySelector('[data-tv-bundle-window]')?._tvWindowView?.currentTopic === '719'
             && window.location.search === '?file=References%2Fdiagnostics.json.gz&topic=719&line=1'
