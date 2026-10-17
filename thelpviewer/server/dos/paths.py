@@ -7,6 +7,7 @@ import tempfile
 
 MAX_FILES = 4096
 MAX_SOURCE_BYTES = 64 * 1024 * 1024
+MAX_PACKAGE_BYTES = 256 * 1024 * 1024
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 ACCOUNT_RE = re.compile(r"^[a-f0-9]{32}$")
 

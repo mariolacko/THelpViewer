@@ -40,6 +40,8 @@ const KEY_CODES = { Escape: 256, Enter: 257, Tab: 258, Backspace: 259, Insert: 2
     ShiftLeft: 340, ControlLeft: 341, AltLeft: 342, MetaLeft: 343,
     ShiftRight: 344, ControlRight: 345, AltRight: 346, MetaRight: 347,
     Space: 32, Minus: 45, Equal: 61, BracketLeft: 91, BracketRight: 93,
+    NumpadDecimal: 330, NumpadComma: 330, NumpadDivide: 331, NumpadMultiply: 332,
+    NumpadSubtract: 333, NumpadAdd: 334, NumpadEnter: 335, NumpadEqual: 61,
     Backslash: 92, Semicolon: 59, Quote: 39, Comma: 44, Period: 46, Slash: 47,
     Backquote: 96 };
 for (let n = 1; n <= 12; n++) { KEY_CODES[`F${n}`] = 289 + n; }
@@ -131,7 +133,8 @@ class TVDosView extends TVView {
     renderFrame(rgb, rgba) {
         if (!this.ci || !this.canvas || (!rgb && !rgba)) { return; }
         const width = this.ci.width(), height = this.ci.height();
-        if (this.canvas.width !== width || this.canvas.height !== height) {
+        if (!this.screenReady || this.canvas.width !== width || this.canvas.height !== height) {
+            this.screenReady = true;
             this.canvas.width = width; this.canvas.height = height;
             this.owner.fitScreen();
         }
@@ -184,6 +187,15 @@ class TVDosWindow extends TVWindow {
         this.closeAction = () => this.onClose?.();
     }
     hasScrollBars() { return false; }
+    _screenGeometry(geometry, maxCols, maxRows, fromHeight = false) {
+        const cell = measureCells(), canvas = this.view.canvas;
+        const ratio = cell.width * canvas.height / (cell.height * canvas.width);
+        const maxWidth = Math.max(1, Math.min(maxCols - 2, Math.floor((maxRows - 2) / ratio)));
+        const minWidth = Math.max(this.minSize.x - 2, Math.ceil((this.minSize.y - 2) / ratio));
+        const wanted = fromHeight ? Math.floor((geometry.rows - 2) / ratio) : geometry.cols - 2;
+        const width = Math.min(maxWidth, Math.max(minWidth, wanted));
+        return { ...geometry, cols: width + 2, rows: Math.ceil(width * ratio) + 2 };
+    }
     fitScreen() {
         this.pendingScreenResize = true;
         const resizer = this.root?._tvResizer, canvas = this.view.canvas;
@@ -195,10 +207,7 @@ class TVDosWindow extends TVWindow {
         const maxCols = Math.max(3, Math.floor(desktop.clientWidth / cell.width) - 2);
         const maxRows = Math.max(3, Math.floor((desktop.clientHeight - 2 * cell.width) / cell.height));
         const fit = (geometry) => {
-            const cols = Math.max(Math.min(this.minSize.x, maxCols), Math.min(geometry.cols, maxCols,
-                Math.floor((maxRows - 2) * cell.height * canvas.width / canvas.height / cell.width) + 2));
-            const rows = Math.max(Math.min(this.minSize.y, maxRows), Math.min(maxRows,
-                Math.ceil((cols - 2) * cell.width * canvas.height / canvas.width / cell.height) + 2));
+            const { cols, rows } = this._screenGeometry(geometry, maxCols, maxRows);
             return { cols, rows,
                 left: Math.max(0, Math.min(geometry.left, desktop.clientWidth - cols * cell.width)),
                 top: Math.max(0, Math.min(geometry.top, desktop.clientHeight - rows * cell.height)),
@@ -230,8 +239,10 @@ class TVDosWindow extends TVWindow {
             const scale = Math.max(1, Math.min(2,
                 (maxCols - 2) / Math.max(1, current.cols - 2),
                 (maxRows - 2) / Math.max(1, current.rows - 2)));
-            const cols = Math.min(maxCols, Math.round((current.cols - 2) * scale) + 2);
-            const rows = Math.min(maxRows, Math.round((current.rows - 2) * scale) + 2);
+            const target = { cols: Math.min(maxCols, Math.round((current.cols - 2) * scale) + 2),
+                rows: Math.min(maxRows, Math.round((current.rows - 2) * scale) + 2) };
+            const { cols, rows } = this.view.canvas?.width && this.view.canvas.height
+                ? this._screenGeometry(target, maxCols, maxRows) : target;
             this.zoomGeometry = current;
             resizer.place({ cols, rows,
                 left: Math.max(0, Math.min(current.left - (cols - current.cols) * cell.width / 2,
@@ -301,9 +312,10 @@ class TVDosWindow extends TVWindow {
                 if (status.state === "error" || Date.now() > deadline) { throw new Error(status.error || "DOS preparation timed out"); }
                 const progress = JSON.stringify([status.current, status.phase, status.processed, status.received, status.percent]);
                 if (progress !== lastProgress) { deadline = Date.now() + 180000; lastProgress = progress; }
-                if (status.initializing && TV.TVLoadingDialog && this.owner) {
+                if ((status.initializing || status.configuring || status.total) && TV.TVLoadingDialog && this.owner) {
                     if (!initializingDialog) {
-                        initializingDialog = new TV.TVLoadingDialog("Initializing DOS C");
+                        initializingDialog = new TV.TVLoadingDialog(status.initializing || status.rebuilding
+                            ? "Initializing DOS C" : "Updating DOS C");
                         this.owner.insert(initializingDialog);
                         initializingDialog.show("Preparing software...");
                     }
@@ -567,6 +579,19 @@ class TVDosWindow extends TVWindow {
         } finally { this.confirmation = null; box.destroy(); owner?.remove(box); }
     }
     handleEvent(event) {
+        if (event.what === evCommand && event.command === TV.TV_COMMANDS?.RESIZE && event.infoPtr instanceof TVRect) {
+            const drag = this.root?._tvResizer?.dragState, bounds = event.infoPtr;
+            if (drag && this.view.canvas?.width && this.view.canvas.height) {
+                const dx = Math.abs((event.nativeEvent.clientX - drag.startX) / drag.cellWidth / (drag.startCols - 2));
+                const dy = Math.abs((event.nativeEvent.clientY - drag.startY) / drag.cellHeight / (drag.startRows - 2));
+                const size = this._screenGeometry({ cols: bounds.width, rows: bounds.height },
+                    drag.maxCols, drag.maxRows, dy > dx);
+                bounds.x2 = bounds.x1 + size.cols;
+                bounds.y2 = bounds.y1 + size.rows;
+            }
+            this.clearEvent(event);
+            return;
+        }
         if (event.what === evCommand && String(event.command).startsWith("dos-")) {
             const command = event.command, data = event.infoPtr;
             this.clearEvent(event);

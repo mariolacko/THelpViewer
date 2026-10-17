@@ -64,7 +64,6 @@ class ContentJob:
 class ContentService:
     def __init__(self, config, dos, on_help_publish=None, *, help_processing=None, journal=None):
         self.config, self.dos = config, dos
-        self._dos_receipt = dos.installed_path
         self.on_help_publish = on_help_publish
         self.help_processing = help_processing or nullcontext
         self.path = config.persistent_dir / "content-settings.json"
@@ -154,8 +153,7 @@ class ContentService:
     def choices(self):
         dos_manifest = self._dos_manifest()
         saved = self._saved_selection()
-        installed = self._dos_receipt
-        dos_installed = json.loads(installed.read_text()) if installed.exists() else {}
+        dos_installed = self.dos.published_packages()
         catalog = self._catalog()
         help_installed = self._installed_help_packages()
         packages = help_packages(catalog)
@@ -239,6 +237,12 @@ class ContentService:
             if self._busy_scopes():
                 return
             self._check_stop()
+            # A prior DOS transaction may have prepared files without publishing C.
+            # Receipts/files, not old queue percentages, decide which rows are done.
+            known = {source["id"] for source in self._dos_manifest()["sources"]}
+            published = self.dos.published_packages()
+            self.dos.downloads.reconcile("dos", known | {"operation"}, completed=published,
+                                         incomplete=known - published, phase="Installed")
             choices = self.choices()
             known_help = {item["id"] for item in choices["help_packages"]}
             known_dos = {item["id"] for item in choices["dos_packages"]}
@@ -413,12 +417,9 @@ class ContentService:
         try:
             self._check_stop()
             desired, packages = values["help_packages"], values["dos_packages"]
-            marker = self._dos_receipt
-            receipt = json.loads(marker.read_text()) if marker.exists() else {}
             manifest = self._dos_manifest()
-            known = {source["id"] for source in manifest["sources"]}
             required = {source["id"] for source in manifest["sources"] if source.get("required", False)}
-            dos_changes = kind == "dos" and set(packages) != (set(receipt) & known)
+            dos_changes = kind == "dos" and set(packages) != self.dos.published_packages()
             installed = self._installed_help_packages()
             editions = [key for key in desired if key not in installed] if kind == "help" else []
             products = list(dict.fromkeys(ident.split(":", 1)[0] for ident in editions))
@@ -449,12 +450,12 @@ class ContentService:
                     processed=status["processed"], total=status["total"], received=status["received"]))
                 if self.dos.state != "ready":
                     raise ValueError(self.dos.error or "DOS installation failed")
-            current = json.loads(marker.read_text()) if marker.exists() else {}
+            current = self.dos.published_packages()
             with self._lock:
                 latest = self._saved_selection() or values
                 complete = job.configured or latest.get("configured", False) or (
                     set(latest["help_packages"]) == self._installed_help_packages()
-                    and set(latest["dos_packages"]) - required == (set(current) & known) - required)
+                    and set(latest["dos_packages"]) - required == current - required)
                 self._save_selection({**latest, "configured": complete})
             for remaining in unfinished:
                 self.dos.downloads.finish(remaining)

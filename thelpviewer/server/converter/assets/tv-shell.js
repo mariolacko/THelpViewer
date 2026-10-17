@@ -117,6 +117,7 @@ class TVDownloadActionDialog extends TVDialog {
         const width = Math.min(72, Math.max(20, Math.floor(window.innerWidth / measureCells().width) - 2));
         const label = `${item.kind.toUpperCase()}: ${item.label}`;
         const notice = "Remove only clears this queue entry; files are kept."
+            + (item.kind === "dos" ? "\nRetry resumes all missing packages from the saved DOS selection; cached archives are reused." : "")
             + (item.retryable ? "" : "\nRetry is unavailable while work runs or for this operation.");
         const lines = wrapTextLines([label, "", item.error || item.phase || "Download failed.", "", notice].join("\n"), width - 6);
         const buttonWidth = 14, buttonGap = 3;
@@ -127,7 +128,7 @@ class TVDownloadActionDialog extends TVDialog {
         super(new TVRect(0, 0, width, height), item.state === "blocked" ? "Download not completed" : "Download failed");
         this.setHelpCtx(TV_HELP_CONTEXTS.hcDownloads);
         this.setState(sfModal, true);
-        const buttons = ["~R~etry", "Re~m~ove", "~C~ancel"].map((title, index) => {
+        const buttons = [item.kind === "dos" ? "~R~etry all" : "~R~etry", "Re~m~ove", "~C~ancel"].map((title, index) => {
             const row = Math.floor(index / buttonsPerRow), column = index % buttonsPerRow;
             const count = Math.min(buttonsPerRow, 3 - row * buttonsPerRow);
             const rowWidth = count * buttonWidth + (count - 1) * buttonGap;
@@ -814,8 +815,13 @@ class TurboVisionWindowResizer {
             this.dragState.maxRows,
             Math.max(this.dragState.minRows, this.dragState.startRows + deltaRows)
         );
-        this.windowElement.style.setProperty("--tv-window-cols", String(nextCols));
-        this.windowElement.style.setProperty("--tv-window-rows", String(nextRows));
+        const bounds = new TVRect(0, 0, nextCols, nextRows);
+        // Let the owned TVWindow constrain its size before the browser draws it.
+        this.windowElement._tvView?.handleEvent(new TVEvent(evCommand, {
+            command: TV_COMMANDS.RESIZE, infoPtr: bounds, nativeEvent: event,
+        }));
+        this.windowElement.style.setProperty("--tv-window-cols", String(bounds.width));
+        this.windowElement.style.setProperty("--tv-window-rows", String(bounds.height));
         fillBorders();
     };
 

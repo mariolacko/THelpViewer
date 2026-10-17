@@ -91,7 +91,7 @@ class DownloadProgress:
                 job["items"][key] = unit
             self._persist(kind)
 
-    def reconcile(self, kind, groups, *, completed=(), phase="Cached"):
+    def reconcile(self, kind, groups, *, completed=(), incomplete=(), phase="Cached"):
         """Check existing rows against domain selection/receipts without starting work."""
         with self._lock:
             job = self._jobs.get(kind)
@@ -106,11 +106,17 @@ class DownloadProgress:
                     item.update(state="done", percent=100, phase=phase, stage="prepare",
                                 stage_percent=None, error="")
                     changed = True
+            for key in incomplete:
+                item = items.get(key)
+                if item is not None and item["state"] in {"done", "running", "pending"}:
+                    item.update(state="blocked", percent=min(99, item["percent"]), phase="Not published",
+                                stage="install", stage_percent=None, error="")
+                    changed = True
             if changed:
                 job["items"] = items
                 if job["state"] != "running" and not any(
                         item["state"] == "pending" for item in items.values()):
-                    job["state"] = "error" if any(item["state"] == "error" for item in items.values()) else "ready"
+                    job["state"] = "error" if any(item["state"] in {"error", "blocked"} for item in items.values()) else "ready"
                 self._persist(kind)
 
     def update(self, kind, key, **values):

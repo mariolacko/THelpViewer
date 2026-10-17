@@ -24,6 +24,12 @@ menu from the DOS keyboard. F1 and other DOS keys go to the emulator instead
 of opening THelpViewer help. Operating-system/browser-reserved shortcuts may
 still be intercepted by the browser. Clicking outside the window or hiding
 the page pauses DOS and clears held keyboard/mouse buttons.
+The numeric keypad forwards physical keys separately from the main keyboard:
+0–9, decimal/comma, divide, multiply, subtract, add and Enter use jsDOS keypad
+codes 320–335. NumLock is forwarded too, leaving number/navigation behavior to
+DOS. Keypad equals uses ordinary `=` (61), because the bundled backend exposes
+no distinct keypad-equals code. Browser/OS-reserved combinations can still be
+intercepted before the page receives them.
 With the DOS canvas focused, **Alt+Enter** toggles native fullscreen and
 **Alt+Pause** toggles pause/resume (also **Alt+F16** for the classic Mac mapping).
 These match the [classic DOSBox bindings](https://www.dosbox.com/wiki/Special_Keys).
@@ -50,6 +56,16 @@ resolution do not resize the window or undo manual adjustments. Zoom back's
 stored geometry adapts to the new mode as well. Fullscreen and maximized
 windows stay in their mode; pending video-size changes apply on returning to
 the normal window. There are no per-program resolution exceptions.
+
+Dragging the resize corner horizontally or vertically scales both client
+dimensions to the current DOSBox pixel width/height ratio. The shared resizer
+sends a `TVEvent` Resize command to the owned window before drawing; only DOS
+constrains its proposal, so HELP/document windows still resize freely. The
+two frame columns/rows are excluded from the ratio. Dimensions stay on the
+TVision character grid, with less than one row of rounding, and respect the
+desktop space available from the fixed top-left corner. The initial frame and
+Zoom use the same sizing calculation. Fullscreen/maximized clients may still
+have black letterboxes to fit the display without stretching the DOS image.
 
 DOS uses both sides of the shared TVWindow frame, including its single-line
 inactive state when another window covers it. The shared window mover caches
@@ -146,6 +162,10 @@ While mandatory preparation runs, `/api/dos/session` and `/api/dos/bundle` retur
 failure keeps those endpoints blocked and displays the error; readiness is never
 inferred from the configured selection alone.
 Existing completed C disks are still loaded lazily on the first DOS request.
+Package updates report `configuring: true`, independently of `initializing`.
+The browser labels this wait **Updating DOS C**, not **Initializing DOS C**.
+The latter is reserved for creating/rebuilding a disk, not adding software to
+an already initialized disk. Emulator startup waits until publication finishes.
 The DOS window reports
 preparation status through a shared `TVLoadingDialog` with a solid-cell gauge,
 source name and download/extraction phase. Cancel closes the wait, not the
@@ -293,8 +313,8 @@ headers. Free Pascal uses the original project's nested DOS ZIP distribution.
 FreeBASIC and DJGPP include the official CWSDPMI runtime. DJGPP uses C:\DJGPP,
 not C:\DEV: its libc reserves the /dev namespace for devices. FreeDOS distributions retain original
 licences, documentation and supplied source archives. The manifest uses
-64 MiB DOS memory; the shared C limit remains 256 MiB, separate from the
-user's private-overlay quota.
+64 MiB DOS memory. The shared software library has no aggregate byte or file-count
+quota; only private user data has a capacity quota.
 
 Word is Microsoft's original British-English self-extracting ZIP. Its KWAJ
 files are expanded to header-provided original names; MAKEVID builds the VGA
@@ -340,7 +360,7 @@ DOS program archive with suitable distribution terms was found; a freeware
 mention or old registration key alone is not enough to add a package.
 
 The manifest contains `cycles` (`auto`, `max` or a numeric DOSBox cycle count),
-`memory_mb` (4–64), `max_c_bytes` (manifest 256 MiB), `max_media_bytes` (default
+`memory_mb` (4–64), `max_media_bytes` (default
 128 MiB), a `categories` list of unique `{id, label, icon}` entries and a `sources`
 list. Each source has:
 
@@ -396,8 +416,9 @@ list. Each source has:
   a list of raw ordered parts; `format: "borland-split"` delegates CA1/CA2
   header removal and ZIP completeness checking to the shared assembler.
   Conflicting output bytes, missing parts and unsafe paths fail publication;
-  combined expanded output obeys `max_c_bytes`, while downloaded envelopes
-  remain bounded by the separate 64 MiB source limit and file-count limit;
+  each package's expanded output remains bounded by 256 MiB and 4096 files,
+  while downloaded envelopes have a separate 64 MiB safety bound. These are
+  archive-processing safeguards, not a quota on the installed common library;
 - `files`: optional list of generated text or binary files, relative to
   `target`, in addition to the selected archive files. Each entry has `path`
   and exactly one of `text` (individual CP437 lines with CRLF) or `base64`
@@ -663,8 +684,11 @@ Regression tests exercise a real WASM DOSBox: TVEvent keyboard input creates
 a C file, secure-mode commands are rejected, saved files/deletions survive
 restart, approved FAT12 floppy/ISO9660 CD files can be copied to C, and
 native fullscreen targets only the canvas, fills the viewport and supports
-returning to the DOS menu with Ctrl+Alt+M. Backend tests
-cover source hashes, private accounts, origins, traversal, revisions and media
+returning to the DOS menu with Ctrl+Alt+M. Browser tests
+also exercise keypad digits/operators/Enter through a real DOS command and
+check horizontal, vertical, minimum and desktop-bounded resizing in VGA
+640x480. Deterministic input tests cover key-up, repeat and focus release.
+Backend tests cover source hashes, private accounts, origins, traversal, revisions and media
 ownership. Safari-specific fullscreen/audio behavior is not covered by that
 Chrome integration test.
 The same browser test explicitly enables the legacy fallback with workers and

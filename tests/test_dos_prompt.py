@@ -79,6 +79,151 @@ def test_failed_package_publication_restores_original_disk_receipt_and_memory(tm
     assert not list(store.disk_dir.parent.glob(".dos-packages-*"))
 
 
+@pytest.mark.parametrize("failure", [None, "download", "publication"])
+def test_dos_completion_means_published_not_staged_and_retry_reuses_cache(tmp_path, monkeypatch, failure):
+    from test_server_content import config_for
+    config = config_for(tmp_path)
+    app = create_app(config)
+    store, downloads = app.state.dos_prompt, app.state.downloads
+    store.configure([])
+    before, marker = dict(store.files), store.installed_path.read_bytes()
+    live_marker = store.installed_path
+    original = __import__("thelpviewer.server.dos.store", fromlist=["atomic_file"]).atomic_file
+    fetched, seen = [], []
+    def fetch(source, *_args, **_kwargs):
+        fetched.append(source["id"])
+        if failure == "download" and source["id"] == "two":
+            raise OSError("source offline")
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            archive.writestr("GAME.EXE", source["id"].encode())
+        return output.getvalue()
+    def write(path, contents):
+        if path == live_marker:
+            rows = downloads.snapshot(private=True)["items"]
+            assert rows and all(row["state"] != "done" for row in rows)
+            seen.append("publication")
+            if failure == "publication":
+                raise OSError("publication failed")
+        original(path, contents)
+    def progress(_status):
+        choices = app.state.content.choices()
+        assert not any(item["installed"] for item in choices["dos_packages"])
+        assert not store.status(start=False)["initializing"]
+        assert store.status(start=False)["configuring"]
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    monkeypatch.setattr("thelpviewer.server.dos.store.atomic_file", write)
+    try:
+        if failure:
+            with pytest.raises(DosError, match="offline|publication failed"):
+                store.configure(["one", "two"], on_progress=progress)
+            rows = {row["id"]: row for row in downloads.snapshot(private=True)["items"]}
+            assert rows["dos:one"]["state"] == "blocked" and rows["dos:one"]["retryable"]
+            assert all(row["state"] != "done" for row in rows.values())
+            assert store.files == before and store.installed_path.read_bytes() == marker
+            assert store.published_packages() == set()
+            fetched.clear()
+            previous_failure, failure = failure, None
+            store.configure(["one", "two"], on_progress=progress)
+            assert fetched == (["two"] if previous_failure == "download" else [])
+        else:
+            store.configure(["one", "two"], on_progress=progress)
+        assert seen
+        assert store.published_packages() == {"one", "two"}
+        assert all(row["state"] == "done" for row in downloads.snapshot(private=True)["items"])
+    finally:
+        downloads.close()
+
+
+def test_shared_library_exceeds_individual_package_size_without_a_global_quota(tmp_path, monkeypatch):
+    from test_server_content import config_for
+    config = config_for(tmp_path)
+    manifest = json.loads(config.dos_config_path.read_text())
+    manifest["files"] = []
+    config.dos_config_path.write_text(json.dumps(manifest))
+    # Small per-package safety bound, independent of the combined library size.
+    monkeypatch.setattr("thelpviewer.server.dos.store.MAX_PACKAGE_BYTES", 16)
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("GAME.EXE", b"123456789")
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *_a, **_kw: output.getvalue())
+    store = DosPromptStore(tmp_path / "dos", config.dos_config_path)
+    try:
+        store.configure(["one", "two"])
+        assert sum(map(len, store.files.values())) == 18
+        assert store.c_limit(None) == 18 + store.overlay_limit(None)
+    finally:
+        store.downloads.close()
+
+
+def test_missing_published_package_file_is_uninstalled_until_cache_repairs_it(tmp_path, monkeypatch):
+    from test_server_content import config_for
+    config = config_for(tmp_path)
+    app = create_app(config)
+    store = app.state.dos_prompt
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("GAME.EXE", b"game")
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *_a, **_kw: output.getvalue())
+    try:
+        store.configure(["one"])
+        owned = json.loads(store.installed_path.read_text())["_files"]["one"]
+        (store.disk_dir / owned[0]).unlink()
+        assert store.published_packages() == set()
+        assert not next(item for item in app.state.content.choices()["dos_packages"] if item["id"] == "one")["installed"]
+        def offline(*_args, **_kwargs):
+            raise AssertionError("Repair must reuse the verified cached archive")
+        monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", offline)
+        store.configure(["one"])
+        assert store.published_packages() == {"one"}
+        assert (store.disk_dir / owned[0]).read_bytes() == b"game"
+    finally:
+        app.state.downloads.close()
+
+
+def test_backup_cleanup_failure_does_not_roll_back_published_packages(tmp_path, monkeypatch):
+    store = store_at(tmp_path)
+    before = dict(store.files)
+    def cleanup(*_args):
+        raise OSError("backup cleanup failed")
+    monkeypatch.setattr("thelpviewer.server.dos.store.prune_backups", cleanup)
+    try:
+        store.configure([])
+        assert store.state == "ready" and not store.configuring
+        assert store.files == before and not store.error
+        assert json.loads(store.installed_path.read_text())["_complete"]
+        assert store.downloads.snapshot(private=True)["errors"] == 0
+    finally:
+        store.downloads.close()
+
+
+@pytest.mark.parametrize("key", ["max_c_bytes", "max_c_files"])
+def test_shared_library_quota_fields_are_not_supported(tmp_path, key):
+    from thelpviewer.server.dos.config import load_dos_config
+    config = tmp_path / "dos.json"
+    config.write_text(json.dumps({"sources": [], key: 1024}))
+    with pytest.raises(DosError, match="shared DOS library has no quota"):
+        load_dos_config(config)
+
+
+def test_large_shared_file_inventory_does_not_consume_private_file_quota(tmp_path):
+    from thelpviewer.server.dos.paths import MAX_FILES
+    store = store_at(tmp_path)
+    try:
+        for number in range(MAX_FILES + 1):
+            (store.disk_dir / f"F{number}.DAT").touch()
+        store.prepare()
+        assert store.state == "ready", store.error
+        assert len(store.files) > MAX_FILES
+        account = uuid.uuid4().hex
+        store.save(account, payload(store, files={"PRIVATE.DAT": b"saved"}))
+        assert store.overlay(account)[1] == {"PRIVATE.DAT": b"saved"}
+        with pytest.raises(DosError, match="file list"):
+            store.save(account, payload(store, files={f"P{number}.DAT": b"" for number in range(MAX_FILES + 1)}))
+    finally:
+        store.downloads.close()
+
+
 def test_required_packages_survive_empty_selection_initialization_and_rebuild(tmp_path, monkeypatch):
     data = io.BytesIO()
     with zipfile.ZipFile(data, "w") as archive:

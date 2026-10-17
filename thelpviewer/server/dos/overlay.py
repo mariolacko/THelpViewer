@@ -148,7 +148,7 @@ class DosOverlayStore:
         folders = {c_path(name) for name in directories}
         merged = {name: data for name, data in base_files.items() if name not in tombstones}
         merged.update(files)
-        if len(merged) > MAX_FILES:
+        if len(merged) > len(base_files) + MAX_FILES:
             raise DosError("Too many C drive files")
         if folders.intersection(merged):
             raise DosError("A path cannot be both a file and a directory")

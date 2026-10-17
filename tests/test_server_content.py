@@ -613,9 +613,15 @@ def test_existing_content_does_not_reopen_first_run_after_an_interrupted_job(tmp
     app = create_app(config)
     app.state.content._save_selection({"configured": False, "help_packages": ["helppc:"], "dos_packages": ["one"]})
     if installed_kind == "dos":
+        from thelpviewer.server.downloader.packages import package_cache_key
         receipt = app.state.dos_prompt.installed_path
         receipt.parent.mkdir(parents=True, exist_ok=True)
-        receipt.write_text(json.dumps({"one": "a" * 64, "_complete": True}))
+        name = "GAMES/ONE/GAME.EXE"
+        program = app.state.dos_prompt.disk_dir / name
+        program.parent.mkdir(parents=True)
+        program.write_bytes(b"installed")
+        source = json.loads(config.dos_config_path.read_text())["sources"][0]
+        receipt.write_text(json.dumps({"one": package_cache_key(source), "_complete": True, "_files": {"one": [name]}}))
     else:
         bundle = config.helps_dir / "HelpPC 2.10/c.json.gz"
         bundle.parent.mkdir(parents=True, exist_ok=True)
@@ -627,6 +633,40 @@ def test_existing_content_does_not_reopen_first_run_after_an_interrupted_job(tmp
     assert not choices["configured"] and not choices["needs_setup"]
     assert choices["selection"] == {"help_packages": ["helppc:"] if installed_kind == "help" else [],
                                      "dos_packages": ["one"] if installed_kind == "dos" else []}
+    app.state.downloads.close()
+
+
+def test_startup_reconciles_unpublished_dos_completion_without_retrying_failed_job(tmp_path, monkeypatch):
+    config = config_for(tmp_path)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("GAME.EXE", b"installed")
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *_a, **_kw: archive.getvalue())
+    app = create_app(config)
+    app.state.dos_prompt.configure(["one"])
+    values = {"configured": True, "help_packages": [], "dos_packages": ["one", "two"]}
+    app.state.content._save_selection(values)
+    ident = app.state.jobs.create("content", {"values": values, "scope": ["dos"], "configured": True})
+    app.state.jobs.update(ident, "error", error="old failed publication")
+    downloads = app.state.downloads
+    downloads.begin("dos", [{"id": key, "label": key} for key in ("one", "two")])
+    for key in ("one", "two"):
+        downloads.update("dos", key, state="done", percent=100, phase="Installed")
+    downloads.finish("dos", error="old failed publication")
+    downloads.close()
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source",
+                        lambda *_a, **_kw: pytest.fail("A terminal failure must not download on restart"))
+    restarted = create_app(config)
+    try:
+        restarted.state.content.resume()
+        rows = {row["id"]: row for row in restarted.state.downloads.snapshot(private=True)["items"]}
+        assert rows["dos:one"]["state"] == "done"
+        assert rows["dos:two"]["state"] == "blocked" and rows["dos:two"]["retryable"]
+        assert rows["dos:operation"]["state"] == "error"
+        assert restarted.state.jobs.latest("content")["state"] == "error"
+        assert restarted.state.content.choices()["selection"]["dos_packages"] == ["one"]
+    finally:
+        restarted.state.downloads.close()
 
 
 def test_reconfiguration_failure_retains_completed_setup_state(tmp_path, monkeypatch):

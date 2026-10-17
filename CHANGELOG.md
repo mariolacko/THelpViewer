@@ -4,6 +4,21 @@
 
 ### 2.1 development
 
+- Keep the DOS client aspect ratio during horizontal/vertical corner resizing,
+  using the active video dimensions and character-grid frame rounding. Route
+  resize proposals through TVEvent; other windows retain free resizing. Fit
+  the initial frame and proportional Zoom within the desktop. Forward numeric
+  keypad operators, decimal/comma and the distinct Enter key to DOSBox, retaining
+  physical numpad digits/NumLock and held-key cleanup.
+- Mark DOS packages complete only after the shared disk and its receipts are
+  published. Keep prepared rows visible until then; on rollback they remain
+  incomplete, and startup reconciles old false completions against live files.
+  Package choices verify published recipe receipts and owned files, never the
+  staging disk. DOS Retry explicitly says it resumes all saved missing packages.
+- Remove the shared DOS library's byte/file quotas; only private user data has
+  capacity quotas. Keep independent bounded archive extraction and private-file
+  limits, including when the common library contains more than 4096 files.
+  Separate first initialization from package updates in DOS status/progress.
 - Resize the DOS window's shared frame when DOSBox changes video mode: preserve
   client width and derive height from the new screen ratio, fitting the desktop
   when necessary. Keep manual geometry between mode changes, update Zoom back

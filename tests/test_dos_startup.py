@@ -10,6 +10,90 @@ NODE = shutil.which("node")
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required")
+def test_dos_resize_command_keeps_mode_ratio_and_other_windows_stay_free():
+    script = r'''
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+class View{clearEvent(e){e.what=0;}setHelpCtx(){}handleEvent(){}}
+class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
+class Rect{constructor(x1=0,y1=0,x2=0,y2=0){Object.assign(this,{x1,y1,x2,y2});}get width(){return this.x2-this.x1;}get height(){return this.y2-this.y1;}}
+const TV={TVView:View,TVWindow:Window,TVStaticText:View,TVRect:Rect,
+ TVPoint:class{constructor(x,y){Object.assign(this,{x,y});}},TV_HELP_CONTEXTS:{hcDosPrompt:2320},
+ TVEvent:class{constructor(what,data){Object.assign(this,{what},data);}},evCommand:1,
+ TV_COMMANDS:{RESIZE:'resize'},measureCells:()=>({width:8,height:16}),fillBorders(){}};
+for(const name of ['TVDialog','TVSubMenu','TVMenuBar','TVStatusLine','TVMenuController','TVProgram'])TV[name]=View;
+const context={URL,window:{THelpViewerTV:TV,location:{pathname:'/'},addEventListener(){}},
+ document:{currentScript:{src:'http://localhost/assets/tv-dos.js'}}};
+vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),context);
+vm.runInNewContext(fs.readFileSync(process.argv[2],'utf8'),context);
+const dos=new TV.TVDosWindow(),vars=new Map();
+TV.TurboVisionWindowResizer.prototype.restoreState=()=>true;
+const element={_tvView:dos,closest:()=>null,querySelector:()=>null,
+ style:{setProperty:(key,value)=>vars.set(key,Number(value))}};
+const resizer=new TV.TurboVisionWindowResizer(element);
+dos.view.canvas={width:640,height:480};
+dos.root={_tvResizer:resizer};
+function drag(dx,dy,maxCols=180,maxRows=90){
+ resizer.dragState={startX:0,startY:0,startCols:82,startRows:32,minCols:42,minRows:15,
+  maxCols,maxRows,cellWidth:8,cellHeight:16};
+ resizer.onResizeMove({clientX:dx,clientY:dy});
+ const cols=vars.get('--tv-window-cols'),rows=vars.get('--tv-window-rows');
+ assert.ok(Number.isInteger(cols)&&Number.isInteger(rows));
+ assert.ok(cols<=maxCols&&rows<=maxRows);
+ const ideal=(cols-2)*8*dos.view.canvas.height/dos.view.canvas.width;
+ assert.ok((rows-2)*16>=ideal&&(rows-2)*16-ideal<16);
+ return {cols,rows};
+}
+assert.deepEqual(drag(160,0),{cols:102,rows:40});
+assert.deepEqual(drag(0,160),{cols:108,rows:42});
+assert.deepEqual(drag(3000,3000,100,45),{cols:100,rows:39});
+assert.deepEqual(drag(-3000,-3000),{cols:42,rows:17});
+for(const [width,height] of [[320,200],[640,400],[640,480],[800,600]]){
+ Object.assign(dos.view.canvas,{width,height});drag(140,20);drag(0,128);drag(9999,9999,90,40);
+}
+// A HELP/document window does not acquire the DOS-only proportional constraint.
+resizer.windowElement._tvView=new Window();
+resizer.onResizeMove({clientX:160,clientY:0});
+assert.equal(vars.get('--tv-window-cols'),90);assert.equal(vars.get('--tv-window-rows'),32);
+'''
+    result = subprocess.run([NODE, "-e", script, "www/assets/tv-dos.js", "www/assets/tv-shell.js"],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required")
+def test_dos_numpad_keys_keep_physical_codes_and_release_held_keys():
+    script = r'''
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+class View{constructor(){this.eventMask=0;}clearEvent(e){e.what=0;}}
+const TV={TVView:View,TVWindow:View,TVRect:class{},evKeyDown:1};
+vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{URL,
+ document:{currentScript:{src:'http://localhost/assets/tv-dos.js'}},window:{THelpViewerTV:TV}});
+const view=new TV.TVDosView(),keys=[];
+view.owner={active:true,getKeyCommand:()=>'',resumeSound(){}};
+view.ci={sendKeyEvent:(...args)=>keys.push(args)};
+function key(code,type='keydown',repeat=false,value=''){
+ const event={what:1,nativeEvent:{code,type,repeat,key:value,preventDefault(){},stopPropagation(){}}};
+ view.handleEvent(event);assert.equal(event.what,0);
+}
+const codes={NumpadDecimal:330,NumpadComma:330,NumpadDivide:331,NumpadMultiply:332,
+ NumpadSubtract:333,NumpadAdd:334,NumpadEnter:335,NumpadEqual:61,NumLock:282};
+for(let i=0;i<10;i++)codes['Numpad'+i]=320+i;
+for(const [code,number] of Object.entries(codes)){
+ const start=keys.length;key(code);key(code,'keydown',true);key(code,'keyup');
+ assert.deepEqual(keys.slice(start),[[number,true],[number,false]]);
+}
+// NumLock changes the DOS interpretation, not the physical key sent to DOSBox.
+key('Numpad1','keydown',false,'End');key('Numpad1','keyup',false,'End');
+assert.deepEqual(keys.slice(-2),[[321,true],[321,false]]);
+key('Numpad8');view.releaseInput();
+assert.deepEqual(keys.slice(-2),[[328,true],[328,false]]);assert.equal(view.keys.size,0);
+'''
+    result = subprocess.run([NODE, "-e", script, "www/assets/tv-dos.js"],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required")
 def test_dos_video_mode_resizes_frame_height_without_resetting_manual_geometry():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
@@ -33,6 +117,10 @@ const resizer={desktop:{clientWidth:2000,clientHeight:1200},captureGeometry:()=>
  place:g=>{geometry=g;},restore:()=>{maximized=false;geometry={...original};}};
 win.root={_tvResizer:resizer,classList:{contains:()=>maximized}};
 const frame=(w,h)=>{width=w;height=h;win.view.renderFrame(null,new Uint8Array(w*h*4));};
+// Fit a restored mismatched frame even if the first mode equals canvas defaults.
+geometry={...original,rows:40};frame(640,400);
+assert.equal(geometry.rows,27);assert.equal(changed,1);
+filled=changed=painted=0;geometry={...original};
 frame(640,480);
 assert.equal(geometry.cols,82);assert.equal(geometry.rows,32);assert.equal(geometry.top,300);
 assert.equal(changed,1);assert.equal(filled,1);
@@ -115,7 +203,7 @@ async function scenario(mode){
  let resumeCalls=0;
  class Audio {constructor(){if(mode==='constructor-denied')throw new Error('Audio denied by embedded browser');}
   resume(){resumeCalls++;return Promise.reject(new Error('Autoplay denied'));}close(){return Promise.resolve();}}
- class Loading {constructor(title){assert.equal(title,'Initializing DOS C');this.filenameView=new Text();}show(){}update(value){progress.push(value);if(mode==='cancel')this.cancelled=true;}destroy(){destroyed++;}}
+ class Loading {constructor(title){assert.equal(title,mode==='updating'?'Updating DOS C':'Initializing DOS C');this.filenameView=new Text();}show(){}update(value){progress.push(value);if(mode==='cancel')this.cancelled=true;}destroy(){destroyed++;}}
  const TV={TVView:View,TVWindow:Window,TVStaticText:Text,TVRect:class{},TVPoint:class{},TVLoadingDialog:Loading,TV_HELP_CONTEXTS:{hcDosPrompt:2320}};
  const context={URL,AbortSignal,DOMException,Set,Promise,console,
   setTimeout(fn,ms){const id=++next;if(ms===500){Promise.resolve().then(fn);return id;}timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},
@@ -126,7 +214,7 @@ async function scenario(mode){
     return mode==='worker-denied'?Promise.reject(new DOMException('Worker forbidden','SecurityError')):mode.endsWith('hang')?new Promise(()=>{}):Promise.resolve(ci);},
    dosboxDirect:()=>mode==='all-hang'?new Promise(()=>{}):Promise.resolve(ci)}},
   fetch:async url=>{requests.push(url);return {ok:true,json:async()=>url.endsWith('/status')?
-   (['preparing','cancel','required-failed'].includes(mode)&&statusCalls++<2?{state:'building',initializing:true,percent:statusCalls*25,phase:'Downloading',current:'Required tool'}:
+   (['preparing','updating','cancel','required-failed'].includes(mode)&&statusCalls++<2?{state:'building',initializing:mode!=='updating',configuring:mode==='updating',percent:statusCalls*25,phase:'Downloading',current:'Required tool'}:
     mode==='required-failed'?{state:'error',error:'Required package unavailable'}:{state:'ready'}):
    {account:'',revision:0,base_id:'base',allow_full_disk_fallback:mode!=='worker-denied'},
    headers:{get:name=>name==='X-DOS-Revision'?'0':'base'},arrayBuffer:async()=>new ArrayBuffer(0)};}};
@@ -160,7 +248,7 @@ async function scenario(mode){
   assert.match(errors[0],/requires Web Workers/);assert.equal(win.view.ci,null);
   assert.ok(!requests.some(url=>url.includes('full=true')));return;
  }
- if(mode==='preparing'){assert.deepEqual(progress,[25,50]);assert.equal(destroyed,1);}
+ if(['preparing','updating'].includes(mode)){assert.deepEqual(progress,[25,50]);assert.equal(destroyed,1);}
  assert.ok(notices.includes('Loading DOS C drive...'));
  if(mode==='all-hang'){
   assert.equal(win.view.ci,null);assert.match(errors[0],/dosboxDirect startup timed out/);assert.equal(win.status.visible,true);
@@ -178,7 +266,7 @@ async function scenario(mode){
  }
  await win.stop(false);
 }
-(async()=>{for(const mode of ['constructor-denied','resume-denied','worker-hang','all-hang','worker-denied','preparing','required-failed','cancel','unexpected-exit'])await scenario(mode);})().catch(error=>{console.error(error);process.exitCode=1;});
+(async()=>{for(const mode of ['constructor-denied','resume-denied','worker-hang','all-hang','worker-denied','preparing','updating','required-failed','cancel','unexpected-exit'])await scenario(mode);})().catch(error=>{console.error(error);process.exitCode=1;});
 '''
     result = subprocess.run([NODE, "-e", script, str(source)], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr

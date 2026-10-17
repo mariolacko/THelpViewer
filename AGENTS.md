@@ -141,6 +141,9 @@ backward-compatibility aliases.
   configured selection or `_complete`. Missing required tools install before
   jsDOS starts; opening DOS does not apply saved optional selections. Required
   work leads the shared queue using the manifest flag, never hardcoded IDs.
+- Shared DOS C has no aggregate byte/file quota. Capacity quotas apply to private
+  user data; archive safety bounds stay separate. DOS queue completion requires
+  publication of the live disk and receipt, not preparation in a staging tree.
 - Persist operation intent and processing progress in `data/jobs.sqlite3`.
   Recover only queued/interrupted jobs, not terminal failures or old saved
   selections. Validate output checkpoints against real files before skipping

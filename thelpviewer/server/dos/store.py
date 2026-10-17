@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 from pathlib import Path
 import re
 import shutil
@@ -23,7 +24,7 @@ from .media import DosMediaStore
 from .migration import migrate_legacy_packages
 from .overlay import DosOverlayStore
 from .packages import DosPackageExtractor, configured_files
-from .paths import DosError, ID_RE, MAX_FILES, MAX_SOURCE_BYTES, atomic_file, c_path
+from .paths import DosError, ID_RE, MAX_FILES, MAX_SOURCE_BYTES, MAX_PACKAGE_BYTES, atomic_file, c_path
 from .post_install import run_post_install
 
 
@@ -59,6 +60,7 @@ class DosPromptStore:
         self.disk_dir = disk_dir or root / "base" / "c"
         self.base_root = disk_dir or root / "base"
         self.installed_path = root / "installed.json" if disk_dir else root / "base" / "installed.json"
+        self._published_disk, self._published_receipt = self.disk_dir, self.installed_path
 
         self.overlays = DosOverlayStore(self.users_dir, self.settings, self.accounts)
         self.media = DosMediaStore(self.users_dir)
@@ -68,6 +70,28 @@ class DosPromptStore:
             config = load_dos_config(self.config_path)
             recovered = migrate_legacy_packages(config, self.installed_path, self.disk_dir, self.downloads_dir)
             return {**migrate_package_cache(config["sources"], self.downloads_dir), "recovered": recovered}
+
+    def published_packages(self) -> set[str]:
+        """Verify live receipts and owned files without booting DOS or downloading."""
+        config = load_dos_config(self.config_path)
+        if self._published_receipt.is_symlink():
+            raise DosError("DOS installation metadata must not be a symbolic link")
+        installed = json.loads(self._published_receipt.read_text()) if self._published_receipt.exists() else {}
+        if not isinstance(installed, dict) or not isinstance(installed.get("_files", {}), dict):
+            raise DosError("Invalid DOS installation file inventory")
+        return {source["id"] for source in config["sources"]
+                if self._package_present(source, installed, self._published_disk)}
+
+    @staticmethod
+    def _package_present(source: dict, installed: dict, disk: Path) -> bool:
+        names = installed.get("_files", {}).get(source["id"], [])
+        if not isinstance(names, list):
+            raise DosError("Invalid DOS installation file inventory")
+        paths = [disk / c_path(name) for name in names]
+        if any(parent.is_symlink() for path in paths for parent in (path, *path.parents)):
+            raise DosError("DOS installation must not contain symbolic links")
+        return bool(installed.get(source["id"]) == package_cache_key(source)
+                    and paths and all(path.is_file() for path in paths))
 
     def install(self, source_ids: list[str], *, on_progress=None) -> None:
         """Install explicitly selected packages; keep the shared disk and private overlays."""
@@ -100,6 +124,8 @@ class DosPromptStore:
         temporary = None
         backup = None
         published = False
+        committed = False
+        previously_published = set()
         try:
             backup_count = self.settings.get()["backup_count"]
             config = load_dos_config(self.config_path)
@@ -110,12 +136,14 @@ class DosPromptStore:
                 raise DosError("Shared DOS storage must not contain symbolic links")
             if disk.exists() and (not disk.is_dir() or any(p.is_symlink() for p in disk.rglob("*"))):
                 raise DosError("Shared DOS storage must be a regular directory")
+            previously_published = self.published_packages()
             original_receipt = marker.read_bytes() if marker.exists() else None
             installed = json.loads(original_receipt) if original_receipt is not None else {}
+            self.initializing = installed.get("_complete") is not True
             self.config = config
             owned = self._package_inventory(installed, sources, disk)
             removed = (set(installed) & sources.keys()) - set(source_ids)
-            protected = set(configured_files(config, int(config.get("max_c_bytes", MAX_SOURCE_BYTES))))
+            protected = set(configured_files(config, MAX_PACKAGE_BYTES))
             protected.update(name for ident, names in owned.items() if ident not in removed for name in names)
             disk.parent.mkdir(parents=True, exist_ok=True)
             temporary = Path(tempfile.mkdtemp(prefix=".dos-packages-", dir=disk.parent))
@@ -152,6 +180,7 @@ class DosPromptStore:
                 staged.rename(disk)
                 published = True
                 atomic_file(marker, self.installed_path.read_bytes())
+                committed = True
             except Exception:
                 if published:
                     disk.rename(temporary / "unpublished-c")
@@ -159,12 +188,20 @@ class DosPromptStore:
                     (backup / "c").rename(disk)
                 raise
             self.backup = str(backup.relative_to(self.root.parent))
-            prune_backups(backup, ("dos-base-", "dos-packages-"), backup_count)
+            try:
+                prune_backups(backup, ("dos-base-", "dos-packages-"), backup_count)
+            except OSError:
+                logging.getLogger(__name__).exception("DOS published; old backup cleanup deferred")
             self.state = "ready"
+            self.downloads.reconcile("dos", set(source_ids), completed=source_ids, phase="Installed")
             self.downloads.finish("dos")
         except Exception as error:
-            self.files, self.file_hashes, self.base_id, self.state = previous
+            if not committed:
+                self.files, self.file_hashes, self.base_id, self.state = previous
             self.error = str(error)
+            self.downloads.reconcile("dos", set(source_ids) | previously_published | {"operation"},
+                completed=source_ids if committed else previously_published,
+                incomplete=() if committed else set(source_ids) - previously_published, phase="Installed")
             self.downloads.finish("dos", error=str(error))
             raise DosError(str(error)) from error
         finally:
@@ -183,7 +220,7 @@ class DosPromptStore:
             if not isinstance(names, list):
                 raise DosError("Invalid DOS installation file inventory")
             result[ident] = [c_path(name) for name in names]
-        root_files = configured_files(self.config, int(self.config.get("max_c_bytes", MAX_SOURCE_BYTES)))
+        root_files = configured_files(self.config, MAX_PACKAGE_BYTES)
         for ident in set(installed) & sources.keys():
             if ident in result:
                 continue
@@ -195,7 +232,7 @@ class DosPromptStore:
                         if key == package_cache_key(source) else None)
             if incoming is None:
                 raise DosError(f"Cannot safely change {ident}: its legacy installation needs the cached archive")
-            incoming.update(configured_files(source, MAX_SOURCE_BYTES))
+            incoming.update(configured_files(source, MAX_PACKAGE_BYTES))
             prefix = c_path(source["target"]) + "/" if source.get("target") else ""
             names = []
             for name, contents in incoming.items():
@@ -249,13 +286,11 @@ class DosPromptStore:
             backup_count = self.settings.get()["backup_count"]
             config = load_dos_config(self.config_path)
             self.config = config
-            limit = int(config.get("max_c_bytes", MAX_SOURCE_BYTES))
-            if not 1024 <= limit <= 256 * 1024 * 1024:
-                raise DosError("Invalid C drive size limit")
+            package_limit = MAX_PACKAGE_BYTES
             media_limit = int(config.get("max_media_bytes", 128 * 1024 * 1024))
             if not 512 <= media_limit <= 256 * 1024 * 1024:
                 raise DosError("Invalid media size limit")
-            root_files = configured_files(config, limit)
+            root_files = configured_files(config, package_limit)
             self.root.mkdir(parents=True, exist_ok=True)
             base = self.disk_dir
             marker = self.installed_path
@@ -272,18 +307,12 @@ class DosPromptStore:
                 if not source.get("required", False):
                     continue
                 ident = source["id"]
-                names = owned.get(ident, [])
-                if not isinstance(names, list):
-                    raise DosError("Invalid DOS installation file inventory")
-                paths = [base / c_path(name) for name in names]
-                if any(parent.is_symlink() for path in paths for parent in (path, *path.parents)):
-                    raise DosError("Required DOS storage must not contain symbolic links")
-                if (installed.get(ident) != package_cache_key(source) or not paths
-                        or any(not path.is_file() for path in paths)):
+                if not self._package_present(source, installed, base):
                     missing_required.add(ident)
                     installed.pop(ident, None)  # A receipt alone cannot make an incomplete package bootable.
             initializing = installed.get("_complete") is not True
-            self.initializing = initializing or install_sources or bool(missing_required)
+            preparing = initializing or install_sources or bool(missing_required)
+            self.initializing = initializing
             if initializing:
                 base.mkdir(parents=True, exist_ok=True)
             elif not base.is_dir():
@@ -297,7 +326,10 @@ class DosPromptStore:
                 source_ids = [source["id"] for source in config["sources"] if source.get("enabled") is not False]
             source_ids = select_dos_packages(config, source_ids)
             source_map = {source["id"]: source for source in config["sources"]}
-            sources = [source_map[ident] for ident in source_ids] if self.initializing else []
+            sources = [source_map[ident] for ident in source_ids] if preparing else []
+            for source in sources:
+                if not self._package_present(source, installed, base):
+                    installed.pop(source["id"], None)
             self.total = len(sources)
             pending_sources = [source for source in sources if installed.get(source["id"]) != package_cache_key(source)]
             if pending_sources:
@@ -310,10 +342,10 @@ class DosPromptStore:
                 ident = source["id"]
                 target = c_path(source["target"]) + "/" if source.get("target") else ""
                 additions = {name: root_files.get(target + name, contents)
-                             for name, contents in configured_files(source, limit).items()}
+                             for name, contents in configured_files(source, package_limit).items()}
                 with self.downloads.context("dos", ident, priority=0 if source.get("required", False) else 10):
                     try:
-                        incoming = self._prepare_package(source, base, additions, root_files, target, limit)
+                        incoming = self._prepare_package(source, base, additions, root_files, target, package_limit)
                     except Exception as error:
                         self.downloads.update("dos", ident, state="error", phase="Failed", error=str(error))
                         raise
@@ -333,7 +365,7 @@ class DosPromptStore:
                 cache_key = package_cache_key(source)
                 seen.add(ident)
                 self._download_id = ident
-                additions = configured_files(source, limit)
+                additions = configured_files(source, package_limit)
                 target = c_path(source["target"]) + "/" if source.get("target") else ""
                 additions = {name: root_files.get(target + name, contents) for name, contents in additions.items()}
                 if installed.get(ident) == cache_key:
@@ -353,7 +385,9 @@ class DosPromptStore:
                     if changed:
                         atomic_file(marker, json.dumps(installed).encode())
                     self.processed += 1
-                    self.downloads.update("dos", ident, state="done", percent=100, phase="Installed", error="")
+                    self.downloads.update("dos", ident, state="running" if self.configuring else "done",
+                        percent=99 if self.configuring else 100,
+                        phase="Awaiting publication" if self.configuring else "Installed", error="", stage="install")
                     continue
                 self.current = str(source.get("title", ident))
                 self._progress("Downloading", 0, stage="download")
@@ -366,9 +400,9 @@ class DosPromptStore:
                     tools_dir = base / "UTILS" / "BIN"
                     tools = ({"UTILS/BIN/" + path.name: path.read_bytes() for path in tools_dir.iterdir() if path.is_file()}
                              if tools_dir.is_dir() else {})
-                    incoming = run_post_install(incoming, source, tools, limit)
-                if len(incoming) > MAX_FILES or sum(len(value) for value in incoming.values()) > limit:
-                    raise DosError("Software exceeds C drive quota")
+                    incoming = run_post_install(incoming, source, tools, package_limit)
+                if len(incoming) > MAX_FILES or sum(len(value) for value in incoming.values()) > package_limit:
+                    raise DosError("Software exceeds per-package extraction safety limits")
                 for index, (name, contents) in enumerate(incoming.items(), 1):
                     destination = base / (target + name)
                     if destination.exists():
@@ -383,30 +417,33 @@ class DosPromptStore:
                                                             if target + name not in root_files]
                 atomic_file(marker, json.dumps(installed).encode())
                 self.processed += 1
-                self.downloads.update("dos", ident, state="done", percent=100, phase="Installed", error="")
+                self.downloads.update("dos", ident, state="running" if self.configuring else "done",
+                    percent=99 if self.configuring else 100,
+                    phase="Awaiting publication" if self.configuring else "Installed", error="", stage="install")
+            self._download_id = ""
+            self.current = ""
             for filename, contents in root_files.items():
                 destination = base / filename
-                if initializing or (self.initializing and not destination.exists()):
+                if initializing or (preparing and not destination.exists()):
                     if destination.exists() and not destination.is_file():
                         raise DosError(f"Configured DOS file is not a regular file: {filename}")
                     atomic_file(destination, contents)
             files = {}
             self.phase = "Checking installed files"
-            if self.initializing and config.get("software_catalog"):
+            if preparing and config.get("software_catalog"):
                 guide = list(config["software_catalog"])
                 if not all(isinstance(line, str) and "\n" not in line and "\r" not in line for line in guide):
                     raise DosError("DOS software_catalog must contain individual header lines")
                 for source in config["sources"]:
                     if source.get("launch") and installed.get(source.get("id")):
                         guide.extend([str(source.get("title", source["id"])), "  " + source["launch"], ""])
-                atomic_file(base / "SOFTWARE.TXT", ("\r\n".join(guide) + "\r\n").encode("cp437", errors="replace"))
+                contents = ("\r\n".join(guide) + "\r\n").encode("cp437", errors="replace")
+                atomic_file(base / "SOFTWARE.TXT", contents)
             for path in base.rglob("*"):
                 if path.is_symlink():
                     raise DosError("Shared C drive must not contain symbolic links")
                 if path.is_file():
                     files[c_path(path.relative_to(base).as_posix())] = path.read_bytes()
-            if len(files) > MAX_FILES or sum(map(len, files.values())) > limit:
-                raise DosError("Shared C drive exceeds configured limits")
             hasher = hashlib.sha256()
             hashes = {}
             for name, contents in sorted(files.items()):
@@ -472,12 +509,11 @@ class DosPromptStore:
             self.start()
         return {"state": "building" if self.configuring else self.state, "current": self.current, "error": self.error,
                 "initializing": self.initializing, "processed": self.processed, "total": self.total,
-                "percent": self.percent, "phase": self.phase, "received": self.received,
+                "percent": self.percent, "phase": self.phase, "received": self.received, "configuring": self.configuring,
                 "backup": self.backup, "rebuilding": self.rebuilding}
 
     def c_limit(self, account_id: str | None) -> int:
-        return (sum(map(len, self.files.values())) + self.overlay_limit(account_id) if account_id
-                else int(self.config.get("max_c_bytes", MAX_SOURCE_BYTES)))
+        return sum(map(len, self.files.values())) + self.overlay_limit(account_id)
 
     def bundle(self, account_id: str | None, media_id: str = "", *, lazy: bool = False, account_name: str = "") -> tuple[bytes, dict]:
         revision, overlay, deleted, directories = self.overlay(account_id)
@@ -545,7 +581,7 @@ class DosPromptStore:
         return self.overlays.read_chunk(account_id, name, digest, offset, size)
 
     def _source_files(self, data: bytes, source: dict) -> dict[str, bytes]:
-        return DosPackageExtractor(int(self.config.get("max_c_bytes", MAX_SOURCE_BYTES))).extract(data, source)
+        return DosPackageExtractor(MAX_PACKAGE_BYTES).extract(data, source)
 
     def overlay(self, account_id: str | None) -> tuple[int, dict[str, bytes], list[str], list[str]]:
         return self.overlays.overlay(account_id)

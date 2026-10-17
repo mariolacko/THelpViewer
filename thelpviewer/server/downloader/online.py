@@ -323,8 +323,8 @@ class OnlineDownloader:
     def begin(self, kind, items, *, replace=True):
         self.progress.begin(kind, items, replace=replace)
 
-    def reconcile(self, kind, groups, *, completed=(), phase="Cached"):
-        self.progress.reconcile(kind, groups, completed=completed, phase=phase)
+    def reconcile(self, kind, groups, *, completed=(), incomplete=(), phase="Cached"):
+        self.progress.reconcile(kind, groups, completed=completed, incomplete=incomplete, phase=phase)
 
     def update(self, kind, key, **values):
         self.progress.update(kind, key, **values)

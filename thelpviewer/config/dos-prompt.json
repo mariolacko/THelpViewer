@@ -1,7 +1,6 @@
 {
   "cycles": "auto",
   "memory_mb": 64,
-  "max_c_bytes": 268435456,
   "max_media_bytes": 134217728,
   "allow_full_disk_fallback": false,
   "files": [

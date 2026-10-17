@@ -8,7 +8,7 @@ from ..downloader.cache import cache_metadata_path, write_cache_identity
 from ..downloader.packages import package_cache_key, package_cache_path
 from ..file_storage import file_digest
 from .packages import DosPackageExtractor, configured_files
-from .paths import DosError, MAX_SOURCE_BYTES, atomic_file, c_path
+from .paths import DosError, MAX_SOURCE_BYTES, MAX_PACKAGE_BYTES, atomic_file, c_path
 
 
 def migrate_legacy_packages(config, receipt_path, disk, downloads_dir):
@@ -33,7 +33,7 @@ def migrate_legacy_packages(config, receipt_path, disk, downloads_dir):
     if not isinstance(installed, dict) or not isinstance(installed.get("_files", {}), dict):
         raise DosError("Invalid DOS installation file inventory")
     owned = dict(installed.get("_files", {}))
-    limit = int(config.get("max_c_bytes", MAX_SOURCE_BYTES))
+    limit = MAX_PACKAGE_BYTES
     root_files = configured_files(config, limit)
     plans = []
     for source in config["sources"]:

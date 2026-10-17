@@ -94,7 +94,8 @@ are disabled. Currently these are UTILS and Volkov Commander. Category/global
 Deselect All clears optional packages only; a required-only group has no
 editable group toggle. API requests omitting required IDs are normalized to
 include them, as are saved intent, direct disk configuration and rebuilds.
-The installed asterisk still reflects the receipt, not the required flag.
+The installed asterisk requires a matching live recipe receipt and owned files,
+not merely the required flag or a temporary staging receipt.
 Required DOS packages have queue priority 0 ahead of ordinary priority 10 work;
 urgent MIDI playback retains its reserved negative-priority lane. On opening
 DOS, a missing required receipt or owned file triggers required-only preparation,
@@ -314,6 +315,15 @@ one failed disk transaction can leave many later packages uninstalled. Its full
 target is journaled before starting; pending removals still require Apply.
 Obsolete unselected DOS queue rows are discarded and successful installs clear
 their stale errors. No terminal failure is retried merely by restarting.
+
+DOS packages stay visible as Awaiting publication until both the new common C
+generation and its receipt are published. If the transaction rolls back,
+unpublished packages become Not completed rather than entering Completed downloads;
+the actual failure remains visible. Startup reconciles persisted completion rows
+against live receipts and regular owned files, without retrying terminal failures.
+The common software library has no aggregate capacity/file-count quota. Private
+overlay capacity and file limits, archive safety bounds and host disk errors
+remain independent of the common library size.
 
 HELP rechecks published catalog/files plus checkpoint hashes; missing/changed
 outputs are rebuilt, not trusted as installed. Each verified edition is converted

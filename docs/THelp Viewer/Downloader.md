@@ -418,6 +418,11 @@ successful cached installs clear their earlier errors, and the complete target i
 journaled before Retry starts, so restart resumes the same request. A blocked row
 remains actionable even if the original failing row was removed. No terminal
 failure is automatically retried on startup.
+The DOS action button is labelled Retry all and explains that scope before
+submission. DOS rows awaiting the atomic disk/receipt publication remain in the
+unfinished list. A rollback keeps them Not completed, and startup repairs old
+false completion rows by checking the published recipe and owned files. A cached
+archive or prepared temporary file is not a completed DOS installation.
 Existing quotas, validation, backups and private-overlay protections still apply.
 A repeated failure remains failed with its current error; retry is not a bypass
 for source rate limits, invalid archives or unavailable files.

@@ -14,6 +14,8 @@ def load_dos_config(path: Path | None) -> dict:
         raise DosError(str(error)) from error
     if any(key in data for key in ("initial_files", "autoexec.bat", "config.sys")):
         raise DosError("Use files entries with path and text/base64 instead of initial_files/autoexec.bat/config.sys")
+    if any(key in data for key in ("max_c_bytes", "max_c_files")):
+        raise DosError("The shared DOS library has no quota; remove max_c_bytes/max_c_files from the manifest")
     if any(not isinstance(source.get("language", "und"), str)
            or not re.fullmatch(r"[a-z]{2,3}(?:-[A-Z]{2})?", source.get("language", "und")) for source in data["sources"]):
         raise DosError("DOS package language must be a language code such as cs, en or en-GB")

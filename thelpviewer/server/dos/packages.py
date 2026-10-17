@@ -31,14 +31,14 @@ def configured_files(config: dict, limit: int) -> dict[str, bytes]:
         else:
             encoded = entry["base64"]
             if not isinstance(encoded, str) or len(encoded) > 4 * ((limit + 2) // 3):
-                raise DosError("Configured binary DOS file exceeds its quota")
+                raise DosError("Configured binary DOS file exceeds its safety limit")
             try:
                 contents = base64.b64decode(encoded, validate=True)
             except ValueError as error:
                 raise DosError("Invalid base64 in configured DOS file") from error
         total += len(contents)
         if total > limit:
-            raise DosError("Configured DOS files exceed the C drive quota")
+            raise DosError("Configured DOS files exceed their safety limit")
         files[name] = contents
     return files
 

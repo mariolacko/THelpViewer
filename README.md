@@ -148,7 +148,12 @@ or change it from an edited source list. Runtime
 memory/cycles changes still take effect after restarting the server. Use
 **Admin → Configuration → DOS Packages… → Apply** to install checked
 missing DOS packages or uninstall unchecked installed ones, with progress and
-recoverable backups. HELP Packages, DOS Packages and MIDI Sources open the
+recoverable backups. Shared DOS software has no aggregate disk quota; private
+user data retains its configured capacity. DOS packages become complete only
+after the new shared disk and its receipts are published; unsuccessful preparation
+remains visible for Retry.
+
+HELP Packages, DOS Packages and MIDI Sources open the
 three separate dialogs derived from a shared **TVPackagesDialog**. HELP has menu product
 groups on the left and independently installable versions on the right;
 DOS has categories/packages and MIDI has providers/albums. Switching windows

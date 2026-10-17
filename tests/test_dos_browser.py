@@ -28,7 +28,7 @@ def test_dos_prompt_real_runtime_save_restart_and_secure_mounts(blocked_worker):
         (helps / "catalog.json").write_text("[]\n", encoding="utf-8")
         docs = root / "docs"
         docs.mkdir()
-        (root / "config.json").write_text('{"sources": [], "memory_mb":64, "max_c_bytes":268435456, "allow_full_disk_fallback": true, "files": [{"path":"README.TXT","text":["Shared test disk"]}]}')
+        (root / "config.json").write_text('{"sources": [], "memory_mb":64, "allow_full_disk_fallback": true, "files": [{"path":"README.TXT","text":["Shared test disk"]}]}')
         accounts = AccountStore(root / "var")
         accounts.create_user("player")
         # This fixture is an already configured DOS server, not first-run setup.
@@ -68,6 +68,9 @@ def test_dos_prompt_real_runtime_save_restart_and_secure_mounts(blocked_worker):
         # BIOS mode 12h: 640x480 with a red last pixel; wait, then restore text.
         (store.root / "base" / "c" / "GFX480.COM").write_bytes(bytes.fromhex(
             "b81200cd10b8040c31dbb97f02badf01cd1031c0cd16b80300cd10cd20"))
+        # Set the BIOS NumLock flag in this isolated test, independent of host LEDs.
+        (store.root / "base" / "c" / "NUMON.COM").write_bytes(bytes.fromhex(
+            "1eb840008ed8800e1700201fc3"))
         nested = store.root / "base" / "c" / "FREEDOS" / "APPINFO"
         nested.mkdir(parents=True, exist_ok=True)
         (nested / "TEST.LSM").write_bytes(b"nested software metadata\r\n")
@@ -173,17 +176,18 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   const nestedLoaded=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/FREEDOS/APPINFO/TEST.LSM')).includes('nested software');
   const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
   const rendered=pixels.some((value,index)=>index%4!==3&&value>0);
-  async function command(text){
+  async function command(text,keypad=false){
    canvas.focus();
    for(const char of text){
     const shifted=char==='>'||char===':';
-    const code=char==='>'?'Period':char===' '?'Space':char==='.'?'Period':char==='/'?'Slash':char===':'?'Semicolon':char==='-'?'Minus':char.charCodeAt(0)===92?'Backslash':/^[0-9]$/.test(char)?'Digit'+char:'Key'+char.toUpperCase();
+    const keypadCode=keypad?({'.':'NumpadDecimal','/':'NumpadDivide','*':'NumpadMultiply','-':'NumpadSubtract','+':'NumpadAdd'}[char]||(/^[0-9]$/.test(char)?'Numpad'+char:'')):'';
+    const code=keypadCode||(char==='>'?'Period':char===' '?'Space':char==='.'?'Period':char==='/'?'Slash':char===':'?'Semicolon':char==='-'?'Minus':char.charCodeAt(0)===92?'Backslash':/^[0-9]$/.test(char)?'Digit'+char:'Key'+char.toUpperCase());
     if(shifted)canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Shift',code:'ShiftLeft',bubbles:true,cancelable:true}));
     for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:char,code,shiftKey:shifted,bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
     if(shifted)canvas.dispatchEvent(new KeyboardEvent('keyup',{key:'Shift',code:'ShiftLeft',bubbles:true,cancelable:true}));
     await new Promise(r=>setTimeout(r,25));
    }
-   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
+   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:keypad?'NumpadEnter':'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
    await new Promise(r=>setTimeout(r,250));
   }
   window.dosCommand=command;
@@ -266,6 +270,20 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    throw new Error('DOS frame did not grow with video mode: '+JSON.stringify({textGeometry,highGeometry,client:client.toJSON()}));
   const corner=canvas.getContext('2d').getImageData(639,479,1,1).data;
   if(corner[0]<100||corner[1]!==0||corner[2]!==0)throw new Error('640x480 bottom-right pixel missing');
+  const resizer=dos.root._tvResizer;
+  for(const [dx,dy] of [[160,0],[0,160],[-9999,-9999],[9999,9999]]){
+   resizer.place({...highGeometry,left:20,top:20});
+   const handle=dos.root.querySelector('[data-tv-resize-handle]');
+   handle.dispatchEvent(new MouseEvent('mousedown',{clientX:100,clientY:100,bubbles:true,cancelable:true}));
+   document.dispatchEvent(new MouseEvent('mousemove',{clientX:100+dx,clientY:100+dy,bubbles:true}));
+   const rect=canvas.getBoundingClientRect(),cell=window.THelpViewerTV.measureCells();
+   const frame=dos.root.getBoundingClientRect(),desktop=resizer.desktop.getBoundingClientRect();
+   if(rect.height<rect.width*480/640-1||rect.height-rect.width*480/640>cell.height+1
+    ||frame.right>desktop.right+1||frame.bottom>desktop.bottom+1)
+    throw new Error('DOS resize lost the video ratio: '+JSON.stringify({dx,dy,rect:rect.toJSON(),frame:frame.toJSON(),desktop:desktop.toJSON()}));
+   document.dispatchEvent(new MouseEvent('mouseup',{clientX:100+dx,clientY:100+dy,bubbles:true}));
+  }
+  resizer.place(highGeometry);
   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
    if(canvas.height===400&&dos.root._tvResizer.captureGeometry().rows===textGeometry.rows){resolve(true);return;}
@@ -280,6 +298,10 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   const graphics=true;
   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
   await new Promise(r=>setTimeout(r,200));
+  await command('numon');
+  await command('echo 0123456789+-*/.>numpad.txt',true);
+  const numpad=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/NUMPAD.TXT')).trim();
+  if(numpad!=='0123456789+-*/.')throw new Error('DOS numpad input differs: '+JSON.stringify(numpad));
   await command('echo hello>state.txt');
   console.log('DOS check: keyboard');
   console.log(JSON.stringify(await dos.view.ci.fsTree()));
