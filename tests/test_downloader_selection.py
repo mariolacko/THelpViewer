@@ -147,8 +147,9 @@ def test_server_download_keeps_help_active_until_publication(tmp_path, monkeypat
         assert not result.errors
         status = downloads.snapshot(private=True)
         assert status["active"] and status["percent"] == 35
-        assert status["items"][0]["state"] == "running"
+        assert status["items"][0]["state"] == "waiting"
         assert status["items"][0]["phase"] == "Awaiting conversion"
+        downloads.update("help", "tp:5.5", state="running", phase="Converting")
         downloads.finish("help", error="Conversion failed")
         row = downloads.snapshot(private=True)["items"][0]
         assert row["state"] == "error" and row["percent"] < 100
@@ -169,7 +170,7 @@ def test_consumer_cancellation_is_not_a_failure_of_successfully_verified_sources
                 package_ids=["tp:5.5"], extractor=ExtractorTools("unar", "lsar", None),
                 downloads=downloads, finalize=False, on_ready=stopped)
         row = downloads.snapshot(private=True)["items"][0]
-        assert row["state"] == "running" and not row["error"]
+        assert row["state"] == "waiting" and not row["error"]
         downloads.finish("help", error="Another edition could not be converted", block_unfinished=True)
         row = next(row for row in downloads.snapshot(private=True)["items"] if row["id"] == "help:tp:5.5")
         assert row["state"] == "blocked" and not row["error"]

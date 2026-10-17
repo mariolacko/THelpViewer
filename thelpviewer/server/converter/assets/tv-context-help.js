@@ -116,7 +116,7 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcGridDemo]: { title: "Grid Viewer", text: "TVGridView displays rows and columns with optional headers and shared horizontal/vertical scrollbars. Arrow keys select cells; Hide headers toggles titles." },
 });
 
-const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20261017g";
+const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20261017h";
 let contextHelpBundlePromise = null;
 
 function loadContextHelpBundle() {

@@ -3,6 +3,7 @@
 from pathlib import Path
 import shutil
 import subprocess
+import threading
 
 import pytest
 
@@ -10,6 +11,137 @@ from thelpviewer.server.downloader.online import OnlineDownloader
 from thelpviewer.server.processing import report_progress, stage_progress
 from thelpviewer.server.processing import observe_progress
 from thelpviewer.server.archives import core
+from thelpviewer.server.jobs import JobStore
+
+
+@pytest.mark.parametrize("phase", ["Waiting for processing", "Awaiting installation", "Awaiting publication"])
+def test_waiting_stays_unfinished_until_published_and_survives_restart(tmp_path, phase):
+    journal = JobStore(tmp_path / "jobs.sqlite3")
+    queue = OnlineDownloader(journal)
+    try:
+        queue.begin("dos", [{"id": "package", "label": "Package", "byte_progress": False}])
+        queue.update("dos", "package", state="waiting", percent=99, phase=phase, stage="install")
+        queue.finish_if_idle("dos")
+        queue.finish("dos")  # Neither a quiet pipeline nor finish is a publication receipt.
+        status = queue.snapshot(private=True)
+        assert status["active"] and status["percent"] == 99
+        assert status["items"][0]["state"] == "waiting"
+        restored = OnlineDownloader(journal)
+        try:
+            row = restored.snapshot(private=True)["items"][0]
+            assert row["state"] == "pending" and row["phase"] == "Interrupted; awaiting recovery"
+        finally:
+            restored.close()
+        queue.reconcile("dos", {"package"}, completed={"package"}, phase="Installed")
+        queue.finish("dos")
+        assert not queue.snapshot(private=True)["active"]
+        assert queue.snapshot(private=True)["items"][0]["state"] == "done"
+    finally:
+        queue.close()
+
+
+@pytest.mark.parametrize("reconcile", [False, True])
+def test_waiting_publication_becomes_blocked_on_failure(reconcile):
+    queue = OnlineDownloader()
+    try:
+        queue.begin("dos", [{"id": "package", "label": "Package"}])
+        queue.update("dos", "package", state="waiting", phase="Awaiting publication", percent=99)
+        if reconcile:
+            queue.reconcile("dos", {"package"}, incomplete={"package"})
+        queue.finish("dos", error="Publication failed")
+        rows = queue.snapshot(private=True)["items"]
+        assert next(row for row in rows if row["id"] == "dos:package")["state"] == "blocked"
+        assert all(row["state"] != "done" for row in rows)
+        assert not queue.snapshot(private=True)["active"]
+    finally:
+        queue.close()
+
+
+def test_shared_scheduler_reports_waiting_before_http_and_local_processing():
+    queue = OnlineDownloader()
+    releases = [threading.Event(), threading.Event()]
+    started = [threading.Event(), threading.Event()]
+    blockers = []
+    try:
+        def blocking_processor():
+            started[1].set()
+            assert releases[1].wait(5)
+        blockers = [queue.enqueue_processing(blocking_processor) for _ in range(3)]
+        assert started[1].wait(2)
+        queue.begin("dos", [{"id": "first", "label": "First"}, {"id": "second", "label": "Second"}])
+        def first():
+            started[0].set()
+            assert releases[0].wait(5)
+        with queue.context("dos", "first"):
+            downloading = queue.enqueue(first, source="https://same.test/first.zip")
+        assert started[0].wait(2)
+        with queue.context("dos", "second"):
+            waiting = queue.enqueue(lambda: "downloaded", source="https://same.test/second.zip")
+        rows = {row["id"]: row for row in queue.snapshot(private=True)["items"]}
+        assert rows["dos:first"]["state"] == "running"
+        assert rows["dos:second"]["state"] == "waiting"
+        assert rows["dos:second"]["phase"] == "Waiting for download"
+        releases[0].set()
+        downloading.result(timeout=2)
+        assert waiting.result(timeout=2) == "downloaded"
+        with queue.context("dos", "second"):
+            queued_extract = queue.enqueue_processing(lambda: queue.snapshot(private=True))
+        row = next(row for row in queue.snapshot(private=True)["items"] if row["id"] == "dos:second")
+        assert row["state"] == "waiting" and row["phase"] == "Waiting for processing"
+        releases[1].set()
+        status = queued_extract.result(timeout=2)
+        row = next(row for row in status["items"] if row["id"] == "dos:second")
+        assert row["state"] == "running" and row["phase"] == "Processing"
+    finally:
+        for release in releases:
+            release.set()
+        for future in blockers:
+            future.result(timeout=5)
+        queue.close()
+
+
+def test_finish_with_recorded_failure_does_not_leave_waiting_work_running():
+    queue = OnlineDownloader()
+    try:
+        queue.begin("dos", [{"id": "bad", "label": "Bad"}, {"id": "prepared", "label": "Prepared"}])
+        queue.update("dos", "bad", state="error", error="Cannot extract")
+        queue.update("dos", "prepared", state="waiting", phase="Awaiting publication", percent=99)
+        queue.finish("dos")
+        status = queue.snapshot(private=True)
+        assert not status["active"] and status["errors"] == 1
+        assert {row["state"] for row in status["items"]} == {"error", "blocked"}
+    finally:
+        queue.close()
+
+
+def test_retry_cooldown_reports_waiting_even_with_domain_status_callback(monkeypatch):
+    from urllib.error import HTTPError
+    from thelpviewer.server.downloader.transport import read_request
+    queue = OnlineDownloader()
+    states = []
+    class Opener:
+        calls = 0
+        def open(self, _request, timeout):
+            self.calls += 1
+            if self.calls == 1:
+                raise HTTPError("https://source.test/archive", 429, "Too many requests", {"Retry-After": "1"}, None)
+            import io
+            response = io.BytesIO(b"archive")
+            response.headers = {"Content-Length": "7"}
+            response.url = "https://source.test/archive"
+            return response
+    def sleep(_seconds):
+        row = queue.snapshot(private=True)["items"][0]
+        states.append((row["state"], row["phase"], row["stage_percent"]))
+    monkeypatch.setattr("thelpviewer.server.downloader.transport.time.sleep", sleep)
+    try:
+        queue.begin("dos", [{"id": "package", "label": "Package"}])
+        with queue.context("dos", "package"):
+            read_request(Opener(), "https://source.test/archive", 20,
+                on_status=lambda phase: queue.update("dos", "package", state="running", phase=phase))
+        assert states == [("waiting", "Rate limited (HTTP 429), retry in 1s", None)]
+    finally:
+        queue.close()
 
 
 def test_shared_queue_exposes_unknown_and_known_stage_progress_until_owner_finishes():
@@ -145,10 +277,14 @@ assert.equal(Progress.downloadCaption({active:false,errors:1,items:[row]}),'!');
 row.state='pending';
 assert.equal(Progress.downloadMarker(row),'·');
 assert.equal(Progress.downloadCaption({active:true,errors:0,items:[row]}),'…');
+row.state='waiting';row.stage='install';row.stage_percent=100;
+assert.equal(Progress.downloadMarker(row),'◷');
+assert.equal(Progress.downloadCaption({active:true,errors:0,items:[row]}),'◷');
 const downloading={state:'running',stage:'download',stage_percent:50};
 const extracting={state:'running',stage:'extract',stage_percent:null};
 const converting={state:'running',stage:'convert',stage_percent:25};
 assert.equal(Progress.downloadCaption({active:true,errors:0,items:[downloading,extracting,converting]}),'↓ 50% ▣ ⚙ 25%');
+assert.equal(Progress.downloadCaption({active:true,errors:0,items:[downloading,row]}),'↓ 50%');
 assert.equal(Progress.downloadCaption({active:true,errors:0,items:[downloading,{...downloading,stage_percent:null}]}),'↓');
 '''
     result = subprocess.run([shutil.which("node"), "-e", script], capture_output=True, text=True, timeout=10)

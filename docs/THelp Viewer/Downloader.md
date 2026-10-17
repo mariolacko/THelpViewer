@@ -197,10 +197,28 @@ single-file byte counts contribute partial progress, completed/cache items count
 as complete. Compound units use `byte_progress=False`: their owner's explicit
 stage percentage (DOS download/extract/install) takes precedence. Server HELP
 uses `download_products(..., finalize=False)`: verified sources leave the row
-running at 35%, conversion advances it up to 95%, and only successful publication
+waiting at 35%, conversion advances it up to 95%, and only successful publication
 marks it done/100%. Conversion failure remains on that edition, not a previously
 completed row. Standalone download jobs finalize when source collection ends.
 MIDI source indexes advance when the planned check finishes.
+Queue rows use `pending` before work starts, `running` only during active work,
+and `waiting` between phases or while a resource/site is unavailable. The shared
+scheduler reports Waiting for download/processing/source; retry cooldowns retain
+their countdown with `waiting`. Verified HELP sources await conversion, extracted
+DOS inputs await ordered installation, and staged DOS packages await publication.
+These states do not change the existing three-unit preparation or per-site limits.
+
+Waiting rows show `◷` and Waiting in the menu, and `◷` in Downloads details.
+They keep their overall partial progress but no phase-local percentage. Only
+`running` rows contribute active-stage symbols/percentages in the top indicator;
+when all work is waiting, it shows `◷`. They remain unfinished and do not enter
+Completed downloads. Idle detection/finish cannot turn waiting into success;
+the domain owner must confirm completion (for DOS, the published disk/receipt).
+Failure blocks uncompleted waiting work, while interruption/restart restores it
+as pending for normal output verification/recovery rather than trusting staging.
+MIDI cancellation after a worker claims a task still raises cancellation rather
+than entering the transfer or treating a false result as a completed download.
+
 A discovery HTML response or one archive is not the size of the whole compound
 unit. Raw byte counters remain available to its detailed operation dialog.
 Unknown source/archive counts are not invented; discovery can change

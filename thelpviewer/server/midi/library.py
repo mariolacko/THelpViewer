@@ -424,7 +424,7 @@ class MidiLibrary:
                 if self._stop.is_set():
                     self.downloads.update("midi", key, state="blocked", phase="Selection changed")
                     self.downloads.finish_if_idle("midi")
-                    return False
+                    raise CancelledError()
                 self.downloads.update("midi", key, state="running", phase="Downloading", stage="download")
                 try:
                     try:

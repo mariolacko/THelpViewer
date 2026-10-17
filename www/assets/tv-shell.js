@@ -199,7 +199,7 @@ class TVDownloadProgress extends TVSubMenu {
             const wait = /in (\d+)s$/.exec(item.phase || "");
             const percent = TVProgressDialog.downloadPercent(item);
             row.name = title; row.param = item.state === "error" ? "Failed" : item.state === "blocked" ? "Not completed"
-                : wait ? `Wait ${wait[1]}s` : percent === null ? "" : `${percent}%`;
+                : wait ? `Wait ${wait[1]}s` : item.state === "waiting" ? "Waiting" : percent === null ? "" : `${percent}%`;
             row.command = ["error", "blocked"].includes(item.state) ? "downloads-failed" : "";
             this.rows.set(item.id, row);
             return row;

@@ -209,9 +209,10 @@ def download_products(product_keys: list[str], sources_dir: Path, downloads_dir:
             queue[index]["state"] = "checked"
             progress({"phase": "Verified sources available" if verified else "Sources checked", "processed": index + 1})
             row_error = error if fatal or finalize else ""
-            downloads.update("help", key, state="error" if row_error else "done" if finalize else "running", error=row_error,
+            downloads.update("help", key, state="error" if row_error else "done" if finalize else "waiting", error=row_error,
                              **({} if row_error else {"percent": 100 if finalize else 35,
-                                "phase": "Sources checked" if finalize else "Awaiting conversion"}))
+                                "phase": "Sources checked" if finalize else "Awaiting conversion",
+                                "stage": "prepare", "stage_percent": None}))
             return row_result
         def execute(item):
             index, row = item

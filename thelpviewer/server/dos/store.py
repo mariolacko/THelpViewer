@@ -349,7 +349,7 @@ class DosPromptStore:
                     except Exception as error:
                         self.downloads.update("dos", ident, state="error", phase="Failed", error=str(error))
                         raise
-                    self._progress("Awaiting installation", 0.75, stage="install", ident=ident)
+                    self._progress("Awaiting installation", 0.75, stage="install", ident=ident, state="waiting")
                     return incoming
             prepared = self.downloads.prepare(pending_sources, prepare, ordered=True,
                 source=lambda source: source.get("url", ""),
@@ -385,16 +385,19 @@ class DosPromptStore:
                     if changed:
                         atomic_file(marker, json.dumps(installed).encode())
                     self.processed += 1
-                    self.downloads.update("dos", ident, state="running" if self.configuring else "done",
+                    self.downloads.update("dos", ident, state="waiting" if self.configuring else "done",
                         percent=99 if self.configuring else 100,
                         phase="Awaiting publication" if self.configuring else "Installed", error="", stage="install")
                     continue
                 self.current = str(source.get("title", ident))
-                self._progress("Downloading", 0, stage="download")
+                self.phase = "Waiting for preparation"
+                if self.on_progress:
+                    self.on_progress(self.status(start=False))
                 ready_source, future = next(prepared)
                 if ready_source["id"] != ident:
                     raise DosError("DOS package preparation order changed")
                 incoming = future.result()
+                self._progress("Installing", 0.75, stage="install", stage_percent=0)
                 if source.get("post_install"):
                     self._progress("Post-install script", 0.85, stage="convert")
                     tools_dir = base / "UTILS" / "BIN"
@@ -417,7 +420,7 @@ class DosPromptStore:
                                                             if target + name not in root_files]
                 atomic_file(marker, json.dumps(installed).encode())
                 self.processed += 1
-                self.downloads.update("dos", ident, state="running" if self.configuring else "done",
+                self.downloads.update("dos", ident, state="waiting" if self.configuring else "done",
                     percent=99 if self.configuring else 100,
                     phase="Awaiting publication" if self.configuring else "Installed", error="", stage="install")
             self._download_id = ""
@@ -471,9 +474,9 @@ class DosPromptStore:
             self.current = ""
             self.rebuilding = False
 
-    def _progress(self, phase: str, fraction: float, *, stage="prepare", stage_percent=None, ident=None) -> None:
+    def _progress(self, phase: str, fraction: float, *, stage="prepare", stage_percent=None, ident=None, state="running") -> None:
         key = self._download_id if ident is None else ident
-        self.downloads.update("dos", key, state="running", phase=phase, percent=int(100 * fraction),
+        self.downloads.update("dos", key, state=state, phase=phase, percent=int(100 * fraction),
                               stage=stage, stage_percent=stage_percent)
         if key != self._download_id:
             return

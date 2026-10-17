@@ -15,7 +15,7 @@ class DownloadProgress:
             if job["state"] == "running":
                 job["state"] = "interrupted"
                 for item in job["items"].values():
-                    if item["state"] in {"pending", "running"}:
+                    if item["state"] in {"pending", "running", "waiting"}:
                         item.update(state="pending", phase="Interrupted; awaiting recovery")
 
     def _persist(self, kind):
@@ -28,7 +28,7 @@ class DownloadProgress:
             job = self._jobs.get(kind)
             items = [item for item in job["items"].values() if item["group"] == group] if job else []
             failed = [item["id"] for item in items if item["state"] in {"error", "blocked"}]
-            if not failed or any(item["state"] == "running" for item in items):
+            if not failed or any(item["state"] in {"running", "waiting"} for item in items):
                 raise ValueError("This download is no longer failed; refresh the queue")
             return job, failed
 
@@ -108,14 +108,14 @@ class DownloadProgress:
                     changed = True
             for key in incomplete:
                 item = items.get(key)
-                if item is not None and item["state"] in {"done", "running", "pending"}:
+                if item is not None and item["state"] in {"done", "running", "pending", "waiting"}:
                     item.update(state="blocked", percent=min(99, item["percent"]), phase="Not published",
                                 stage="install", stage_percent=None, error="")
                     changed = True
             if changed:
                 job["items"] = items
                 if job["state"] != "running" and not any(
-                        item["state"] == "pending" for item in items.values()):
+                        item["state"] in {"pending", "running", "waiting"} for item in items.values()):
                     job["state"] = "error" if any(item["state"] in {"error", "blocked"} for item in items.values()) else "ready"
                 self._persist(kind)
 
@@ -145,7 +145,7 @@ class DownloadProgress:
     def finish_if_idle(self, kind):
         with self._lock:
             job = self._jobs.get(kind)
-            if job and all(item["state"] not in {"pending", "running"} for item in job["items"].values()):
+            if job and all(item["state"] not in {"pending", "running", "waiting"} for item in job["items"].values()):
                 self.finish(kind)
 
     def interrupt(self, kind):
@@ -155,7 +155,7 @@ class DownloadProgress:
                 return
             job["state"] = "interrupted"
             for item in job["items"].values():
-                if item["state"] in {"pending", "running"}:
+                if item["state"] in {"pending", "running", "waiting"}:
                     item.update(state="pending", phase="Interrupted; awaiting recovery")
             self._persist(kind)
 
@@ -164,18 +164,21 @@ class DownloadProgress:
             job = self._jobs.get(kind)
             if job is None:
                 return
-            job["state"] = "error" if error or any(item["state"] == "error" for item in job["items"].values()) else "ready"
+            failed = bool(error) or any(item["state"] == "error" for item in job["items"].values())
+            job["state"] = "error" if failed else "ready"
             for item in job["items"].values():
-                if error and block_unfinished and item["state"] in {"running", "pending"}:
+                if error and block_unfinished and item["state"] in {"running", "pending", "waiting"}:
                     item.update(state="blocked", phase="Not published", error="")
                 elif item["state"] == "running":
                     item.update(state="error" if error else "done", error=error, percent=item["percent"] if error else 100)
                 elif error and item["state"] == "pending":
                     item.update(state="blocked", phase="Not started")
+                elif failed and item["state"] == "waiting":
+                    item.update(state="blocked", phase="Not completed", error="")
             if error and not any(item["state"] == "error" for item in job["items"].values()):
                 job["items"]["operation"] = {"id": "operation", "group": "operation", "label": "Operation",
                     "state": "error", "percent": 0, "phase": "Failed", "received": 0, "bytes_total": 0, "error": error, "batch": self._batch}
-            if job.get("retrying"):
+            if job.get("retrying") or (not failed and any(item["state"] == "waiting" for item in job["items"].values())):
                 job["state"] = "running"
             self._persist(kind)
 
@@ -205,8 +208,9 @@ class DownloadProgress:
                     progress_groups.append(percent(current_batch))
                 states = {item["state"] for item in items}
                 state = ("running" if "running" in states else "error" if "error" in states
-                         else "pending" if "pending" in states else "blocked" if "blocked" in states else "done")
-                current = next((item for item in items if item["state"] == "running"), items[-1])
+                         else "pending" if "pending" in states else "waiting" if "waiting" in states
+                         else "blocked" if "blocked" in states else "done")
+                current = next((item for item in items if item["state"] == state), items[-1])
                 rows.append({**group, "state": state, "percent": int(percent(items)),
                     "priority": min(item.get("priority", 10) for item in items),
                     "order": max(item.get("order", 0) for item in items),

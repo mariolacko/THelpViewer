@@ -182,3 +182,25 @@ def test_app_lifespan_closes_midi_before_shared_queue(tmp_path, monkeypatch):
     with TestClient(app) as client:
         assert client.get("/healthz").status_code == 200
     assert events == ["midi", "queue"]
+
+
+def test_midi_cancelled_after_worker_claim_does_not_enter_the_download(tmp_path, monkeypatch):
+    library = _library(tmp_path)
+    item = {"id": "0" * 16, "source_id": "game", "kind": "midi", "game": "Game",
+            "title": "Song", "filename": "song.mid", "url": "https://music.test/song.mid"}
+    library._items = [item]
+    report = library.downloads._operation_status
+    def claimed(state, phase, **values):
+        report(state, phase, **values)
+        if state == "running" and phase == "Processing":
+            library._stop.set()
+    monkeypatch.setattr(library.downloads, "_operation_status", claimed)
+    monkeypatch.setattr(library, "_download_item", lambda *_: pytest.fail("Cancelled MIDI started downloading"))
+    try:
+        assert library.prioritize("game", item["id"])
+        with pytest.raises(CancelledError):
+            library._play_tasks[("game", item["id"])].result(timeout=5)
+        assert library.downloads.snapshot()["items"][0]["state"] == "blocked"
+    finally:
+        library.close()
+        library.downloads.close()

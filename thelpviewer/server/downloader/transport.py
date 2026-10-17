@@ -150,10 +150,10 @@ def read_request(opener, request, limit, *, timeout=30, retries=3, retry_after=3
         request = _encoded_url(request)
     # Check before queueing: a deferred site must not first wait in its cooldown.
     check_source_limit(getattr(request, "full_url", request))
-    def status(value):
-        report_transfer(value)
+    def status(value, *, waiting=False):
         if on_status:
             on_status(value)
+        report_transfer(value, state="waiting" if waiting else "running")
     def progress(received, total):
         report_transfer(phase, received, total)
         if on_progress:
@@ -196,7 +196,7 @@ def read_request(opener, request, limit, *, timeout=30, retries=3, retry_after=3
                     raise
                 delay, waiting = 5, "Retrying"
             for remaining in range(delay, 0, -1):
-                status(f"{waiting} in {remaining}s")
+                status(f"{waiting} in {remaining}s", waiting=True)
                 time.sleep(1)
         raise ValueError("Download needs at least one attempt")
     return run_download(transfer, source=getattr(request, "full_url", request),

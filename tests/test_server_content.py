@@ -450,6 +450,9 @@ def test_cross_type_requests_run_concurrently_and_preserve_both_selections(tmp_p
         return DownloadResult()
 
     def fetch(*_args, **_kwargs):
+        # This transport stub must announce actual transfer work just like read_request.
+        from thelpviewer.server.downloader.online import report_transfer
+        report_transfer("Downloading")
         gate("dos")
         return archive.getvalue()
 
@@ -769,7 +772,7 @@ def test_help_queue_remains_active_through_conversion_and_reports_its_failure(tm
     entered, release = threading.Event(), threading.Event()
     def download(_products, _sources, _cache, *, downloads, finalize, on_ready, **_options):
         assert not finalize
-        downloads.update("help", "helppc:", state="running", percent=35, phase="Awaiting conversion")
+        downloads.update("help", "helppc:", state="waiting", percent=35, phase="Awaiting conversion")
         on_ready("helppc:")
         return DownloadResult(files=[source])
     def build(*args, on_progress, **kwargs):

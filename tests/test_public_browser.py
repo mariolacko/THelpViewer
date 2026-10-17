@@ -153,7 +153,20 @@ async function run() {
                 downloads.update({active:true,percent:25,errors:0,items:[{
                     id:'midi:test',kind:'midi',label:'Test song',state:'running',
                     percent:25,stage:'download',stage_percent:25,phase:'Downloading',
+                },{
+                    id:'dos:prepared',kind:'dos',label:'Prepared package',state:'waiting',
+                    percent:99,stage:'install',stage_percent:null,phase:'Awaiting publication',
                 }]}, menu);
+                if (downloads.name !== '↓ 25%' || downloads.rows.get('dos:prepared').param !== 'Waiting'
+                    || !downloads.rows.get('dos:prepared').name.startsWith('◷ ')) {
+                    throw new Error('Waiting package was rendered as active processing');
+                }
+                const progress = downloads.showDialog(app.desktopView);
+                progress.toggleDetails(true);
+                if (!progress.details.items.some(row => row.label.includes('Prepared package') && row.label.endsWith('◷'))) {
+                    throw new Error('Downloads details omitted the waiting icon');
+                }
+                progress.hideProgress();
                 menu.itemElements.get(downloads).click();
                 await new Promise(requestAnimationFrame);
                 if (!menu.activeRoot || menu.getHelpCtx() !== TV.TV_HELP_CONTEXTS.hcDownloads) {

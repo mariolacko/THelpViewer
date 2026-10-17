@@ -195,6 +195,7 @@ class OnlineDownloader:
                      else self._urgent_queue if urgent else self._queue)
             sequence = next(self._sequence)
             queue.append((priority, -sequence if urgent else sequence, task))
+            self._operation_status("waiting", "Waiting for processing" if processing else "Waiting for download")
             urgent_name = "_urgent_processing_worker" if processing else "_urgent_worker"
             workers = self._processing_workers if processing else self._workers
             if urgent and getattr(self, urgent_name) is None:
@@ -240,9 +241,14 @@ class OnlineDownloader:
         # Redirects/form actions can use a different server than the queued URL.
         key = source_key(url)
         with self._changed:
+            waiting = key in self._transfers
+            if waiting:
+                self._operation_status("waiting", "Waiting for source")
             while key in self._transfers:
                 self._changed.wait()
             self._transfers.add(key)
+            if waiting:
+                self._operation_status("running", "Downloading", stage="download")
         try:
             yield
         finally:
@@ -295,7 +301,12 @@ class OnlineDownloader:
                 future = task["future"]
                 if future.set_running_or_notify_cancel():
                     try:
-                        future.set_result(task["context"].run(task["operation"]))
+                        def execute():
+                            processing = queue is self._processing_queue or queue is self._urgent_processing_queue
+                            self._operation_status("running", "Processing" if processing else "Downloading",
+                                stage="prepare" if processing else "download")
+                            return task["operation"]()
+                        future.set_result(task["context"].run(execute))
                     except Exception as error:
                         future.set_exception(error)
             finally:
@@ -305,6 +316,11 @@ class OnlineDownloader:
                     if identity is not None and self._tasks.get(identity) is task:
                         del self._tasks[identity]
                     self._changed.notify_all()
+
+    def _operation_status(self, state, phase, *, stage="prepare"):
+        current = _current.get()
+        if current and current[0] is self:
+            self.update(current[1], current[2], state=state, phase=phase, stage=stage, stage_percent=None)
 
     def close(self):
         with self._lock:
@@ -402,10 +418,10 @@ def transfer_slot(url):
                 current[0].defer_source(url, current[4])
 
 
-def report_transfer(phase, received=0, bytes_total=0):
+def report_transfer(phase, received=0, bytes_total=0, *, state="running"):
     current = _current.get()
     if current:
-        current[0].update(current[1], current[2], state="running", phase=phase,
+        current[0].update(current[1], current[2], state=state, phase=phase,
             received=received, bytes_total=bytes_total,
             **stage_progress("download" if phase == "Downloading" else "prepare",
                              received=received, bytes_total=bytes_total))

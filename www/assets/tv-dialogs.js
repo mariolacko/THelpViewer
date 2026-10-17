@@ -4940,6 +4940,7 @@ class TVProgressDialog extends TVDialog {
         if (item.state === "done") { return "✓"; }
         if (item.state === "error") { return "!"; }
         if (item.state === "blocked") { return "–"; }
+        if (item.state === "waiting") { return "◷"; }
         if (item.state !== "running") { return "·"; }
         return { download: "↓", extract: "▣", convert: "⚙", install: "⚙",
             validate: "⚙", publish: "⚙", index: "⚙" }[item.stage] || "…";
@@ -4969,7 +4970,8 @@ class TVProgressDialog extends TVDialog {
         });
         const text = [...stages].map(([symbol, values]) => symbol + (values.every(Number.isFinite)
             ? ` ${Math.floor(values.reduce((sum, value) => sum + value, 0) / values.length)}%` : "")).join(" ");
-        return (status.errors ? "! " : "") + (text || (rows.some((item) => item.state === "pending") ? "…" : "⚙"));
+        return (status.errors ? "! " : "") + (text || (rows.some((item) => item.state === "waiting") ? "◷"
+            : rows.some((item) => item.state === "pending") ? "…" : "⚙"));
     }
 
     constructor(title = "Progress", initialSummary = "Preparing...") {
@@ -5014,7 +5016,7 @@ class TVProgressDialog extends TVDialog {
     updateDownloads(status) {
         this.downloadStatus = status;
         const rows = status.items || [];
-        const current = rows.find((item) => item.state === "running");
+        const current = rows.find((item) => item.state === "running") || rows.find((item) => item.state === "waiting");
         if (!this.operationStatus) {
             const completed = !status.active && rows.length > 0 && rows.every((item) => item.state === "done");
             this.update({ percent: completed ? 100 : status.percent, processed: rows.filter((item) => ["done", "error"].includes(item.state)).length,

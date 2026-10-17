@@ -101,7 +101,7 @@ def test_dos_completion_means_published_not_staged_and_retry_reuses_cache(tmp_pa
     def write(path, contents):
         if path == live_marker:
             rows = downloads.snapshot(private=True)["items"]
-            assert rows and all(row["state"] != "done" for row in rows)
+            assert rows and all(row["state"] == "waiting" and row["phase"] == "Awaiting publication" for row in rows)
             seen.append("publication")
             if failure == "publication":
                 raise OSError("publication failed")

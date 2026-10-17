@@ -4,6 +4,13 @@
 
 ### 2.1 development
 
+- Distinguish waiting (`◷`) from active download/extraction/conversion in the
+  shared queue. Report resource/source waits and retry cooldowns, HELP awaiting
+  conversion, and DOS awaiting installation/publication without pretending they
+  are still running. Preserve unfinished progress, recover waiting work after
+  interruption, and require publication before completion. Waiting rows do not
+  dilute active-stage percentages or add false processing icons to the menu.
+  Preserve MIDI cancellation when shutdown/selection changes race worker claim.
 - Preserve typed values in every TVInputLine, not only inputs with validators,
   when shared views are redrawn/rebound. Passkey Rename keeps unsaved profile
   fields intact and does not submit them; profile Save remains separate.
