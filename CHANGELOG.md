@@ -4,6 +4,9 @@
 
 ### 2.1 development
 
+- Preserve typed values in every TVInputLine, not only inputs with validators,
+  when shared views are redrawn/rebound. Passkey Rename keeps unsaved profile
+  fields intact and does not submit them; profile Save remains separate.
 - Keep the DOS client aspect ratio during horizontal/vertical corner resizing,
   using the active video dimensions and character-grid frame rounding. Route
   resize proposals through TVEvent; other windows retain free resizing. Fit

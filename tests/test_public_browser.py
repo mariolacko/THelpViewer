@@ -305,6 +305,8 @@ async function run() {
             let saved = null;
             let savedUser = null;
             let createdUser = null;
+            const passkey = {id:'test-key',name:'Original Passkey'};
+            let renamed = false;
             const disk = { used_bytes: 1048576, capacity_bytes: 64 * 1048576, free_bytes: 63 * 1048576 };
             const user = { id: 'test-user', username: 'reader', display_name: 'Reader', email: 'reader@example.test',
                 role: 'member', active: true, disk_capacity_mb: null, disk,
@@ -331,7 +333,12 @@ async function run() {
                 }
                 if (String(url) === '/api/auth/session') { return new Response(JSON.stringify(session)); }
                 if (String(url) === '/api/auth/security') {
-                    return new Response(JSON.stringify({ passkeys: [], password_set: false }));
+                    return new Response(JSON.stringify({ passkeys: [passkey], password_set: false }));
+                }
+                if (String(url) === '/api/auth/passkeys/test-key' && options?.method === 'PUT') {
+                    passkey.name = JSON.parse(options.body).name;
+                    renamed = true;
+                    return new Response(JSON.stringify({renamed:true}));
                 }
                 if (String(url) === '/api/auth/profile') {
                     saved = JSON.parse(options.body);
@@ -358,6 +365,29 @@ async function run() {
                 if (!menu.entries().some(item => item.command === 'account-profile')
                         || !config.subMenu.entries().some(item => item.command === 'account-rebuild-dos')) {
                     throw new Error('Production administrator menu is missing Account/Rebuild');
+                }
+                const edits = [[account.firstNameInput,'Ján'],[account.lastNameInput,'Novák'],
+                    [account.nicknameInput,'Unstored nickname'],[account.emailInput,'draft@example.test']];
+                for (const [input,value] of edits) {
+                    input.root.focus(); input.root.value = value;
+                    input.root.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));
+                }
+                account.passkeyName.setData('macOS - Safari');
+                account.renamePasskeyButton.root.click();
+                await new Promise((resolve,reject) => {
+                    const deadline = Date.now()+5000;
+                    const check = () => {
+                        if (renamed && !account.securityBusy) { resolve(); return; }
+                        if (Date.now()>deadline) { reject(new Error('Passkey Rename did not finish')); return; }
+                        setTimeout(check,10);
+                    }; check();
+                });
+                if (saved || passkey.name !== 'macOS - Safari' || edits.some(([input,value]) => input.getData() !== value)) {
+                    throw new Error('Passkey Rename changed/submitted profile fields');
+                }
+                account.firstNameInput.owner.drawView();
+                if (edits.some(([input,value]) => input.getData() !== value || input.data !== value)) {
+                    throw new Error('Profile edits disappeared after shared group redraw');
                 }
                 account.emailInput.setData('invalid');
                 await account.saveProfile();

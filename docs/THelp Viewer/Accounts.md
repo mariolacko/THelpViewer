@@ -171,7 +171,12 @@ account/permission administration interface.
 
 Account shows the owner's Passkeys in a standard TVListBox. Select one, edit
 Passkey name and choose Rename; this changes only our label, not the key in
-the platform's password manager. Enter a name and choose Add Passkey to enroll
+the platform's password manager. Rename does not submit or reload the profile:
+typed first/last name, nickname and email stay in the form until Save or Cancel.
+Shared TVInputLine input events update their model with or without a validator,
+so rebinding/redrawing a group also retains unsaved edits. This does not make
+those edits permanent; only profile Save does that.
+Enter a name and choose Add Passkey to enroll
 another authenticator. Accounts support up to 20 keys; existing keys are
 excluded from a new registration to prevent duplicating the same credential.
 Registration suggests an editable label such as `Windows - Edge` or

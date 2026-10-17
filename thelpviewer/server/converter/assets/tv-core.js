@@ -2205,9 +2205,9 @@ class TVInputLine extends TVView {
     handleEvent(event) {
         if ((event.what === evKeyDown || event.what === evCommand) && handleClipboardEvent(this, event)) { return; }
         if (event.what !== evBroadcast || event.infoPtr !== this
-            || event.nativeEvent?.type !== "input" || !this.validator) { return; }
-        const formatted = this.validator.format?.(this.root.value) ?? this.root.value;
-        if (this.validator.isValidInput && !this.validator.isValidInput(formatted, false)) {
+            || event.nativeEvent?.type !== "input") { return; }
+        const formatted = this.validator?.format?.(this.root.value) ?? this.root.value;
+        if (this.validator?.isValidInput && !this.validator.isValidInput(formatted, false)) {
             this.root.value = this.data;
             return;
         }

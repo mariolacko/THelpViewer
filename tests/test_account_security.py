@@ -67,6 +67,15 @@ def test_add_rename_list_and_authenticate_multiple_passkeys(owner, monkeypatch):
     assert all(row["last_used_at"] for row in store.security(token)["passkeys"])
 
 
+def test_renaming_passkey_does_not_modify_profile(owner):
+    store, _, token, _ = owner
+    store.update_profile(token, "reader@example.test", first_name="Ján", last_name="Novák", nickname="Reader")
+    before = store.session_user(token)
+    store.rename_passkey(token, "Zmlyc3Q", "macOS - Safari")
+    assert store.session_user(token) == before
+    assert store.security(token)["passkeys"][0]["name"] == "macOS - Safari"
+
+
 @pytest.mark.parametrize("name", ["", " ", "x" * 81, "line\nnext", "bad\x00"])
 def test_passkey_names_are_validated(owner, name):
     with pytest.raises(AccountError, match="name"):
