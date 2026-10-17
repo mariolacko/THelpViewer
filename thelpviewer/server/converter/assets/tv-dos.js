@@ -133,6 +133,7 @@ class TVDosView extends TVView {
         const width = this.ci.width(), height = this.ci.height();
         if (this.canvas.width !== width || this.canvas.height !== height) {
             this.canvas.width = width; this.canvas.height = height;
+            this.owner.fitScreen();
         }
         const image = new ImageData(width, height);
         if (rgba) { image.data.set(rgba); }
@@ -183,6 +184,36 @@ class TVDosWindow extends TVWindow {
         this.closeAction = () => this.onClose?.();
     }
     hasScrollBars() { return false; }
+    fitScreen() {
+        this.pendingScreenResize = true;
+        const resizer = this.root?._tvResizer, canvas = this.view.canvas;
+        if (!resizer?.desktop || !canvas?.width || !canvas.height
+            || document.fullscreenElement === canvas || this.root.classList.contains("is-maximized")) { return this; }
+        const cell = measureCells(), desktop = resizer.desktop;
+        if (!desktop.clientWidth || !desktop.clientHeight) { return this; }
+        // Match the shared frame's two columns/rows and its desktop margins.
+        const maxCols = Math.max(3, Math.floor(desktop.clientWidth / cell.width) - 2);
+        const maxRows = Math.max(3, Math.floor((desktop.clientHeight - 2 * cell.width) / cell.height));
+        const fit = (geometry) => {
+            const cols = Math.max(Math.min(this.minSize.x, maxCols), Math.min(geometry.cols, maxCols,
+                Math.floor((maxRows - 2) * cell.height * canvas.width / canvas.height / cell.width) + 2));
+            const rows = Math.max(Math.min(this.minSize.y, maxRows), Math.min(maxRows,
+                Math.ceil((cols - 2) * cell.width * canvas.height / canvas.width / cell.height) + 2));
+            return { cols, rows,
+                left: Math.max(0, Math.min(geometry.left, desktop.clientWidth - cols * cell.width)),
+                top: Math.max(0, Math.min(geometry.top, desktop.clientHeight - rows * cell.height)),
+            };
+        };
+        const current = resizer.captureGeometry(), geometry = fit(current);
+        if (this.zoomGeometry) { this.zoomGeometry = fit(this.zoomGeometry); }
+        this.pendingScreenResize = false;
+        if (["cols", "rows", "left", "top"].some((key) => geometry[key] !== current[key])) {
+            resizer.place(geometry);
+            fillBorders(this.root);
+            this.onChange?.();
+        }
+        return this;
+    }
     zoom() {
         const resizer = this.root?._tvResizer;
         if (!resizer?.desktop) { return this; }
@@ -209,6 +240,7 @@ class TVDosWindow extends TVWindow {
                     resizer.desktop.clientHeight - rows * cell.height)),
             });
         }
+        if (this.pendingScreenResize) { this.fitScreen(); }
         fillBorders(this.root);
         this.view.canvas?.focus();
         this.onChange?.();
@@ -509,6 +541,7 @@ class TVDosWindow extends TVWindow {
         this.fullscreenChanged = () => {
             this.view.releaseInput(); canvas.focus();
             if (document.fullscreenElement === canvas) { return; }
+            if (this.pendingScreenResize) { this.fitScreen(); }
             document.removeEventListener("fullscreenchange", this.fullscreenChanged);
             this.fullscreenChanged = null;
         };

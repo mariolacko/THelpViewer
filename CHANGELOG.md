@@ -4,6 +4,11 @@
 
 ### 2.1 development
 
+- Resize the DOS window's shared frame when DOSBox changes video mode: preserve
+  client width and derive height from the new screen ratio, fitting the desktop
+  when necessary. Keep manual geometry between mode changes, update Zoom back
+  geometry, and defer adjustments during native fullscreen/maximization until
+  returning to the window. Cover real VGA 640x480 output and return to text mode.
 - Prioritize manifest-required DOS packages in selection, queue display, bounded
   preparation and shared HTTP/extraction work. Opening DOS bootstraps only the
   required set, even if optional selections were saved. Verify required recipe

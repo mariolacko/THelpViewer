@@ -6,8 +6,8 @@ the shared `TVWindow` frame, movement, resize and title controls. Its specialise
 `TVDosView` owns only the DOS canvas, audio and native input bridge into
 `TVEvent.handleEvent()`. There is no second js-dos player UI or player CSS.
 Both text-mode software and graphical DOS programs are supported. The canvas
-follows DOSBox's video-mode size; a BIOS VGA 320x200 test verifies real graphics
-and the transition back to text mode. Individual games still depend on DOSBox
+follows DOSBox's video-mode size; BIOS VGA 320x200 and 640x480 tests verify real
+graphics and the transition back to text mode. Individual games still depend on DOSBox
 compatibility, configured memory/cycles and the browser's performance.
 
 The worker backend is required by the default configuration. If a browser
@@ -40,6 +40,17 @@ ratio. The frame's Zoom button uses the same operation. A successful cloud
 save is silent, including periodic autosaves, so it does not cover the DOS
 image. Save failures still display an error.
 
+When DOSBox changes video mode, the window keeps its client width and adjusts
+its height to the new screen ratio, rounded up to TVision character rows with
+the shared frame included. For example, switching from 640x400 to 640x480
+adds five rows with 8x16 cells and a 640-pixel-wide client. If the taller window
+cannot fit the desktop, its width is reduced too; its position is kept where
+possible, otherwise moved back inside the desktop. Normal frames at the same
+resolution do not resize the window or undo manual adjustments. Zoom back's
+stored geometry adapts to the new mode as well. Fullscreen and maximized
+windows stay in their mode; pending video-size changes apply on returning to
+the normal window. There are no per-program resolution exceptions.
+
 DOS uses both sides of the shared TVWindow frame, including its single-line
 inactive state when another window covers it. The shared window mover caches
 drag limits at mouse-down, coalesces position updates per browser animation
@@ -64,7 +75,9 @@ close/page exit; abrupt crashes or failed exit delivery can lose an interval.
 the DOS canvas itself. Only DOS is visible: there is no TVision menu/frame,
 desktop or browser toolbar. The image keeps its aspect ratio, with black
 letterboxing where needed, and the canvas retains keyboard/mouse input.
-The original TVWindow position, dimensions and maximized state do not change.
+Entering/leaving fullscreen alone does not change the TVWindow geometry or
+maximized state. A video-mode change while fullscreen defers the normal-window
+height adjustment until fullscreen exits.
 
 Use the browser's **Esc** fullscreen exit, or **Ctrl+Alt+M** to leave fullscreen
 and open the DOS Prompt menu. Restarting DOS keeps fullscreen; closing its
@@ -642,8 +655,9 @@ and account guards and cannot read another account's overlay. An explicit
 The emulator assets load only
 on demand. Media uploads also send `X-DOS-Account` matching the loaded session
 to prevent an account switch during a file picker from misrouting the upload.
-Fullscreen displays only the DOS canvas and leaves the TVWindow geometry
-unchanged; see the native-fullscreen section above for input and restrictions.
+Fullscreen displays only the DOS canvas; the underlying frame adapts to pending
+video-mode changes after exit. See the native-fullscreen section above for input
+and restrictions.
 
 Regression tests exercise a real WASM DOSBox: TVEvent keyboard input creates
 a C file, secure-mode commands are rejected, saved files/deletions survive

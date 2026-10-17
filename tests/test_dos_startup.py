@@ -10,6 +10,65 @@ NODE = shutil.which("node")
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required")
+def test_dos_video_mode_resizes_frame_height_without_resetting_manual_geometry():
+    script = r'''
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+class View{clearEvent(e){e.what=0;}setHelpCtx(value){this.helpCtx=value;}}
+class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
+let filled=0,changed=0,painted=0,maximized=false;
+const TV={TVView:View,TVWindow:Window,TVStaticText:class{},TVRect:class{},
+ TVPoint:class{constructor(x,y){this.x=x;this.y=y;}},TV_HELP_CONTEXTS:{hcDosPrompt:2320},
+ measureCells:()=>({width:8,height:16}),fillBorders:()=>filled++};
+const listeners=new Map();
+const document={currentScript:{src:'http://localhost/assets/tv-dos.js'},
+ addEventListener(type,fn){listeners.set(type,fn);},removeEventListener(type){listeners.delete(type);}};
+vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{URL,document,
+ ImageData:class{constructor(w,h){this.data=new Uint8ClampedArray(w*h*4);}},window:{THelpViewerTV:TV}});
+const win=new TV.TVDosWindow();let width=640,height=400;
+const canvas={width,height,focus(){},getContext:()=>({putImageData(){painted++;}}),
+ requestFullscreen:async()=>{document.fullscreenElement=canvas;}};
+win.view.canvas=canvas;win.view.ci={width:()=>width,height:()=>height};win.onChange=()=>changed++;
+const original={left:500,top:300,cols:82,rows:27};let geometry={...original};
+const resizer={desktop:{clientWidth:2000,clientHeight:1200},captureGeometry:()=>geometry,
+ place:g=>{geometry=g;},restore:()=>{maximized=false;geometry={...original};}};
+win.root={_tvResizer:resizer,classList:{contains:()=>maximized}};
+const frame=(w,h)=>{width=w;height=h;win.view.renderFrame(null,new Uint8Array(w*h*4));};
+frame(640,480);
+assert.equal(geometry.cols,82);assert.equal(geometry.rows,32);assert.equal(geometry.top,300);
+assert.equal(changed,1);assert.equal(filled,1);
+// Redrawing this mode must not fight a manual resize or rebuild the menu each frame.
+geometry={...geometry,rows:40};frame(640,480);
+assert.equal(geometry.rows,40);assert.equal(changed,1);assert.equal(painted,2);
+frame(640,400);assert.equal(geometry.rows,27);assert.equal(geometry.cols,82);
+win.zoom();assert.equal(geometry.cols,162);assert.equal(geometry.rows,52);
+frame(640,480);assert.equal(geometry.cols,162);assert.equal(geometry.rows,62);
+assert.equal(win.zoomGeometry.rows,32);win.zoom();assert.equal(geometry.rows,32);assert.equal(geometry.cols,82);
+// Moving up keeps a taller frame on the desktop; a short desktop also limits width.
+geometry={...original,top:1000};frame(640,400);frame(640,480);
+assert.ok(geometry.top+geometry.rows*16<=1200);
+resizer.desktop.clientWidth=800;resizer.desktop.clientHeight=500;
+frame(640,400);frame(640,480);
+assert.ok(geometry.cols<82);assert.ok(geometry.rows*16<=484);
+assert.ok(geometry.left+geometry.cols*8<=800&&geometry.top+geometry.rows*16<=500);
+assert.ok((geometry.rows-2)*16>=(geometry.cols-2)*8*480/640);
+// A mode change must not leave native fullscreen or de-maximize the window.
+(async()=>{
+ resizer.desktop.clientWidth=2000;resizer.desktop.clientHeight=1200;geometry={...original};
+ frame(640,400);const before=geometry;
+ win.fullScreen();await win.fullscreenRequest;frame(640,480);
+ assert.equal(document.fullscreenElement,canvas);assert.deepEqual(geometry,before);
+ document.fullscreenElement=null;listeners.get('fullscreenchange')();
+ assert.equal(geometry.rows,32);assert.equal(win.pendingScreenResize,false);
+ maximized=true;frame(640,400);assert.equal(maximized,true);assert.equal(geometry.rows,32);
+ win.zoom();assert.equal(maximized,false);assert.equal(geometry.rows,27);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+    result = subprocess.run([NODE, "-e", script, "www/assets/tv-dos.js"],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required")
 def test_dos_zoom_doubles_client_area_restores_and_limits_to_desktop():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');

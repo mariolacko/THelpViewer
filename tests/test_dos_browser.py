@@ -20,7 +20,7 @@ from test_dos_prompt import floppy_image, cd_image
 @pytest.mark.parametrize("blocked_worker", [False, True])
 def test_dos_prompt_real_runtime_save_restart_and_secure_mounts(blocked_worker):
     with tempfile.TemporaryDirectory(prefix="thelp-dos-browser-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         # DOS interaction must not race a modal rebuild of the developer's
         # unrelated full HELP library. Index behavior has separate coverage.
         helps = root / "helps"
@@ -65,6 +65,9 @@ def test_dos_prompt_real_runtime_save_restart_and_secure_mounts(blocked_worker):
         # BIOS mode 13h: fill all 320x200 pixels red, wait for a key, restore text.
         (store.root / "base" / "c" / "GFX.COM").write_bytes(bytes.fromhex(
             "b81300cd10b800a08ec031ffb900fab004f3aa31c0cd16b80300cd10cd20"))
+        # BIOS mode 12h: 640x480 with a red last pixel; wait, then restore text.
+        (store.root / "base" / "c" / "GFX480.COM").write_bytes(bytes.fromhex(
+            "b81200cd10b8040c31dbb97f02badf01cd1031c0cd16b80300cd10cd20"))
         nested = store.root / "base" / "c" / "FREEDOS" / "APPINFO"
         nested.mkdir(parents=True, exist_ok=True)
         (nested / "TEST.LSM").write_bytes(b"nested software metadata\r\n")
@@ -114,6 +117,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   return r.result.value;
  };
  await send('Page.enable');await send('Runtime.enable');await send('Network.enable');await send('Log.enable');
+ await send('Emulation.setDeviceMetricsOverride',{width:1280,height:1000,deviceScaleFactor:1,mobile:false});
  await send('Network.setCookie',{name:'thelp_session',value:token,url,httpOnly:true});
  if(blockedWorker==='true')await send('Page.addScriptToEvaluateOnNewDocument',{source:`window.Worker=class{constructor(){throw new DOMException('Worker blocked by embedded browser','SecurityError');}};window.AudioContext=class{constructor(){throw new DOMException('Audio blocked by embedded browser','NotAllowedError');}};`});
  await send('Page.navigate',{url});await send('Page.bringToFront');
@@ -250,6 +254,23 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
     await dos.restart();
    }
   }
+  const textGeometry=dos.root._tvResizer.captureGeometry();
+  await command('gfx480');
+  await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
+   if(canvas.width===640&&canvas.height===480){resolve(true);return;}
+   if(Date.now()>deadline){reject(new Error('640x480 video mode was not rendered'));return;}setTimeout(check,50);
+  };check();});
+  const highGeometry=dos.root._tvResizer.captureGeometry(),client=canvas.getBoundingClientRect();
+  if(highGeometry.cols!==textGeometry.cols||highGeometry.rows<=textGeometry.rows
+   ||client.height<client.width*480/640||client.height-client.width*480/640>17)
+   throw new Error('DOS frame did not grow with video mode: '+JSON.stringify({textGeometry,highGeometry,client:client.toJSON()}));
+  const corner=canvas.getContext('2d').getImageData(639,479,1,1).data;
+  if(corner[0]<100||corner[1]!==0||corner[2]!==0)throw new Error('640x480 bottom-right pixel missing');
+  for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
+  await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
+   if(canvas.height===400&&dos.root._tvResizer.captureGeometry().rows===textGeometry.rows){resolve(true);return;}
+   if(Date.now()>deadline){reject(new Error('DOS frame did not shrink back to text mode'));return;}setTimeout(check,50);
+  };check();});
   await command('gfx');
   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
    const pixel=canvas.getContext('2d').getImageData(100,100,1,1).data;
