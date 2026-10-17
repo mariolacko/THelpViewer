@@ -26,14 +26,20 @@ user's problem; these rules exist to prevent regressions, not to add process.
   and other temporary test caches. Never clean `.venv`, dependencies, source
   HELP files, generated bundles or persistent `data/` as test cache. Never
   recursively clean all of `var/`; its generated DOS/MIDI data and downloads
-  have explicit, recoverable rebuild operations.
+  have explicit, recoverable rebuild operations. Isolate mutable test paths:
+  replacing `AppConfig.state_dir` must also redirect `downloads_dir` and
+  `sources_dir`; startup expiry must never reach the repository's real inputs.
 - Record every user-visible feature or behavior fix under `CHANGELOG.md`'s
   `[Unreleased]` section and update affected technical documentation.
+- Restart the local THelp Docker service when needed to activate or test changes;
+  no separate confirmation is required. Check active jobs first and preserve
+  persistent data and download caches. This does not authorize production
+  deployment or restarts.
 
 ## Adding HELP files
 
 1. Inspect the existing product, source and bundle layout first. Put original
-   files in `data/sources/<Product>/` and generated UHF bundles in
+   files in `var/sources/<Product>/` and generated UHF bundles in
    `data/helps/<Product>/`; retain an existing release subdirectory when that
    product already uses one. Never add a staging/build-group directory such as
    `Candidates/` to these paths or to the Help Files menu.
@@ -48,10 +54,12 @@ user's problem; these rules exist to prevent regressions, not to add process.
    verified release/download pages, portable `search_text`, fallback `query`
    and exact `archive_members`. Downloader jobs consume both family and
    edition queries; do not add retrieval metadata that providers ignore.
-3. `archive_members` is the downloader's exact extraction list, **not** the
-   converter's input list. Select the files needed for conversion and any
-   required licence notices; do not extract unused companion files. Explain
-   retained non-converted files in the downloader or format documentation.
+3. Use `archive_members` as the single list of files to extract and process;
+   do not add parallel include/exclude configuration. Keep edition-specific
+   lists with the edition's sources so older releases retain their own names.
+   Retain required licence notices (not converted) and explain them in the
+   downloader documentation. Ignore stale unselected originals during batch
+   conversion without deleting them or adding filename hacks to readers.
 4. Reuse an existing reader when the format matches. For a new format, add a
    reader and register it in the manifest. Every `docs/Formats/<Format>.md`
    datasheet must be a self-contained technical specification from which an
@@ -75,7 +83,9 @@ document/UHF models and cross-layer contracts at the converter root.
 The Help Files menu groups catalog entries by `product_name`, then `version`.
 Releases of one product use the same version-free `menu_label`, with the
 release in `default_version` or inferred from `collection_prefixes`. Do not
-repeat the release in both menu levels. Use one canonical bundle layout in CLI
+repeat the release in both menu levels. A single-file edition opens directly
+from its version item; a product with only one file opens directly as product
+plus version, without redundant submenus. Use one canonical bundle layout in CLI
 and server builds. Correct paths when needed; do not maintain old HELP URLs as
 aliases. Reader-verified logical database names are real link identities, not
 backward-compatibility aliases.
@@ -86,24 +96,54 @@ backward-compatibility aliases.
   `server/midi/`; keep HTTP adapters in `server/routes/` and common transfers in
   `server/downloader/`. Stores coordinate explicit modules/components, not mixin
   chains or dynamic forwarding. Keep small shared modules at the server root.
+- Share archive mechanics through server/archives/ (no HELP or network
+  dependencies), operation events through processing.py and atomic publication
+  through file_storage.py. Keep HELP ingestion/edition selection in converter/;
+  providers discover source plans, while HELP/DOS/MIDI retain domain validation.
 - Versioned application JSON belongs in `thelpviewer/config/`; converter and
   downloader modules belong in `thelpviewer/server/`. Server jobs call their
   Python APIs directly. `.env` and Docker Compose stay at the project root;
   web-edited settings remain permanent data, not versioned configuration.
-- Permanent storage is `data/`: original HELP in `data/sources/`, published
-  UHF in `data/helps/`, documents in `data/docs/`, accounts/statistics/settings
+- Permanent storage is `data/`: published UHF in `data/helps/`, documents in
+  `data/docs/`, accounts/statistics/settings
   databases and private DOS overlays/media in `data/dos/users/<id>/`.
   HTTP URLs and product/release-relative paths follow the current canonical
   layout; rebuild catalogs/indexes after an intentional layout change.
-- Cache new HELP/DOS downloads under `var/downloads/help/` and
-  `var/downloads/dos/`. Shared generated DOS C is `var/dos/c/`; downloaded
+- Cache new HELP/DOS/MIDI raw downloads under `var/downloads/help/`,
+  `var/downloads/dos/` and `var/downloads/midi/`. Extracted/manual HELP originals
+  and licence notices belong in `var/sources/`; retain them across uninstall
+  and rebuild, but expire unused inputs with the same cache lifetime as raw
+  downloads. Explicit administrator Clear cache empties both locations after
+  warning that manual/unavailable inputs may be impossible to download again.
+  Shared generated
+  DOS C is `var/dos/c/`; downloaded
   tracks/covers/catalog are `var/midi/`. Never include `data/` in a rebuild or
   cache cleanup target. Upgrade with the old server stopped; migration verifies
   copies, refuses conflicts and archives originals in `data/migration-backups/`.
+- Raw downloads and HELP inputs expire by `download_cache_days` (default 30) since their
+  last successful download/use, at startup and hourly under idle downloader
+  maintenance. Successful HELP ingestion/reuse and server conversion refresh
+  input mtime; passive scans and failed conversion do not. Never expire installed
+  content or permanent data. DOS archive paths are
+  `<package-id>/<readable-archive-name>` with source/checksum sidecars; preserve
+  source identity across same-name alternatives, and migrate recognized old
+  cache entries rather than adding runtime hash-path fallback aliases.
+- Group recoverable content generations under `var/backups/help/`,
+  `var/backups/dos/` and `var/backups/midi/`, respecting `backup_count` per
+  family. A HELP sibling rollback directory is transient until publication
+  succeeds; then move it to the backup tree, verifying cross-filesystem copies.
+  Preserve migration archives and private overlay revisions separately.
 - Server download/build jobs call Python modules, not CLI subprocesses.
   Selections use manifest IDs; an empty selection means none except DOS
   sources explicitly marked `required` in the manifest. Publish staged
   HELP only after validation, preserving unselected content and a backup.
+- Persist operation intent and processing progress in `data/jobs.sqlite3`.
+  Recover only queued/interrupted jobs, not terminal failures or old saved
+  selections. Validate output checkpoints against real files before skipping
+  work; percentages are not completion receipts. Publish each successful HELP
+  edition immediately and preserve it if another edition fails. Reserve recovered
+  HELP work before starting the index or expiring its inputs. One server process
+  owns the journal; stop/join its writers before releasing ownership.
 - HELP Packages, DOS Packages and MIDI Sources are separate dialogs derived
   from TVPackagesDialog, sharing layout/workflow, not a mode-switching window.
   Keep product/package descriptions in their configuration manifests. HELP

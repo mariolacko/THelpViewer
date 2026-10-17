@@ -1,25 +1,131 @@
 # TODO
 
-## Pre-commit verification — 2026-10-15
+## Production inventory and restart/retry verification — 2026-10-17
+
+- [x] Deploy the MIDI restart/DOS Retry fixes and verify public assets, context
+  HELP, managed Docs and a healthy restarted service. No private data or content
+  selection was changed by deployment. A blocked row opens Retry/Remove through
+  the regular menu event flow; Cancel does not start installation.
+- [x] Check all 273 published HELP bundles (76 editions, 173,741 topics): valid
+  gzip/UHF, matching catalog counts and matching published checkpoint SHA-256s.
+- [x] Check all 23 current-manifest DOS packages marked installed: all 1,221
+  owned files exist, source recipe keys and launch targets match. Compare 1,215
+  files with checksum-identified cached archive outputs and six UTILS generated
+  files with the configured post-install copy/script bytes. HC602.EXE is a COM
+  executable with an EXE filename, not corruption; original archive CRC agrees.
+- [ ] Continue the outstanding DOS selection by explicit Retry/Apply: only 23
+  of the 70 originally selected current-manifest packages were installed at this
+  snapshot. Deployment/audit did not start another installation automatically.
+- [ ] Validate/normalize legacy MIDI cache without unnecessary redownloads.
+  All 7,236 catalogued files and 207 covers exist, but only 7,150 tracks already
+  match the current normalized SMF decoder output. Fifty tracks retain removable
+  source trailers. Thirty-five Amy's Fantasies tracks declare SMF format 0 with
+  two tracks (rejected by the current validator); Duke Nukem 3D Atomic Edition's
+  WAREHAUS.MID has a chunk extending beyond the file. Check original payloads
+  before deciding whether to repair a nonconforming source or retain a failure.
+  The lightweight size/MThd cache check currently still reports these files as
+  available. No retrospective cache repair or playback verification is claimed.
+- [ ] Verify the seven absent tracked originals formerly under `data/sources/`
+  against canonical `var/sources/` or migration backups before committing their
+  deletion. Code/documentation commits do not authorize discarding original bytes.
+
+Targeted verification: 447 tests passed; three corpus-dependent tests were
+deselected because their TASM.TAH / Turbo Debugger 1.0 TDHELP.TDH inputs are
+absent. This includes browser menu/action tests and restart/job recovery, not a
+new complete-suite run. Earlier complete-suite results below are historical.
+
+An additional six-module converter check reported 214 passes, four skips and
+20 failures: 19 cannot read absent original THELP/Scorpions inputs; the remaining
+case finds an unreferenced `Borland C++ 3.x/OWLHELP.TCH` payload (SHA-256
+`9dcf2d3e64de62e3fc0a964a89fc7f494e1b4c4881164483053440be85919180`).
+Restore/verify the missing corpus and independently verify that ObjectWindows
+revision before extending the frozen references. Do not regenerate expected
+decoder hashes from the implementation merely to make this test pass.
+
+## Browser regression — 2026-10-16
+
+- [x] Refresh pending global Search results when a response reports `building`
+  or `paused` but the first index-status poll already says `ready`, without a
+  progress dialog having been created. Track pending search refresh separately
+  from the dialog, and keep idle polling from resetting a completed selection.
+  Use canonical temporary paths in browser tests because storage migration
+  deliberately rejects symlink ancestors.
+
+## Live HELP download diagnostics — 2026-10-15
+
+- [x] WinWorld's broad release pages collect distinct HELP versions
+  into the same `Borland Turbo Pascal 5.x` directory. The existing original is
+  CRC32 `8BB44D4B` (Turbo Pascal 5.0); a different original correctly triggers
+  conflict protection. Archive titles now filter releases before download;
+  verified CRCs control canonical placement and exact edition selection,
+  without overwriting originals or adding aliases. Unknown collisions still fail.
+- [x] Archive-tool stdout/stderr can contain non-UTF-8 filename bytes. In the
+  running Docker HELP job this produces a decoding failure at byte EB in TP6
+  extraction; decode diagnostic output safely, keeping actual file paths,
+  member matching and source bytes intact. These are not HTTP 429s.
+  Neither failure was retried/removed and the running job was not interrupted.
+- [x] Old-DOS requests failed the URL transport guard: HTTPS redirects to HTTP.
+  Its actual HTTP catalogs (categories 51/52) return 200; use that provider's
+  explicit HTTP origin. Public-peer, credential and generic HTTPS-downgrade
+  checks are unchanged.
+- [x] Replace Norton Commander 4.0's rate-limited WinWorld source with two
+  verified English-media alternatives at Internet Archive. Retain bounded
+  retries/cooldowns; a failed job still requires explicit Retry/Apply, and an
+  alternative recipe is not proof that the package has already been installed.
+- [x] The run ended with 11 failed source groups. Publication then rejected
+  `Borland Turbo Pascal 7/COMMDLGS.HLP` and `HELPEX.HLP`: both report
+  "Windows Help 3.0 topic addressing is not implemented". Turbo Pascal 7's
+  `archive_members` selects TURBO.TPH, OWL.TPH and TVISION.TPH for extraction
+  and processing; the two example originals are retained. Selected malformed inputs still
+  fail staging rather than replacing existing publication.
+- [ ] Implement/verify Windows Help 3.0 (HC30, SYSTEM.Minor 15) topic addressing
+  before selecting those example files for conversion. This is deferred format work,
+  not proof of damaged originals or a completed HC30 implementation.
+
+## MIDI source data — 2026-10-15
+
+- [ ] Obtain actual playable MIDI for Karl's IT Retro's `Bad Blood (1990).zip`.
+  All four `.mid` members contain short plain-text parameter lists ending in
+  DOS EOF, not Standard MIDI payloads. The original `01 - Title.mid` is 46 bytes
+  (`(2/60)`, then `(2/4,3/104,4/110,5/114,10/1,10/1)`). Do not invent notes or
+  disable validation. The server now reports the source error, examines every
+  member and preserves the cover/any valid siblings; the upstream music itself
+  remains unavailable.
+
+## Regression repair — 2026-10-15
 
 The complete 2,539-test run reported 2,530 passes, eight failures and one skip.
 Two failures were stale test setup after the account change: an unqualified
 six-column credential INSERT and a profile-browser mock missing the security
 endpoint. Those fixtures were corrected; all six tests in the affected
-migration/public-browser modules then passed. The remaining six failures are
-not a clean full-suite result:
+migration/public-browser modules then passed. This is the historical starting
+result, not the result after the following repairs:
 
-- [ ] Verify the newly downloaded Turbo Basic `TBHELP.TBH` header/compression
-  profile using its original consumer. The current parser reports unsupported
-  compression type 15; that interpretation itself needs verification. Three
-  THELP corpus checks and the combined Turbo Basic/Prolog server-build check
-  fail on these inputs. Keep the bounded rejection/atomic publication behavior;
-  do not silently omit the inputs or guess a decoder to satisfy a snapshot.
-- [ ] Isolate the browser workspace-restore and installed-Scorpion corpus
-  fixtures from administrator-selected live content. The current local
-  `data/helps/catalog.json` contains only Norton Guides; Sidekick 2 and Scorpion
-  are absent, so those two tests cannot perform their intended assertions.
-  Do not reinstall packages into permanent data as an implicit test setup step.
+- [x] Verify Turbo Basic `TBHELP.TBH` using its original consumer. It uses
+  WORD records and literal/FE-space text, not compression type 15. A dedicated
+  reader matches TB.EXE's display bytes for all 324 physical screens; preserve
+  native context/offset links, malformed-input rejection and atomic builds.
+  Register both distinct CRCs and document the separate binary grammar.
+- [x] Isolate browser workspace-restore and Scorpion publication checks from
+  administrator-selected content. Build the eight browser HELP sources and
+  Scorpion DAT corpus only in temporary output. Update stale MIDI assertions
+  for the shared Downloads control instead of restoring removed APIs.
+- [x] Freeze the original 66-file THELP reference cohort with source hashes,
+  preserving its independent golden digests. Verify 13 additional source copies
+  separately: nine are prior byte-identical inputs; the other four contain
+  three distinct inputs matching the existing DEHELP.C/BOA C references.
+
+Verification: the complete 2,570-case run reported 2,567 passes, two failures
+and one skipped Safari automation test. Both failures were reference-fixture
+ordering (string sorting versus the original Path component sorting), not
+changed decoder output. After restoring Path order, both unchanged independent
+golden tests passed (58.02 s). The final pending-download shutdown case adds
+one regression: all 34 MIDI/configuration/rebuild tests passed (2.51 s), and
+the main browser/catalog repetition passed seven tests (37.20 s).
+Across the complete run and targeted repetitions, all 2,570 distinct current
+non-Safari cases have passing results. This is not a claim of a fresh clean
+single full-suite run after the last fixture/shutdown edits. Safari remains
+unverified here; the known Starlette/httpx deprecation warning remains too.
 
 ## HELP conversion audit — remaining scope (2026-10-14)
 
@@ -149,10 +255,11 @@ consumer evidence.
   with recent Passkey confirmation, salted hashes, throttling and browser tests.
 - [x] Separate accounts, DOS and MIDI into feature packages, retaining explicit
   coordinating stores, the shared downloader, HTTP adapters and data paths.
-- [ ] Stop/join MIDI background writers before closing the shared downloader
-  during application shutdown. Short-lived TestClient lifespans can currently
-  report an unhandled `RuntimeError: Downloader is stopping` in the MIDI thread;
-  the worker/queue shutdown ordering is separate from the module-layout refactor.
+- [x] Stop/join MIDI background writers and urgent playback transfers before
+  closing the shared downloader during application shutdown. A terminal stop
+  state prevents pending rebuild/source/index operations from restarting the
+  writer. Cancel only pending MIDI tasks, without waiting behind unrelated
+  HELP/DOS work; Event-gated regressions verify ordering and file preservation.
 - [x] Callable downloader/converter services with progress callbacks, bounded
   staging and validated atomic HELP publication; server jobs call Python APIs.
 - [x] Administrator HELP / DOS Packages menu/dialog with shared TVCheckBoxes,

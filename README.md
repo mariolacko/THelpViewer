@@ -26,6 +26,7 @@ interactive web application with authentic DOS look and feel.
 | **HelpPC 2.10** | Six linked DOS text databases | `.TXT` |
 | **FreeDOS HTML Help** | HHSTNDRD HTML page collection | `HHSTNDRD.ZIP` |
 | **MicroCalc text help** | Turbo Basic MicroCalc example, paginated and colored text | `.HLP` |
+| **Turbo Basic help** | Compiler/editor screens, space packing and native links | `.TBH` |
 | **DOS text help / Prolog help database** | Turbo Prolog main/example helps and `h("…")` display records | `.HLP` |
 | **Norton Guide** | Norton Guides and Expert Help databases | `.NG` |
 | **TurboVision FBHF** | Turbo Vision apps (TP6, BP7), TVHC compiler | `.HLP` |
@@ -108,8 +109,8 @@ Useful Docker commands:
 ./thelp.sh docker restart
 ```
 
-The container image installs Python dependencies and 7-Zip for disk-image
-extraction, and
+The container image installs Python dependencies, unar and 7-Zip with Debian's
+separate `7zip-rar` decoder for archive/disk-image extraction, and
 docker-compose bind-mounts the whole repository into `/app`, so JS/CSS/docs/help
 data are never copied into the image. `./thelp.sh docker start` and
 `./thelp.sh docker restart` read HELP files, account/settings metadata, the shared DOS C
@@ -182,7 +183,7 @@ SQLite catalog at `var/midi/library.sqlite3` through `/api/midi/catalog` and
 plays local files through `/api/midi/files/...`; the previous bundled demo
 tracks are no longer its playlist. ZIP sources are unpacked selectively: only
 valid `.mid`/`.midi` tracks and a configured cover image are retained.
-SQLite stores one `midi_tracks` row per playable file, with game/title/source
+SQLite stores one `midi_tracks` row per available local file, with game/title/source
 metadata and its optional `midi_covers` image reference; `midi_index` retains
 the original source links needed to resume ZIP downloads.
 The catalog total counts individual MIDI files inside those ZIPs, not distinct
@@ -202,11 +203,17 @@ Play resumes it; the transport buttons have a one-character gap. Playback
 continues with the next track when
 one ends; the Random next track checkbox under More switches to shuffle mode.
 The Download progress dialog uses the shared Turbo Vision gauges and can be hidden without stopping
-the server download; the Downloads button reopens it. More expands the playlist
+the server download; the Downloads menu beside the account/clock reopens it. More expands the playlist
 and its Filter input, which matches game, track title, or sequencer. The old
 free-form MIDI URL input and external Commons/ToBeFree presets are removed.
 The Filter's history arrow reuses the standard Turbo Vision history popup;
 press Enter, start a track, or close the player to remember the current filter.
+
+Newly processed music passes the server's Standard MIDI validator before
+publication. Existing-file availability checks only its size and `MThd` prefix;
+it does not revalidate or normalize an older cache. An available/catalogued
+track is therefore not a guarantee that its complete SMF payload is valid.
+Legacy-cache validation/normalization remains open work, not a completed repair.
 
 Each JSON source declares `pages` as a nonempty list of HTTPS URLs,
 plus `allowed_hosts`, an `extract` rule, and an optional `cover` rule. A
@@ -256,7 +263,10 @@ THelpViewer/
 │   ├── help_database.py    ←   shared manifest loader and validation
 │   ├── server/             ←   FastAPI app
 │   │   ├── converter/      ←     HELP readers, writers, assets and staged builder
-│   │   ├── downloader/     ←     providers, shared transport and archive extraction
+│   │   ├── downloader/     ←     providers, common queued transport/cache and progress registry
+│   │   ├── archives/       ←     shared bounded archive/image/split-file extraction
+│   │   ├── processing.py   ←     context-local operation progress and safety errors
+│   │   ├── file_storage.py ←     atomic publication for downloads, UHF and server data
 │   │   ├── app.py          ←     app setup, shared services and static mounts
 │   │   ├── config.py       ←     env-based runtime configuration
 │   │   ├── accounts/       ←     profiles, named Passkeys, optional passwords and sessions
@@ -271,17 +281,23 @@ THelpViewer/
 │   │   └── __init__.py
 │   └── __init__.py         ←   application version
 ├── data/                   ← Permanent data (included in backups, excluded from Git)
-│   ├── sources/<Product>/  ← Original HELP files and licence notices
 │   ├── helps/<Product>/    ← Published UHF bundles + catalog.json
 │   ├── docs/               ← Published documentation / permanent additional documents
 │   ├── dos/users/<id>/     ← Private overlays, savegames and removable media
 │   ├── accounts.sqlite3    ← Accounts, Passkeys and sessions
 │   ├── statistics.sqlite3  ← Statistics and Hall of Fame
+│   ├── jobs.sqlite3        ← Durable processing intent, progress and recovery checkpoints
+│   ├── server-settings.json ← Capacity, backup and cache retention settings
+│   ├── midi-settings.json  ← Administrator's selected MIDI sources/albums
 │   └── content-settings.json ← Administrator's selected HELP / DOS packages
-├── var/                    ← Rebuildable runtime data; do not erase wholesale
+├── var/                    ← Working sources and runtime data; do not erase wholesale
+│   ├── sources/<Product>/  ← Original HELP/licences; cache lifetime defaults to 30 days
 │   ├── downloads/help/     ← Cached HELP downloads / archives
 │   ├── downloads/dos/      ← Cached DOS package archives
+│   ├── downloads/midi/     ← Validated raw MIDI/album downloads
 │   ├── dos/c/              ← Generated shared C disk
+│   ├── global-search.sqlite3 ← Rebuildable full-text index and per-file checkpoints
+│   ├── backups/            ← Recoverable HELP/DOS/MIDI generations, bounded per family
 │   └── midi/               ← Downloaded MIDI tracks, covers and catalog
 ├── docs/                   ← Version-controlled documentation sources
 │   ├── FORMATS.md          ←   binary/source format index
@@ -340,12 +356,12 @@ Measured on the current generated UHF 2.0 payloads:
 
 1. The **downloader** (`python3 -m thelpviewer.server.downloader`) reads one shared manifest of
    logical products and fetches them via provider-specific downloaders
-   (WinWorldPC, archive.org, old-dos.ru, GitHub, DaveP NG mirror, Cheater.cz) into `data/sources/`
+   (WinWorldPC, archive.org, old-dos.ru, GitHub, DaveP NG mirror, Cheater.cz) into `var/sources/`
    When called without selectors it downloads everything it knows about and skips
-   files already present in `var/downloads/help/` or `data/sources/`
+   files already present in `var/downloads/help/` or `var/sources/`
 
 The downloader now also manages the full published DOS Scorpions Cheater corpus.
-Those releases are stored under `data/sources/Scorpions Cheater DOS/` in per-version
+Those releases are stored under `var/sources/Scorpions Cheater DOS/` in per-version
 subdirectories so DAT-era and pre-DAT-era builds can coexist without overwriting
 each other.
 2. `thelp.sh build` runs the converter over manifest-backed build groups resolved
@@ -609,7 +625,8 @@ Signed-in administrators have User name → Configuration → **Rebuild DOS C**
 and **Rebuild MIDI** in production as well as local development, with confirmation
 and a shared progress dialog. The API requires an active administrator session,
 the configured host and an exact same-origin write; ordinary members are denied.
-Previous data moves to `var/backups/` for recovery:
+Recovery generations are grouped in `var/backups/help/`, `var/backups/dos/`
+and `var/backups/midi/`; existing backups move there automatically on upgrade.
 DOS rebuild retains private overlays/source archives; MIDI rebuild stops the
 existing downloader before replacing tracks, covers and catalog and downloading
 the configured sources again. Successful jobs retain two backups per HELP,
@@ -657,9 +674,12 @@ Install `requirements-dev.txt`, then run:
 PYTHONDONTWRITEBYTECODE=1 python -m pytest -p no:cacheprovider
 ```
 
-Browser tests use Node.js and Chrome when available. Original-corpus and some
-browser regressions also require their source files and published HELP bundles;
-administrator package selections can make those prerequisites unavailable.
+Browser tests use Node.js and Chrome when available. Original-corpus regressions
+require their source files. The main browser regression builds its required
+originals into a temporary HELP library, independently of administrator package
+selections; Scorpion's publication check also uses temporary output.
+THELP reference digests use a frozen source/hash cohort; additional originals
+have separate independently verified references rather than replacing it.
 Do not alter permanent content merely to satisfy a test fixture. The repository's
 `TODO.md` records the latest complete-suite result and unresolved format/fixture
 work; it is not published in the public Docs catalog. Keep repository
