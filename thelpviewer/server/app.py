@@ -18,6 +18,7 @@ from .. import __version__
 from ..public_docs import is_public_doc_path, public_doc_sources
 from .accounts.store import AccountStore
 from .config import AppConfig, load_config
+from .compression import ResponseCompressionMiddleware
 from .routes.auth import create_auth_router
 from .routes.midi import create_midi_router
 from .routes.dos import create_dos_router
@@ -121,6 +122,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 running_app.state.jobs.release()
 
     app = FastAPI(title="THelpViewer", version=__version__, lifespan=lifespan)
+    app.add_middleware(ResponseCompressionMiddleware)
     app.state.config = config
     persistent = config.persistent_dir
     statistics_path = config.statistics_path or persistent / "statistics.sqlite3"

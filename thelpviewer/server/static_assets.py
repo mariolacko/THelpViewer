@@ -9,32 +9,18 @@ from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import Headers
 from starlette.responses import Response
 
+from .compression import accepts_encoding
+
 
 class ViewerAssets(StaticFiles):
     """Serve the versioned MIDI SoundFont with its precompressed variant."""
-
-    @staticmethod
-    def _accepts_brotli(value: str) -> bool:
-        for part in value.split(","):
-            encoding, _, parameters = part.partition(";")
-            if encoding.strip().lower() != "br":
-                continue
-            for parameter in parameters.split(";"):
-                name, _, quality = parameter.strip().partition("=")
-                if name.strip().lower() == "q":
-                    try:
-                        return float(quality) > 0
-                    except ValueError:
-                        return False
-            return True
-        return False
 
     async def get_response(self, path: str, scope: dict) -> Response:
         if path != "midi/synth/FluidR3Mono_GM.sf3":
             return await super().get_response(path, scope)
 
-        accepted = Headers(scope=scope).get("accept-encoding", "")
-        brotli = self._accepts_brotli(accepted)
+        accepted = ",".join(Headers(scope=scope).getlist("accept-encoding"))
+        brotli = accepts_encoding(accepted, "br")
         compressed = Path(self.directory) / f"{path}.br" if self.directory else None
         use_brotli = bool(brotli and compressed and compressed.is_file())
         response = await super().get_response(f"{path}.br" if use_brotli else path, scope)

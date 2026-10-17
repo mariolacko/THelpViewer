@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import gzip
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -12,23 +11,6 @@ from ..accounts.store import AccountStore
 from ..config import AppConfig
 from ..dos.store import DosPromptStore
 from ..dos.paths import DosError
-
-
-def _accepts_gzip(value: str) -> bool:
-    for part in value.split(","):
-        encoding, *parameters = part.split(";")
-        if encoding.strip().lower() != "gzip":
-            continue
-        quality = 1.0
-        for parameter in parameters:
-            name, _, number = parameter.strip().partition("=")
-            if name.lower() == "q":
-                try:
-                    quality = float(number)
-                except ValueError:
-                    quality = 0.0
-        return quality > 0
-    return False
 
 
 def create_dos_router(config: AppConfig, accounts: AccountStore, store: DosPromptStore) -> APIRouter:
@@ -102,11 +84,9 @@ def create_dos_router(config: AppConfig, accounts: AccountStore, store: DosPromp
             data = store.read_chunk(account_id, name, sha256, base_file, offset, size)
         except (DosError, OSError) as error:
             raise HTTPException(status_code=409, detail=str(error)) from None
-        headers = {"Cache-Control": "no-store", "Vary": "Accept-Encoding, Cookie"}
-        if _accepts_gzip(request.headers.get("accept-encoding", "")) and len(data) >= 1024:
-            data = gzip.compress(data, compresslevel=2)
-            headers["Content-Encoding"] = "gzip"
-        return Response(data, media_type="application/octet-stream", headers=headers)
+        return Response(data, media_type="application/octet-stream", headers={
+            "Cache-Control": "no-store", "Vary": "Cookie",
+        })
 
     @router.put("/overlay")
     async def overlay(request: Request) -> Response:

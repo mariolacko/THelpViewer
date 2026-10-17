@@ -216,6 +216,35 @@ Waiting requests for the same track are promoted, not duplicated. Regular packag
 share at most three regular source lanes; each source permits one transfer,
 including urgent playback. Completed playback rows move to Completed downloads.
 
+## HTTP response compression
+
+`compression.py` applies one ASGI policy across the viewer, API and static
+mounts. Starlette performs streaming gzip (level 5, minimum 1024 bytes), with
+large chunks compressed off the event loop. HTML, JSON/catalogs, JS, CSS, XML,
+Markdown, WebAssembly, raw MIDI and DOS chunks all use this policy; individual
+routes do not compress their own responses. Clients decode HTTP gzip normally,
+without application changes. The direct Starlette dependency is at least 1.8
+for its MIME exclusions, partial-response protection and off-thread compression.
+
+Negotiation follows [Accept-Encoding](https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.3):
+coding names are case-insensitive; an explicit `gzip;q=0` overrides `*`.
+Absent/empty headers conservatively select identity; unsupported encodings and
+malformed/zero gzip weights do not enable gzip. `Vary: Accept-Encoding` separates
+eligible compressed/identity cache variants, retaining existing Vary values.
+Compression updates/removes Content-Length as appropriate and weakens strong
+ETags when gzip changes the bytes. FileResponse uses chunks rather than
+zero-copy pathsend when gzip is negotiated; files are not read wholly into RAM.
+
+HEAD, byte-range/206 responses, SSE, existing Content-Encoding, compressed
+archives/UHF `.json.gz`, SF3, compressed audio/video, WOFF and compressed images
+are not recompressed. Raw UHF remains gzip *file data*, not HTTP Content-Encoding,
+because its decoder explicitly expands it. The precompressed SoundFont keeps
+its Brotli sidecar, cache policy and shared encoding negotiation. Response
+`Cache-Control: no-transform` is respected. Account/registration-token APIs,
+administrator user/invitation responses and any Set-Cookie response are excluded
+to avoid compressing secrets with caller-controlled text. This does not add
+compressed request-body support or change stored files/download-cache formats.
+
 ## Server module boundaries
 
 `app.py` constructs services, connects their shared dependencies and registers

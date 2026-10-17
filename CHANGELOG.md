@@ -4,6 +4,12 @@
 
 ### 2.1 development
 
+- Negotiate shared HTTP gzip compression for HTML, API JSON, JavaScript, CSS,
+  XML, Markdown, WebAssembly, MIDI and DOS file chunks from 1 KiB. Honor encoding
+  exclusions/wildcards, preserve Vary and weak validators, and stream large
+  files without recompressing UHF .gz, archives, images or the Brotli SoundFont.
+  Leave ranges, event streams, account/token and cookie-setting responses alone.
+  Remove route-specific DOS gzip and share SoundFont encoding negotiation.
 - Distinguish waiting (`◷`) from active download/extraction/conversion in the
   shared queue. Report resource/source waits and retry cooldowns, HELP awaiting
   conversion, and DOS awaiting installation/publication without pretending they
