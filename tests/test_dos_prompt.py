@@ -461,8 +461,8 @@ def test_private_overlays_preserve_base_deletions_and_empty_directories(tmp_path
         assert "drive_c/README.TXT" not in archive.namelist()
         assert "drive_c/EMPTY/" in archive.namelist()
         conf = archive.read(".jsdos/dosbox.conf").decode()
-        assert "mount c drive_c" in conf and "config -securemode" in conf
-        assert conf.index("mount c") < conf.index("config -securemode") < conf.index("echo THelpViewer")
+        assert "mount c drive_c" in conf and "config -securemode" not in conf
+        assert conf.index("mount c") < conf.index("mount d") < conf.index("echo THelpViewer")
     with zipfile.ZipFile(io.BytesIO(store.bundle(second)[0])) as archive:
         assert archive.read("drive_c/README.TXT") == original
         assert "drive_c/SAVE.DAT" not in archive.namelist()
@@ -612,13 +612,56 @@ def test_unread_private_files_are_retained_without_browser_upload(tmp_path):
     account = uuid.uuid4().hex
     store.save(account, payload(store, files={"SAVE.DAT": b"unchanged", "OTHER.DAT": b"remove"}))
     data = payload(store, revision=1, files={"NEW.DAT": b"new"})
-    data["unchanged"] = ["SAVE.DAT"]
+    data["unchanged"] = {"SAVE.DAT": hashlib.sha256(b"unchanged").hexdigest()}
     store.save(account, data)
     assert store.overlay(account)[1] == {"SAVE.DAT": b"unchanged", "NEW.DAT": b"new"}
     digest = hashlib.sha256(b"unchanged").hexdigest()
     assert store.read_chunk(account, "SAVE.DAT", digest, False, 2, 3) == b"cha"
     with pytest.raises(DosError):
         store.read_chunk(uuid.uuid4().hex, "SAVE.DAT", digest, False, 0, 3)
+
+
+def test_unchanged_autosaves_do_not_invalidate_other_dos_windows(tmp_path, monkeypatch):
+    store = store_at(tmp_path)
+    account = uuid.uuid4().hex
+    initial = {**payload(store), "directories": ["GAMES"]}
+    assert store.save(account, initial) == 0  # Implicit base directories are not edits.
+    assert store.save(account, initial) == 0
+    assert not (store.overlays.user_dir(account) / "c").exists()
+    changed = payload(store, files={"SAVE/LEVEL.DAT": b"saved"}, deleted=["README.TXT"])
+    changed["directories"] = ["GAMES", "SAVE", "EMPTY/NESTED", "EMPTY"]
+    assert store.save(account, changed) == 1
+    replay = {**changed, "unchanged": {"SAVE/LEVEL.DAT": hashlib.sha256(b"saved").hexdigest()}, "files": {}}
+
+    def no_snapshot(*args):
+        pytest.fail("Unchanged saves must not rotate or rewrite private snapshots")
+
+    monkeypatch.setattr(store.overlays, "_write_snapshot", no_snapshot)
+    assert store.save(account, replay) == 1  # Stale identical state is safe to replay.
+    assert store.save(account, {**replay, "revision": 1}) == 1
+    assert store.save(account, changed) == 1  # Lost response, all bytes uploaded again.
+    assert store.overlay(account)[0:3] == (1, {"SAVE/LEVEL.DAT": b"saved"}, ["README.TXT"])
+    with zipfile.ZipFile(io.BytesIO(store.bundle(account)[0])) as archive:
+        assert "drive_c/EMPTY/NESTED/" in archive.namelist()
+        assert "drive_c/SAVE/" in archive.namelist()
+    for unsafe in ({**initial}, {**replay, "directories": []}, {**replay, "deleted": []},
+                   {**replay, "files": {"OTHER.TXT": base64.b64encode(b"different").decode()}},
+                   {**replay, "unchanged": {"SAVE/LEVEL.DAT": hashlib.sha256(b"older").hexdigest()}},
+                   {**replay, "revision": 2}, {**replay, "revision": True}):
+        with pytest.raises(DosError, match="Another DOS"):
+            store.save(account, unsafe)
+
+
+def test_retained_private_hash_cannot_hide_a_concurrent_edit(tmp_path):
+    store = store_at(tmp_path)
+    account = uuid.uuid4().hex
+    assert store.save(account, payload(store, files={"SAVE.DAT": b"first"})) == 1
+    stale = payload(store, revision=1)
+    stale["unchanged"] = {"SAVE.DAT": hashlib.sha256(b"first").hexdigest()}
+    assert store.save(account, payload(store, revision=1, files={"SAVE.DAT": b"second"})) == 2
+    with pytest.raises(DosError, match="Another DOS"):
+        store.save(account, stale)
+    assert store.overlay(account)[0:2] == (2, {"SAVE.DAT": b"second"})
 
 
 def test_root_text_binary_and_boot_files_use_the_same_schema_and_remain_frozen(tmp_path):
@@ -641,7 +684,8 @@ def test_root_text_binary_and_boot_files_use_the_same_schema_and_remain_frozen(t
     assert store.files["AUTOEXEC.BAT"] == b"administrator content"
     with zipfile.ZipFile(io.BytesIO(store.bundle(None)[0])) as archive:
         commands = archive.read(".jsdos/dosbox.conf").decode()
-        assert commands.index("config -securemode") < commands.index("call C:\\AUTOEXEC.BAT")
+        assert "config -securemode" not in commands
+        assert commands.index("mount d") < commands.index("call C:\\AUTOEXEC.BAT")
 
 
 def test_default_manifest_does_not_create_an_ineffective_config_sys(tmp_path):

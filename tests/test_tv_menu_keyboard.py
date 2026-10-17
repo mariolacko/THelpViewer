@@ -505,8 +505,12 @@ const start = source.indexOf("class TVDialogManager");
 const end = source.indexOf("// ── TVMessageBox", start);
 const HOST_WINDOW_TOKEN = "__host__";
 const TV_COMMANDS = {
-    CLOSE: "close", CANCEL: "cancel", ZOOM: "zoom", NEXT: "next", PREVIOUS: "previous",
+    CLOSE: "close", CANCEL: "cancel", ZOOM: "zoom", NEXT: "next", PREVIOUS: "previous", DEFAULT_SIZE: "default-size",
 };
+const wfGrow = 2, evCommand = 0x100;
+class TVEvent { constructor(what, values) { Object.assign(this, {what}, values); } }
+global.TVView = { _fromElement: (element) => element?._tvView || null };
+global.TVWindow = class {};
 global.document = { querySelector: () => null, body: {} };
 global.TVDesktop = class {};
 eval(source.slice(start, end) + "\nglobalThis.TestDialogManager = TVDialogManager;");
@@ -528,6 +532,20 @@ if (!manager.canDispatchCommand(TV_COMMANDS.CLOSE) || !manager.canDispatchComman
 if (manager.canDispatchCommand(TV_COMMANDS.NEXT) || manager.openWindowCount() !== 1) {
     throw new Error("Next was enabled for only one window");
 }
+const ownedWindow = new TVWindow();
+first._tvView = ownedWindow;
+ownedWindow.flags = wfGrow;
+if (manager.canDispatchCommand(TV_COMMANDS.DEFAULT_SIZE)) throw new Error("Reset without a resizer was enabled");
+first._tvResizer = {};
+let resetEvent;
+ownedWindow.dispatchEvent = (event) => { resetEvent = event; };
+if (!manager.canDispatchCommand(TV_COMMANDS.DEFAULT_SIZE) || !manager.dispatchCommand(TV_COMMANDS.DEFAULT_SIZE)
+    || resetEvent?.what !== evCommand || resetEvent.command !== TV_COMMANDS.DEFAULT_SIZE) {
+    throw new Error("Default size did not use the owned window TVEvent command");
+}
+ownedWindow.flags = 0;
+if (manager.canDispatchCommand(TV_COMMANDS.DEFAULT_SIZE)) throw new Error("Fixed window reset was enabled");
+ownedWindow.flags = wfGrow;
 manager.windows.set("second", { isConnected: true });
 manager.stackOrder.push("second");
 if (!manager.canDispatchCommand(TV_COMMANDS.NEXT) || !manager.canDispatchCommand(TV_COMMANDS.PREVIOUS)) {
@@ -536,7 +554,8 @@ if (!manager.canDispatchCommand(TV_COMMANDS.NEXT) || !manager.canDispatchCommand
 manager.dialogs.set("dialog", { isOpen: () => true });
 manager.stackOrder.push("dialog");
 manager.activeTarget = "dialog";
-if (!manager.canDispatchCommand(TV_COMMANDS.CLOSE) || manager.canDispatchCommand(TV_COMMANDS.ZOOM)) {
+if (!manager.canDispatchCommand(TV_COMMANDS.CLOSE) || manager.canDispatchCommand(TV_COMMANDS.ZOOM)
+    || manager.canDispatchCommand(TV_COMMANDS.DEFAULT_SIZE) || manager.dispatchCommand(TV_COMMANDS.DEFAULT_SIZE)) {
     throw new Error("dialog command state did not replace the active window state");
 }
 '''
@@ -565,7 +584,7 @@ const fs = require("fs");
 const source = fs.readFileSync(process.argv[1], "utf8");
 const start = source.indexOf("class TVBundleApp");
 const end = source.indexOf("// ── Bootstrap", start);
-const TV_COMMANDS = { CLOSE: "close", ZOOM: "zoom", NEXT: "next", PREVIOUS: "previous" };
+const TV_COMMANDS = { CLOSE: "close", ZOOM: "zoom", NEXT: "next", PREVIOUS: "previous", DEFAULT_SIZE: "default-size" };
 global.TVProgram = class {};
 eval(source.slice(start, end) + "\nglobalThis.TestBundleApp = TVBundleApp;");
 
@@ -590,7 +609,7 @@ function item(command) {
         },
     };
 }
-const items = ["tile", "cascade", "list", "zoom", "next", "previous", "close"].map(item);
+const items = ["tile", "cascade", "list", "zoom", "default-size", "next", "previous", "close"].map(item);
 const menuState = {
     windowItems: new Map(items.map((entry) => [entry.dataset.tvWindowCmd, entry])),
     findItem: item("find"),
@@ -615,9 +634,10 @@ windowCount = 1;
 targetCount = 1;
 enabledCommands.add(TV_COMMANDS.CLOSE);
 enabledCommands.add(TV_COMMANDS.ZOOM);
+enabledCommands.add(TV_COMMANDS.DEFAULT_SIZE);
 app._updateWindowMenuState();
 const byCommand = Object.fromEntries(items.map((entry) => [entry.dataset.tvWindowCmd, entry]));
-for (const command of ["tile", "cascade", "list", "zoom", "close"]) {
+for (const command of ["tile", "cascade", "list", "zoom", "default-size", "close"]) {
     if (byCommand[command].disabled || byCommand[command].classList.contains("is-disabled")) {
         throw new Error(`${command} was not enabled for an active window`);
     }

@@ -13,7 +13,7 @@ NODE = shutil.which("node")
 def test_dos_resize_command_keeps_mode_ratio_and_other_windows_stay_free():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-class View{clearEvent(e){e.what=0;}setHelpCtx(){}handleEvent(){}}
+class View{clearEvent(e){e.what=0;}setHelpCtx(){}handleEvent(){}setState(mask,on){this.state=on?(this.state|mask):(this.state&~mask);}getState(mask){return Boolean(this.state&mask);}}
 class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
 class Rect{constructor(x1=0,y1=0,x2=0,y2=0){Object.assign(this,{x1,y1,x2,y2});}get width(){return this.x2-this.x1;}get height(){return this.y2-this.y1;}}
 const TV={TVView:View,TVWindow:Window,TVStaticText:View,TVRect:Rect,
@@ -27,6 +27,7 @@ vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),context);
 vm.runInNewContext(fs.readFileSync(process.argv[2],'utf8'),context);
 const dos=new TV.TVDosWindow(),vars=new Map();
 TV.TurboVisionWindowResizer.prototype.restoreState=()=>true;
+TV.TurboVisionWindowResizer.prototype.captureGeometry=()=>({left:0,top:0,cols:82,rows:27});
 const element={_tvView:dos,closest:()=>null,querySelector:()=>null,
  style:{setProperty:(key,value)=>vars.set(key,Number(value))}};
 const resizer=new TV.TurboVisionWindowResizer(element);
@@ -205,7 +206,7 @@ async function scenario(mode){
   resume(){resumeCalls++;return Promise.reject(new Error('Autoplay denied'));}close(){return Promise.resolve();}}
  class Loading {constructor(title){assert.equal(title,mode==='updating'?'Updating DOS C':'Initializing DOS C');this.filenameView=new Text();}show(){}update(value){progress.push(value);if(mode==='cancel')this.cancelled=true;}destroy(){destroyed++;}}
  const TV={TVView:View,TVWindow:Window,TVStaticText:Text,TVRect:class{},TVPoint:class{},TVLoadingDialog:Loading,TV_HELP_CONTEXTS:{hcDosPrompt:2320}};
- const context={URL,AbortSignal,DOMException,Set,Promise,console,
+ const context={URL,URLSearchParams,AbortSignal,DOMException,Set,Promise,console,
   setTimeout(fn,ms){const id=++next;if(ms===500){Promise.resolve().then(fn);return id;}timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},
   setInterval(){return 1;},clearInterval(){},
   document:{currentScript:{src:'http://localhost/assets/tv-dos.js'},hidden:false,addEventListener(){},removeEventListener(){}},
@@ -299,6 +300,12 @@ win.view.canvas=canvas;
  win.fullScreen();assert.equal(requests,2);
  resolveRequest();await win.fullscreenRequest;listeners.get('fullscreenchange')();
  assert.equal(document.fullscreenElement,canvas);
+ win.active=false; // Native fullscreen still owns its controls if TV focus changes.
+ win.view.handleEvent({what:TV.evKeyDown,nativeEvent:{type:'keydown',code:'NumpadEnter',altKey:true,
+  preventDefault(){},stopPropagation(){}}});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(document.fullscreenElement,null);win.active=true;
+ win.fullScreen();resolveRequest();await win.fullscreenRequest;listeners.get('fullscreenchange')();
  let menu=0;win.onMenu=()=>menu++;
  win.view.handleEvent({what:TV.evKeyDown,nativeEvent:{type:'keydown',code:'KeyM',ctrlKey:true,altKey:true,
   preventDefault(){},stopPropagation(){}}});
@@ -322,4 +329,37 @@ win.view.canvas=canvas;
 '''
     result = subprocess.run([NODE, "-e", script, "www/assets/tv-dos.js"],
                             capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required")
+def test_cloud_close_failure_requires_explicit_discard_and_preserves_local_failures():
+    script = r'''
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+let answer='cancel',exits=0,boxes=0,removed=0,local=0;
+class View{setHelpCtx(){}}
+class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
+class Box{static MF_WARNING=0;static MF_OK_CANCEL=3;async show(options){boxes++;
+ assert.match(options.title,/without saving C/);assert.match(options.lines.join('\n'),/will not be overwritten/);
+ assert.equal(win.paused,true);return answer;}destroy(){removed++;}}
+const TV={TVView:View,TVWindow:Window,TVStaticText:View,TVMessageBox:Box,TVRect:class{},TVPoint:class{},TV_HELP_CONTEXTS:{}};
+const document={currentScript:{src:'http://localhost/assets/tv-dos.js'},fullscreenElement:null,removeEventListener(){}};
+vm.runInNewContext(fs.readFileSync('www/assets/tv-dos.js','utf8'),{URL,clearInterval(){},clearTimeout(){},document,window:{THelpViewerTV:TV}});
+const win=new TV.TVDosWindow();win.syncPause=()=>{};win.owner={insert(){},remove(){}};
+win.view.ci={exit:async()=>exits++};win.session={account:'reader'};
+win.saveSnapshot=async()=>{local++;const error=Error('Another DOS window saved this drive');error.dosCloudSave=true;throw error;};
+(async()=>{
+ assert.equal(await win.stop(),false);assert.equal(exits,0);assert.equal(win.disposed,false);
+ assert.equal(win.paused,false);assert.ok(win.view.ci);assert.equal(win.confirmation,null);
+ // The message box's []/Escape resolve as cancel, never implicit discard.
+ answer='cancel';assert.equal(await win.stop(),false);assert.equal(exits,0);
+ answer='ok';await win.stop();assert.equal(exits,1);assert.equal(win.disposed,true);
+ assert.equal(boxes,3);assert.equal(removed,3);assert.equal(local,3);
+ const failed=new TV.TVDosWindow();failed.view.ci={};failed.session={account:'reader'};
+ failed.saveSnapshot=async()=>{throw Error('Local D changed outside DOS');};
+ await assert.rejects(failed.stop(),/Local D/);assert.equal(boxes,3);
+ assert.ok(failed.view.ci);assert.equal(failed.disposed,false);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+    result = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr

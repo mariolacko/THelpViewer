@@ -3270,6 +3270,7 @@ function buildBundleMenuBar(catalog, activeBundle = null, session = null, dosWin
         { cmd: "cascade", label: "C~a~scade", hotkey: "" },
         { cmd: "list", label: "Window ~L~ist", hotkey: "Alt-0" },
         { cmd: "zoom", label: "~Z~oom", hotkey: "F5" },
+        { cmd: "default-size", label: "~D~efault Size", hotkey: "" },
         { cmd: "next", label: "~N~ext", hotkey: "F6" },
         { cmd: "previous", label: "~P~revious", hotkey: "Shift-F6" },
         { cmd: "close", label: "~C~lose", hotkey: "Alt-F3" },
@@ -3321,13 +3322,18 @@ function buildBundleMenuBar(catalog, activeBundle = null, session = null, dosWin
     if (contents) { topItems.push(contents); }
     if (dosWindow?.active) {
         const command = (label, name, disabled = false, shortcut = "") => new TVMenuItem(label, name, 0, hcDosPrompt, shortcut).setDisabled(disabled);
-        const ready = Boolean(dosWindow.view.ci) && !dosWindow.busy;
+        const idle = !dosWindow.busy && !dosWindow.selectingLocal;
+        const ready = Boolean(dosWindow.view.ci) && idle;
         topItems.push(renderMenuSubmenu("D~O~S Prompt", [
             command(dosWindow.paused ? "~R~esume" : "~P~ause", "dos-pause", !ready, "Alt-Pause"),
-            command("Res~t~art", "dos-restart", dosWindow.busy, "Ctrl-Alt-R"),
+            command("Res~t~art", "dos-restart", !idle, "Ctrl-Alt-R"),
             command("~S~ave C to cloud", "dos-save", !ready || !dosWindow.session?.account),
             NewLine(),
-            command("Mount ~C~D...", "dos-mount-cd", !ready || !dosWindow.session?.account),
+            command("Mount local f~o~lder (D:)...", "dos-mount-local", !ready || !dosWindow.lazyDisk),
+            ...(dosWindow.localSaveFailed ? [command("Retry local ~D~ save", "dos-save-local", !ready)] : []),
+            command("Disco~n~nect local D:", "dos-unmount-local", !ready || !dosWindow.localDrive),
+            NewLine(),
+            command("Mount ~C~D (E:)...", "dos-mount-cd", !ready || !dosWindow.session?.account),
             command("Mount ~F~loppy...", "dos-mount-floppy", !ready || !dosWindow.session?.account),
             command("~E~ject media", "dos-eject", !ready || !dosWindow.media),
             NewLine(), command(dosWindow.zoomGeometry ? "~Z~oom back" : "~Z~oom 2×", "dos-zoom"),
@@ -3527,6 +3533,7 @@ class TVBundleApp extends TVProgram {
 
     _dispatchWindowCommand(command) {
         if (command === "zoom") { this.dialogManager.dispatchCommand(TV_COMMANDS.ZOOM); }
+        else if (command === TV_COMMANDS.DEFAULT_SIZE) { this.dialogManager.dispatchCommand(command); }
         else if (command === "close") { this.dialogManager.dispatchCommand(TV_COMMANDS.CLOSE); }
         else if (command === "next") { this.dialogManager.dispatchCommand(TV_COMMANDS.NEXT); }
         else if (command === "previous") { this.dialogManager.dispatchCommand(TV_COMMANDS.PREVIOUS); }
@@ -3809,7 +3816,7 @@ class TVBundleApp extends TVProgram {
         this.menuState = buildBundleMenuBar([], null, this.authSession, null, this.downloadProgress);
         fillBorders();
         this._bindMenus();
-        void this._refreshAuthSession();
+        this.sessionActivity = new TV.TVSessionActivity((session) => this._setAuthSession(session)).start();
         this.downloadProgress.start(() => this.menuController?.menuView);
         this._catalogReady = this._loadCatalog();
 
@@ -3947,6 +3954,7 @@ class TVBundleApp extends TVProgram {
             cascade: windowCount > 0,
             list: targetCount > 0,
             zoom: this.dialogManager.canDispatchCommand(TV_COMMANDS.ZOOM),
+            [TV_COMMANDS.DEFAULT_SIZE]: this.dialogManager.canDispatchCommand(TV_COMMANDS.DEFAULT_SIZE),
             next: this.dialogManager.canDispatchCommand(TV_COMMANDS.NEXT),
             previous: this.dialogManager.canDispatchCommand(TV_COMMANDS.PREVIOUS),
             close: this.dialogManager.canDispatchCommand(TV_COMMANDS.CLOSE),
@@ -4551,15 +4559,11 @@ class TVBundleApp extends TVProgram {
         this._bindMenus();
     }
 
-    async _refreshAuthSession() {
-        try {
-            const response = await fetch("/api/auth/session", { cache: "no-store" });
-            if (response.ok) { this._setAuthSession(await response.json()); }
-        } catch { /* Local generated pages may have no account API. */ }
-    }
-
     _setAuthSession(session) {
+        this.sessionActivity?.setSession(session);
         if (this.dosWindow?.session && this.dosWindow.session.account !== (session?.user?.username || "")) {
+            this.dosWindow.session.account = ""; // Never upload the previous account's C after expiry/switch.
+            this.dosWindow.paused = true; this.dosWindow.syncPause();
             void this._closeDosPrompt(false);
         }
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
@@ -4767,7 +4771,7 @@ class TVBundleApp extends TVProgram {
         if (!windowView || windowView.closing) { return; }
         windowView.closing = true;
         try {
-            await windowView.stop(save);
+            if (await windowView.stop(save) === false) { return; }
             windowView.view.destroy(); windowView.resizer?.destroy();
             this.desktopView.remove(windowView); windowView.root?.remove();
             this.dosWindow = null;

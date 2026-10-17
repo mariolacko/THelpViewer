@@ -382,6 +382,7 @@ const TV_COMMANDS = Object.freeze({
     CLOSE: "close",
     ZOOM: "zoom",
     RESIZE: "resize",
+    DEFAULT_SIZE: "default-size",
     NEXT: "next",
     PREVIOUS: "previous",
     OK: "ok",
@@ -5527,6 +5528,9 @@ class TVWindow extends TVGroup {
             if (typeof this.zoomAction === "function") { this.zoomAction(); }
             else { this.zoom(); }
             this.clearEvent(event);
+        } else if (event.command === TV_COMMANDS.DEFAULT_SIZE && (this.flags & wfGrow) !== 0) {
+            this.restoreSize();
+            this.clearEvent(event);
         }
     }
 
@@ -5558,6 +5562,11 @@ class TVWindow extends TVGroup {
     zoom() {
         if (this.root?._tvResizer) { this.root._tvResizer.toggle(); }
         else { this.root?.classList.toggle("is-maximized"); }
+        return this;
+    }
+
+    restoreSize() {
+        if ((this.flags & wfGrow) !== 0) { this.root?._tvResizer?.restoreDefaultSize(); }
         return this;
     }
 
@@ -6299,6 +6308,11 @@ class TVDialogManager {
         if (dialog && dialog.isOpen()) {
             return command === TV_COMMANDS.CLOSE || command === TV_COMMANDS.CANCEL;
         }
+        if (command === TV_COMMANDS.DEFAULT_SIZE) {
+            const element = target === HOST_WINDOW_TOKEN ? this.hostWindow : this.windows.get(target);
+            const view = TVView._fromElement(element);
+            return view instanceof TVWindow && (view.flags & wfGrow) !== 0 && Boolean(element?._tvResizer);
+        }
         return typeof this.windowCommands.get(target)?.[command] === "function";
     }
 
@@ -6312,6 +6326,12 @@ class TVDialogManager {
             return this.cycleTarget(-1);
         }
         const target = this.activeTarget;
+        if (command === TV_COMMANDS.DEFAULT_SIZE) {
+            if (!this.canDispatchCommand(command)) { return false; }
+            const element = target === HOST_WINDOW_TOKEN ? this.hostWindow : this.windows.get(target);
+            TVView._fromElement(element).dispatchEvent(new TVEvent(evCommand, { command }));
+            return true;
+        }
         const dialog = this.dialogs.get(target);
         if (dialog && dialog.isOpen()) {
             if (command === TV_COMMANDS.CLOSE || command === TV_COMMANDS.CANCEL) {

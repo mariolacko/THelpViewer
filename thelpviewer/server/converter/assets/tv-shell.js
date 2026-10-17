@@ -15,6 +15,7 @@ const {
     bfDefault,
     sfModal,
     sfDisabled,
+    sfDragging,
     TVMenu,
     TVMenuBar,
     NewLine,
@@ -526,6 +527,8 @@ class TurboVisionWindowResizer {
         this.onHandleMouseDown = (event) => this.startResize(event);
         this.onMoveHandleMouseDown = (event) => this.startMove(event);
         this.onBeforeUnload = () => this.persistState();
+        const initial = this.captureGeometry();
+        this.defaultSize = { cols: initial.cols, rows: initial.rows };
         this.bind();
         if (!this.restoreState()) {
             this.centerWindow();
@@ -560,6 +563,7 @@ class TurboVisionWindowResizer {
     }
 
     startResize(event) {
+        if (event.button > 0 || this.moveState || this.dragState) { return; }
         if (this.windowElement.classList.contains("is-maximized")) {
             return;
         }
@@ -581,11 +585,13 @@ class TurboVisionWindowResizer {
             cellWidth: cell.width,
             cellHeight: cell.height,
         };
-        document.addEventListener("mousemove", this.onResizeMove);
-        document.addEventListener("mouseup", this.onResizeEnd);
+        document.addEventListener("mousemove", this.onResizeMove, true);
+        document.addEventListener("mouseup", this.onResizeEnd, true);
+        window.addEventListener("blur", this.onDragCancel);
     }
 
     startMove(event) {
+        if (event.button > 0 || this.moveState || this.dragState) { return; }
         if (event.target.closest(".tv-close-control")) {
             return;
         }
@@ -610,12 +616,14 @@ class TurboVisionWindowResizer {
             maxTop: this.desktop ? Math.max(0, this.desktop.clientHeight - this.windowElement.offsetHeight) : Infinity,
         };
         this.setMoveFrame(true);
-        document.addEventListener("mousemove", this.onMoveDrag);
-        document.addEventListener("mouseup", this.onMoveEnd);
+        document.addEventListener("mousemove", this.onMoveDrag, true);
+        document.addEventListener("mouseup", this.onMoveEnd, true);
+        window.addEventListener("blur", this.onDragCancel);
     }
 
     setResizeFrame(active) {
         this.windowElement.classList.toggle("is-resizing", active);
+        this.windowElement._tvView?.setState?.(sfDragging, active);
         this.setWindowFrame();
     }
 
@@ -624,6 +632,7 @@ class TurboVisionWindowResizer {
             return;
         }
         this.windowElement.classList.toggle("is-moving", active);
+        this.windowElement._tvView?.setState?.(sfDragging, active);
         this.setWindowFrame();
     }
 
@@ -683,6 +692,22 @@ class TurboVisionWindowResizer {
         if (zoomGlyph) { zoomGlyph.textContent = "↑"; }
         this.restoreSnapshot = this.captureGeometry();
         this.persistState();
+    }
+
+    restoreDefaultSize() {
+        const current = this.windowElement.classList.contains("is-maximized") && this.restoreSnapshot
+            ? this.restoreSnapshot : this.captureGeometry();
+        const cell = measureCells(), style = getComputedStyle(this.windowElement);
+        const maxCols = this.desktop ? Math.max(1, Math.floor(this.desktop.clientWidth / cell.width) - 2) : Infinity;
+        const maxRows = this.desktop ? Math.max(1, Math.floor((this.desktop.clientHeight - 2 * cell.width) / cell.height)) : Infinity;
+        const cols = Math.min(maxCols, Math.max(this.defaultSize.cols, this.numericVar(style, "--tv-window-min-cols", 1)));
+        const rows = Math.min(maxRows, Math.max(this.defaultSize.rows, this.numericVar(style, "--tv-window-min-rows", 1)));
+        this.place({ cols, rows,
+            left: this.desktop ? this.clamp(current.left, 0, Math.max(0, this.desktop.clientWidth - cols * cell.width)) : current.left,
+            top: this.desktop ? this.clamp(current.top, 0, Math.max(0, this.desktop.clientHeight - rows * cell.height)) : current.top,
+        });
+        fillBorders();
+        window.dispatchEvent(new CustomEvent("tv-window-state-change"));
     }
 
     readStoredState() {
@@ -805,6 +830,8 @@ class TurboVisionWindowResizer {
         if (!this.dragState) {
             return;
         }
+        event.preventDefault?.(); event.stopPropagation?.();
+        if (event.buttons === 0) { this.onResizeEnd(); return; }
         const deltaCols = Math.round((event.clientX - this.dragState.startX) / this.dragState.cellWidth);
         const deltaRows = Math.round((event.clientY - this.dragState.startY) / this.dragState.cellHeight);
         const nextCols = Math.min(
@@ -825,11 +852,13 @@ class TurboVisionWindowResizer {
         fillBorders();
     };
 
-    onResizeEnd = () => {
+    onResizeEnd = (event) => {
+        event?.preventDefault?.(); event?.stopPropagation?.();
         this.dragState = null;
         this.setResizeFrame(false);
-        document.removeEventListener("mousemove", this.onResizeMove);
-        document.removeEventListener("mouseup", this.onResizeEnd);
+        document.removeEventListener("mousemove", this.onResizeMove, true);
+        document.removeEventListener("mouseup", this.onResizeEnd, true);
+        window.removeEventListener("blur", this.onDragCancel);
         this.restoreSnapshot = this.captureGeometry();
         this.persistState();
         window.dispatchEvent(new CustomEvent("tv-window-state-change"));
@@ -839,6 +868,12 @@ class TurboVisionWindowResizer {
         if (!this.moveState) {
             return;
         }
+        event.preventDefault?.(); event.stopPropagation?.();
+        if (event.buttons === 0) { this.onMoveEnd(); return; }
+        this.updateMove(event);
+    };
+
+    updateMove(event) {
         const rawLeft = this.moveState.startLeft + (event.clientX - this.moveState.startX);
         const rawTop = this.moveState.startTop + (event.clientY - this.moveState.startY);
         this.moveState.nextLeft = this.clamp(rawLeft, 0, this.moveState.maxLeft);
@@ -846,7 +881,7 @@ class TurboVisionWindowResizer {
         if (this.moveFrame === null) {
             this.moveFrame = window.requestAnimationFrame(this.applyMove);
         }
-    };
+    }
 
     applyMove = () => {
         this.moveFrame = null;
@@ -856,18 +891,25 @@ class TurboVisionWindowResizer {
     };
 
     onMoveEnd = (event) => {
+        event?.preventDefault?.(); event?.stopPropagation?.();
         if (this.moveState && Number.isFinite(event?.clientX) && Number.isFinite(event?.clientY)) {
-            this.onMoveDrag(event);
+            this.updateMove(event);
         }
         if (this.moveFrame !== null) { window.cancelAnimationFrame(this.moveFrame); }
         this.applyMove();
         this.moveState = null;
         this.setMoveFrame(false);
-        document.removeEventListener("mousemove", this.onMoveDrag);
-        document.removeEventListener("mouseup", this.onMoveEnd);
+        document.removeEventListener("mousemove", this.onMoveDrag, true);
+        document.removeEventListener("mouseup", this.onMoveEnd, true);
+        window.removeEventListener("blur", this.onDragCancel);
         this.restoreSnapshot = this.captureGeometry();
         this.persistState();
         window.dispatchEvent(new CustomEvent("tv-window-state-change"));
+    };
+
+    onDragCancel = () => {
+        if (this.moveState) { this.onMoveEnd(); }
+        if (this.dragState) { this.onResizeEnd(); }
     };
 
     destroy() {
@@ -879,10 +921,11 @@ class TurboVisionWindowResizer {
         if (this.moveFrame !== null) { window.cancelAnimationFrame(this.moveFrame); this.moveFrame = null; }
         this.dragState = null;
         this.moveState = null;
-        document.removeEventListener("mousemove", this.onResizeMove);
-        document.removeEventListener("mouseup", this.onResizeEnd);
-        document.removeEventListener("mousemove", this.onMoveDrag);
-        document.removeEventListener("mouseup", this.onMoveEnd);
+        document.removeEventListener("mousemove", this.onResizeMove, true);
+        document.removeEventListener("mouseup", this.onResizeEnd, true);
+        document.removeEventListener("mousemove", this.onMoveDrag, true);
+        document.removeEventListener("mouseup", this.onMoveEnd, true);
+        window.removeEventListener("blur", this.onDragCancel);
         window.removeEventListener("beforeunload", this.onBeforeUnload);
         if (this.handle) {
             this.handle.removeEventListener("mousedown", this.onHandleMouseDown);
@@ -892,6 +935,7 @@ class TurboVisionWindowResizer {
         }
         this.windowElement.classList.remove("is-resizing");
         this.windowElement.classList.remove("is-moving");
+        this.windowElement._tvView?.setState?.(sfDragging, false);
         if (this.windowElement._tvResizer === this) { delete this.windowElement._tvResizer; }
     }
 }
@@ -901,6 +945,66 @@ class TurboVisionMenus extends TVMenuController {
         super();
         this.desktop = dialogManager?.desktop?.root || null;
         this.dialogManager = dialogManager;
+    }
+}
+
+// Browser lifecycle adapter shared by the SPA and generated HELP pages. Only
+// foreground human input renews authentication; background polling never does.
+class TVSessionActivity {
+    constructor(onSession) {
+        this.onSession = onSession;
+        this.authenticated = false;
+        this.pending = false;
+        this.lastRenew = 0;
+        this.version = 0;
+        this.input = (event) => {
+            if (event.isTrusted && !document.hidden) { this.activity(); }
+        };
+        this.visibility = () => {
+            if (!document.hidden) { this.activity(true); }
+        };
+    }
+    setSession(session) {
+        this.authenticated = Boolean(session?.authenticated && session.user);
+        this.version++;
+    }
+    start() {
+        for (const type of ["pointerdown", "keydown", "wheel"]) {
+            document.addEventListener(type, this.input, { capture: true, passive: true });
+        }
+        document.addEventListener("visibilitychange", this.visibility);
+        this.timer = setInterval(() => { if (this.authenticated) { void this.check(); } }, 60000);
+        void this.check(false).then(() => { if (!document.hidden) { this.activity(true); } });
+        return this;
+    }
+    activity(immediate = false) {
+        this.pending = true;
+        if (this.authenticated && (immediate || Date.now() - this.lastRenew >= 60000)) { void this.check(); }
+    }
+    async check(renew = this.pending && !document.hidden) {
+        if (this.request) { return this.request; }
+        const version = this.version;
+        if (renew) { this.pending = false; this.lastRenew = Date.now(); }
+        this.request = (async () => {
+            try {
+                const response = await fetch(renew ? "/api/auth/activity" : "/api/auth/session", {
+                    method: renew ? "POST" : "GET", credentials: "same-origin", cache: "no-store",
+                    signal: AbortSignal.timeout(15000),
+                });
+                if (!response.ok) { if (renew) { this.pending = true; } return; }
+                const session = await response.json();
+                // A delayed heartbeat must not overwrite a newer login/profile.
+                if (version === this.version) { this.onSession(session); }
+            } catch { if (renew) { this.pending = true; } }
+            finally { this.request = null; }
+        })();
+        return this.request;
+    }
+    destroy() {
+        clearInterval(this.timer);
+        this.version++;
+        for (const type of ["pointerdown", "keydown", "wheel"]) { document.removeEventListener(type, this.input, true); }
+        document.removeEventListener("visibilitychange", this.visibility);
     }
 }
 
@@ -1068,6 +1172,7 @@ class TVApplication extends TVProgram {
     }
 
     _setAuthSession(session) {
+        this.sessionActivity?.setSession(session);
         const nextAdmin = Boolean(session?.authenticated && session.user?.role === "admin");
         if (!nextAdmin) {
             for (const name of ["help-packages", "dos-packages", "midi-sources"]) { this.dialogManager?.get(name)?.close(); }
@@ -1087,13 +1192,6 @@ class TVApplication extends TVProgram {
             this.menus?.refresh();
             void this.downloadProgress?.refresh();
         }
-    }
-
-    async _refreshAuthSession() {
-        try {
-            const response = await fetch("/api/auth/session", { cache: "no-store" });
-            if (response.ok) { this._setAuthSession(await response.json()); }
-        } catch { /* Standalone generated pages can run without the account API. */ }
     }
 
     initShellWidgets() {
@@ -1167,7 +1265,7 @@ class TVApplication extends TVProgram {
         loginDialog.onSessionChange = (session) => this._setAuthSession(session);
         registrationDialog.onSessionChange = (session) => loginDialog.updateSession(session);
         registrationDialog.onConfirmed = () => loginDialog.close();
-        void this._refreshAuthSession();
+        this.sessionActivity = new TVSessionActivity((session) => this._setAuthSession(session)).start();
         this.registerDialog("puzzle", () => new TVPuzzleDialog());
         this.registerDialog("hanoi", () => new TVHanoiDialog());
         this.registerDialog("tron", () => new TVTronDialog());
@@ -1210,6 +1308,7 @@ class TVApplication extends TVProgram {
 
 
 Object.assign(TV, {
+    TVSessionActivity,
     TVDownloadProgress,
     TVApplicationMenuBar,
     buildAccountMenu,

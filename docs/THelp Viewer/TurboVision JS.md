@@ -329,6 +329,11 @@ with all commands handled through TVEvent and no dialog-specific HTML/CSS.
   only the left side. The shared browser mover caches drag limits at mouse-down
   and coalesces position writes with `requestAnimationFrame`; mouse-up flushes
   the final position before persistence, and destruction cancels queued work.
+  Move/resize set the owned view's original `sfDragging` state. Capture-phase
+  document tracking owns mouse motion/release even over an input-consuming DOS
+  canvas; blur or a motion reporting no pressed buttons also ends a lost drag.
+  DOS pauses and releases guest input while this state is set, then re-evaluates
+  normal/manual pause without a separate DOM-only dragging flag.
   Move/resize frame transitions use `updateWindowFrameState`, including the
   bottom border and restoration of the window's actual active/passive state.
   Standard close/zoom controls are semantic buttons. The close glyph changes
@@ -538,6 +543,13 @@ on the same `TVDialogManager` stack. Dynamic windows use distinct persisted
 geometry keys, so moving or maximizing one does not overwrite another.
 Tile and Cascade place resizable windows through that same resizer, updating
 the restored geometry and zoom glyph together.
+Windows → Default Size sends `TV_COMMANDS.DEFAULT_SIZE` to the active growable
+`TVWindow` via `TVEvent`. The shared `restoreSize()` uses the resizer's dimensions
+captured before local-storage/URL restoration, not the most recently saved size.
+It leaves maximization, preserves position where the default fits, clamps to the
+desktop and persists the result. Fixed dialogs and an empty desktop disable it.
+HELP uses its bundle dimensions and Markdown its declared 86×24 cells; DOS
+overrides only the video-specific adjustment and clears its 2× zoom snapshot.
 HELP Contents activates a selected `TVOutline` node directly through its
 `TVEvent` handler; it does not click a rendered anchor. The HELP window retains
 its outline and each HELP/Docs window retains its scrollbars for redraw and

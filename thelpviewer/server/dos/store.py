@@ -518,22 +518,25 @@ class DosPromptStore:
     def c_limit(self, account_id: str | None) -> int:
         return sum(map(len, self.files.values())) + self.overlay_limit(account_id)
 
-    def bundle(self, account_id: str | None, media_id: str = "", *, lazy: bool = False, account_name: str = "") -> tuple[bytes, dict]:
+    def bundle(self, account_id: str | None, media_id: str = "", *, lazy: bool = False,
+               account_name: str = "") -> tuple[bytes, dict]:
         revision, overlay, deleted, directories = self.overlay(account_id)
         files = {name: data for name, data in self.files.items() if name not in deleted}
         files.update(overlay)
         remote_files = {name: {"size": len(data), "sha256": (self.file_hashes.get(name) if name not in overlay else None)
                               or hashlib.sha256(data).hexdigest(), "base": name not in overlay}
                         for name, data in files.items()} if lazy else {}
-        commands = ["@echo off", "mount c drive_c"]
+        # D is a browser-local exchange slot. Its initially empty contents can
+        # be replaced without restarting DOS or exposing an OS/NAS directory.
+        commands = ["@echo off", "mount c drive_c", "mount d drive_d"]
         media = self.media_path(account_id, media_id) if media_id and account_id else None
         if media_id and media is None:
             raise DosError("Media not found for this account")
         if media:
             kind = "floppy" if media.suffix == ".img" else "iso"
-            drive = "a" if kind == "floppy" else "d"
+            drive = "a" if kind == "floppy" else "e"
             commands.append(f"imgmount {drive} media/{media.name} -t {kind}")
-        commands += ["config -securemode", "c:", "set PATH=C:\\FREEDOS\\BIN;Z:\\", "cls",
+        commands += ["c:", "set PATH=C:\\FREEDOS\\BIN;Z:\\", "cls",
                      "echo THelpViewer DOS Prompt - use the DOS Prompt menu for media.",
                      "if exist C:\\AUTOEXEC.BAT call C:\\AUTOEXEC.BAT",
                      "Z:\\COMMAND.COM", "echo THelpViewer DOS session ended.", "pause >nul"]
@@ -551,6 +554,7 @@ class DosPromptStore:
             if lazy:
                 archive.writestr(".jsdos/disk.json", json.dumps({"base_id": self.base_id, "account": account_name, "files": remote_files}))
             archive.writestr("drive_c/", b"")
+            archive.writestr("drive_d/", b"")
             folders = set(directories)
             for name in [*files, *directories]:
                 parts = name.split("/")

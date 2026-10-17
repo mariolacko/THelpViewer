@@ -4,6 +4,45 @@
 
 ### 2.1 development
 
+- Toggle DOS native fullscreen with the same Alt+Enter shortcut in both
+  directions, including keypad Enter and fullscreen focus changes. Do not
+  create overlay revisions/snapshots for identical autosaves; verify retained
+  private-file hashes and accept only identical stale retries. On cloud-save
+  failure during Close, offer explicit discard of this window's unsaved C
+  changes, while Cancel/[] preserves the running window and cloud data.
+- Pause DOS during shared window move/resize via the original `sfDragging`
+  state and block guest input. Track drag motion/release in document capture,
+  including over the DOS canvas, and end lost gestures on blur/button release.
+  Restore the prior manual pause state instead of leaving a stuck move frame.
+- Allow browser DOSBox MOUNT/IMGMOUNT/BOOT on its virtual filesystem; retain
+  secure mode only in server-side package post-installation. Hot-connect,
+  replace and disconnect a selected local folder without restarting DOS,
+  preserving the running program and C memory. Reserve D for local exchange
+  and E for CD images, flush pending writes, reject open local files, stage
+  filesystem replacement and refresh native DOS caches without typing commands.
+  Keep host folder permissions and all server account/path checks unchanged.
+- Expire sign-in after 24 hours without foreground activity, with a 30-day
+  absolute lifetime. Share throttled activity renewal across SPA/generated HELP
+  pages; enforce expiry on the server and never let background polling/downloads
+  renew it or an activity heartbeat count as recent Passkey confirmation.
+  Clamp existing long-lived sessions on upgrade without reviving expired ones.
+- Automatically flush local DOS D changes every two seconds, also when its
+  window is inactive, without uploading C. Remove routine Save local D; pause
+  and retain edits on failure with a Retry local D save command. Flush local
+  data before account-expiry/switch closes DOS, never under another cloud owner.
+- Mount a user-selected local folder as DOS D through File System Access, with
+  explicit read/write permission and confirmation. Read local files on
+  demand in the DOS worker, save buffered changes locally on Save/autosave/Close,
+  reject external-edit conflicts and never recursively delete local folders.
+  Keep handles and D contents out of server APIs, cloud overlays and workspace
+  URLs. Use DOS 8.3 aliases, preserve original host names, move a simultaneous
+  CD to E, and explain unsupported browsers and save-before-reload limitations.
+- Add Windows → Default Size for the active growable window through the shared
+  TVWindow/TVEvent command path. Restore declared dimensions rather than saved
+  geometry, leave maximization/2× zoom, retain position where possible and fit
+  the desktop. HELP, Markdown and DOS use the same reset; DOS derives height
+  from its current video mode without restarting emulation. Fixed dialogs and
+  an empty desktop disable the command; persist the restored size in URL/local state.
 - Negotiate shared HTTP gzip compression for HTML, API JSON, JavaScript, CSS,
   XML, Markdown, WebAssembly, MIDI and DOS file chunks from 1 KiB. Honor encoding
   exclusions/wildcards, preserve Vary and weak validators, and stream large

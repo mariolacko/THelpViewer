@@ -128,10 +128,13 @@ locally available again, then reload the page. See
 
 Open **≡ → DOS Prompt** for a real WASM DOSBox inside a standard `TVWindow`.
 Its contextual top menu provides Pause/Resume, Restart, Save C to cloud,
-Mount CD/Floppy, Eject and Fullscreen. Ctrl+Alt+M returns keyboard focus to
-that menu. The emulator pauses when its window is inactive or the tab is hidden.
+Mount local folder (D:), Disconnect local D, Mount CD/Floppy, Eject and Fullscreen.
+Ctrl+Alt+M returns keyboard focus to that menu. The emulator pauses when its
+window is inactive, the tab is hidden or its frame is being moved/resized.
 Fullscreen displays only DOS without the TVision frame/menu or browser chrome;
-Esc returns to the window, while Ctrl+Alt+M also opens its control menu.
+Alt+Enter enters and leaves it (main or keypad Enter). Esc returns to the window,
+while Ctrl+Alt+M also opens its control menu. Windows → Default Size restores
+the frame's default size adjusted to the current DOS video mode.
 
 After an administrator confirms selected packages, the server prepares `var/dos/c/` from
 [`thelpviewer/config/dos-prompt.json`](thelpviewer/config/dos-prompt.json). The default source
@@ -169,16 +172,26 @@ Only files DOS actually reads are downloaded, in gzip-capable 64 KiB chunks;
 workers are required by default, with no automatic full-disk fallback.
 Admins can configure the default 64 MiB private-only quota through
 **User name → Configuration → Server Configuration**. Changes never modify the shared base. Saves run every minute
-while active, and before closing or restarting DOS. Before closing the browser
+while active and visible, and before closing or restarting DOS. Identical saves
+do not create revisions; genuinely conflicting cloud edits are not overwritten.
+If cloud saving fails on Close, explicit confirmation can discard this window's
+unsaved C changes; Cancel or [] keeps DOS open. Before closing the browser
 tab, explicitly choose **Save C to cloud**: a tab close/crash cannot guarantee
 a final upload. Guests can try DOS but cannot save or mount private media.
 This stores files (configuration and savegames), not a running CPU/RAM snapshot.
 
-Mounting/ejecting media restarts DOS after confirmation. The first version
-supports one image at a time, ISO9660 CD images up to 128 MiB and raw floppy
-images up to 16 MiB; writes inside a floppy image are temporary. DOSBox's native
-secure mode blocks interactive MOUNT/IMGMOUNT/BOOT commands; the browser does
-not execute these as host/server commands. See
+In a supported browser (desktop Chrome/Edge on HTTPS or localhost), select a
+local folder with read/write permission to expose it as D:. Connecting,
+replacing or disconnecting it does not restart DOS; close open D files first.
+Local changes flush every two seconds, even with the DOS window inactive.
+Local write conflicts pause DOS and retain edits for Retry local D save.
+The folder's contents and permission handle are not sent to the server.
+
+Mounting/ejecting uploaded media restarts DOS after confirmation. One image is
+supported at a time: ISO9660 CD on E: up to 128 MiB or raw floppy on A: up to
+16 MiB; writes inside a floppy image are temporary. Browser DOSBox allows
+MOUNT/IMGMOUNT/BOOT only within its virtual filesystem, not arbitrary host or
+server paths. Native server-side package post-installation retains secure mode. See
 [DOS Prompt](docs/THelp%20Viewer/DOS%20Prompt.md) for storage, APIs and limits.
 
 ### Game MIDI library

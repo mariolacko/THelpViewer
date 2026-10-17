@@ -127,6 +127,57 @@ async function run() {
             })()`);
             if (!valid) { throw new Error('Diagnostic topic became a website error'); }
         }
+        await send('Emulation.setDeviceMetricsOverride', {width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+        await evaluate(`(async () => {
+            await document.fonts.ready;
+            const TV = window.THelpViewerTV;
+            const app = document.querySelector('[data-tv-bundle-desktop]')._tvView.owner;
+            const resetFromMenu = () => {
+                app._updateWindowMenuState();
+                const menu = app.menuState.view, item = app.menuState.windowItems.get(TV.TV_COMMANDS.DEFAULT_SIZE);
+                if (!item || item.disabled) { throw new Error('Default Size is not enabled for a growable window'); }
+                const windows = menu.menu.entries().find(entry => entry.name === '~W~indows');
+                menu.itemElements.get(windows).click();
+                menu.itemElements.get(item).click();
+            };
+            const check = (root) => {
+                const view = root._tvWindowView, resizer = root._tvResizer, defaults = resizer.defaultSize;
+                resizer.place({left:40,top:32,cols:defaults.cols+12,rows:defaults.rows+6});
+                resetFromMenu();
+                let geometry = resizer.captureGeometry();
+                if (geometry.cols !== defaults.cols || geometry.rows !== defaults.rows
+                    || geometry.left !== 40 || geometry.top !== 32 || root._tvWindowView !== view) {
+                    throw new Error('Default Size failed after manual resize: '+JSON.stringify({geometry,defaults}));
+                }
+                resizer.maximize();
+                resetFromMenu();
+                geometry = resizer.captureGeometry();
+                const stored = JSON.parse(localStorage.getItem(resizer.storageKey));
+                if (root.classList.contains('is-maximized') || geometry.cols !== defaults.cols
+                    || geometry.rows !== defaults.rows || stored.maximized || stored.cols !== defaults.cols
+                    || stored.restore.rows !== defaults.rows) {
+                    throw new Error('Default Size did not leave zoom or persist restored dimensions');
+                }
+            };
+            check(document.querySelector('[data-tv-bundle-window]'));
+            let doc = app._openDocWindow('Resize.md','# Resize test');
+            doc._tvResizer.place({left:64,top:48,cols:110,rows:35});
+            doc._tvWindowView.closeAction();
+            doc = app._openDocWindow('Resize.md','# Resize test');
+            if (doc._tvResizer.captureGeometry().cols !== 110 || doc._tvResizer.defaultSize.cols !== 86
+                || doc._tvResizer.defaultSize.rows !== 24) {
+                throw new Error('Saved geometry replaced the document default size');
+            }
+            check(doc);
+            doc._tvWindowView.closeAction();
+            const fixed = app.dialogManager.open('calendar');
+            app._updateWindowMenuState();
+            if (!app.menuState.windowItems.get(TV.TV_COMMANDS.DEFAULT_SIZE).disabled
+                || app.dialogManager.dispatchCommand(TV.TV_COMMANDS.DEFAULT_SIZE)) {
+                throw new Error('Default Size was enabled for a fixed dialog');
+            }
+            fixed.close();
+        })()`);
         // Opening F1 help rebuilds the menu to add Contents. Disable the
         // periodic tick so a zero clock cannot be hidden by the next second.
         await evaluate(`(async () => {

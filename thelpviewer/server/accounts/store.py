@@ -102,6 +102,13 @@ class AccountStore:
                                   ("auth_method", "TEXT NOT NULL DEFAULT ''")):
             if field not in session_columns:
                 connection.execute(f"ALTER TABLE sessions ADD COLUMN {field} {definition}")
+        if "created_at" not in session_columns:
+            connection.execute("ALTER TABLE sessions ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0")
+            # The old fixed-lifetime sessions have no activity timestamp. Give
+            # still-valid sessions at most one day, without reviving expired ones.
+            now = int(time.time())
+            connection.execute("UPDATE sessions SET created_at=?, expires_at=MIN(expires_at, ?)",
+                               (now, now + sessions.SESSION_LIFETIME))
         ceremony_columns = {row[1] for row in connection.execute("PRAGMA table_info(ceremonies)")}
         if "session_hash" not in ceremony_columns:
             connection.execute("ALTER TABLE ceremonies ADD COLUMN session_hash TEXT")
@@ -326,6 +333,9 @@ class AccountStore:
 
     def session_user(self, token: str) -> dict[str, str] | None:
         return sessions.session_user(self, token)
+
+    def session_activity(self, token: str) -> bool:
+        return sessions.activity(self, token)
 
     def session_account_id(self, token: str) -> str | None:
         return sessions.session_account_id(self, token)

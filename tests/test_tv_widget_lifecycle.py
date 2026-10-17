@@ -285,6 +285,7 @@ const fs = require("node:fs");
 class FakeTarget {
     constructor() {
         this.listeners = new Map();
+        this.captures = new Map();
         this.attributes = new Map();
         const styleValues = new Map();
         this.style = {
@@ -316,11 +317,11 @@ class FakeTarget {
             },
         };
     }
-    addEventListener(type, handler) { this.listeners.set(type, handler); }
+    addEventListener(type, handler, capture = false) { this.listeners.set(type, handler); this.captures.set(type, capture); }
     setAttribute(name, value) { this.attributes.set(name, String(value)); }
     getAttribute(name) { return this.attributes.get(name) || null; }
     removeEventListener(type, handler) {
-        if (this.listeners.get(type) === handler) { this.listeners.delete(type); }
+        if (this.listeners.get(type) === handler) { this.listeners.delete(type); this.captures.delete(type); }
     }
     querySelectorAll() { return []; }
 }
@@ -445,6 +446,11 @@ const desktop = new FakeTarget();
 desktop.clientWidth = 800;
 desktop.clientHeight = 500;
 const windowElement = new FakeTarget();
+global.sfDragging = 0x0080;
+const ownedView = { state: 0, setState(mask, enable) { this.state = enable ? this.state | mask : this.state & ~mask; } };
+windowElement._tvView = ownedView;
+windowElement.style.setProperty("--tv-window-cols", "80");
+windowElement.style.setProperty("--tv-window-rows", "25");
 const zoomGlyph = { textContent: "↓" };
 windowElement.closest = () => desktop;
 windowElement.querySelector = (selector) => {
@@ -501,6 +507,23 @@ resizer.setMoveFrame(false);
 if (windowElement.classList.contains("is-moving")) {
     throw new Error("move frame state was not cleared");
 }
+resizer.maximize(false);
+resizer.restoreDefaultSize();
+let defaults = resizer.captureGeometry();
+if (defaults.cols !== 80 || defaults.rows !== 25 || defaults.left !== 16 || defaults.top !== 32
+    || windowElement.classList.contains("is-maximized") || zoomGlyph.textContent !== "↑") {
+    throw new Error("default size used saved geometry or lost the pre-zoom position");
+}
+desktop.clientWidth = 32; desktop.clientHeight = 16;
+resizer.restoreDefaultSize();
+defaults = resizer.captureGeometry();
+if (defaults.cols > 2 || defaults.rows > 1 || defaults.left < 0 || defaults.top < 0
+    || defaults.left + defaults.cols * 8 > desktop.clientWidth
+    || defaults.top + defaults.rows * 16 > desktop.clientHeight) {
+    throw new Error("default size escaped a small desktop");
+}
+desktop.clientWidth = 800; desktop.clientHeight = 500;
+resizer.place({ left: 16, top: 32, cols: 70, rows: 20 });
 const animationFrames = new Map();
 let frameNumber = 0, widthReads = 0, heightReads = 0;
 window.requestAnimationFrame = (callback) => { animationFrames.set(++frameNumber, callback); return frameNumber; };
@@ -508,6 +531,9 @@ window.cancelAnimationFrame = (id) => animationFrames.delete(id);
 Object.defineProperty(windowElement, "offsetWidth", { get() { widthReads++; return 80; } });
 Object.defineProperty(windowElement, "offsetHeight", { get() { heightReads++; return 25; } });
 resizer.startMove({ clientX: 10, clientY: 20, target: { closest() { return null; } }, preventDefault() {} });
+if (!(ownedView.state & sfDragging) || !document.captures.get("mousemove") || !document.captures.get("mouseup")) {
+    throw new Error("move did not acquire TV dragging state and capture-phase mouse tracking");
+}
 widthReads = heightReads = 0;
 for (let i = 0; i < 50; i++) { resizer.onMoveDrag({ clientX: 100 + i, clientY: 200 + i }); }
 if (animationFrames.size !== 1 || widthReads || heightReads
@@ -519,11 +545,21 @@ animationFrames.delete(frameId); apply();
 if (windowElement.style.getPropertyValue("--tv-window-left") !== "155px") {
     throw new Error("drag did not apply the latest queued position");
 }
-resizer.onMoveEnd({ clientX: 110, clientY: 220 });
+resizer.onMoveEnd({ clientX: 110, clientY: 220, buttons: 0 });
 if (animationFrames.size || windowElement.style.getPropertyValue("--tv-window-left") !== "116px"
     || windowElement.style.getPropertyValue("--tv-window-top") !== "232px"
     || resizer.restoreSnapshot.left !== 116 || resizer.restoreSnapshot.top !== 232) {
     throw new Error("drag did not flush and persist the final mouse-up position");
+}
+if (ownedView.state & sfDragging) { throw new Error("move left sfDragging set"); }
+for (const reason of ["release", "blur"]) {
+    resizer.lastMoveDown = 0;
+    resizer.startMove({ clientX: 10, clientY: 20, target: { closest() { return null; } }, preventDefault() {} });
+    if (reason === "release") { resizer.onMoveDrag({ buttons: 0 }); }
+    else { window.listeners.get("blur")(); }
+    if (resizer.moveState || (ownedView.state & sfDragging) || windowElement.classList.contains("is-moving")) {
+        throw new Error(`${reason} left a stuck move`);
+    }
 }
 resizer.moveState = { startX: 0, startY: 0, startLeft: 0, startTop: 0, maxLeft: 720, maxTop: 475 };
 resizer.onMoveDrag({ clientX: 9999, clientY: 9999 });

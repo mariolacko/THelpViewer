@@ -19,11 +19,15 @@ the legacy direct backend and its full ZIP download.
 
 Open **≡ → DOS Prompt**. While the window is active, a **DOS Prompt** menu is
 added to the main menu bar. It contains Pause/Resume, Restart, Save C to cloud,
-Mount CD, Mount Floppy, Eject media, Zoom 2×, Fullscreen and Close. Ctrl+Alt+M opens this
+Mount local folder, Disconnect local D, Mount CD, Mount Floppy,
+Eject media, Zoom 2×, Fullscreen and Close. Ctrl+Alt+M opens this
 menu from the DOS keyboard. F1 and other DOS keys go to the emulator instead
 of opening THelpViewer help. Operating-system/browser-reserved shortcuts may
 still be intercepted by the browser. Clicking outside the window or hiding
-the page pauses DOS and clears held keyboard/mouse buttons.
+the page pauses DOS and clears held keyboard/mouse buttons. Moving/resizing
+the frame also pauses DOS through `sfDragging`; mouse events belong exclusively
+to the shared frame mover, including mouse-up over the canvas. Releasing the
+mouse or losing browser focus clears dragging and preserves manual Pause.
 The numeric keypad forwards physical keys separately from the main keyboard:
 0–9, decimal/comma, divide, multiply, subtract, add and Enter use jsDOS keypad
 codes 320–335. NumLock is forwarded too, leaving number/navigation behavior to
@@ -45,6 +49,11 @@ not browser fullscreen or extra CSS scaling; the DOS image retains its aspect
 ratio. The frame's Zoom button uses the same operation. A successful cloud
 save is silent, including periodic autosaves, so it does not cover the DOS
 image. Save failures still display an error.
+
+**Windows → Default Size** restores the declared default width (82 columns for
+the standard DOS Prompt) and derives its height from the current video mode,
+fitting both dimensions to the desktop. It clears maximization/2× zoom without
+restarting DOS or changing the running program, mounted media or private disk.
 
 When DOSBox changes video mode, the window keeps its client width and adjusts
 its height to the new screen ratio, rounded up to TVision character rows with
@@ -77,7 +86,8 @@ window geometry, stacking/active window and Pause state. Restoring the URL
 starts a fresh emulator session with the currently signed-in user's saved
 overlay; it is not a CPU/RAM save-state. Commands, account identifiers and
 private media IDs are not placed in the URL. Fullscreen requires a new user
-gesture and is not restored automatically from a link.
+gesture and is not restored automatically from a link. A local folder and its
+permission handle are also excluded; select the folder again after a page reload.
 
 Server Statistics lists opens under **Tools → dos-prompt** and duration buckets
 under **Tool time**. The shared managed-window lifecycle excludes startup,
@@ -95,6 +105,9 @@ Entering/leaving fullscreen alone does not change the TVWindow geometry or
 maximized state. A video-mode change while fullscreen defers the normal-window
 height adjustment until fullscreen exits.
 
+Press **Alt+Enter** again to exit (main or numeric-keypad Enter). Fullscreen
+control shortcuts are captured by the owning DOS input view even if browser
+focus moves off the canvas; they still pass through `TVEvent.handleEvent()`.
 Use the browser's **Esc** fullscreen exit, or **Ctrl+Alt+M** to leave fullscreen
 and open the DOS Prompt menu. Restarting DOS keeps fullscreen; closing its
 window exits only its own fullscreen, not an unrelated fullscreen element.
@@ -494,7 +507,7 @@ constructor/reader is retained. For example:
 ]
 ```
 
-Trusted startup enables secure mode first, then calls `C:\AUTOEXEC.BAT`.
+Trusted browser startup mounts the virtual drives, then calls `C:\AUTOEXEC.BAT`.
 There is no default CONFIG.SYS entry in `files` because
 DOSBox's internal DOS does not interpret it. Existing shared disks are not
 rewritten by a configuration/schema change; an older CONFIG.SYS can remain inert.
@@ -577,12 +590,18 @@ stable internal IDs to accounts; a username change does not rename the disk.
 
 Saving briefly pauses DOS and scans C. The worker tracks changed files so
 unread shared files are not downloaded just to compare them. Unchanged private
-files are retained server-side by name; only changed/new contents are uploaded.
+files are retained server-side by name and their expected SHA-256 hash; only
+changed/new contents are uploaded. The server verifies those hashes under the
+same lock as publication. Identical saves do not advance the revision or rotate
+snapshots. Implicit parent directories are not counted as new private edits.
 The server replaces the private overlay transactionally and validates paths,
-file count, private capacity and file/directory collisions. Revision checks reject stale saves
-from another tab; a base hash check rejects saves after the common disk changes.
-Reload the page to load the new server state after a conflict; this discards
-the old tab's unsaved changes instead of overwriting the newer server snapshot.
+file count, private capacity and file/directory collisions. An older revision
+is accepted only if the complete proposed overlay (file hashes, deletion markers
+and empty directories) already equals the current saved state, for example a
+retry after losing the successful response. Other stale saves are rejected;
+a base hash check rejects saves after the common disk changes. No automatic
+overwrite or merge of conflicting disks is attempted. Close/reopen DOS to load
+the latest cloud disk; this loses the old window's unsaved C changes and RAM.
 No user's files or deleted-file markers affect another account.
 
 The default private quota is **64 MiB**, excluding all shared software.
@@ -595,19 +614,102 @@ an over-limit save fails and leaves the last good overlay intact. Restart DOS
 to refresh its advertised client-side allowance. Backup generations are not
 included in the logical quota, so physical storage may be larger.
 
-Authenticated sessions save every 60 seconds while active, on **Save C to
+Authenticated sessions save every 60 seconds while active and the page is visible, on **Save C to
 cloud**, before normal Close/Restart and when the DOS `EXIT` command returns
 from the interactive `COMMAND.COM` to the trusted boot script. The parent
 shell remains alive for the filesystem save; only then does the adapter stop
-DOSBox using its public `exit()` API. A normal window-close save failure leaves the window
-open rather than silently discarding changes. Use manual Save before closing
+DOSBox using its public `exit()` API. If cloud saving fails during normal Close,
+a standard message box offers **OK** to close without saving this window's C
+changes, or **Cancel**, Escape/[] to keep DOS and its changes open. This never
+overwrites the other window's saved disk. Local D is flushed before cloud C;
+a local-folder save failure still blocks closing rather than discarding local
+edits. Use manual Save before closing
 the browser/tab: unload, crashes or loss of network cannot guarantee upload.
-Signing out or switching accounts closes the old DOS window without writing
-it under the new identity. Unsynced changes are then discarded. Guests have
+Signing out, expiry or switching accounts closes the old DOS window without
+uploading C under the new identity; local D is saved separately first. Unsynced
+C changes are then discarded. A failed local flush retains the paused window.
+Guests have
 a temporary C drive without server persistence or media upload.
 
 This is file persistence, not an emulator save-state: restart resumes saved
 configuration/savegames but not the running program, CPU state or RAM.
+
+## Local folder (D)
+
+**DOS Prompt → Mount local folder (D:)…** opens the browser directory picker
+with `mode: "readwrite"`. The browser must support `showDirectoryPicker` and
+the page must be a secure context (HTTPS or localhost). Chromium-based desktop
+browsers such as Chrome and Edge support this; detect the API rather than a
+browser name. Other browsers show an explanation, not a file-upload fallback.
+This feature requires the worker backend even if full-disk fallback is enabled.
+
+Choose a dedicated folder: DOS programs can read, create, overwrite, rename and
+delete its files. A confirmation warns about these rights without restarting DOS.
+Selecting/cancelling a picker or cancelling confirmation does not modify the
+folder. Connecting/replacing/disconnecting local D saves pending local changes
+first and keeps the same DOS session, running program and C memory. Close files
+and programs using D first: the worker rejects replacement while D has open
+filesystem streams. Changing CD/floppy media still requires the ordinary restart.
+**Disconnect local D** releases the folder, leaving an empty D slot; it does not
+delete the host folder. CD always uses E; floppy uses A.
+
+`DosLocalDrive` in `tv-dos-local.js` keeps the directory capability in the page.
+A fresh, random, browser-local BroadcastChannel gives the DOS worker immutable
+`File` snapshots, not the directory handle. The worker uses FileReaderSync to
+read file slices on demand and keeps DOS modifications in its own memory.
+No local files are read eagerly in bulk or uploaded to initialize D. Neither
+the handle, folder name nor local file bytes are sent to the server; no server
+local-folder flag is needed. Startup mounts `drive_d` as a reserved, initially
+empty D slot. `DosLocalConnection` owns one browser-local channel per emulator;
+the worker stages and swaps its contents only after rejecting open D streams.
+Errors before publication preserve the old tree; mount identities in the local
+state prevent a lost acknowledgement from writing a different folder's files.
+The pinned backend's native `_rescanFilesystem` export invalidates DOS directory
+caches before acknowledgement, without injecting commands or keyboard input.
+Its classic mapper is a no-op, so Ctrl-F4/mapper events are not used. Host directory capabilities
+stay in the page; the worker receives only immutable File snapshots. A restart
+re-enumerates the selected folder, but normal connecting/disconnecting needs none.
+If you manually unmount/remap D using DOS commands, restore the managed slot with
+`MOUNT D drive_d` to use the local-folder menu again.
+
+Local D changes are automatically written back through File System Access every
+**two seconds**, including while another TVision window is active, and checked
+when page visibility changes. The timer only reads a small revision record;
+unchanged D does not pause DOS or scan/read its files. A changed revision is
+saved with emulation briefly paused. This is separate from C's 60-second cloud
+autosave: local flushes do not scan/upload C or require a THelp account/quota.
+Close, Restart, DOS EXIT and Save C also flush D; saves are serialized so a
+concurrent local flush cannot skip a requested cloud save.
+
+There is no routine Save local D command. On failure DOS pauses, the error is
+shown once and **DOS Prompt → Retry local D save** becomes available. Changes
+remain in the DOS window; resolve the conflict/permission/storage problem and
+retry, then Resume. Close/restart cannot silently discard a failed local save.
+Forced browser close, reload, crashes and suspended/background-tab timers cannot
+guarantee completion of an asynchronous write: the last unsaved changes may be
+lost. This is buffered continuous saving, not synchronous host filesystem access.
+Do not reload while saving or while an unresolved write error is displayed.
+
+This is a session view, not a live filesystem watcher. Reselect the folder
+(without restarting), or restart DOS, to see external changes. Before overwriting/deleting an existing
+file, saving checks its identity, metadata and original bytes; a stale snapshot
+or conflicting edit aborts the save. Do not edit the same files concurrently:
+these checks are not an OS-level lock against a change racing the write itself.
+Multi-file saves are not one atomic transaction; a filesystem/permission error
+can occur after earlier entries were saved. Retain the window and resolve the
+error before retrying. Directory removals are never recursive, so files added
+outside DOS cannot be silently removed with an old directory snapshot.
+
+DOS names use deterministic 8.3 aliases (for example `LONG_N~1.TXT`), retaining
+the original host names for existing entries. New entries use their DOS names.
+Bounds are 4096 entries, a 240-character DOS path and 64 MiB per file/per save;
+choose a smaller folder for larger collections. A file/directory type change
+at the same path requires reconnecting the folder instead of a destructive
+replacement. These safety bounds are separate from the private C quota.
+
+D is not automatically cloud-saved. However, a DOS program can copy any file
+it can read on D to C; those copies follow the ordinary C cloud-save rules.
+Only grant folder access to DOS software you trust.
 
 ## CD/floppy mounting and isolation
 
@@ -618,27 +720,31 @@ that library. CD images must have an ISO9660 signature and fit the configured
 media limit; raw floppies must have a boot signature, sector-aligned size and
 be at most 16 MiB. These are preliminary format checks, not malware scanning.
 
-The first version mounts one image at a time: floppy as A or CD as D.
+One image is mounted at a time: floppy as A or CD as E (D is the local-folder slot).
 Mount/eject confirms a DOS restart and saves C first. ISO images are read-only;
 modifications inside mounted floppy images are not uploaded back. Copy their
 configuration/save files onto C if persistence is required. Large 650/700 MB
 CDs exceed the default 128 MiB limit; streamed images and writable-media
 overlays remain future work.
 
-The server generates a fixed boot configuration: mount the prepared C,
-optionally mount only a validated image owned by that account, then execute
-`config -securemode` before presenting the interactive prompt. The DOSBox
-engine itself blocks MOUNT, IMGMOUNT, BOOT and protected configuration changes;
-this is not a JavaScript command-string blacklist. The browser filesystem
-contains only the bundle and approved media, not host disks. The server has
-no endpoint for mounting an arbitrary host path or executing DOS commands.
+The server generates a fixed boot configuration: mount the prepared virtual C,
+the empty D slot and optionally a validated image owned by that account. Browser
+DOSBox does not enable `config -securemode`: MOUNT, IMGMOUNT and BOOT work on its
+in-memory Emscripten filesystem. Paths such as `/` refer to that virtual tree,
+not the browser machine's disk or the NAS. The virtual filesystem contains only
+this session's bundle, approved media, runtime files and the selected folder's
+snapshot. A DOS command cannot invoke a browser picker or grant itself another
+directory capability. Private server APIs still enforce session ownership,
+origins, revisions and paths; there is no arbitrary host-mount/command endpoint.
+The separate server-side DOSBox used for package post-installation retains
+secure mode: that process, unlike browser WASM, runs on the server OS.
 
 Uploads/saves require an authenticated session and the exact configured
 `THELP_AUTH_ORIGIN`. All DOS API responses are `no-store`. Media reads check
 ownership; knowing another account's image ID does not grant access. Keep the
 state directory private, back it up together with the accounts database, and
-apply deployment-level rate limits to uploads. Secure mode is not a reason to
-run untrusted software with trusted server privileges: emulation stays in WASM.
+apply deployment-level rate limits to uploads. Never run untrusted DOS software
+with trusted server privileges; interactive emulation stays in browser WASM.
 
 ## Modules and API
 
@@ -673,6 +779,12 @@ Session/bundle accept an optional `media=<id>`; revision/base response headers
 detect changes between their separate requests. File requests carry base/hash
 and account guards and cannot read another account's overlay. An explicit
 `bundle?full=true` is reserved for the disabled-by-default legacy fallback.
+The overlay JSON carries `base_id`, integer `revision`, `account`, `files`
+(DOS path → Base64 contents), `unchanged` (DOS path → expected SHA-256),
+`deleted` (shared-file paths) and `directories` (directory paths). Retained
+hashes refer to the private files loaded for this session, not current data
+silently substituted from another window. A successful identical retry returns
+the current revision without publishing a new generation.
 The emulator assets load only
 on demand. Media uploads also send `X-DOS-Account` matching the loaded session
 to prevent an account switch during a file picker from misrouting the upload.
@@ -681,10 +793,12 @@ video-mode changes after exit. See the native-fullscreen section above for input
 and restrictions.
 
 Regression tests exercise a real WASM DOSBox: TVEvent keyboard input creates
-a C file, secure-mode commands are rejected, saved files/deletions survive
+a C file, MOUNT maps virtual paths, saved files/deletions survive
 restart, approved FAT12 floppy/ISO9660 CD files can be copied to C, and
 native fullscreen targets only the canvas, fills the viewport and supports
-returning to the DOS menu with Ctrl+Alt+M. Browser tests
+Alt+Enter toggling and returning to the DOS menu with Ctrl+Alt+M. A concurrent
+cloud update exercises Cancel/[] versus explicit close-without-saving and
+checks that the newer server disk is untouched. Browser tests
 also exercise keypad digits/operators/Enter through a real DOS command and
 check horizontal, vertical, minimum and desktop-bounded resizing in VGA
 640x480. Deterministic input tests cover key-up, repeat and focus release.

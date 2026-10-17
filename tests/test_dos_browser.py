@@ -18,7 +18,7 @@ from test_dos_prompt import floppy_image, cd_image
 
 @pytest.mark.skipif(NODE is None or CHROME is None, reason="Chrome and Node.js are required")
 @pytest.mark.parametrize("blocked_worker", [False, True])
-def test_dos_prompt_real_runtime_save_restart_and_secure_mounts(blocked_worker):
+def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker):
     with tempfile.TemporaryDirectory(prefix="thelp-dos-browser-") as temporary:
         root = Path(temporary).resolve()
         # DOS interaction must not race a modal rebuild of the developer's
@@ -113,7 +113,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   if(m.method==='Network.requestWillBeSent'&&m.params.request.url.includes('/api/dos/file?'))fileRequests.push(m.params.request.url);
   if(pending.has(m.id)){const p=pending.get(m.id);pending.delete(m.id);m.error?p.reject(new Error(m.error.message)):p.resolve(m.result);}
  });
- const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>reject(new Error('Timed out: '+method+' '+params.expression)),installedGames==='true'?60000:35000);pending.set(id,{resolve:value=>{clearTimeout(timer);resolve(value);},reject:error=>{clearTimeout(timer);reject(error);}});socket.send(JSON.stringify({id,method,params}));});
+ const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++seq;const timer=setTimeout(()=>reject(new Error('Timed out: '+method+' '+params.expression)),90000);pending.set(id,{resolve:value=>{clearTimeout(timer);resolve(value);},reject:error=>{clearTimeout(timer);reject(error);}});socket.send(JSON.stringify({id,method,params}));});
  const evaluate=async (expression,userGesture=false)=>{
   const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,userGesture});
   if(r.exceptionDetails)throw new Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);
@@ -150,9 +150,9 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    ||right.getAttribute('data-tv-border-side')!=='║')throw new Error('Active DOS frame was not restored');
   const mover=root._tvResizer,before=mover.captureGeometry();
   mover.lastMoveDown=0;
-  root.querySelector('.tv-window-caption').dispatchEvent(new MouseEvent('mousedown',{clientX:100,clientY:100,bubbles:true,cancelable:true}));
+  root.querySelector('.tv-window-caption').dispatchEvent(new MouseEvent('mousedown',{clientX:100,clientY:100,buttons:1,bubbles:true,cancelable:true}));
   const maxLeft=mover.moveState.maxLeft,maxTop=mover.moveState.maxTop;
-  for(let i=0;i<50;i++)document.dispatchEvent(new MouseEvent('mousemove',{clientX:110+i,clientY:110+i,bubbles:true}));
+  for(let i=0;i<50;i++)document.dispatchEvent(new MouseEvent('mousemove',{clientX:110+i,clientY:110+i,buttons:1,bubbles:true}));
   if(mover.captureGeometry().left!==before.left)throw new Error('Move positions were not coalesced');
   document.dispatchEvent(new MouseEvent('mouseup',{clientX:116,clientY:132,bubbles:true}));
   const after=mover.captureGeometry();
@@ -179,9 +179,9 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   async function command(text,keypad=false){
    canvas.focus();
    for(const char of text){
-    const shifted=char==='>'||char===':';
+    const shifted=char==='>'||char===':'||char==='_';
     const keypadCode=keypad?({'.':'NumpadDecimal','/':'NumpadDivide','*':'NumpadMultiply','-':'NumpadSubtract','+':'NumpadAdd'}[char]||(/^[0-9]$/.test(char)?'Numpad'+char:'')):'';
-    const code=keypadCode||(char==='>'?'Period':char===' '?'Space':char==='.'?'Period':char==='/'?'Slash':char===':'?'Semicolon':char==='-'?'Minus':char.charCodeAt(0)===92?'Backslash':/^[0-9]$/.test(char)?'Digit'+char:'Key'+char.toUpperCase());
+    const code=keypadCode||(char==='>'?'Period':char===' '?'Space':char==='.'?'Period':char==='/'?'Slash':char===':'?'Semicolon':char==='-'||char==='_'?'Minus':char.charCodeAt(0)===92?'Backslash':/^[0-9]$/.test(char)?'Digit'+char:'Key'+char.toUpperCase());
     if(shifted)canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Shift',code:'ShiftLeft',bubbles:true,cancelable:true}));
     for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:char,code,shiftKey:shifted,bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
     if(shifted)canvas.dispatchEvent(new KeyboardEvent('keyup',{key:'Shift',code:'ShiftLeft',bubbles:true,cancelable:true}));
@@ -284,6 +284,15 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    document.dispatchEvent(new MouseEvent('mouseup',{clientX:100+dx,clientY:100+dy,bubbles:true}));
   }
   resizer.place(highGeometry);
+  const running=dos.view.ci;
+  dos.zoom();
+  const app=document.querySelector('[data-tv-bundle-desktop]')._tvView.owner;
+  app._dispatchWindowCommand(window.THelpViewerTV.TV_COMMANDS.DEFAULT_SIZE);
+  const defaultGeometry=resizer.captureGeometry(),defaultClient=canvas.getBoundingClientRect();
+  if(dos.zoomGeometry||dos.view.ci!==running||defaultGeometry.cols!==resizer.defaultSize.cols
+   ||defaultClient.height<defaultClient.width*480/640-1
+   ||defaultClient.height-defaultClient.width*480/640>17)
+   throw new Error('DOS default size lost video ratio or restarted emulation: '+JSON.stringify(defaultGeometry));
   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
    if(canvas.height===400&&dos.root._tvResizer.captureGeometry().rows===textGeometry.rows){resolve(true);return;}
@@ -308,15 +317,17 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   if(!(await dos.view.ci.fsTree()).nodes.find(node=>node.name==='drive_c').nodes.some(node=>node.name.toUpperCase()==='STATE.TXT'))throw new Error('Keyboard did not create STATE.TXT');
   const text=await dos.view.ci.fsReadFile('drive_c/STATE.TXT');
   if(!new TextDecoder().decode(text).toLowerCase().includes('hello'))throw new Error('DOS keyboard did not create STATE.TXT');
-  await command('mount d / >mount.txt');
+  await command('mount x drive_c >mount.txt');
   const mount=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/MOUNT.TXT'));
-  if(!/secure/i.test(mount))throw new Error('MOUNT was not blocked: '+mount);
+  if(!/mounted/i.test(mount)||/secure/i.test(mount))throw new Error('Browser MOUNT failed: '+mount);
+  await command('echo virtual-only>x:'+String.fromCharCode(92)+'virtual.txt');
+  if(!new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/VIRTUAL.TXT')).includes('virtual-only'))throw Error('MOUNT did not use the virtual filesystem');
   await command('imgmount e missing.iso -t iso >image.txt');
   const image=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/IMAGE.TXT'));
-  if(!/secure/i.test(image))throw new Error('IMGMOUNT was not blocked: '+image);
+  if(/secure/i.test(image))throw new Error('IMGMOUNT is still blocked: '+image);
   await command('boot no.img >boot.txt');
   const boot=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/BOOT.TXT'));
-  if(!/secure/i.test(boot))throw new Error('BOOT was not blocked: '+boot);
+  if(/secure/i.test(boot))throw new Error('BOOT is still blocked: '+boot);
   await command('del readme.txt');
   await dos.save();
   if(dos.status.root.textContent.includes('C drive saved to cloud'))throw new Error('Successful save overlays the DOS screen');
@@ -335,8 +346,74 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   await command('copy a:'+String.fromCharCode(92)+'approved.txt c:'+String.fromCharCode(92)+'media.txt');
   const mounted=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/MEDIA.TXT')).includes('approved media');
   await dos.restart(${JSON.stringify(cdId)});
-  await command('copy d:'+String.fromCharCode(92)+'approved.txt c:'+String.fromCharCode(92)+'cd.txt');
+  await command('copy e:'+String.fromCharCode(92)+'approved.txt c:'+String.fromCharCode(92)+'cd.txt');
   const cdMounted=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/CD.TXT')).includes('approved cd');
+  if (${JSON.stringify(blockedWorker)} === 'false') {
+   // Real browser FileSystemDirectoryHandle/File objects; only the native picker
+   // is replaced with an isolated OPFS directory, never the user's host files.
+   const folder=await(await navigator.storage.getDirectory()).getDirectoryHandle('dos-local-fixture',{create:true});
+   const write=async(name,text)=>{const handle=await folder.getFileHandle(name,{create:true});const stream=await handle.createWritable();await stream.write(text);await stream.close();};
+   await write('INPUT.TXT','local-only input');await write('DELETE.TXT','delete');await write('MOVE.TXT','move');
+   window.showDirectoryPicker=async options=>{if(options.mode!=='readwrite')throw Error('Local folder not writable');return folder;};
+   await command('gfx');
+   const originalCi=dos.view.ci;
+   // The native permission/confirmation gesture is covered separately. Exercise
+   // the actual Worker protocol here, with no restart or keyboard injection.
+   await dos.changeLocalFolder(new THelpViewerTV.DosLocalDrive(folder));
+   if(dos.view.ci!==originalCi)throw Error('Local mount restarted DOS');
+   const programAfterMount=await dos.view.ci.getRunningProgram();
+   if(!programAfterMount.toUpperCase().includes('GFX')||canvas.width!==320||canvas.height!==200)throw Error('Local mount interrupted the running VGA program: '+JSON.stringify({programAfterMount,width:canvas.width,height:canvas.height}));
+   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(resolve=>setTimeout(resolve,30));}
+   if(!dos.localDrive||!dos.view.ci)throw Error('Local mount failed: '+dos.status.root.textContent);
+   const connectedMount=dos.localDrive.id;
+   try{await dos.localConnection.replace({mount:'invalid',writable:true,maxFileBytes:1024,entries:[{path:'../OUTSIDE',directory:true}]});throw Error('Accepted unsafe staged local path');}
+   catch(error){if(error.message==='Accepted unsafe staged local path')throw error;}
+   if(JSON.parse(new TextDecoder().decode(await dos.view.ci.fsReadFile('.jsdos/local-state.json'))).mount!==connectedMount)throw Error('Rejected local replacement damaged the current mount');
+   await command('copy d:'+String.fromCharCode(92)+'input.txt c:'+String.fromCharCode(92)+'fromd.txt');
+   if(!new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/FROMD.TXT')).includes('local-only input'))throw Error('Local D read failed');
+   // DOS opens D:\INPUT.TXT and waits for one key while retaining the file
+   // handle. A hot disconnect must fail without killing this running program.
+   await dos.view.ci.fsWriteFile('drive_c/HOLD.COM',new Uint8Array([
+    ...[0xba,0x14,0x01,0xb8,0x00,0x3d,0xcd,0x21,0x89,0xc3,0xb4,0x08,0xcd,0x21,0xb4,0x3e,0xcd,0x21,0xcd,0x20],
+    ...new TextEncoder().encode('D:'+String.fromCharCode(92)+'INPUT.TXT'),0]));
+   await command('rescan -a');
+   await command('hold');
+   try{await dos.changeLocalFolder(null);throw Error('Disconnected an open local file');}
+   catch(error){if(!/Close files/.test(error.message))throw error;}
+   if(dos.view.ci!==originalCi||!dos.localDrive)throw Error('Failed disconnect replaced the running DOS session');
+   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(resolve=>setTimeout(resolve,30));}
+   await command('echo still-running>alive.txt');
+   if(!new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/ALIVE.TXT')).includes('still-running'))throw Error('Failed hot swap did not preserve the DOS process');
+   await command('echo saved>d:'+String.fromCharCode(92)+'out.txt');
+   await command('md d:'+String.fromCharCode(92)+'empty');
+   await command('del d:'+String.fromCharCode(92)+'delete.txt');
+   await command('ren d:'+String.fromCharCode(92)+'move.txt moved.txt');
+   if(!(await dos.view.ci.fsTree()).nodes.find(node=>node.name==='drive_d').nodes.some(node=>node.name==='INPUT.TXT'))throw Error('Local D tree is incomplete');
+   // No manual Save: automatic D flush works even with the window inactive.
+   dos.setActive(false);
+   const deadline=Date.now()+8000;
+   while(dos.localDrive.savedRevision!==JSON.parse(new TextDecoder().decode(await dos.view.ci.fsReadFile('.jsdos/local-state.json'))).revision){
+    if(dos.localSaveFailed||Date.now()>deadline)throw Error('Automatic local save failed');
+    await new Promise(resolve=>setTimeout(resolve,100));
+   }
+   dos.setActive(true);
+   if(!(await(await folder.getFileHandle('OUT.TXT')).getFile()).size)throw Error('Local D write failed');
+   await folder.getDirectoryHandle('EMPTY');await folder.getFileHandle('MOVED.TXT');
+   if(new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_d/MOVED.TXT'))!=='move')throw Error('Renamed local file lost bytes after save');
+   try{await folder.getFileHandle('DELETE.TXT');throw Error('Local deletion not saved');}catch(error){if(error.name!=='NotFoundError')throw error;}
+   await dos.restart();
+   if(!new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_d/OUT.TXT')).includes('saved'))throw Error('Local D restart failed');
+   await command('copy e:'+String.fromCharCode(92)+'approved.txt c:'+String.fromCharCode(92)+'localcd.txt');
+   if(!new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/LOCALCD.TXT')).includes('approved cd'))throw Error('CD did not move to E');
+   const config=await(await fetch('/api/dos/session')).json();
+   if(Object.keys(config.remote_files).some(name=>name==='OUT.TXT'||name==='MOVED.TXT'))throw Error('Local D leaked to server C');
+   const connectedCi=dos.view.ci;
+   await dos.changeLocalFolder(null);
+   if(dos.view.ci!==connectedCi)throw Error('Local disconnect restarted DOS');
+   if((await dos.view.ci.fsTree()).nodes.find(node=>node.name==='drive_d').nodes.length)throw Error('Disconnected local D still contains host files');
+   await command('dir d:'+String.fromCharCode(92)+' /b>emptyd.txt');
+   if(/INPUT|OUT|MOVED/.test(new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/EMPTYD.TXT'))))throw Error('DOS directory cache still exposes the disconnected folder');
+  }
   const deleted=!(await dos.view.ci.fsTree()).nodes.find(node=>node.name==='drive_c').nodes.some(node=>node.name.toUpperCase()==='README.TXT');
   return {frameOkay,bottomOkay,allBlack,nestedLoaded,rendered,graphics,paused,restored,deleted,mounted,cdMounted,revision,account:dos.session.account,mount};
  })()`);
@@ -345,6 +422,28 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   console.log(JSON.stringify(result));socket.close();return;
  }
  if(!result.frameOkay||!result.bottomOkay||!result.allBlack||!result.nestedLoaded||!result.rendered||!result.paused||!result.restored||!result.deleted||!result.mounted||!result.cdMounted||result.revision<1||result.account!=='player'||errors.length){throw new Error(JSON.stringify({result,errors}));}
+ await evaluate(`(()=>{
+  const resizer=dos.root._tvResizer,geometry=resizer.captureGeometry(),ci=dos.view.ci;
+  const original={pause:ci.pause,resume:ci.resume,motion:ci.sendMouseMotion,button:ci.sendMouseButton};
+  let pauses=0,resumes=0,mouse=0;
+  ci.pause=function(){pauses++;return original.pause.call(this);};
+  ci.resume=function(){resumes++;return original.resume.call(this);};
+  ci.sendMouseMotion=function(...args){mouse++;return original.motion.apply(this,args);};
+  ci.sendMouseButton=function(...args){mouse++;return original.button.apply(this,args);};
+  const down=()=>{resizer.lastMoveDown=0;resizer.moveHandle.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,button:0,buttons:1,clientX:100,clientY:100}));};
+  try{
+   dos.setActive(true);down();
+   if(!dos.getState(THelpViewerTV.sfDragging)||!resizer.moveState||!pauses)throw Error('DOS movement did not pause through sfDragging');
+   dos.view.canvas.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,cancelable:true,buttons:1,clientX:140,clientY:140}));
+   if(!resizer.moveState||mouse)throw Error('DOS stole the frame drag over its canvas');
+   const resumed=resumes;
+   dos.view.canvas.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,button:0,buttons:0,clientX:160,clientY:160}));
+   if(resizer.moveState||dos.getState(THelpViewerTV.sfDragging)||dos.root.classList.contains('is-moving')||mouse||resumes<=resumed)throw Error('Mouse-up over DOS did not finish/resume the frame drag');
+   dos.paused=true;dos.syncPause();down();const manuallyPaused=resumes;
+   window.dispatchEvent(new Event('blur'));
+   if(resizer.moveState||dos.getState(THelpViewerTV.sfDragging)||!dos.paused||resumes!==manuallyPaused)throw Error('Blur left a stuck drag or lost manual DOS pause');
+  }finally{ci.pause=original.pause;ci.resume=original.resume;ci.sendMouseMotion=original.motion;ci.sendMouseButton=original.button;dos.paused=false;dos.syncPause();resizer.place(geometry);}
+ })()`);
  await evaluate(`(()=>{
   const before=dos.root._tvResizer.captureGeometry(),r=dos.root.getBoundingClientRect();
   document.querySelector('[data-tv-command="dos-zoom"]').click();
@@ -360,11 +459,12 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   if(document.fullscreenElement===dos.view.canvas&&!dos.root.classList.contains('is-maximized')&&Math.abs(r.width-innerWidth)<1&&Math.abs(r.height-innerHeight)<1){resolve(true);return;}if(Date.now()>deadline){reject(new Error('Native canvas fullscreen failed'));return;}setTimeout(check,50);
  };check();})`);
  await evaluate(`(()=>{const key=()=>dos.view.canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Pause',code:'Pause',altKey:true,bubbles:true,cancelable:true}));key();if(!dos.paused)throw new Error('Alt-Pause did not pause DOS');key();if(dos.paused)throw new Error('Alt-Pause did not resume DOS');})()`);
- await evaluate(`document.exitFullscreen()`,true);
+ // A fullscreen key can target the document after browser focus changes.
+ await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',altKey:true,bubbles:true,cancelable:true}))`,true);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
   if(!document.fullscreenElement&&!dos.root.classList.contains('is-maximized')){resolve(true);return;}if(Date.now()>deadline){reject(new Error('DOS fullscreen restore failed'));return;}setTimeout(check,50);
  };check();})`);
- await evaluate(`dos.view.canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',altKey:true,bubbles:true,cancelable:true}))`,true);
+ await evaluate(`dos.view.canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'NumpadEnter',altKey:true,bubbles:true,cancelable:true}))`,true);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
   if(document.fullscreenElement===dos.view.canvas){resolve(true);return;}if(Date.now()>deadline){reject(new Error('DOS fullscreen re-entry failed'));return;}setTimeout(check,50);
  };check();})`);
@@ -434,13 +534,41 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
  if(JSON.stringify(restoredGeometry)!==JSON.stringify(geometry.slice(0,4)))throw new Error('DOS window geometry was not restored');
  const stats=await evaluate(`(async()=>{return await (await fetch('/api/statistics/summary')).json();})()`);
  if(!stats.tool.some(row=>row.value==='dos-prompt'&&row.count===2)||!stats.tool_duration.some(row=>row.value.startsWith('dos-prompt · '))){throw new Error('DOS statistics missing: '+JSON.stringify({stats,errors}));}
+ // A genuinely different cloud write must not trap Close, or silently overwrite it.
+ await evaluate(`(async()=>{
+  const state=await(await fetch('/api/dos/session')).json(),unchanged={};
+  for(const name of state.overlay_files)unchanged[name]=state.remote_files[name].sha256;
+  const response=await fetch('/api/dos/overlay',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+   base_id:state.base_id,revision:state.revision,account:state.account,files:{'OTHER.TXT':btoa('another DOS window')},unchanged,
+   deleted:Object.keys(state.files).filter(name=>!state.remote_files[name]),directories:[]})});
+  if(!response.ok)throw Error('Could not simulate second DOS window');
+  window.foreignRevision=(await response.json()).revision;
+ })()`);
  const closePoint=await evaluate(`(()=>{const r=dos.root.querySelector('.tv-close-control').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
  await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...closePoint});
  if(!await evaluate(`dos.root.isConnected`))throw new Error('DOS closed before mouse release');
  await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...closePoint});
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
+  if(dos.confirmation?.isOpen()){resolve(true);return;}
+  if(Date.now()>deadline){reject(new Error('Cloud conflict offered no way to close DOS'));return;}setTimeout(check,50);
+ };check();})`);
+ await evaluate(`dos.confirmation.closeAction()`);
+ await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
+  if(!dos.confirmation&&!dos.closing&&dos.root.isConnected&&dos.view.ci){resolve(true);return;}
+  if(Date.now()>deadline){reject(new Error('Cancel discarded DOS after a cloud conflict'));return;}setTimeout(check,50);
+ };check();})`);
+ await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...closePoint});
+ await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...closePoint});
+ await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
+  if(dos.confirmation?.isOpen()){resolve(true);return;}
+  if(Date.now()>deadline){reject(new Error('Repeated close lost its confirmation'));return;}setTimeout(check,50);
+ };check();})`);
+ await evaluate(`dos.confirmation.buttonViews.find(button=>button.value==='ok').press()`);
+ await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
   if(!document.querySelector('.tv-dos-window')){resolve(true);return;}if(Date.now()>deadline){reject(new Error('DOS close failed'));return;}setTimeout(check,50);
  };check();})`);
+ await evaluate(`(async()=>{const response=await(await fetch('/api/dos/session')).json();
+  if(response.revision!==foreignRevision||!response.remote_files['OTHER.TXT'])throw Error('Discard overwrote the other DOS disk');})()`);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
   if(!location.hash.includes('tv=1.')){resolve(true);return;}
   if(Date.now()>deadline){reject(new Error('Closed DOS remained in URL'));return;}setTimeout(check,50);
@@ -455,7 +583,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
                 launch = next(source["launch"] for source in sources if f"\\GAMES\\{extra_game} then " in source.get("launch", ""))
                 game_command = launch.split(" then ", 1)[1]
             result = subprocess.run([NODE, "-e", script, debugging, url, token, media_id, cd_id, str(blocked_worker).lower(), installed_games, extra_game, game_command, str(audio_test).lower(),
-                extra_software, os.environ.get("THELP_DOS_TEST_SOFTWARE_COMMAND", "start"), os.environ.get("THELP_DOS_TEST_SCREENSHOT", ""), os.environ.get("THELP_DOS_TEST_SOFTWARE_OUTPUT", "")], capture_output=True, text=True, timeout=90)
+                extra_software, os.environ.get("THELP_DOS_TEST_SOFTWARE_COMMAND", "start"), os.environ.get("THELP_DOS_TEST_SCREENSHOT", ""), os.environ.get("THELP_DOS_TEST_SOFTWARE_OUTPUT", "")], capture_output=True, text=True, timeout=180)
             assert result.returncode == 0, result.stderr
             if extra_software:
                 print(result.stdout)

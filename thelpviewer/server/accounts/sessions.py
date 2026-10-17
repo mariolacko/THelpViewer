@@ -11,7 +11,8 @@ import uuid
 
 from .common import AccountError, token_hash
 
-SESSION_LIFETIME = 30 * 86400
+SESSION_LIFETIME = 86400
+SESSION_MAX_LIFETIME = 30 * 86400
 
 
 if TYPE_CHECKING:
@@ -46,11 +47,28 @@ def owner(connection: sqlite3.Connection, token: str, *, recent_passkey: bool = 
 
 def new_session(connection: sqlite3.Connection, account_id: str, *, auth_method: str = "passkey") -> str:
     token = secrets.token_urlsafe(32)
+    now = int(time.time())
     connection.execute(
-        "INSERT INTO sessions(token_hash, account_id, expires_at, verified_at, auth_method) VALUES (?, ?, ?, ?, ?)",
-        (token_hash(token), account_id, int(time.time()) + SESSION_LIFETIME, int(time.time()), auth_method),
+        "INSERT INTO sessions(token_hash, account_id, expires_at, verified_at, auth_method, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (token_hash(token), account_id, now + SESSION_LIFETIME, now, auth_method, now),
     )
     return token
+
+
+def activity(store: AccountStore, token: str) -> bool:
+    """Renew a still-valid session, never its recent-Passkey verification proof."""
+    if not token:
+        return False
+    now = int(time.time())
+    with closing(store._connect()) as connection, connection:
+        return connection.execute(
+            "UPDATE sessions SET expires_at=MIN(?, created_at+?) "
+            "WHERE token_hash=? AND expires_at>? AND created_at+?>? "
+            "AND account_id IN (SELECT id FROM accounts WHERE active=1)",
+            (now + SESSION_LIFETIME, SESSION_MAX_LIFETIME, token_hash(token), now,
+             SESSION_MAX_LIFETIME, now),
+        ).rowcount == 1
 
 
 def development_session(store: AccountStore) -> str:

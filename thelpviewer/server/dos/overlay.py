@@ -110,28 +110,23 @@ class DosOverlayStore:
         if payload.get("base_id") != base_id:
             raise DosError("C drive base changed; reload the page before saving")
         incoming, deleted = payload.get("files"), payload.get("deleted")
-        unchanged = payload.get("unchanged", [])
+        unchanged = payload.get("unchanged", {})
         directories = payload.get("directories", [])
-        if (not isinstance(incoming, dict) or not isinstance(deleted, list) or not isinstance(unchanged, list)
+        if (not isinstance(incoming, dict) or not isinstance(deleted, list) or not isinstance(unchanged, dict)
                 or len(incoming) + len(deleted) + len(unchanged) > MAX_FILES):
             raise DosError("Invalid overlay file list")
         files = {}
         total = 0
-        if unchanged:
-            old_revision, old_files, _deleted, _directories = self.overlay(account_id)
-            if old_revision != payload.get("revision"):
-                raise DosError("Another DOS window saved this drive; reload the page to load its changes")
-            for name in unchanged:
-                canonical = c_path(name)
-                if canonical not in old_files or canonical in files:
-                    raise DosError("Invalid unchanged overlay file")
-                files[canonical] = old_files[canonical]
-                total += len(files[canonical])
-            if total > limit:
-                raise DosError("Overlay exceeds its quota")
+        retained = {}
+        for name, digest in unchanged.items():
+            canonical = c_path(name)
+            if canonical in retained or not isinstance(digest, str) or len(digest) != 64 or any(
+                    char not in "0123456789abcdef" for char in digest):
+                raise DosError("Invalid unchanged overlay file")
+            retained[canonical] = digest
         for name, encoded in incoming.items():
             canonical = c_path(name)
-            if canonical in files or not isinstance(encoded, str):
+            if canonical in files or canonical in retained or not isinstance(encoded, str):
                 raise DosError("Duplicate or invalid overlay file")
             try:
                 contents = base64.b64decode(encoded, validate=True)
@@ -146,26 +141,56 @@ class DosOverlayStore:
         if not isinstance(directories, list) or len(directories) > MAX_FILES:
             raise DosError("Invalid directory list")
         folders = {c_path(name) for name in directories}
-        merged = {name: data for name, data in base_files.items() if name not in tombstones}
-        merged.update(files)
-        if len(merged) > len(base_files) + MAX_FILES:
-            raise DosError("Too many C drive files")
-        if folders.intersection(merged):
-            raise DosError("A path cannot be both a file and a directory")
-        for name in merged.keys() | folders:
-            parts = name.split("/")
-            if any("/".join(parts[:index]) in merged for index in range(1, len(parts))):
-                raise DosError("A file cannot contain another path")
-        if any(name not in base_files or name in files for name in tombstones):
+        if any(name not in base_files or name in files or name in retained for name in tombstones):
             raise DosError("Invalid deleted file list")
         database = self._database(account_id)
         snapshot = None
         try:
             database.execute("BEGIN IMMEDIATE")
             revision = database.execute("SELECT revision FROM state WHERE id=1").fetchone()[0]
-            if type(payload.get("revision")) is not int or payload["revision"] != revision:
-                raise DosError("Another DOS window saved this drive; reload the page to load its changes")
+            conflict = "Another DOS window saved this drive; close and reopen DOS to load its changes"
+            if type(payload.get("revision")) is not int or not 0 <= payload["revision"] <= revision:
+                raise DosError(conflict)
             self._migrate_overlay_files(database, account_id, revision)
+            current = dict(database.execute("SELECT name, sha256 FROM entries"))
+            for name, digest in retained.items():
+                if current.get(name) != digest:
+                    raise DosError(conflict)
+                path = self.user_dir(account_id) / "c" / str(revision) / name
+                self._check_private_path(path)
+                files[name] = path.read_bytes()
+                total += len(files[name])
+            if total > limit:
+                raise DosError("Overlay exceeds its quota")
+            merged = (base_files.keys() - tombstones) | files.keys()
+            if folders.intersection(merged):
+                raise DosError("A path cannot be both a file and a directory")
+            for name in merged | folders:
+                parts = name.split("/")
+                if any("/".join(parts[:index]) in merged for index in range(1, len(parts))):
+                    raise DosError("A file cannot contain another path")
+
+            def empty_folders(names, directories):
+                # File/child directory parents are implicit in both the boot
+                # tree and snapshots. Only empty leaves carry extra state.
+                parents = set()
+                for name in names | directories:
+                    parts = name.split("/")
+                    parents.update("/".join(parts[:index]) for index in range(1, len(parts)))
+                return directories - parents
+
+            folders = empty_folders(merged, folders)
+            old_deleted = {row[0] for row in database.execute("SELECT name FROM deleted")}
+            old_folders = {row[0] for row in database.execute("SELECT name FROM directories")}
+            old_folders = empty_folders((base_files.keys() - old_deleted) | current.keys(), old_folders)
+            hashes = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
+            if hashes == current and tombstones == old_deleted and folders == old_folders:
+                # Identical autosaves and replay after a lost response are
+                # safe even at an older revision; never rotate a no-op disk.
+                database.commit()
+                return revision
+            if payload["revision"] != revision:
+                raise DosError(conflict)
             snapshot = self._write_snapshot(account_id, revision + 1, files, folders)
             database.execute("DELETE FROM entries")
             database.execute("DELETE FROM deleted")

@@ -207,7 +207,7 @@ and cleared after submission/closing, and are not saved in workspace URLs.
 
 The UI reconfirms an existing Passkey before setting a password or adding a
 key. The server independently requires a Passkey-verified session no older
-than five minutes, not merely a 30-day login cookie or a password-only session.
+than five minutes, not merely a login cookie or a password-only session.
 Existing sessions migrate without recent-verification status and must reconfirm.
 Local opt-in development sessions are the explicit existing exception, limited
 by the same freshness window. Adding a key binds the one-use challenge to the
@@ -315,6 +315,27 @@ verification and signature with `py_webauthn`. Challenges are single-use and
 expire after five minutes. Sessions use random opaque IDs, stored only as
 hashes in SQLite and sent in HttpOnly, SameSite=Strict cookies. The cookie is
 also Secure for HTTPS deployments. Sign Out invalidates the server session.
+
+Sessions expire after **24 hours without activity**, enforced in SQLite on every
+authenticated API operation. Foreground pointer/keyboard/wheel input and returning
+to the page renew the current session through `POST /api/auth/activity`, at most
+once per minute. This endpoint requires the configured Host, exact Origin and a
+still-valid session; it reissues the HttpOnly cookie with a 24-hour lifetime.
+Background downloads, music and periodic API polling do not renew it. Both the
+SPA and generated HELP pages use the shared `TVSessionActivity` lifecycle adapter;
+periodic read-only session checks update the menu after expiration. Other tabs
+using the same cookie share that session's deadline.
+
+There is also an absolute **30-day** lifetime from login. Renewal never changes
+`created_at`, `verified_at` or `auth_method`, and cannot revive an expired,
+revoked or disabled account's session. Sensitive sign-in-method changes still
+need Passkey confirmation within five minutes. A one-time migration clamps
+existing fixed-duration sessions to at most 24 hours from the upgrade (their old
+activity was not recorded), without extending shorter/expired sessions. Local
+opt-in development auto-login remains an explicit exception: a subsequent session
+check can sign in the development Admin again. Expiry/sign-out never uploads the
+old DOS C under a new account; buffered local D changes are flushed before closing
+the DOS window, and a local write failure retains the paused window for recovery.
 
 `THELP_AUTH_ORIGIN` must be the exact browser origin, including scheme and
 port. The local Docker default is `http://localhost:5448`; browsers treat

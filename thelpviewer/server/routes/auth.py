@@ -127,6 +127,21 @@ def create_auth_router(config: AppConfig, accounts: AccountStore) -> APIRouter:
             headers={"Cache-Control": "no-store"},
         )
 
+    @router.post("/api/auth/activity")
+    def session_activity(request: Request) -> JSONResponse:
+        origin, _rp_id = auth_origin(request, require_post=True)
+        token = request.cookies.get("thelp_session", "")
+        if accounts.session_activity(token):
+            return auth_response(token, origin, {
+                "enabled": True, "authenticated": True, "user": accounts.session_user(token),
+                **({"development": True} if config.dev_auto_login else {}),
+            })
+        response = JSONResponse({"enabled": True, "authenticated": False, "user": None},
+                                headers={"Cache-Control": "no-store"})
+        response.delete_cookie("thelp_session", path="/", secure=origin.startswith("https://"),
+                               httponly=True, samesite="strict")
+        return response
+
     @router.put("/api/auth/profile")
     def update_profile(data: ProfileUpdate, request: Request) -> JSONResponse:
         auth_origin(request, require_post=True)
