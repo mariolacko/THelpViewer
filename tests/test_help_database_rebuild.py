@@ -3,11 +3,30 @@
 import json
 from pathlib import Path
 import stat
+import sys
 
 import pytest
 
 from thelpviewer.help_database import crc32_file, load_help_manifest
 from tools import rebuild_help_database as rebuild
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_database_tool_sources_default_to_working_state(tmp_path, monkeypatch, explicit):
+    monkeypatch.setenv("THELP_DATA_DIR", str(tmp_path / "permanent"))
+    monkeypatch.setenv("THELP_STATE_DIR", str(tmp_path / "work"))
+    expected = tmp_path / "inputs" if explicit else tmp_path / "work" / "sources"
+    if explicit:
+        monkeypatch.setenv("THELP_SOURCES_DIR", str(expected))
+    else:
+        monkeypatch.delenv("THELP_SOURCES_DIR", raising=False)
+    database = tmp_path / "help-database.json"
+    monkeypatch.setattr(sys, "argv", ["rebuild_help_database.py", "--output", str(database)])
+    def rebuild_database(sources, output):
+        assert sources == expected and output == database
+        return 0
+    monkeypatch.setattr(rebuild, "rebuild_help_database", rebuild_database)
+    assert rebuild.main() == 0
 
 
 def test_rebuild_retains_complete_manifest_and_explicit_product_assignments(tmp_path):

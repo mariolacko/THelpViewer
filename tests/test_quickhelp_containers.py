@@ -189,7 +189,7 @@ def test_single_and_tree_export_keep_physical_url_and_logical_catalog_names(tmp_
     ("Microsoft QuickC, C, and C++ 6.0", "LINK.HLP", [155, 51]),
 ])
 def test_original_multi_database_files_export_every_topic_without_renumbering_first(product, filename, counts):
-    source = Path("data/sources") / product / filename
+    source = Path("var/sources") / product / filename
     if not source.exists():
         pytest.skip("Original Microsoft corpus is not installed")
     document = load_document(source)

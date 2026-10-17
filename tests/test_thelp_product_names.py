@@ -105,7 +105,7 @@ def test_hotspot_target_and_visible_label_survive_product_substitution():
 
 
 def test_native_originals_keep_raw_placeholders_but_project_correct_product_names():
-    root = Path("data/sources")
+    root = Path("var/sources")
     for name, product in [("Borland Turbo Pascal 7", "Turbo"), ("Borland Pascal 7.x current", "Borland")]:
         data = (root / name / "TURBO.TPH").read_bytes()
         _meta, screens, _, _ = ThelpBinaryParser(data).parse()
@@ -117,9 +117,9 @@ def test_native_originals_keep_raw_placeholders_but_project_correct_product_name
 
 
 def test_borland_product_name_reaches_bundle_and_source_stays_immutable(tmp_path):
-    source = Path("data/sources/Borland Pascal 7.x current/TURBO.TPH")
+    source = Path("var/sources/Borland Pascal 7.x current/TURBO.TPH")
     before = source.read_bytes()
-    results = export_bundle_tree(Path("data/sources"), tmp_path, source_paths=[source], layout="helps")
+    results = export_bundle_tree(Path("var/sources"), tmp_path, source_paths=[source], layout="helps")
     payload = json.loads(gzip.decompress(results[0].json_path.read_bytes()))
     assert "Welcome to Borland Pascal's Online Help" in "\n".join(payload["topics"]["2"]["content"])
     assert source.read_bytes() == before
@@ -128,7 +128,7 @@ def test_borland_product_name_reaches_bundle_and_source_stays_immutable(tmp_path
 def test_placeholder_records_match_original_turbo_and_borland_decoder_capture():
     digest = hashlib.sha256()
     files = records = rows = markers = 0
-    root = Path("data/sources")
+    root = Path("var/sources")
     for source in sorted(root.rglob("TURBO.TPH")):
         meta, screens, _, _ = ThelpBinaryParser(source.read_bytes()).parse()
         affected = [screen for screen in screens if "product_runs" in screen]

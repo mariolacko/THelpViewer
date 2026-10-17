@@ -84,7 +84,7 @@ On the server or in local development, a signed-in administrator can use **User 
 Configuration → Rebuild DOS C** to recreate this shared disk from the current
 manifest. Confirmation is required; the current browser saves/closes DOS first.
 The server moves only `var/dos/c/` to a unique recoverable backup under
-`var/backups/`, keeps `data/dos/users/` overlays/media and cached source archives,
+`var/backups/dos/`, keeps `data/dos/users/` overlays/media and cached source archives,
 then runs the normal initial preparation again. Other browser tabs must restart
 DOS after the base changes. A successful rebuild rotates older DOS backups:
 default two, shared with package-change snapshots, configurable via Server
@@ -206,8 +206,19 @@ the current Chrome/WASM smoke test stalls at that selector, even with a held
 selection key. It reproduces both with worker/file-on-demand and with the
 explicitly enabled direct/full-disk test configuration, so it is not specific
 to chunk delivery. The cause and gameplay compatibility remain unresolved.
-Norton Commander 4.0
-has a pinned disk-image source but is disabled pending redistribution permission.
+Norton Commander 4.0 is opt-in and uses original English media from
+`archive.org/details/003492-NortonCommander40`, with a second distribution at
+`archive.org/details/norton-commander-4.0-for-dos`. The first recipe opens the
+7z's `003492_norton_commander/disk1.img`, then extracts `NC_ARC.EXE` and
+`NC_ARCV1.EXE` as ARJ archives and retains `README.TXT`. The alternative ZIP
+has a single `NC_ARC.EXE`; its Symantec ARJ variant is supported by unar (7-Zip
+reports an invalid archive length for that variant). Neither executes INSTALL.
+Both actual program binaries identify as Norton Commander 4.0; the old WinWorld
+image identified as modified "MFF" and is not retained as an alternative.
+The recipes were checked by extraction, not by a gameplay/runtime smoke test.
+Commercial redistribution still requires the administrator's permission;
+the package remains unchecked by default. Alternative recipes are handled by
+the shared package downloader, not Norton-specific code.
 Subsequent messages distinguish C-drive loading, runtime loading, backend
 startup and the command shell. Network/backend waits have 30-second deadlines,
 script loading 20 seconds and shell startup 15 seconds, rather than leaving
@@ -461,10 +472,15 @@ device it supports. Web Audio also requires browser permission/user activation;
 click the DOS canvas after restoring a URL if audio has not been unlocked.
 See the [DOSBox sound documentation](https://www.dosbox.com/wiki/Sound).
 
-New downloads are cached by hash in `var/downloads/dos/`; upgrade migrates the
+New downloads use readable `<package-id>/<archive-name>` paths with identity
+and checksum sidecars in `var/downloads/dos/`; upgrade migrates the
 legacy `var/dos/downloads/` cache there and archives its original. Verified files are
 installed under `var/dos/c/`; `var/dos/installed.json` records installed
-source hashes. After successful initialisation its `_complete` flag freezes
+source-recipe keys and per-package `_files` ownership. Old SHA-pinned receipts
+are recovered once from retained checksum-proven archives whose contents match
+the shared disk, before migrating those caches to readable names. No C files or
+private overlays are changed; missing/modified/ambiguous data is not guessed.
+After successful initialisation its `_complete` flag freezes
 automatic installation: later starts only read the existing disk, even if the
 manifest's source list changes. They do not redownload, restore deleted files
 or overwrite administrator edits. An interrupted initial installation without
@@ -590,6 +606,10 @@ transactions and ownership checks. `server/routes/dos.py` owns the
 HTTP/session/origin boundary. The shared
 `server/downloader/packages.py` module handles cached software downloads and
 uses the same transport and atomic cache writer as HELP providers.
+DOS recipes use `server/archives/` just like HELP ingestion and MIDI albums:
+bounded ZIP members, external image/archive extraction, split-stream assembly
+and Microsoft SZDD/KWAJ expansion. The DOS layer alone owns installation paths,
+recipe/member selection, C-drive quotas and post-install commands.
 `settings.py` and `routes/settings.py` own
 persisted admin settings. `app.py` constructs stores and registers routers.
 

@@ -44,12 +44,24 @@ def test_manifest_providers_and_all_converter_symbols_resolve_in_server_modules(
 
 
 def test_downloader_defaults_and_exported_site_image_use_project_root(tmp_path, monkeypatch):
-    for name in ("THELP_DATA_DIR", "THELP_SOURCES_DIR", "THELP_DOWNLOADS_DIR"):
+    for name in ("THELP_DATA_DIR", "THELP_STATE_DIR", "THELP_SOURCES_DIR", "THELP_DOWNLOADS_DIR"):
         monkeypatch.delenv(name, raising=False)
     args = _build_parser(PROJECT_ROOT).parse_args([])
-    assert args.out_dir == str(PROJECT_ROOT / "data" / "sources")
+    assert load_config().sources_dir == PROJECT_ROOT / "var" / "sources"
+    assert args.out_dir == str(PROJECT_ROOT / "var" / "sources")
     assert args.dl_dir == str(PROJECT_ROOT / "var" / "downloads" / "help")
     _write_bundle_index(tmp_path)
     assert (tmp_path / "assets" / "Thelp.png").read_bytes() == (PROJECT_ROOT / "Thelp.png").read_bytes()
     assert (tmp_path / "assets" / "tv-bundle-app.js").is_file()
     assert (tmp_path / "index.html").is_file()
+
+
+def test_sources_default_to_state_not_permanent_data_and_support_explicit_override(tmp_path, monkeypatch):
+    monkeypatch.delenv("THELP_SOURCES_DIR", raising=False)
+    monkeypatch.setenv("THELP_STATE_DIR", str(tmp_path / "work"))
+    monkeypatch.setenv("THELP_DATA_DIR", str(tmp_path / "permanent"))
+    assert load_config().sources_dir == tmp_path / "work" / "sources"
+    assert _build_parser(PROJECT_ROOT).parse_args([]).out_dir == str(tmp_path / "work" / "sources")
+    monkeypatch.setenv("THELP_SOURCES_DIR", str(tmp_path / "inputs"))
+    assert load_config().sources_dir == tmp_path / "inputs"
+    assert _build_parser(PROJECT_ROOT).parse_args([]).out_dir == str(tmp_path / "inputs")

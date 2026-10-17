@@ -1,0 +1,26 @@
+{
+  "e8855613e1fab569daddab65c42f4b96bbeac1c72f9b5734dec828c834d1752e": {
+    "example_source": "Borland C++ 3.0/TASM.TAH",
+    "records": 525,
+    "rows": 7664,
+    "native_text": "67afab79266d50f8da33b5cab68c7e1290181a9e792ef2a87449ffbbecfb4919",
+    "native_visible": "584578cdf82cb317f3375921bbfb6eb58ea5be7a91ab85cae45cc82316ab4369",
+    "model": "4af34ba2894f86b0cb03cef008c3d14cfdb6105afb5249c7c8da1ebaf1b4167e"
+  },
+  "d1b407f4aa52b718659bdac2f1d50b26ae895f625c293bd037172e89d3848cbf": {
+    "example_source": "Borland Pascal 7.0 (DE)/TASM.TAH",
+    "records": 530,
+    "rows": 8152,
+    "native_text": "ffe346d0ac3c27a4b52f1ab844156bc53f98c8217a417b8944c693180e0498c9",
+    "native_visible": "8dffac36b20e83a176b19f1a2a1ca38bc4d239c4a68c3b3c964b93d7aa8beb54",
+    "model": "870e5f563862048c7716102211239e7aae0b13de6f8739db64d7e8a8059e37a8"
+  },
+  "1b17b7844ed25d72ed2a521557c7475d09e026b7fe44ed99a66992412d0b662f": {
+    "example_source": "Borland Turbo Pascal 4.0 (DE)/TURBO.HLP",
+    "records": 372,
+    "rows": 4955,
+    "native_text": "7e0215c22a31caf9d31a879d6f4abf95555140c3274dc843cb93ac428dce9651",
+    "native_visible": "6f04518e0a152732ce9448502b74bc3a9932de6931bc73d87122ee7626d3f0c2",
+    "model": "6a74d188165e143aca11b9d34a1190eb5ae909498a9925c9043967501fe27eb3"
+  }
+}

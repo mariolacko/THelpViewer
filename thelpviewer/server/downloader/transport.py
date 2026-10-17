@@ -3,6 +3,8 @@
 from http.cookiejar import CookieJar
 from http.client import HTTPConnection, HTTPSConnection
 from ipaddress import ip_address
+from contextlib import contextmanager
+from contextvars import ContextVar
 from urllib.parse import quote, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, HTTPRedirectHandler, HTTPHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 from urllib.error import HTTPError, URLError
@@ -10,10 +12,28 @@ import time
 
 from bs4 import BeautifulSoup
 from soupsieve.util import SelectorSyntaxError
-from .cache import atomic_download
-from .online import defer_source, report_transfer, run_download, transfer_slot
+from ..file_storage import atomic_file
+from .online import defer_source, report_transfer, run_download, source_key, transfer_slot
+from .errors import DownloadSecurityError, SourceRateLimited, SourceUnavailable
 
 MAX_RETRY_AFTER = 300
+_limited_sources = ContextVar("limited_download_sources", default=None)
+
+
+@contextmanager
+def defer_limited_sources(sources):
+    """Share exhausted site limits across alternative sources in one job."""
+    token = _limited_sources.set(sources)
+    try:
+        yield
+    finally:
+        _limited_sources.reset(token)
+
+
+def check_source_limit(url):
+    sources = _limited_sources.get()
+    if sources is not None and source_key(url) in sources:
+        raise SourceRateLimited(url)
 
 
 def retry_delay(headers: object, default: int) -> int:
@@ -26,19 +46,19 @@ def retry_delay(headers: object, default: int) -> int:
 
 def public_url(url: str, *, https_only: bool = True) -> None:
     if any(ord(char) < 32 or ord(char) == 127 for char in url):
-        raise ValueError("Download URLs must not contain control characters")
+        raise DownloadSecurityError("Download URLs must not contain control characters")
     parsed = urlsplit(url)
     if (parsed.scheme not in ({"https"} if https_only else {"http", "https"}) or not parsed.hostname
             or parsed.username is not None or parsed.password is not None
             or parsed.hostname == "localhost" or parsed.hostname.endswith(".localhost")):
-        raise ValueError("Downloads require public HTTPS URLs without credentials" if https_only
+        raise DownloadSecurityError("Downloads require public HTTPS URLs without credentials" if https_only
                          else "Downloads require public HTTP(S) URLs without credentials")
     try:
         address = ip_address(parsed.hostname)
     except ValueError:
         return  # The connection below also verifies the actual resolved peer.
     if not address.is_global:
-        raise ValueError("Downloads must not access private network addresses")
+        raise DownloadSecurityError("Downloads must not access private network addresses")
 
 
 def _encoded_url(url: str) -> str:
@@ -63,7 +83,7 @@ class _PublicPeer:
     def _check_peer(self) -> None:
         if self.sock is None or not ip_address(self.sock.getpeername()[0]).is_global:
             self.close()
-            raise ValueError("Downloads must not access private network addresses")
+            raise DownloadSecurityError("Downloads must not access private network addresses")
 
 
 class _PublicHTTPSConnection(_PublicPeer, HTTPSConnection):
@@ -95,7 +115,8 @@ class _HTTPSRedirect(HTTPRedirectHandler):
         newurl = _encoded_url(newurl)
         public_url(newurl, https_only=self.https_only or urlsplit(request.full_url).scheme == "https")
         if self.allowed_hosts is not None and urlsplit(newurl).hostname not in self.allowed_hosts:
-            raise ValueError("Download redirected outside its configured hosts")
+            raise DownloadSecurityError("Download redirected outside its configured hosts")
+        check_source_limit(newurl)
         return super().redirect_request(request, fp, code, message, headers, newurl)
 
 
@@ -117,7 +138,7 @@ def download_chunks(response, limit: int, on_progress=None):
             on_progress(received, total)
         yield chunk
     if total and received != total:
-        raise ValueError("Download is incomplete")
+        raise SourceUnavailable("Download is incomplete")
 
 
 def read_request(opener, request, limit, *, timeout=30, retries=3, retry_after=30,
@@ -127,6 +148,8 @@ def read_request(opener, request, limit, *, timeout=30, retries=3, retry_after=3
         request.full_url = _encoded_url(request.full_url)
     else:
         request = _encoded_url(request)
+    # Check before queueing: a deferred site must not first wait in its cooldown.
+    check_source_limit(getattr(request, "full_url", request))
     def status(value):
         report_transfer(value)
         if on_status:
@@ -139,6 +162,7 @@ def read_request(opener, request, limit, *, timeout=30, retries=3, retry_after=3
         for attempt in range(retries):
             status(phase)
             try:
+                check_source_limit(getattr(request, "full_url", request))
                 with opener.open(request, timeout=timeout) as response:
                     final_url = getattr(response, "url", getattr(request, "full_url", request))
                     with transfer_slot(final_url):
@@ -146,17 +170,24 @@ def read_request(opener, request, limit, *, timeout=30, retries=3, retry_after=3
                         if destination is None:
                             data = b"".join(chunks)
                         else:
-                            with atomic_download(destination) as output:
+                            with atomic_file(destination) as output:
                                 for chunk in chunks:
                                     output.write(chunk)
                             data = destination
                         return data, final_url, response.headers
+            except SourceRateLimited:
+                raise
             except HTTPError as error:
                 retryable = error.code == 429 or 500 <= error.code < 600
                 delay = retry_delay(error.headers, retry_after) if error.code == 429 else 5
                 waiting = "Rate limited (HTTP 429), retry" if error.code == 429 else "Retrying"
                 if error.code == 429:
                     defer_source(error.url, delay)
+                    sources = _limited_sources.get()
+                    if sources is not None and attempt == retries - 1:
+                        sources.add(source_key(error.url))
+                        error.close()
+                        raise SourceRateLimited(error.url) from None
                 if not retryable or attempt == retries - 1:
                     raise
                 error.close()
@@ -168,13 +199,14 @@ def read_request(opener, request, limit, *, timeout=30, retries=3, retry_after=3
                 status(f"{waiting} in {remaining}s")
                 time.sleep(1)
         raise ValueError("Download needs at least one attempt")
-    return run_download(transfer, source=getattr(request, "full_url", request))
+    return run_download(transfer, source=getattr(request, "full_url", request),
+        check=lambda: check_source_limit(getattr(request, "full_url", request)))
 
 
 def fetch_bytes(url, hosts, limit, *, on_progress=None, on_status=None, user_agent="THelpViewer downloader"):
     public_url(url)
     if urlsplit(url).hostname not in hosts:
-        raise ValueError("Download URL is outside its configured HTTPS hosts")
+        raise DownloadSecurityError("Download URL is outside its configured HTTPS hosts")
     request = Request(url, headers={"User-Agent": user_agent})
     data, _url, _headers = read_request(create_opener(allowed_hosts=hosts), request, limit,
         on_progress=on_progress, on_status=on_status)
@@ -196,11 +228,13 @@ def fetch_source(source: dict, limit: int, on_progress=None, *, on_status=None) 
         try:
             contents, final_url, _headers = read_request(opener, request, limit,
                 on_progress=on_progress if download else None, on_status=on_status)
+        except SourceRateLimited:
+            raise
         except HTTPError as error:
             if error.code != 429:
                 raise
             error.close()
-            raise ValueError(f"Download of {source.get('title', source.get('id', 'package'))} is rate limited (HTTP 429). Try again later; installed files are unchanged.") from None
+            raise SourceUnavailable(f"Download of {source.get('title', source.get('id', 'package'))} is rate limited (HTTP 429). Try again later; installed files are unchanged.") from None
         return bytes(contents), final_url
 
     data, url = fetch(url, download=not selectors)
@@ -213,7 +247,7 @@ def fetch_source(source: dict, limit: int, on_progress=None, *, on_status=None) 
         except SelectorSyntaxError as error:
             raise ValueError("Invalid download form selector") from error
         if form is None or form.name != "form" or form.get("method", "get").lower() != "post":
-            raise ValueError("Download form is unavailable; inspect the source page")
+            raise SourceUnavailable("Download form is unavailable; inspect the source page")
         fields = {item["name"]: item.get("value", "")
                   for item in form.select('input[type="hidden"][name]:not([disabled])')}
         button = form.select_one('button[name]:not([disabled]), input[type="submit"][name]:not([disabled])')

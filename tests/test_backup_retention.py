@@ -83,17 +83,19 @@ def test_help_build_retention_and_conversion_failure(tmp_path, monkeypatch, keep
         result = build_help_groups(["dos-reference"], sources, helps, **options)
         if result["backup"]:
             backups.append(Path(result["backup"]))
-    assert set(tmp_path.glob(".helps-previous-*")) == set(backups[-keep:])
+    root = tmp_path / "backups/help"
+    assert set(root.glob("help-*")) == set(backups[-keep:])
+    assert not list(tmp_path.glob(".helps-previous-*"))
     assert all((backup / "HelpPC 2.10/c.json.gz").is_file() for backup in backups[-keep:])
 
     def fail(*args, **kwargs):
         raise ValueError("conversion failed")
 
     monkeypatch.setattr("thelpviewer.server.converter.build.export_bundle_tree", fail)
-    before = set(tmp_path.glob(".helps-previous-*"))
+    before = set(root.glob("help-*"))
     with pytest.raises(ValueError, match="conversion failed"):
         build_help_groups(["dos-reference"], sources, helps, backup_count=1)
-    assert set(tmp_path.glob(".helps-previous-*")) == before
+    assert set(root.glob("help-*")) == before
     assert (helps / "HelpPC 2.10/c.json.gz").is_file()
 
 
@@ -104,7 +106,7 @@ def test_failed_help_publication_restores_live_tree_without_pruning(tmp_path, mo
     source.write_bytes(b"@C language\r\n:ReferenceTopic\r\n%Reference text\r\n")
     for _ in range(4):
         build_help_groups(["dos-reference"], sources, helps, backup_count=3)
-    before = set(tmp_path.glob(".helps-previous-*"))
+    before = set((tmp_path / "backups/help").glob("help-*"))
     live = (helps / "HelpPC 2.10/c.json.gz").read_bytes()
     rename = Path.rename
 
@@ -116,7 +118,8 @@ def test_failed_help_publication_restores_live_tree_without_pruning(tmp_path, mo
     monkeypatch.setattr(Path, "rename", fail_publish)
     with pytest.raises(OSError, match="cannot publish"):
         build_help_groups(["dos-reference"], sources, helps, backup_count=1)
-    assert set(tmp_path.glob(".helps-previous-*")) == before
+    assert set((tmp_path / "backups/help").glob("help-*")) == before
+    assert not list(tmp_path.glob(".helps-previous-*"))
     assert (helps / "HelpPC 2.10/c.json.gz").read_bytes() == live
     assert not list(tmp_path.glob(".helps-build-*"))
 
@@ -139,15 +142,15 @@ def test_dos_base_and_package_changes_share_configured_limit(tmp_path, keep):
             assert not store._worker.is_alive()
         assert store.state == "ready", store.error
         backups.append(tmp_path / store.backup)
-    assert set((tmp_path / "backups").iterdir()) == set(backups[-keep:])
+    assert set((tmp_path / "backups/dos").iterdir()) == set(backups[-keep:])
     assert all((backup / "c/TEST.TXT").is_file() for backup in backups[-keep:])
     # A failed rebuild retains its new recovery copy and all prior snapshots.
-    before = set((tmp_path / "backups").iterdir())
+    before = set((tmp_path / "backups/dos").iterdir())
     manifest.write_text("not valid JSON")
     store.rebuild()
     store._worker.join(timeout=5)
     assert store.state == "error"
-    assert before < set((tmp_path / "backups").iterdir())
+    assert before < set((tmp_path / "backups/dos").iterdir())
 
 
 @pytest.mark.parametrize("keep", [2, 3])
@@ -165,8 +168,8 @@ def test_midi_retention_and_partial_failure_preserve_recovery(tmp_path, monkeypa
         assert not library._worker.is_alive()
         assert library.rebuild_status()["state"] == "ready"
         backups.append(tmp_path / library.rebuild_status()["backup"])
-    assert set((tmp_path / "backups").iterdir()) == set(backups[-keep:])
-    before = set((tmp_path / "backups").iterdir())
+    assert set((tmp_path / "backups/midi").iterdir()) == set(backups[-keep:])
+    before = set((tmp_path / "backups/midi").iterdir())
 
     def partial():
         library._state = failure_state
@@ -176,4 +179,26 @@ def test_midi_retention_and_partial_failure_preserve_recovery(tmp_path, monkeypa
     library.rebuild()
     library._worker.join(timeout=5)
     assert library.rebuild_status()["state"] == failure_state
-    assert before < set((tmp_path / "backups").iterdir())
+    assert before < set((tmp_path / "backups/midi").iterdir())
+
+
+def test_help_backup_uses_configured_state_directory_and_retains_rollback_on_archive_error(tmp_path, monkeypatch, caplog):
+    sources, helps = tmp_path / "var/sources", tmp_path / "data/helps"
+    backups = tmp_path / "var/backups/help"
+    source = sources / "HelpPC 2.10/C.TXT"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"@C language\r\n:Reference\r\n%Help\r\n")
+    options = {"backup_dir": backups}
+    build_help_groups(["dos-reference"], sources, helps, **options)
+    result = build_help_groups(["dos-reference"], sources, helps, **options)
+    assert Path(result["backup"]).parent == backups
+    assert not list(helps.parent.glob(".helps-previous-*"))
+    def fail(*_args):
+        raise OSError("backup volume unavailable")
+    monkeypatch.setattr("thelpviewer.server.converter.build.relocate_directory", fail)
+    result = build_help_groups(["dos-reference"], sources, helps, **options)
+    retained = Path(result["backup"])
+    assert retained.parent == helps.parent and retained.name.startswith(".helps-previous-")
+    assert (retained / "HelpPC 2.10/c.json.gz").is_file()
+    assert (helps / "HelpPC 2.10/c.json.gz").is_file()
+    assert "recovery copy remains" in caplog.text

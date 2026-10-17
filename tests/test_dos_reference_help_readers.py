@@ -110,7 +110,7 @@ def test_helppc_overlong_centering_fails_but_ordinary_text_is_not_clipped():
 
 
 def test_helppc_corpus_retains_topics_links_and_native_center_origins():
-    root = Path("data/sources/HelpPC 2.10")
+    root = Path("var/sources/HelpPC 2.10")
     files = [root / name for name in ("ASM.TXT", "C.TXT", "HARDWARE.TXT", "INTERRUP.TXT", "MISC.TXT", "TABLES.TXT")]
     if not all(path.is_file() for path in files):
         pytest.skip("HelpPC originals not available")
@@ -438,7 +438,7 @@ def test_freedos_crossed_and_unmatched_source_tags_do_not_corrupt_uhf():
 
 
 def test_freedos_corpus_keeps_all_real_links_and_resolves_fragment_lines():
-    source = Path("data/sources/FreeDOS HTML Help 1.1.1a/HHSTNDRD.ZIP")
+    source = Path("var/sources/FreeDOS HTML Help 1.1.1a/HHSTNDRD.ZIP")
     if not source.is_file():
         pytest.skip("FreeDOS original not available")
     before = source.read_bytes()
@@ -471,7 +471,7 @@ def test_freedos_corpus_keeps_all_real_links_and_resolves_fragment_lines():
 
 
 def test_reference_crc_records_match_downloaded_files_when_present():
-    root = Path("data/sources")
+    root = Path("var/sources")
     paths = [
         *(root / "HelpPC 2.10" / name for name in (
             "ASM.TXT", "C.TXT", "HARDWARE.TXT", "INTERRUP.TXT", "MISC.TXT", "TABLES.TXT"
@@ -491,7 +491,7 @@ def test_reference_crc_records_match_downloaded_files_when_present():
 
 
 def test_downloaded_reference_help_exports_into_help_files_catalog(tmp_path):
-    root = Path("data/sources")
+    root = Path("var/sources")
     required = (
         root / "FreeDOS HTML Help 1.1.1a" / "HHSTNDRD.ZIP",
         root / "HelpPC 2.10" / "ASM.TXT",

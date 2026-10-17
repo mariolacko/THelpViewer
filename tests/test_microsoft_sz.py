@@ -6,15 +6,9 @@ import shutil
 
 import pytest
 
-from thelpviewer.server.downloader.extractor import (
-    ExtractorTools,
-    MAX_EXPANDED_PAYLOAD,
-    QBASIC_SZ_SIGNATURE,
-    SZ_SIGNATURE,
-    _decompress_sz_payload,
-    collect_archive_members,
-    expand_single_file_payloads,
-)
+from thelpviewer.server.archives.core import ExtractorTools
+from thelpviewer.server.archives.containers import MAX_EXPANDED_PAYLOAD, QBASIC_SZ_SIGNATURE, SZ_SIGNATURE, _decompress_sz_payload, expand_single_file_payloads
+from thelpviewer.server.converter.ingest import collect_archive_members
 from thelpviewer.server.converter.exporter import load_document
 
 
@@ -138,8 +132,8 @@ def test_bad_split_payload_prevents_copying_other_members(tmp_path, monkeypatch)
         parts[1].unlink()
         (destination / "OTHER.HLP").write_bytes(b"valid companion")
         return True
-    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_file", extract)
-    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_nested", lambda *_: None)
+    monkeypatch.setattr("thelpviewer.server.converter.ingest.extract_file", extract)
+    monkeypatch.setattr("thelpviewer.server.converter.ingest.extract_nested", lambda *_a, **_k: None)
     sources = tmp_path / "sources"
     with pytest.raises(ValueError, match="Missing Microsoft SZ continuation part 2"):
         collect_archive_members(tmp_path / "archive.zip", ("REFERENCE.HLP", "OTHER.HLP"),
@@ -184,7 +178,7 @@ def test_real_quickc250_split_advisor_is_complete_and_reader_decodable(tmp_path,
 
     collected = collect_archive_members(archive, ("QC.HLP",), "QuickC 2.50", sources, tools)
 
-    assert collected == [sources / "QuickC 2.50/QC.HLP"]
+    assert collected == [sources / "Microsoft QuickC, C, and C++ 2.50/QC.HLP"]
     assert [path for path in sources.rglob("*") if path.is_file()] == collected
     data = collected[0].read_bytes()
     assert len(data) == 504694

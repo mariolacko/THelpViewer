@@ -4,7 +4,10 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-RUN apt-get update && apt-get install -y --no-install-recommends 7zip unar dosbox \
+# Debian separates the RAR decoder from 7zip; unar alone cannot decode every
+# historical solid/SFX RAR. Keep the fallback usable on both amd64 and arm64.
+RUN sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends 7zip 7zip-rar unar dosbox \
     && (command -v 7zz || command -v 7z) && command -v unar && command -v lsar && command -v dosbox \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir -r requirements.txt

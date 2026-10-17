@@ -98,7 +98,7 @@ def test_flow_does_not_turn_a_referring_row_into_an_orphan_destination():
 
 
 def test_original_cpp_table_uses_normal_word_flow_and_retains_all_42_targets():
-    source = Path("data/sources/Borland C++ 3.0/TCHELP.TCH")
+    source = Path("var/sources/Borland C++ 3.0/TCHELP.TCH")
     data = source.read_bytes()
     _meta, screens, _, _ = ThelpBinaryParser(data).parse()
     original = next(s for s in screens if s["id"] == 2088)
@@ -114,9 +114,9 @@ def test_original_cpp_table_uses_normal_word_flow_and_retains_all_42_targets():
 
 
 def test_native_flow_reaches_canonical_bundle_without_changing_the_original(tmp_path):
-    source = Path("data/sources/Borland C++ 3.0/TCHELP.TCH")
+    source = Path("var/sources/Borland C++ 3.0/TCHELP.TCH")
     data = source.read_bytes()
-    result = export_bundle_tree(Path("data/sources"), tmp_path, source_paths=[source], layout="helps")
+    result = export_bundle_tree(Path("var/sources"), tmp_path, source_paths=[source], layout="helps")
     bundle = json.loads(gzip.decompress(result[0].json_path.read_bytes()))
     rows = bundle["topics"]["2088"]["content"]
     assert sum(row.count("[link:") == 7 for row in rows) == 6

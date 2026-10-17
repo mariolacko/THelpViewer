@@ -24,7 +24,7 @@ from thelpviewer.server.converter.exporter import (
     fix_metadata_encoding,
     load_document,
 )
-from thelpviewer.server.downloader.collector import detect_language
+from thelpviewer.server.converter.sources import detect_language
 from thelpviewer.help_database import crc32_file, help_database_path
 
 
@@ -383,7 +383,7 @@ def main() -> int:
         "sources_dir",
         nargs="?",
         default=os.environ.get("THELP_SOURCES_DIR",
-            str(Path(os.environ.get("THELP_DATA_DIR", repo_root / "data")) / "sources")),
+            str(Path(os.environ.get("THELP_STATE_DIR", repo_root / "var")) / "sources")),
         help="Directory containing source help files (default: %(default)s)",
     )
     parser.add_argument(

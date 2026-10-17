@@ -4,12 +4,326 @@
 
 ### 2.1 development
 
+- Align restart/Retry and MIDI availability documentation with the current
+  implementation. Record the production inventory audit and the outstanding
+  legacy MIDI-cache validation/normalization work in TODO; no repair of those
+  cached payloads or new complete-suite result is claimed.
+- Queue only missing MIDI tracks/albums after restart, checking every ZIP member
+  before creating work. Preserve completed/failed history without resetting the
+  progress batch or replaying cached source indexes. Reconcile interrupted rows
+  whose output was already published, and remove deselected MIDI queue entries.
+  DOS Retry continues the saved requested additions as one disk transaction,
+  preserves installed packages/private data, and removes obsolete unselected
+  queue rows. Allow Retry/Remove for blocked "Not started" rows and clear stale
+  errors when installation succeeds; terminal failures still need explicit action.
+- Install Debian's separate `7zip-rar` decoder in Docker so the shared extractor
+  can fall back when `unar` fails on historical solid/SFX RAR packages such as
+  Text602 3.1. Keep archive validation and failed-output cleanup unchanged.
+  Report the actual trailing extraction error without terminal control codes,
+  rather than truncating the preceding successful-file list. Existing Docker
+  deployments need an image rebuild, not only a container restart.
+- Run independent HELP and DOS installation jobs concurrently, including
+  recovery and combined requests. Give every job/type its own progress and
+  journal/checkpoint context, preserve same-type ordering and stable live DOS
+  receipts, and release the global-index pause when HELP finishes. Separate
+  bounded preparation drivers from HTTP/extraction workers and look ahead for
+  independent HELP/DOS sources without increasing per-site connection limits
+  or changing DOS installation order. Keep failures, retries and shutdown
+  isolated, and update Downloads/package HELP and technical documentation.
+- Connect every application HELP topic to its parent category and Help Contents
+  through footer links. Expand relevant cross-links between viewers, tools,
+  accounts, packages and Downloads, remove a duplicate MIDI Sources link, and
+  complete the Contents tree. Verify category/topic navigation in both bundle
+  mirrors and in the existing shared HELP window; no new renderer or CSS.
+- Review all 47 application HELP topics, expanding short tool descriptions and
+  the rules, controls, scoring and tips for all twelve games. Reformat prose
+  into paragraphs within the 72-column UHF text area, retaining topic IDs,
+  links and tables; align the DOS Prompt shortcut table. Correct Tetris's
+  Down/Space hard-drop description and Hanoi's right-tower goal. Verify every
+  topic in the shared help window, without changes to player/game code or CSS.
+- Write Downloads HELP as continuous paragraphs, word-wrapped to its 72-column
+  UHF text area rather than one sentence per source row. Separate titled
+  sections with real blank lines, retaining the shared HELP renderer. Correct
+  the obsolete claim that restart clears the queue; add source-layout and
+  browser coverage when restoring the application's own help from a URL.
+- Persist explicit HELP/DOS installation jobs, processing phases and queue rows
+  in `data/jobs.sqlite3`. Recover queued/interrupted work after restart, verify
+  checkpointed HELP outputs by SHA-256, reuse validated sources/download caches,
+  and repeat only unfinished safe units. Terminal failures require explicit
+  retry; removing a failed queue row persists across restarts. One process owns
+  the journal; shutdown drains content writers before releasing it.
+- Publish each validated HELP edition immediately instead of waiting for an
+  entire batch. Refresh Help Files in open browsers as the live catalog changes;
+  later failures keep successful editions. Defer unchecked-edition removal until
+  requested additions succeed. Recover an interrupted HELP directory swap from
+  its exact journaled rollback path before rotating backups.
+- Connect incremental global indexing to the same job journal. Retain committed
+  per-file SQLite checkpoints, recover interrupted work, persist unchanged-file
+  failures, and stop at source boundaries. Recovered HELP work holds the index
+  before its first startup scan; cache expiry/clearing cannot consume inputs
+  reserved by unfinished content jobs.
+- Distinguish FAT images containing embedded ZIP end records from real ZIP
+  containers by requiring a readable central directory before ZIP selection.
+  Retain strict ZIP metadata/quota/path validation. Decode Borland installer
+  split ZIPs with four/five-byte headers, checked 24-bit offsets and lettered
+  volumes after 9, without misclassifying Microsoft cabinets. Prioritize
+  complete assembled streams before unrelated installer examples.
+- Give Borland C++ 2.0, 3.0, 3.1 and the framework guides precise edition source
+  recipes/member lists. Register the CRC-verified ObjectWindows guide from the
+  same 3.1 installer as Turbo Vision; treat registered revisions of a component
+  as alternatives, retaining valid existing originals. Exclude unselected stale
+  companions from conversion without deleting them or adding reader hacks.
+  Consumer cancellation no longer marks another successful source as Failed.
+- Accept aggregate telemetry for current account/configuration/download dialogs.
+  Classify automatically registered progress/message windows with bounded stable
+  names, not generated view IDs or window text, preventing repeated HTTP 422s.
+- Restore Game-Cheater download discovery when Slunečnice puts the signed
+  program URL in a JavaScript string instead of an anchor. Decode only the
+  literal, verify the source/path/signature fields and ignore partner downloads;
+  report missing links as recoverable source failures. Pin Turbo C++ 1.00's
+  original floppy archives at Internet Archive and WinWorld, retaining the
+  exact TCHELP.TCH selection and CRC edition. Prefer exact direct archives
+  before release-page crawls, retaining other sources as fallbacks.
+- Report external archive extraction percentages through the shared queue:
+  unar counts successfully extracted entries against lsar's listing, while
+  7-Zip supplies native progress. Stream output without moving the child's
+  write position, retain timeout/quota/path checks and validate before completing
+  extraction. HELP conversion reports completed files/source groups; unknown
+  phase totals retain an icon rather than an invented percentage.
+- Suspend the global HELP/Docs/SEO index while server HELP sources are being
+  downloaded, extracted, converted and published, including Retry/removal and
+  failure cleanup. Finish the current indexed file before yielding, release
+  SQLite, retain committed search data, and rescan the final live library once
+  HELP work ends, even on failure. DOS/MIDI-only jobs do not hold the index.
+  Show a paused `▤ ‖` indicator and waiting progress status; keep polling and
+  return temporary 503/Retry-After for not-yet-indexed public pages, not false 404s.
+  Refresh pending search results when indexing finishes even if the build was
+  too quick to create a progress window; idle polling does not reset selections.
+- Remove nonexistent plain Scorpions Cheater 6/7/8 installation choices; use
+  the actual shareware edition IDs already present in source collections and
+  published HELP. Ignore removed HELP IDs in saved requests, not explicit new
+  API requests. Attribute a failed pipelined conversion to its edition and mark
+  other unpublished editions blocked rather than claiming each download failed.
+  Whole-library checks no longer start/change the progress of every edition.
+- Recover old SHA-pinned DOS installations once when manifests no longer pin
+  those hashes: verify the retained archive checksum and its files against the
+  shared C drive, persist ownership, and migrate to readable cache paths and
+  current receipt keys. Preflight conflicts, preserve unknown packages/private
+  data, never overwrite changed C files, and retain original cache bytes until
+  verified copies and the updated receipt are published. This prevents unrelated
+  package changes from failing despite the original archives still being present.
+- Apply the configured cache lifetime (default 30 days) to unused HELP originals
+  and licence files in `var/sources/` too. Refresh their age after accepted
+  ingestion/reuse and successful server conversion, not passive scans or failed
+  decodes. Check startup/hourly only while idle and protect published HELP,
+  installed DOS/MIDI, user data and backups. Existing file dates are used as-is;
+  unavailable/manual originals need an independent backup if they must be kept.
+- Include extracted/manual HELP originals and licence files in `var/sources/`
+  in confirmed administrator Clear cache, together with raw HELP/DOS/MIDI
+  downloads. Warn that unavailable originals may not be downloadable again;
+  count both locations in the result and preflight every scope before deletion.
+  Apply automatic expiry by age, while manual cleanup clears all inputs. Preserve published HELP,
+  installed DOS/MIDI, private data, settings, indexes and backups.
+- Give DOS raw-download cache readable package/archive paths with separate
+  source-identity and content-checksum metadata. Migrate recognized flat cache
+  files without redownloading or losing timestamps; preserve unknown inputs
+  for normal expiry rather than guessing their package. Never reuse another
+  source's same-name archive or publish invalid downloads over a valid cache.
+  Preserve one-transfer-per-source reuse across different package IDs.
+- Add Download cache lifetime to Server Configuration, default 30 days since
+  successful download/reuse, configurable from 1 to 3650 days. Sweep HELP, DOS
+  and MIDI raw downloads plus HELP inputs at startup and hourly while idle. Defer active jobs,
+  remove matching metadata/empty folders, reject unsafe paths before deletion,
+  and preserve installed content, backups and private user data.
+- Move extracted and manually supplied HELP originals to `var/sources/` for
+  server jobs, downloader, builds and database tools. Migrate existing originals
+  with SHA-256 verification and conflict checks, retaining a recovery copy.
+  Keep published HELP/Docs and private data in `data/`; no URL aliases or changes
+  to product/release paths. Uninstallation and rebuilds preserve originals;
+  expiry and explicit Clear cache remove these cached inputs.
+- Group recovery generations under `var/backups/help/`, `dos/` and `midi/`
+  instead of leaving HELP snapshots in `data/` or mixing DOS/MIDI generations
+  in one flat directory. Migrate existing managed backups without pruning or
+  overwriting conflicts. Keep atomic HELP rollback beside the live library
+  until publication succeeds, then relocate it; verify cross-filesystem copies
+  before removing the original. Retain the configured per-family backup limit.
+- Overlap package downloads, archive extraction and conversion through bounded
+  processing workers separate from HTTP workers. HELP converts ready editions
+  while later inputs continue, then atomically publishes each validated edition.
+  DOS prefetches packages but installs/post-processes in manifest order; MIDI
+  uses the same processing queue and retains its urgent playback lane. Preserve
+  per-site transfer limits/cooldowns, serialize shared cache/original writers,
+  cancel queued MIDI transfers on shutdown, and drain active writers on failure.
+  Report conversion progress per edition rather than borrowing another
+  edition's percentage.
+- Separate colliding Turbo Debugger/Profiler original collections by their
+  registered releases in the HELP manifest. Retain original filenames and
+  CRC ownership; relocate a misplaced known original to its declared collection
+  before filling its former slot, refusing unknown/different destination data.
+  Prevent an installation of one release from blocking other registered releases
+  with a false original-file conflict. Explicit registered-edition builds ignore
+  unknown same-name originals from unrelated distribution collections rather
+  than labelling them as that edition; no old URL aliases are added.
+- Recognize OLE/CFBF document signatures before recursive archive inspection.
+  Leave documents such as the TASM media's INSTALAR.DOC intact instead of
+  interpreting internal CompObj/property streams as filesystem paths and
+  aborting HELP discovery. Explicit document-as-archive inputs fail with a
+  recoverable format diagnostic; real archives still reject control-character
+  paths, traversal and links for all consumers.
+- Show a temporary global-index indicator (▤ and percentage) beside Downloads
+  and the clock. Clicking it reopens the existing Building Global Index dialog,
+  including after Hide; remove the indicator when indexing finishes. Reuse the
+  search status monitor for both displays, detect later background rebuilds,
+  preserve progress across menu refreshes and stop polling on view destruction.
+- Simplify Help Files menus using the JSON catalog's product/version metadata:
+  a product with only one HELP opens directly with its version in the label;
+  single-file editions open directly from their version item. Keep submenus
+  for editions with multiple files, natural release ordering and real targets.
+- Give every published Turbo Assembler HELP a verified edition: 2.0, 2.01,
+  3.0, 3.1 and German 3.2. Register the two previously unlisted CRCs, retain
+  executable/archive provenance and exact downloader recipes, and deduplicate
+  the identical C++ 3.0/3.x copy through the normal CRC publication path.
+  Sort release submenus numerically for all HELP products. Keep real source
+  collections/cross-file identities rather than inferring an assembler version
+  from the host C++/Pascal release. Prefer requested nested containers, stop
+  after selection completes, and accept only byte-identical same-name copies
+  created by split-media assembly; distinct ambiguous members remain errors.
+- Align Server Configuration actions in a two-row, three-column grid with equal
+  button widths and spacing. Keep Save/Cancel together at the bottom right and
+  status above them; narrow the dialog to 82 columns without increasing its
+  27-row height. Use shared TVision bounds, controls and shadows, not new CSS.
+- Add Clear cache in Server Configuration, with explicit confirmation and a
+  removed-file/source-byte summary. Administrators clear raw HELP, DOS and MIDI
+  download caches (including abandoned transfer staging) and extracted/manual
+  originals, never published bundles, installed DOS/MIDI, backups or private data.
+  Refuse active downloads/processing, linked/special files and unsafe directory
+  overlaps; serialize maintenance with new shared-downloader work.
+- Prefer exact HELP-edition recipes before family-wide discovery and stop each
+  provider between archives as soon as every required CRC component is present.
+  Deduplicate failed/empty source attempts within a job as well as successful
+  ones. Discovery may collect selected members across separate disks; pinned
+  single-archive recipes and final edition completeness remain strict. Recover
+  unreadable download-cache placeholders by fetching/validating a staged copy,
+  retaining the old cache if recovery fails. Give Old-DOS download endpoints
+  distinct readable cache names and separate the two colliding TASM originals'
+  collections without overwriting existing source files.
+- Apply in HELP Packages, DOS Packages and MIDI Sources submits the selected
+  changes directly, without a second selection-confirmation dialog. Keep duplicate
+  submission guards, DOS save/close handling and separate rebuild/delete prompts.
+  Compact the shared progress dialog to at most 64 columns, remove unused file
+  rows and excess bottom/gauge spacing, retaining full wrapped text, button
+  shadows and the expandable Downloads list.
+- Reuse `archive_members` for HELP extraction and batch input selection rather
+  than separate include/exclude rules. Complete edition source lists also filter
+  stale unselected originals already on disk; preserve originals, licence files,
+  CRC checks and missing/ambiguous-member failures. Turbo Pascal 7 selects
+  TURBO.TPH, OWL.TPH and TVISION.TPH, not the deferred HC30 examples.
+- Keep known failed MIDI downloads out of automatic startup work. Removing a
+  failed album no longer makes it reappear after a server restart. Persist
+  download diagnostics in the MIDI catalog, preserving valid tracks and covers;
+  explicit Retry, playback requests and source Apply can still retry failures.
+- Show real processing stages in the shared Downloads menu and detail list:
+  ↓ transfer, ▣ extraction and ⚙ conversion/installation/validation/publication.
+  Display phase-local percentages only when bytes or work counts are known;
+  clear stale percentages on stage changes. Concurrent stages remain visible
+  together. Show ✓ only after successful processing/publication, never merely
+  after transfer reaches 100%; failed work retains ! and waiting work has no
+  invented percentage.
+- Unify HELP, DOS and MIDI processing boundaries: one bounded archive layer
+  for ZIP, external tools, disk images, nested/split containers and Microsoft
+  single-file compression; one progress observer and atomic file publisher.
+  HELP providers now pass source plans to common transfer/ingestion instead
+  of unpacking/copying independently. MIDI caches validated original downloads
+  in var/downloads/midi; rejected new inputs are not cached. Reject unsafe
+  archive paths/links and enforce extraction quotas/timeouts. Separate converter
+  selection, planning, metadata, results and validation from UHF writing;
+  propagate actual conversion errors and use one validated catalog builder for
+  server and CLI. Preserve published content/private data on processing failure.
+  Index exact archive member paths once and avoid expanding unrelated software
+  after the requested HELP files are available. Close standalone download
+  workers on success/failure without stopping the server's shared downloader.
+- Refactor the shared downloader with a separate progress/lifecycle registry,
+  one staged cache helper and common source-attempt handling. Remove the unused
+  second URL submission pipeline. Preserve source lanes, urgent MIDI playback,
+  private/public snapshots and retry isolation. Missing download forms and
+  incomplete responses can use alternatives; URL/peer/redirect policy failures
+  abort instead of being hidden by provider fallback.
+- Keep HELP queue rows active through conversion and publication, not just
+  source transfer. Report conversion failures on the affected edition; mark
+  Published only after activation. Retain successfully published HELP when a
+  subsequent DOS installation fails. Cache processors validate fresh/reused
+  files before new publication, without loading streamed HELP/ISO into memory.
+- Add concrete Archive.org alternatives for all nine WinWorld-backed Borland
+  HELP families and retain exact-member provenance for CRC-matching originals.
+  Process pinned items before advanced search, using metadata directly; keep
+  separate member selections, allow safe nested archive paths and skip scanned
+  manual/KryoFlux ZIPs. Version/language and CRC selection still apply.
+- Replace Norton Commander's mislabeled MFF image with original English DOS
+  4.0 media and a second distribution. Extract its ARJ payloads on the server
+  without running INSTALL. Shared package downloading supports complete
+  alternative extraction recipes, bounded source retries and validation before
+  cache publication; private disks, installed selection and other packages stay
+  unchanged on failure.
+- Treat HELP providers as edition-scoped fallbacks in one queue row. After
+  bounded HTTP 429 retries, defer that site and its subdomains for the current
+  HELP job instead of repeating the same quota across mirrors/products. Try
+  other configured providers, stopping only at complete CRC-verified originals;
+  retain source warnings without marking a recovered edition Failed. Explicit
+  Retry starts fresh for that edition; incomplete verified sets do not publish.
+  Route loose Archive.org/GitHub HELP through the same CRC/selection collector
+  as archives, preserving cached originals and unrelated installed content.
+  Retain CRC-registered utility references instead of skipping them as unknown
+  accessories; non-CRC formats still require successful staged conversion.
+- Redraw the shared TVButton bottom-shadow glyphs after changeBounds/locate,
+  including buttons constructed before their final layout. Restore Downloads
+  Hide/More/Less shadows without replacing button roots, focus or pressed state.
+- Do not use one HTML response or archive's Content-Length as completion of a
+  multi-request HELP source check/MIDI index. Count completed planned checks;
+  retain byte-based single-track progress and owner-weighted DOS installation
+  stages. Expand Downloads with wrapped full status/filename text, nonoverlapping
+  shared views and complete package names accessible by horizontal scrolling.
+- Bind each scrollbar to its own frame controls, not nested menus/lists; restore
+  Download menu arrows, track clicks and thumb dragging without moving its
+  Completed downloads submenu. Weight batch percentages by package/album rather
+  than provider-attempt count, exclude already installed DOS packages from new
+  work, and never show rejected source checks as 100% successful downloads.
+  Refresh shell/export asset URLs so cached browser/CDN copies do not mask fixes.
+- Filter WinWorld archive releases before transfer and place known HELP originals
+  using their verified CRC edition/collection, skipping unselected editions while
+  retaining conflict protection for unknown originals. Decode archive-tool
+  diagnostics safely when legacy filenames emit non-UTF-8 bytes. Use Old-DOS's
+  verified public HTTP catalog directly; keep generic HTTPS downgrade/private-peer
+  checks unchanged. Plan only providers applicable to the requested edition.
+- Diagnose plain-text files mislabeled `.mid` without pretending to convert
+  them into music. Process every MIDI ZIP member, retain valid tracks and
+  cover art when other members fail, and keep rejected-member diagnostics
+  across catalog reloads. Partial albums stay failed/retryable until all
+  members validate; urgent playback also publishes the usable track inventory.
+- Accept DOS changes while HELP installation runs (and vice versa), show
+  waiting packages immediately in Downloads and process installations in order.
+  Keep each selection and earlier failures when the next job starts; Apply
+  follows only its own content type instead of dropping another type's request.
+- Share MIDI's normal/focused/selected row colors with the standard TVListBox
+  palette used by Downloads. Preserve list focus during live row updates so
+  the focused color does not disappear at every progress refresh.
+  Align Statistics and package category icons with
+  the shared list icon column; widen DOS Groups by one character to avoid an
+  unnecessary horizontal scrollbar.
+- Decode Turbo Basic TBHELP.TBH with its native WORD records, FE-space runs,
+  context slots and absolute-offset hyperlinks instead of misreading it as
+  nibble THELP. Preserve all 108 screens per original, including continuations;
+  verify display bytes against TB.EXE and document the binary profile/CRCs.
+- Build browser/Scorpion regression HELP libraries in temporary output, so
+  administrator package selections no longer break those checks or get changed.
+- Stop and join MIDI catalog/playback writers before closing the shared
+  downloader; cancel only pending MIDI tasks and prevent pending rebuilds/source
+  changes from restarting at exit, without waiting behind unrelated downloads.
 - Reconcile Account/Login, shared package dialogs and Downloads documentation
   with the current APIs and controls. Correct the format index/Sidekick link;
   distinguish historical compiler experiments from current converter commands.
   Update account migration/browser fixtures for credential metadata and the
-  security API. Record the full-suite result and unresolved Turbo Basic/local
-  corpus prerequisites in TODO, alongside graphics, external links and shutdown.
+  security API. Record the initial full-suite result and subsequent repairs
+  in TODO, keeping graphics and external-link verification explicitly scoped.
 - Add Account's New password mnemonic (Alt+P) through the linked TVLabel.
 - Add account-owned named Passkeys: list, add another authenticator and rename
   existing keys without changing their cryptographic identity. Suggest an

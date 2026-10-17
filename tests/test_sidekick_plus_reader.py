@@ -15,7 +15,7 @@ from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
-SOURCE = Path("data/sources/Borland Sidekick Plus/SKPLUS.HLP")
+SOURCE = Path("var/sources/Borland Sidekick Plus/SKPLUS.HLP")
 SIGNATURE = b"\x00\x9bBorland Help\x00\x01"
 
 
@@ -260,7 +260,7 @@ def test_bundle_export_adds_supported_sidekick_plus_in_existing_product_layout(t
     if not SOURCE.exists():
         pytest.skip("Sidekick Plus original not available")
     output = tmp_path / "helps"
-    results = export_bundle_tree(Path("data/sources"), output, layout="helps", source_paths=[SOURCE])
+    results = export_bundle_tree(Path("var/sources"), output, layout="helps", source_paths=[SOURCE])
     assert len(results) == 1 and results[0].format_name == "sidekick-plus"
     assert results[0].topic_count == 1165
     path = output / "Borland Sidekick Plus/skplus.json.gz"

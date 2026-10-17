@@ -31,7 +31,8 @@ from .exporter import (
 from .readers.fbhf import FBHFHelpReader, FBHFSourceParser, FBHFSourceReader, is_fbhf_binary, is_fbhf_source
 from .writers.html import HelpHtmlRenderer
 from .writers.json import HelpJsonRenderer
-from .writers.bundle import BundleResult, export_bundle, export_bundle_tree
+from .results import BundleResult
+from .writers.bundle import export_bundle, export_bundle_tree
 from .writers.md import HelpMarkdownRenderer
 
 

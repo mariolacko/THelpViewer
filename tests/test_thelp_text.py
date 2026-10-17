@@ -11,6 +11,7 @@ import pytest
 from thelpviewer.server.converter.readers.thelp import ThelpBinaryParser, ThelpHelpReader, is_thelp_binary
 from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 from test_thelp_validation import admin, file_header, record
+from thelp_corpus import original_thelp_corpus
 
 
 TABLE = b"\0ABCDEFGHIJKLM"
@@ -124,7 +125,7 @@ def test_early_logical_eot_does_not_change_the_declared_next_record_boundary():
 
 
 def test_real_pascal_last_letters_and_the_entire_positioned_hotspot_are_restored():
-    document = ThelpHelpReader().read_path(Path("data/sources/Borland Pascal 4.0/TURBO.HLP"))
+    document = ThelpHelpReader().read_path(Path("var/sources/Borland Pascal 4.0/TURBO.HLP"))
     topics = {topic.context_id: topic for topic in document.topics}
     assert topics[34].raw_lines[-1] == b" Compile  Options"
     assert topics[5].raw_lines[-1] == b" Alt-F10       Displays the version screen"
@@ -138,7 +139,7 @@ def test_real_pascal_last_letters_and_the_entire_positioned_hotspot_are_restored
 def test_restored_native_link_cell_reaches_the_bundle_without_changing_the_original(tmp_path):
     source = tmp_path / "sources/Borland Turbo Pascal 4.0/TURBO.HLP"
     source.parent.mkdir(parents=True)
-    original = Path("data/sources/Borland Pascal 4.0/TURBO.HLP").read_bytes()
+    original = Path("var/sources/Borland Pascal 4.0/TURBO.HLP").read_bytes()
     source.write_bytes(original)
     result = export_bundle_tree(tmp_path / "sources", tmp_path / "helps", source_paths=[source], layout="helps")
     payload = json.loads(gzip.decompress(result[0].json_path.read_bytes()))
@@ -152,15 +153,9 @@ def test_every_physical_text_record_matches_the_independent_c_nibble_reference_r
     # up to the logical EOT. This is not a capture of its source formatter/GUI.
     digest = hashlib.sha256()
     files = records = 0
-    root = Path("data/sources")
-    for source in sorted(root.rglob("*")):
-        if not source.is_file():
-            continue
-        with source.open("rb") as stream:
-            prefix = stream.read(4096)
-            if not is_thelp_binary(prefix):
-                continue
-            data = prefix + stream.read()
+    root = Path("var/sources")
+    for source, data in original_thelp_corpus():
+        assert is_thelp_binary(data)
         files += 1
         name = source.relative_to(root).as_posix()
         parser = ThelpBinaryParser(data)

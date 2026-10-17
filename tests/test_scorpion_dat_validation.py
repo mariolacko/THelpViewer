@@ -18,6 +18,7 @@ from thelpviewer.server.converter.readers.scorpion_dat_reader import (
     ScorpionDatReader, is_scorpion_dat_help_binary,
 )
 from thelpviewer.server.converter.writers.json import HelpJsonRenderer
+from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 from test_allegro_dat_reader import _dat_body, _literal_lzss, _object, _old_crypt_literal_lzss, _property
 
 
@@ -106,13 +107,19 @@ def test_password_cursor_restarts_per_object_and_valid_resources_stay_non_articl
     assert document.metadata["scorpion_resource_record_names"] == ["font1"]
 
 
-def test_installed_modern_corpus_has_complete_chunks_and_unchanged_articles():
-    root = Path("data/sources/Scorpions Cheater DOS")
+def test_modern_corpus_has_complete_chunks_and_publishes_unchanged_articles(tmp_path):
+    root = Path("var/sources/Scorpions Cheater DOS")
     if not root.is_dir():
         pytest.skip("Original Scorpion databases are not installed")
-    catalog = json.loads(Path("data/helps/catalog.json").read_text())
+    sources = [path for path in sorted(root.rglob("*.DAT"))
+               if path.read_bytes().startswith(SCORPION_ALLEGRO_PACK_MAGIC + b"ALL.")]
+    supported = [path for path in sources if detect_format_handler(path) is not None]
+    helps = tmp_path / "helps"
+    results = export_bundle_tree(Path("var/sources"), helps, source_paths=supported, layout="helps")
+    assert len(results) == len(supported) and all(not result.error for result in results)
+    catalog = json.loads((helps / "catalog.json").read_text())
     files = records = articles = 0
-    for path in sorted(root.rglob("*.DAT")):
+    for path in sources:
         data = path.read_bytes()
         if not data.startswith(SCORPION_ALLEGRO_PACK_MAGIC + b"ALL."):
             continue
@@ -127,7 +134,7 @@ def test_installed_modern_corpus_has_complete_chunks_and_unchanged_articles():
         version = document.metadata["scorpion_version"]
         entry = next(e for e in catalog if e.get("product") == "scorpion" and e.get("version") == version
                      and path.name in e["source_files"])
-        published = json.loads(gzip.decompress((Path("data/helps") / entry["file"]).read_bytes()))
+        published = json.loads(gzip.decompress((helps / entry["file"]).read_bytes()))
         payload = HelpJsonRenderer(document, "utf-8").render_document()
         assert payload["topics"] == published["topics"], path
         assert payload["contents"] == published["contents"], path

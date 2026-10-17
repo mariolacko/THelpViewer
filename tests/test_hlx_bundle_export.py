@@ -8,7 +8,7 @@ from thelpviewer.server.converter.readers.hlx_binary import HlxBinaryParser
 from thelpviewer.server.converter.writers.bundle import export_bundle
 
 
-SOURCES = [Path("data/sources") / collection for collection in ("Borland C++ 4.x", "Borland C++ 4.5")]
+SOURCES = [Path("var/sources") / collection for collection in ("Borland C++ 4.x", "Borland C++ 4.5")]
 
 
 @pytest.mark.parametrize("source", sorted(path for root in SOURCES for path in root.glob("*.HLX")),

@@ -13,7 +13,7 @@ def _load_bundle_payload(bundle_result):
 
 
 def test_legacy_tdh_bundle_suppresses_redirect_alias_topics(tmp_path):
-    source = Path("data/sources") / "Borland Turbo Debugger 1.0" / "TDHELP.TDH"
+    source = Path("var/sources") / "Borland Turbo Debugger 1.0" / "TDHELP.TDH"
     assert source.exists(), f"Source TDH not found: {source}"
 
     result = export_bundle(source, tmp_path)
@@ -47,7 +47,7 @@ def test_legacy_tdh_bundle_suppresses_redirect_alias_topics(tmp_path):
 
 
 def test_later_tdh_bundle_exports_known_runtime_topics(tmp_path):
-    source = Path("data/sources") / "Borland Turbo Assembler 1.0 with Turbo Debugger" / "TDHELP.TDH"
+    source = Path("var/sources") / "Borland Turbo Assembler 1.0 with Turbo Debugger" / "TDHELP.TDH"
     assert source.exists(), f"Source TDH not found: {source}"
 
     result = export_bundle(source, tmp_path)
@@ -80,7 +80,7 @@ def test_later_tdh_bundle_exports_known_runtime_topics(tmp_path):
 
 
 def test_tfh_bundle_exports_contents_nav_and_hotspots(tmp_path):
-    source = Path("data/sources") / "Borland Turbo Profiler" / "TFHELP.TFH"
+    source = Path("var/sources") / "Borland Turbo Profiler" / "TFHELP.TFH"
     assert source.exists(), f"Source TFH not found: {source}"
 
     result = export_bundle(source, tmp_path)
@@ -120,10 +120,10 @@ def test_tfh_bundle_exports_contents_nav_and_hotspots(tmp_path):
 
 
 def test_german_debugger_15_keeps_native_contents_and_verified_language(tmp_path):
-    source = Path("data/sources/Borland Turbo Debugger 1.5 (DE)/TDHELP.TDH")
+    source = Path("var/sources/Borland Turbo Debugger 1.5 (DE)/TDHELP.TDH")
     if not source.is_file():
         pytest.skip("Original German Debugger 1.5 not available")
-    results = export_bundle_tree(Path("data/sources"), tmp_path, source_paths=[source], layout="helps")
+    results = export_bundle_tree(Path("var/sources"), tmp_path, source_paths=[source], layout="helps")
     assert len(results) == 1 and results[0].topic_count == 536
     payload = _load_bundle_payload(results[0])
     assert payload["metadata"]["language"] == "de"

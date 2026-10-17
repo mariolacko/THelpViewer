@@ -170,6 +170,14 @@
       "reader": "thelpviewer.server.converter.readers.tdh:TdhHelpReader"
     },
     {
+      "name": "turbo-basic",
+      "source_kind": "compiled",
+      "extensions": [".tbh"],
+      "matcher": "thelpviewer.server.converter.readers.turbo_basic:is_turbo_basic_binary",
+      "matcher_args": "data",
+      "reader": "thelpviewer.server.converter.readers.turbo_basic:TurboBasicHelpReader"
+    },
+    {
       "name": "thelp",
       "source_kind": "compiled",
       "matcher": "thelpviewer.server.converter.readers.thelp:is_thelp_binary",
@@ -283,6 +291,12 @@
         "archiveorg": {
           "search_text": "Borland Turbo Pascal",
           "query": "creator:Borland AND (title:\"Turbo Pascal\" OR subject:\"Turbo Pascal\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/BorlandTurboPascal4.0",
+            "https://archive.org/details/borland-turbo-pascal-v-5.0-1988-08-29",
+            "https://archive.org/details/TurboPascal55",
+            "https://archive.org/details/turbopascal7.0"
+          ],
           "keywords": [
             "borland",
             "turbo pascal"
@@ -326,6 +340,10 @@
         "archiveorg": {
           "search_text": "Borland Turbo C / Turbo C++",
           "query": "creator:Borland AND (title:\"Turbo C\" OR title:\"Turbo C++\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/tc201_202512",
+            "https://archive.org/details/borland-turbo-c-plus-plus"
+          ],
           "keywords": [
             "borland",
             "turbo c",
@@ -349,6 +367,13 @@
       "key": "tasm",
       "label": "Borland Turbo Assembler",
       "description": "Assembler instructions, directives and macros for writing DOS assembly code with Turbo Assembler.",
+      "version_descriptions": {
+        "2.0": "Turbo Assembler 2.0 instruction, directive, macro and command-line reference.",
+        "2.01": "Turbo Assembler 2.01's revised DOS assembler reference.",
+        "3.0": "Turbo Assembler 3.0 help distributed with Borland C++ 3.0, including object structures and command-line options.",
+        "3.1": "Turbo Assembler 3.1 help from the Borland C++ 3.1 distribution.",
+        "3.2 (DE)": "German Turbo Assembler help distributed with TASM 3.2 in Borland Pascal with Objects 7.0."
+      },
       "build_group": "borland",
       "collection_prefixes": ["Borland Turbo Assembler"],
       "conversion": {
@@ -362,6 +387,10 @@
         "archiveorg": {
           "search_text": "Borland Turbo Assembler",
           "query": "creator:Borland AND (title:\"Turbo Assembler\" OR title:\"TASM\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-turbo-assembler",
+            "https://archive.org/details/borland-turbo-debugger-profiler-assembler"
+          ],
           "keywords": [
             "borland",
             "turbo assembler",
@@ -395,7 +424,8 @@
       },
       "build_group": "borland",
       "collection_prefixes": [
-        "Borland Turbo Debugger/Profiler/Assembler"
+        "Borland Turbo Debugger/Profiler/Assembler",
+        "Borland Turbo Debugger"
       ],
       "conversion": {
         "use_database_entries": true,
@@ -413,6 +443,11 @@
         "archiveorg": {
           "search_text": "Borland Turbo Debugger / Turbo Profiler / Turbo Assembler distribution disks",
           "query": "(title:\"Turbo Debugger\" OR title:\"Turbo Profiler\" OR title:\"Turbo Assembler\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-turbo-debugger",
+            "https://archive.org/details/borland-turbo-debugger-profiler-assembler",
+            "https://archive.org/details/borland-turbo-assembler"
+          ],
           "keywords": [
             "borland",
             "turbo debugger",
@@ -434,10 +469,10 @@
     {
       "key": "tbasic",
       "label": "Borland Turbo Basic",
-      "description": "Help for the MicroCalc spreadsheet example shipped with Turbo Basic: worksheet commands, cell navigation and calculations.",
+      "description": "Turbo Basic's compiler and editor reference, command help and MicroCalc spreadsheet example.",
       "version_descriptions": {
-        "1.x current": "English MC.HLP for Turbo Basic's MicroCalc example: spreadsheet commands, worksheet navigation and calculations.",
-        "1.0 (DE)": "German MC.HLP for the MicroCalc spreadsheet bundled with Turbo Basic, describing its worksheet commands and calculations."
+        "1.x current": "English Turbo Basic compiler/editor help and the MicroCalc spreadsheet example.",
+        "1.0 (DE)": "German Turbo Basic compiler/editor help and the MicroCalc spreadsheet example."
       },
       "build_group": "borland",
       "collection_prefixes": [
@@ -454,6 +489,10 @@
         "archiveorg": {
           "search_text": "Borland Turbo Basic / PowerBASIC",
           "query": "(creator:Borland OR creator:\"Power Basic\") AND (title:\"Turbo Basic\" OR title:\"PowerBASIC\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-turbo-basic-zipped",
+            "https://archive.org/details/BorlandTurboBasic1.0German"
+          ],
           "keywords": [
             "borland",
             "turbo basic",
@@ -495,6 +534,10 @@
         "archiveorg": {
           "search_text": "Borland Turbo Prolog",
           "query": "creator:Borland AND title:\"Turbo Prolog\" AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/BorlandTurboProlog1.0",
+            "https://archive.org/details/borland-turbo-prolog-v2.0"
+          ],
           "keywords": [
             "borland",
             "turbo prolog"
@@ -538,6 +581,11 @@
         "archiveorg": {
           "search_text": "Borland C++",
           "query": "creator:Borland AND title:\"Borland C++\" AND mediatype:software NOT title:\"Builder\"",
+          "direct_urls": [
+            "https://archive.org/details/borland-cpp-30",
+            "https://archive.org/details/bcpp31",
+            "https://archive.org/details/borland-c-4-5"
+          ],
           "keywords": [
             "borland",
             "borland c++",
@@ -579,6 +627,10 @@
         "archiveorg": {
           "search_text": "Borland Pascal",
           "query": "creator:Borland AND title:\"Borland Pascal\" AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-pascal-with-objects-7.0-and-bonus-disk",
+            "https://archive.org/details/borland-pascal-7.0-german"
+          ],
           "keywords": [
             "borland",
             "borland pascal"
@@ -614,6 +666,7 @@
         "archiveorg": {
           "search_text": "Borland Sidekick DOS 1.56b and Sidekick Plus distribution disks",
           "query": "title:Sidekick AND mediatype:software",
+          "direct_urls": ["https://archive.org/details/borland-sidekick-plus"],
           "keywords": ["sidekick", "borland"]
         }
       }
@@ -864,7 +917,7 @@
     },
     {
       "key": "scorpion",
-      "versions": ["1", "1.5", "3", "3.5", "4", "5", "6", "7", "8", "10", "11", "12", "13", "14", "15", "16", "21", "22", "23"],
+      "versions": ["1", "1.5", "3", "3.5", "4", "5", "6 _shareware_", "7 _shareware_", "8 _shareware_", "10", "11", "12", "13", "14", "15", "16", "21", "22", "23"],
       "label": "Scorpions Cheater DOS",
       "menu_label": "Scorpions Cheater",
       "description": "Browse game-specific walkthroughs, hints and cheat codes in Scorpions Cheater's DOS databases, including the original text-screen illustrations.",
@@ -1203,7 +1256,21 @@
       "title": "GEOBASE",
       "collection": "Borland Turbo Prolog 1.0",
       "text_encoding": "",
-      "language": "en"
+      "language": "en",
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Prolog 1.0 HELP: GEOBASE.HLP, PROLOG.HLP",
+          "query": "creator:Borland AND title:\"Turbo Prolog\" AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Turbo Prolog 1.0",
+            "https://archive.org/details/BorlandTurboProlog1.0"
+          ],
+          "archive_members": [
+            "GEOBASE.HLP",
+            "PROLOG.HLP"
+          ]
+        }
+      }
     },
     {
       "crc32": "2E10B9E2",
@@ -1246,7 +1313,20 @@
       "title": "Turbo C Help",
       "collection": "Borland Turbo C 2.01",
       "text_encoding": "cp437",
-      "language": "en"
+      "language": "en",
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo C 2.01 HELP: TCHELP.TCH",
+          "query": "creator:Borland AND (title:\"Turbo C\" OR title:\"Turbo C++\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Turbo C 2.01",
+            "https://archive.org/details/tc201_202512"
+          ],
+          "archive_members": [
+            "TCHELP.TCH"
+          ]
+        }
+      }
     },
     {
       "crc32": "3EB5A592",
@@ -1313,6 +1393,64 @@
       "language": "en"
     },
     {
+      "crc32": "3ADC1C1F",
+      "filenames": [
+        "TBHELP.TBH"
+      ],
+      "title": "Turbo Basic Help",
+      "collection": "Borland Turbo Basic 1.x current",
+      "text_encoding": "cp437",
+      "language": "en",
+      "product": "tbasic",
+      "help_contents_topic_id": 100,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Basic 1.0 1987 English TBHELP.TBH Disk01.img",
+          "direct_urls": [
+            "https://winworldpc.com/product/turbo-basic/1x",
+            "https://winworldpc.com/download/97dda20e-c349-11f0-9e27-0200008a0da4"
+          ],
+          "archive_members": [
+            "TBHELP.TBH"
+          ]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Basic 1.x current HELP: MC.HLP, TBHELP.TBH",
+          "query": "title:\"Turbo Basic\" AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Turbo Basic 1.x current",
+            "https://archive.org/details/borland-turbo-basic-zipped"
+          ],
+          "archive_members": [
+            "MC.HLP",
+            "TBHELP.TBH"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "E9E8BE71",
+      "filenames": ["TBHELP.TBH"],
+      "title": "Turbo Basic Help",
+      "collection": "Borland Turbo Basic 1.0 (DE)",
+      "text_encoding": "cp437",
+      "language": "de",
+      "product": "tbasic",
+      "help_contents_topic_id": 100,
+      "sources": {
+        "winworld": {
+          "search_text": "Borland Turbo Basic 1.0 1987 German TBHELP.TBH Disk01.img",
+          "direct_urls": ["https://winworldpc.com/product/turbo-basic/1x", "https://winworldpc.com/download/0fe4385f-b476-11e8-9b71-fa163e9022f0"],
+          "archive_members": ["TBHELP.TBH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland Turbo Basic 1.0 German TBHELP.TBH",
+          "query": "title:\"Turbo Basic\" AND (German OR Deutsch) AND mediatype:software",
+          "archive_members": ["TBHELP.TBH"]
+        }
+      }
+    },
+    {
       "crc32": "559E061B",
       "filenames": [
         "MC.HLP"
@@ -1320,7 +1458,21 @@
       "title": "MC",
       "collection": "Borland Turbo Basic 1.x current",
       "text_encoding": "",
-      "language": "en"
+      "language": "en",
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Basic 1.x current HELP: MC.HLP, TBHELP.TBH",
+          "query": "title:\"Turbo Basic\" AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Turbo Basic 1.x current",
+            "https://archive.org/details/borland-turbo-basic-zipped"
+          ],
+          "archive_members": [
+            "MC.HLP",
+            "TBHELP.TBH"
+          ]
+        }
+      }
     },
     {
       "crc32": "58AB33C3",
@@ -1368,6 +1520,11 @@
         "archiveorg": {
           "search_text": "Borland Sidekick 2.0 DOS January 1991 SK2.HLP",
           "query": "title:Sidekick AND mediatype:software"
+        },
+        "direct": {
+          "search_text": "Borland Sidekick 2.0 DOS SK2.HLP ACRPC DOS-Misc BorlandSidekick-2.0.7z",
+          "direct_urls": ["https://www.acrpc.net/utils/DOS-Misc/BorlandSidekick-2.0.7z"],
+          "archive_members": ["SK2.HLP"]
         }
       }
     },
@@ -1401,7 +1558,21 @@
       "title": "PROLOG",
       "collection": "Borland Turbo Prolog 1.0",
       "text_encoding": "",
-      "language": "en"
+      "language": "en",
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Prolog 1.0 HELP: GEOBASE.HLP, PROLOG.HLP",
+          "query": "creator:Borland AND title:\"Turbo Prolog\" AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Turbo Prolog 1.0",
+            "https://archive.org/details/BorlandTurboProlog1.0"
+          ],
+          "archive_members": [
+            "GEOBASE.HLP",
+            "PROLOG.HLP"
+          ]
+        }
+      }
     },
     {
       "crc32": "6450667D",
@@ -1410,9 +1581,29 @@
       ],
       "title": "Borland C++ 3.1 Windows Help",
       "collection": "Borland C++ 3.1",
+      "sources": {
+        "direct": {
+          "search_text": "Borland C++ 3.1 bcpp31 BCPP31.ZIP TCHELP.TCH WINHELP.TCH",
+          "direct_urls": ["https://archive.org/download/bcpp31/BCPP31.ZIP"],
+          "archive_members": ["TCHELP.TCH", "WINHELP.TCH"]
+        }
+      },
       "text_encoding": "cp437",
       "language": "en",
-      "help_contents_topic_id": 399
+      "help_contents_topic_id": 399,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland C++ 3.1 HELP: TCHELP.TCH, WINHELP.TCH",
+          "query": "creator:Borland AND title:\"Borland C++\" AND mediatype:software NOT title:\"Builder\"",
+          "direct_urls": [
+            "https://archive.org/details/bcpp31"
+          ],
+          "archive_members": [
+            "TCHELP.TCH",
+            "WINHELP.TCH"
+          ]
+        }
+      }
     },
     {
       "crc32": "662E3D85",
@@ -1464,9 +1655,29 @@
       ],
       "title": "Borland C++ 3.1 Help",
       "collection": "Borland C++ 3.1",
+      "sources": {
+        "direct": {
+          "search_text": "Borland C++ 3.1 bcpp31 BCPP31.ZIP TCHELP.TCH WINHELP.TCH",
+          "direct_urls": ["https://archive.org/download/bcpp31/BCPP31.ZIP"],
+          "archive_members": ["TCHELP.TCH", "WINHELP.TCH"]
+        }
+      },
       "text_encoding": "cp437",
       "language": "en",
-      "help_contents_topic_id": 399
+      "help_contents_topic_id": 399,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland C++ 3.1 HELP: TCHELP.TCH, WINHELP.TCH",
+          "query": "creator:Borland AND title:\"Borland C++\" AND mediatype:software NOT title:\"Builder\"",
+          "direct_urls": [
+            "https://archive.org/details/bcpp31"
+          ],
+          "archive_members": [
+            "TCHELP.TCH",
+            "WINHELP.TCH"
+          ]
+        }
+      }
     },
     {
       "crc32": "716B739B",
@@ -1732,7 +1943,20 @@
       "collection": "Borland Turbo Pascal 7",
       "text_encoding": "cp437",
       "language": "en",
-      "help_contents_topic_id": 1254
+      "help_contents_topic_id": 1254,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Pascal 7 HELP: OWL.TPH, TVISION.TPH",
+          "query": "creator:Borland AND (title:\"Turbo Pascal\" OR subject:\"Turbo Pascal\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-pascal-with-objects-7.0-and-bonus-disk"
+          ],
+          "archive_members": [
+            "OWL.TPH",
+            "TVISION.TPH"
+          ]
+        }
+      }
     },
     {
       "crc32": "CBC21976",
@@ -1743,7 +1967,15 @@
       "collection": "Borland Turbo Pascal 7",
       "text_encoding": "cp437",
       "language": "en",
-      "help_contents_topic_id": 3
+      "help_contents_topic_id": 3,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Pascal 7 HELP: TURBO.TPH",
+          "query": "creator:Borland AND (title:\"Turbo Pascal\" OR subject:\"Turbo Pascal\") AND mediatype:software",
+          "direct_urls": ["https://archive.org/details/turbopascal7.0"],
+          "archive_members": ["TURBO.TPH"]
+        }
+      }
     },
     {
       "crc32": "CCC3E5FB",
@@ -1837,7 +2069,20 @@
       "collection": "Borland Turbo Pascal 7",
       "text_encoding": "cp437",
       "language": "en",
-      "help_contents_topic_id": 2
+      "help_contents_topic_id": 2,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Pascal 7 HELP: OWL.TPH, TVISION.TPH",
+          "query": "creator:Borland AND (title:\"Turbo Pascal\" OR subject:\"Turbo Pascal\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-pascal-with-objects-7.0-and-bonus-disk"
+          ],
+          "archive_members": [
+            "OWL.TPH",
+            "TVISION.TPH"
+          ]
+        }
+      }
     },
     {
       "crc32": "DB2836B5",
@@ -2130,6 +2375,19 @@
       ],
       "title": "Turbo Vision C++ Help",
       "collection": "Borland C++ 3.x",
+      "sources": {
+        "direct": {
+          "search_text": "Borland CPP 3.1 and Application Frameworks bcsetup.zip WHELP1.CA1 OWLHELP.TCH TVCHELP.TCH",
+          "direct_urls": ["https://archive.org/download/borland-cpp-3.1-installer/bcsetup.zip"],
+          "archive_members": ["TVCHELP.TCH", "OWLHELP.TCH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland CPP 3.1 and Application Frameworks extracted disk images WHELP1.CA1",
+          "query": "identifier:borland-cpp-3.1-installer",
+          "direct_urls": ["https://archive.org/details/borland-cpp-3.1-installer"],
+          "archive_members": ["TVCHELP.TCH", "OWLHELP.TCH"]
+        }
+      },
       "text_encoding": "cp437",
       "language": "en",
       "help_contents_topic_id": 399
@@ -2176,7 +2434,20 @@
       "collection": "Borland Pascal 7.x current",
       "text_encoding": "cp437",
       "language": "en",
-      "help_contents_topic_id": 3
+      "help_contents_topic_id": 3,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Pascal 7.x current HELP: TURBO.TPH, WINDOWS.TPH",
+          "query": "creator:Borland AND title:\"Borland Pascal\" AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-pascal-with-objects-7.0-and-bonus-disk"
+          ],
+          "archive_members": [
+            "TURBO.TPH",
+            "WINDOWS.TPH"
+          ]
+        }
+      }
     },
     {
       "crc32": "2CDBD1AD",
@@ -2517,7 +2788,20 @@
       "text_encoding": "cp437",
       "language": "en",
       "product": "sk",
-      "help_contents_topic_id": 768
+      "help_contents_topic_id": 768,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Sidekick Plus HELP: SKPLUS.HLP",
+          "query": "title:Sidekick AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Sidekick Plus",
+            "https://archive.org/details/borland-sidekick-plus"
+          ],
+          "archive_members": [
+            "SKPLUS.HLP"
+          ]
+        }
+      }
     },
     {
       "crc32": "B2E9DC4F",
@@ -2526,6 +2810,13 @@
       ],
       "title": "Borland C++ 2.0 Help",
       "collection": "Borland C++ 2.0 DOS current",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland CPP 2.0 (1991) (3.5-720k) TCHELP.TCH TCHELPW.TCH",
+          "direct_urls": ["https://winworldpc.com/download/9d8ab0f6-ffb3-11f0-b330-0200008a0da4"],
+          "archive_members": ["TCHELP.TCH", "TCHELPW.TCH"]
+        }
+      },
       "text_encoding": "cp437",
       "language": "en",
       "help_contents_topic_id": 2
@@ -2793,7 +3084,20 @@
       "collection": "Borland Pascal 7.x current",
       "text_encoding": "cp437",
       "language": "en",
-      "help_contents_topic_id": 2
+      "help_contents_topic_id": 2,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Pascal 7.x current HELP: TURBO.TPH, WINDOWS.TPH",
+          "query": "creator:Borland AND title:\"Borland Pascal\" AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/borland-pascal-with-objects-7.0-and-bonus-disk"
+          ],
+          "archive_members": [
+            "TURBO.TPH",
+            "WINDOWS.TPH"
+          ]
+        }
+      }
     },
     {
       "crc32": "590A3739",
@@ -3451,6 +3755,13 @@
       ],
       "title": "Borland C++ 2.0 Windows API Help",
       "collection": "Borland C++ 2.0 DOS current",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland CPP 2.0 (1991) (3.5-720k) TCHELP.TCH TCHELPW.TCH",
+          "direct_urls": ["https://winworldpc.com/download/9d8ab0f6-ffb3-11f0-b330-0200008a0da4"],
+          "archive_members": ["TCHELP.TCH", "TCHELPW.TCH"]
+        }
+      },
       "text_encoding": "cp437",
       "language": "en",
       "help_contents_topic_id": 2
@@ -3969,6 +4280,26 @@
       ],
       "title": "Turbo C++ 1.00 Help",
       "collection": "Borland Turbo C++ 1.00",
+      "sources": {
+        "direct": {
+          "search_text": "Borland TURBO C++ (1990), eight 360K floppy disks, archive.org borland-turbo-c-plus-plus, HELP.CA1 + HELP.CA2, TCHELP.TCH",
+          "direct_urls": [
+            "https://archive.org/compress/borland-turbo-c-plus-plus/formats=ISO%20IMAGE&file=/borland-turbo-c-plus-plus.zip"
+          ],
+          "archive_members": [
+            "TCHELP.TCH"
+          ]
+        },
+        "winworld": {
+          "search_text": "Borland Turbo CPP 1.00 (5.25-360k), HELP.CA1 + HELP.CA2, TCHELP.TCH",
+          "direct_urls": [
+            "https://winworldpc.com/download/ce1316dd-b5fe-11e7-b8e6-fa163e9022f0"
+          ],
+          "archive_members": [
+            "TCHELP.TCH"
+          ]
+        }
+      },
       "text_encoding": "cp437",
       "language": "en",
       "help_contents_topic_id": 2
@@ -3980,6 +4311,13 @@
       ],
       "title": "Borland C++ 3.0 Help",
       "collection": "Borland C++ 3.0",
+      "sources": {
+        "winworld": {
+          "search_text": "Borland CPP 3.0 (3.5-1.44mb) TCHELP.TCH",
+          "direct_urls": ["https://winworldpc.com/download/52dfb385-9ba2-11e9-ab10-fa163e9022f0"],
+          "archive_members": ["TCHELP.TCH"]
+        }
+      },
       "text_encoding": "cp437",
       "language": "en",
       "help_contents_topic_id": 399
@@ -4269,7 +4607,20 @@
       "collection": "Borland Turbo Pascal 5.5",
       "text_encoding": "cp437",
       "language": "en",
-      "help_contents_topic_id": 100
+      "help_contents_topic_id": 100,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Pascal 5.5 HELP: TURBO.HLP",
+          "query": "creator:Borland AND (title:\"Turbo Pascal\" OR subject:\"Turbo Pascal\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Turbo Pascal 5.5",
+            "https://archive.org/details/TurboPascal55"
+          ],
+          "archive_members": [
+            "TURBO.HLP"
+          ]
+        }
+      }
     },
     {
       "crc32": "C8EB3173",
@@ -4440,6 +4791,30 @@
       "collection": "Borland Turbo Prolog 2.0",
       "text_encoding": "",
       "language": "en"
+    },
+    {
+      "crc32": "280DB274",
+      "filenames": [
+        "OWLHELP.TCH"
+      ],
+      "title": "ObjectWindows Library Help",
+      "collection": "Borland C++ 3.x",
+      "sources": {
+        "direct": {
+          "search_text": "Borland CPP 3.1 and Application Frameworks bcsetup.zip WHELP1.CA1 OWLHELP.TCH TVCHELP.TCH",
+          "direct_urls": ["https://archive.org/download/borland-cpp-3.1-installer/bcsetup.zip"],
+          "archive_members": ["TVCHELP.TCH", "OWLHELP.TCH"]
+        },
+        "archiveorg": {
+          "search_text": "Borland CPP 3.1 and Application Frameworks extracted disk images WHELP1.CA1",
+          "query": "identifier:borland-cpp-3.1-installer",
+          "direct_urls": ["https://archive.org/details/borland-cpp-3.1-installer"],
+          "archive_members": ["TVCHELP.TCH", "OWLHELP.TCH"]
+        }
+      },
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 399
     },
     {
       "crc32": "D94BC466",
@@ -4999,7 +5374,7 @@
         "TDHELP.TDH"
       ],
       "title": "Turbo Debugger Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Debugger/1.0",
       "product": "td",
       "release": "1.0",
       "bundle_stem": "tdhelp-1.0",
@@ -5023,12 +5398,24 @@
       "sources": {
         "winworld": {
           "search_text": "Borland Turbo Assembler 2.0 (5.25-360k) THELP.ZIP TASM.TAH",
-          "direct_urls": ["https://winworldpc.com/product/turbo-assembler/20", "https://winworldpc.com/download/64c3bec2-abc2-b9c3-aa03-11c3a6c2bb2a"],
-          "archive_members": ["TASM.TAH"]
+          "direct_urls": [
+            "https://winworldpc.com/product/turbo-assembler/20",
+            "https://winworldpc.com/download/64c3bec2-abc2-b9c3-aa03-11c3a6c2bb2a"
+          ],
+          "archive_members": [
+            "TASM.TAH"
+          ]
         },
         "archiveorg": {
-          "search_text": "Borland Turbo Assembler 2.0 distribution disks",
-          "query": "title:\"Turbo Assembler\" AND mediatype:software"
+          "search_text": "Borland Turbo Assembler 2.0 HELP: TASM.TAH",
+          "query": "title:\"Turbo Assembler\" AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Turbo Debugger",
+            "https://archive.org/details/borland-turbo-assembler"
+          ],
+          "archive_members": [
+            "TASM.TAH"
+          ]
         }
       }
     },
@@ -5038,12 +5425,25 @@
         "TDHELP.TDH"
       ],
       "title": "Turbo Debugger Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Debugger/2.x",
       "product": "td",
       "release": "2.x",
       "bundle_stem": "tdhelp-2.x",
       "text_encoding": "",
-      "language": "en"
+      "language": "en",
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Debugger 2.x HELP: TDHELP.TDH",
+          "query": "(title:\"Turbo Debugger\" OR title:\"Turbo Profiler\" OR title:\"Turbo Assembler\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Turbo Debugger",
+            "https://archive.org/details/borland-turbo-debugger"
+          ],
+          "archive_members": [
+            "TDHELP.TDH"
+          ]
+        }
+      }
     },
     {
       "crc32": "EDCB6DAB",
@@ -5054,7 +5454,20 @@
       "collection": "Borland Turbo Debugger/Profiler/Assembler",
       "text_encoding": "",
       "language": "en",
-      "help_contents_topic_id": 1
+      "help_contents_topic_id": 1,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Debugger HELP: TFHELP.TFH",
+          "query": "(title:\"Turbo Debugger\" OR title:\"Turbo Profiler\" OR title:\"Turbo Assembler\") AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/Borland Turbo Debugger",
+            "https://archive.org/details/borland-turbo-assembler"
+          ],
+          "archive_members": [
+            "TFHELP.TFH"
+          ]
+        }
+      }
     },
     {
       "kind": "separator",
@@ -5067,11 +5480,71 @@
       ],
       "crc32": "9AC3E64A",
       "title": "Turbo Assembler Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Assembler",
       "product": "tasm",
+      "release": "3.1",
       "text_encoding": "cp437",
       "language": "en",
-      "help_contents_topic_id": 3
+      "help_contents_topic_id": 3,
+      "sources": {
+        "archiveorg": {
+          "search_text": "Borland Turbo Assembler 3.1 HELP TASM.TAH Borland C++ 3.1 BCPP31.ZIP",
+          "query": "creator:Borland AND (title:\"Turbo Assembler\" OR title:\"TASM\" OR title:\"Borland C++\") AND (title:\"3.1\" OR identifier:bcpp31) AND mediatype:software",
+          "direct_urls": [
+            "https://archive.org/details/bcpp31"
+          ],
+          "archive_members": [
+            "TASM.TAH"
+          ]
+        }
+      }
+    },
+    {
+      "crc32": "91D5F0DE",
+      "filenames": ["TASM.TAH"],
+      "title": "Turbo Assembler Help",
+      "collection": "Borland C++ 3.0",
+      "product": "tasm",
+      "release": "3.0",
+      "text_encoding": "cp437",
+      "language": "en",
+      "help_contents_topic_id": 3,
+      "sources": {
+        "winworld": {
+          "search_text": "Turbo Assembler 3.0 TASM.TAH Borland CPP 3.0 (3.5-1.44mb)",
+          "direct_urls": ["https://winworldpc.com/product/borland-c/30", "https://winworldpc.com/download/52dfb385-9ba2-11e9-ab10-fa163e9022f0"],
+          "archive_members": ["TASM.TAH"]
+        },
+        "archiveorg": {
+          "search_text": "Turbo Assembler 3.0 TASM.TAH Borland C++ 3.0 distribution disks",
+          "query": "creator:Borland AND (title:\"Turbo Assembler\" OR title:\"Borland C++\") AND title:\"3.0\" AND mediatype:software",
+          "direct_urls": ["https://archive.org/details/borland-cpp-30"],
+          "archive_members": ["TASM.TAH"]
+        }
+      }
+    },
+    {
+      "crc32": "C74EE5C6",
+      "filenames": ["TASM.TAH"],
+      "title": "Turbo Assembler Help",
+      "collection": "Borland Pascal 7.0 (DE)",
+      "product": "tasm",
+      "release": "3.2 (DE)",
+      "text_encoding": "cp437",
+      "language": "de",
+      "help_contents_topic_id": 3,
+      "sources": {
+        "winworld": {
+          "search_text": "Turbo Assembler 3.2 German TASM.TAH Borland Pascal With Objects 7.0 German (3.5-1.44mb)",
+          "direct_urls": ["https://winworldpc.com/product/borland-pascal/7x", "https://winworldpc.com/download/e2809ac2-a2e2-8099-e280-93157011c3a5"],
+          "archive_members": ["TASM.TAH"]
+        },
+        "archiveorg": {
+          "search_text": "Turbo Assembler 3.2 German deutsch TASM.TAH Borland Pascal 7.0",
+          "query": "creator:Borland AND (title:\"Turbo Assembler\" OR title:\"Borland Pascal\") AND (title:German OR title:Deutsch) AND mediatype:software",
+          "archive_members": ["TASM.TAH"]
+        }
+      }
     },
     {
       "crc32": "C517BD6D",
@@ -5145,7 +5618,7 @@
       "crc32": "C7CCE043",
       "filenames": ["TFHELP.TFH"],
       "title": "Turbo Profiler Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Debugger/1.01",
       "product": "td",
       "release": "1.01",
       "bundle_stem": "tfhelp-1.01",
@@ -5183,6 +5656,11 @@
         "archiveorg": {
           "search_text": "Borland Sidekick 1.56b DOS",
           "query": "title:Sidekick AND mediatype:software"
+        },
+        "direct": {
+          "search_text": "Borland Sidekick 1.56b DOS SK.HLP ACRPC DOS-Misc BorlandSidekick-1.56.7z",
+          "direct_urls": ["https://www.acrpc.net/utils/DOS-Misc/BorlandSidekick-1.56.7z"],
+          "archive_members": ["SK.HLP"]
         }
       }
     },
@@ -5190,7 +5668,7 @@
       "crc32": "BBF9DEFB",
       "filenames": ["TDHELP.TDH"],
       "title": "Turbo Debugger DOS Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Debugger/4.0",
       "product": "td",
       "release": "4.0",
       "bundle_stem": "tdhelp-4.0",
@@ -5213,7 +5691,7 @@
       "crc32": "7C2A5934",
       "filenames": ["TD32HELP.TDH"],
       "title": "Turbo Debugger 32-bit Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Debugger/4.0",
       "product": "td",
       "release": "4.0",
       "bundle_stem": "td32help-4.0",
@@ -5236,7 +5714,7 @@
       "crc32": "77B4692D",
       "filenames": ["TDWHELP.TDH"],
       "title": "Turbo Debugger Windows Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Debugger/4.0",
       "product": "td",
       "release": "4.0",
       "bundle_stem": "tdwhelp-4.0",
@@ -5259,7 +5737,7 @@
       "crc32": "1A84ACE2",
       "filenames": ["TDHELP.TDH"],
       "title": "Turbo Debugger DOS Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Debugger/5.0",
       "product": "td",
       "release": "5.0",
       "bundle_stem": "tdhelp-5.0",
@@ -5282,7 +5760,7 @@
       "crc32": "7D23BEE7",
       "filenames": ["TD32HELP.TDH"],
       "title": "Turbo Debugger 32-bit Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Debugger/5.0",
       "product": "td",
       "release": "5.0",
       "bundle_stem": "td32help-5.0",
@@ -5305,7 +5783,7 @@
       "crc32": "86079353",
       "filenames": ["TDWHELP.TDH"],
       "title": "Turbo Debugger Windows Help",
-      "collection": "Borland Turbo Debugger/Profiler/Assembler",
+      "collection": "Borland Turbo Debugger/5.0",
       "product": "td",
       "release": "5.0",
       "bundle_stem": "tdwhelp-5.0",

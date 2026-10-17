@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..processing import UnsafeContentError
+from .errors import SourceRateLimited
 from .catalog import products_for_source
-from .collector import is_help_file_path
-from .extractor import ExtractorTools, collect_from_archive
-from .http import download_file, fetch_json
+from ..converter.sources import is_help_file_path
+from ..converter.ingest import HelpInput
+from .http import fetch_json
+from ..processing import report_progress
 
 
 SOURCE_NAME = "github"
@@ -41,15 +44,18 @@ def list_repo_files(api_url: str) -> list[dict[str, str]]:
 
 def run(
     product_keys: list[str],
-    sources_dir: Path,
     dl_dir: Path,
     dry_run: bool,
-    extractor: ExtractorTools,
+    process,
+    *,
+    complete=None,
 ) -> list[Path]:
     """Run the GitHub provider for selected logical products."""
     all_collected: list[Path] = []
 
     for product in products_for_source(SOURCE_NAME, product_keys):
+        if complete and complete():
+            break
         source_query = product.sources[SOURCE_NAME]
         if not source_query.api_url:
             continue
@@ -63,18 +69,24 @@ def run(
 
         try:
             files = list_repo_files(source_query.api_url)
+        except SourceRateLimited:
+            raise
+        except UnsafeContentError:
+            raise
         except Exception as exc:
             print(f"  [error] {exc}")
+            report_progress("Source warning", warning=str(exc))
             continue
 
         if not files:
             print("  [error] No files found.")
+            report_progress("Source warning", warning=f"No files found for {product.label}")
             continue
 
-        target_dir = sources_dir / product.label
-        target_dir.mkdir(parents=True, exist_ok=True)
 
         for entry in files:
+            if complete and complete():
+                break
             name = entry["name"]
             url = entry["download_url"]
             print(f"  File: {name}")
@@ -82,32 +94,13 @@ def run(
                 print(f"    [dry-run] {url}")
                 continue
 
-            if is_help_file_path(Path(name)):
-                final_dest = target_dir / name.upper()
-                temp_dest = dl_dir / name
-                if final_dest.exists():
-                    print(f"    [skipped] {final_dest.name} (exists)")
-                    continue
-                try:
-                    download_file(url, temp_dest)
-                    final_dest.parent.mkdir(parents=True, exist_ok=True)
-                    temp_dest.replace(final_dest)
-                    print(f"    ✓ {final_dest.relative_to(sources_dir)}")
-                    all_collected.append(final_dest)
-                except Exception as exc:
-                    print(f"    [error] {exc}")
-                continue
-
-            archive_path = dl_dir / name
+            path = dl_dir / name
             try:
-                download_file(url, archive_path)
+                all_collected.extend(process(HelpInput(path, product.label,
+                    direct=is_help_file_path(Path(name))), url=url))
+            except (SourceRateLimited, UnsafeContentError):
+                raise
             except Exception as exc:
-                print(f"    [error] {exc}")
-                continue
-
-            result = collect_from_archive(archive_path, product.label, sources_dir, extractor)
-            all_collected.extend(result)
-            if not result:
-                print("    No help files found.")
+                report_progress("Source warning", warning=str(exc))
 
     return all_collected

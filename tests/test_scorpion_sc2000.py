@@ -20,7 +20,7 @@ from thelpviewer.server.converter.readers.scorpion_sc2000 import (
 from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
-SOURCE = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 21/TEXTY.DAT")
+SOURCE = Path("var/sources/Scorpions Cheater DOS/Scorpions Cheater 21/TEXTY.DAT")
 
 
 def _record(payload):

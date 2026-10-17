@@ -11,6 +11,12 @@ Sidekick 1 `SK.HLP` is a separate uncompressed context/page stream; see
 [paragraph directories and scoped hotspots](Borland%20Sidekick%20Plus%20Help.md),
 not THELP records; accepting a `.HLP` suffix does not decode that format.
 
+Turbo Basic's `TBHELP.TBH` shares the signature and version pair `1/1`, but
+uses WORD record kinds/lengths, absolute-offset hotspots and space packing,
+not the grammar below. Its exact stamp selects the separate
+[Turbo Basic Help profile](Borland%20Turbo%20Basic%20Help.md). Version bytes
+alone do not distinguish it from Eureka.
+
 Assembler TAH files use the same record grammar when their THELP signature
 matches. Examples include `formatVersion=5,textVersion=1` and
 `formatVersion=52,textVersion=1`; the extension does not select the grammar.

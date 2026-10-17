@@ -152,7 +152,7 @@ def test_outlen_zero_is_a_valid_empty_topic():
     assert QuickHelpReader().read_bytes(_encoded_database(b"")).topics[0].raw_lines == []
 
 
-SOURCES = sorted(str(path) for path in Path("data/sources").glob("Microsoft*/*.HLP")
+SOURCES = sorted(str(path) for path in Path("var/sources").glob("Microsoft*/*.HLP")
                  if path.read_bytes()[:4] == b"LN\2\0")
 
 
@@ -169,7 +169,7 @@ def test_all_installed_original_quickhelp_databases_decode_every_declared_topic(
 
 
 def test_bad_quickhelp_preserves_published_library_and_retry_works(tmp_path):
-    original = Path("data/sources/Microsoft QuickC, C, and C++ 2.50/QA.HLP").read_bytes()
+    original = Path("var/sources/Microsoft QuickC, C, and C++ 2.50/QA.HLP").read_bytes()
     sources, helps = tmp_path / "sources", tmp_path / "helps"
     source = sources / "Microsoft QuickC, C, and C++ 2.50" / "QA.HLP"
     source.parent.mkdir(parents=True)

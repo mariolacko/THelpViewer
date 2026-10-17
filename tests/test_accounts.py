@@ -61,7 +61,9 @@ def test_profile_preserves_identity_passkey_sessions_and_role(tmp_path):
 def test_profile_api_requires_owner_session_origin_and_rejects_role_changes(tmp_path):
     manifest = tmp_path / "empty.json"
     manifest.write_text('{"sources": []}')
-    config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      midi_sources_path=manifest, auth_origin="https://accounts.example.test")
     app = create_app(config)
@@ -148,7 +150,9 @@ def test_admin_invitation_passkey_and_session(tmp_path, monkeypatch):
 
 
 def test_passkey_api_requires_configured_origin_and_no_public_registration(tmp_path):
-    config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      auth_origin="https://accounts.example.test")
     (tmp_path / "helps").mkdir()
@@ -168,7 +172,9 @@ def test_passkey_api_requires_configured_origin_and_no_public_registration(tmp_p
 
 
 def test_missing_passkey_dependency_returns_actionable_json(tmp_path, monkeypatch):
-    config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      auth_origin="https://accounts.example.test")
     (tmp_path / "helps").mkdir()
@@ -268,7 +274,9 @@ def test_bootstrap_admin_and_one_hour_admin_registration_tokens(tmp_path, monkey
         store.new_registration_options("Older", "older@example.test", older_token,
                                        "example.test", "THelpViewer")
 
-    config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      auth_origin="https://example.test")
     (tmp_path / "helps").mkdir()
@@ -329,7 +337,9 @@ def test_old_registration_token_table_gains_encrypted_value_column(tmp_path):
 
 
 def test_public_robots_uses_configured_https_origin_behind_http_proxy(tmp_path):
-    config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      public_base_url="", auth_origin="https://help.example.test")
     (tmp_path / "helps").mkdir()

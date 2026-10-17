@@ -15,11 +15,12 @@ import zipfile
 
 from ..accounts.store import AccountStore
 from ..downloader.online import OnlineDownloader
-from ..downloader.packages import download_package, package_cache_key
+from ..downloader.packages import download_package, migrate_package_cache, package_cache_key, read_package_cache
 from ..rebuild import archive_rebuild_directory, prune_backups
 from ..settings import ServerSettings
 from .config import load_dos_config, select_dos_packages
 from .media import DosMediaStore
+from .migration import migrate_legacy_packages
 from .overlay import DosOverlayStore
 from .packages import DosPackageExtractor, configured_files
 from .paths import DosError, ID_RE, MAX_FILES, MAX_SOURCE_BYTES, atomic_file, c_path
@@ -61,6 +62,12 @@ class DosPromptStore:
 
         self.overlays = DosOverlayStore(self.users_dir, self.settings, self.accounts)
         self.media = DosMediaStore(self.users_dir)
+
+    def migrate_downloads(self) -> dict:
+        with self.downloads.maintenance():
+            config = load_dos_config(self.config_path)
+            recovered = migrate_legacy_packages(config, self.installed_path, self.disk_dir, self.downloads_dir)
+            return {**migrate_package_cache(config["sources"], self.downloads_dir), "recovered": recovered}
 
     def install(self, source_ids: list[str], *, on_progress=None) -> None:
         """Install explicitly selected packages; keep the shared disk and private overlays."""
@@ -135,7 +142,7 @@ class DosPromptStore:
             if self.state != "ready":
                 raise DosError(self.error or "DOS package configuration failed")
             self.state = "building"
-            backup = self.root.parent / "backups" / f"dos-packages-{uuid.uuid4().hex}"
+            backup = self.root.parent / "backups" / "dos" / f"dos-packages-{uuid.uuid4().hex}"
             backup.mkdir(parents=True)
             if original_receipt is not None:
                 atomic_file(backup / "installed.json", original_receipt)
@@ -183,14 +190,11 @@ class DosPromptStore:
             key = installed[ident]
             if not isinstance(key, str) or not re.fullmatch(r"[0-9a-f]{64}", key):
                 raise DosError("Invalid DOS installation cache key")
-            cached = next((directory / key for directory in (self.downloads_dir, self.root / "downloads")
-                           if (directory / key).is_file() and not (directory / key).is_symlink()), None)
-            if cached is None:
-                raise DosError(f"Cannot safely change {ident}: its legacy installation needs the cached archive")
-            if cached.stat().st_size > MAX_SOURCE_BYTES:
-                raise DosError("Cached software archive exceeds its quota")
             source = sources[ident]
-            incoming = self._source_files(cached.read_bytes(), source)
+            incoming = (read_package_cache(source, self.downloads_dir, MAX_SOURCE_BYTES, process=self._source_files)
+                        if key == package_cache_key(source) else None)
+            if incoming is None:
+                raise DosError(f"Cannot safely change {ident}: its legacy installation needs the cached archive")
             incoming.update(configured_files(source, MAX_SOURCE_BYTES))
             prefix = c_path(source["target"]) + "/" if source.get("target") else ""
             names = []
@@ -213,10 +217,11 @@ class DosPromptStore:
             if self.installed_path.is_symlink():
                 raise DosError("DOS installation metadata must not be a symbolic link")
             self.settings.get()  # Validate retention before archiving the live C drive.
-            self.backup = archive_rebuild_directory(self.base_root, self.root.parent / "backups", "dos-base")
+            archived = archive_rebuild_directory(self.base_root, self.root.parent / "backups" / "dos", "dos-base")
+            self.backup = str(archived.relative_to(self.root.parent)) if archived else ""
             if not self.installed_path.is_relative_to(self.base_root) and self.installed_path.exists():
                 if not self.backup:
-                    backup = self.root.parent / "backups" / f"dos-base-{uuid.uuid4().hex}"
+                    backup = self.root.parent / "backups" / "dos" / f"dos-base-{uuid.uuid4().hex}"
                     backup.mkdir(parents=True)
                     self.backup = str(backup.relative_to(self.root.parent))
                 self.installed_path.rename(self.root.parent / self.backup / "installed.json")
@@ -239,6 +244,7 @@ class DosPromptStore:
     def prepare(self, *, install_sources: bool = False, source_ids: list[str] | None = None,
                 preserve_downloads=False) -> None:
         download_queue = False
+        prepared = None
         try:
             backup_count = self.settings.get()["backup_count"]
             config = load_dos_config(self.config_path)
@@ -270,11 +276,28 @@ class DosPromptStore:
             source_ids = select_dos_packages(config, source_ids)
             sources = [source for source in config["sources"] if self.initializing and source["id"] in source_ids]
             self.total = len(sources)
-            if self.total:
-                self.downloads.begin("dos", [{"id": source["id"], "label": source.get("title", source["id"])}
-                    for source in sources],
+            pending_sources = [source for source in sources if installed.get(source["id"]) != package_cache_key(source)]
+            if pending_sources:
+                self.downloads.begin("dos", [{"id": source["id"], "label": source.get("title", source["id"]),
+                                             "byte_progress": False}
+                    for source in pending_sources],
                     replace=not preserve_downloads)
                 download_queue = True
+            def prepare(source):
+                ident = source["id"]
+                target = c_path(source["target"]) + "/" if source.get("target") else ""
+                additions = {name: root_files.get(target + name, contents)
+                             for name, contents in configured_files(source, limit).items()}
+                with self.downloads.context("dos", ident):
+                    try:
+                        incoming = self._prepare_package(source, base, additions, root_files, target, limit)
+                    except Exception as error:
+                        self.downloads.update("dos", ident, state="error", phase="Failed", error=str(error))
+                        raise
+                    self._progress("Awaiting installation", 0.75, stage="install", ident=ident)
+                    return incoming
+            prepared = self.downloads.prepare(pending_sources, prepare, ordered=True,
+                source=lambda source: source.get("url", ""))
             self.processed = 0
             for source in sources:
                 if not isinstance(source, dict):
@@ -292,20 +315,34 @@ class DosPromptStore:
                 if installed.get(ident) == cache_key:
                     # Resume/explicit install may fill missing configured files,
                     # but never overwrite the administrator's existing C files.
+                    owned = installed.get("_files", {}).get(ident)
+                    changed = False
                     for name, contents in additions.items():
                         destination = base / (target + name)
                         if not destination.exists():
                             atomic_file(destination, contents)
                         elif not destination.is_file() or destination.read_bytes() != contents:
                             raise DosError(f"Configured software file conflicts with existing C file: {target + name}")
+                        if owned is not None and target + name not in root_files and target + name not in owned:
+                            owned.append(target + name)
+                            changed = True
+                    if changed:
+                        atomic_file(marker, json.dumps(installed).encode())
                     self.processed += 1
-                    self.downloads.update("dos", ident, state="done", percent=100, phase="Installed")
+                    self.downloads.update("dos", ident, state="done", percent=100, phase="Installed", error="")
                     continue
                 self.current = str(source.get("title", ident))
-                self._progress("Downloading", 0)
-                with self.downloads.context("dos", ident):
-                    incoming = self.downloads.call(lambda: self._prepare_package(source, base, additions, root_files, target, limit),
-                        source=source.get("url", ""))
+                self._progress("Downloading", 0, stage="download")
+                ready_source, future = next(prepared)
+                if ready_source["id"] != ident:
+                    raise DosError("DOS package preparation order changed")
+                incoming = future.result()
+                if source.get("post_install"):
+                    self._progress("Post-install script", 0.85, stage="convert")
+                    tools_dir = base / "UTILS" / "BIN"
+                    tools = ({"UTILS/BIN/" + path.name: path.read_bytes() for path in tools_dir.iterdir() if path.is_file()}
+                             if tools_dir.is_dir() else {})
+                    incoming = run_post_install(incoming, source, tools, limit)
                 if len(incoming) > MAX_FILES or sum(len(value) for value in incoming.values()) > limit:
                     raise DosError("Software exceeds C drive quota")
                 for index, (name, contents) in enumerate(incoming.items(), 1):
@@ -315,13 +352,14 @@ class DosPromptStore:
                             raise DosError(f"Initial software conflicts with existing C file: {target + name}")
                     else:
                         atomic_file(destination, contents)
-                    self._progress("Installing", 0.75 + 0.25 * index / max(1, len(incoming)))
+                    self._progress("Installing", 0.75 + 0.25 * index / max(1, len(incoming)),
+                                   stage="install", stage_percent=int(100 * index / max(1, len(incoming))))
                 installed[ident] = cache_key
                 installed.setdefault("_files", {})[ident] = [target + name for name in incoming
                                                             if target + name not in root_files]
                 atomic_file(marker, json.dumps(installed).encode())
                 self.processed += 1
-                self.downloads.update("dos", ident, state="done", percent=100, phase="Installed")
+                self.downloads.update("dos", ident, state="done", percent=100, phase="Installed", error="")
             for filename, contents in root_files.items():
                 destination = base / filename
                 if initializing or (install_sources and not destination.exists()):
@@ -364,37 +402,45 @@ class DosPromptStore:
             self.error, self.state = str(error), "error"
             self.downloads.update("dos", self._download_id, state="error", phase="Failed", error=str(error))
         finally:
+            if prepared is not None:
+                prepared.close()
             if download_queue and not self.configuring:
                 self.downloads.finish("dos", error=self.error if self.state == "error" else "")
             self._download_id = ""
             self.current = ""
             self.rebuilding = False
 
-    def _progress(self, phase: str, fraction: float) -> None:
+    def _progress(self, phase: str, fraction: float, *, stage="prepare", stage_percent=None, ident=None) -> None:
+        key = self._download_id if ident is None else ident
+        self.downloads.update("dos", key, state="running", phase=phase, percent=int(100 * fraction),
+                              stage=stage, stage_percent=stage_percent)
+        if key != self._download_id:
+            return
         self.phase = phase
         self.percent = min(99, int(100 * (self.processed + fraction) / max(1, self.total)))
-        self.downloads.update("dos", self._download_id, state="running", phase=phase, percent=int(100 * fraction))
         if self.on_progress:
             self.on_progress(self.status(start=False))
 
-    def _download_progress(self, received: int, total: int) -> None:
-        self.received = received
-        self._progress("Downloading", min(1, received / total) * 0.75 if total > 0 else 0)
+    def _download_progress(self, received: int, total: int, *, ident=None) -> None:
+        if ident is None or ident == self._download_id:
+            self.received = received
+        self._progress("Downloading", min(1, received / total) * 0.75 if total > 0 else 0,
+                       stage="download", stage_percent=min(100, int(100 * received / total)) if total > 0 else None, ident=ident)
 
     def _prepare_package(self, source, base, additions, root_files, target, limit):
-        data, _key = download_package(source, self.downloads_dir, MAX_SOURCE_BYTES,
-            on_progress=self._download_progress, legacy_dirs=(self.root / "downloads",),
-            on_status=lambda phase: self._progress(phase, 0), local_dir=Path(__file__).parent.parent / "assets" / "dos")
-        self._progress("Extracting", 0.75)
-        incoming = self._source_files(data, source)
+        def extract(data, recipe):
+            self._progress("Extracting", 0.75, stage="extract", ident=source["id"])
+            incoming = self._source_files(data, recipe)
+            if not incoming:
+                raise DosError("Configured package contains no selected program files")
+            return incoming
+        incoming, _key = download_package(source, self.downloads_dir, MAX_SOURCE_BYTES,
+            on_progress=lambda received, total: self._download_progress(received, total, ident=source["id"]),
+            on_status=lambda phase: self._progress(phase, 0, ident=source["id"]),
+            local_dir=Path(__file__).parent.parent / "assets" / "dos",
+            process=extract)
         incoming.update(additions)
         incoming = {name: root_files.get(target + name, contents) for name, contents in incoming.items()}
-        if source.get("post_install"):
-            self._progress("Post-install script", 0.85)
-            tools_dir = base / "UTILS" / "BIN"
-            tools = ({"UTILS/BIN/" + path.name: path.read_bytes() for path in tools_dir.iterdir() if path.is_file()}
-                     if tools_dir.is_dir() else {})
-            incoming = run_post_install(incoming, source, tools, limit)
         return incoming
 
     def status(self, *, start: bool = True) -> dict:

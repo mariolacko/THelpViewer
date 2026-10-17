@@ -120,7 +120,7 @@ def test_invalid_font_and_format_fail_without_turning_into_title_only_articles()
 
 @pytest.fixture(scope="module")
 def win31():
-    source = ROOT / "data/sources/Borland C++ 4.x/WIN31WH.HLP"
+    source = ROOT / "var/sources/Borland C++ 4.x/WIN31WH.HLP"
     return WinHelpReader(source.name).read_bytes(source.read_bytes())
 
 
@@ -162,7 +162,7 @@ def test_unrendered_picture_payloads_and_positions_remain_explicit(win31):
 
 
 def test_matching_hlp_is_selected_instead_of_duplicate_index_bundle(tmp_path):
-    collection = ROOT / "data/sources/Borland C++ 4.x"
+    collection = ROOT / "var/sources/Borland C++ 4.x"
     for ext in ("HLP", "HLX"):
         (tmp_path / f"OPENHELP.{ext}").write_bytes((collection / f"OPENHELP.{ext}").read_bytes())
     assert [p.name for p in iter_help_files(tmp_path)] == ["OPENHELP.HLP"]
@@ -171,7 +171,7 @@ def test_matching_hlp_is_selected_instead_of_duplicate_index_bundle(tmp_path):
 
 
 def test_hlp_bundle_has_native_title_article_zero_contents_and_browse(tmp_path):
-    source = ROOT / "data/sources/Borland C++ 4.x/OPENHELP.HLP"
+    source = ROOT / "var/sources/Borland C++ 4.x/OPENHELP.HLP"
     result = export_bundle(source, tmp_path)
     assert result.format_name == "winhelp" and result.topic_count == 42
     payload = json.loads(gzip.decompress(result.json_path.read_bytes()))
@@ -200,7 +200,7 @@ def test_failed_hlp_conversion_keeps_existing_published_bundles(tmp_path):
 @pytest.mark.parametrize("collection,fixture", CORPUS,
                          ids=[collection + "/" + f["file"] for collection, f in CORPUS])
 def test_all_retained_hlp_articles_and_keyword_destinations_convert(collection, fixture):
-    source = ROOT / "data/sources" / collection / fixture["file"]
+    source = ROOT / "var/sources" / collection / fixture["file"]
     doc = WinHelpReader(source.name).read_bytes(source.read_bytes())
     assert len(doc.topics) == fixture["topics"]
     assert len(doc.index_entries) == fixture["references"]

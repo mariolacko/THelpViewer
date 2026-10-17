@@ -17,7 +17,7 @@ from thelpviewer.server.config import load_config
 from thelpviewer.server.dos.packages import configured_files
 from thelpviewer.server.dos.store import DosPromptStore
 from thelpviewer.server.dos.paths import DosError, c_path
-from thelpviewer.server.downloader.extractor import find_unar, find_sevenzip
+from thelpviewer.server.archives.core import UnsafeArchiveError, find_unar, find_sevenzip
 
 
 def store_at(tmp_path):
@@ -126,14 +126,14 @@ def test_package_strip_components_rejects_invalid_counts(tmp_path, strip):
 @pytest.mark.parametrize("names,message", [
     (["Disk1/FILE.TXT", "Disk2/file.txt"], "Duplicate DOS filename"),
     (["FILE.TXT"], "too few components"),
-    (["../FILE.TXT"], "Invalid C drive path"),
+    (["../FILE.TXT"], "Unsafe archive member path"),
 ])
 def test_package_strip_components_rejects_collisions_short_paths_and_traversal(tmp_path, names, message):
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
         for name in names:
             archive.writestr(name, b"data")
-    with pytest.raises(DosError, match=message):
+    with pytest.raises(UnsafeArchiveError if names[0].startswith("../") else DosError, match=message):
         store_at(tmp_path)._source_files(stream.getvalue(), {"format": "zip", "strip_components": 1})
 
 
@@ -147,18 +147,21 @@ def test_dos_zip_attributes_are_not_misread_as_unix_symlinks(tmp_path, creator):
         archive.writestr(entry, b"ordinary DOS file")
     store = store_at(tmp_path)
     if creator == 3:
-        with pytest.raises(DosError, match="symbolic link"):
+        with pytest.raises(UnsafeArchiveError, match="symbolic link"):
             store._source_files(stream.getvalue(), {"format": "zip"})
     else:
         assert store._source_files(stream.getvalue(), {"format": "zip"}) == {"ANTI-VIR.DAT": b"ordinary DOS file"}
 
 
 def test_legacy_package_ownership_requires_cached_archive_before_uninstall(tmp_path):
+    from thelpviewer.server.downloader.cache import write_cache_identity
+    from thelpviewer.server.downloader.packages import package_cache_key, package_cache_path
     store = store_at(tmp_path)
     config = json.loads(store.config_path.read_text())
     config["sources"] = [{"id": "legacy", "url": "https://games.test/old.zip", "target": "GAMES/OLD", "format": "zip"}]
     store.config_path.write_text(json.dumps(config))
-    receipt = {"legacy": "a" * 64, "_complete": True}
+    source = config["sources"][0]
+    receipt = {"legacy": package_cache_key(source), "_complete": True}
     store.installed_path.write_text(json.dumps(receipt))
     original = store.installed_path.read_bytes()
     with pytest.raises(DosError, match="cached archive"):
@@ -167,8 +170,9 @@ def test_legacy_package_ownership_requires_cached_archive_before_uninstall(tmp_p
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
         archive.writestr("GAME.EXE", b"game")
-    cache = store.downloads_dir / ("a" * 64)
-    cache.parent.mkdir(); cache.write_bytes(stream.getvalue())
+    cache = store.downloads_dir / package_cache_path(source)
+    cache.parent.mkdir(parents=True); cache.write_bytes(stream.getvalue())
+    write_cache_identity(cache, package_cache_key(source))
     game = store.disk_dir / "GAMES/OLD/GAME.EXE"
     game.parent.mkdir(); game.write_bytes(b"game")
     store.configure([])
@@ -425,7 +429,7 @@ def test_first_run_software_download_is_hash_checked_selected_and_resumable(tmp_
     invalid = DosPromptStore(tmp_path / "invalid", config)
     invalid.prepare()
     assert invalid.state == "error" and "SHA-256 mismatch" in invalid.error
-    with pytest.raises(DosError):
+    with pytest.raises(UnsafeArchiveError):
         store._source_files(_unsafe_zip(), {"format": "zip"})
 
 
@@ -582,7 +586,9 @@ def test_dos_api_binds_storage_and_media_to_session(tmp_path):
     dos_config.write_text('{"sources": [], "files": [{"path":"README.TXT","text":["Shared test disk"]}]}')
     midi = tmp_path / "midi.json"
     midi.write_text('{"sources": []}')
-    config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
         dos_config_path=dos_config, midi_sources_path=midi, auth_origin="http://testserver",
         statistics_path=tmp_path / "var" / "statistics.sqlite3")
     app = create_app(config)

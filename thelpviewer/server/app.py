@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+import logging
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -26,14 +28,16 @@ from .routes.rebuild import create_rebuild_router
 from .routes.content import create_content_router
 from .routes.downloads import create_downloads_router
 from .downloader.online import OnlineDownloader
+from .downloader.maintenance import DownloadCache
 from .content import ContentService
+from .jobs import JobStore
 from .search_index import GlobalSearchIndex
 from .midi.library import MidiLibrary
 from .dos.store import DosPromptStore
 from .settings import ServerSettings
 from .statistics import StatisticsStore
 from .static_assets import ViewerAssets
-from .storage import prepare_storage
+from .storage import migrate_backups, prepare_storage
 
 
 def _help_display_names(config: AppConfig) -> dict[str, str]:
@@ -79,27 +83,56 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(running_app: FastAPI):
-        running_app.state.global_search.ensure_current()
-        running_app.state.midi_library.start()
-        if config.dev_auto_login:
-            print("THelpViewer LOCAL DEVELOPMENT auto-login enabled; do not expose this server publicly.", flush=True)
-        bootstrap_token = None if config.dev_auto_login else running_app.state.accounts.bootstrap_token()
-        if bootstrap_token:
-            print(f"THelpViewer first administrator registration token (valid 1 hour): {bootstrap_token}", flush=True)
-        yield
-        running_app.state.downloads.close()
+        running_app.state.jobs.acquire()
+        cache_task = None
+        try:
+            running_app.state.content.recover_publications()
+            migrate_backups(config)
+            names = running_app.state.help_display_names
+            names.clear()
+            names.update(_help_display_names(config))
+            try:
+                await asyncio.to_thread(running_app.state.dos_prompt.migrate_downloads)
+            except (OSError, ValueError) as error:
+                logging.getLogger(__name__).warning("DOS cache migration deferred: %s", error)
+            # Reserve unfinished work before expiry or the first index scan.
+            await asyncio.to_thread(running_app.state.content.resume)
+            await running_app.state.download_cache.sweep()
+            running_app.state.global_search.ensure_current()
+            running_app.state.midi_library.start()
+            if config.dev_auto_login:
+                print("THelpViewer LOCAL DEVELOPMENT auto-login enabled; do not expose this server publicly.", flush=True)
+            bootstrap_token = None if config.dev_auto_login else running_app.state.accounts.bootstrap_token()
+            if bootstrap_token:
+                print(f"THelpViewer first administrator registration token (valid 1 hour): {bootstrap_token}", flush=True)
+            cache_task = asyncio.create_task(running_app.state.download_cache.maintain())
+            yield
+        finally:
+            if cache_task:
+                cache_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await cache_task
+            try:
+                await asyncio.to_thread(running_app.state.global_search.close)
+                await asyncio.to_thread(running_app.state.content.close)
+                await asyncio.to_thread(running_app.state.midi_library.close)
+            finally:
+                running_app.state.downloads.close()
+                running_app.state.jobs.release()
 
     app = FastAPI(title="THelpViewer", version=__version__, lifespan=lifespan)
     app.state.config = config
     persistent = config.persistent_dir
     statistics_path = config.statistics_path or persistent / "statistics.sqlite3"
     app.state.statistics = StatisticsStore(statistics_path)
+    app.state.jobs = JobStore(persistent / "jobs.sqlite3")
     app.state.global_search = GlobalSearchIndex(
-        config.helps_dir, config.state_dir, config.docs_dir, config.virtual_docs
+        config.helps_dir, config.state_dir, config.docs_dir, config.virtual_docs, journal=app.state.jobs,
     )
     app.state.accounts = AccountStore(persistent / "development" if config.dev_auto_login else persistent)
-    app.state.downloads = OnlineDownloader()
+    app.state.downloads = OnlineDownloader(app.state.jobs)
     app.state.server_settings = ServerSettings(persistent / "server-settings.json")
+    app.state.download_cache = DownloadCache(config, app.state.server_settings, app.state.downloads, app.state.jobs)
     app.state.midi_library = MidiLibrary(config.state_dir / "midi", config.midi_sources_path,
         selection_path=persistent / "midi-settings.json", downloads=app.state.downloads, settings=app.state.server_settings)
     app.state.dos_prompt = DosPromptStore(config.state_dir / "dos", config.dos_config_path,
@@ -113,7 +146,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         names.update(_help_display_names(config))
         app.state.global_search.ensure_current()
 
-    app.state.content = ContentService(config, app.state.dos_prompt, refresh_help_content)
+    app.state.content = ContentService(config, app.state.dos_prompt, refresh_help_content,
+        help_processing=app.state.global_search.suspend, journal=app.state.jobs)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
@@ -168,7 +202,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(create_midi_router(app.state.midi_library))
     app.include_router(create_dos_router(config, app.state.accounts, app.state.dos_prompt))
     app.include_router(create_settings_router(config, app.state.accounts, app.state.server_settings,
-        app.state.dos_prompt, app.state.midi_library))
+        app.state.dos_prompt, app.state.midi_library, app.state.download_cache))
     app.include_router(create_rebuild_router(config, app.state.accounts, app.state.dos_prompt, app.state.midi_library))
     app.include_router(create_content_router(config, app.state.accounts, app.state.content))
     app.include_router(create_downloads_router(config, app.state.accounts, app.state.downloads))

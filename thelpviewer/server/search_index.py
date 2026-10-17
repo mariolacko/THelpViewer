@@ -9,7 +9,7 @@ import re
 import sqlite3
 import threading
 import zlib
-from contextlib import closing
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 from ..public_docs import public_doc_sources
@@ -133,12 +133,19 @@ class GlobalSearchIndex:
     """One background writer for public HELP topics and Docs."""
 
     def __init__(self, helps_dir: Path, state_dir: Path, docs_dir: Path | None = None,
-                 virtual_docs: tuple[tuple[str, Path], ...] = ()):
+                 virtual_docs: tuple[tuple[str, Path], ...] = (), *, journal=None):
         self.helps_dir = helps_dir
         self.docs_dir = docs_dir
         self.virtual_docs = virtual_docs
         self.path = state_dir / "global-search.sqlite3"
         self._lock = threading.Lock()
+        self._condition = threading.Condition(self._lock)
+        self._pauses = 0
+        self.journal = journal
+        self._job_id = None
+        self._worker = None
+        self._stopping = False
+        self._completed = 0
         self._building = False
         self._available = False
         self._failed_files: dict[tuple[str, str], tuple[str, str]] = {}
@@ -146,6 +153,24 @@ class GlobalSearchIndex:
         self._failed_snapshot = None
         self._status = {"state": "idle", "percent": 0, "processed": 0, "total": 0,
                         "topics": 0, "documents": 0, "file": ""}
+        if journal:
+            previous = journal.latest("index")
+            if previous:
+                self._failed_files = {
+                    tuple(key.split(":", 1)): (step["fingerprint"], step["detail"].get("error", ""))
+                    for key, step in journal.steps(previous["id"]).items() if step["state"] == "error"
+                }
+
+    def close(self):
+        with self._lock:
+            self._stopping = True
+            worker = self._worker
+        if worker and worker is not threading.current_thread():
+            worker.join()
+
+    def _record_job(self, state):
+        if self.journal and self._job_id:
+            self.journal.update(self._job_id, state, self._status, self._status.get("error", ""))
 
     def _connect(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -216,9 +241,28 @@ class GlobalSearchIndex:
             found[relative] = (path, f"{stat.st_size}:{stat.st_mtime_ns}:{stat.st_ctime_ns}", title)
         return found
 
+    @contextmanager
+    def suspend(self):
+        """Yield the disk/CPU to HELP processing, then rescan published content.
+
+        Finish the current source transaction before handing over. Stop the
+        writer at a file boundary rather than holding SQLite open while paused.
+        Nested/concurrent holders resume only after the final one leaves.
+        """
+        with self._condition:
+            self._pauses += 1
+            while self._building:
+                self._condition.wait()
+        try:
+            yield
+        finally:
+            with self._condition:
+                self._pauses -= 1
+            self.ensure_current()
+
     def ensure_current(self) -> None:
         with self._lock:
-            if self._building:
+            if self._building or self._pauses or self._stopping:
                 return
             try:
                 snapshot = self._snapshot()
@@ -256,6 +300,9 @@ class GlobalSearchIndex:
                                     "total": len(snapshot) + len(docs_snapshot), "topics": topic_count,
                                     "documents": doc_count, "file": ""}
                     self._failed_snapshot = None
+                    if self.journal:
+                        for job in self.journal.pending("index"):
+                            self.journal.update(job["id"], "done", self._status)
                     return
                 signature = tuple((kind, name,
                                    (snapshot if kind == "help" else docs_snapshot).get(name, (None, None, None))[1])
@@ -270,12 +317,32 @@ class GlobalSearchIndex:
                 self._status = {"state": "building", "percent": 0, "processed": 0,
                                 "total": len(work), "topics": topic_count,
                                 "documents": doc_count, "file": ""}
-            except (OSError, sqlite3.Error) as error:
+                self._completed = 0
+                if self.journal:
+                    pending = self.journal.pending("index")
+                    self._job_id = pending[0]["id"] if pending else self.journal.create("index", {})
+                    self.journal.claim(self._job_id)
+                    for (kind, name), (fingerprint, error) in self._failed_files.items():
+                        self.journal.checkpoint(self._job_id, kind + ":" + name, state="error",
+                            fingerprint=fingerprint, detail={"error": error})
+                    for key, step in self.journal.steps(self._job_id).items():
+                        kind, name = key.split(":", 1)
+                        sources = snapshot if kind == "help" else docs_snapshot
+                        if step["fingerprint"] == sources.get(name, (None, "missing", None))[1]:
+                            self._completed += 1
+                    self._status.update(processed=self._completed, total=self._completed + len(work),
+                        percent=round(100 * self._completed / (self._completed + len(work))))
+                    self._record_job("running")
+            except (OSError, ValueError, sqlite3.Error) as error:
+                self._building = False
+                self._condition.notify_all()
                 self._available = False
                 self._status = {"state": "error", "percent": 0, "processed": 0,
                                 "total": 0, "topics": 0, "documents": 0, "file": "", "error": str(error)}
                 return
-        threading.Thread(target=self._build, args=(snapshot, docs_snapshot, work, signature), daemon=True).start()
+            self._worker = threading.Thread(target=self._build, args=(snapshot, docs_snapshot, work, signature),
+                                             daemon=True, name="thelp-global-index")
+            self._worker.start()
 
     @staticmethod
     def _remove_indexed_source(connection: sqlite3.Connection, kind: str, relative: str) -> None:
@@ -335,6 +402,10 @@ class GlobalSearchIndex:
         try:
             with closing(self._connect()) as connection:
                 for position, (kind, relative) in enumerate(work, 1):
+                    with self._lock:
+                        if self._pauses or self._stopping:
+                            self._record_job("interrupted")
+                            return
                     sources = snapshot if kind == "help" else docs_snapshot
                     try:
                         self._update_source(connection, kind, relative, sources)
@@ -346,36 +417,49 @@ class GlobalSearchIndex:
                         fingerprint = sources.get(relative, (None, "", None))[1]
                         with self._lock:
                             self._failed_files[(kind, relative)] = (fingerprint, str(error))
+                        if self.journal:
+                            self.journal.checkpoint(self._job_id, kind + ":" + relative, state="error",
+                                fingerprint=fingerprint, detail={"error": str(error)})
                         _LOGGER.warning("Cannot index %s %s: %s", kind, relative, error)
                     else:
                         with self._lock:
                             self._failed_files.pop((kind, relative), None)
                             self._available = True
+                        if self.journal:
+                            self.journal.checkpoint(self._job_id, kind + ":" + relative,
+                                fingerprint=sources.get(relative, (None, "missing", None))[1])
                     with self._lock:
                         self._pending_files.discard((kind, relative))
                     count = connection.execute("SELECT coalesce(sum(topic_count), 0) FROM files").fetchone()[0]
                     documents = connection.execute("SELECT count(*) FROM docs_files").fetchone()[0]
                     with self._lock:
-                        self._status = {"state": "building", "percent": round(position * 100 / len(work)),
-                                        "processed": position, "total": len(work), "topics": count,
+                        total, processed = self._completed + len(work), self._completed + position
+                        self._status = {"state": "building", "percent": round(processed * 100 / total),
+                                        "processed": processed, "total": total, "topics": count,
                                         "documents": documents, "file": relative}
+                        self._record_job("running")
             with self._lock:
                 self._status = {**self._status, "state": "ready", "percent": 100, "file": ""}
                 self._available = True
                 self._failed_snapshot = None
+                self._record_job("done")
         except (OSError, ValueError, sqlite3.Error) as error:
             with self._lock:
                 self._status = {**self._status, "state": "error", "error": str(error)}
                 self._available = False
                 self._failed_snapshot = signature
+                self._record_job("error")
         finally:
-            with self._lock:
+            with self._condition:
                 self._building = False
+                self._condition.notify_all()
 
     def status(self) -> dict:
         self.ensure_current()
         with self._lock:
-            return {**self._status, "available": self._available,
+            return {**self._status,
+                    **({"state": "paused", "phase": "Waiting for HELP processing", "file": ""} if self._pauses else {}),
+                    "available": self._available,
                     "warnings": [{"kind": kind, "file": name, "error": error}
                                  for (kind, name), (_fingerprint, error) in sorted(self._failed_files.items())]}
 

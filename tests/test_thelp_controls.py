@@ -10,6 +10,7 @@ import pytest
 from thelpviewer.server.converter.readers.thelp import ThelpBinaryParser, ThelpHelpReader, is_thelp_binary
 from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 from test_thelp_reader import _screen
+from thelp_corpus import original_thelp_corpus
 
 
 @pytest.mark.parametrize("raw,visible,codes", [
@@ -110,7 +111,7 @@ def test_cycles_have_no_guessed_entry_state_and_long_chains_do_not_recurse():
 
 
 def test_real_czech_menu_arrow_preserves_its_cell_and_is_not_a_code_toggle():
-    source = Path("data/sources/Borland Turbo Pascal 7 (CZ)/TURBO.TPH")
+    source = Path("var/sources/Borland Turbo Pascal 7 (CZ)/TURBO.TPH")
     document = ThelpHelpReader().read_path(source)
     topic = next(topic for topic in document.topics if topic.context_id == 434)
     assert any(row.startswith(b"    \x10    \xb3") for row in topic.raw_lines)
@@ -119,7 +120,7 @@ def test_real_czech_menu_arrow_preserves_its_cell_and_is_not_a_code_toggle():
 
 
 def test_real_puts_inline_closing_toggle_does_not_remain_as_a_club():
-    source = Path("data/sources/Borland C++ 2.0 DOS current/TCHELP.TCH")
+    source = Path("var/sources/Borland C++ 2.0 DOS current/TCHELP.TCH")
     document = ThelpHelpReader().read_path(source)
     topic = next(topic for topic in document.topics if topic.context_id == 1388)
     start = topic.raw_lines.index(b" #include <stdio.h>")
@@ -130,9 +131,9 @@ def test_real_puts_inline_closing_toggle_does_not_remain_as_a_club():
 
 
 def test_arrow_and_native_source_rows_reach_the_bundle_without_modifying_source(tmp_path):
-    source = Path("data/sources/Borland Turbo Pascal 7 (CZ)/TURBO.TPH")
+    source = Path("var/sources/Borland Turbo Pascal 7 (CZ)/TURBO.TPH")
     original = source.read_bytes()
-    result = export_bundle_tree(Path("data/sources"), tmp_path, source_paths=[source], layout="helps")
+    result = export_bundle_tree(Path("var/sources"), tmp_path, source_paths=[source], layout="helps")
     payload = json.loads(gzip.decompress(result[0].json_path.read_bytes()))
     assert any(line.startswith("    ►    │") for line in payload["topics"]["434"]["content"])
     assert all("[code]" not in line for line in payload["topics"]["434"]["content"])
@@ -144,15 +145,9 @@ def test_all_physical_rows_match_the_independent_boa_toggle_reference():
     # not a DOS GUI capture or a per-cell styled shared-model representation.
     digest = hashlib.sha256()
     files = records = rows = code_rows = inherited_pages = 0
-    root = Path("data/sources")
-    for source in sorted(root.rglob("*")):
-        if not source.is_file():
-            continue
-        with source.open("rb") as stream:
-            prefix = stream.read(4096)
-            if not is_thelp_binary(prefix):
-                continue
-            data = prefix + stream.read()
+    root = Path("var/sources")
+    for source, data in original_thelp_corpus():
+        assert is_thelp_binary(data)
         files += 1
         name = source.relative_to(root).as_posix()
         _meta, screens, _index, _tags = ThelpBinaryParser(data).parse()

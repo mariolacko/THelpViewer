@@ -35,7 +35,7 @@ NATIVE_DIGESTS = {
 
 
 def source(version, filename):
-    path = Path("data/sources") / f"Borland Turbo Assembler {version}" / filename
+    path = Path("var/sources") / f"Borland Turbo Assembler {version}" / filename
     if not path.is_file():
         pytest.skip("Original newer TDH not available")
     return path
@@ -109,7 +109,7 @@ def test_malformed_or_truncated_map_fails_without_publishing_partial_topics():
 def test_modern_bundle_versions_titles_aliases_and_source_ownership(tmp_path):
     paths = [source(version, filename) for version, filename, *_ in SAMPLES]
     originals = {path: hashlib.sha256(path.read_bytes()).digest() for path in paths}
-    results = export_bundle_tree(Path("data/sources"), tmp_path, source_paths=paths, layout="helps")
+    results = export_bundle_tree(Path("var/sources"), tmp_path, source_paths=paths, layout="helps")
     assert len(results) == 6 and all(result.format_name == "tdh" for result in results)
     assert sum(result.topic_count for result in results) == 4602
     catalog = json.loads((tmp_path / "catalog.json").read_text())

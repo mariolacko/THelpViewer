@@ -115,7 +115,9 @@ def test_midi_selection_api_requires_admin_origin_and_explicit_manifest_ids(tmp_
     path = manifest(tmp_path)
     dos = tmp_path / "dos.json"
     dos.write_text('{"sources": []}')
-    config = replace(load_config(), state_dir=tmp_path / "var", data_dir=tmp_path / "data",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", data_dir=tmp_path / "data",
         helps_dir=tmp_path / "helps", statistics_path=tmp_path / "statistics.sqlite3",
         midi_sources_path=path, dos_config_path=dos, auth_origin="https://accounts.test", dev_auto_login=False)
     monkeypatch.setattr(MidiLibrary, "_fetch", staticmethod(lambda url, hosts, limit:

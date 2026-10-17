@@ -3,7 +3,7 @@ import sys
 import pytest
 
 from thelpviewer.server.converter import __main__ as converter_cli
-from thelpviewer.server.converter.writers.bundle import BundleResult
+from thelpviewer.server.converter.results import BundleResult
 
 
 def test_bundle_cli_exits_unsuccessfully_when_export_reports_error(tmp_path, monkeypatch):
@@ -12,7 +12,8 @@ def test_bundle_cli_exits_unsuccessfully_when_export_reports_error(tmp_path, mon
     result = BundleResult(
         input_path=source,
         json_path=tmp_path / "output" / "broken.json.gz",
-        format_name="ERROR",
+        format_name="",
+        error="Conversion failed",
         topic_count=0,
         display_name="broken",
         source_files=(source.name,),

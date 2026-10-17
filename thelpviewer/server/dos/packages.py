@@ -2,16 +2,13 @@
 
 import base64
 from fnmatch import fnmatch
-import io
 from pathlib import Path
-import stat
 import tempfile
-import zipfile
 
-from ..downloader.extractor import (
-    ExtractorTools, extract_file, find_lsar, find_sevenzip, find_unar,
-    assemble_borland_split_archives, KWAJ_SIGNATURE, SZDD_SIGNATURE,
-)
+from ..archives.core import (ExtractorTools, ExtractionLimits, extract_file, find_lsar, find_sevenzip,
+    find_unar, open_zip, read_zip_member)
+from ..archives.containers import assemble_borland_split_archives, expand_microsoft
+from ..processing import report_progress
 from .paths import DosError, MAX_FILES, MAX_SOURCE_BYTES, c_path
 
 def configured_files(config: dict, limit: int) -> dict[str, bytes]:
@@ -54,24 +51,12 @@ class DosPackageExtractor:
         if "expand" in source:
             if source["expand"] != "microsoft":
                 raise DosError("Unknown software file expansion")
-            from pylibmspack import KwajFile, SzddFile
-            from pylibmspack.errors import MspackError
-
             files = self.extract(data, {key: value for key, value in source.items() if key != "expand"})
             expanded = {}
             total = 0
             for name, contents in files.items():
-                reader = (KwajFile.from_bytes(contents, name=Path(name).name) if contents.startswith(KWAJ_SIGNATURE)
-                    else SzddFile.from_bytes(contents, name=Path(name).name) if contents.startswith(SZDD_SIGNATURE) else None)
-                if reader is not None:
-                    try:
-                        filename = c_path(reader.suggested_name())
-                        if "/" in filename:
-                            raise DosError("Compressed software filename must not contain directories")
-                        name = name.rpartition("/")[0] + "/" + filename if "/" in name else filename
-                        contents = reader.read(max_size=min(self.limit, MAX_SOURCE_BYTES))
-                    except MspackError as error:
-                        raise DosError(f"Cannot expand software file {name}: {error}") from error
+                name, contents = expand_microsoft(contents, name, min(self.limit, MAX_SOURCE_BYTES))
+                name = c_path(name)
                 if name in expanded:
                     raise DosError("Duplicate expanded DOS filename")
                 total += len(contents)
@@ -81,9 +66,9 @@ class DosPackageExtractor:
             return expanded
         if source.get("format") == "collection":
             files = {}
-            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            with open_zip(data, ExtractionLimits(max_files=MAX_FILES, max_bytes=MAX_SOURCE_BYTES)) as archive:
                 for index, component in enumerate(source["archives"]):
-                    payload = archive.read(f"{index}.archive")
+                    payload = read_zip_member(archive, archive.getinfo(f"{index}.archive"), MAX_SOURCE_BYTES)
                     incoming = self.extract(payload, component)
                     prefix = c_path(component["target"]) + "/" if component.get("target") else ""
                     for name, contents in incoming.items():
@@ -162,50 +147,37 @@ class DosPackageExtractor:
                 raise DosError("Selected software path has too few components")
             return "/".join(parts[strip:])
 
+        limits = ExtractionLimits(max_files=MAX_FILES, max_bytes=self.limit)
         if source.get("format") == "zip":
             files = {}
-            with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                if len(archive.infolist()) > MAX_FILES:
-                    raise DosError("Too many software archive entries")
-                if sum(entry.file_size for entry in archive.infolist()) > self.limit:
-                    raise DosError("Software archive expands beyond its quota")
-                for entry in archive.infolist():
-                    if not entry.is_dir():
-                        c_path(entry.filename)
-                    if entry.create_system == 3 and stat.S_ISLNK(entry.external_attr >> 16):
-                        raise DosError("Software archive contains a symbolic link")
-                if any(entry.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED,
-                        zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA) for entry in archive.infolist()):
+            with open_zip(data, limits) as archive:
+                if any(entry.compress_type not in (0, 8, 12, 14) for entry in archive.infolist()):
                     return self.extract(data, {**source, "format": "archive"})
-                total = 0
-                for entry in archive.infolist():
+                entries = archive.infolist()
+                for index, entry in enumerate(entries):
+                    report_progress("Extracting DOS package", entry.filename, stage="extract",
+                                    processed=index, total=len(entries))
                     if entry.is_dir():
                         continue
-                    name = c_path(entry.filename)
-                    if entry.create_system == 3 and stat.S_ISLNK(entry.external_attr >> 16):
-                        raise DosError("Software archive contains a symbolic link")
-                    total += entry.file_size
-                    if total > self.limit:
-                        raise DosError("Software archive expands beyond its quota")
-                    name = selected_name(name)
+                    c_path(entry.filename)
+                    name = selected_name(entry.filename)
                     if name is not None:
                         if name in files:
                             raise DosError("Duplicate DOS filename in software archive")
-                        files[name] = archive.read(entry)
+                        files[name] = read_zip_member(archive, entry, self.limit)
             return files
         if source.get("format") not in ("img", "archive"):
             raise DosError("Software sources must be zip, img or archive")
         tools = ExtractorTools(find_unar(), find_lsar(), find_sevenzip())
         if not tools.available:
             raise DosError("IMG extraction needs unar/lsar or 7zz; rebuild the Docker image")
-        # Reuse the downloader's image extractor for administrator-configured
+        # Reuse the common image extractor for administrator-configured
         # sources, never untrusted media uploaded by a player.
         with tempfile.TemporaryDirectory(prefix="thelp-dos-image-") as temporary:
             image = Path(temporary) / ("software.img" if source.get("format") == "img" else "software.archive")
             image.write_bytes(data)
             directory = Path(temporary) / "contents"
-            if not extract_file(image, directory, tools):
-                raise DosError("Cannot extract configured software image")
+            extract_file(image, directory, tools, limits=limits)
             if source.get("image_member"):
                 wanted = c_path(source["image_member"])
                 candidates = [path for path in directory.rglob("*") if path.is_file()
@@ -213,8 +185,7 @@ class DosPackageExtractor:
                 if len(candidates) != 1:
                     raise DosError("Configured disk image is missing from the software archive")
                 contents = Path(temporary) / "disk-contents"
-                if not extract_file(candidates[0], contents, tools):
-                    raise DosError("Cannot extract configured inner disk image")
+                extract_file(candidates[0], contents, tools, limits=limits)
                 directory = contents
             files = {}
             for path in directory.rglob("*"):

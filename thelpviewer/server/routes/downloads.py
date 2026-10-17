@@ -27,7 +27,14 @@ def create_downloads_router(config, accounts, downloads):
             private = True
         except HTTPException:
             pass
-        return JSONResponse(downloads.snapshot(private=private), headers={"Cache-Control": "no-store"})
+        catalog = config.helps_dir / "catalog.json"
+        try:
+            stat = catalog.stat()
+            revision = f"{stat.st_mtime_ns}:{stat.st_size}"
+        except FileNotFoundError:
+            revision = "missing"
+        return JSONResponse({**downloads.snapshot(private=private), "content_revision": revision},
+                            headers={"Cache-Control": "no-store"})
 
     @router.post("/action", status_code=202)
     def act(values: DownloadAction, request: Request):

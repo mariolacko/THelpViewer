@@ -5,14 +5,10 @@ import zipfile
 
 import pytest
 
-from thelpviewer.server.downloader.extractor import (
-    ExtractorTools,
-    _should_probe,
-    assemble_borland_split_archives,
-    collect_archive_members,
-    expand_single_file_payloads,
-    extract_file,
-)
+from thelpviewer.server.archives.core import ExtractorTools, UnsafeArchiveError, extract_file
+from thelpviewer.server.archives.nested import _should_probe
+from thelpviewer.server.archives.containers import assemble_borland_split_archives, expand_single_file_payloads
+from thelpviewer.server.converter.ingest import collect_archive_members
 
 
 def test_assemble_borland_split_zip_parts(tmp_path):
@@ -25,7 +21,7 @@ def test_assemble_borland_split_zip_parts(tmp_path):
     part1 = tmp_path / "HELP.CA1"
     part2 = tmp_path / "HELP.CA2"
     part1.write_bytes(b"\x02\x00\x00\x00" + zip_data[:split_at])
-    part2.write_bytes(b"\x01\x00\x00\x00" + zip_data[split_at:])
+    part2.write_bytes(b"\x01" + split_at.to_bytes(3, "little") + zip_data[split_at:])
 
     assembled = assemble_borland_split_archives(tmp_path)
 
@@ -35,6 +31,41 @@ def test_assemble_borland_split_zip_parts(tmp_path):
     assert not _should_probe(part2)
 
 
+@pytest.mark.parametrize("header_size,parts_count", [(4, 2), (5, 4), (5, 11)])
+@pytest.mark.parametrize("bad_offset", [False, True])
+def test_split_headers_offsets_and_lettered_parts(tmp_path, header_size, parts_count, bad_offset):
+    stream = BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        archive.writestr("TVCHELP.TCH", bytes(range(256)) * 4)
+    payload = stream.getvalue()
+    offset = 0
+    for index in range(parts_count):
+        end = len(payload) * (index + 1) // parts_count
+        number = str(index + 1) if index < 9 else chr(ord("A") + index - 9)
+        bitmap = ((1 << parts_count) - 1) ^ (1 << index)
+        position = offset + (1 if bad_offset and index == 1 else 0)
+        part = tmp_path / f"WHELP.CA{number}"
+        part.write_bytes(bitmap.to_bytes(header_size - 3, "little") + position.to_bytes(3, "little") + payload[offset:end])
+        assert not _should_probe(part)
+        offset = end
+    assembled = assemble_borland_split_archives(tmp_path)
+    if bad_offset:
+        assert not assembled
+    else:
+        assert len(assembled) == 1 and assembled[0].read_bytes() == payload
+
+
+def test_lettered_parts_do_not_hide_microsoft_cabinets(tmp_path):
+    cabinet = tmp_path / "SETUP.CAB"
+    cabinet.write_bytes(b"MSCF" + b"\0" * 32)
+    assert _should_probe(cabinet)
+    (tmp_path / "SETUP.CA1").write_bytes(b"split")
+    assert _should_probe(cabinet)
+    cabinet.write_bytes(b"not a split part without the first volume")
+    (tmp_path / "SETUP.CA1").unlink()
+    assert _should_probe(cabinet)
+
+
 def test_extract_file_rejects_symlinks_from_external_extractor(tmp_path, monkeypatch):
     archive = tmp_path / "unsafe.zip"
     archive.write_bytes(b"archive")
@@ -42,14 +73,16 @@ def test_extract_file_rejects_symlinks_from_external_extractor(tmp_path, monkeyp
     outside.write_text("secret", encoding="utf-8")
     destination = tmp_path / "extract"
 
-    def fake_extract(_path, dest, _tools):
+    def fake_extract(_path, dest, _tools, _limits, **_options):
         (dest / "escape.txt").symlink_to(outside)
         return True, None
 
-    monkeypatch.setattr("thelpviewer.server.downloader.extractor._extract_with_unar", fake_extract)
+    monkeypatch.setattr("thelpviewer.server.archives.core._extract_with_unar", fake_extract)
+    monkeypatch.setattr("thelpviewer.server.archives.core.probe_extractable", lambda *_: None)
     tools = ExtractorTools(unar="unar", lsar="lsar", sevenzip=None)
 
-    assert extract_file(archive, destination, tools) is False
+    with pytest.raises(UnsafeArchiveError, match="symbolic link"):
+        extract_file(archive, destination, tools)
     assert list(destination.iterdir()) == []
     assert outside.read_text(encoding="utf-8") == "secret"
 
@@ -65,7 +98,7 @@ def test_collect_archive_members_keeps_only_configured_language(tmp_path, monkey
             member.write_bytes(language.encode("ascii"))
         return True
 
-    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_file", fake_extract)
+    monkeypatch.setattr("thelpviewer.server.converter.ingest.extract_file", fake_extract)
     tools = ExtractorTools(unar="unar", lsar="lsar", sevenzip=None)
 
     collected = collect_archive_members(
@@ -83,8 +116,8 @@ def test_collect_archive_members_keeps_only_configured_language(tmp_path, monkey
 def test_collect_archive_members_rejects_missing_files(tmp_path, monkeypatch):
     archive = tmp_path / "help.zip"
     archive.write_bytes(b"test")
-    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_file", lambda *_: True)
-    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_nested", lambda *_: None)
+    monkeypatch.setattr("thelpviewer.server.converter.ingest.extract_file", lambda *_: True)
+    monkeypatch.setattr("thelpviewer.server.converter.ingest.extract_nested", lambda *_a, **_k: None)
     tools = ExtractorTools(unar="unar", lsar="lsar", sevenzip=None)
 
     with pytest.raises(ValueError, match="QB45QCK.HLP"):
@@ -108,7 +141,7 @@ def test_collect_archive_members_matches_nested_paths_at_component_boundaries(tm
             path.write_bytes(content)
         return True
 
-    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_file", fake_extract)
+    monkeypatch.setattr("thelpviewer.server.converter.ingest.extract_file", fake_extract)
     collected = collect_archive_members(tmp_path / "cd.7z", ("bc45\\bin\\bcw.hlp",),
                                         "Borland", tmp_path / "sources", ExtractorTools(None, None, None))
     assert len(collected) == 1 and collected[0].read_bytes() == b"selected"
@@ -122,11 +155,44 @@ def test_collect_archive_members_rejects_ambiguous_nested_paths(tmp_path, monkey
             path.write_bytes(prefix.encode("ascii"))
         return True
 
-    monkeypatch.setattr("thelpviewer.server.downloader.extractor.extract_file", fake_extract)
+    monkeypatch.setattr("thelpviewer.server.converter.ingest.extract_file", fake_extract)
     with pytest.raises(ValueError, match="ambiguous"):
         collect_archive_members(tmp_path / "cd.7z", ("BC45/BIN/BCW.HLP",),
                                 "Borland", tmp_path / "sources", ExtractorTools(None, None, None))
     assert not (tmp_path / "sources").exists()
+
+
+def test_collect_archive_members_accepts_byte_identical_assembled_copies(tmp_path, monkeypatch):
+    def extract(_path, dest, _tools):
+        for prefix in ("disk/assembled", "assembled"):
+            path = dest / prefix / "TASM.TAH"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"identical original")
+    monkeypatch.setattr("thelpviewer.server.converter.ingest.extract_file", extract)
+    paths = collect_archive_members(tmp_path / "disks.7z", ("TASM.TAH",), "Assembler",
+                                   tmp_path / "sources", ExtractorTools(None, None, None))
+    assert len(paths) == 1 and paths[0].read_bytes() == b"identical original"
+
+
+def test_member_selection_prioritizes_needed_split_archive_and_skips_bad_siblings(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from thelpviewer.server.archives import nested
+    requested = []
+    def extract(source, dest, _tools, **_kwargs):
+        dest.mkdir(exist_ok=True, parents=True)
+        if source.name == "disks.7z":
+            (dest / "TASM.ZIP").write_bytes(b"assembler archive")
+            (dest / "BROKEN.ZIP").write_bytes(b"unrelated corrupt Windows help")
+        else:
+            requested.append(source.name)
+            assert source.name == "TASM.ZIP", "Expanded unrelated broken sibling"
+            (dest / "TASM.TAH").write_bytes(b"selected help")
+    monkeypatch.setattr("thelpviewer.server.converter.ingest.extract_file", extract)
+    monkeypatch.setattr(nested, "extract_file", extract)
+    monkeypatch.setattr(nested, "probe_extractable", lambda *_args, **_kw: SimpleNamespace())
+    paths = collect_archive_members(tmp_path / "disks.7z", ("TASM.TAH",), "Assembler",
+                                   tmp_path / "sources", ExtractorTools(None, None, None))
+    assert requested == ["TASM.ZIP"] and len(paths) == 1
 
 
 def test_expand_kwaj_help_payload(tmp_path):

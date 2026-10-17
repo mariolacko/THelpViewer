@@ -43,7 +43,7 @@ def test_empty_server_start_waits_for_configuration_instead_of_downloading_every
                 time.sleep(.05)
         else:
             raise AssertionError("Empty server did not start")
-        assert not (tmp_path / "data" / "sources").exists()
+        assert not (tmp_path / "var" / "sources").exists()
         assert not (tmp_path / "var" / "downloads").exists()
     finally:
         process.terminate(); process.wait(timeout=5)
@@ -51,7 +51,7 @@ def test_empty_server_start_waits_for_configuration_instead_of_downloading_every
 
 
 def test_with_dos_reference_builds_default_and_reference_sources_together(tmp_path):
-    sources = tmp_path / "sources"
+    sources = tmp_path / "var" / "sources"
     default_source = sources / "Microsoft Demo" / "ASM.TXT"
     reference_source = sources / "HelpPC 2.10" / "C.TXT"
     default_source.parent.mkdir(parents=True)
@@ -61,9 +61,9 @@ def test_with_dos_reference_builds_default_and_reference_sources_together(tmp_pa
 
     script = Path(__file__).resolve().parents[1] / "thelp.sh"
     env = os.environ.copy()
+    env.pop("THELP_SOURCES_DIR", None)
     env.update({
         "THELP_PYTHON": sys.executable,
-        "THELP_SOURCES_DIR": str(sources),
         "THELP_STATE_DIR": str(tmp_path / "var"),
     })
 

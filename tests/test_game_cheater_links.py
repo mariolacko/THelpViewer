@@ -113,7 +113,7 @@ def test_empty_named_records_resolve_to_following_text_in_links_index_contents_a
 
 
 def test_complete_original_help_lookup_matches_independent_source_record_scan():
-    path = Path("data/sources/Game-Cheater/Game-Cheater 9.02/CHEATDBS.000")
+    path = Path("var/sources/Game-Cheater/Game-Cheater 9.02/CHEATDBS.000")
     if not path.is_file():
         pytest.skip("Original Game-Cheater is not installed")
     records = _records(path.with_name("GCHLP.000").read_bytes(), 39)

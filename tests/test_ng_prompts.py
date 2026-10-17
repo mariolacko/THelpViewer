@@ -95,15 +95,15 @@ def test_see_also_keeps_empty_targets_null_target_captions_and_source_order():
 
 
 def test_real_ff_captions_and_literal_see_also_escapes():
-    document = NGReader().read_path(Path("data/sources/Norton Guides/BEATLES.NG"))
+    document = NGReader().read_path(Path("var/sources/Norton Guides/BEATLES.NG"))
     topics = {topic.context_id: topic for topic in document.topics}
     assert topics[378].raw_lines[0] == b"The\xfflist\xffof\xffalbums"
     assert "The\u00a0list\u00a0of\u00a0albums" in topics[378].uhf_content[0]
     assert topics[747].raw_lines[1:4] == [b"Epigraph", b"Epigraph\xff", b"Epigraph\xff\xff"]
-    document = NGReader().read_path(Path("data/sources/Norton Guides/DPMI.NG"))
+    document = NGReader().read_path(Path("var/sources/Norton Guides/DPMI.NG"))
     topic = next(topic for topic in document.topics if topic.context_id == 59273)
     assert "^bINTERRUPT SERVICES^b" in topic.uhf_content[-1]
-    document = NGReader().read_path(Path("data/sources/Norton Guides/GT_LIBNG.NG"))
+    document = NGReader().read_path(Path("var/sources/Norton Guides/GT_LIBNG.NG"))
     topic = next(topic for topic in document.topics if topic.context_id == 1511)
     assert topic.uhf_content[-1] == "See also: GT_S2ARR()  "
     assert topic.positional_keywords == []
@@ -123,7 +123,7 @@ def test_preserved_caption_bytes_and_links_reach_the_published_bundle(tmp_path):
 def test_all_original_caption_cells_and_descriptor_addresses_match_the_native_baseline():
     digest = hashlib.sha256()
     titles = prompts = related = cells_total = menus = 0
-    for source in sorted(Path("data/sources/Norton Guides").glob("*.NG")):
+    for source in sorted(Path("var/sources/Norton Guides").glob("*.NG")):
         data = source.read_bytes()
         document = NGReader().read_bytes(data)
         topics = {topic.context_id: topic for topic in document.topics}

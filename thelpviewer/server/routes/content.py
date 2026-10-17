@@ -1,5 +1,7 @@
 """Administrator-only content choices and long-running installation progress."""
 
+import sqlite3
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,6 +36,8 @@ def create_content_router(config, accounts, content):
         require_administrator(config, accounts, request, write=True)
         try:
             status = content.start(data.help_packages, data.dos_packages)
+        except sqlite3.Error as error:
+            raise HTTPException(status_code=503, detail=f"Job storage is unavailable: {error}") from None
         except (ValueError, OSError) as error:
             raise HTTPException(status_code=409, detail=str(error)) from None
         return JSONResponse(status, status_code=202, headers={"Cache-Control": "no-store"})

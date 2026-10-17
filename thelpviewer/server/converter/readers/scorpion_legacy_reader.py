@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import tempfile
 
-from ...downloader.extractor import ExtractorTools, extract_file, find_lsar, find_sevenzip, find_unar
+from ...archives.core import ExtractionError, ExtractorTools, extract_file, find_lsar, find_sevenzip, find_unar
 from ..base import ContentNode, HelpDocument, HelpReaderBase, IndexEntry, TopicRecord, ensure_document_index
 from ..codepages import KAMENICKY, decode_bytes
 from ..text_screen import BitmapFont
@@ -962,7 +962,9 @@ def _extract_overlay_members(overlay: bytes) -> dict[str, bytes]:
         archive_path = temp_root / "overlay.rar"
         extract_root = temp_root / "extract"
         archive_path.write_bytes(overlay)
-        if not extract_file(archive_path, extract_root, tools):
+        try:
+            extract_file(archive_path, extract_root, tools)
+        except ExtractionError:
             return {}
 
         extracted: dict[str, bytes] = {}

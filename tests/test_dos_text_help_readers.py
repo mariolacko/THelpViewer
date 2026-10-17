@@ -156,25 +156,25 @@ def test_empty_backup_payload_fails():
 
 
 def test_original_turbo_basic_and_prolog_corpus_converts_and_retains_crc_metadata(tmp_path):
-    root = Path("data/sources")
-    selected = [path for path in root.rglob("*.HLP")
-                if path.parts[2].startswith(("Borland Turbo Basic", "Borland Turbo Prolog"))]
+    root = Path("var/sources")
+    selected = [path for path in root.rglob("*") if path.suffix.upper() in {".HLP", ".TBH"}
+                and path.parts[2].startswith(("Borland Turbo Basic", "Borland Turbo Prolog"))]
     if not selected:
         pytest.skip("Original Turbo Basic/Prolog help files are not available")
-    assert len(selected) == 26
+    assert len(selected) == 29
     formats = {}
     for path in selected:
         entry = lookup_help_database_entry(path)
         assert entry is not None and entry.product_key in {"tbasic", "tprolog"}
         document = load_document(path)
         formats[document.format_name] = formats.get(document.format_name, 0) + 1
-        expected = {"microcalc-text": 7, "prolog-help": 2, "dos-text": 1}[document.format_name]
+        expected = {"microcalc-text": 7, "prolog-help": 2, "dos-text": 1, "turbo-basic": 108}[document.format_name]
         assert len(document.topics) == expected
         assert all("�" not in line for topic in document.topics for line in topic.uhf_content)
-    assert formats == {"microcalc-text": 3, "prolog-help": 1, "dos-text": 22}
+    assert formats == {"microcalc-text": 3, "prolog-help": 1, "dos-text": 22, "turbo-basic": 3}
 
     results = export_bundle_tree(root, tmp_path / "helps", source_paths=selected, layout="helps")
-    assert results and all(result.format_name != "ERROR" for result in results)
+    assert results and all(not result.error for result in results)
     catalog = json.loads((tmp_path / "helps" / "catalog.json").read_text())
     assert {item["product"] for item in catalog} == {"tbasic", "tprolog"}
     assert {item["product_name"] for item in catalog} == {"Borland Turbo Basic", "Borland Turbo Prolog"}

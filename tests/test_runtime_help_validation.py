@@ -24,7 +24,7 @@ TFH_SOURCES = [
 
 
 def source(relative):
-    path = Path("data/sources") / relative
+    path = Path("var/sources") / relative
     if not path.is_file():
         pytest.skip("Original runtime HELP not available")
     return path
@@ -166,9 +166,11 @@ def test_unused_overlapping_eof_slot_is_not_fabricated_as_a_page():
 
 @pytest.mark.parametrize("relative", [TDH_SOURCES[1], TFH_SOURCES[1]])
 def test_real_bad_help_cannot_replace_published_bundles_and_can_be_retried(tmp_path, relative):
-    original = source(relative).read_bytes()
+    from thelpviewer.help_database import lookup_help_database_entry
+    original_path = source(relative)
+    original = original_path.read_bytes()
     sources, helps = tmp_path / "sources", tmp_path / "helps"
-    copy = sources / relative
+    copy = sources / lookup_help_database_entry(original_path).collection / original_path.name
     copy.parent.mkdir(parents=True)
     copy.write_bytes(original)
     build_help_groups(["borland"], sources, helps, product_keys=["td"], keep_products=["td"])

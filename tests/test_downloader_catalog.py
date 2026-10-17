@@ -1,17 +1,31 @@
 import json
 
-from thelpviewer.server.downloader.catalog import (
-    SOURCE_RUNNERS,
-    all_build_groups,
-    all_products,
-    build_help_prefixes_for_groups,
-    build_group_for_help_root,
-    build_group_for_source_root,
-    build_source_root_prefixes_for_groups,
-    normalize_build_group,
-    product_spec,
-)
+from thelpviewer.server.downloader.catalog import (SOURCE_RUNNERS, all_products, product_spec)
+from thelpviewer.server.converter.planning import (all_build_groups, build_help_prefixes_for_groups, build_group_for_help_root, build_group_for_source_root, build_source_root_prefixes_for_groups, normalize_build_group)
 from thelpviewer.help_database import load_help_manifest, product_entries
+
+
+def test_winworld_families_have_concrete_independent_alternative_urls():
+    manifest = load_help_manifest()
+    families = [product for product in manifest.products if "winworld" in product.sources]
+    assert {product.key for product in families} == {"tp", "tc", "tasm", "td", "tbasic", "tprolog", "bc", "bp", "sk"}
+    for product in families:
+        urls = [url for provider, query in product.sources.items() if provider != "winworld" for url in query.direct_urls]
+        assert urls and all("winworldpc" not in url for url in urls), product.key
+
+
+def test_verified_alternative_provenance_selects_help_not_unrelated_members():
+    database = load_help_manifest().entry_map
+    for crc, filename in ((0x3ADC1C1F, "TBHELP.TBH"), (0x39309330, "TCHELP.TCH"),
+                          (0x07E89446, "TASM.TAH"), (0xA6E139F2, "TDHELP.TDH"),
+                          (0x6E12E51C, "TCHELP.TCH"), (0x2B71174C, "TURBO.TPH")):
+        source = database[crc].sources["archiveorg"]
+        assert source.direct_urls and source.query and filename in source.archive_members
+        assert all(not name.endswith(".EXE") for name in source.archive_members)
+    for crc, filename in ((0x0EA517F6, "SK.HLP"), (0x58D27871, "SK2.HLP")):
+        source = database[crc].sources["direct"]
+        assert source.direct_urls[0].startswith("https://www.acrpc.net/")
+        assert source.archive_members == (filename,)
 
 
 def test_build_groups_and_scorpion_direct_url():
@@ -108,14 +122,15 @@ def test_manifest_drives_sources_products_and_conversion_files():
     assert {entry.product_key for entry in turbo_pascal_entries} == {"tp"}
     assert any(entry.version == "7.1" for entry in turbo_pascal_entries)
     assembler_entries = product_entries("tasm")
-    assert {entry.crc32 for entry in assembler_entries} == {0x07E89446, 0x9AC3E64A, 0xC517BD6D}
+    assert {entry.crc32 for entry in assembler_entries} == {0x07E89446, 0x9AC3E64A, 0xC517BD6D, 0x91D5F0DE, 0xC74EE5C6}
+    assert {entry.version for entry in assembler_entries} == {"2.0", "2.01", "3.0", "3.1", "3.2 (DE)"}
     assert all(entry.filenames == ("TASM.TAH",) for entry in assembler_entries)
 
 
 def test_discovered_revisions_retain_retrieval_pages_and_fallback_queries():
     manifest = load_help_manifest()
     for crc in (0x07E89446, 0xC517BD6D, 0xC7CCE043, 0x0EA517F6, 0xBBF9DEFB, 0x7C2A5934,
-                0x77B4692D, 0x1A84ACE2, 0x7D23BEE7, 0x86079353):
+                0x77B4692D, 0x1A84ACE2, 0x7D23BEE7, 0x86079353, 0x3ADC1C1F, 0xE9E8BE71):
         entry = manifest.entry_map[crc]
         assert entry.version and entry.product_key
         origin = entry.sources["winworld"]
@@ -139,17 +154,17 @@ def test_discovered_revisions_retain_retrieval_pages_and_fallback_queries():
 
 def test_source_product_metadata_uses_crc_then_filename_before_folder():
     from pathlib import Path
-    from thelpviewer.server.converter.writers.bundle import _product_metadata_for_source
+    from thelpviewer.server.converter.metadata import product_metadata_for_source
     manifest = load_help_manifest()
     folder = "Borland Turbo Assembler 4.x"
-    assert _product_metadata_for_source(Path("TDHELP.TDH"), folder, None)[0] == "td"
-    assert _product_metadata_for_source(Path("TD32HELP.TDH"), folder, None)[0] == "td"
-    assert _product_metadata_for_source(Path("TASM.TAH"), folder, None) == (
+    assert product_metadata_for_source(Path("TDHELP.TDH"), folder, None)[0] == "td"
+    assert product_metadata_for_source(Path("TD32HELP.TDH"), folder, None)[0] == "td"
+    assert product_metadata_for_source(Path("TASM.TAH"), folder, None) == (
         "tasm", "Borland Turbo Assembler", "4.x")
     # TCHELP is shared by C and C++; an unrelated archive name proves neither.
-    assert _product_metadata_for_source(Path("TCHELP.TCH"), folder, None)[0] == ""
+    assert product_metadata_for_source(Path("TCHELP.TCH"), folder, None)[0] == ""
     crc_entry = manifest.entry_map[0x9AC3E64A]
-    assert _product_metadata_for_source(Path("RENAMED.HLP"), "Borland C++ 3.0", crc_entry)[0] == "tasm"
+    assert product_metadata_for_source(Path("RENAMED.HLP"), "Borland C++ 3.0", crc_entry)[0] == "tasm"
 
 
 def test_pinned_dos_sources_select_only_the_intended_files():

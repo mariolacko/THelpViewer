@@ -16,6 +16,7 @@ import pytest
 from thelpviewer.server.dos.media import DosMediaStore
 from thelpviewer.server.dos.overlay import DosOverlayStore
 from thelpviewer.server.dos.packages import DosPackageExtractor, configured_files
+from thelpviewer.server.archives.core import UnsafeArchiveError
 from thelpviewer.server.dos.paths import DosError
 from thelpviewer.server.midi import catalog
 from thelpviewer.server.midi.format import standard_midi
@@ -60,7 +61,7 @@ def test_package_extraction_and_file_recipes_need_no_store_or_network():
     assert DosPackageExtractor(100).extract(data.getvalue(), {
         "format": "zip", "strip_components": 1,
     }) == {"README.TXT": b"reference"}
-    with pytest.raises(DosError, match="quota"):
+    with pytest.raises(UnsafeArchiveError, match="quota"):
         DosPackageExtractor(8).extract(data.getvalue(), {"format": "zip"})
     assert configured_files({"files": [
         {"path": "AUTOEXEC.BAT", "text": ["@echo off"]},

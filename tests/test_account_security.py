@@ -204,7 +204,9 @@ def test_old_database_migration_preserves_credentials_sessions_and_does_not_enab
 def test_security_http_owner_origin_cookie_and_password_login(tmp_path):
     empty = tmp_path / "empty.json"
     empty.write_text('{"sources": []}')
-    config = replace(load_config(), state_dir=tmp_path / "var", data_dir=tmp_path / "data",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", data_dir=tmp_path / "data",
         helps_dir=tmp_path / "helps", docs_dir=tmp_path / "docs", midi_sources_path=empty,
         dos_config_path=empty, statistics_path=tmp_path / "data/stats.sqlite3", auth_origin="https://account.test")
     app = create_app(config)
@@ -236,7 +238,9 @@ def test_security_http_owner_origin_cookie_and_password_login(tmp_path):
 def test_key_metadata_and_creation_api_reject_cross_origin_cross_account_and_extra_fields(tmp_path, monkeypatch):
     empty = tmp_path / "empty.json"
     empty.write_text('{"sources": []}')
-    config = replace(load_config(), state_dir=tmp_path / "var", data_dir=tmp_path / "data",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", data_dir=tmp_path / "data",
         helps_dir=tmp_path / "helps", docs_dir=tmp_path / "docs", midi_sources_path=empty,
         dos_config_path=empty, statistics_path=tmp_path / "data/stats.sqlite3", auth_origin="https://account.test")
     app = create_app(config)

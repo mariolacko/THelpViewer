@@ -14,7 +14,7 @@ from thelpviewer.server.converter.readers.scorpion_legacy_reader import _render_
 from thelpviewer.server.converter.readers.scorpion_dat_reader import _render_payload_lines
 from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
-ROOT = Path("data/sources/Scorpions Cheater DOS")
+ROOT = Path("var/sources/Scorpions Cheater DOS")
 FONT_HASHES = [
     "1580b25396baf217138be59c340dffb80f9c6cab1faca8913eda27303ebcab0a",
     "675cb1a4c6f45d1367dea5bbe6551f433591390f47f57d1053186be57b53bd0a",

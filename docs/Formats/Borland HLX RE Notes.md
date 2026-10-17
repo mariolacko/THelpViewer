@@ -4,7 +4,7 @@ Private analysis and converter evidence, not the public source-format datasheet.
 
 ## Verified keyword trees (2026-10-12)
 
-All 20 originals in `data/sources/Borland C++ 4.x/` conform to the
+All 20 originals in `var/sources/Borland C++ 4.x/` conform to the
 standalone Windows Help B+ tree descriptor `i24`. Together they contain
 18,975 exact keyword records and 29,064 referenced keyword-data positions.
 The format contains no compressed article stream. Its native leaf count

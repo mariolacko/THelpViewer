@@ -7,6 +7,7 @@ Index of supported help file binary and source formats.
 ## Binary Format Specifications
 
 - Borland THELP: [Formats/Borland THELP.md](Formats/Borland%20THELP.md) — TP4–7, Turbo C, TASM, Sidekick 2, Sprint
+- Borland Turbo Basic: [Formats/Borland Turbo Basic Help.md](Formats/Borland%20Turbo%20Basic%20Help.md) — WORD records, CP437 screens, space packing and absolute-offset hotspots; not nibble THELP
 - Borland Sidekick 1: [Formats/Borland Sidekick 1 Help.md](Formats/Borland%20Sidekick%201%20Help.md) — uncompressed screen contexts and intra-context pages; not Sidekick Plus
 - Borland Sidekick Plus: [Formats/Borland Sidekick Plus Help.md](Formats/Borland%20Sidekick%20Plus%20Help.md) — paragraph-addressed screen groups, native redirects, scoped hotspots and pages
 - Borland Turbo Debugger/Profiler runtime help: [Formats/Borland TDH.md](Formats/Borland%20TDH.md) — separate TDH/TFH runtime-help family, decoded for the known sample families

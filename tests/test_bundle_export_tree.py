@@ -71,13 +71,14 @@ def test_export_bundle_tree_omits_failed_exports_from_catalog(tmp_path, monkeypa
 
     results = bundle_writer.export_bundle_tree(input_root, output_dir, layout="helps")
 
-    assert [result.format_name for result in results] == ["ERROR"]
+    assert len(results) == 1 and results[0].error == "synthetic parse failure"
+    assert results[0].format_name == ""
     assert json.loads((output_dir / "catalog.json").read_text(encoding="utf-8")) == []
 
 
 def test_export_bundle_tree_prefers_tdh_candidate_with_more_topics(tmp_path, monkeypatch):
-    legacy_source = Path("data/sources") / "Borland Turbo Debugger 1.0" / "TDHELP.TDH"
-    later_source = Path("data/sources") / "Borland Turbo Assembler 1.0 with Turbo Debugger" / "TDHELP.TDH"
+    legacy_source = Path("var/sources") / "Borland Turbo Debugger 1.0" / "TDHELP.TDH"
+    later_source = Path("var/sources") / "Borland Turbo Assembler 1.0 with Turbo Debugger" / "TDHELP.TDH"
     assert legacy_source.exists(), f"Source TDH not found: {legacy_source}"
     assert later_source.exists(), f"Source TDH not found: {later_source}"
 
@@ -146,8 +147,8 @@ def test_export_bundle_tree_prefers_tdh_candidate_with_more_topics(tmp_path, mon
 
 
 def test_export_bundle_tree_uses_versioned_bundle_stems_for_tdh_variants(tmp_path, monkeypatch):
-    legacy_source = Path("data/sources") / "Borland Turbo Debugger 1.0" / "TDHELP.TDH"
-    later_source = Path("data/sources") / "Borland Turbo Assembler 1.0 with Turbo Debugger" / "TDHELP.TDH"
+    legacy_source = Path("var/sources") / "Borland Turbo Debugger 1.0" / "TDHELP.TDH"
+    later_source = Path("var/sources") / "Borland Turbo Assembler 1.0 with Turbo Debugger" / "TDHELP.TDH"
     assert legacy_source.exists(), f"Source TDH not found: {legacy_source}"
     assert later_source.exists(), f"Source TDH not found: {later_source}"
 

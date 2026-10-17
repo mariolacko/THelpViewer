@@ -14,6 +14,7 @@ from .readers.source_containers import unpack_dos_backup
 from .codepages import decode_bytes, guess_display_encoding, is_czech_encoding_hint
 from thelpviewer.help_database import ConverterSpec, load_help_manifest, lookup_help_database_entry
 from .writers.html import HelpHtmlRenderer
+from .selection import archive_member_selected
 
 
 def _clean_dir(path: Path) -> None:
@@ -35,6 +36,7 @@ class ExportResult:
     encoding: str
     html_count: int
     json_path: Path | None = None
+    error: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,7 +258,8 @@ def export_file(
         return ExportResult(
             input_path=source_path,
             output_dir=Path(output_dir),
-            format_name="ERROR",
+            format_name="",
+            error=str(e) or type(e).__name__,
             encoding="?",
             html_count=0,
             json_path=None,
@@ -299,6 +302,10 @@ def iter_help_files(root: str | Path) -> list[Path]:
     compiled_stems: set[Path] = set()
 
     for path in all_paths:
+        entry = lookup_help_database_entry(path)
+        if not archive_member_selected(path, entry):
+            print(f"[converter] SKIP CONFIG: {path}")
+            continue
         data = path.read_bytes()
         handler = detect_format_handler(path, data)
         if handler is None:

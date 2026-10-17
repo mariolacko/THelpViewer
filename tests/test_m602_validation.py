@@ -16,7 +16,7 @@ from thelpviewer.server.converter.readers.m602 import (
 from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
-ORIGINAL = Path("data/sources/Software 602/M602_200.HLP")
+ORIGINAL = Path("var/sources/Software 602/M602_200.HLP")
 
 
 def source():

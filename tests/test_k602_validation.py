@@ -16,7 +16,7 @@ from thelpviewer.server.converter.readers.software602_graphics import decode_gra
 from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
-ORIGINAL = Path("data/sources/Software 602/K602.HLP")
+ORIGINAL = Path("var/sources/Software 602/K602.HLP")
 
 
 def source():

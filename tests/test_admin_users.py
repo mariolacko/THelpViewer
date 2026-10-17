@@ -14,7 +14,9 @@ from thelpviewer.server.config import load_config
 def test_admin_users_and_disk_limits(tmp_path):
     manifest = tmp_path / "empty.json"
     manifest.write_text('{"sources": [], "files": [{"path":"BASE.TXT","text":["shared"]}]}')
-    config = replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
         midi_sources_path=manifest, dos_config_path=manifest, auth_origin="https://accounts.example.test",
         dev_auto_login=False, statistics_path=tmp_path / "var" / "statistics.sqlite3")
     app = create_app(config)

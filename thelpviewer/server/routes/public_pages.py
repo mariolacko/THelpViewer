@@ -56,12 +56,15 @@ def create_public_router(
         return None
 
     def index_unavailable(kind: str = "", path: str = "", *, pending: bool = False) -> Response | None:
-        if not search_index.status()["available"]:
+        status = search_index.status()
+        if not status["available"]:
             message = "The search index is not yet available"
         elif kind and search_index.file_error(kind, path):
             message = "The requested file could not be indexed"
         elif pending and search_index.file_pending(kind, path):
             message = "The requested file is being indexed"
+        elif pending and status["state"] == "paused":
+            message = "The search index is waiting for HELP processing"
         else:
             return None
         return Response(message, status_code=503, media_type="text/plain",

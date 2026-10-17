@@ -16,6 +16,7 @@ from thelpviewer.server.converter.exporter import _resolve_dotted_path
     "readers.software602_graphics", "readers.tvision_help", "readers.source_containers",
     "readers.winhelp_binary", "readers.winhelp_text", "readers.hlx_binary",
     "writers.bundle_extensions",
+    "planning", "metadata", "results", "validation", "sources", "selection", "ingest",
 ])
 def test_reader_helpers_import_fresh_and_load_registered_windows_help(tmp_path, module):
     source = tmp_path / "REFERENCE.HLP"
@@ -49,3 +50,18 @@ def test_all_manifest_converter_targets_resolve_after_moves():
             target = getattr(converter, field)
             if target:
                 assert callable(_resolve_dotted_path(target)), (converter.name, field, target)
+
+
+@pytest.mark.parametrize("module", ["core", "containers", "nested"])
+def test_common_archives_import_without_help_or_network_consumers(module):
+    script = """
+import importlib
+import sys
+importlib.import_module('thelpviewer.server.archives.' + sys.argv[1])
+assert not any(name.startswith(('thelpviewer.server.converter', 'thelpviewer.server.downloader',
+                                'thelpviewer.server.app')) for name in sys.modules)
+"""
+    result = subprocess.run([sys.executable, "-c", script, module],
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr

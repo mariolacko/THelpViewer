@@ -6,8 +6,8 @@ import pytest
 
 from thelpviewer.server.downloader import direct, winworld
 from thelpviewer.server.downloader.cache import download_filename
-from thelpviewer.server.downloader.extractor import ExtractorTools, find_sevenzip, extract_file
-from thelpviewer.server.downloader.http import observe_downloads
+from thelpviewer.server.archives.core import ExtractorTools, find_sevenzip, extract_file
+from thelpviewer.server.processing import observe_progress
 
 
 @pytest.mark.parametrize("name,expected", [
@@ -27,16 +27,13 @@ def test_pinned_winworld_archive_uses_page_title_and_does_not_need_family_scrapi
     html = f'<h1>Borland Turbo Assembler 2.0 (5.25-360k)</h1><a href="{mirror.removeprefix("https://winworldpc.com")}">Server 2</a>'
     monkeypatch.setattr(winworld, "fetch_polite", lambda url: html)
     calls = []
-    def download(url, dest):
-        calls.append((url, dest.name))
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(b"archive")
-        return dest
-    monkeypatch.setattr(winworld, "download_file", download)
-    monkeypatch.setattr(winworld, "collect_archive_members", lambda *args: [tmp_path / "TASM.TAH"])
+    def process(source, *, url):
+        calls.append((url, source.path.name))
+        assert source.members == ("TASM.TAH",)
+        return [tmp_path / "TASM.TAH"]
     failures = []
     result = winworld.process_version("2.0", "", "Borland Turbo Assembler", tmp_path / "downloads",
-        tmp_path / "sources", ExtractorTools(None, None, None), False, failures,
+        process, False, failures,
         records=[(selector, page)], archive_members=("TASM.TAH",))
     assert result == [tmp_path / "TASM.TAH"] and not failures
     assert calls == [(mirror, "Borland Turbo Assembler 2.0 _5.25-360k_.archive")]
@@ -50,9 +47,8 @@ def test_direct_archive_url_is_decoded_for_the_disk_name(tmp_path, monkeypatch):
         sources={"direct": query})
     monkeypatch.setattr(direct, "products_for_source", lambda *args: [product])
     calls = []
-    monkeypatch.setattr(direct, "download_file", lambda url, dest: calls.append(dest))
-    monkeypatch.setattr(direct, "collect_archive_members", lambda *args: [])
-    direct.run(["quickc"], tmp_path / "sources", tmp_path / "downloads", False, ExtractorTools(None, None, None))
+    direct.run(["quickc"], tmp_path / "downloads", False,
+        lambda source, **_options: calls.append(source.path) or [])
     assert calls[0].name == "direct_quickc_Microsoft QuickC 2.50.zip"
 
 
@@ -64,15 +60,17 @@ def test_extraction_reports_its_phase_instead_of_completed_download_bytes(tmp_pa
     with zipfile.ZipFile(archive, "w") as output:
         output.writestr("HELP.TXT", "Help")
     events = []
-    with observe_downloads(events.append):
+    with observe_progress(events.append):
         assert extract_file(archive, tmp_path / "expanded", ExtractorTools(None, None, tool))
-    assert events == [{"phase": "Extracting", "file": archive.name, "received": 0, "bytes_total": 0}]
+    assert [event["stage_percent"] for event in events] == [None, 100]
+    assert all(event["stage"] == "extract" and event["phase"] == "Extracting"
+               and event["file"] == archive.name and not event["received"] and not event["bytes_total"] for event in events)
 
 
 def test_source_queue_counts_new_and_cached_files_and_preserves_waiting_jobs(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from thelpviewer.server.downloader import service
-    from thelpviewer.server.downloader.http import report_progress
+    from thelpviewer.server.processing import report_progress
     monkeypatch.setattr(service, "supported_product_keys", lambda _: ["tp", "tc"])
     def run(**kwargs):
         report_progress("Reading source page")

@@ -22,7 +22,7 @@ DISPLAY_FIELDS = json.loads((ROOT / "tests/golden/winhelp/display_fields.json").
 @pytest.mark.parametrize(("collection", "fixture"), FIXTURES,
                          ids=[collection + "/" + fixture["file"] for collection, fixture in FIXTURES])
 def test_windows_help_payloads_and_keyword_destinations(collection, fixture):
-    source = ROOT / "data/sources" / collection / fixture["file"]
+    source = ROOT / "var/sources" / collection / fixture["file"]
     data = source.read_bytes()
     assert hashlib.sha256(data).hexdigest() == fixture["source_sha256"]
     assert f"{zlib.crc32(data):08X}" == fixture["crc32"]

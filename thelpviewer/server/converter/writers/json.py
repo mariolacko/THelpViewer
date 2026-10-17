@@ -13,6 +13,7 @@ from .. import __version__ as GENERATOR_VERSION
 from ..base import HelpDocument, PositionedKeyword, TopicNavItem, TopicRecord, context_nav_action, render_topic_uhf_content
 from ..uhf_markup import escape_uhf_text, format_uhf_link
 from ..text_screen import SCREEN_LINE
+from ...file_storage import atomic_file
 from .html import HelpHtmlRenderer
 
 
@@ -139,7 +140,9 @@ class HelpJsonRenderer:
         """Write the rendered UHF document to disk and return the path."""
         target_path = Path(path)
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        payload = (self.to_json(indent=indent) + "\n").encode("utf-8")
+        with atomic_file(target_path) as stream:
+            stream.write(payload)
         return target_path
 
     def write_json_gz(
@@ -152,7 +155,8 @@ class HelpJsonRenderer:
         target_path = Path(path)
         target_path.parent.mkdir(parents=True, exist_ok=True)
         payload = (self.to_json(indent=indent) + "\n").encode("utf-8")
-        target_path.write_bytes(gzip.compress(payload, compresslevel=compresslevel))
+        with atomic_file(target_path) as stream:
+            stream.write(gzip.compress(payload, compresslevel=compresslevel))
         return target_path
 
     def _build_metadata(self) -> dict[str, object]:

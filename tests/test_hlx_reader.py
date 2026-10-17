@@ -208,5 +208,5 @@ def test_invalid_tree_export_fails_without_overwriting_an_existing_bundle(tmp_pa
     published = destination / "damaged.json.gz"
     published.write_bytes(b"previous verified bundle")
     result = export_bundle(source, destination)
-    assert result.format_name == "ERROR"
+    assert bool(result.error)
     assert published.read_bytes() == b"previous verified bundle"

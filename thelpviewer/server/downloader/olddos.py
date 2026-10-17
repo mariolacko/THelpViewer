@@ -8,14 +8,19 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from .catalog import ProductSpec, SourceQuery, products_for_source, version_selected
-from .collector import detect_language
-from .extractor import ExtractorTools, collect_from_archive
-from .http import download_file, fetch_html, parse_anchors
+from ..processing import UnsafeContentError, report_progress
+from .catalog import ProductSpec, SourceQuery, products_for_source
+from ..converter.selection import version_selected
+from ..converter.sources import detect_language
+from ..converter.ingest import HelpInput
+from .http import fetch_html, parse_anchors
+from .cache import download_filename
 
 
 SOURCE_NAME = "olddos"
-OLDDOS_BASE = "https://old-dos.ru"
+# This archive serves HTTP; its HTTPS endpoint redirects back to HTTP.
+# Declare that source explicitly without allowing HTTPS downgrades elsewhere.
+OLDDOS_BASE = "http://old-dos.ru"
 
 
 def fetch_olddos(url: str) -> str:
@@ -131,10 +136,11 @@ def _entries_for_product(
 
 def run(
     product_keys: list[str],
-    sources_dir: Path,
     dl_dir: Path,
     dry_run: bool,
-    extractor: ExtractorTools,
+    process,
+    *,
+    complete=None,
 ) -> list[Path]:
     """Run the old-dos.ru provider for selected logical products."""
     print(f"\n{'=' * 60}")
@@ -151,6 +157,8 @@ def run(
     all_collected: list[Path] = []
 
     for product in selected_products:
+        if complete and complete():
+            break
         source_query = product.sources[SOURCE_NAME]
         matching = _entries_for_product(product, source_query, entries_by_category)
 
@@ -158,6 +166,8 @@ def run(
         print(f"  Search: {source_query.search_text}")
 
         for entry in matching:
+            if complete and complete():
+                break
             if not version_selected(product.key, entry["name"]):
                 continue
             print(f"    {entry['name']}")
@@ -172,23 +182,24 @@ def run(
 
             lang_code = detect_language(entry["name"])
             filename = urllib.parse.urlparse(download_url).path.split("/")[-1]
-            safe_filename = re.sub(r"[^\w\-. ]", "_", filename).strip() or "archive"
-            archive_path = dl_dir / f"od_{safe_filename}"
+            # dl.php?id=... identifies different archives. Its basename alone
+            # would reuse the first product's bytes for every subsequent link.
+            suffix = Path(filename).suffix.lower()
+            if suffix not in {".zip", ".7z", ".rar", ".arj", ".lzh", ".img", ".iso"}:
+                suffix = ".archive"
+            archive_path = dl_dir / ("od_" + download_filename(entry["name"] + " " + entry["id"]) + suffix)
 
             try:
-                print(f"      Downloading: {filename}")
-                download_file(download_url, archive_path)
+                print(f"      Archive: {archive_path.name}")
+                result = process(HelpInput(archive_path, product.label, language=lang_code,
+                    members=source_query.archive_members, allow_partial=True), url=download_url)
+            except UnsafeContentError:
+                raise
             except Exception as exc:
                 print(f"      [error] {exc}")
+                report_progress("Source warning", warning=str(exc))
                 continue
 
-            result = collect_from_archive(
-                archive_path,
-                product.label,
-                sources_dir,
-                extractor,
-                lang_code=lang_code,
-            )
             all_collected.extend(result)
             if not result:
                 print("      No help files found.")

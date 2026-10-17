@@ -14,7 +14,7 @@ from .writers.bundle import export_bundle, export_bundle_tree
 
 def _fail_on_export_errors(results: Iterable[object]) -> None:
     """Exit unsuccessfully when an exporter reported a caught exception."""
-    if any(getattr(result, "format_name", None) == "ERROR" for result in results):
+    if any(getattr(result, "error", "") for result in results):
         raise SystemExit(1)
 
 

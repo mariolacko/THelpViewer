@@ -9,9 +9,10 @@ from typing import Literal
 from ..accounts.common import AccountError
 from ..accounts.store import AccountStore
 from ..config import AppConfig
-from ..settings import MAX_BACKUP_COUNT, ServerSettings
+from ..settings import MAX_BACKUP_COUNT, MAX_DOWNLOAD_CACHE_DAYS, ServerSettings
 from ..dos.store import DosPromptStore
 from ..midi.library import MidiLibrary
+from ..downloader.maintenance import DownloadCache
 from .authorization import require_administrator
 
 
@@ -19,6 +20,7 @@ class SettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     dos_user_disk_mb: int = Field(strict=True, ge=1, le=256)
     backup_count: int = Field(strict=True, ge=1, le=MAX_BACKUP_COUNT)
+    download_cache_days: int = Field(strict=True, ge=1, le=MAX_DOWNLOAD_CACHE_DAYS)
 
 
 class MidiSourcesUpdate(BaseModel):
@@ -47,7 +49,7 @@ class UserCreate(BaseModel):
 
 
 def create_settings_router(config: AppConfig, accounts: AccountStore, settings: ServerSettings,
-                           dos: DosPromptStore, midi: MidiLibrary) -> APIRouter:
+                           dos: DosPromptStore, midi: MidiLibrary, cache: DownloadCache) -> APIRouter:
     router = APIRouter(prefix="/api/admin")
 
     def administrator(request: Request, *, write: bool = False) -> str:
@@ -60,7 +62,7 @@ def create_settings_router(config: AppConfig, accounts: AccountStore, settings: 
             "host": config.host, "port": config.port,
             "public_base_url": config.public_base_url, "auth_origin": config.auth_origin,
             "state_dir": str(config.state_dir), "helps_dir": str(config.helps_dir),
-            "data_dir": str(config.persistent_dir), "sources_dir": str(config.sources_dir or ""),
+            "data_dir": str(config.persistent_dir), "sources_dir": str(config.sources_dir or config.state_dir / "sources"),
             "downloads_dir": str(config.downloads_dir or config.state_dir / "downloads"),
             "docs_dir": str(config.docs_dir), "web_dir": str(config.web_dir),
             "assets_dir": str(config.assets_dir), "index_path": str(config.index_path),
@@ -77,6 +79,15 @@ def create_settings_router(config: AppConfig, accounts: AccountStore, settings: 
     def write_settings(data: SettingsUpdate, request: Request) -> JSONResponse:
         administrator(request, write=True)
         return JSONResponse(settings.update(data.model_dump()), headers={"Cache-Control": "no-store"})
+
+    @router.post("/cache/clear")
+    def clear_cache(request: Request) -> JSONResponse:
+        administrator(request, write=True)
+        try:
+            result = cache.clear()
+        except (OSError, ValueError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
     @router.get("/midi-sources")
     def midi_sources(request: Request) -> JSONResponse:

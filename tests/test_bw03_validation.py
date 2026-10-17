@@ -24,7 +24,7 @@ SOURCES = [
 
 
 def source(relative):
-    path = Path("data/sources") / relative
+    path = Path("var/sources") / relative
     if not path.is_file():
         pytest.skip("Original BW03 source is not installed")
     return path

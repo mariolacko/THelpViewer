@@ -5,9 +5,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ..processing import UnsafeContentError, report_progress
+from ..converter.ingest import HelpInput
 from .catalog import products_for_source
-from .extractor import ExtractorTools
-from .http import download_file, fetch_html
+from .http import fetch_html
 
 
 SOURCE_NAME = "davep_ng"
@@ -24,13 +25,13 @@ def get_guide_names(base_url: str) -> list[str]:
 
 def run(
     product_keys: list[str],
-    sources_dir: Path,
     dl_dir: Path,
     dry_run: bool,
-    extractor: ExtractorTools,
+    process,
+    *,
+    complete=None,
 ) -> list[Path]:
     """Download plain ``.ng`` files from the DaveP mirror."""
-    del extractor
 
     selected = products_for_source(SOURCE_NAME, product_keys)
     if not selected:
@@ -50,29 +51,24 @@ def run(
         print("  [error] No .ng files found on the mirror.")
         return []
 
-    target_dir = sources_dir / product.label
-    target_dir.mkdir(parents=True, exist_ok=True)
     collected: list[Path] = []
 
     for guide in guides:
+        if complete and complete():
+            break
         url = f"{base_url}{guide}/{guide}.ng"
         temp_dest = dl_dir / f"{guide}.ng"
-        final_dest = target_dir / f"{guide.upper()}.NG"
 
         print(f"  File: {guide}.ng")
         if dry_run:
             print(f"    [dry-run] {url}")
             continue
-        if final_dest.exists():
-            print(f"    [skipped] {final_dest.name} (exists)")
-            continue
         try:
-            download_file(url, temp_dest)
-            final_dest.parent.mkdir(parents=True, exist_ok=True)
-            temp_dest.replace(final_dest)
-            print(f"    ✓ {final_dest.relative_to(sources_dir)}")
-            collected.append(final_dest)
+            collected.extend(process(HelpInput(temp_dest, product.label, direct=True), url=url))
+        except UnsafeContentError:
+            raise
         except Exception as exc:
             print(f"    [error] {exc}")
+            report_progress("Source warning", warning=str(exc))
 
     return collected

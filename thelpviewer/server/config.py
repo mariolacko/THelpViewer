@@ -117,7 +117,7 @@ def load_config() -> AppConfig:
         )),
         dos_config_path=Path(os.environ.get("THELP_DOS_CONFIG_PATH", CONFIG_DIR / "dos-prompt.json")),
         dev_auto_login=os.environ.get("THELP_DEV_AUTO_LOGIN", "0") == "1",
-        sources_dir=Path(os.environ.get("THELP_SOURCES_DIR", content_root / "sources")),
+        sources_dir=Path(os.environ.get("THELP_SOURCES_DIR", state_dir / "sources")),
         downloads_dir=Path(os.environ.get("THELP_DOWNLOADS_DIR", state_dir / "downloads")),
         data_dir=data_dir,
         docs_source_dir=root / "docs" if docs_dir == content_root / "docs" else None,

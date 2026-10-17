@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import argparse
-import gzip
-import json
 import os
 from pathlib import Path
 
-
 from ...config import PROJECT_ROOT as REPO_ROOT
+from .validation import load_bundle
+from ..json_storage import write_json
+from ..processing import report_progress
 
 # ``metadata.source.format`` in the bundle records the source format id
 # ("thelp", "quickhelp", ...).  ``helps/catalog.json`` exposes the reader
@@ -40,19 +40,6 @@ def _topic_count(payload: dict[str, object]) -> int:
     return 0
 
 
-def _read_file_bytes(path: Path) -> bytes:
-    fd = os.open(path, os.O_RDONLY)
-    try:
-        chunks: list[bytes] = []
-        while True:
-            chunk = os.read(fd, 1024 * 1024)
-            if not chunk:
-                return b"".join(chunks)
-            chunks.append(chunk)
-    finally:
-        os.close(fd)
-
-
 def _metadata_string(metadata: dict[str, object], key: str) -> str:
     value = metadata.get(key)
     return value.strip() if isinstance(value, str) else ""
@@ -68,7 +55,7 @@ def _catalog_source_files(metadata: dict[str, object], source_file: str) -> list
 
 
 def _catalog_entry(path: Path, helps_dir: Path) -> dict[str, object]:
-    payload = json.loads(gzip.decompress(_read_file_bytes(path)).decode("utf-8"))
+    payload = load_bundle(path)
     metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
         metadata = {}
@@ -114,7 +101,10 @@ def rebuild_catalog(helps_dir: Path, output_path: Path) -> int:
         for path in helps_dir.rglob("*.json.gz")
         if path.is_file()
     )
-    catalog = [_catalog_entry(path, helps_dir) for path in bundles]
+    catalog = []
+    for index, path in enumerate(bundles):
+        report_progress("Validating", path.name, stage="validate", processed=index, total=len(bundles))
+        catalog.append(_catalog_entry(path, helps_dir))
     catalog.sort(
         key=lambda item: (
             str(item["group"]).casefold(),
@@ -124,10 +114,8 @@ def rebuild_catalog(helps_dir: Path, output_path: Path) -> int:
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(catalog, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    write_json(output_path, catalog)
+    report_progress("Catalog ready", stage="validate", processed=len(bundles), total=len(bundles))
     return len(catalog)
 
 

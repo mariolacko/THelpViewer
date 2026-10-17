@@ -4,6 +4,7 @@ from contextvars import ContextVar
 import io
 import threading
 import time
+import zipfile
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -20,6 +21,57 @@ def wait_downloads(downloads):
     while downloads.snapshot(private=True)["active"] and time.monotonic() < deadline:
         time.sleep(.01)
     assert not downloads.snapshot(private=True)["active"]
+
+
+def test_processing_is_bounded_without_holding_a_network_source_lane():
+    downloads = OnlineDownloader()
+    release = threading.Event()
+    entered = [threading.Event() for _ in range(4)]
+    def work(index):
+        entered[index].set()
+        assert release.wait(5)
+    futures = [downloads.enqueue_processing(lambda index=index: work(index)) for index in range(4)]
+    try:
+        assert all(event.wait(2) for event in entered[:3]) and not entered[3].is_set()
+        assert downloads.enqueue(lambda: "network", source="https://source.test/archive").result(timeout=2) == "network"
+        assert downloads.enqueue_processing(lambda: "playback", priority=-10).result(timeout=2) == "playback"
+        release.set()
+        for future in futures:
+            future.result(timeout=2)
+    finally:
+        release.set()
+        downloads.close()
+
+
+def test_closing_ordered_pipeline_drains_running_work_and_cancels_waiting_work():
+    downloads = OnlineDownloader()
+    release, closed = threading.Event(), threading.Event()
+    entered = threading.Barrier(4)
+    tasks = []
+    def work():
+        entered.wait(timeout=5)
+        assert release.wait(5)
+    # Keep processors busy so pipeline work remains cancellable in the queue.
+    blockers = [downloads.enqueue_processing(work) for _ in range(3)]
+    def submit(item):
+        task = downloads.enqueue_processing(lambda: item)
+        tasks.append(task)
+        return task
+    stream = downloads.pipeline(range(5), submit, ordered=True)
+    try:
+        entered.wait(timeout=2)
+        next(stream)
+        closer = threading.Thread(target=lambda: (stream.close(), closed.set()))
+        closer.start()
+        assert closed.wait(2), "Cancelled queued Futures must not block pipeline cleanup"
+        closer.join(timeout=2)
+        assert len(tasks) == 3 and all(task.cancelled() for task in tasks)
+    finally:
+        release.set()
+        stream.close()
+        for task in blockers:
+            task.result(timeout=2)
+        downloads.close()
 
 
 def test_failed_group_retry_only_reopens_failed_units_and_preserves_other_rows():
@@ -54,6 +106,84 @@ def test_failed_group_retry_only_reopens_failed_units_and_preserves_other_rows()
     with pytest.raises(ValueError):
         downloads.act("midi:album", "remove")  # Only failed rows can be removed.
     downloads.close()
+
+
+def test_blocked_packages_can_be_retried_or_removed_after_restart(tmp_path):
+    from thelpviewer.server.jobs import JobStore
+    path = tmp_path / "jobs.sqlite3"
+    downloads = OnlineDownloader(JobStore(path))
+    downloads.begin("dos", [{"id": key, "label": key} for key in ("failed", "retry", "remove")])
+    downloads.update("dos", "failed", state="error", error="offline")
+    downloads.finish("dos", error="offline")
+    downloads.close()
+    downloads = OnlineDownloader(JobStore(path))
+    def prepare(group, failed):
+        assert group == "retry" and failed == ["retry"]
+        return lambda: downloads.update("dos", "retry", state="done", percent=100, error="")
+    downloads.register_retry("dos", prepare)
+    try:
+        rows = {row["id"]: row for row in downloads.snapshot(private=True)["items"]}
+        assert rows["dos:retry"]["state"] == "blocked" and rows["dos:retry"]["retryable"]
+        downloads.act("dos:remove", "remove")
+        downloads.act("dos:retry", "retry")
+        wait_downloads(downloads)
+        rows = {row["id"]: row for row in downloads.snapshot(private=True)["items"]}
+        assert rows["dos:retry"]["state"] == "done" and "dos:remove" not in rows
+        assert rows["dos:failed"]["state"] == "error"
+    finally:
+        downloads.close()
+    assert "remove" not in JobStore(path).load_queue()["dos"]["items"]
+
+
+def test_dos_retry_continues_requested_packages_not_only_the_clicked_one(tmp_path, monkeypatch):
+    import json
+    from test_server_content import join_content_jobs
+
+    config = config_for(tmp_path)
+    manifest = json.loads(config.dos_config_path.read_bytes())
+    manifest["sources"].append({"id": "three", "title": "Three", "url": "https://packages.test/three.zip",
+                                "format": "zip", "target": "GAMES/THREE"})
+    config.dos_config_path.write_text(json.dumps(manifest))
+    app = create_app(config)
+    content, dos, downloads = app.state.content, app.state.dos_prompt, app.state.downloads
+    offline = False
+    calls = []
+    def fetch(source, *_args, **_kwargs):
+        calls.append(source["id"])
+        if offline and source["id"] == "two":
+            raise OSError("offline")
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as output:
+            output.writestr("GAME.EXE", source["id"].encode())
+        return payload.getvalue()
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    try:
+        dos.configure(["one"])
+        offline = True
+        content.start(dos_packages=["one", "two", "three"])
+        join_content_jobs(content)
+        assert content.status()["state"] == "error"
+        assert not (dos.disk_dir / "GAMES/TWO/GAME.EXE").exists()
+        # Exercise Retry even if the original failing row has been removed.
+        downloads.act("dos:two", "remove")
+        downloads.update("dos", "three", state="blocked", phase="Not started", error="")
+        downloads.finish("dos")
+        offline = False
+        calls.clear()
+        downloads.act("dos:three", "retry")
+        wait_downloads(downloads)
+        join_content_jobs(content)
+        assert content.status()["state"] == "ready", content.status()
+        for key in ("one", "two", "three"):
+            assert (dos.disk_dir / f"GAMES/{key.upper()}/GAME.EXE").read_bytes() == key.encode()
+        assert "one" not in calls and "two" in calls
+        assert all(row["state"] == "done" and not row["error"]
+                   for row in downloads.snapshot(private=True)["items"])
+        assert set(json.loads(content.path.read_bytes())["dos_packages"]) == {"one", "two", "three"}
+        retry = app.state.jobs.latest("content")
+        assert retry["state"] == "done" and set(retry["payload"]["values"]["dos_packages"]) == {"one", "two", "three"}
+    finally:
+        downloads.close()
 
 
 def test_retry_validation_and_repeated_failure_leave_a_failed_row():
@@ -216,16 +346,18 @@ def test_dos_retry_preserves_installed_packages_and_private_data(tmp_path, monke
     assert dos.files["GAMES/ONE/GAME.EXE"] == b"one" and dos.files["GAMES/TWO/GAME.EXE"] == b"two"
     assert private.read_bytes() == b"private saved game" and content.path.read_bytes() == selection
     rows = {row["id"]: row for row in app.state.downloads.snapshot(private=True)["items"]}
-    assert rows["dos:two"]["state"] == "done" and rows["dos:unrelated"]["state"] == "error"
-    app.state.downloads.act("dos:unrelated", "remove")
+    assert rows["dos:two"]["state"] == "done" and "dos:unrelated" not in rows
     assert private.is_file() and dos.disk_dir.is_dir()
     assert json.loads(dos.installed_path.read_text())["_complete"]
     app.state.downloads.close()
 
 
-def test_help_retry_rechecks_only_failed_provider_and_preserves_other_products(tmp_path, monkeypatch):
+def test_help_retry_rechecks_edition_sources_and_preserves_other_products(tmp_path, monkeypatch):
+    from dataclasses import replace
     import importlib
     import zipfile
+    import zlib
+    from thelpviewer.help_database import HelpDatabaseEntry, load_help_manifest
     from thelpviewer.server.converter.build import build_help_groups
     from thelpviewer.server.downloader.catalog import all_sources, supported_product_keys, SOURCE_RUNNERS
     config = config_for(tmp_path)
@@ -240,18 +372,25 @@ def test_help_retry_rechecks_only_failed_provider_and_preserves_other_products(t
     content._save_selection({"configured": True, "help_packages": ["helppc:"], "dos_packages": []})
     selection = content.path.read_bytes()
     provider = next(key for key in all_sources() if "helppc" in supported_product_keys(key))
+    payload = b"@C language\r\n:ReferenceTopic\r\n%Reference help\r\n"
+    # Register this small valid source fixture, not the CRCs of the full real corpus.
+    manifest = load_help_manifest()
+    entry = HelpDatabaseEntry(crc32=zlib.crc32(payload), filenames=("C.TXT",), title="HelpPC",
+        collection="HelpPC 2.10", product_key="helppc")
+    monkeypatch.setattr("thelpviewer.server.downloader.service.load_help_manifest", lambda:
+        replace(manifest, entries=tuple(item for item in manifest.entries if item.product_key != "helppc") + (entry,)))
     calls = []
-    def run(*, product_keys, sources_dir, **_kwargs):
+    def run(*, product_keys, **_kwargs):
         calls.extend(product_keys)
-        path = sources_dir / "HelpPC 2.10" / "C.TXT"
+        path = config.sources_dir / "HelpPC 2.10" / "C.TXT"
         path.parent.mkdir(parents=True)
-        path.write_bytes(b"@C language\r\n:ReferenceTopic\r\n%Reference help\r\n")
+        path.write_bytes(payload)
         return [path]
     monkeypatch.setattr(importlib.import_module(SOURCE_RUNNERS[provider]), "run", run)
     downloads = app.state.downloads
-    downloads.begin("help", [{"id": provider + ":helppc:", "group": "helppc:", "label": "HelpPC"},
+    downloads.begin("help", [{"id": "helppc:", "group": "helppc:", "label": "HelpPC"},
         {"id": "other", "group": "another", "label": "Another"}])
-    for key in (provider + ":helppc:", "other"):
+    for key in ("helppc:", "other"):
         downloads.update("help", key, state="error", error="offline")
     downloads.finish("help")
     downloads.act("help:helppc:", "retry")
@@ -396,6 +535,86 @@ def test_regular_downloads_have_a_global_bound_of_three_distinct_sources():
     finally:
         release.set()
         downloads.close()
+
+
+@pytest.mark.parametrize("ordered", [False, True])
+def test_preparation_looks_past_a_busy_site_without_reordering_installation(ordered):
+    downloads = OnlineDownloader()
+    entered, independent, release = (threading.Event() for _ in range(3))
+    urls = [f"https://archive.org/{index}.zip" for index in range(10)] + ["https://other.test/file.zip"]
+    results, errors = [], []
+
+    def operation(url):
+        def transfer():
+            if source_key(url) == "archive.org":
+                entered.set()
+                assert release.wait(5)
+            else:
+                independent.set()
+            return url
+        return downloads.call(transfer, source=url)
+
+    def consume():
+        try:
+            for item, future in downloads.prepare(urls, operation, ordered=ordered, source=lambda url: url):
+                results.append((item, future.result(timeout=5)))
+        except BaseException as error:
+            errors.append(error)
+
+    worker = threading.Thread(target=consume)
+    worker.start()
+    try:
+        assert entered.wait(2)
+        assert independent.wait(2), "A later source must start while the first site is still blocked"
+        assert downloads.process(lambda: "local validation") == "local validation"
+    finally:
+        release.set()
+        worker.join(timeout=5)
+        downloads.close()
+    assert not worker.is_alive() and not errors
+    assert {item for item, _value in results} == set(urls)
+    assert all(item == value for item, value in results)
+    if ordered:
+        assert [item for item, _value in results] == urls
+
+
+def test_waiting_help_preparations_do_not_occupy_dos_or_http_workers():
+    downloads = OnlineDownloader()
+    entered, independent, release = (threading.Event() for _ in range(3))
+    errors = []
+
+    def consume(urls):
+        def operation(url):
+            def transfer():
+                if source_key(url) == "archive.org":
+                    entered.set()
+                    assert release.wait(5)
+                else:
+                    independent.set()
+                return b"archive"
+            return downloads.call(transfer, source=url)
+        try:
+            for _item, future in downloads.prepare(urls, operation, source=lambda url: url):
+                assert future.result(timeout=5) == b"archive"
+        except BaseException as error:
+            errors.append(error)
+
+    help_worker = threading.Thread(target=consume, args=([f"https://archive.org/{index}" for index in range(3)],))
+    dos_worker = threading.Thread(target=consume, args=(["https://packages.test/game.zip"],))
+    help_worker.start()
+    try:
+        assert entered.wait(2)
+        dos_worker.start()
+        assert independent.wait(2), "Three waiting HELP drivers must not block an unrelated DOS source"
+        dos_worker.join(timeout=2)
+        assert not dos_worker.is_alive()
+    finally:
+        release.set()
+        help_worker.join(timeout=5)
+        if dos_worker.ident is not None:
+            dos_worker.join(timeout=5)
+        downloads.close()
+    assert not help_worker.is_alive() and not errors
 
 
 def test_urgent_playback_promotes_the_same_future_while_a_package_is_running():
@@ -563,28 +782,32 @@ def test_retry_counter_counts_only_retried_work_not_successful_history():
         downloads.close()
 
 
-def test_url_task_can_cache_and_process_on_the_same_worker(tmp_path, monkeypatch):
+def test_cached_package_processing_leaves_network_and_preparation_workers_free(tmp_path, monkeypatch):
+    from thelpviewer.server.downloader.packages import download_package, package_cache_path
     downloader = OnlineDownloader()
     calls, workers = [], []
-    def fetch(source, limit, progress, **kwargs):
+    def fetch(source, limit, progress):
         calls.append(source["url"])
-        workers.append(threading.current_thread().ident)
+        workers.append(threading.current_thread().name)
         progress(7, 7)
         return b"archive"
-    monkeypatch.setattr("thelpviewer.server.downloader.transport.fetch_source", fetch)
-    def process(data):
-        workers.append(threading.current_thread().ident)
-        return downloader.call(lambda: data.upper())
-    cache = tmp_path / "cache.zip"
-    for _ in range(2):
-        future = downloader.submit({"url": "https://packages.test/file.zip"}, 1000,
-            kind="dos", key="tools", label="Tools", destination=cache, process=process)
-        assert future.result(timeout=5) == b"ARCHIVE"
-    assert calls == ["https://packages.test/file.zip"] and cache.read_bytes() == b"archive"
-    status = downloader.snapshot(private=True)
-    assert not status["active"] and status["items"][0]["percent"] == 100
-    assert len(workers) == 3 and workers[0] == workers[1]
-    downloader.close()
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    def process(data, _recipe):
+        workers.append(threading.current_thread().name)
+        return data.upper()
+    source = {"id": "tools", "url": "https://packages.test/file.zip"}
+    try:
+        for _ in range(2):
+            with downloader.activate():
+                for _source, future in downloader.prepare([source], lambda source: download_package(source, tmp_path, 1000,
+                        on_progress=lambda *_: None, process=process)):
+                    result, key = future.result(timeout=5)
+            assert result == b"ARCHIVE"
+        assert calls == [source["url"]] and (tmp_path / package_cache_path(source)).read_bytes() == b"archive"
+        assert len(workers) == 3 and workers[0].startswith("thelp-prepare")
+        assert all(name.startswith("thelp-processor") for name in workers[1:])
+    finally:
+        downloader.close()
 
 
 def test_shared_progress_groups_albums_and_hides_private_packages():
@@ -604,6 +827,101 @@ def test_shared_progress_groups_albums_and_hides_private_packages():
     assert not downloads.snapshot()["active"] and downloads.snapshot()["errors"] == 1
     assert downloads.snapshot()["percent"] == 50  # Failed work is not reported as 100% complete.
     downloads.close()
+
+
+def test_batch_percentage_weights_packages_not_their_number_of_provider_attempts():
+    downloads = OnlineDownloader()
+    try:
+        downloads.begin("help", [{"id": provider, "group": "pascal", "label": "Pascal"}
+                                 for provider in ("winworld", "archiveorg", "olddos")])
+        downloads.begin("dos", [{"id": "game", "label": "Game"}])
+        for provider in ("winworld", "archiveorg", "olddos"):
+            downloads.update("help", provider, state="done", percent=100)
+        downloads.finish("help")
+        assert downloads.snapshot(private=True)["percent"] == 50  # One of two packages, not three of four sources.
+        downloads.update("dos", "game", state="running", received=50, bytes_total=100)
+        assert downloads.snapshot(private=True)["percent"] == 75
+        downloads.update("dos", "game", state="done", percent=100)
+        downloads.finish("dos")
+        assert downloads.snapshot(private=True)["percent"] == 0
+    finally:
+        downloads.close()
+
+
+def test_help_discovery_responses_are_not_the_package_download_percentage():
+    from thelpviewer.server.downloader.service import plan_help_downloads
+    downloads = OnlineDownloader()
+    try:
+        plan = plan_help_downloads(["tp"], source_keys=["winworld"], package_ids=["tp:5.5"])
+        assert plan
+        downloads.begin("help", plan)
+        key = plan[0]["id"]
+        # Both a small discovery page and a later archive may reach their own
+        # Content-Length. Neither completes this multi-request source check.
+        for phase, received, total in (("Downloading", 1024, 1024),
+                                       ("Rate limited (HTTP 429), retry in 30s", 0, 0),
+                                       ("Downloading", 10, 100), ("Downloading", 100, 100)):
+            downloads.update("help", key, state="running", phase=phase, received=received, bytes_total=total)
+            status = downloads.snapshot(private=True)
+            assert status["active"] and status["percent"] == status["items"][0]["percent"] == 0
+        downloads.update("help", key, state="done", percent=100)
+        assert downloads.snapshot(private=True)["percent"] == 99  # Owner still publishing.
+        downloads.finish("help")
+        assert downloads.snapshot(private=True)["percent"] == 0
+        assert not downloads.snapshot()["items"]  # No private progress exposed.
+    finally:
+        downloads.close()
+
+
+def test_explicit_installation_progress_is_not_overwritten_by_response_bytes():
+    downloads = OnlineDownloader()
+    try:
+        downloads.begin("dos", [{"id": "game", "label": "Game", "byte_progress": False}])
+        downloads.update("dos", "game", state="running", percent=45)
+        downloads.update("dos", "game", received=100, bytes_total=100)
+        assert downloads.snapshot(private=True)["percent"] == 45
+        downloads.update("dos", "game", percent=80)
+        assert downloads.snapshot(private=True)["percent"] == 80
+        downloads.begin("midi", [{"id": "track", "label": "Track"}])
+        downloads.update("midi", "track", state="running", received=50, bytes_total=100)
+        assert downloads.snapshot()["percent"] == 50  # Single-file progress remains byte-based.
+        downloads.update("midi", "track", percent=60, received=50, bytes_total=100)
+        assert downloads.snapshot()["percent"] == 60  # Explicit owner progress wins.
+    finally:
+        downloads.close()
+
+
+def test_dos_apply_does_not_requeue_installed_packages_as_new_completed_work(tmp_path, monkeypatch):
+    app = create_app(config_for(tmp_path))
+    def fetch(source, _limit, *_args, **_kwargs):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as output:
+            output.writestr("GAME.EXE", source["id"].encode())
+        return payload.getvalue()
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    dos = app.state.dos_prompt
+    try:
+        dos.configure(["one"])
+        dos.configure(["one", "two"])
+        snapshot = dos.downloads.snapshot(private=True)
+        assert {row["id"] for row in snapshot["items"]} == {"dos:two"}
+        assert snapshot["percent"] == 0 and not snapshot["active"]
+        assert dos.files["GAMES/ONE/GAME.EXE"] == b"one" and dos.files["GAMES/TWO/GAME.EXE"] == b"two"
+    finally:
+        dos.downloads.close()
+
+
+def test_rejected_source_cannot_make_a_failed_group_or_batch_show_100_percent():
+    downloads = OnlineDownloader()
+    try:
+        downloads.begin("help", [{"id": "source", "group": "pascal", "label": "Pascal"}])
+        downloads.update("help", "source", state="error", percent=100, error="Invalid archive")
+        downloads.finish("help")
+        snapshot = downloads.snapshot(private=True)
+        assert not snapshot["active"] and snapshot["errors"] == 1
+        assert snapshot["percent"] == snapshot["items"][0]["percent"] == 99
+    finally:
+        downloads.close()
 
 
 def test_shared_transfer_is_atomic_and_preserves_previous_cache_on_failure(tmp_path):
@@ -663,11 +981,29 @@ def test_referer_providers_use_shared_queued_atomic_transfer(tmp_path, monkeypat
         return response
     monkeypatch.setattr(http, "get_opener", lambda: SimpleNamespace(open=open_response))
     monkeypatch.setattr(http.time, "sleep", lambda _: None)
-    download = module._download_with_referer if provider == "cheater_cz" else module._download_archive
-    destination = tmp_path / "source.zip"
-    with http.observe_downloads(progress.append):
-        assert download("https://provider.test/source.zip", destination, referer="https://provider.test/page") == destination
-    assert requests[0].get_header("Referer") == "https://provider.test/page"
-    assert destination.read_bytes() == b"archive"
+    from thelpviewer.server.downloader import service
+    from thelpviewer.server.processing import observe_progress
+    from functools import partial
+    monkeypatch.setattr(service, "ingest_help", lambda source, *_: (
+        [source.path] if source.path.read_bytes() == b"archive" else []))
+    if provider == "cheater_cz":
+        monkeypatch.setattr(module, "get_versions", lambda _: [("Scorpions Cheater 21", "key")])
+        monkeypatch.setattr(module, "get_archive_name", lambda *_: "source.zip")
+        monkeypatch.setattr(module, "get_download_url", lambda *_: "https://provider.test/source.zip")
+        products = ["scorpion"]
+    else:
+        monkeypatch.setattr(module, "fetch_html", lambda *_: "")
+        monkeypatch.setattr(module, "find_download_url", lambda *_: "https://provider.test/source.zip")
+        products = ["game-cheater"]
+    plans = []
+    def process(source, **options):
+        plans.append((source, options))
+        return service.process_help_input(source, sources_dir=tmp_path / "sources",
+            extractor=None, **options)
+    with observe_progress(progress.append):
+        module.run(products, tmp_path / "downloads", False, process)
+    assert len(plans) == 1
+    assert requests[0].get_header("Referer") == plans[0][1]["headers"]["Referer"]
+    assert plans[0][0].path.read_bytes() == b"archive"
     assert len(threads) == 1 and threads[0].startswith("thelp-online-downloader-")
     assert progress[-1]["phase"] == "Downloaded" and progress[-1]["downloaded_size"] == 7

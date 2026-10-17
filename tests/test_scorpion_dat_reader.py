@@ -15,23 +15,23 @@ from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
 def _sample_cheaty23_path() -> Path:
-    return Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 23/CHEATY.DAT")
+    return Path("var/sources/Scorpions Cheater DOS/Scorpions Cheater 23/CHEATY.DAT")
 
 
 def _sample_navody23_path() -> Path:
-    return Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 23/NAVODY.DAT")
+    return Path("var/sources/Scorpions Cheater DOS/Scorpions Cheater 23/NAVODY.DAT")
 
 
 def _sample_easter23_path() -> Path:
-    return Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 23/EASTER.DAT")
+    return Path("var/sources/Scorpions Cheater DOS/Scorpions Cheater 23/EASTER.DAT")
 
 
 def _sample_program23_path() -> Path:
-    return Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 23/PROGRAM.DAT")
+    return Path("var/sources/Scorpions Cheater DOS/Scorpions Cheater 23/PROGRAM.DAT")
 
 
 def _sample_texty21_path() -> Path:
-    return Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 21/TEXTY.DAT")
+    return Path("var/sources/Scorpions Cheater DOS/Scorpions Cheater 21/TEXTY.DAT")
 
 
 def test_scorpion_dat_reader_detects_modern_old_crypt_allegro_dat():
@@ -162,7 +162,7 @@ def test_scorpion_dat_reader_distinguishes_e5_background_from_literal_n():
 
 
 def test_scorpion_v15_dat_reader_restores_literal_n_from_e5():
-    path = Path("data/sources/Scorpions Cheater DOS/Scorpions Cheater 15/CHEATY.DAT")
+    path = Path("var/sources/Scorpions Cheater DOS/Scorpions Cheater 15/CHEATY.DAT")
     document = ScorpionDatReader(source_name=path.name, source_path=path).read_bytes(path.read_bytes())
     topgun = next(topic for topic in document.topics if "9011" in topic.alias_strings)
 

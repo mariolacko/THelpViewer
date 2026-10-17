@@ -29,7 +29,7 @@ DATA_DIR="${THELP_DATA_DIR:-${SCRIPT_DIR}/data}"
 if [ -z "${THELP_DATA_DIR:-}" ] && [ "${STATE_DIR}" != "${SCRIPT_DIR}/var" ]; then
     DATA_DIR="${STATE_DIR}"
 fi
-SOURCES_DIR="${THELP_SOURCES_DIR:-${DATA_DIR}/sources}"
+SOURCES_DIR="${THELP_SOURCES_DIR:-${STATE_DIR}/sources}"
 DOWNLOADS_DIR="${THELP_DOWNLOADS_DIR:-${THELP_STATE_DIR:-${SCRIPT_DIR}/var}/downloads}"
 HELPS_DIR="${THELP_HELPS_DIR:-${DATA_DIR}/helps}"
 WEB_DIR="${THELP_WEB_DIR:-${SCRIPT_DIR}/www}"
@@ -104,7 +104,7 @@ with_dos_reference=false
 catalog_build_group_values() {
     local mode="${1:-all}"
     "${PYTHON_BIN}" - "$mode" <<'PY'
-from thelpviewer.server.downloader.catalog import all_build_groups
+from thelpviewer.server.converter.planning import all_build_groups
 import sys
 
 default_only = len(sys.argv) > 1 and sys.argv[1] == "default"
@@ -118,7 +118,7 @@ mapfile -t ALL_BUILD_GROUPS < <(catalog_build_group_values all)
 
 normalize_build_group() {
     "${PYTHON_BIN}" - "$1" <<'PY'
-from thelpviewer.server.downloader.catalog import normalize_build_group
+from thelpviewer.server.converter.planning import normalize_build_group
 import sys
 
 resolved = normalize_build_group(sys.argv[1])
@@ -171,7 +171,7 @@ selected_build_source_roots() {
     "${PYTHON_BIN}" - "${SOURCES_DIR}" "$@" <<'PY'
 from pathlib import Path
 import sys
-from thelpviewer.server.downloader.catalog import build_group_for_source_root
+from thelpviewer.server.converter.planning import build_group_for_source_root
 
 source_dir = Path(sys.argv[1])
 selected = set(sys.argv[2:])
@@ -192,7 +192,7 @@ remove_group_outputs() {
     done < <("${PYTHON_BIN}" - "$target_dir" "$@" <<'PY'
 from pathlib import Path
 import sys
-from thelpviewer.server.downloader.catalog import build_group_for_help_root
+from thelpviewer.server.converter.planning import build_group_for_help_root
 
 help_dir = Path(sys.argv[1])
 selected = set(sys.argv[2:])

@@ -2,60 +2,52 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+import json
+import re
+from urllib.parse import parse_qs, urljoin, urlparse
 
-from .catalog import product_spec, products_for_source
-from .collector import copy_help_files
-from .extractor import ExtractorTools, extract_file
-from .http import USER_AGENT, fetch_html, download_file, parse_anchors
+from ..processing import UnsafeContentError, report_progress
+from ..converter.ingest import HelpInput
+from .catalog import products_for_source
+from .errors import SourceUnavailable
+from .http import USER_AGENT, fetch_html, parse_anchors
 
 
 SOURCE_NAME = "slunecnice"
 DOWNLOAD_PAGE_SUFFIX = "stahnout/"
-DATABASE_FILENAMES = {
-    name.upper()
-    for name in product_spec("game-cheater").conversion.required_filenames
-}
 
 
 def find_download_url(html: str, page_url: str) -> str:
     """Find the current signed Slunečnice download URL in a download page."""
-    for anchor in parse_anchors(html):
-        href = urljoin(page_url, anchor.get("href", ""))
+    candidates = [anchor.get("href", "") for anchor in parse_anchors(html)]
+    # The partner-offer page now keeps the program's URL in a JS string rather
+    # than an anchor. Decode that literal only; never execute page scripts or
+    # follow the unrelated partnerUrl (antivirus advertisement).
+    for literal in re.findall(r'\b(?:var|let|const)\s+softwareUrl\s*=\s*("(?:\\.|[^"\\])*")\s*;', html):
+        try:
+            candidates.append(json.loads(literal))
+        except json.JSONDecodeError:
+            continue
+    page = urlparse(page_url)
+    for candidate in candidates:
+        href = urljoin(page_url, candidate)
         parsed = urlparse(href)
-        if parsed.path.startswith("/sw/game-cheater/stahnout/") and "md5=" in parsed.query:
+        query = parse_qs(parsed.query)
+        if (parsed.scheme == "https" and parsed.netloc == page.netloc
+                and parsed.path.startswith(page.path.rstrip("/") + "/")
+                and query.get("md5") and query.get("expires")):
             return href
-    raise RuntimeError("Game-Cheater download link was not found on Slunečnice.cz")
-
-
-def _download_archive(url: str, dest: Path, *, referer: str) -> Path:
-    return download_file(url, dest, headers={"User-Agent": USER_AGENT,
-        "Accept": "application/zip,application/octet-stream,*/*;q=0.9", "Referer": referer})
-
-
-def _collect_database_files(
-    work_dir: Path,
-    filenames: set[str] | None = None,
-) -> list[Path]:
-    selected_names = DATABASE_FILENAMES if filenames is None else filenames
-    by_name: dict[str, Path] = {}
-    for path in sorted(work_dir.rglob("*")):
-        name = path.name.upper()
-        if path.is_file() and name in selected_names:
-            current = by_name.get(name)
-            if current is None or "GCDATA" in {part.upper() for part in path.parts}:
-                by_name[name] = path
-    return [by_name[name] for name in sorted(by_name)]
+    raise SourceUnavailable("Game-Cheater download link was not found on Slunečnice.cz")
 
 
 def run(
     product_keys: list[str],
-    sources_dir: Path,
     dl_dir: Path,
     dry_run: bool,
-    extractor: ExtractorTools,
+    process,
+    *,
+    complete=None,
 ) -> list[Path]:
     """Download and extract the Game-Cheater database from Slunečnice.cz."""
     selected = products_for_source(SOURCE_NAME, product_keys)
@@ -64,6 +56,8 @@ def run(
 
     collected: list[Path] = []
     for product in selected:
+        if complete and complete():
+            break
         query = product.sources[SOURCE_NAME]
         database_filenames = {name.upper() for name in product.conversion.required_filenames}
         if not database_filenames:
@@ -82,34 +76,17 @@ def run(
         archive_path = dl_dir / "instgc.zip"
         if dry_run:
             print(f"    [dry-run] url: {download_url}")
-            print(f"    [dry-run] target: {sources_dir / 'Game-Cheater' / product.label}")
+            print(f"    [dry-run] target: Game-Cheater/{product.label}")
             continue
 
         try:
-            _download_archive(download_url, archive_path, referer=download_page)
-            with tempfile.TemporaryDirectory(prefix="dlgamecheater_") as tmp:
-                work_dir = Path(tmp)
-                if not extract_file(archive_path, work_dir, extractor):
-                    print("    [error] Could not extract instgc.zip")
-                    continue
-                installers = [
-                    path for path in work_dir.rglob("*")
-                    if path.is_file() and path.name.upper() == "INSTGC.EXE"
-                ]
-                if not installers:
-                    print("    [error] INSTGC.EXE was not found in instgc.zip")
-                    continue
-                installer_dir = work_dir / "installer"
-                if not extract_file(installers[0], installer_dir, extractor):
-                    print("    [error] Could not extract INSTGC.EXE")
-                    continue
-                files = _collect_database_files(installer_dir, database_filenames)
-                missing = sorted(database_filenames - {path.name.upper() for path in files})
-                if missing:
-                    print(f"    [error] Missing database files: {', '.join(missing)}")
-                    continue
-                target_dir = sources_dir / "Game-Cheater" / product.label
-                collected.extend(copy_help_files(files, target_dir, sources_dir))
+            collected.extend(process(HelpInput(archive_path, "Game-Cheater/" + product.label,
+                members=tuple(sorted(database_filenames)), inner_member="INSTGC.EXE"), url=download_url,
+                headers={"User-Agent": USER_AGENT, "Accept": "application/zip,application/octet-stream,*/*;q=0.9",
+                    "Referer": download_page}))
+        except UnsafeContentError:
+            raise
         except Exception as exc:
             print(f"    [error] {exc}")
+            report_progress("Source warning", warning=str(exc))
     return collected

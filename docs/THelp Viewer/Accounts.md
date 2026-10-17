@@ -108,8 +108,8 @@ writer is allowed to recreate obsolete files after the reset. Fresh catalog
 tracks can be prioritized/played as they download. A second simultaneous MIDI
 rebuild returns 409; failed downloads are reported in progress/catalog status.
 
-Old active directories move to unique `var/backups/dos-base-<id>/` and
-`var/backups/midi-<id>/` backups. Successful jobs retain the configured newest
+Old active directories move to unique `var/backups/dos/dos-base-<id>/` and
+`var/backups/midi/midi-<id>/` backups. Successful jobs retain the configured newest
 copies (default two per type); DOS base/package changes share one limit.
 Failed/partial jobs keep recovery copies. Administrators change `backup_count`
 in Server Configuration; see [backup retention](Server%20Content.md#backup-retention).

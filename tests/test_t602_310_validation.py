@@ -16,7 +16,7 @@ from thelpviewer.server.converter.readers.tvision_help import paragraph_lines
 from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
-ROOT = Path("data/sources/Software 602")
+ROOT = Path("var/sources/Software 602")
 
 
 @lru_cache(maxsize=2)

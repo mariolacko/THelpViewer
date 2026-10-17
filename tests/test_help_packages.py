@@ -1,6 +1,8 @@
+from thelpviewer.server.converter import selection
 """Edition selection controls real downloads, publication and removal."""
 
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,7 +12,7 @@ from thelpviewer.help_packages import help_packages
 from thelpviewer.server.app import create_app
 from thelpviewer.server.converter.build import build_help_groups
 from thelpviewer.server.downloader import catalog, winworld
-from thelpviewer.server.downloader.extractor import ExtractorTools
+from thelpviewer.server.archives.core import ExtractorTools
 from thelpviewer.server.downloader.service import DownloadResult, download_products
 
 
@@ -33,6 +35,25 @@ def test_help_descriptions_identify_the_actual_edition_and_fall_back_to_the_prod
     assert rows["tp:99"]["description"]
 
 
+def test_shareware_releases_have_one_installation_id_matching_their_source_collections():
+    catalog = [{"product": "scorpion", "version": f"{version} _shareware_"} for version in (6, 7, 8)]
+    ids = {item["id"] for item in help_packages(catalog)}
+    for version in (6, 7, 8):
+        assert f"scorpion:{version} _shareware_" in ids
+        assert f"scorpion:{version}" not in ids
+
+
+def test_removed_manifest_help_ids_do_not_block_an_unrelated_dos_selection(tmp_path):
+    app = create_app(config_for(tmp_path))
+    content = app.state.content
+    content._save_selection({"configured": True, "help_packages": ["scorpion:6", "scorpion:6 _shareware_"],
+                             "dos_packages": []})
+    try:
+        assert content._saved_selection()["help_packages"] == ["scorpion:6 _shareware_"]
+    finally:
+        app.state.downloads.close()
+
+
 def test_empty_edition_selection_needs_no_extractor_or_download_directory(tmp_path):
     assert download_products(["tp"], tmp_path / "sources", tmp_path / "downloads",
         package_ids=[], extractor=ExtractorTools(None, None, None)).files == []
@@ -40,6 +61,13 @@ def test_empty_edition_selection_needs_no_extractor_or_download_directory(tmp_pa
 
 
 def test_install_and_remove_one_version_keeps_its_sibling_and_originals(tmp_path, monkeypatch):
+    manifest = json.loads(Path("thelpviewer/config/help-database.json").read_text())
+    product = next(product for product in manifest["products"] if product["key"] == "tp")
+    for query in product["sources"].values():
+        query["archive_members"] = ["REFERENCE.TXT"]
+    database = tmp_path / "help-database.json"
+    database.write_text(json.dumps(manifest))
+    monkeypatch.setenv("THELP_HELP_DATABASE_PATH", str(database))
     config = config_for(tmp_path)
     for version in ("5.0", "5.5"):
         source = config.sources_dir / ("Borland Turbo Pascal " + version) / "REFERENCE.TXT"
@@ -48,6 +76,8 @@ def test_install_and_remove_one_version_keeps_its_sibling_and_originals(tmp_path
     calls = []
     def download(products, *_args, **kwargs):
         calls.append((products, kwargs["package_ids"]))
+        for edition in kwargs["package_ids"]:
+            kwargs["on_ready"](edition)
         return DownloadResult()
     monkeypatch.setattr("thelpviewer.server.content.download_products", download)
     app = create_app(config)
@@ -98,32 +128,32 @@ def test_downloader_filters_release_pages_and_restores_context(tmp_path, monkeyp
         source_keys=["winworld"], package_ids=["tp:5.5"])
     assert not result.warnings and requested == ["5.5"]
     # The selection is local to this call, not a process-global provider filter.
-    assert catalog.version_selected("tp", "7.0")
-    with catalog.select_help_packages(["tp:5.5"]):
+    assert selection.version_selected("tp", "7.0")
+    with selection.select_help_packages(["tp:5.5"]):
         jobs = catalog.products_for_source("archiveorg", ["tp"])
         assert not any(job.default_version == "4.0" for job in jobs)
-        assert not catalog.version_selected("tp", "7.0")
-    with catalog.select_help_packages(["tp:7"]):
-        assert catalog.version_selected("tp", "7.0")
-        assert not catalog.version_selected("tp", "7.1")
+        assert not selection.version_selected("tp", "7.0")
+    with selection.select_help_packages(["tp:7"]):
+        assert selection.version_selected("tp", "7.0")
+        assert not selection.version_selected("tp", "7.1")
 
 
 def test_build_uses_verified_crc_version_not_the_archive_folder(tmp_path):
     import shutil
-    source = tmp_path / "sources/Borland Turbo Assembler/TASM.TAH"
+    source = tmp_path / "sources/Borland C++ 999/TASM.TAH"
     source.parent.mkdir(parents=True)
-    shutil.copyfile("data/sources/Borland Turbo Assembler/TASM.TAH", source)
+    shutil.copyfile("var/sources/Borland Turbo Assembler/TASM.TAH", source)
     build_help_groups(["borland"], tmp_path / "sources", tmp_path / "helps",
-        package_ids=["tasm:"], keep_packages=["tasm:"])
+        package_ids=["tasm:3.1"], keep_packages=["tasm:3.1"])
     entries = json.loads((tmp_path / "helps/catalog.json").read_text())
-    assert len(entries) == 1 and entries[0]["product"] == "tasm" and not entries[0].get("version")
+    assert len(entries) == 1 and entries[0]["product"] == "tasm" and entries[0]["version"] == "3.1"
 
 
 def test_non_crc_database_uses_its_canonical_publication_version(tmp_path):
     import shutil
     source = tmp_path / "sources/Scorpions Cheater DOS/Scorpions Cheater 1/DATA.DAT"
     source.parent.mkdir(parents=True)
-    shutil.copyfile("data/sources/Scorpions Cheater DOS/Scorpions Cheater 1/DATA.DAT", source)
+    shutil.copyfile("var/sources/Scorpions Cheater DOS/Scorpions Cheater 1/DATA.DAT", source)
     build_help_groups(["scorpion"], tmp_path / "sources", tmp_path / "helps",
         package_ids=["scorpion:1"], keep_packages=["scorpion:1"])
     entries = json.loads((tmp_path / "helps/catalog.json").read_text())
@@ -140,6 +170,6 @@ def test_verified_archive_edition_does_not_require_version_in_remote_title(tmp_p
     monkeypatch.setattr(archiveorg.time, "sleep", lambda *_: None)
     calls = []
     monkeypatch.setattr(archiveorg, "process_item", lambda **kwargs: calls.append(kwargs["item"]) or [])
-    with catalog.select_help_packages(["tp:4.0"]):
-        archiveorg.run(["tp"], tmp_path / "sources", tmp_path / "downloads", True, ExtractorTools(None, None, None))
+    with selection.select_help_packages(["tp:4.0"]):
+        archiveorg.run(["tp"], tmp_path / "downloads", True, lambda *_a, **_k: [])
     assert calls

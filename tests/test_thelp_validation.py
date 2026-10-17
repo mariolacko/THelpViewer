@@ -10,6 +10,7 @@ import pytest
 
 from thelpviewer.server.converter.build import build_help_groups
 from thelpviewer.server.converter.readers.thelp import THELP_SIG, ThelpBinaryParser, ThelpHelpReader, is_thelp_binary
+from thelp_corpus import original_thelp_corpus
 from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 
 
@@ -178,7 +179,7 @@ def test_header_extensions_aliases_and_index_tag_order_stay_intact():
 
 
 def test_real_turbo_c_20_dimensions_contents_and_genuine_alias_are_read_from_the_long_header():
-    document = ThelpHelpReader().read_path(Path("data/sources/Borland Turbo C 2.0/TCHELP.TCH"))
+    document = ThelpHelpReader().read_path(Path("var/sources/Borland Turbo C 2.0/TCHELP.TCH"))
     meta = document.metadata
     assert (meta["height"], meta["width"], meta["left_margin"], meta["help_contents_topic_id"]) == (15, 50, 2, 100)
     assert len(document.topics) == 1051
@@ -225,7 +226,7 @@ def test_failed_thelp_server_build_keeps_publication_and_retry_works(tmp_path, d
 def test_correct_stored_geometry_and_contents_reach_the_bundle(tmp_path):
     source = tmp_path / "sources/Borland Turbo C/TCHELP.TCH"
     source.parent.mkdir(parents=True)
-    original = Path("data/sources/Borland Turbo C 2.0/TCHELP.TCH").read_bytes()
+    original = Path("var/sources/Borland Turbo C 2.0/TCHELP.TCH").read_bytes()
     source.write_bytes(original)
     result = export_bundle_tree(tmp_path / "sources", tmp_path / "helps", source_paths=[source], layout="helps")
     payload = json.loads(gzip.decompress(result[0].json_path.read_bytes()))
@@ -238,15 +239,9 @@ def test_correct_stored_geometry_and_contents_reach_the_bundle(tmp_path):
 def test_complete_thelp_corpus_preserves_native_records_targets_and_corrected_models():
     source_hashes, models = {}, {}
     topics = positioned = sequential = indexes = 0
-    roots = Path("data/sources")
-    for source in sorted(roots.rglob("*")):
-        if not source.is_file():
-            continue
-        with source.open("rb") as stream:
-            prefix = stream.read(4096)
-            if not is_thelp_binary(prefix):
-                continue
-            data = prefix + stream.read()
+    roots = Path("var/sources")
+    for source, data in original_thelp_corpus():
+        assert is_thelp_binary(data)
         name = source.relative_to(roots).as_posix()
         document = ThelpHelpReader(source_name=source.name).read_bytes(data)
         source_hashes[name] = hashlib.sha256(data).hexdigest()

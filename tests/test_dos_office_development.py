@@ -10,6 +10,7 @@ import pytest
 from thelpviewer.config import CONFIG_DIR
 from thelpviewer.server.dos.packages import DosPackageExtractor, configured_files
 from thelpviewer.server.dos.paths import DosError
+from thelpviewer.server.archives.core import ExtractionError, UnsafeArchiveError
 
 
 NEW_PACKAGES = {
@@ -78,7 +79,8 @@ def test_szdd_expansion_restores_the_missing_extension_character():
 
 @pytest.mark.parametrize("name", ["../escape", "/outside", "SUB/DIR", "SUB\\DIR"])
 def test_kwaj_header_cannot_write_outside_its_original_directory(name):
-    with pytest.raises(DosError, match="path|directories|expand"):
+    with pytest.raises(ExtractionError if name == "../escape" else UnsafeArchiveError,
+                       match="path|directories|expand"):
         DosPackageExtractor(10000).extract(zipped({"PROG.EX$": kwaj(name)}), {"format": "zip", "expand": "microsoft"})
 
 
@@ -86,9 +88,9 @@ def test_microsoft_expansion_rejects_conflicts_corrupt_files_and_expanded_quota(
     extractor = DosPackageExtractor(10000)
     with pytest.raises(DosError, match="Duplicate expanded"):
         extractor.extract(zipped({"PROG.EX$": kwaj(), "PROGRAM.EXE": b"existing"}), {"format": "zip", "expand": "microsoft"})
-    with pytest.raises(DosError, match="Cannot expand"):
+    with pytest.raises(ExtractionError, match="Cannot expand"):
         extractor.extract(zipped({"PROG.EX$": b"KWAJ\x88\xf0\x27\xd1"}), {"format": "zip", "expand": "microsoft"})
-    with pytest.raises(DosError, match="quota|expand"):
+    with pytest.raises(UnsafeArchiveError, match="quota|expand"):
         DosPackageExtractor(250).extract(zipped({"PROG.EX$": kwaj(payload=b"A" * 200), "PROG2.EX$": kwaj("SECOND", payload=b"B" * 200)}),
             {"format": "zip", "expand": "microsoft"})
     with pytest.raises(DosError, match="Unknown software"):

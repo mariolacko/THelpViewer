@@ -6,7 +6,7 @@ from thelpviewer.server.converter.readers.k602 import K602Reader, is_k602_binary
 from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
-K602_PATH = Path("data/sources") / "Software 602" / "K602.HLP"
+K602_PATH = Path("var/sources") / "Software 602" / "K602.HLP"
 
 
 @lru_cache(maxsize=1)

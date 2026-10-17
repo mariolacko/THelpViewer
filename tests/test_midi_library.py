@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sqlite3
 import threading
+import time
 import zipfile
 
 import pytest
@@ -174,6 +175,315 @@ def test_invalid_midi_does_not_overwrite_cached_music_and_names_the_bad_zip_memb
         assert not list(library.root.rglob(".download-*"))
     finally:
         library.downloads.close()
+
+
+@pytest.mark.parametrize("invalid_first", [True, False])
+def test_partial_zip_keeps_valid_music_and_cover_without_marking_the_album_complete(tmp_path, monkeypatch, invalid_first):
+    from test_midi_file import TEXT_MIDI, chunk, rmid
+    manifest = tmp_path / "sources.json"
+    manifest.write_text(json.dumps({"sources": [{
+        "id": "archive", "name": "Archives", "pages": ["https://music.test/list"],
+        "allowed_hosts": ["music.test"], "extract": {"mode": "download_then_heading",
+            "download_link_text": "Download", "game_heading_tag": "h5", "game_prefix": "Game:"},
+        "cover": {"mode": "zip_image", "extensions": [".png"]},
+        "request_delay_seconds": 0,
+    }]}))
+    repaired = False
+    calls = []
+
+    def fetch(url, *_args):
+        calls.append(url)
+        if url.endswith("/list"):
+            return b'<a href="album.zip">Download</a><h5>Game: Album</h5>'
+        good = [("Good.mid", MIDI), ("RMID.mid", rmid(chunk(b"data", MIDI)))]
+        bad = [("Text.mid", MIDI if repaired else TEXT_MIDI),
+               ("Truncated.mid", MIDI if repaired else MIDI[:-1])]
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as archive:
+            for name, payload in bad + good if invalid_first else good + bad:
+                archive.writestr(f"Album/{name}", payload)
+            archive.writestr("Album/Cover.png", PNG)
+        return data.getvalue()
+
+    library = MidiLibrary(tmp_path / "midi", manifest)
+    monkeypatch.setattr(library, "_fetch", fetch)
+    try:
+        library.run_once(sleep=False)
+        catalog = library.catalog()
+        assert catalog["state"] == "partial" and catalog["downloaded"] == 2 and catalog["total"] == 4
+        assert all(track["cover"] for track in catalog["tracks"])
+        assert {track["title"] for track in catalog["tracks"] if track["available"]} == {"Good", "RMID"}
+        for track in catalog["tracks"]:
+            if track["available"]:
+                assert library.file_path("archive", track["file"].rsplit("/", 1)[-1]).read_bytes() == MIDI
+        row = library.downloads.snapshot()["items"][0]
+        assert row["state"] == "error" and "2/4 MIDI files rejected" in row["error"]
+        assert "Album/Text.mid: File is not Standard MIDI: source contains plain text" in row["error"]
+        assert "Album/Truncated.mid:" in row["error"]
+        assert len(list(library.root.rglob("*.mid"))) == 2
+        app = FastAPI()
+        app.include_router(create_midi_router(library))
+        client = TestClient(app)
+        for track in catalog["tracks"]:
+            if track["available"]:
+                assert client.get(track["file"]).content == MIDI
+            assert client.get(track["cover"]).content == PNG
+        with sqlite3.connect(library.root / "library.sqlite3") as database:
+            assert database.execute("SELECT count(*) FROM midi_tracks").fetchone()[0] == 2
+    finally:
+        library.close()
+        library.downloads.close()
+
+    reloaded = MidiLibrary(library.root, manifest)
+    monkeypatch.setattr(reloaded, "_fetch", fetch)
+    try:
+        assert sum(bool(member.get("error")) for member in reloaded._items[0]["members"]) == 2
+        calls.clear()
+        reloaded.run_once(sleep=False)
+        assert calls == ["https://music.test/album.zip"]
+        assert reloaded.catalog()["state"] == "partial"
+        failed = reloaded.downloads.snapshot()["items"][0]
+        assert failed["state"] == "error"  # Cached good members do not hide rejected ones.
+        repaired = True
+        calls.clear()
+        reloaded.downloads.act(failed["id"], "retry")
+        deadline = time.monotonic() + 5
+        while reloaded.downloads.retry_in_progress("midi") and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert not reloaded.downloads.retry_in_progress("midi")
+        assert calls == ["https://music.test/album.zip"]
+        catalog = reloaded.catalog()
+        assert catalog["state"] == "ready" and catalog["downloaded"] == catalog["total"] == 4
+        assert not catalog["errors"] and reloaded.downloads.snapshot()["errors"] == 0
+        assert all(not member.get("error") for member in reloaded._items[0]["members"])
+    finally:
+        reloaded.close()
+        reloaded.downloads.close()
+
+
+@pytest.mark.parametrize("failure", ["zip", "members", "network"])
+def test_removed_midi_failure_stays_out_of_queue_after_restart_until_explicit_retry(tmp_path, monkeypatch, failure):
+    manifest = tmp_path / "sources.json"
+    manifest.write_text(json.dumps({"sources": [{
+        "id": "music", "name": "Music", "pages": ["https://music.test/list"],
+        "allowed_hosts": ["music.test"], "extract": {"mode": "anchors"},
+        "cover": {"mode": "zip_image", "extensions": [".png"]}, "request_delay_seconds": 0,
+    }]}))
+    broken_name = "broken.mid" if failure == "network" else "album.zip"
+    repaired = False
+    calls = []
+
+    def fetch(url, *_args):
+        calls.append(url)
+        if url.endswith("/list"):
+            return f'<a href="ready.mid">Ready</a><a href="{broken_name}">Album</a>'.encode()
+        if url.endswith("ready.mid"):
+            return MIDI
+        if failure == "network":
+            if not repaired:
+                raise OSError("Source unavailable")
+            return MIDI
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as archive:
+            archive.writestr("Ready.mid", MIDI)
+            archive.writestr("Broken.mid", MIDI if repaired else b"not MIDI")
+            archive.writestr("Cover.png", PNG)
+        return data.getvalue()
+
+    library = MidiLibrary(tmp_path / "midi", manifest)
+    monkeypatch.setattr(library, "_fetch", fetch)
+    try:
+        library.run_once(sleep=False)
+        before = library.catalog()
+        failed, = [row for row in library.downloads.snapshot()["items"] if row["state"] == "error"]
+        assert before["state"] == "partial" and before["errors"]
+        library.downloads.act(failed["id"], "remove")
+        assert not library.downloads.snapshot()["errors"]
+        for _ in range(2):
+            assert library.catalog()["tracks"] == before["tracks"]
+            assert not library.downloads.snapshot()["errors"]
+        if failure == "members":
+            # Persisted member diagnostics alone must also prevent auto-retries.
+            for item in library._items:
+                item.pop("download_error", None)
+            library._save_catalog()
+    finally:
+        library.close()
+        library.downloads.close()
+
+    reloaded = MidiLibrary(library.root, manifest)
+    monkeypatch.setattr(reloaded, "_fetch", fetch)
+    try:
+        calls.clear()
+        for _ in range(2):
+            reloaded.start()
+            reloaded._worker.join(timeout=5)
+            assert not reloaded._worker.is_alive()
+            assert calls == []
+            assert not reloaded.downloads.snapshot()["errors"]
+            assert all(row["state"] == "done" for row in reloaded.downloads.snapshot()["items"])
+            assert reloaded.catalog()["state"] == "partial" and reloaded.catalog()["errors"]
+            assert sorted(reloaded.catalog()["tracks"], key=lambda track: track["id"]) == sorted(
+                before["tracks"], key=lambda track: track["id"])
+
+        # An explicit operation still retries the source and reports real errors.
+        item, = [item for item in reloaded._items if item["url"].endswith(broken_name)]
+        assert reloaded.prioritize("music", str(item["id"]))
+        with pytest.raises((ValueError, OSError)):
+            reloaded._play_tasks[("music", str(item["id"]))].result(timeout=5)
+        assert calls == [f"https://music.test/{broken_name}"]
+        assert reloaded.downloads.snapshot()["errors"] == 1
+        calls.clear()
+        reloaded.run_once(sleep=False)
+        assert calls == [f"https://music.test/{broken_name}"]
+        failed, = [row for row in reloaded.downloads.snapshot()["items"] if row["state"] == "error"]
+        repaired = True
+        calls.clear()
+        reloaded.downloads.act(failed["id"], "retry")
+        deadline = time.monotonic() + 5
+        while reloaded.downloads.retry_in_progress("midi") and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert not reloaded.downloads.retry_in_progress("midi")
+        assert calls == [f"https://music.test/{broken_name}"]
+        assert reloaded.catalog()["state"] == "ready" and not reloaded.catalog()["errors"]
+        assert all(track["available"] for track in reloaded.catalog()["tracks"])
+        assert not reloaded.downloads.snapshot()["errors"]
+        assert all(not item.get("download_error") for item in reloaded._items)
+    finally:
+        reloaded.close()
+        reloaded.downloads.close()
+
+
+def test_all_text_album_reports_all_rejected_members_and_still_keeps_its_cover(tmp_path, monkeypatch):
+    from test_midi_file import TEXT_MIDI
+    manifest = tmp_path / "sources.json"
+    manifest.write_text('{"sources": []}')
+    library = MidiLibrary(tmp_path / "midi", manifest)
+    item = {"id": "0" * 16, "kind": "zip", "url": "https://music.test/album.zip", "game": "Album"}
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        for index in range(4):
+            archive.writestr(f"Album/{index}.mid", TEXT_MIDI)
+        archive.writestr("Album/Cover.png", PNG)
+    monkeypatch.setattr(library, "_fetch", lambda *_args: data.getvalue())
+    try:
+        with pytest.raises(ValueError, match="4/4 MIDI files rejected:.*and 1 more rejected files"):
+            library._download_item({"id": "archive", "allowed_hosts": ["music.test"],
+                "cover": {"mode": "zip_image", "extensions": [".png"]}}, item)
+        assert len(item["members"]) == 4 and all(member.get("error") for member in item["members"])
+        assert not list(library.root.rglob("*.mid"))
+        assert next((library.root / "covers").iterdir()).read_bytes() == PNG
+    finally:
+        library.close()
+        library.downloads.close()
+
+
+def test_partial_urgent_album_syncs_valid_tracks_before_reporting_its_failure(tmp_path, monkeypatch):
+    from test_midi_file import TEXT_MIDI
+    manifest = tmp_path / "sources.json"
+    manifest.write_text('{"sources": []}')
+    library = MidiLibrary(tmp_path / "midi", manifest)
+    item = {"id": "0" * 16, "source_id": "archive", "kind": "zip", "url": "https://music.test/album.zip",
+        "title": "Album", "game": "Album", "sequencer": ""}
+    library._items = [item]
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, "w") as archive:
+        archive.writestr("Album/Text.mid", TEXT_MIDI)
+        archive.writestr("Album/Good.mid", MIDI)
+    monkeypatch.setattr(library, "_fetch", lambda *_args: data.getvalue())
+    try:
+        task = library._queue_download({"id": "archive", "provider_id": "archive", "name": "Archive",
+            "allowed_hosts": ["music.test"]}, item, priority=-10)
+        with pytest.raises(ValueError, match="1/2 MIDI files rejected"):
+            task.result(timeout=5)
+        with sqlite3.connect(library.root / "library.sqlite3") as database:
+            assert database.execute("SELECT title FROM midi_tracks").fetchall() == [("Good",)]
+        snapshot = library.downloads.snapshot()
+        assert not snapshot["active"] and snapshot["errors"] == 1
+        assert snapshot["items"][0]["state"] == "error"
+    finally:
+        library.close()
+        library.downloads.close()
+
+
+@pytest.mark.parametrize("missing", [None, "direct", "archive", "interrupted"])
+def test_restart_queues_only_missing_midi_and_preserves_completed_history(tmp_path, monkeypatch, missing):
+    from thelpviewer.server.jobs import JobStore
+
+    manifest = tmp_path / "sources.json"
+    manifest.write_text(json.dumps({"sources": [{
+        "id": "music", "name": "Music", "pages": ["https://music.test/list"],
+        "allowed_hosts": ["music.test"], "extract": {"mode": "anchors"}, "request_delay_seconds": 0,
+    }]}))
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("One.mid", MIDI)
+        output.writestr("Two.mid", MIDI)
+    responses = {"https://music.test/list": b'<a href="ready.mid">Ready</a><a href="album.zip">Album</a>',
+                 "https://music.test/ready.mid": MIDI, "https://music.test/album.zip": archive.getvalue()}
+    journal = JobStore(tmp_path / "jobs.sqlite3")
+    downloads = OnlineDownloader(journal)
+    library = MidiLibrary(tmp_path / "midi", manifest, downloads=downloads)
+    monkeypatch.setattr(library, "_fetch", lambda url, *_args: responses[url])
+    try:
+        library.run_once(sleep=False)
+        assert library.catalog()["downloaded"] == 3
+        if missing in {"direct", "archive"}:
+            track = next(track for track in library.catalog()["tracks"]
+                         if (track["title"] == "Ready") == (missing == "direct"))
+            library.file_path(track["source_id"], track["file"].rsplit("/", 1)[-1]).unlink()
+            # Force a real transfer rather than re-extraction of the raw cache.
+            suffix = "ready.mid" if missing == "direct" else "album.zip"
+            cache, = (tmp_path / "downloads/midi").glob("*-" + suffix)
+            cache.unlink()
+        elif missing == "interrupted":
+            # A crash can leave a running row after its output has been published.
+            item = library._items[0]
+            key = f"music:{item['id']}"
+            downloads.update("midi", key, state="running", percent=99, phase="Publishing")
+    finally:
+        library.close()
+        downloads.close()
+
+    restored = OnlineDownloader(JobStore(journal.path))
+    library = MidiLibrary(library.root, manifest, downloads=restored)
+    if missing is None:
+        restored.begin("dos", [{"id": "busy", "label": "Other package"}])
+        restored.update("dos", "busy", state="running", percent=37)
+    before = restored.snapshot(private=True)
+    submitted, calls = [], []
+    queue = library._queue_download
+    def submit(source, item, **kwargs):
+        submitted.append(item["url"])
+        return queue(source, item, **kwargs)
+    def fetch(url, *_args):
+        calls.append(url)
+        assert url != "https://music.test/list"
+        active = [row for row in restored.snapshot()["items"] if row["state"] in {"running", "pending"}]
+        assert len(active) == 1
+        return responses[url]
+    monkeypatch.setattr(library, "_queue_download", submit)
+    monkeypatch.setattr(library, "_fetch", fetch)
+    begins = []
+    begin = restored.begin
+    monkeypatch.setattr(restored, "begin", lambda *args, **kwargs: (begins.append(args), begin(*args, **kwargs))[-1])
+    try:
+        library.start()
+        library._worker.join(5)
+        assert not library._worker.is_alive()
+        expected = ["https://music.test/" + ("ready.mid" if missing == "direct" else "album.zip")] if missing in {"direct", "archive"} else []
+        assert submitted == calls == expected
+        if not expected:
+            assert not begins, "Cached startup must not start/reset a progress batch"
+        if missing is None:
+            assert restored.snapshot(private=True) == before, "MIDI startup changed unrelated DOS progress/history"
+        snapshot = restored.snapshot()
+        assert not snapshot["active"] and snapshot["percent"] == 0 and not snapshot["errors"]
+        assert len(snapshot["items"]) == 2 and all(row["state"] == "done" for row in snapshot["items"])
+        assert library.catalog()["downloaded"] == 3
+    finally:
+        library.close()
+        restored.close()
 
 
 def test_configured_midi_and_zip_sources_download_resume_and_serve(tmp_path, monkeypatch):

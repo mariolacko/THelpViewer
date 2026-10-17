@@ -5,12 +5,17 @@ from __future__ import annotations
 import re
 import time
 import urllib.parse
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
-from .catalog import ProductSpec, SourceQuery, products_for_source, version_selected
-from .collector import HELP_EXTENSIONS, detect_language
-from .extractor import ExtractorTools, collect_archive_members, collect_from_archive
-from .http import download_file, fetch_json
+from ..processing import UnsafeContentError
+from .errors import SourceRateLimited
+from .catalog import ProductSpec, SourceQuery, products_for_source
+from ..converter.selection import version_selected
+from .cache import download_filename
+from ..converter.sources import HELP_EXTENSIONS, detect_language
+from ..converter.ingest import HelpInput
+from .http import fetch_json
+from ..processing import report_progress
 
 
 SOURCE_NAME = "archiveorg"
@@ -60,18 +65,9 @@ def get_item_files(identifier: str) -> list[dict]:
 
 def get_item(identifier: str) -> dict | None:
     """Fetch a minimal Archive.org item record by identifier."""
-    params = urllib.parse.urlencode(
-        {
-            "q": f"identifier:{identifier}",
-            "fl[]": "identifier,title,subject,creator",
-            "rows": 1,
-            "output": "json",
-            "page": 1,
-        }
-    )
-    data = fetch_json(f"{ARCHIVEORG_SEARCH}?{params}")
-    docs = data.get("response", {}).get("docs", [])
-    return docs[0] if docs else None
+    data = fetch_json(f"{ARCHIVEORG_METADATA}/{urllib.parse.quote(identifier, safe='')}")
+    item = data.get("metadata", {})
+    return item if item.get("identifier") == identifier else None
 
 
 def is_relevant_item(item: dict, source_query: SourceQuery) -> bool:
@@ -151,13 +147,14 @@ def pick_download_files(files: list[dict], identifier: str) -> list[tuple[str, s
 
     for item in files:
         name = item.get("name", "")
-        if not name or "/" in name:
+        path = PurePosixPath(name)
+        if not name or path.is_absolute() or "\\" in name or any(part in {".", ".."} for part in name.split("/")):
             continue
         ext = Path(name).suffix.lower()
         size = int(item.get("size") or 0)
         lowered = name.lower()
 
-        if any(token in lowered for token in ("kryoflux", ".raw", ".scp", ".ipf", ".mfm")):
+        if lowered.endswith("_jp2.zip") or any(token in lowered for token in ("kryoflux", ".raw", ".scp", ".ipf", ".mfm")):
             continue
 
         if ext in HELP_EXTENSIONS:
@@ -207,10 +204,11 @@ def process_item(
     product: ProductSpec,
     source_query: SourceQuery,
     dl_dir: Path,
-    sources_dir: Path,
-    extractor: ExtractorTools,
+    process,
     dry_run: bool,
     failed: list[str],
+    *,
+    complete=None,
 ) -> list[Path]:
     """Download one Archive.org item and collect any help files from it."""
     identifier = item["identifier"]
@@ -230,125 +228,104 @@ def process_item(
     collected: list[Path] = []
 
     for filename, url in to_download:
+        if complete and complete():
+            break
         print(f"    file: {filename}")
         if dry_run:
             print(f"      [dry-run] {url}")
             print(f"      [search]   {source_query.search_text}")
             continue
 
-        ext = Path(filename).suffix.lower()
-        if ext in HELP_EXTENSIONS:
-            target_dir = sources_dir / f"{base_label}{f' ({lang_code})' if lang_code else ''}".strip()
-            dest = target_dir / filename.upper()
-            if dest.exists():
-                print(f"    [skipped] {filename} (exists)")
-                continue
-            try:
-                download_file(url, dest)
-                collected.append(dest)
-                print(f"    ✓ {dest.relative_to(sources_dir)}")
-            except Exception as exc:
-                print(f"    [error] {exc}")
-                failed.append(f"{identifier}/{filename}: {exc}")
-            continue
-
-        archive_path = dl_dir / f"ao_{identifier}_{filename}"
+        direct = Path(filename).suffix.lower() in HELP_EXTENSIONS
+        cache = dl_dir / f"ao_{identifier}" / filename if direct else dl_dir / f"ao_{identifier}_{download_filename(filename)}"
+        collection = (product.collection_prefixes[0] if source_query.archive_members and product.collection_prefixes
+                      else f"{base_label}{f' ({lang_code})' if lang_code and direct else ''}")
         try:
-            print(f"    Downloading: {filename}")
-            download_file(url, archive_path)
+            collected.extend(process(HelpInput(cache, collection, members=source_query.archive_members,
+                language=None if direct else lang_code, direct=direct, allow_partial=True), url=url))
+        except (SourceRateLimited, UnsafeContentError):
+            raise
         except Exception as exc:
-            print(f"    [error] {exc}")
             failed.append(f"{identifier}/{filename}: {exc}")
-            continue
-
-        if source_query.archive_members:
-            result = collect_archive_members(
-                archive_path,
-                source_query.archive_members,
-                product.collection_prefixes[0] if product.collection_prefixes else base_label,
-                sources_dir,
-                extractor,
-            )
-        else:
-            result = collect_from_archive(
-                archive_path,
-                base_label,
-                sources_dir,
-                extractor,
-                lang_code=lang_code,
-            )
-        collected.extend(result)
-        if not result:
-            print("    No help files found.")
 
     return collected
 
 
 def run(
     product_keys: list[str],
-    sources_dir: Path,
     dl_dir: Path,
     dry_run: bool,
-    extractor: ExtractorTools,
+    process,
+    *,
+    complete=None,
 ) -> list[Path]:
     """Run the Archive.org provider for selected logical products."""
     all_collected: list[Path] = []
     all_failed: list[str] = []
-    seen_items: set[tuple[str, str]] = set()
+    seen_items: set[tuple[str, str, tuple[str, ...]]] = set()
 
     for product in products_for_source(SOURCE_NAME, product_keys):
+        if complete and complete():
+            break
         source_query = product.sources[SOURCE_NAME]
         if not source_query.query and not source_query.direct_urls:
             continue
 
         print(f"[archive.org] {product.label}")
-        if source_query.archive_members and product.collection_prefixes and not dry_run:
-            target_dir = sources_dir / product.collection_prefixes[0]
-            if all((target_dir / Path(member).name.upper()).is_file() for member in source_query.archive_members):
-                print("  [skipped] All selected files already exist")
-                continue
         print(f"  Search: {source_query.search_text}")
-        direct_items: list[dict] = []
-        for url in source_query.direct_urls:
-            identifier = _identifier_from_direct_url(url)
-            if not identifier:
-                continue
-            item = get_item(identifier)
-            if item:
-                direct_items.append(item)
+        collected_query = False
+        def candidates():
+            # A pinned item must not depend on a working advanced-search API.
+            for url in source_query.direct_urls:
+                if complete and complete():
+                    return
+                identifier = _identifier_from_direct_url(url)
+                if not identifier or (product.key, identifier, source_query.archive_members) in seen_items:
+                    continue
+                try:
+                    item = get_item(identifier)
+                except (SourceRateLimited, UnsafeContentError):
+                    raise
+                except Exception as error:
+                    all_failed.append(f"{identifier}: {error}")
+                    continue
+                if item:
+                    yield item
+            if source_query.query and not collected_query and not (complete and complete()):
+                time.sleep(1.0)
+                items = search_items(source_query.query)
+                relevant = [item for item in items if is_relevant_item(item, source_query)]
+                print(f"  Found: {len(items)}, relevant: {len(relevant)}")
+                yield from relevant
 
-        time.sleep(1.0)
-        items = search_items(source_query.query) if source_query.query else []
-        relevant = [item for item in items if is_relevant_item(item, source_query)]
-        merged: dict[str, dict] = {}
-        for item in [*direct_items, *relevant]:
-            identifier = item.get("identifier")
-            if isinstance(identifier, str) and identifier:
-                merged[identifier] = item
-        relevant = list(merged.values())
-        print(f"  Found: {len(items)}, relevant: {len(relevant)}")
-
-        for item in relevant:
+        for item in candidates():
+            if complete and complete():
+                break
             if not (product.default_version and version_selected(product.key, product.default_version)) and not version_selected(
                     product.key, str(item.get("title", "")) + " " + item["identifier"]):
                 continue
-            identity = (product.key, item["identifier"])
+            identity = (product.key, item["identifier"], source_query.archive_members)
             if identity in seen_items:
                 continue
+            seen_items.add(identity)
             try:
                 files = process_item(
                     item=item,
                     product=product,
                     source_query=source_query,
                     dl_dir=dl_dir,
-                    sources_dir=sources_dir,
-                    extractor=extractor,
+                    process=process,
                     dry_run=dry_run,
                     failed=all_failed,
+                    complete=complete,
                 )
                 all_collected.extend(files)
                 if files or dry_run:
-                    seen_items.add(identity)
+                    collected_query = True
+            except SourceRateLimited:
+                raise
+            except UnsafeContentError:
+                raise
             except Exception as exc:
                 identifier = item.get("identifier", "?")
                 print(f"  [error] {identifier}: {exc}")
@@ -358,5 +335,6 @@ def run(
         print(f"\n  {len(all_failed)} downloads failed:")
         for item in all_failed:
             print(f"    {item}")
+            report_progress("Source warning", warning=item)
 
     return all_collected

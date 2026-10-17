@@ -14,7 +14,7 @@ from .catalog import (
     all_products,
     all_sources,
 )
-from .extractor import require_extractor_tools
+from ..archives.core import ExtractionError, require_extractor_tools
 from .service import download_products
 
 
@@ -56,8 +56,8 @@ def _build_parser(project_root: Path) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--out-dir",
-        default=os.environ.get("THELP_SOURCES_DIR", str(Path(os.environ.get("THELP_DATA_DIR", project_root / "data")) / "sources")),
-        help="Target directory for extracted help files (default: data/sources/)",
+        default=os.environ.get("THELP_SOURCES_DIR", str(Path(os.environ.get("THELP_STATE_DIR", project_root / "var")) / "sources")),
+        help="Target directory for extracted help files (default: var/sources/)",
     )
     parser.add_argument(
         "--dl-dir",
@@ -109,7 +109,10 @@ def main() -> None:
     if args.dry_run:
         print("Mode:               DRY-RUN")
 
-    extractor_tools = require_extractor_tools(dry_run=args.dry_run)
+    try:
+        extractor_tools = require_extractor_tools(dry_run=args.dry_run)
+    except ExtractionError as error:
+        raise SystemExit(str(error)) from error
     result = download_products(selected_products, sources_dir, dl_dir,
                               source_keys=selected_sources, dry_run=args.dry_run, extractor=extractor_tools)
     all_collected = result.files
@@ -121,8 +124,10 @@ def main() -> None:
         print(f"Total help files collected: {len(all_collected)}")
         for path in all_collected:
             print(f"  {path.relative_to(sources_dir)}")
-    if result.warnings:
-        raise SystemExit("Download errors: " + "; ".join(result.warnings))
+    for warning in result.warnings:
+        print("Warning: " + warning)
+    if result.errors:
+        raise SystemExit("Download errors: " + "; ".join(result.errors))
 
 
 if __name__ == "__main__":

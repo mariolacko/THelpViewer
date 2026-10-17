@@ -13,8 +13,8 @@ from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 
-SOURCE = Path("data/sources/Borland Sidekick 1.x current/SK.HLP")
-REFERENCE = Path("data/sources/Borland Sidekick 1.56b/SK.HLP")
+SOURCE = Path("var/sources/Borland Sidekick 1.x current/SK.HLP")
+REFERENCE = Path("var/sources/Borland Sidekick 1.56b/SK.HLP")
 ZERO = b"\x01\x0c\x02Help text #0\x00"
 
 
@@ -159,7 +159,7 @@ def test_corpus_preserves_every_context_page_and_structural_boundary():
     assert all(data[item["offset"]:item["offset"] + 2] == bytes((item["rows"], item["columns"]))
                for item in descriptors)
     assert sum(len(item["page_ids"]) for item in descriptors) == len(document.topics)
-    assert not is_sidekick1_binary(Path("data/sources/Borland Sidekick Plus/SKPLUS.HLP").read_bytes())
+    assert not is_sidekick1_binary(Path("var/sources/Borland Sidekick Plus/SKPLUS.HLP").read_bytes())
     for item in descriptors:
         assert len(item["page_ids"]) == data[item["offset"] + 2:data.index(b"\0", item["offset"] + 2)].count(b"\3") + 1
     payload = HelpJsonRenderer(document).render_document()
@@ -191,7 +191,7 @@ def test_export_registers_original_filename_and_real_page_count_in_catalog(tmp_p
     if not SOURCE.is_file():
         pytest.skip("Sidekick 1 original not available")
     before = SOURCE.read_bytes()
-    results = export_bundle_tree(Path("data/sources"), tmp_path / "helps", source_paths=[SOURCE], layout="helps")
+    results = export_bundle_tree(Path("var/sources"), tmp_path / "helps", source_paths=[SOURCE], layout="helps")
     assert len(results) == 1 and results[0].topic_count == 148
     catalog = json.loads((tmp_path / "helps" / "catalog.json").read_text())
     assert catalog[0]["product"] == "sk"

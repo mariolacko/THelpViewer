@@ -18,6 +18,7 @@ from thelpviewer.server.downloader.service import DownloadResult, download_produ
 from thelpviewer.server.downloader.transport import download_chunks, public_url
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
+from thelpviewer.server.content import ContentJob
 
 
 def config_for(tmp_path):
@@ -53,6 +54,204 @@ def wait_job(client):
         assert 0 <= status["percent"] <= 100
         time.sleep(.01)
     raise AssertionError("Content job did not finish")
+
+
+def join_content_jobs(content, timeout=10):
+    for job in content._jobs:
+        if job.worker:
+            job.worker.join(timeout=timeout)
+            assert not job.worker.is_alive()
+
+
+@pytest.mark.parametrize("fail_last", [False, True])
+def test_help_stages_overlap_and_publish_each_edition_before_later_failure(tmp_path, monkeypatch, fail_last):
+    from types import SimpleNamespace
+    from thelpviewer.server.downloader import service
+    from thelpviewer.server.downloader.transport import read_request
+    from thelpviewer.server.converter import build, selection
+    from thelpviewer.server.processing import report_progress
+
+    manifest = json.loads(Path("thelpviewer/config/help-database.json").read_text())
+    product = next(product for product in manifest["products"] if product["key"] == "tp")
+    product["versions"] = sorted(set(product.get("versions", [])) | {"5.0", "5.5", "6.0"})
+    for query in product["sources"].values():
+        query["archive_members"] = ["REFERENCE.TXT"]
+    database = tmp_path / "help-database.json"
+    database.write_text(json.dumps(manifest))
+    monkeypatch.setenv("THELP_HELP_DATABASE_PATH", str(database))
+    config = config_for(tmp_path)
+    # A later error must retain both existing published content and originals.
+    original = config.sources_dir / "HelpPC 2.10/C.TXT"
+    original.parent.mkdir(parents=True)
+    original.write_bytes(b"@C\r\n:Original\r\n%Existing library\r\n")
+    build_help_groups(["dos-reference"], config.sources_dir, config.helps_dir)
+    previous = {path.relative_to(config.helps_dir): path.read_bytes()
+                for path in config.helps_dir.rglob("*") if path.is_file()}
+    first_extract, second_extract, converting, third_transfer, release = (threading.Event() for _ in range(5))
+    app = create_app(config)
+    monkeypatch.setattr(service, "all_sources", lambda: ["direct"])
+    monkeypatch.setattr(service, "supported_product_keys", lambda _: ["tp"])
+    monkeypatch.setattr(service, "_verified_sources", lambda *_: None)
+    monkeypatch.setattr(service, "find_sevenzip", lambda: "7zz")
+
+    class Response(io.BytesIO):
+        headers = {"Content-Length": "4"}
+        def __init__(self, url):
+            self.url = url
+            super().__init__(b"help")
+        def read(self, count):
+            if self.url.endswith("6.0"):
+                third_transfer.set()
+                assert release.wait(5)
+            return super().read(count)
+    opener = SimpleNamespace(open=lambda url, **_kwargs: Response(url))
+
+    def provider(**_kwargs):
+        version, = [version for version in ("5.0", "5.5", "6.0") if selection.version_selected("tp", version)]
+        if version == "5.5":
+            assert first_extract.wait(5)
+        elif version == "6.0":
+            assert converting.wait(5)
+        read_request(opener, "https://source.test/" + version, 1024)
+        report_progress("Extracting archive", version, stage="extract")
+        if version == "5.0":
+            first_extract.set()
+            assert second_extract.wait(5)
+        elif version == "5.5":
+            second_extract.set()
+            assert release.wait(5)
+        source = config.sources_dir / ("Borland Turbo Pascal " + version) / "REFERENCE.TXT"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"@Pascal\r\n:Reference\r\n%" + version.encode() + b"\r\n")
+        if version == "6.0" and fail_last:
+            source.write_bytes(b"invalid HELP payload")
+        return [source]
+    import_module = service.importlib.import_module
+    monkeypatch.setattr(service.importlib, "import_module", lambda name: SimpleNamespace(run=provider)
+        if name in service.SOURCE_RUNNERS.values() else import_module(name))
+    export = build.export_bundle_tree
+    def convert(*args, source_paths, on_progress, **kwargs):
+        if source_paths[0].parent.name.endswith("5.0"):
+            on_progress({"phase": "Converting", "stage": "convert", "processed": 0, "total": 1})
+            converting.set()
+            assert second_extract.wait(5) and third_transfer.wait(5)
+            rows = {item["id"]: item for item in app.state.downloads.snapshot(private=True)["items"]}
+            assert rows["help:tp:5.0"]["stage"] == "convert"
+            assert rows["help:tp:5.5"]["stage"] == "extract"
+            assert rows["help:tp:6.0"]["stage"] == "download"
+            assert rows["help:tp:5.0"]["percent"] == 35
+            assert {path.relative_to(config.helps_dir): path.read_bytes()
+                    for path in config.helps_dir.rglob("*") if path.is_file()} == previous
+            release.set()
+        return export(*args, source_paths=source_paths, on_progress=on_progress, **kwargs)
+    monkeypatch.setattr(build, "export_bundle_tree", convert)
+    try:
+        app.state.content.start(help_packages=["helppc:", "tp:5.0", "tp:5.5", "tp:6.0"])
+        join_content_jobs(app.state.content)
+        status = app.state.content.status()
+        assert converting.is_set() and third_transfer.is_set()
+        assert status["state"] == ("error" if fail_last else "ready"), status
+        current = {path.relative_to(config.helps_dir): path.read_bytes()
+                   for path in config.helps_dir.rglob("*") if path.is_file()}
+        if fail_last:
+            assert current[Path("HelpPC 2.10/c.json.gz")] == previous[Path("HelpPC 2.10/c.json.gz")]
+            assert all((config.helps_dir / f"Borland Turbo Pascal {version}/reference.json.gz").is_file()
+                       for version in ("5.0", "5.5"))
+            assert not (config.helps_dir / "Borland Turbo Pascal 6.0/reference.json.gz").exists()
+            rows = {row["id"]: row for row in app.state.downloads.snapshot(private=True)["items"]}
+            assert rows["help:tp:6.0"]["state"] == "error", status["error"]
+            for edition in ("5.0", "5.5"):
+                assert rows["help:tp:" + edition]["state"] == "done"
+                assert not rows["help:tp:" + edition]["error"]
+            assert sum(row["state"] == "error" for row in rows.values()) == 1
+        else:
+            assert all((config.helps_dir / f"Borland Turbo Pascal {version}/reference.json.gz").is_file()
+                       for version in ("5.0", "5.5", "6.0"))
+        assert original.read_bytes() == b"@C\r\n:Original\r\n%Existing library\r\n"
+        assert not list(config.helps_dir.parent.glob(".helps-build-*"))
+    finally:
+        release.set()
+        app.state.downloads.close()
+
+
+def test_global_build_progress_does_not_start_every_edition(tmp_path):
+    app = create_app(config_for(tmp_path))
+    editions = ["tp:5.0", "tp:5.5"]
+    app.state.downloads.begin("help", [{"id": ident, "label": ident} for ident in editions])
+    try:
+        values = {"help_packages": editions, "dos_packages": []}
+        ident = app.state.jobs.create("content", {"values": values, "scope": ["help"], "configured": True})
+        job = ContentJob(ident, values, {"help"}, True)
+        app.state.content._help_build_progress(job,
+            {"phase": "Checking HELP selection", "processed": 1, "total": 2}, editions)
+        assert all(row["state"] == "pending" for row in app.state.downloads.snapshot(private=True)["items"])
+    finally:
+        app.state.downloads.close()
+
+
+@pytest.mark.parametrize("valid", [True, False])
+@pytest.mark.parametrize("registered", [True, False])
+def test_help_api_fallback_requires_crc_or_successful_conversion(tmp_path, monkeypatch, valid, registered):
+    import zlib
+    from types import SimpleNamespace
+    from urllib.error import HTTPError
+    from thelpviewer.help_database import HelpDatabaseEntry, load_help_manifest
+    from thelpviewer.server.downloader import archiveorg, http, service, transport, winworld
+
+    config = config_for(tmp_path)
+    old = config.sources_dir / "FreeDOS HTML Help 1.1.1a" / "HHSTNDRD.ZIP"
+    old.parent.mkdir(parents=True)
+    with zipfile.ZipFile(old, "w") as output:
+        output.writestr("help/index.htm", "<title>Contents</title><p>Existing FreeDOS help</p>")
+    build_help_groups(["dos-reference"], config.sources_dir, config.helps_dir)
+    published = {path: path.read_bytes() for path in config.helps_dir.rglob("*") if path.is_file()}
+    payload = b"@C language\r\n:Reference\r\n%Help text\r\n"
+    manifest = load_help_manifest()
+    entry = HelpDatabaseEntry(crc32=zlib.crc32(payload), filenames=("C.TXT",), title="HelpPC",
+        collection="HelpPC 2.10", product_key="helppc")
+    monkeypatch.setattr(service, "load_help_manifest", lambda: replace(manifest, entries=(entry,) if registered else ()))
+    monkeypatch.setattr(service, "all_sources", lambda: ["winworld", "archiveorg"])
+    monkeypatch.setattr(service, "supported_product_keys", lambda _: ["helppc"])
+    monkeypatch.setattr(service, "find_unar", lambda: "unar")
+    monkeypatch.setattr(service, "find_lsar", lambda: "lsar")
+    monkeypatch.setattr(http.time, "sleep", lambda _: None)
+    monkeypatch.setattr(transport, "defer_source", lambda *_: None)
+    requests, calls = [], []
+    def limited(url, **_kwargs):
+        requests.append(url)
+        raise HTTPError(url, 429, "quota", {"Retry-After": "0"}, None)
+    monkeypatch.setattr(http, "get_opener", lambda: SimpleNamespace(open=limited))
+    def first(**kwargs):
+        calls.append("first")
+        http.download_file("https://limited.test/help", kwargs["dl_dir"] / "Help.zip")
+    def fallback(**kwargs):
+        calls.append("fallback")
+        source = config.sources_dir / entry.collection / "C.TXT"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(payload if valid else b"unverified contents")
+        return [source]
+    monkeypatch.setattr(winworld, "run", first)
+    monkeypatch.setattr(archiveorg, "run", fallback)
+    app = create_app(config)
+    with TestClient(app, base_url=config.auth_origin) as client:
+        admin_session(app, client)
+        selection = ["helppc:"] + [row["id"] for row in client.get("/api/admin/content").json()["help_packages"]
+                                  if row["installed"]]
+        response = client.post("/api/admin/content", json={"help_packages": selection}, headers={"Origin": config.auth_origin})
+        assert response.status_code == 202, response.text
+        status = wait_job(client)
+        assert calls == ["first", "fallback"] and len(requests) == 3
+        assert status["state"] == ("ready" if valid else "error"), status
+        assert len(status["warnings"]) == 1 and "429" in status["warnings"][0]
+        assert (config.helps_dir / "HelpPC 2.10/c.json.gz").exists() is valid
+        assert all(path.read_bytes() == data for path, data in published.items()
+                   if path.name != "catalog.json" or not valid)
+        row = next(row for row in client.get("/api/downloads").json()["items"] if row["id"] == "help:helppc:")
+        assert row["state"] == ("done" if valid else "error")
+        assert row["total"] == 1
+        if not valid:
+            assert not next(row for row in client.get("/api/admin/content").json()["help_packages"]
+                            if row["id"] == "helppc:")["installed"]
 
 
 def test_first_run_is_read_only_until_admin_confirms_and_empty_means_none(tmp_path):
@@ -150,12 +349,16 @@ def test_help_and_dos_installation_updates_catalog_index_and_keeps_private_data(
     source.parent.mkdir(parents=True)
     source.write_bytes(b"@C language\r\n:ReferenceTopic\r\n%Reference search text\r\n")
     selected_products = []
-    def download(products, sources, cache, on_progress, *, downloads, package_ids):
+    def download(products, sources, cache, on_progress, *, downloads, package_ids, preserve_downloads, finalize, on_ready):
+        assert preserve_downloads
+        assert not finalize
         assert package_ids == (["helppc:"] if products else [])
         selected_products.extend(products)
         assert sources == config.sources_dir and cache == config.downloads_dir / "help"
         assert downloads is app.state.downloads
         on_progress({"phase": "Finding sources", "processed": 1, "total": 1, "file": "C.TXT"})
+        for edition in package_ids:
+            on_ready(edition)
         return DownloadResult()
     monkeypatch.setattr("thelpviewer.server.content.download_products", download)
     archive = io.BytesIO()
@@ -212,6 +415,89 @@ def test_help_and_dos_installation_updates_catalog_index_and_keeps_private_data(
         while time.monotonic() < deadline and client.get("/api/search/status").json()["state"] == "building":
             time.sleep(.01)
         assert client.get("/api/search/global", params={"q": "Reference"}).json()["results"] == []
+
+
+@pytest.mark.parametrize("first,fail_help", [("help", False), ("dos", False), ("help", True)])
+@pytest.mark.parametrize("combined", [False, True])
+def test_cross_type_requests_run_concurrently_and_preserve_both_selections(tmp_path, monkeypatch, first, fail_help, combined):
+    from thelpviewer.server.downloader.service import plan_help_downloads
+
+    config = config_for(tmp_path)
+    source = config.sources_dir / "HelpPC 2.10/C.TXT"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"@C language\r\n:Reference\r\n%Help text\r\n")
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("GAME.EXE", b"game")
+    entered = {kind: threading.Event() for kind in ("help", "dos")}
+    release = threading.Event()
+
+    def gate(kind):
+        entered[kind].set()
+        assert release.wait(5)
+
+    def download(products, *_args, downloads, package_ids, on_ready, **_kwargs):
+        rows = plan_help_downloads(products, package_ids=package_ids)
+        for row in rows:
+            downloads.update("help", row["id"], state="running")
+        gate("help")
+        if fail_help:
+            raise ValueError("HELP test source unavailable")
+        for row in rows:
+            downloads.update("help", row["id"], state="done", percent=100)
+            on_ready(row["id"])
+        downloads.finish("help")
+        return DownloadResult()
+
+    def fetch(*_args, **_kwargs):
+        gate("dos")
+        return archive.getvalue()
+
+    monkeypatch.setattr("thelpviewer.server.content.download_products", download)
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    app = create_app(config)
+    with TestClient(app, base_url=config.auth_origin) as client:
+        admin_session(app, client)
+        headers = {"Origin": config.auth_origin}
+        jobs = {"help": {"help_packages": ["helppc:"]}, "dos": {"dos_packages": ["one"]}}
+        second = "dos" if first == "help" else "help"
+        try:
+            payload = {**jobs[first], **jobs[second]} if combined else jobs[first]
+            response = client.post("/api/admin/content", json=payload, headers=headers)
+            assert response.status_code == 202
+            assert entered[first].wait(5)
+            if not combined:
+                response = client.post("/api/admin/content", json=jobs[second], headers=headers)
+                assert response.status_code == 202, response.text
+            assert entered[second].wait(5), "The other content type must start before the first is released"
+            assert client.get("/api/admin/content/status").json()["scopes"] == ["dos", "help"]
+            active_jobs = app.state.jobs.pending("content")
+            assert len(active_jobs) == (1 if combined else 2)
+            for record in active_jobs:
+                assert record["state"] == "running"
+                assert set(record["progress"]["operations"]) == set(record["payload"]["scope"])
+            rows = client.get("/api/downloads").json()["items"]
+            assert {"help:helppc:", "dos:one"} <= {row["id"] for row in rows}
+            running = next(row for row in rows if row["kind"] == second)
+            assert running["state"] == "running"
+            assert client.post("/api/admin/content", json=jobs[second], headers=headers).status_code == 409
+            requested = client.get("/api/admin/content").json()["selection"]
+            assert requested == {"help_packages": ["helppc:"], "dos_packages": ["one"]}
+        finally:
+            release.set()
+            join_content_jobs(app.state.content)
+        status = wait_job(client)
+        assert status["scopes"] == []
+        assert status["state"] == ("error" if fail_help else "ready"), status
+        assert app.state.dos_prompt.files["GAMES/ONE/GAME.EXE"] == b"game"
+        assert app.state.content._saved_selection()["dos_packages"] == ["one"]
+        assert app.state.content._saved_selection()["help_packages"] == ["helppc:"]
+        if fail_help:
+            assert "HELP test source unavailable" in status["error"]
+            assert client.get("/api/downloads").json()["errors"] > 0
+        else:
+            assert (config.helps_dir / "HelpPC 2.10/c.json.gz").is_file()
+            assert not client.get("/api/downloads").json()["active"]
 
 
 def test_help_choices_are_editions_and_saved_requests_are_not_installed_content(tmp_path):
@@ -274,7 +560,11 @@ def test_separate_help_and_dos_choices_preserve_the_other_selection(tmp_path, mo
     source = config.sources_dir / "HelpPC 2.10" / "C.TXT"
     source.parent.mkdir(parents=True)
     source.write_bytes(b"@C language\r\n:Reference\r\n%Help text\r\n")
-    monkeypatch.setattr("thelpviewer.server.content.download_products", lambda *_args, **_kwargs: DownloadResult())
+    def download(*_args, package_ids, on_ready, **_kwargs):
+        for edition in package_ids:
+            on_ready(edition)
+        return DownloadResult()
+    monkeypatch.setattr("thelpviewer.server.content.download_products", download)
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w") as output:
         output.writestr("GAME.EXE", b"game")
@@ -401,8 +691,8 @@ def test_failed_request_never_replaces_installed_choices_on_reopen_or_restart(tm
         assert not next(row for row in rows if row["id"] == requested)["installed"]
     finally:
         release.set()
-        content._worker.join(timeout=5)
-    assert not content._worker.is_alive() and content.status()["state"] == "error"
+        join_content_jobs(content, timeout=5)
+    assert content.status()["state"] == "error"
     # Closing/reopening does a fresh choices request. Old content survives the
     # failed addition/removal; remembered intent remains available to Retry only.
     assert content.choices()["selection"][field] == [installed]
@@ -414,20 +704,81 @@ def test_failed_request_never_replaces_installed_choices_on_reopen_or_restart(tm
 def test_content_dialog_statistics_accept_only_registered_aggregate_names(tmp_path):
     app = create_app(config_for(tmp_path))
     with TestClient(app) as client:
-        names = {"help-packages", "dos-packages", "midi-sources", "downloads"}
+        names = {"help-packages", "dos-packages", "midi-sources", "downloads", "server-configuration",
+                 "account", "login", "users", "add-user", "registration", "registration-token",
+                 "download-action", "download-error", "rebuild-dos", "rebuild-midi", "grid", "progress", "messagebox", "dialog"}
         for name in names:
             assert client.post("/api/statistics/events", json={"event": "dialog_open", "name": name}).status_code == 204
             assert client.post("/api/statistics/events", json={
                 "event": "view_duration", "scope": "dialog", "name": name, "duration_ms": 5000,
             }).status_code == 204
         assert client.post("/api/statistics/events", json={"event": "dialog_open", "name": "arbitrary-private-name"}).status_code == 422
-        summary = client.get("/api/statistics/summary").json()
-        assert summary["dialog_opens"] == 4
+        summary = app.state.statistics.summary(limit=25)
+        assert summary["dialog_opens"] == len(names)
         assert {row["value"] for row in summary["dialog"]} == names
         assert {row["value"].split(" · ")[0] for row in summary["dialog_duration"]} == names
 
 
-def test_product_reconfiguration_preserves_other_products_and_archives_uninstalled_help(tmp_path):
+@pytest.mark.parametrize("fail_conversion", [False, True])
+def test_help_queue_remains_active_through_conversion_and_reports_its_failure(tmp_path, monkeypatch, fail_conversion):
+    config = config_for(tmp_path)
+    source = config.sources_dir / "HelpPC 2.10/C.TXT"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"@C language\r\n:Reference\r\n%Reference text\r\n")
+    app = create_app(config)
+    entered, release = threading.Event(), threading.Event()
+    def download(_products, _sources, _cache, *, downloads, finalize, on_ready, **_options):
+        assert not finalize
+        downloads.update("help", "helppc:", state="running", percent=35, phase="Awaiting conversion")
+        on_ready("helppc:")
+        return DownloadResult(files=[source])
+    def build(*args, on_progress, **kwargs):
+        on_progress({"phase": "Converting", "stage": "convert", "stage_percent": 50,
+                     "processed": 1, "total": 2, "file": source.name})
+        entered.set()
+        assert release.wait(5)
+        if fail_conversion:
+            raise ValueError("Invalid HELP payload")
+        return build_help_groups(*args, on_progress=on_progress, **kwargs)
+    monkeypatch.setattr("thelpviewer.server.content.download_products", download)
+    monkeypatch.setattr("thelpviewer.server.content.build_help_groups", build)
+    with TestClient(app, base_url=config.auth_origin) as client:
+        admin_session(app, client)
+        try:
+            assert client.post("/api/admin/content", json={"help_packages": ["helppc:"]},
+                headers={"Origin": config.auth_origin}).status_code == 202
+            assert entered.wait(5)
+            status = client.get("/api/downloads").json()
+            row = next(row for row in status["items"] if row["id"] == "help:helppc:")
+            assert status["active"] and 35 < status["percent"] < 100
+            assert row["state"] == "running" and row["phase"] == "Converting"
+            assert row["stage"] == "convert" and row["stage_percent"] == 50
+            assert not list(config.helps_dir.rglob("*.json.gz"))
+        finally:
+            release.set()
+        finished = wait_job(client)
+        status = client.get("/api/downloads").json()
+        row = next(row for row in status["items"] if row["id"] == "help:helppc:")
+        assert not status["active"]
+        if fail_conversion:
+            assert finished["state"] == row["state"] == "error"
+            assert row["percent"] < 100 and row["error"] == "Invalid HELP payload"
+            assert not list(config.helps_dir.rglob("*.json.gz"))
+        else:
+            assert finished["state"] == "ready" and row["state"] == "done"
+            assert row["phase"] == "Published" and row["percent"] == 100
+            assert status["percent"] == 0
+            assert (config.helps_dir / "HelpPC 2.10/c.json.gz").is_file()
+
+
+def test_product_reconfiguration_preserves_other_products_and_archives_uninstalled_help(tmp_path, monkeypatch):
+    manifest = json.loads(Path("thelpviewer/config/help-database.json").read_text())
+    product = next(product for product in manifest["products"] if product["key"] == "bc")
+    for query in product["sources"].values():
+        query["archive_members"] = ["REFERENCE.TXT"]
+    database = tmp_path / "help-database.json"
+    database.write_text(json.dumps(manifest))
+    monkeypatch.setenv("THELP_HELP_DATABASE_PATH", str(database))
     sources, helps = tmp_path / "sources", tmp_path / "helps"
     for name, title in [("Borland Turbo Pascal 7.0", "Pascal"), ("Borland C++ 3.0", "C++")]:
         path = sources / name / "REFERENCE.TXT"
@@ -445,12 +796,43 @@ def test_product_reconfiguration_preserves_other_products_and_archives_uninstall
     assert (sources / "Borland Turbo Pascal 7.0" / "REFERENCE.TXT").is_file()
 
 
+def test_later_dos_failure_does_not_reject_successfully_published_help(tmp_path, monkeypatch):
+    config = config_for(tmp_path)
+    source = config.sources_dir / "HelpPC 2.10/C.TXT"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"@C language\r\n:Reference\r\n%Reference text\r\n")
+    app = create_app(config)
+    downloads = app.state.downloads
+    downloads.begin("help", [{"id": "helppc:", "label": "HelpPC", "byte_progress": False}])
+    downloads.begin("dos", [{"id": "two", "label": "Two", "byte_progress": False}])
+    def download(*_args, finalize, on_ready, **_kwargs):
+        assert not finalize
+        downloads.update("help", "helppc:", state="running", percent=35)
+        on_ready("helppc:")
+        return DownloadResult(files=[source])
+    def fail_dos(*_args, **_kwargs):
+        raise ValueError("DOS archive unavailable")
+    monkeypatch.setattr("thelpviewer.server.content.download_products", download)
+    monkeypatch.setattr(app.state.dos_prompt, "configure", fail_dos)
+    try:
+        app.state.content.start(help_packages=["helppc:"], dos_packages=["two"])
+        join_content_jobs(app.state.content)
+        assert app.state.content.status()["state"] == "error"
+        assert (config.helps_dir / "HelpPC 2.10/c.json.gz").is_file()
+        rows = downloads.snapshot(private=True)["items"]
+        help_rows = [row for row in rows if row["kind"] == "help"]
+        assert len(help_rows) == 1 and help_rows[0]["state"] == "done" and not help_rows[0]["error"]
+        assert any(row["kind"] == "dos" and row["state"] == "error" for row in rows)
+    finally:
+        downloads.close()
+
+
 def test_product_build_does_not_classify_companion_help_by_archive_folder(tmp_path):
     import shutil
     sources, helps = tmp_path / "sources", tmp_path / "helps"
     target = sources / "Borland Turbo Assembler"
     target.mkdir(parents=True)
-    shutil.copyfile(Path("data/sources/Borland Turbo Assembler/TASM.TAH"), target / "TASM.TAH")
+    shutil.copyfile(Path("var/sources/Borland Turbo Assembler/TASM.TAH"), target / "TASM.TAH")
     # A new CRC of a known companion filename must not acquire the archive's product.
     (target / "TDHELP.TDH").write_bytes(b"@Debugger\r\n:Companion\r\n%Debugger text\r\n")
     build_help_groups(["borland"], sources, helps, product_keys=["tasm"], keep_products=["tasm"])

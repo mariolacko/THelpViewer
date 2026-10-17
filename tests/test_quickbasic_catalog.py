@@ -6,7 +6,8 @@ import shutil
 
 import pytest
 
-from thelpviewer.server.converter.writers.bundle import _product_metadata_for_group, export_bundle_tree
+from thelpviewer.server.converter.metadata import product_metadata_for_group
+from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 
 
 @pytest.mark.parametrize("group,expected_product,expected_version", [
@@ -14,22 +15,22 @@ from thelpviewer.server.converter.writers.bundle import _product_metadata_for_gr
     ("Microsoft QuickBASIC 4.5", "qb45", "4.5"),
 ])
 def test_quickbasic_group_metadata_has_one_product_name(group, expected_product, expected_version):
-    assert _product_metadata_for_group(group) == (
+    assert product_metadata_for_group(group) == (
         expected_product, "Microsoft QuickBASIC", expected_version,
     )
 
 
 def test_quickbasic_exports_share_one_product_with_two_version_branches(tmp_path):
     originals = (
-        Path("data/sources/Microsoft QuickBASIC Extended 7.1/BAS7QCK.HLP"),
-        Path("data/sources/Microsoft QuickBASIC 4.5/QB45QCK.HLP"),
+        Path("var/sources/Microsoft QuickBASIC Extended 7.1/BAS7QCK.HLP"),
+        Path("var/sources/Microsoft QuickBASIC 4.5/QB45QCK.HLP"),
     )
     if not all(path.is_file() for path in originals):
         pytest.skip("QuickBASIC source help files were not downloaded")
 
     sources = tmp_path / "sources"
     for original in originals:
-        target = sources / original.relative_to("data/sources")
+        target = sources / original.relative_to("var/sources")
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(original, target)
 

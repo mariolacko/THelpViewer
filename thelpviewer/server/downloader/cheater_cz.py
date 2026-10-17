@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import re
-import tempfile
 import time
 from pathlib import Path
 from urllib.parse import quote_plus, urljoin
 
-from .catalog import ProductSpec, products_for_source, version_selected
-from .collector import copy_help_files
-from .extractor import ExtractorTools, expand_single_file_payloads, extract_file, extract_nested
-from .http import REQUEST_DELAY, USER_AGENT, fetch_html, download_file
+from ..processing import UnsafeContentError, report_progress
+from ..converter.ingest import HelpInput
+from .catalog import products_for_source
+from ..converter.selection import version_selected
+from .http import REQUEST_DELAY, USER_AGENT, fetch_html
 
 
 SOURCE_NAME = "cheater_cz"
@@ -77,57 +77,13 @@ def get_download_url(download_key: str, history_url: str) -> str:
     return urljoin(history_url, match.group(1))
 
 
-def _download_with_referer(url: str, dest: Path, *, referer: str) -> Path:
-    return download_file(url, dest, headers={"User-Agent": USER_AGENT,
-        "Accept": "application/octet-stream,*/*;q=0.9", "Accept-Language": "cs,en;q=0.9", "Referer": referer})
-
-
-def _collect_scorpion_source_files(work_dir: Path, product: ProductSpec) -> list[Path]:
-    files: list[Path] = []
-    for path in sorted(work_dir.rglob("*")):
-        if not path.is_file():
-            continue
-        if product.conversion.matches(path):
-            files.append(path)
-    if files:
-        return files
-
-    for path in sorted(work_dir.rglob("*")):
-        if not path.is_file():
-            continue
-        if product.conversion.matches(path, secondary=True):
-            files.append(path)
-    return files
-
-
-def _collect_from_archive(
-    archive_path: Path,
-    *,
-    product_label: str,
-    version_label: str,
-    sources_dir: Path,
-    extractor: ExtractorTools,
-    product: ProductSpec,
-) -> list[Path]:
-    target_dir = sources_dir / product_label / _safe_segment(version_label)
-    with tempfile.TemporaryDirectory(prefix="dlscorpion_") as tmp:
-        tmp_path = Path(tmp)
-        if not extract_file(archive_path, tmp_path, extractor):
-            return []
-        extract_nested(tmp_path, extractor)
-        expand_single_file_payloads(tmp_path, extractor)
-        files = _collect_scorpion_source_files(tmp_path, product)
-        if not files:
-            return []
-        return copy_help_files(files, target_dir, sources_dir)
-
-
 def run(
     product_keys: list[str],
-    sources_dir: Path,
     dl_dir: Path,
     dry_run: bool,
-    extractor: ExtractorTools,
+    process,
+    *,
+    complete=None,
 ) -> list[Path]:
     """Download every published DOS Scorpions Cheater release from Cheater.cz."""
     selected = products_for_source(SOURCE_NAME, product_keys)
@@ -154,14 +110,19 @@ def run(
     collected: list[Path] = []
 
     for version_label, download_key in versions:
+        if complete and complete():
+            break
         if not version_selected(product.key, version_label):
             continue
         print(f"\n  --- {version_label} ---")
         try:
             archive_name = get_archive_name(download_key, history_url)
             download_url = get_download_url(download_key, history_url)
+        except UnsafeContentError:
+            raise
         except Exception as exc:
             print(f"    [error] {exc}")
+            report_progress("Source warning", warning=str(exc))
             continue
 
         archive_filename = f"{download_key}__{_safe_segment(archive_name)}"
@@ -174,20 +135,18 @@ def run(
             continue
 
         try:
-            _download_with_referer(download_url, archive_path, referer=history_url)
-            files = _collect_from_archive(
-                archive_path,
-                product_label=product.label,
-                version_label=version_label,
-                sources_dir=sources_dir,
-                extractor=extractor,
-                product=product,
-            )
+            files = process(HelpInput(archive_path, product.label + "/" + _safe_segment(version_label),
+                product=product), url=download_url,
+                headers={"User-Agent": USER_AGENT, "Accept": "application/octet-stream,*/*;q=0.9",
+                    "Accept-Language": "cs,en;q=0.9", "Referer": history_url})
             if not files:
                 print("    No Scorpion source files found.")
                 continue
             collected.extend(files)
+        except UnsafeContentError:
+            raise
         except Exception as exc:
             print(f"    [error] {exc}")
+            report_progress("Source warning", warning=str(exc))
 
     return collected

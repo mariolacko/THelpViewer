@@ -24,6 +24,41 @@ def zipped(files):
     return stream.getvalue()
 
 
+def test_dos_install_falls_back_with_its_recipe_then_preserves_private_data(tmp_path, monkeypatch):
+    from urllib.error import HTTPError
+    from test_dos_prompt import payload
+
+    store = store_at(tmp_path)
+    account = "a" * 32
+    store.save(account, payload(store, files={"SAVE.DAT": b"private save"}))
+    source = {"id": "app", "url": "https://first.test/app.img", "format": "img", "target": "TOOLS/APP",
+        "alternatives": [{"url": "https://second.test/app.zip", "format": "zip", "strip_components": 1}]}
+    config = json.loads(store.config_path.read_text())
+    config["sources"] = [source]
+    store.config_path.write_text(json.dumps(config))
+    calls = []
+    def fetch(recipe, *_args, **_kwargs):
+        calls.append(recipe["url"])
+        if "first.test" in recipe["url"]:
+            raise HTTPError(recipe["url"], 404, "unavailable", {}, None)
+        return zipped({"APP/PROGRAM.EXE": b"MZ program", "APP/LICENSE.TXT": b"original licence"})
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    try:
+        store.configure(["app"])
+        assert store.state == "ready", store.error
+        assert store.files["TOOLS/APP/PROGRAM.EXE"] == b"MZ program"
+        assert store.overlay(account)[1] == {"SAVE.DAT": b"private save"}
+        assert len(calls) == 2
+        receipt = json.loads(store.installed_path.read_text())
+        assert set(receipt["_files"]["app"]) == {"TOOLS/APP/PROGRAM.EXE", "TOOLS/APP/LICENSE.TXT"}
+        store.configure([])
+        assert "TOOLS/APP/PROGRAM.EXE" not in store.files
+        assert store.overlay(account)[1] == {"SAVE.DAT": b"private save"}
+        assert len(calls) == 2  # Removing the fallback install does not download.
+    finally:
+        store.downloads.close()
+
+
 @pytest.mark.parametrize("ident,root,executable", [
     ("ia-cannon-fodder", "Cannon Fodder/_dosbox/_gamefiles/", "CF_ENG.EXE"),
     ("ia-cannon-fodder-2", "Cannon Fodder 2/_dosbox/_gamefiles/", "CANNON.EXE"),
@@ -114,7 +149,7 @@ def test_bundled_calc602_contains_only_the_approved_original_runtime(tmp_path):
 
 def test_archive_filter_ignores_host_only_names_but_validates_selected_dos_names(tmp_path, monkeypatch):
     monkeypatch.setattr("thelpviewer.server.dos.packages.find_sevenzip", lambda: "/usr/bin/7zz")
-    def extract(_archive, output, _tools):
+    def extract(_archive, output, _tools, **_options):
         (output / "GAME").mkdir(parents=True)
         (output / "GAME/PLAY.EXE").write_bytes(b"MZ game")
         (output / "HOST[windows].txt").write_bytes(b"not DOS content")

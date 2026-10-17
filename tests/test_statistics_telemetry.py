@@ -60,6 +60,33 @@ def test_statistics_asset_mirror_is_current():
     assert ASSET_PATHS[0].read_bytes() == ASSET_PATHS[1].read_bytes()
 
 
+def test_every_static_dialog_registration_has_a_bounded_statistics_name():
+    import re
+    from thelpviewer.server.statistics import DIALOG_NAMES
+    for filename in ("tv-shell.js", "tv-bundle-app.js", "tv-content.js", "tv-dialogs.js"):
+        source = (Path("www/assets") / filename).read_text()
+        names = set(re.findall(r'(?:_?registerDialog|dialogManager\.register)\("([a-z-]+)"', source))
+        assert names <= DIALOG_NAMES, names - DIALOG_NAMES
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js required")
+def test_automatic_view_ids_are_aggregated_without_sending_generated_ids_or_titles():
+    script = r'''
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const source=fs.readFileSync(process.argv[1],'utf8');
+class TVProgressDialog {} class TVMessageBox {}
+eval(source.slice(source.indexOf('function statisticsDialogName('),source.indexOf('function recordStatisticsEvent(')));
+assert.equal(statisticsDialogName('tv-view-21',new TVProgressDialog()),'progress');
+assert.equal(statisticsDialogName('tv-view-22',new TVMessageBox()),'messagebox');
+assert.equal(statisticsDialogName('tv-view-23',{}),'dialog');
+assert.equal(statisticsDialogName('server-configuration',{}),'server-configuration');
+assert.equal(statisticsDialogName('hall:sokoban',{}),'hall-of-fame');
+'''
+    result = subprocess.run([shutil.which("node"), "-e", script, str(ASSET_PATHS[0])],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required")
 def test_managed_dos_statistics_exclude_boot_pause_hidden_and_inactive_intervals():
     script = r'''

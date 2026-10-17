@@ -48,7 +48,7 @@ REFLOWED_SPANS = {
 
 
 def source(folder):
-    path = Path("data/sources") / folder / "TDHELP.TDH"
+    path = Path("var/sources") / folder / "TDHELP.TDH"
     if not path.is_file():
         pytest.skip("Original older TDH not available")
     return path
@@ -240,7 +240,7 @@ def test_hard_word_wrap_keeps_a_full_hotspot_on_the_previous_row():
 def test_wrapped_source_labels_survive_bundle_export(tmp_path, folder, context, expected):
     path = source(folder)
     original = path.read_bytes()
-    results = export_bundle_tree(Path("data/sources"), tmp_path, source_paths=[path], layout="helps")
+    results = export_bundle_tree(Path("var/sources"), tmp_path, source_paths=[path], layout="helps")
     assert len(results) == 1 and path.read_bytes() == original
     bundle = json.loads(gzip.decompress(results[0].json_path.read_bytes()))
     content = "\n".join(bundle["topics"][str(context)]["content"])
@@ -284,7 +284,7 @@ def test_only_the_later_hotspot_layout_reserves_a_nonspace_lookahead_cell():
 def test_older_final_pages_export_without_changing_originals(tmp_path, folder, context):
     path = source(folder)
     original = path.read_bytes()
-    results = export_bundle_tree(Path("data/sources"), tmp_path, source_paths=[path], layout="helps")
+    results = export_bundle_tree(Path("var/sources"), tmp_path, source_paths=[path], layout="helps")
     assert len(results) == 1 and path.read_bytes() == original
     bundle = json.loads(gzip.decompress(results[0].json_path.read_bytes()))
     assert str(context) in bundle["topics"]

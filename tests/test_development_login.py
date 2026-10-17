@@ -14,7 +14,9 @@ from thelpviewer.server.config import load_config
 
 
 def local_config(tmp_path, **changes):
-    return replace(load_config(), state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+    return replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                    statistics_path=tmp_path / "var" / "statistics.sqlite3",
                    auth_origin="http://localhost:5448", public_base_url="",
                    dev_auto_login=True, **changes)

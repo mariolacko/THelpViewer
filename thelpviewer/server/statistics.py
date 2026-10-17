@@ -41,6 +41,9 @@ HALL_OF_FAME_GAMES = {
 }
 HALL_OF_FAME_LIMIT = 10
 DIALOG_NAMES = {
+    "account", "add-user", "dialog", "download-action", "download-error", "grid", "login",
+    "messagebox", "progress", "rebuild-dos", "rebuild-midi", "registration",
+    "registration-token", "server-configuration", "users",
     "about", "ascii", "breakout", "calc", "calendar", "chdir", "colors",
     "contexthelp", "help-packages", "dos-packages", "downloads", "fileopen", "find", "hall-of-fame", "hanoi", "highscore",
     "lines", "ludo", "mastermind", "midi", "midi-sources", "midi-source-progress", "mines", "puzzle", "reversi",

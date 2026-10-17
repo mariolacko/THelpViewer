@@ -9,6 +9,7 @@ from urllib.request import Request
 import pytest
 
 from thelpviewer.server.downloader import http
+from thelpviewer.server.processing import observe_progress
 from thelpviewer.server.downloader.transport import read_request, retry_delay, MAX_RETRY_AFTER, _HTTPSRedirect
 
 
@@ -130,7 +131,7 @@ def test_download_progress_uses_archive_name_and_clears_bytes_between_phases(tmp
     monkeypatch.setattr(http.time, "sleep", lambda _: None)
     destination = tmp_path / "Borland Turbo Pascal 7.0.7z"
     events = []
-    with http.observe_downloads(events.append):
+    with observe_progress(events.append):
         http.download_file("https://example.test/download/mirror-id", destination)
         http.download_file("https://example.test/download/mirror-id", destination)
     assert [(event["phase"], event["file"], event["received"], event["bytes_total"]) for event in events] == [
@@ -150,9 +151,60 @@ def test_rate_limit_is_reported_as_waiting_before_retry(tmp_path, monkeypatch):
         return _Response(b"payload")
     monkeypatch.setattr(http, "get_opener", lambda: SimpleNamespace(open=open_response))
     monkeypatch.setattr(http.time, "sleep", lambda _: None)
-    with http.observe_downloads(events.append):
+    with observe_progress(events.append):
         http.download_file("https://example.test/download/id", tmp_path / "Help archive.zip", retries=2)
     assert [event["phase"] for event in events] == [
         "Downloading", "Rate limited (HTTP 429), retry in 3s", "Rate limited (HTTP 429), retry in 2s",
         "Rate limited (HTTP 429), retry in 1s", "Downloading", "Downloading", "Downloaded"]
     assert all(event["file"] == "Help archive.zip" for event in events)
+
+
+def test_help_rate_limit_defers_site_and_redirects_but_not_other_sites_or_new_jobs(tmp_path, monkeypatch):
+    from thelpviewer.server.downloader import transport
+
+    calls, cooldowns = [], []
+    def open_response(url, **_kwargs):
+        calls.append(url)
+        if "limited.test" in url:
+            raise urllib.error.HTTPError(url, 429, "quota", {"Retry-After": "0"}, None)
+        return _Response(b"archive")
+    monkeypatch.setattr(http, "get_opener", lambda: SimpleNamespace(open=open_response))
+    monkeypatch.setattr(http.time, "sleep", lambda _: None)
+    monkeypatch.setattr(transport, "defer_source", lambda url, delay: cooldowns.append((url, delay)))
+    deferred = set()
+    with transport.defer_limited_sources(deferred):
+        with pytest.raises(transport.SourceRateLimited, match="alternative sources"):
+            http.download_file("https://limited.test/download/first", tmp_path / "first.zip")
+        assert calls == ["https://limited.test/download/first"] * 3
+        assert deferred == {"limited.test"} and len(cooldowns) == 3
+        with pytest.raises(transport.SourceRateLimited):
+            http.download_file("https://mirror.limited.test/another", tmp_path / "second.zip")
+        with pytest.raises(transport.SourceRateLimited):
+            _HTTPSRedirect().redirect_request(Request("https://other.test/start"), None,
+                302, "Found", {}, "https://limited.test/mirror")
+        assert len(calls) == 3  # No network request or cooldown wait for other mirrors.
+        assert http.download_file("https://other.test/archive.zip", tmp_path / "other.zip").read_bytes() == b"archive"
+    assert not (tmp_path / "first.zip").exists() and not (tmp_path / "second.zip").exists()
+    assert not list(tmp_path.glob("*.part"))
+    # A later explicit retry has a fresh operation scope, not a permanent ban.
+    with transport.defer_limited_sources(set()):
+        with pytest.raises(transport.SourceRateLimited):
+            http.download_file("https://limited.test/download/first", tmp_path / "first.zip", retries=1)
+    assert len(calls) == 5
+
+
+def test_help_transient_rate_limit_can_recover_within_bounded_attempts(tmp_path, monkeypatch):
+    from thelpviewer.server.downloader.transport import defer_limited_sources
+
+    calls = []
+    def open_response(url, **_kwargs):
+        calls.append(url)
+        if len(calls) == 1:
+            raise urllib.error.HTTPError(url, 429, "quota", {"Retry-After": "0"}, None)
+        return _Response(b"archive")
+    monkeypatch.setattr(http, "get_opener", lambda: SimpleNamespace(open=open_response))
+    monkeypatch.setattr(http.time, "sleep", lambda _: None)
+    deferred = set()
+    with defer_limited_sources(deferred):
+        assert http.download_file("https://transient.test/file", tmp_path / "file").read_bytes() == b"archive"
+    assert len(calls) == 2 and not deferred

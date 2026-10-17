@@ -9,7 +9,7 @@ from thelpviewer.server.converter.readers.thelp import ThelpBinaryParser, ThelpH
 from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 
 
-SOURCE = Path("data/sources/Borland Sidekick 2/SK2.HLP")
+SOURCE = Path("var/sources/Borland Sidekick 2/SK2.HLP")
 
 
 def test_original_sidekick2_has_a_long_header_not_an_unknown_short_contents_binding():

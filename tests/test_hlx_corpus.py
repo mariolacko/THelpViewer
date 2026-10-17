@@ -16,7 +16,7 @@ FIXTURES = json.loads((ROOT / "tests/golden/hlx/keyword_trees.json").read_text()
 
 @pytest.mark.parametrize("fixture", FIXTURES, ids=lambda item: item["file"])
 def test_hlx_native_keyword_tree(fixture):
-    path = ROOT / "data/sources/Borland C++ 4.x" / fixture["file"]
+    path = ROOT / "var/sources/Borland C++ 4.x" / fixture["file"]
     data = path.read_bytes()
     assert f"{zlib.crc32(data):08X}" == fixture["crc32"]
     assert hashlib.sha256(data).hexdigest() == fixture["source_sha256"]

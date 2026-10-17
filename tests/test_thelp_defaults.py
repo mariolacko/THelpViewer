@@ -12,7 +12,7 @@ from test_thelp_validation import TABLE, admin, file_header, record, sample, tex
 
 
 def test_original_pascal4_default_slots_select_the_native_index_record():
-    data = Path("data/sources/Borland Turbo Pascal 4.0/TURBO.HLP").read_bytes()
+    data = Path("var/sources/Borland Turbo Pascal 4.0/TURBO.HLP").read_bytes()
     parser = ThelpBinaryParser(data)
     meta, screens, _index, _tags = parser.parse()
     assert meta["help_contents_topic_id"] == 100

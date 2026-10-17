@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-import gzip
 import json
 import shutil
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
+from ..results import BundleResult
+from ..selection import archive_member_selected
+from ..metadata import (product_metadata_for_database_entry, product_metadata_for_group,
+    product_metadata_for_source, catalog_menu_name)
+from ..planning import BundlePlan, bundle_stem_for_entry, build_pending_bundle_export, prefer_pending_bundle_export
+from ..catalog import rebuild_catalog
+from ...processing import report_progress
 from ..base import HelpDocument
 from .bundle_extensions import discover_bundle_source_groups, document_bundle_variants
 from ..bundle_types import BundleDocumentVariant, BundleSourceGroup
 from ..exporter import iter_help_files, load_document, select_display_encoding, fix_metadata_encoding, _clean_dir
 from .json import HelpJsonRenderer, TRANSPORT_METADATA_KEY_LIST
 from thelpviewer.help_database import (
-    HelpDatabaseEntry,
-    ProductSpec,
     load_help_database,
-    load_help_manifest,
     lookup_help_database_entry,
 )
 from thelpviewer.public_docs import is_public_doc_path
@@ -35,122 +37,6 @@ from .html import (
 HELPS_DIR_NAME = "helps"
 CATALOG_FILENAME = "catalog.json"
 DOCS_DIR_NAME = "docs"
-
-
-@dataclass(frozen=True, slots=True)
-class BundleResult:
-    input_path: Path
-    json_path: Path
-    format_name: str
-    topic_count: int
-    display_name: str
-    source_files: tuple[str, ...] = ()
-    product: str = ""
-    product_name: str = ""
-    version: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class _PendingBundleExport:
-    source_path: Path
-    bundle_dir: Path
-    bundle_path: Path
-    bundle_stem: str
-    group_name: str = ""
-    database_entry: HelpDatabaseEntry | None = None
-
-
-def _bundle_stem_for_entry(source_path: Path, database_entry: object | None) -> str:
-    if database_entry is not None:
-        bundle_stem = getattr(database_entry, "bundle_stem", "")
-        if isinstance(bundle_stem, str) and bundle_stem.strip():
-            return bundle_stem.strip().lower()
-        filenames = getattr(database_entry, "filenames", ())
-        if filenames:
-            return Path(filenames[0]).stem.lower()
-    return source_path.stem.lower()
-
-
-def _product_menu_label(product: ProductSpec | None) -> str:
-    if product is None:
-        return ""
-    return product.menu_label or product.label
-
-
-def _product_metadata_for_database_entry(
-    database_entry: HelpDatabaseEntry | None,
-) -> tuple[str, str, str]:
-    if database_entry is None or not database_entry.product_key:
-        return "", "", ""
-    product = load_help_manifest().product_map.get(database_entry.product_key)
-    version = database_entry.version or (product.default_version if product else "")
-    return database_entry.product_key, _product_menu_label(product), version
-
-
-def _product_metadata_for_group(group_name: str) -> tuple[str, str, str]:
-    normalized = group_name.replace("\\", "/").strip("/")
-    if not normalized:
-        return "", "", ""
-    manifest = load_help_manifest()
-    matches: list[tuple[int, int, ProductSpec, str]] = []
-    for product in manifest.products:
-        prefixes = (
-            [(prefix, 2) for prefix in product.collection_prefixes]
-            + [(product.label, 1)]
-            + ([(product.menu_label, 0)] if product.menu_label else [])
-        )
-        for prefix, priority in prefixes:
-            clean_prefix = prefix.strip()
-            if not clean_prefix:
-                continue
-            if normalized.casefold().startswith(clean_prefix.casefold()):
-                remainder = normalized[len(clean_prefix) :]
-                if remainder and remainder[0] not in " -/":
-                    continue
-                matches.append((len(clean_prefix), priority, product, remainder.strip(" -/")))
-    if matches:
-        _, _, product, version = max(matches, key=lambda match: (match[0], match[1]))
-        return product.key, _product_menu_label(product), version or product.default_version
-    return "", "", ""
-
-
-def _product_metadata_for_source(
-    source_path: Path, group_name: str, database_entry: HelpDatabaseEntry | None,
-) -> tuple[str, str, str]:
-    """Prefer verified CRC/file ownership over the containing archive's label."""
-    if database_entry is not None and database_entry.product_key:
-        return _product_metadata_for_database_entry(database_entry)
-    manifest = load_help_manifest()
-    owners = {product.key for product in manifest.products if product.conversion.matches(source_path)}
-    owners.update(entry.product_key for entry in manifest.entries
-                  if entry.product_key and any(name.casefold() == source_path.name.casefold()
-                                               for name in entry.filenames))
-    inferred = _product_metadata_for_group(group_name)
-    if not owners or inferred[0] in owners:
-        return inferred
-    if len(owners) == 1:
-        product = manifest.product_map[next(iter(owners))]
-        return product.key, _product_menu_label(product), product.default_version
-    return "", "", ""  # A mixed archive cannot disambiguate a shared filename.
-
-
-def _catalog_menu_name(
-    display_name: str,
-    *,
-    group_name: str,
-    product_name: str,
-    version: str,
-) -> str:
-    label = display_name.strip()
-    prefixes = [
-        f"{group_name} - ",
-        f"{product_name} {version} - " if product_name and version else "",
-        f"{product_name} - " if product_name else "",
-    ]
-    for prefix in prefixes:
-        if prefix and label.casefold().startswith(prefix.casefold()):
-            return label[len(prefix) :].strip() or label
-    return label
 
 
 def _add_transport_metadata_keys(document: HelpDocument, keys: tuple[str, ...]) -> None:
@@ -242,13 +128,13 @@ def export_bundle(
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
         display_name = document.display_name
-        file_stem = _bundle_stem_for_entry(source_path, database_entry) if bundle_name is None else bundle_name
+        file_stem = bundle_stem_for_entry(source_path, database_entry) if bundle_name is None else bundle_name
         source_files = tuple(
             getattr(database_entry, "filenames", ()) or (source_path.name,)
         )
         source_files = _source_files_with_aliases(document, source_files)
-        product_key, product_name, version = _product_metadata_for_database_entry(database_entry)
-        menu_name = _catalog_menu_name(
+        product_key, product_name, version = product_metadata_for_database_entry(database_entry)
+        menu_name = catalog_menu_name(
             display_name,
             group_name=getattr(database_entry, "collection", "") if database_entry is not None else "",
             product_name=product_name,
@@ -283,7 +169,8 @@ def export_bundle(
         return BundleResult(
             input_path=source_path,
             json_path=Path(output_dir) / (file_stem + ".json.gz"),
-            format_name="ERROR",
+            format_name="",
+            error=str(e) or type(e).__name__,
             topic_count=0,
             display_name=source_path.stem,
             source_files=(source_path.name,),
@@ -317,9 +204,9 @@ def _export_bundle_source_group(
         fix_metadata_encoding(document, chosen_encoding)
 
     document = group.build_document(group.source_paths, documents)
-    product_key, product_name, version = _product_metadata_for_group(group_name)
+    product_key, product_name, version = product_metadata_for_group(group_name)
     source_files = _source_files_with_aliases(document, tuple(path.name for path in group.source_paths))
-    menu_name = _catalog_menu_name(
+    menu_name = catalog_menu_name(
         document.display_name,
         group_name=group_name,
         product_name=product_name,
@@ -366,7 +253,7 @@ def _apply_bundle_metadata(
 
 
 def _export_pending_bundle_variants(
-    pending: _PendingBundleExport,
+    pending: BundlePlan,
     *,
     encoding: str,
 ) -> list[BundleResult]:
@@ -395,14 +282,14 @@ def _export_pending_bundle_variants(
             BundleDocumentVariant(bundle_stem=pending.bundle_stem, document=document)
         ]
         results: list[BundleResult] = []
-        product_key, product_name, version = _product_metadata_for_source(
+        product_key, product_name, version = product_metadata_for_source(
             source_path, pending.group_name, db_entry,
         )
         for variant in variants:
             variant_document = variant.document
             source_files = variant.source_files or tuple(getattr(db_entry, "filenames", ()) or (source_path.name,))
             source_files = _source_files_with_aliases(variant_document, source_files)
-            menu_name = _catalog_menu_name(
+            menu_name = catalog_menu_name(
                 variant_document.display_name,
                 group_name=pending.group_name,
                 product_name=product_name,
@@ -447,80 +334,16 @@ def _export_pending_bundle_variants(
             BundleResult(
                 input_path=source_path,
                 json_path=pending.bundle_path,
-                format_name="ERROR",
+                format_name="",
+                error=str(e) or type(e).__name__,
                 topic_count=0,
                 display_name=source_path.stem,
                 source_files=(source_path.name,),
-                product=_product_metadata_for_group(pending.group_name)[0],
-                product_name=_product_metadata_for_group(pending.group_name)[1],
-                version=_product_metadata_for_group(pending.group_name)[2],
+                product=product_metadata_for_group(pending.group_name)[0],
+                product_name=product_metadata_for_group(pending.group_name)[1],
+                version=product_metadata_for_group(pending.group_name)[2],
             )
         ]
-
-
-def _build_pending_bundle_export(
-    path: Path,
-    *,
-    source_root: Path,
-    helps_dir: Path,
-    database_entry: HelpDatabaseEntry | None,
-) -> _PendingBundleExport:
-    relative = path.relative_to(source_root)
-    group_name = (
-        database_entry.collection
-        if database_entry is not None and getattr(database_entry, "collection", "")
-        else str(relative.parent).replace("\\", "/")
-    )
-    if (database_entry is None or not database_entry.collection) and len(relative.parent.parts) > 1:
-        # A declared source container can hold publication roots. The result
-        # must not depend on whether the caller exports that container or its
-        # parent (CLI product roots versus the server's complete source tree).
-        container, publication_root, *rest = relative.parent.parts
-        for group in load_help_manifest().build_groups:
-            if (any(container.startswith(prefix) for prefix in group.source_root_prefixes)
-                    and any(publication_root.startswith(prefix) for prefix in group.help_dir_prefixes)):
-                group_name = Path(publication_root, *rest).as_posix()
-                break
-    group_parts = tuple(part for part in Path(group_name).parts if part not in {"", "."})
-    bundle_dir = helps_dir.joinpath(*group_parts) if group_parts else helps_dir
-    bundle_stem = _bundle_stem_for_entry(path, database_entry)
-    return _PendingBundleExport(
-        source_path=path,
-        bundle_dir=bundle_dir,
-        bundle_path=bundle_dir / f"{bundle_stem}.json.gz",
-        bundle_stem=bundle_stem,
-        group_name=group_name,
-        database_entry=database_entry,
-    )
-
-
-def _pending_bundle_topic_count(
-    candidate: _PendingBundleExport,
-    *,
-    cache: dict[Path, int],
-) -> int:
-    cached = cache.get(candidate.source_path)
-    if cached is not None:
-        return cached
-    try:
-        cached = len(load_document(candidate.source_path).topics)
-    except Exception:
-        cached = -1
-    cache[candidate.source_path] = cached
-    return cached
-
-
-def _prefer_pending_bundle_export(
-    current: _PendingBundleExport,
-    candidate: _PendingBundleExport,
-    *,
-    topic_count_cache: dict[Path, int],
-) -> bool:
-    current_count = _pending_bundle_topic_count(current, cache=topic_count_cache)
-    candidate_count = _pending_bundle_topic_count(candidate, cache=topic_count_cache)
-    if candidate_count != current_count:
-        return candidate_count > current_count
-    return str(candidate.source_path).casefold() < str(current.source_path).casefold()
 
 
 def export_bundle_tree(
@@ -532,6 +355,7 @@ def export_bundle_tree(
     *,
     source_paths: list[Path] | None = None,
     on_progress=None,
+    include_catalog=True,
 ) -> list[BundleResult]:
     """Export all help files under *input_root* as JSON bundles."""
     source_root = Path(input_root)
@@ -550,10 +374,12 @@ def export_bundle_tree(
     results: list[BundleResult] = []
     seen_crc32: set[int] = set()
     topic_count_cache: dict[Path, int] = {}
-    pending_exports: dict[Path, _PendingBundleExport] = {}
+    pending_exports: dict[Path, BundlePlan] = {}
     help_paths = iter_help_files(source_root) if source_paths is None else source_paths
     if any(not path.is_relative_to(source_root) for path in help_paths):
         raise ValueError("Selected HELP paths must be inside the source root")
+    help_paths = [path for path in help_paths
+                  if archive_member_selected(path, lookup_help_database_entry(path, help_database))]
     source_groups = discover_bundle_source_groups(help_paths)
     grouped_source_members = {
         path
@@ -565,7 +391,7 @@ def export_bundle_tree(
         if path in grouped_source_members:
             continue
         db_entry = lookup_help_database_entry(path, help_database)
-        pending = _build_pending_bundle_export(
+        pending = build_pending_bundle_export(
             path,
             source_root=source_root,
             helps_dir=helps_dir,
@@ -578,7 +404,7 @@ def export_bundle_tree(
                 continue
             seen_crc32.add(db_entry.crc32)
         existing = pending_exports.get(pending.bundle_path)
-        if existing is not None and not _prefer_pending_bundle_export(
+        if existing is not None and not prefer_pending_bundle_export(
             existing,
             pending,
             topic_count_cache=topic_count_cache,
@@ -591,18 +417,20 @@ def export_bundle_tree(
     total_exports = len(pending_exports) + len(source_groups)
     processed = 0
     for pending in pending_exports.values():
+        progress = report_progress("Converting", pending.source_path.name,
+                                   stage="convert", processed=processed, total=total_exports)
         if on_progress:
-            on_progress({"phase": "Converting", "file": pending.source_path.name,
-                         "processed": processed, "total": total_exports})
+            on_progress(progress)
         results.extend(_export_pending_bundle_variants(pending, encoding=encoding))
         processed += 1
     for group in source_groups:
+        progress = report_progress("Converting", group.source_paths[0].name,
+                                   stage="convert", processed=processed, total=total_exports)
         if on_progress:
-            on_progress({"phase": "Converting", "file": group.source_paths[0].name,
-                         "processed": processed, "total": total_exports})
+            on_progress(progress)
         processed += 1
         try:
-            first_pending = _build_pending_bundle_export(
+            first_pending = build_pending_bundle_export(
                 group.source_paths[0],
                 source_root=source_root,
                 helps_dir=helps_dir,
@@ -627,56 +455,22 @@ def export_bundle_tree(
                     json_path=helps_dir
                     / group.source_paths[0].parent.relative_to(source_root)
                     / f"{group.bundle_stem}.json.gz",
-                    format_name="ERROR",
+                    format_name="",
+                    error=str(e) or type(e).__name__,
                     topic_count=0,
                     display_name=description,
                     source_files=tuple(path.name for path in group.source_paths),
-                    product=_product_metadata_for_group(str(group.source_paths[0].parent.relative_to(source_root)))[0],
-                    product_name=_product_metadata_for_group(str(group.source_paths[0].parent.relative_to(source_root)))[1],
-                    version=_product_metadata_for_group(str(group.source_paths[0].parent.relative_to(source_root)))[2],
+                    product=product_metadata_for_group(str(group.source_paths[0].parent.relative_to(source_root)))[0],
+                    product_name=product_metadata_for_group(str(group.source_paths[0].parent.relative_to(source_root)))[1],
+                    version=product_metadata_for_group(str(group.source_paths[0].parent.relative_to(source_root)))[2],
                 )
             )
 
+    progress = report_progress("Converting", stage="convert", processed=processed, total=total_exports)
     if on_progress:
-        on_progress({"phase": "Converting", "file": "", "processed": processed, "total": total_exports})
-    # Build catalog.json in the helps/ directory.
-    catalog = []
-    for result in results:
-        if result.format_name == "ERROR" or not result.json_path.is_file():
-            continue
-        rel_path = result.json_path.relative_to(helps_dir)
-        group = str(rel_path.parent) if rel_path.parent != Path(".") else ""
-        source_files = list(result.source_files) if result.source_files else [result.input_path.name]
-        menu_name = _catalog_menu_name(
-            result.display_name,
-            group_name=group,
-            product_name=result.product_name,
-            version=result.version,
-        )
-        entry = {
-            "group": group,
-            "file": str(rel_path).replace("\\", "/"),
-            "source_file": source_files[0],
-            "source_files": source_files,
-            "name": result.display_name,
-            "format": result.format_name,
-            "topics": result.topic_count,
-        }
-        if result.product:
-            entry["product"] = result.product
-        if result.product_name:
-            entry["product_name"] = result.product_name
-        if result.version:
-            entry["version"] = result.version
-        if menu_name and menu_name != result.display_name:
-            entry["menu_name"] = menu_name
-        catalog.append(entry)
-
+        on_progress(progress)
     catalog_path = helps_dir / CATALOG_FILENAME
-    catalog_path.write_text(
-        json.dumps(catalog, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    count = rebuild_catalog(helps_dir, catalog_path) if include_catalog else len(results)
 
     # No cross-bundle index annotation: do not add `source_file` to
     # index entries and do not attempt to invent external links here.
@@ -693,7 +487,7 @@ def export_bundle_tree(
             _copy_docs(docs_source, target_dir / DOCS_DIR_NAME,
                         readme=source_root.parent / "README.md")
 
-    print(f"[bundle] Katalóg aktualizovaný: {catalog_path} ({len(catalog)} položiek)")
+    print(f"[bundle] Katalóg aktualizovaný: {catalog_path} ({count} položiek)")
     return results
 
 
@@ -775,17 +569,17 @@ def _render_bundle_index_html() -> str:
 <meta name="theme-color" content="#000080">
 <meta name="GENERATOR" content="THelp Viewer Converter {GENERATOR_VERSION}">
 <link rel="icon" type="image/svg+xml" href="{SITE_ASSET_DIR_NAME}/thelp-icon.svg">
-<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20261015b">
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20261015c"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20261015k"></script>
+<link rel="stylesheet" href="{SITE_ASSET_DIR_NAME}/turbovision.css?v=20261015c">
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-core.js?v=20261015e"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-context-help.js?v=20261017a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-highlight.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20261015c"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-content.js?v=20261015f"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-dialogs.js?v=20261016t"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-content.js?v=20261016g"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-screensaver.js?v=20261010b"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-games.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20261015b"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-shell.js?v=20261017a"></script>
 <script defer src="{SITE_ASSET_DIR_NAME}/tv-dos.js?v=20261010b"></script>
-<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20261015c"></script>
+<script defer src="{SITE_ASSET_DIR_NAME}/tv-bundle-app.js?v=20261016w"></script>
 </head>
 <body class="tv-page tv-bundle-page"
   data-tv-site-name="THelpViewer"

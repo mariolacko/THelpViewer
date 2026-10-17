@@ -18,6 +18,7 @@ from ..base import (
     render_topic_uhf_content,
 )
 from ..codepages import decode_bytes, decode_bytes_box_aware
+from .turbo_basic import is_turbo_basic_binary
 
 THELP_SIG = b"$*$* &&&&$*$"
 
@@ -69,6 +70,8 @@ KNOWN_THELP_TITLES: dict[str, str] = {
 
 def is_thelp_binary(data: bytes) -> bool:
     """Return ``True`` when the buffer looks like a THELP or Turbo C help file."""
+    if is_turbo_basic_binary(data):
+        return False
     # Accept Borland Pascal/TPH, Turbo C/TCH and other `*.T?H` variants
     # when they still contain the THELP signature. Some variants keep a
     # larger loader/header prefix.

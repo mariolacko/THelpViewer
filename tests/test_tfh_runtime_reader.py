@@ -22,7 +22,7 @@ SAMPLES = [
 
 
 def source(folder):
-    path = Path("data/sources") / folder / "TFHELP.TFH"
+    path = Path("var/sources") / folder / "TFHELP.TFH"
     if not path.is_file():
         pytest.skip("Original Profiler HELP not available")
     return path
@@ -128,13 +128,13 @@ def test_profiler_corrupt_map_fails_instead_of_stopping_early(folder):
 def test_profiler_101_exports_a_separate_complete_edition_without_changing_originals(tmp_path):
     path = source(SAMPLES[1][0])
     original = path.read_bytes()
-    results = export_bundle_tree(Path("data/sources"), tmp_path, source_paths=[path], layout="helps")
+    results = export_bundle_tree(Path("var/sources"), tmp_path, source_paths=[path], layout="helps")
     assert len(results) == 1 and results[0].topic_count == 367
     assert path.read_bytes() == original
     catalog = json.loads((tmp_path / "catalog.json").read_text())
     entry = catalog[0]
     assert entry["product"] == "td" and entry["version"] == "1.01"
-    assert entry["file"] == "Borland Turbo Debugger/Profiler/Assembler/tfhelp-1.01.json.gz"
+    assert entry["file"] == "Borland Turbo Debugger/1.01/tfhelp-1.01.json.gz"
     bundle = json.loads(gzip.decompress((tmp_path / entry["file"]).read_bytes()))
     assert len(bundle["topics"]) == 367 and "366" in bundle["topics"]
     assert bundle["metadata"]["display"]["cols"] == 48

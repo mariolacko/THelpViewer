@@ -56,7 +56,7 @@ def test_failed_json_replacement_keeps_settings_and_cleans_temporary_file(tmp_pa
     original = path.read_bytes()
     def fail(*_args):
         raise OSError("disk unavailable")
-    monkeypatch.setattr("thelpviewer.server.json_storage.os.replace", fail)
+    monkeypatch.setattr("thelpviewer.server.file_storage.os.replace", fail)
     with pytest.raises(OSError, match="disk unavailable"):
         write_json(path, {"sources": []})
     assert path.read_bytes() == original and list(tmp_path.iterdir()) == [path]

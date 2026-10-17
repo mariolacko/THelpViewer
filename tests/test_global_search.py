@@ -29,6 +29,7 @@ def _bundle(path, title, content, *, aliases=None):
             "topics": {"7": {"id": 7, "title": title, "content": content,
                               **({"aliases": {"ids": aliases}} if aliases is not None else {})}},
             "index": [{"group": "A", "entries": [{"label": "Indexed Alpha", "topic_id": 7}]}],
+            "contents": [],
         }, output)
 
 
@@ -51,7 +52,9 @@ def test_numeric_source_aliases_open_canonical_topics_without_duplicate_index_ro
     _bundle(second, "Second", ["Other primary text"], aliases=[17])
     midi = tmp_path / "midi.json"
     midi.write_text('{"sources": []}')
-    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
                      state_dir=tmp_path / "var", midi_sources_path=midi,
                      public_base_url="https://help.example.test",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3")
@@ -128,7 +131,9 @@ def test_explicit_alias_public_urls_keep_numeric_aliases_distinct_from_real_ids(
         }}, output)
     midi = tmp_path / "midi.json"
     midi.write_text('{"sources": []}')
-    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+    config = replace(load_config(), sources_dir=(tmp_path / "state") / 'sources',
+        downloads_dir=(tmp_path / "state") / "downloads",
+        helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
                      state_dir=tmp_path / "state", midi_sources_path=midi,
                      public_base_url="https://help.example.test",
                      statistics_path=tmp_path / "state" / "statistics.sqlite3")
@@ -180,7 +185,9 @@ def test_symbolic_alias_cursor_urls_case_sensitive_contexts_and_cache_upgrade(tm
         connection.execute("CREATE TABLE topic_aliases (file_path TEXT, alias TEXT, context_id TEXT, PRIMARY KEY(file_path,alias))")
     midi = tmp_path / "midi.json"
     midi.write_text('{"sources": []}')
-    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+    config = replace(load_config(), sources_dir=(state) / 'sources',
+        downloads_dir=(state) / "downloads",
+        helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
                      state_dir=state, midi_sources_path=midi, public_base_url="https://help.example.test",
                      statistics_path=state / "statistics.sqlite3")
     before = path.read_bytes()
@@ -222,7 +229,9 @@ def test_global_search_builds_incrementally_and_removes_missing_help(tmp_path):
     (helps / "catalog.json").write_text(json.dumps([
         {"file": "first.json.gz", "name": "The First HELP", "source_file": "FIRST.NG"},
     ]), encoding="utf-8")
-    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
                      state_dir=tmp_path / "var",
                      public_base_url="https://help.example.test",
                      google_site_verification="",
@@ -315,7 +324,9 @@ def test_global_search_builds_incrementally_and_removes_missing_help(tmp_path):
 def test_global_search_empty_catalog_is_ready(tmp_path):
     helps = tmp_path / "helps"
     helps.mkdir()
-    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
                      state_dir=tmp_path / "var",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3")
     with TestClient(create_app(config)) as client:
@@ -336,7 +347,9 @@ def test_public_docs_share_search_index_and_have_crawlable_pages(tmp_path):
     (docs / "RE.md").write_text("Hidden Zebra", encoding="utf-8")
     readme = tmp_path / "README.md"
     readme.write_text("# Welcome\n\nPublic Penguin text", encoding="utf-8")
-    config = replace(load_config(), helps_dir=helps, docs_dir=docs,
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        helps_dir=helps, docs_dir=docs,
                      virtual_docs=(("README.md", readme), ("Alias/README.md", readme)),
                      state_dir=tmp_path / "var", public_base_url="https://help.example.test",
                      google_site_verification='verification-"&',
@@ -406,7 +419,9 @@ def test_file_sitemap_pages_keep_overview_on_first_page(tmp_path, monkeypatch):
                 for number in range(1, 4)
             },
         }, output)
-    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
                      state_dir=tmp_path / "var",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3")
     with TestClient(create_app(config)) as client:
@@ -435,7 +450,9 @@ def test_public_urls_redirect_encoding_variants_to_sitemap_urls(tmp_path):
     (docs / doc_path).write_text("# HELP Format\n\nDocument body", encoding="utf-8")
     midi_sources = tmp_path / "midi.json"
     midi_sources.write_text('{"sources": []}', encoding="utf-8")
-    config = replace(load_config(), helps_dir=helps, docs_dir=docs, virtual_docs=(),
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        helps_dir=helps, docs_dir=docs, virtual_docs=(),
                      state_dir=tmp_path / "var", midi_sources_path=midi_sources,
                      public_base_url="https://help.example.test",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3")
@@ -490,7 +507,9 @@ def test_browser_error_page_keeps_messagebox_but_returns_real_404(tmp_path):
     helps.mkdir()
     midi_sources = tmp_path / "midi.json"
     midi_sources.write_text('{"sources": []}', encoding="utf-8")
-    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
                      state_dir=tmp_path / "var", midi_sources_path=midi_sources,
                      google_site_verification="test-verification",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3")
@@ -536,7 +555,9 @@ def test_original_error_documentation_is_not_a_website_error(tmp_path):
     _bundle(helps / "placeholder.json.gz", "No help", topics["3"]["content"])
     midi_sources = tmp_path / "midi.json"
     midi_sources.write_text('{"sources": []}', encoding="utf-8")
-    config = replace(load_config(), helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
+    config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        helps_dir=helps, docs_dir=tmp_path / "docs", virtual_docs=(),
                      state_dir=tmp_path / "var", midi_sources_path=midi_sources,
                      statistics_path=tmp_path / "var" / "statistics.sqlite3")
     with TestClient(create_app(config)) as client:
@@ -582,7 +603,9 @@ def _isolated_config(tmp_path):
     docs.mkdir()
     midi = tmp_path / "midi.json"
     midi.write_text('{"sources": []}', encoding="utf-8")
-    return replace(load_config(), helps_dir=helps, docs_dir=docs, virtual_docs=(),
+    return replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
+        downloads_dir=(tmp_path / "var") / "downloads",
+        helps_dir=helps, docs_dir=docs, virtual_docs=(),
                    state_dir=tmp_path / "var", midi_sources_path=midi,
                    statistics_path=tmp_path / "var" / "statistics.sqlite3")
 

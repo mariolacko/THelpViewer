@@ -8,32 +8,13 @@ import re
 import time
 import urllib.error
 import urllib.request
-from contextlib import contextmanager
-from contextvars import ContextVar
 from html.parser import HTMLParser
 from pathlib import Path
 
 from .transport import create_opener, public_url, read_request
-
-
-_progress = ContextVar("download_progress", default=None)
-
-
-@contextmanager
-def observe_downloads(callback):
-    """Per-task progress, without redirecting process-wide stdout."""
-    token = _progress.set(callback)
-    try:
-        yield
-    finally:
-        _progress.reset(token)
-
-
-def report_progress(phase: str, filename: str = "", **values):
-    """Report a real work phase and clear stale per-file byte counters."""
-    callback = _progress.get()
-    if callback:
-        callback({"phase": phase, "file": filename, "received": 0, "bytes_total": 0, **values})
+from .errors import SourceRateLimited, SourceUnavailable
+from .cache import download_cached
+from ..processing import report_progress
 
 
 REQUEST_DELAY = 1.5
@@ -117,28 +98,24 @@ def fetch_polite(url: str, encoding: str | None = None) -> str:
     return fetch_html(url, encoding=encoding)
 
 
-def download_file(url: str, dest: Path, retries: int = 3, *, headers=None) -> Path:
+def download_file(url: str, dest: Path, retries: int = 3, *, headers=None, process=None):
     """Download one file to disk, skipping already-downloaded targets."""
     public_url(url, https_only=False)
-    if dest.is_symlink() or dest.parent.is_symlink():
-        raise ValueError("Download cache must not contain symbolic links")
-    if dest.exists():
-        if not dest.is_file():
-            raise ValueError("Download cache entry must be a regular file")
+    def cached():
         print(f"    [skipped] {dest.name} (exists)")
         report_progress("Using cached archive", dest.name)
-        return dest
-
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    time.sleep(DOWNLOAD_DELAY)
-    request = urllib.request.Request(url, headers=headers) if headers else url
-    try:
-        read_request(get_opener(), request, 512 * 1024 * 1024, timeout=120, retries=retries,
-            retry_after=60, destination=dest,
-            on_status=lambda phase: report_progress(phase, dest.name),
-            on_progress=lambda received, size: report_progress("Downloading", dest.name,
-                received=received, bytes_total=size))
-    except (OSError, urllib.error.URLError) as error:
-        raise RuntimeError(f"Download failed: {dest.name}: {error}") from error
-    report_progress("Downloaded", dest.name, downloaded_size=dest.stat().st_size)
-    return dest
+    def fetch(staged):
+        time.sleep(DOWNLOAD_DELAY)
+        request = urllib.request.Request(url, headers=headers) if headers else url
+        try:
+            read_request(get_opener(), request, 512 * 1024 * 1024, timeout=120, retries=retries,
+                retry_after=60, destination=staged,
+                on_status=lambda phase: report_progress(phase, dest.name),
+                on_progress=lambda received, size: report_progress("Downloading", dest.name, stage="download",
+                    received=received, bytes_total=size))
+        except SourceRateLimited:
+            raise
+        except (OSError, urllib.error.URLError) as error:
+            raise SourceUnavailable(f"Download failed: {dest.name}: {error}") from error
+        report_progress("Downloaded", dest.name, stage="prepare", downloaded_size=staged.stat().st_size)
+    return download_cached(dest, 512 * 1024 * 1024, fetch, process=process, on_cached=cached)

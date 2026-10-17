@@ -4,6 +4,118 @@ Internal implementation/mapping excerpts removed from the format datasheets.
 These are historical notes, not source-format fields. Some examples refer to
 obsolete tools or behavior; current decoder code and CHANGELOG take precedence.
 
+## Turbo Assembler edition identities (2026-10-16)
+
+Every current TASM.TAH is CRC-registered with its own tool release, independently
+of the compiler distribution containing it. Verified native executable banners:
+
+| HELP CRC32 | Release | TASM.EXE CRC32 | Distribution |
+| --- | --- | --- | --- |
+| `91D5F0DE` | 3.0, English | `0E0DAAE7` | Borland CPP 3.0 (3.5-1.44mb) |
+| `9AC3E64A` | 3.1, English | `B8C4FB37` | Archive.org BCPP31.ZIP, BIN/TASM.* |
+| `C74EE5C6` | 3.2, German help | `DF0CB775` | Borland Pascal with Objects 7.0 German |
+
+The cached C++ archive matches SHA-1
+`8a80b487e1ef2153e8f203d9d1b349d5530cd5f0` from its
+[verified download record](https://winworldpc.com/download/52dfb385-9ba2-11e9-ab10-fa163e9022f0).
+The German Pascal archive matches the SHA-512 in its
+[verified download record](https://winworldpc.com/download/e2809ac2-a2e2-8099-e280-93157011c3a5):
+`2b86d1d5da737e0d2c03e46cf63236e1411416ade2a1848a2f961479fcec1380fdbc278d3360f4862776bc30fea566b3f68112413bde34b8620d39e0bc763fbf`.
+The 3.1 English archive is pinned at <https://archive.org/details/bcpp31>.
+The German STRUC topic still mentions 3.1; its accompanying program explicitly
+reports 3.2, so that topic alone must not label the entire help as 3.1.
+
+The C++ 3.0/3.x originals are byte-identical copies of CRC `91D5F0DE`, not
+separate editions. Their published copy uses the verified C++ 3.0 collection;
+the German original retains its Pascal 7.0 (DE) collection so real same-group
+cross-file links retain their source identity. All originals stay on disk.
+CRC-based export removes duplicate publication without a menu-specific rule.
+The separate registered 2.0/2.01 references retain 491 topics; the additional
+3.0/3.1/German 3.2 references have 525/530/530 topics respectively.
+
+Borland split media expose identical assembled TASM payloads in more than one
+temporary subtree. Exact-member ingestion collapses only identical same-name
+copies. It prioritizes TASM.ZIP and stops after obtaining the selected members,
+instead of opening an unrelated BPWHLP.ZIP with a bad MMSYSTEM.HLP checksum.
+The corruption of that Windows help payload is not fixed or hidden for a job
+that actually selects it.
+
+## Turbo Basic WORD records and isolated regressions (2026-10-15)
+
+The failure reporting compression type 15 was a grammar mismatch, not a
+new nibble compression. TBHELP.TBH has WORD type/length fields: its header's
+height 15 was being read as a later THELP compression selector. English CRC32
+`3ADC1C1F` is 41,029 bytes with FE-space packing; German `E9E8BE71` is 58,073
+bytes with literal text. Both German source directories contain identical
+bytes and represent one registered edition, not two new releases.
+
+The English input matches Disk01.img in WinWorld's Turbo Basic 1.0 archive
+byte for byte, SHA-256
+`5618e8d8d5e67a384fcc84e8b8ef1bcb9cfeb856965cb001bbfc5d67c08f1661`.
+Its original TB.EXE has SHA-256
+`f4f28fe595d32eed54754c4bf2ca0704a352a72de1017508c267bcbf809d6cb0`.
+Verified download pages are recorded on both CRC entries with exact-member
+TBHELP.TBH selection and Archive.org fallback queries. The MicroCalc files
+remain separate text inputs.
+
+Load-image offsets in TB.EXE: `6B47h` opens/verifies headers, `6AE9h` reads
+WORD record headers, `6CFFh` expands FE-space runs, `6D57h` displays a screen,
+`6C88h` highlights twelve-byte hotspot entries, `6FF0h` activates their DWORD
+targets, and `7005h` resolves six-byte context slots with fallback to 100.
+The screen reader consumes the keyword count WORD separately from its
+declared entry-byte length. The last file-header WORD selects literal/space
+packing, not a margin. Context and link DWORDs address text record headers.
+
+Executing the original renderer in a 16-bit CPU emulator, with its MZ
+relocations applied and DS/SS matching the original near-buffer model, gives
+the same display rows for all 324 physical screens in the three source
+copies. Hooks supply file seeks/reads and capture original video calls; the
+Python decoder does not supply display rows. Each file has 108 text/keyword
+pairs, 66 mapped screens and 42 offset-only continuations. English retains
+207 links and each German copy 257. All destinations resolve. Generated
+continuation IDs use 65536 plus zero-based physical screen ordinal.
+
+Compact ASCII JSON+LF records `[absolute_text_offset, [row.hex(), ...]]`
+from native execution hash to:
+
+| CRC32 | Native display SHA-256 |
+| --- | --- |
+| `3ADC1C1F` | `330f976860d8ec61596deaca1f64e024e2939911e3de25a76f415483d98964a6` |
+| `E9E8BE71` | `e6294fa8eb4e6b11f878658060ea552871cd6e92cbbdc2d5e952a3c0c903fe3f` |
+
+Injected text confirms FE counts 0/3/255, literal FE in mode 0, ignored SOH,
+blank NUL rows and literal FF. The disassembly contains an apparent FF
+displacement branch, but CBW sign-extends FF to FFFF before comparison with
+00FF; execution confirms that branch is not reached. A nonempty final row
+without NUL has an inconsistent native buffer flush and remains a strict
+rejection rather than a guessed alternate encoding.
+
+The three pre-existing THELP golden tests now identify their original
+66-source cohort by frozen paths/SHA-256, preserving every preceding source,
+raw-row, example-row and complete-model digest. The downloaded collection
+also contains 13 additional THELP copies: nine match earlier input hashes;
+the other four contain three distinct inputs. Their raw nibble rows and
+example projections were independently compared with the existing bounded
+DEHELP.C/BOA C references. Separate input-keyed goldens extend coverage to
+those three inputs without replacing the 66-file baseline. These include
+C++ 3.0/3.x TASM, German Pascal 7 TASM and German Turbo Pascal 4.
+
+The main browser test publishes the eight real HELP sources referenced by
+its restore/public-URL scenarios into temporary output. Scorpion likewise
+exports its checked DAT corpus into a temporary library before checking
+publication. Neither test depends on or changes the administrator's installed
+selection. The browser assertions now exercise the shared Downloads control,
+not the removed player-specific progress API or removed catalog cache field.
+Original sources and live published content are not rebuilt by these tests.
+
+Verification recorded in TODO: the complete 2,570-case run has 2,567 passes,
+two ordering-fixture failures and one Safari skip. Keeping Path-component
+ordering in the frozen cohort restores both unchanged independent digests;
+their repetition passes. The final MIDI pending-transfer shutdown addition
+also passes with all 34 MIDI/configuration/rebuild checks. There is no
+remaining observed failure from this pass, but no fresh single full-suite
+execution after those last edits is claimed.
+
 ## QuickC 2.50 split-media closure (2026-10-14)
 
 The Archive.org `microsoft-quick-c-2.50` distribution is complete: its
@@ -410,7 +522,7 @@ filename; renaming that script fixes the harness without application changes.
 
 ## Borland Sidekick 1 Help
 
-The second original is now retained in `data/sources/Borland Sidekick 1.56b/`
+The second original is now retained in `var/sources/Borland Sidekick 1.56b/`
 and registered independently with its release/download page and fallback
 search query, rather than replacing the differently sized first original.
 
@@ -472,7 +584,7 @@ Sidekick Plus uses a [separate reader and directory format](../Formats/Borland%2
 
 ## Evidence and scope
 
-The local original is `data/sources/Borland Sidekick Plus/SKPLUS.HLP`.
+The local original is `var/sources/Borland Sidekick Plus/SKPLUS.HLP`.
 [The 1.00A disk listing](https://www.pcjs.org/software/pcx86/util/borland/skplus/1.00a/)
 independently identifies a file of this size dated 1988-03-10. Borland's
 [owner's handbook](https://www.bitsavers.org/pdf/borland/sidekick/Sidekick_Plus_Owners_Handbook_1988.pdf),
@@ -615,7 +727,7 @@ Native attributes are represented by the existing UHF bold/link categories,
 not a claimed reconstruction of configurable native colors.
 
 The downloader selects only the six `.TXT` conversion inputs into
-`data/sources/HelpPC 2.10/`. `HELPPC.DOC` and `HELPPC.NDX` remain in the original
+`var/sources/HelpPC 2.10/`. `HELPPC.DOC` and `HELPPC.NDX` remain in the original
 downloaded archive; the converter does not use them. These sources are
 excluded from the default public build pending a redistribution-rights review.
 
@@ -1688,7 +1800,7 @@ harness failures used a wrong dialog selector and a stale debugging-port
 file; fresh profiles and the actual shared dialog root fix the harness,
 without weakening an application assertion or changing application code.
 
-Confirmed Turbo Assembler sample: `data/sources/Borland Turbo Assembler/TASM.TAH`
+Confirmed Turbo Assembler sample: `var/sources/Borland Turbo Assembler/TASM.TAH`
 is a normal THELP-family file. The current loader detects it via the standard
 THELP signature and reads it with `format_version = 52` / `text_version = 1`;
 no separate `TAH` decoder is needed.

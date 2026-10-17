@@ -39,6 +39,12 @@ def standard_midi(data: bytes, *, limit: int) -> bytes:
         counted = True
 
     if len(data) < 14 or data[:4] != b"MThd":
+        try:
+            text = data.decode("utf-8-sig").rstrip("\x1a\r\n\t ")
+        except UnicodeDecodeError:
+            text = ""
+        if text and all(char.isprintable() or char in "\r\n\t" for char in text):
+            raise ValueError("File is not Standard MIDI: source contains plain text instead of MIDI bytes")
         raise ValueError("File is not Standard MIDI or a supported MIDI container")
     header_size = int.from_bytes(data[4:8], "big")
     format_number = int.from_bytes(data[8:10], "big")

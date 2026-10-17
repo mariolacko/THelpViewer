@@ -795,13 +795,28 @@
       "category": "filemanagers",
       "title": "Norton Commander 4.0",
       "enabled": false,
-      "url": "https://winworldpc.com/download/4627e280-9ec2-b518-c39a-11c3a4e284a2/from/c3ae6ee2-8099-713d-3411-c3a6e280947e",
+      "url": "https://archive.org/download/003492-NortonCommander40/003492_norton_commander.7z",
       "format": "archive",
-      "image_member": "Norton Commander 4.0 (3.5)/disk1.img",
+      "image_member": "003492_norton_commander/disk1.img",
+      "extract": [
+        {"members": ["README.TXT"]},
+        {"archive": "NC_ARC.EXE", "format": "archive"},
+        {"archive": "NC_ARCV1.EXE", "format": "archive"}
+      ],
+      "alternatives": [
+        {
+          "url": "https://archive.org/download/norton-commander-4.0-for-dos/Norton%20Commander%204.0%20for%20DOS.zip",
+          "format": "zip",
+          "extract": [
+            {"members": ["README.TXT"]},
+            {"archive": "NC_ARC.EXE", "format": "archive"}
+          ]
+        }
+      ],
       "target": "TOOLS/NC",
       "launch": "CD \\TOOLS\\NC then NC",
       "license": "Commercial Symantec software; enable only with redistribution permission",
-      "description": "The classic two-panel file manager for navigating drives and organising files. Includes Norton Commander's own menus and online help.",
+      "description": "Original English Norton Commander 4.0 for DOS: two-panel file management, editor, online help and file viewers. Server-side extraction requires no interactive installer.",
       "post_install": []
     },
     {

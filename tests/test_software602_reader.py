@@ -9,19 +9,19 @@ from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 @lru_cache(maxsize=1)
 def _c602_document():
-    path = Path("data/sources") / "Software 602" / "C602.HLP"
+    path = Path("var/sources") / "Software 602" / "C602.HLP"
     return T602310Reader(str(path), path).read_bytes(path.read_bytes())
 
 
 @lru_cache(maxsize=1)
 def _t602_document():
-    path = Path("data/sources") / "Software 602" / "t602_310.hlp"
+    path = Path("var/sources") / "Software 602" / "t602_310.hlp"
     return T602310Reader(str(path), path).read_bytes(path.read_bytes())
 
 
 @lru_cache(maxsize=1)
 def _t602_300_document():
-    path = Path("data/sources") / "Software 602" / "t602_300.hlp"
+    path = Path("var/sources") / "Software 602" / "t602_300.hlp"
     return T602300Reader(str(path), path).read_bytes(path.read_bytes())
 
 
@@ -234,7 +234,7 @@ def test_c602_uses_software602_character_overrides():
 
 
 def test_t602_300_is_detected_by_manifest_converter_registry():
-    path = Path("data/sources") / "Software 602" / "t602_300.hlp"
+    path = Path("var/sources") / "Software 602" / "t602_300.hlp"
     data = path.read_bytes()
     handler = detect_format_handler(path, data)
 

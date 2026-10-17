@@ -5,6 +5,7 @@ import pytest
 from thelpviewer.server.midi.format import standard_midi
 
 MIDI = b"MThd\x00\x00\x00\x06\x00\x00\x00\x01\x00\x60MTrk\x00\x00\x00\x04\x00\xff\x2f\x00"
+TEXT_MIDI = b"(2/60)\r\n(2/4,3/104,4/110,5/114,10/1,10/1)\r\n\r\n\x1a"
 
 
 def chunk(kind, data):
@@ -45,6 +46,14 @@ def test_invalid_or_truncated_payloads_are_not_published(data):
 def test_size_limits_include_the_container():
     with pytest.raises(ValueError, match="size limit"):
         standard_midi(rmid(chunk(b"data", MIDI)), limit=len(MIDI))
+
+
+@pytest.mark.parametrize("data", [TEXT_MIDI, b"\xef\xbb\xbf" + TEXT_MIDI,
+    "Not music: názov skladby".encode(), b"<html>not music</html>",
+    rmid(chunk(b"data", TEXT_MIDI))])
+def test_text_renamed_to_midi_has_a_source_diagnostic_not_a_fake_conversion(data):
+    with pytest.raises(ValueError, match="source contains plain text instead of MIDI bytes"):
+        standard_midi(data, limit=1024)
 
 
 def test_midi_chunk_lengths_are_big_endian_without_riff_word_padding():

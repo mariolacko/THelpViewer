@@ -1,10 +1,12 @@
 # Converter
 
-> Updated: 2026-10-15
+> Updated: 2026-10-16
 
 Help file converter — reads binary and source help formats, exports to HTML, JSON bundles or Markdown.
 
-The converter has no external dependencies beyond Python 3.10+.
+Use Python 3.10+ and the repository requirements. Container ingestion may also
+need unar/lsar or 7zz; decoding format-specific compression uses the reader's
+declared dependencies.
 
 ## Usage
 
@@ -13,10 +15,10 @@ The converter has no external dependencies beyond Python 3.10+.
 python -m thelpviewer.server.converter TURBO.TPH output/
 
 # Directory tree → HTML (with clean target)
-python -m thelpviewer.server.converter data/sources/ output/ --clean
+python -m thelpviewer.server.converter var/sources/ output/ --clean
 
 # JSON bundle for SPA viewer
-python -m thelpviewer.server.converter data/sources/ www/ --bundle
+python -m thelpviewer.server.converter var/sources/ www/ --bundle
 
 # Specify encoding
 python -m thelpviewer.server.converter TURBO7CZ.TPH output/ --encoding cp852
@@ -39,6 +41,26 @@ python -m thelpviewer.server.converter TURBO.TPH output/ --dump-json
 
 ## Architecture
 
+The converter's public processing responsibilities are separate:
+
+- `ingest.py` consumes `HelpInput` source plans, calls the shared
+  `server/archives/` layer, selects required members and retains originals.
+- `sources.py` owns CRC-aware source collection; `selection.py` owns the
+  request-local edition filter used by discovery and ingestion.
+- `planning.py` owns build groups, canonical bundle destinations and collision
+  selection; `metadata.py` owns product/version/menu metadata.
+- Readers return `HelpDocument`; writers serialize it without fetching URLs.
+- `results.py` defines conversion results with an explicit `error` string.
+  Failed conversions retain their actual diagnostic, not an ERROR format ID.
+- `validation.py` validates gzip/JSON, UHF version, required structures and
+  topic IDs/content before `catalog.py` builds the catalog. External links are
+  not rejected just because their target belongs to a different bundle.
+
+`export_bundle_tree(include_catalog=False)` lets the staged server build own
+the one final catalog pass; standalone exports include the catalog by default.
+Both paths use the same catalog builder. UHF and catalogs are atomically
+written, so a failed write does not replace an existing file.
+
 Server builds call `converter.build.build_help_groups()` directly. It converts
 only the selected manifest groups, stages bundles next to `data/helps/`, rebuilds
 the catalog through `converter.catalog.rebuild_catalog()`, and keeps live
@@ -60,11 +82,13 @@ exports remain available; the server does not run them as commands.
 See [Server Content](Server%20Content.md).
 
 Recognition is not a promise that every historical profile can be decoded.
-In particular, the currently downloaded Turbo Basic `TBHELP.TBH` files are
-rejected at header/compression parsing; their native profile remains unverified.
-They are separate from the supported MicroCalc example `.HLP` files. A selected
-product containing these inputs fails its staged build without replacing the
-published library. Remaining verification is tracked in the repository's
+Turbo Basic `TBHELP.TBH` uses a separate WORD-record/space-packing reader,
+verified against the original `TB.EXE`, rather than the later nibble THELP
+decoder. It retains continuation screens addressed only by native offsets;
+generated IDs at `65536 + physical screen ordinal` identify screens without
+context slots. MicroCalc's `.HLP` text grammar remains separate. Malformed
+inputs fail a selected staged build without replacing the published library.
+Remaining verification is tracked in the repository's
 `TODO.md`, which is not part of the public Docs catalog.
 
 The converter uses a pipeline architecture with automatic format detection:
@@ -79,6 +103,64 @@ roots and conversion inputs, and map known CRC32 files to canonical collection,
 title, encoding, and bundle metadata. It also defines converter handlers in
 deterministic order, including the matcher/detector function and reader class.
 `thelpviewer/help_database.py` validates and exposes the schema.
+An auxiliary tool's release is its own version, not the release of the C++ or
+Pascal distribution containing it. CRC entries for all current TASM originals
+declare explicit releases (2.0, 2.01, 3.0, 3.1, 3.2 (DE)); byte-identical copies
+share one registered output. Their verified distribution collections remain
+unchanged where needed for real cross-file lookup. Catalog product/version
+metadata, not physical folder nesting, controls the Help Files hierarchy.
+
+### Conversion input selection
+
+`archive_members` in `help-database.json` is the shared list of files to extract
+and process. Turbo Pascal 7 uses `"archive_members": ["TURBO.TPH"]` for its
+compiler archive and `"archive_members": ["OWL.TPH", "TVISION.TPH"]` for the
+library archive. Their combined selection is those three HELP files.
+
+The server and CLI use the same lists for HTML/UHF batch builds, including
+explicit batches and already-extracted originals. Source queries retain full
+archive paths; published originals use their canonical basenames. Matching is
+case-insensitive. An explicit archive plan still requires every listed member
+and rejects ambiguous matches. Broad discovery reuses the complete edition list
+instead of copying unrelated HELP files from the archive.
+
+Edition lists stay with edition sources: Turbo Pascal 5.5 still uses TURBO.HLP,
+not the 7.0 list. A retrieval recipe for only one component is not treated as a
+complete edition list while other registered components have no member lists.
+Products without a complete declared selection retain normal format discovery.
+CRC ownership takes precedence over a mixed archive's directory label.
+For an explicitly selected registered edition, an unknown CRC in a different
+collection is not identified by filename alone. Unknown/corrupt inputs in the
+edition's canonical collection still undergo decoder validation and can fail
+the build; unregistered formats retain their usual discovery rules.
+
+Originals sharing a filename but belonging to distinct registered releases need
+distinct `collection` paths in the manifest. Debugger originals use release
+subdirectories, keeping their physical DOS filenames intact. A corrected
+collection can relocate an existing CRC-verified source without overwriting
+different data; source and output planning both use the same manifest.
+
+The server may pass `source_batches`, an iterator of ready edition IDs, with
+explicit `package_ids` to `build_help_groups`. Each edition is selected and
+converted when ready while downloading/extraction continues. Duplicate/unknown
+IDs or an incomplete iterator fail the build. Every result remains in one
+staging tree until all requested editions, bundle validation and catalog
+generation succeed; an exception cannot publish the earlier partial results.
+Without `source_batches`, CLI and direct API builds retain full-batch discovery.
+`backup_dir` selects the recovery destination: the server uses
+`var/backups/help/`; standalone calls default to `<helps-parent>/backups/help/`.
+The previous live directory stays beside HELP only during atomic publication
+and is moved to a managed `help-<id>` generation after success. Backup transfer
+failure keeps that original recovery tree and logs its path rather than
+rolling back an already published valid library.
+
+Unselected originals are retained but do not enter that edition's batch. Thus
+COMMDLGS.HLP and HELPEX.HLP can remain on disk without blocking Turbo Pascal 7.
+Required licence notices may also be selected; format detection does not turn
+them into HELP bundles. Selected malformed/unsupported inputs still fail staging,
+without replacing published HELP. Low-level single-file readers remain usable
+for diagnostics. Special multi-file reader/bundle assembly rules remain separate
+from this download selection; no parallel include/exclude list is needed.
 
 ### 1. Format Detection
 
@@ -96,7 +178,8 @@ structural checks. Representative checks are:
 | `LN` + version word `0x0002` | Microsoft QuickHelp |
 | `NG`/`EH` header or `.ng` | Norton Guide |
 | `FBHF` magic | TurboVision FBHF binary |
-| THELP signature | Borland THELP binary |
+| Exact `TURBO BASIC HELP FILE.` stamp and signature | Turbo Basic WORD-record binary |
+| Other THELP signatures | Borland THELP binary |
 | Opaque word followed by the validated English `Help text #0` screen record | Sidekick 1 screen stream |
 | Opaque pairing word followed by `"Borland Help" 00 01` | Sidekick Plus paragraph directory |
 | Big-endian delta map, sentinel and first-page padding structure | TDH/TFH runtime help (not THELP) |
@@ -592,6 +675,7 @@ See [Windows Help](../Formats/Windows%20Help.md) for source-format byte fields.
 | Reader | Format | Signature | Binary/Text |
 |--------|--------|-----------|-------------|
 | `thelp.py` | Borland THELP (TP4–7, TC, TASM, Sidekick 2) | `$*$* &&&&$*$` | Binary |
+| `turbo_basic.py` | Turbo Basic compiler/editor screens | Exact TBH stamp, WORD records and FE-space packing | Binary |
 | `fbhf.py` | TurboVision FBHF (TP6, TP7, BP7) | `FBHF` magic | Binary |
 | `ng.py` | Norton Guide / Expert Help | `NG` / `EH` | Binary, XOR `1Ah` records |
 | `m602.py` | Software602 M602 HelpSystem | `\x1a(c) Software602 HelpSystem` | Binary (XOR $FA encrypted) |
@@ -802,7 +886,7 @@ and catalog intact; the same job can be retried after correcting its input.
 | `export_bundle(path, output_dir, ...)` | Single file → `.json.gz` bundle |
 | `export_bundle_tree(input_dir, output_dir, ...)` | Directory → bundles + `catalog.json` |
 
-Tree exports preserve subdirectory structure from `data/sources/`. Bundle tree
+Tree exports preserve subdirectory structure from `var/sources/`. Bundle tree
 exports also generate `catalog.json` in the selected output directory. Server
 builds publish it at `data/helps/catalog.json`, served as `/helps/catalog.json`.
 
@@ -813,6 +897,11 @@ labels and physical source directories differ. For example, QuickBASIC 4.5
 and QuickBASIC Extended 7.1 both appear under `Microsoft QuickBASIC`, then
 under separate `4.5` and `7.1` entries. The catalog `file` path stays tied to
 the existing bundle location, not to the menu labels.
+Single-file editions open directly from their version item instead of adding
+a one-file submenu. If the whole product contains only one file, its Help
+Files item opens that file directly and shows the product plus its version.
+Versions still come from the manifest/catalog, not product-specific JS rules;
+an unknown version is not invented.
 
 Known files are deduplicated by CRC32. Product-level conversion rules cover
 corpora where a release consists of several related files without stable CRCs.

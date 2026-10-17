@@ -140,7 +140,7 @@ def test_mixed_frames_and_literal_markup_are_not_rewritten_by_table_appearance()
 
 
 def test_original_tables_and_every_assigned_memo_remain_readable():
-    root = Path("data/sources/Game-Cheater/Game-Cheater 9.02")
+    root = Path("var/sources/Game-Cheater/Game-Cheater 9.02")
     if not root.is_dir():
         pytest.skip("Original Game-Cheater database not available")
     datasheet = Path("docs/Formats/Game Cheater PC-Fand Format.md").read_text()

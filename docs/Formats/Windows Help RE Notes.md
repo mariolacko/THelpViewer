@@ -19,8 +19,8 @@ provider's published checksums:
 The first is a research input, not another installed catalog edition.
 The 4.52 ISO reproduces all 20 existing 4.x HLX files exactly. Eighteen
 indexes also match 4.5; BCW/OWL do not. Permanent source acquisition keeps
-20 matching HLPs under `data/sources/Borland C++ 4.x/`, and the four distinct
-4.5 BCW/OWL HLP/HLX files under `data/sources/Borland C++ 4.5/`. The original
+20 matching HLPs under `var/sources/Borland C++ 4.x/`, and the four distinct
+4.5 BCW/OWL HLP/HLX files under `var/sources/Borland C++ 4.5/`. The original
 20 indexes remain byte-identical. Manifest release metadata now identifies
 them as 4.52; this does not rename their physical collection or bundle URLs.
 

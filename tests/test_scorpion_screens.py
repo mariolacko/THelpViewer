@@ -13,7 +13,7 @@ from thelpviewer.server.converter.writers.json import HelpJsonRenderer
 
 @pytest.mark.parametrize("version,count", [("15", 9), ("16", 9), ("21", 10), ("22", 10), ("23", 10)])
 def test_program_screens_preserve_native_order_glyph_attributes_font_and_all_articles(version, count):
-    path = Path(f"data/sources/Scorpions Cheater DOS/Scorpions Cheater {version}/PROGRAM.DAT")
+    path = Path(f"var/sources/Scorpions Cheater DOS/Scorpions Cheater {version}/PROGRAM.DAT")
     if not path.is_file():
         pytest.skip("Original Scorpion PROGRAM resources are not installed")
     data = path.read_bytes()

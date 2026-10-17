@@ -5,14 +5,15 @@ import shutil
 
 import pytest
 
-from thelpviewer.server.downloader import archiveorg, catalog, winworld
-from thelpviewer.server.downloader.collector import collect_help_files, copy_help_files
-from thelpviewer.server.downloader.extractor import ExtractorTools
+from thelpviewer.server.downloader import archiveorg, catalog, service, winworld
+from thelpviewer.server.converter.sources import collect_help_files, copy_help_files
+from tests.help_downloads import help_processor
+from thelpviewer.server.archives.core import ExtractorTools
 from thelpviewer.server.converter.readers.winhelp_binary import WinHelpFile
 
 
 def test_windows_help_is_retained_by_archive_collection_and_duplicate_copy(tmp_path):
-    original = Path("data/sources/Borland C++ 4.x/OPENHELP.HLP").read_bytes()
+    original = Path("var/sources/Borland C++ 4.x/OPENHELP.HLP").read_bytes()
     source = tmp_path / "extracted"
     source.mkdir()
     help_path = source / "OPENHELP.HLP"
@@ -24,22 +25,23 @@ def test_windows_help_is_retained_by_archive_collection_and_duplicate_copy(tmp_p
     assert copy_help_files([help_path], destination / "Borland C++", destination) == []
     help_path.write_bytes(b"another revision")
     with pytest.raises(ValueError, match="Conflicting"):
-        copy_help_files([help_path], destination / "Borland C++", destination)
+        copy_help_files([help_path], copied[0].parent, destination)
     assert copied[0].read_bytes() == original
 
 
 def test_archiveorg_direct_hlp_download_is_not_deleted(tmp_path, monkeypatch):
     product = catalog.product_spec("bc")
     query = product.sources["archiveorg"]
-    original = Path("data/sources/Borland C++ 4.x/OPENHELP.HLP").read_bytes()
+    original = Path("var/sources/Borland C++ 4.x/OPENHELP.HLP").read_bytes()
     monkeypatch.setattr(archiveorg, "get_item_files", lambda _: [{"name": "OPENHELP.HLP", "size": str(len(original))}])
-    def download(_url, path):
+    def download(_url, path, *, process, **_options):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(original)
-    monkeypatch.setattr(archiveorg, "download_file", download)
+        return process(path)
+    monkeypatch.setattr(service, "download_file", download)
     result = archiveorg.process_item({"identifier": "borland", "title": "Borland C++ 4.52"},
-                                    product, query, tmp_path / "downloads", tmp_path / "sources",
-                                    ExtractorTools(None, None, None), False, [])
+                                    product, query, tmp_path / "downloads",
+                                    help_processor(tmp_path / "sources", ExtractorTools(None, None, None)), False, [])
     assert len(result) == 1 and result[0].read_bytes() == original
 
 
@@ -63,8 +65,9 @@ def test_archiveorg_can_select_iso_without_selecting_raw_flux_images():
 def test_repeated_crc_provenance_is_one_edition_job_per_provider():
     for provider in ("winworld", "archiveorg"):
         jobs = catalog.products_for_source(provider, ["bc"])
-        assert len(jobs) == 3  # Family + distinct 4.5 pair set + full 4.52 set.
-        assert {j.default_version for j in jobs[1:]} == {"4.5", "4.52"}
+        # Other verified editions can add jobs; repeated pair records must not.
+        assert len([job for job in jobs if job.default_version == "4.5"]) == 1
+        assert len([job for job in jobs if job.default_version == "4.52"]) == 1
         pinned = next(j for j in jobs if j.default_version == "4.52")
         assert len(pinned.sources[provider].archive_members) == 40
         assert pinned.collection_prefixes == ("Borland C++ 4.x",)
@@ -86,16 +89,16 @@ def test_actual_pinned_cd_download_retains_exact_matching_index_and_hlp(tmp_path
     monkeypatch.setattr(winworld, "products_for_source", lambda *_: [pinned])
     monkeypatch.setattr(winworld, "get_download_info", lambda _: ("Borland C++ 4.52",
         [("mirror", "https://example.com/bc452.7z")]))
-    def cached(_url, destination):
+    def cached(_url, destination, *, process, **_options):
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(archive, destination)
-        return destination
-    monkeypatch.setattr(winworld, "download_file", cached)
-    files = winworld.run(["bc"], tmp_path / "sources", tmp_path / "downloads", False,
-                        ExtractorTools(None, None, sevenzip))
+        return process(destination)
+    monkeypatch.setattr(service, "download_file", cached)
+    files = winworld.run(["bc"], tmp_path / "downloads", False,
+                        help_processor(tmp_path / "sources", ExtractorTools(None, None, sevenzip)))
     assert len(files) == 40
     for path in files:
-        assert path.read_bytes() == (Path("data/sources/Borland C++ 4.x") / path.name).read_bytes()
+        assert path.read_bytes() == (Path("var/sources/Borland C++ 4.x") / path.name).read_bytes()
         if path.suffix == ".HLP":
             companion = path.with_suffix(".HLX")
             assert WinHelpFile(path.read_bytes()).stream("|KWBTREE") == companion.read_bytes()

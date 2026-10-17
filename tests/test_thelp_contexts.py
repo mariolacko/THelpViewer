@@ -108,7 +108,7 @@ def test_declared_missing_index_context_is_not_guessed_from_an_alias_string():
 
 
 def test_real_transfer_arguments_alias_opens_its_record_instead_of_the_source_page():
-    source = Path("data/sources/Borland C++ 3.0/TCHELP.TCH")
+    source = Path("var/sources/Borland C++ 3.0/TCHELP.TCH")
     document = ThelpHelpReader().read_path(source)
     owner = next(topic for topic in document.topics if 543 in topic.alias_contexts)
     source_topic = next(topic for topic in document.topics if topic.context_id == 2887)
@@ -118,7 +118,7 @@ def test_real_transfer_arguments_alias_opens_its_record_instead_of_the_source_pa
 
 
 def test_real_pascal_register_alias_opens_its_record_not_the_referring_menu_row():
-    document = ThelpHelpReader().read_path(Path("data/sources/Borland Turbo Pascal 7/TURBO.TPH"))
+    document = ThelpHelpReader().read_path(Path("var/sources/Borland Turbo Pascal 7/TURBO.TPH"))
     register = next(topic for topic in document.topics if topic.context_id == 117)
     assert 477 in register.alias_contexts
     assert any("[link:topic=477]" in row and "Register" in row
