@@ -206,4 +206,3 @@ def test_head_without_body_retains_identity_file_length_and_cache_variant():
     assert body == b"" and headers[b"content-length"] == b"4096"
     assert b"content-encoding" not in headers
     assert headers[b"vary"] == b"Accept-Encoding"
-
