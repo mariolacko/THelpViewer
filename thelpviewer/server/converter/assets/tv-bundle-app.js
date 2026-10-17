@@ -61,6 +61,7 @@ const {
     TVDosWindow,
     TVDialog,
     TVMessageBox,
+    TVProgressDialog,
     TVView,
     TVGroup,
     TVStaticText,
@@ -138,8 +139,12 @@ let catalogData = null;
 let docsCatalogData = null;
 const URL_STATE_PREFIX = "tv=1.";
 
-function statisticsDialogName(name) {
+function statisticsDialogName(name, dialog = null) {
     const value = String(name || "").toLowerCase();
+    if (/^tv-view-\d+$/.test(value)) {
+        return dialog instanceof TVProgressDialog ? "progress"
+            : dialog instanceof TVMessageBox ? "messagebox" : "dialog";
+    }
     if (value.startsWith("hall:")) { return "hall-of-fame"; }
     if (value.startsWith("highscore:")) { return "highscore"; }
     if (value.startsWith("tetris-setup:")) { return "tetris-setup"; }
@@ -2943,12 +2948,22 @@ function buildCatalogMenuItems(catalog) {
         items.push(renderMenuPopupSeparator());
     }
     products.forEach((productNode) => {
+        const entries = [...productNode.direct, ...productNode.versions.flatMap((version) => version.direct)];
+        if (entries.length === 1) {
+            const entry = entries[0];
+            const label = [productNode.key, catalogVersionLabel(entry)].filter(Boolean).join(" ");
+            items.push(catalogMenuEntryButton(entry, label));
+            return;
+        }
         const productItems = catalogMenuEntryButtons(productNode.direct);
         if (productItems.length && productNode.versions.length) {
             productItems.push(renderMenuPopupSeparator());
         }
-        productNode.versions.forEach((versionNode) => {
-            productItems.push(renderMenuSubmenu(versionNode.key, catalogMenuEntryButtons(versionNode.direct)));
+        productNode.versions.sort((left, right) => left.key.localeCompare(right.key, undefined,
+            { numeric: true, sensitivity: "base" })).forEach((versionNode) => {
+            productItems.push(versionNode.direct.length === 1
+                ? catalogMenuEntryButton(versionNode.direct[0], versionNode.key)
+                : renderMenuSubmenu(versionNode.key, catalogMenuEntryButtons(versionNode.direct)));
         });
         items.push(renderMenuSubmenu(productNode.key, productItems));
     });
@@ -3409,6 +3424,9 @@ class TVBundleApp extends TVProgram {
         let handled = true;
         if (event.command === "downloads-show") {
             this.downloadProgress.showDialog(this.desktopView);
+        } else if (event.command === "global-index-show") {
+            this.searchDialog?.handleEvent(event);
+            return;
         } else if (event.command === "downloads-failed") {
             void this.downloadProgress.failedItem(control, this.desktopView);
         } else if (event.command === "context-help") {
@@ -3529,7 +3547,7 @@ class TVBundleApp extends TVProgram {
             }
             return {
                 scope: "dialog",
-                name: statisticsDialogName(managerName),
+                name: statisticsDialogName(managerName, dialog),
                 view: dialog,
             };
         }
@@ -3579,7 +3597,7 @@ class TVBundleApp extends TVProgram {
         } else if (target.scope === "tool") {
             recordStatisticsEvent({ event: "tool_open", name: target.name });
         } else {
-            recordStatisticsEvent({ event: "dialog_open", name: statisticsDialogName(managerName) });
+            recordStatisticsEvent({ event: "dialog_open", name: target.scope === "dialog" ? target.name : statisticsDialogName(managerName) });
             if (target.scope === "game") {
                 recordStatisticsEvent({ event: "game_open", game: target.name });
             }
@@ -3719,6 +3737,7 @@ class TVBundleApp extends TVProgram {
         };
         this.helpPackagesDialog.onInstalled = () => this._loadCatalog(false);
         this.dosPackagesDialog.onInstalled = () => this._loadCatalog(false);
+        this.downloadProgress.onContentChange = () => this._loadCatalog(false);
         this.serverConfigDialog.onBeforeRebuild = async (resource) => {
             if (resource === "dos" && this.dosWindow) {
                 await this._closeDosPrompt();
@@ -4319,6 +4338,7 @@ class TVBundleApp extends TVProgram {
         const searchDialog = this._registerDialog("search", () => new TVSearchDialog());
         if (!searchDialog) { return; }
         this.searchDialog = searchDialog;
+        searchDialog.onIndexStatus = (status) => this.menuController?.menuView?.setIndexStatus(status);
         // Provide empty search data initially
         searchDialog.searchData = { topics: [] };
         // Override openSelected to navigate within bundle viewer
@@ -4506,9 +4526,8 @@ class TVBundleApp extends TVProgram {
                 this.fileOpenDialog?.setDirectory(directory);
             });
         }
-        this.menuState = buildBundleMenuBar(catalogData, null, this.authSession, this.dosWindow, this.downloadProgress);
-        fillBorders();
-        this._bindMenus();
+        this._menuBundleKey = null;
+        this._syncBundleMenu();
         if (startup) {
             this._showWelcome();
             await this._handleUrlState();
@@ -4905,6 +4924,7 @@ class TVBundleApp extends TVProgram {
             this.menuController.commandTarget = this;
             this.menuController.refresh();
         }
+        this.menuController.menuView?.setIndexStatus(this.searchDialog?.indexStatus);
         if (TVScreenSaver) { TVScreenSaver.installIdleStart(); }
         this._updateWindowMenuState();
     }

@@ -82,6 +82,22 @@ for(const role of ['member','admin']){
  if(account.subMenu.entries()[0].name.replaceAll('~','')!=='Account')throw new Error('Account menu label was not renamed');
  const bar=new TV.TVApplicationMenuBar(new TV.TVRect(),TV.NewMenu(account),account);
  if(!bar.draw().includes('Test ~&lt;Name&gt;~')||bar.menuMnemonic(account)!=='')throw new Error('User name was interpreted as menu markup');
+ const indexElement=new FakeElement();
+ bar.itemElements.set(bar.indexItem,indexElement);
+ bar.setIndexStatus({state:'ready',percent:100});
+ if(!indexElement.hidden||!bar.indexItem.disabled||bar.topLevelActions.includes(indexElement))throw new Error('Idle index action is visible/focusable');
+ bar.setIndexStatus({state:'building',percent:37.9});
+ if(indexElement.hidden||bar.indexItem.disabled||bar.indexItem.name!=='▤ 37%'||bar.indexItem.command!=='global-index-show'
+    ||!bar.topLevelActions.includes(indexElement))throw new Error('Live index indicator is missing');
+ bar.setIndexStatus({state:'building',percent:1000});
+ if(bar.indexItem.name!=='▤ 100%')throw new Error('Index percentage is not bounded');
+ bar.setIndexStatus({state:'paused',percent:37});
+ if(indexElement.hidden||bar.indexItem.disabled||bar.indexItem.name!=='▤ ‖'
+    ||!bar.topLevelActions.includes(indexElement))throw new Error('Paused index indicator is missing/inaccessible');
+ bar.setIndexStatus({state:'building'});
+ if(bar.indexItem.name!=='▤')throw new Error('Unknown index percentage was invented');
+ bar.setIndexStatus({state:'error'});
+ if(!indexElement.hidden||!bar.indexItem.disabled||bar.topLevelActions.includes(indexElement))throw new Error('Finished index indicator remains active');
 }
 for(const role of ['member','admin']){
  const account=TV.buildAccountMenu({authenticated:true,development:true,user:{username:'local',display_name:'Local',role}});
@@ -374,12 +390,53 @@ const filtered = TV.TVMenuView.prototype.menuItems.call(menuView, submenuPopup);
 if (filtered.length !== 1 || filtered[0] !== enabled) {
     throw new Error("menu navigation included disabled or nested items");
 }
+(async()=>{
+ const progress=new TV.TVDownloadProgress();let changed=0,revision='first';
+ progress.getMenuView=()=>null;progress.update=()=>{};
+ progress.onContentChange=async()=>{changed++;};
+ global.fetch=async()=>({ok:true,status:200,json:async()=>({active:false,items:[],content_revision:revision})});
+ const timer=window.setTimeout;window.setTimeout=()=>0;
+ try{
+  await progress.refresh();if(changed!==0)throw Error('Initial queue poll unnecessarily reloads Help Files');
+  revision='published-edition';await progress.refresh();
+  if(changed!==1)throw Error('Published HELP edition does not refresh Help Files during processing');
+  await progress.refresh();if(changed!==1)throw Error('Unchanged catalog is reloaded on every queue poll');
+ }finally{progress.stop();window.setTimeout=timer;}
+})().catch(error=>{console.error(error);process.exitCode=1;});
 """
     result = subprocess.run(
         [NODE, "-e", script, str(CORE_PATHS[0]), "www/assets/tv-shell.js"],
         capture_output=True,
         text=True,
     )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required")
+def test_live_catalog_refresh_keeps_active_help_and_dos_menus():
+    script = r'''
+const fs=require('fs'),source=fs.readFileSync(process.argv[1],'utf8');
+global.TVProgram=class {};
+let catalogData=[],docsCatalogData=[];
+const CATALOG_FILE='helps/catalog.json',DOCS_CATALOG_FILE='docs/catalog.json';
+const bundleWindowKey=()=> 'active-help';
+const fillBorders=()=>{};
+const buildBundleMenuBar=(catalog,bundle,session,dos,downloads)=>({catalog,bundle,dos,downloads});
+global.window={location:{search:'?file=active'}};
+global.fetch=async url=>({ok:true,json:async()=>url===CATALOG_FILE?[{file:'new.json.gz',name:'New Help'}]:[]});
+const start=source.indexOf('class TVBundleApp'),end=source.indexOf('// ── Bootstrap',start);
+eval(source.slice(start,end)+'\nglobalThis.App=TVBundleApp;');
+(async()=>{
+ const app=Object.create(App.prototype),bundle={contents:[{topic:1}]};
+ app.windowManager={currentBundle:bundle};app.dosWindow={active:true};
+ app.downloadProgress={};app._bindMenus=()=>{};
+ await app._loadCatalog(false);
+ if(app.menuState.bundle!==bundle||app.menuState.dos!==app.dosWindow||app.menuState.catalog.length!==1)
+  throw Error('Live publication discarded active Help Contents or DOS context');
+ if(app.menuState.downloads!==app.downloadProgress)throw Error('Live publication replaced the download monitor');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+    result = subprocess.run([NODE, "-e", script, "www/assets/tv-bundle-app.js"], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
 

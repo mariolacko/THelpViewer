@@ -3031,7 +3031,8 @@ class TVListViewer extends TVView {
         if (typeof item === "string") {
             return escapeHtml(item);
         }
-        return escapeHtml(item && item.label ? item.label : "");
+        const label = escapeHtml(item && item.label ? item.label : "");
+        return item?.icon ? `<span class="tv-vlist-icon">${escapeHtml(item.icon)}</span>${label}` : label;
     }
 
     defaultMarkup(item, index) {
@@ -3050,12 +3051,14 @@ class TVListViewer extends TVView {
         this.items = Array.isArray(items) ? [...items] : [];
         this.range = this.items.length;
         const itemsRoot = this.itemsRoot();
+        const restoreFocus = Boolean(itemsRoot?.contains(document.activeElement));
         this.selectionUiRoot = null;
         this.selectionUiIndex = null;
         if (itemsRoot) {
             itemsRoot.innerHTML = this.items.map((item, index) => this.itemMarkup(item, index)).join("");
         }
         this.select(selectedIndex, { scroll: false });
+        if (restoreFocus) { this.focusSelectedItem(); }
     }
 
     select(index, { scroll = true } = {}) {
@@ -5176,6 +5179,17 @@ class TVButton extends TVView {
         return this;
     }
 
+    _shadowText() {
+        return " " + "\u2580".repeat(Math.max(0, Math.ceil(this.size.x) - 1));
+    }
+
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        const shadow = this._query(".tv-dialog-button-shadow");
+        if (shadow) { shadow.textContent = this._shadowText(); }
+        return this;
+    }
+
     _drawParts() {
         return {
             dialog: true,
@@ -5216,7 +5230,7 @@ class TVButton extends TVView {
         const labelMarkup = parts.labelMarkup;
         if (parts.dialog) {
             const buttonClass = [parts.baseClass, classNames].filter(Boolean).join(" ");
-            const shadow = " " + "\u2580".repeat(Math.max(0, Math.ceil(this.bounds.width) - 1));
+            const shadow = this._shadowText();
             return `
                 <button class="${buttonClass}"${styleAttr} ${attrString}>
                     <span class="tv-dialog-button-face">
@@ -6650,7 +6664,7 @@ class TVScrollBar extends TVView {
     }
 
     buildAxis(axis) {
-        const root = this.host.querySelector(`.tv-scrollbar-${axis}`);
+        const root = this.host.querySelector(`:scope > .tv-scrollbar-${axis}, :scope > .tv-bottom-bar > .tv-scrollbar-${axis}`);
         if (!root) { return null; }
         return {
             axis,

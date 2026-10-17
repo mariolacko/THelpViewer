@@ -106,6 +106,12 @@ Core widget hierarchy and infrastructure.
   private to concrete list subclasses, not caller-set `TVListBox` options.
   When a view owns an `hScrollBar`, an overlong row reveals the shared bottom
   scrollbar and can be moved horizontally; short rows leave it hidden.
+  Plain list items may supply `icon` alongside `label`; the shared row drawing
+  reserves three character cells so emoji and single-cell symbols align.
+  MIDI rows reuse the same normal, selected and focused palette as other lists;
+  they no longer substitute the HELP hyperlink-hover colors.
+  Replacing items preserves focus inside the list, so live progress refreshes
+  retain the focused selection palette as well as the caller-selected row.
 - **TVGridView** — Read-only two-dimensional `TVListBox` subclass.
   `TVGridView(bounds, columns, hScrollBar, vScrollBar)` takes column titles and
   optional character widths; `setRows()` accepts arrays of cell values.
@@ -196,6 +202,9 @@ Core widget hierarchy and infrastructure.
   not synthesize a browser click. Its base `_drawParts()` now draws only the
   generic dialog button; specialized faces belong to the concrete ASCII,
   calendar, color, MIDI, search-result and game controls.
+  `changeBounds()`/`locate()` recompute the bottom-shadow glyph row at the new
+  width, including an initially empty bound. This updates only the shared
+  button's shadow text, preserving its root, focus and pressed state.
 - **TVEvent** — Turbo Vision-style event record with `what`, `command`,
   `infoPtr`, `infoLong` and the private browser-event bridge.
   `TVButton.handleEvent()`
@@ -442,6 +451,24 @@ exposed directly on `THelpViewerTV` for Turbo Vision-style use.
 - Internal topic links, fixed-width tables and long text are handled by the
   existing UHF renderer. Restoring URL state reloads the same context bundle
   and selected topic.
+- UHF `content` array entries are source lines. Empty strings create blank
+  lines; topic sections use these around ordinary `[b]...[/b]` headings. Keep
+  paragraph spacing in the bundle, not in context-specific CSS or another
+  renderer. Author application-help prose as continuous paragraphs, wrapped to
+  the bundle's 72-column text area; a sentence ending is not a forced row
+  break. Literal tables and link lists keep their authored alignment.
+  Each game topic explains its goal, legal moves, implemented controls,
+  ending conditions, score ordering and practical tips. Match the actual
+  game rules, not generic assumptions: Tetris Down/Space is a hard drop,
+  Hanoi finishes on the right tower, and Sokoban ranks level before moves.
+  Longer administration/player topics use separated sections. IDs, context
+  resolution and the shared UHF renderer remain the same.
+- Each application-help article ends with its category link followed by Help
+  Contents; top-level categories link directly to Help Contents. Related-topic
+  links precede that footer, without repeating its targets. Categories link to
+  their child articles, and the UHF Contents tree covers every topic, including
+  utilities and administration. Keep these as ordinary UHF topic links in both
+  JSON assets, not dynamically generated navigation or special window controls.
 
 The Help menu and `F1 Help` status command use the same context-resolution path
 as the keyboard.
@@ -524,6 +551,9 @@ customization; headings, links and syntax accents may use their own colors.
 ### TVScrollBar
 
 Custom scrollbar for `[data-tv-scroll-frame]` containers. Handles thumb drag, track clicks, arrow buttons, wheel events.
+Axis controls belong directly to their host, with the window's horizontal axis
+in its bottom bar. Binding never selects a scrollbar inside a nested list/menu,
+so the Download popup and Completed downloads scroll independently.
 
 - `refresh()` — Re-observe replaced viewport content and redraw both axes.
 - `setActive(active)` — Enable input for the active window or make both axes
@@ -703,7 +733,8 @@ after administrator sign-in; the other types remain separate menu actions.
 The shared scrollable
 TVCluster primitive paints its entire bounded rectangle, including empty rows.
 Individual HELP products and DOS packages are
-installed or uninstalled only after a confirming `TVMessageBox`. The server
+installed or uninstalled directly by Apply; MIDI selection follows the same
+shared workflow. Rebuild/delete confirmations remain separate. The server
 job is followed by `TVProgressDialog`/`TVBarGauge`; hiding that dialog
 does not cancel server work. See [Server Content](Server%20Content.md) for
 permissions, API progress, ownership and retained backups.
@@ -738,6 +769,14 @@ parallel DOM key handler.
 - `openSelected()` — Open the highlighted result. The bundle app loads HELP
   results through its bundle loader and opens `context_hex`; Docs results use
   the existing document-window loader.
+- `monitorIndex()` shares `/api/search/status` with the progress dialog and
+  `TVApplicationMenuBar`'s standard `TVMenuItem` beside Downloads: `▤ N%` while
+  building, hidden and disabled otherwise. A `global-index-show` TVEvent command
+  reopens/activates the same dialog after Hide, without creating another one.
+  Poll every 250 ms while building and every five seconds when idle so later
+  server rebuilds are detected too; a missing API stops monitoring, transient
+  failures retry, and `destroy()` cancels timers and ignores outstanding replies.
+  Both bundle and generated-page menus retain the current status when rebuilt.
 - `TVProgressDialog(title, initialSummary)` composes
   two shared gauge views, static text, a Hide button and optional More/Less list.
   Its window construction is shared by index, rebuild and Downloads operations.
@@ -745,6 +784,12 @@ parallel DOM key handler.
   progress while that queue changes. Downloads reuses one nonmodal instance through
   the toolbar model. Its queue list excludes completed work (kept in the menu's
   Completed downloads submenu) and preserves item selection as rows disappear.
+  `layoutProgress` places shared views in character bounds (up to 64 columns),
+  wraps full phase/file text via `wrapTextLines`, and grows the client/frame to
+  avoid overlapping gauges/buttons, omitting an empty filename row and excess
+  footer space while keeping button shadows inside the frame.
+  The details TVListBox retains complete names
+  and uses the existing horizontal scrollbar for long rows; no dialog layout CSS.
   Hide is on the left, More/Less on the right; an empty queue collapses the list.
   The index instance appears when the page detects index creation, even before
   Search Topics is opened,
@@ -1028,6 +1073,22 @@ separately.
 
 `TVUsersDialog` and `TVServerConfigurationDialog` are composed from shared
 TVision views. Users' four buttons form a 2×2 block, with a taller list alongside.
+Server Configuration uses an 82×27-cell dialog. Three numeric TVInputLine fields
+in its first row set private DOS capacity, retained backups and download cache
+lifetime (1–3650 days, default 30), each with its linked TVLabel mnemonic.
+HELP/DOS/MIDI actions form the
+first row, Users/Colors/Clear cache the second, with equal 24-cell button widths
+and two-cell horizontal/one-row vertical gaps. Status is above the separately
+right-aligned, equally sized Save/Cancel pair. The runtime list and numeric
+fields retain their shared views, validators and scrolling. All placement is
+expressed by TVRect bounds; no dialog-specific CSS supplies these dimensions.
+Clear cache confirms removal of both raw HELP/DOS/MIDI downloads and all
+extracted/manual HELP originals and licence notices in `var/sources/`. Its
+warning explains that unavailable/manual inputs may not be downloadable again;
+Cancel, Escape and the frame close control do not submit the deletion. The
+combined file/byte result is shown in a MessageBox. Cache lifetime applies to
+both raw downloads and HELP originals/licences (default 30 days since successful
+acquisition/use); installed HELP/DOS/MIDI, private data and backups are protected.
 Add User opens `TVAddUserDialog : TVRegistrationDialog`, sharing the profile
 controls and event handler. Its Create action creates a member and bound Passkey
 invitation, not a Passkey on the administrator's device; the token is shown in
@@ -1166,7 +1227,11 @@ Single-page application for browsing help file bundles.
 
 The Help Files menu uses `product_name`, `version`, and `menu_name` from
 `helps/catalog.json` to render product → version → file. Entries without
-`product_name` are shown as direct Help Files items.
+`product_name` are shown as direct Help Files items. Single-file editions open
+directly from their version item; products containing only one file open
+directly as product plus version. Only multi-file editions need a file submenu.
+This shared rule uses catalog metadata, without per-product JS/CSS exceptions
+or changes to source/bundle paths.
 
 The public Docs catalog and static site export omit internal files named
 `* Audit.md` or `* RE Notes.md`. Markdown links are resolved inside the viewer;

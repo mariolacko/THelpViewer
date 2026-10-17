@@ -72,6 +72,28 @@ def _wait_for_search_index(url: str, timeout: float = 300.0) -> None:
     raise TimeoutError(f"search index fixture did not become ready: {url}: {status}")
 
 
+def _prepare_help_fixture(helps: Path) -> None:
+    """Publish the real sources used below without changing installed packages."""
+    from thelpviewer.server.converter.writers.bundle import export_bundle_tree
+
+    sources = Path("var/sources")
+    selected = [sources / name for name in (
+        "Borland Sidekick 2/SK2.HLP", "Norton Guides/VISTA.NG",
+        "Borland Turbo C 1.x current/TCHELP.TCH",
+        "Borland Turbo C 1.0/TCHELP.TCH", "Microsoft MS-DOS 6.22/HELP.HLP",
+        "Borland C++ 2.0 DOS current/TCHELP.TCH",
+        "Borland C++ 3.x/TVCHELP.TCH", "Norton Guides/DEBUG.NG",
+        "Borland C++ 3.0/TASM.TAH", "Borland Pascal 7.0 (DE)/TASM.TAH",
+        "Borland Turbo Assembler/TASM.TAH", "Borland Turbo Assembler 2.01/TASM.TAH",
+        "Borland Turbo Debugger/Profiler/Assembler/TASM.TAH",
+    )]
+    missing = [str(path) for path in selected if not path.is_file()]
+    if missing:
+        pytest.skip("Original browser HELP sources unavailable: " + ", ".join(missing))
+    results = export_bundle_tree(sources, helps, source_paths=selected, layout="helps")
+    assert len(results) == len(selected) and all(not result.error for result in results)
+
+
 @pytest.mark.skipif(NODE is None or CHROME is None, reason="Node.js and Chrome are required")
 def test_real_browser_menu_focus_and_dynamic_command_state():
     external_url = os.environ.get("THELP_BROWSER_BASE_URL", "").rstrip("/")
@@ -83,6 +105,8 @@ def test_real_browser_menu_focus_and_dynamic_command_state():
         app_port = _free_port()
         app_url = f"http://127.0.0.1:{app_port}/"
         server_state_directory = tempfile.TemporaryDirectory(prefix="thelpviewer-server-state-")
+        helps = Path(server_state_directory.name) / "helps"
+        _prepare_help_fixture(helps)
         midi_sources_path = Path(server_state_directory.name) / "midi-sources.json"
         midi_sources_path.write_text('{"sources": []}', encoding="utf-8")
         server = subprocess.Popen(
@@ -104,6 +128,7 @@ def test_real_browser_menu_focus_and_dynamic_command_state():
             env={
                 **os.environ,
                 "THELP_STATE_DIR": server_state_directory.name,
+                "THELP_HELPS_DIR": str(helps),
                 "THELP_STATISTICS_PATH": str(Path(server_state_directory.name) / "statistics.sqlite3"),
                 "THELP_MIDI_SOURCES_PATH": str(midi_sources_path),
             },
@@ -402,6 +427,25 @@ async function run() {
     if (!emptyFileHistory.opened || !emptyFileHistory.closed || emptyFileHistory.entries !== 0) {
         throw new Error(`Empty File Open history did not toggle: ${JSON.stringify(emptyFileHistory)}`);
     }
+    await evaluate(`new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+            const toggle = Array.from(document.querySelectorAll('[data-tv-submenu-toggle]'))
+                .find((element) => element._tvMenuItem?.name === 'Borland Turbo Assembler');
+            if (toggle) {
+                const entries = toggle._tvMenuItem.subMenu.entries();
+                if (entries.map((entry) => entry.name).join('|') !== '2.0|2.01|3.0|3.1|3.2 (DE)'
+                    || entries.some((entry) => entry.subMenu || entry.command !== 'bundle-open'
+                        || !entry.getUrl().includes('file='))) {
+                    reject(new Error('Assembler single-file editions are nested/missing/unsorted')); return;
+                }
+                resolve(); return;
+            }
+            if (Date.now() >= deadline) { reject(new Error('Assembler product menu missing')); return; }
+            setTimeout(check, 30);
+        };
+        check();
+    })`, true);
     await key("F1", "F1");
     await evaluate(`new Promise((resolve, reject) => {
             const deadline = Date.now() + 5000;
@@ -1156,7 +1200,9 @@ async function run() {
         const check = () => {
             const progress = document.querySelector('.tv-progress-window');
             if (progress && !progress.closest('.tv-dialog-overlay').hidden
-                && progress.textContent.includes('1 / 2') && progress.textContent.includes('37')) {
+                && progress.textContent.includes('1 / 2') && progress.textContent.includes('37')
+                && document.querySelector('[data-tv-command="global-index-show"]')?.textContent === '▤ 37%'
+                && !document.querySelector('[data-tv-command="global-index-show"]').hidden) {
                 resolve(true); return;
             }
             if (Date.now() > deadline) { reject(new Error('Index progress dialog did not appear')); return; }
@@ -1164,6 +1210,34 @@ async function run() {
         };
         check();
     })`, true);
+    const reopenedIndexProgress = await evaluate(`(() => {
+        const TV = window.THelpViewerTV;
+        const search = document.querySelector('.tv-search-window').closest('.tv-dialog-overlay')._tvView;
+        const progress = search.indexProgress;
+        progress.hideProgress();
+        if (progress.isOpen() || !search.progressDismissed) { throw new Error('Index dialog was not hidden'); }
+        const before = document.querySelectorAll('.tv-progress-window').length;
+        const app = search.topView();
+        app._menuBundleKey = null;
+        app._syncBundleMenu();
+        const menuView = document.querySelector('[data-tv-menu-bar]')._tvMenuView;
+        const command = menuView.indexItem;
+        const button = document.querySelector('[data-tv-command="global-index-show"]');
+        const rect = button.getBoundingClientRect();
+        const clock = document.querySelector('[data-tv-clock]').getBoundingClientRect();
+        if (button.hidden || button.textContent !== '▤ 37%' || rect.width <= 0
+            || rect.right > clock.left + 1) { throw new Error('Index status/placement lost after menu refresh'); }
+        button.click();
+        return { same: search.indexProgress === progress, open: progress.isOpen(),
+            dismissed: search.progressDismissed, count: document.querySelectorAll('.tv-progress-window').length,
+            before, standardItem: command instanceof TV.TVMenuItem, context: command.helpCtx,
+            searchContext: TV.TV_HELP_CONTEXTS.hcSearch };
+    })()`);
+    if (!reopenedIndexProgress.same || !reopenedIndexProgress.open || reopenedIndexProgress.dismissed
+        || reopenedIndexProgress.count !== reopenedIndexProgress.before || !reopenedIndexProgress.standardItem
+        || reopenedIndexProgress.context !== reopenedIndexProgress.searchContext) {
+        throw new Error(`Index menu did not reuse its existing dialog: ${JSON.stringify(reopenedIndexProgress)}`);
+    }
     const indexProgress = await evaluate(`(() => {
         const dialog = document.querySelector('.tv-progress-window');
         const view = dialog?.closest('.tv-dialog-overlay')?._tvView;
@@ -1174,6 +1248,7 @@ async function run() {
             text: dialog?.textContent,
             percent: dialog?.querySelector('.tv-percent-gauge')?.textContent,
             bar: dialog?.querySelector('[data-tv-bar-gauge]')?.textContent,
+            columns: view?.bar.size.x,
             buttonRowsBelowFile: button && file
                 ? (button.getBoundingClientRect().top - file.getBoundingClientRect().top)
                     / parseFloat(getComputedStyle(file).fontSize) : null,
@@ -1182,7 +1257,8 @@ async function run() {
         };
     })()`);
     if (!indexProgress.text.includes('1 / 2') || !indexProgress.text.includes('37')
-        || !/^█{14}░{26}$/.test(indexProgress.bar)
+        || indexProgress.bar !== '█'.repeat(Math.floor(indexProgress.columns * 0.37))
+            + '░'.repeat(indexProgress.columns - Math.floor(indexProgress.columns * 0.37))
         || Math.abs(indexProgress.buttonRowsBelowFile - 2) > 0.1
         || !indexProgress.buttonInsideFrame) {
         throw new Error(`Global index progress is incomplete: ${JSON.stringify(indexProgress)}`);
@@ -1192,7 +1268,7 @@ async function run() {
         const deadline = Date.now() + 3000;
         const check = () => {
             const progress = document.querySelector('.tv-progress-window');
-            if (progress?.querySelector('[data-tv-bar-gauge]')?.textContent === '█'.repeat(40)
+            if (progress?.querySelector('[data-tv-bar-gauge]')?.textContent === '█'.repeat(progress.closest('.tv-dialog-overlay')._tvView.bar.size.x)
                 && progress.querySelector('.tv-percent-gauge')?.textContent.includes('100')) {
                 resolve(true); return;
             }
@@ -1227,6 +1303,12 @@ async function run() {
             ._tvView.sourceView.root?.textContent`)).includes('db_VISTA III')) {
         throw new Error(`Global Search Topics result is incomplete: ${JSON.stringify(globalSearchResult)}`);
     }
+    if (!(await evaluate(`(() => {
+        const button = document.querySelector('[data-tv-command="global-index-show"]');
+        return button.hidden && button.getBoundingClientRect().width === 0;
+    })()`))) {
+        throw new Error('Completed global index indicator stayed visible');
+    }
     const selectedSource = await evaluate(`(() => {
         const dialog = document.querySelector('.tv-search-window').closest('.tv-dialog-overlay')._tvView;
         dialog.selectIndex(1);
@@ -1254,7 +1336,9 @@ async function run() {
             const progress = document.querySelector('.tv-progress-window');
             if (progress && !progress.closest('.tv-dialog-overlay').hidden
                 && progress.textContent.includes('0 / 2')
-                && progress.querySelector('[data-tv-bar-gauge]')?.textContent === '░'.repeat(40)) {
+                && document.querySelector('[data-tv-command="global-index-show"]')?.textContent === '▤ 0%'
+                && !document.querySelector('[data-tv-command="global-index-show"]').hidden
+                && progress.querySelector('[data-tv-bar-gauge]')?.textContent === '░'.repeat(progress.closest('.tv-dialog-overlay')._tvView.bar.size.x)) {
                 resolve(true); return;
             }
             if (Date.now() > deadline) { reject(new Error('Startup index progress did not appear')); return; }
@@ -1267,7 +1351,7 @@ async function run() {
         const deadline = Date.now() + 3000;
         const check = () => {
             const progress = document.querySelector('.tv-progress-window');
-            if (progress?.querySelector('[data-tv-bar-gauge]')?.textContent === '█'.repeat(40)) {
+            if (progress?.querySelector('[data-tv-bar-gauge]')?.textContent === '█'.repeat(progress.closest('.tv-dialog-overlay')._tvView.bar.size.x)) {
                 resolve(true); return;
             }
             if (Date.now() > deadline) { reject(new Error('Startup index bar never filled')); return; }
@@ -2927,7 +3011,8 @@ async function run() {
             window.setTimeout = timeoutBeforeRetry;
         }
         const catalogRecovered = catalogRetryScheduled && catalogAttempts === 2
-            && player.lastCatalog?.state === 'ready' && !player.catalogTimer;
+            && !player.catalogPending && !player.catalogTimer
+            && !player.displayView.root.textContent.includes('MIDI catalog unavailable');
         const playbackEvents = [];
         const playbackEventHandler = player.onPlaybackEvent;
         player.onPlaybackEvent = (event) => playbackEvents.push(event);
@@ -3137,21 +3222,22 @@ async function run() {
         const randomFullWidth = Math.abs(player.randomNext.root.getBoundingClientRect().width - advancedWidth) < 1;
         const downloadButtonRemoved = !player.downloadsButton
             && !player.advancedView.root.textContent.includes('Downloads');
-        player.showDownloadProgress({ state: 'downloading', downloaded: 1, total: 2, current: 'Doom' });
-        const downloadOverlay = player.downloadProgress?.overlay;
-        const downloadOpensOnStatus = Boolean(downloadOverlay && !downloadOverlay.hidden);
-        player.downloadProgress?.hideProgress();
-        const hiddenWithoutStopping = Boolean(downloadOverlay?.hidden && player.downloadDismissed);
-        player.showDownloadProgress({ state: 'downloading', downloaded: 1, total: 2, current: 'Doom' });
-        const staysHiddenAfterHide = Boolean(downloadOverlay?.hidden);
-        player.downloadDismissed = false;
-        player.showDownloadProgress({ state: 'downloading', downloaded: 1, total: 2, current: 'Doom' });
-        const progress = Array.from(document.querySelectorAll('.tv-dialog-window')).find((element) =>
-            element.querySelector('.tv-dialog-title-text')?.textContent === 'Downloading Game MIDI'
-        );
-        const progressVisible = Boolean(progress && !progress.closest('.tv-dialog-overlay').hidden
-            && progress.querySelector('[data-tv-bar-gauge]')?.textContent.includes('█'));
-        player.clearDownloadProgress();
+        const menuView = document.querySelector('[data-tv-menu-bar]')._tvMenuView;
+        const download = menuView.downloadItem;
+        const previousStatus = download.status;
+        const status = { active: true, errors: 0, percent: 50,
+            items: [{ id: 'midi:test', kind: 'midi', label: 'Doom', state: 'running', percent: 50 }] };
+        download.update(status, menuView);
+        const noAutomaticDownloadDialog = !download.dialog?.isOpen();
+        const progress = download.showDialog(player.owner);
+        const downloadOpensFromMenu = progress.isOpen();
+        const progressVisible = progress.isOpen()
+            && progress.root.querySelector('[data-tv-bar-gauge]')?.textContent.includes('█');
+        progress.hideProgress();
+        const hiddenWithoutStopping = !progress.isOpen() && download.status.active;
+        download.update({ ...status, percent: 75 }, menuView);
+        const staysHiddenAfterHide = !progress.isOpen();
+        download.update(previousStatus, menuView);
         player.filterInput.root.value = '';
         player.filterInput.root.dispatchEvent(new Event('input', { bubbles: true }));
         player.allTracks.push({ id: '3333333333333333', item_id: '3333333333333333',
@@ -3191,7 +3277,7 @@ async function run() {
             pendingStoppedOldTrack,
             coverVisible, seeksToClick, seeksFromOffset,
             filtered, priorityUrl, resumedId, sequentialNext, randomNext, automaticNext,
-            downloadButtonRemoved, randomFullWidth, downloadOpensOnStatus,
+            downloadButtonRemoved, randomFullWidth, noAutomaticDownloadDialog, downloadOpensFromMenu,
             hiddenWithoutStopping, staysHiddenAfterHide, progressVisible };
     })()`, true);
     if (!midiCatalogControls.catalogRecovered || !midiCatalogControls.playbackStatistics
@@ -3215,7 +3301,8 @@ async function run() {
         || !midiCatalogControls.sequentialNext || !midiCatalogControls.randomNext
         || !midiCatalogControls.automaticNext
         || !midiCatalogControls.downloadButtonRemoved || !midiCatalogControls.randomFullWidth
-        || !midiCatalogControls.downloadOpensOnStatus || !midiCatalogControls.hiddenWithoutStopping
+        || !midiCatalogControls.noAutomaticDownloadDialog || !midiCatalogControls.downloadOpensFromMenu
+        || !midiCatalogControls.hiddenWithoutStopping
         || !midiCatalogControls.staysHiddenAfterHide
         || !midiCatalogControls.progressVisible) {
         throw new Error(`MIDI catalog controls failed: ${JSON.stringify(midiCatalogControls)}`);

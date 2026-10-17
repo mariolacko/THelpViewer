@@ -101,6 +101,179 @@ def test_application_commands_use_tvision_handle_event_flow():
     assert "onDialogKeyDown(event)" not in dialogs
 
 
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for index monitoring tests")
+def test_global_index_monitor_keeps_polling_and_ignores_stale_or_destroyed_requests():
+    paths = [Path("www/assets/tv-dialogs.js"), Path("thelpviewer/server/converter/assets/tv-dialogs.js")]
+    assert paths[0].read_bytes() == paths[1].read_bytes()
+    script = r'''
+const fs = require("fs"), assert = require("node:assert/strict");
+const source = fs.readFileSync(process.argv[1], "utf8");
+class TVDialog { destroy() { this.destroyed = true; } }
+const start = source.indexOf("class TVSearchDialog");
+eval(source.slice(start, source.indexOf("Object.assign(TV,", start)) + "\nglobalThis.Search = TVSearchDialog;");
+const timers = new Map(); let nextTimer = 0;
+global.setTimeout = (callback, delay) => { timers.set(++nextTimer, { callback, delay }); return nextTimer; };
+global.clearTimeout = (id) => timers.delete(id);
+const make = () => {
+    const search = Object.create(Search.prototype);
+    Object.assign(search, { indexMonitorSerial: 0, indexMonitorTimer: null, indexProgress: null,
+        indexStatus: { state: "idle" }, searchSerial: 0, availabilitySerial: 0, statuses: [],
+        onIndexStatus(status) { this.statuses.push(status); }, isOpen() { return false; },
+        showIndexProgress() {
+            this.indexProgress ||= { values: [], update(status) { this.values.push(status); }, destroy() { this.destroyed = true; } };
+        },
+    });
+    return search;
+};
+const response = (state, percent = 0) => ({ ok: true, status: 200, async json() { return { state, percent }; } });
+const onlyTimer = (delay) => {
+    assert.equal(timers.size, 1);
+    assert.equal([...timers.values()][0].delay, delay);
+};
+(async () => {
+    const waitingSearch = make();
+    let refreshed = 0;
+    Object.assign(waitingSearch, { indexSearchPending: true, isOpen: () => true, isGlobal: () => true,
+        input: { getData: () => "compiler" }, renderResults: () => { refreshed += 1; } });
+    global.fetch = async () => response("ready", 100);
+    await waitingSearch.monitorIndex();
+    assert.equal(refreshed, 1, "a fast build finishing before progress opens did not refresh pending results");
+    await waitingSearch.monitorIndex();
+    assert.equal(refreshed, 1, "idle polling reset a completed search");
+    waitingSearch.destroy();
+    assert.equal(timers.size, 0);
+    const search = make();
+    global.fetch = async () => response("ready", 100);
+    await search.monitorIndex();
+    onlyTimer(5000);
+    assert.equal(search.indexProgress, null);
+    global.fetch = async () => response("building", 37);
+    await search.monitorIndex();
+    onlyTimer(250);
+    assert.deepEqual(search.indexStatus, { state: "building", percent: 37 });
+    const progress = search.indexProgress;
+    global.fetch = async () => response("paused", 37);
+    await search.monitorIndex();
+    onlyTimer(1000);
+    assert.equal(search.indexStatus.state, "paused");
+    assert.equal(search.indexProgress, progress, "pause discarded the existing progress window");
+    global.fetch = async () => response("ready", 100);
+    await search.monitorIndex();
+    onlyTimer(600);
+    assert.equal(progress.values[0].percent, 100);
+    const [id, timer] = timers.entries().next().value;
+    timers.delete(id); timer.callback();
+    onlyTimer(5000);
+    assert.equal(progress.destroyed, true);
+    assert.equal(search.indexProgress, null);
+
+    global.fetch = async () => { throw new Error("offline"); };
+    await search.monitorIndex();
+    onlyTimer(5000);
+    assert.equal(search.indexStatus.state, "unavailable");
+    global.fetch = async () => ({ ok: false, status: 404 });
+    await search.monitorIndex();
+    assert.equal(timers.size, 0, "static exports must not poll a missing API forever");
+
+    const pending = [];
+    global.fetch = () => new Promise((resolve) => pending.push(resolve));
+    const older = search.monitorIndex(), newer = search.monitorIndex();
+    pending[1](response("ready", 100)); await newer;
+    pending[0](response("building", 20)); await older;
+    onlyTimer(5000);
+    assert.equal(search.indexStatus.state, "ready", "stale request replaced current status");
+    const inFlight = search.monitorIndex();
+    search.destroy();
+    const count = search.statuses.length;
+    pending[2](response("building", 50)); await inFlight;
+    assert.equal(search.statuses.length, count);
+    assert.equal(timers.size, 0, "destroy left an index monitor alive");
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+'''
+    result = subprocess.run([NODE, "-e", script, str(paths[0])], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required for catalog menu tests")
+def test_catalog_menu_collapses_only_single_file_levels_and_keeps_versions_and_targets():
+    assert BUNDLE_PATHS[0].read_bytes() == BUNDLE_PATHS[1].read_bytes()
+    script = r'''
+const fs = require("fs");
+const assert = require("node:assert/strict");
+const core = fs.readFileSync(process.argv[1], "utf8");
+const app = fs.readFileSync(process.argv[2], "utf8");
+const kbNoKey = 0, hcNoContext = 0;
+const normalizeHelpContext = (context) => context;
+const viewerUrl = (target) => "/?" + new URLSearchParams(target);
+const bundleLoadingLabel = (entry) => entry.name;
+eval(core.slice(core.indexOf("class TVMenu {"), core.indexOf("class TVMenuView"))
+    + core.slice(core.indexOf("class TVMenuItem {"), core.indexOf("class TVMenuBar"))
+    + app.slice(app.indexOf("const menuActions = new WeakMap()"), app.indexOf("function buildDocsMenuItems"))
+    + "\nglobalThis.buildMenu = buildCatalogMenuItems;");
+
+const entry = (file, product, version, name = "Reference") => ({
+    file, product_name: product, version, name,
+});
+const files = (catalog) => buildMenu(catalog).filter((item) =>
+    !item.separator && !["file-open", "dialog-open"].includes(item.command));
+const checkTarget = (item, file) => {
+    assert.equal(item.command, "bundle-open");
+    assert.equal(item.subMenu, null);
+    assert.equal(new URL(item.getUrl(), "https://example.test").searchParams.get("file"), file);
+};
+
+assert.deepEqual(files([]), []);
+const single = files([entry("C++ 7/help.json.gz", "Compiler", "7.0")]);
+assert.equal(single.length, 1);
+assert.equal(single[0].name, "Compiler 7.0");
+checkTarget(single[0], "C++ 7/help.json.gz");
+const unknown = files([entry("guide.json.gz", "Guide", "")]);
+assert.equal(unknown[0].name, "Guide");
+checkTarget(unknown[0], "guide.json.gz");
+
+const releases = [entry("asm10.json.gz", "Assembler", "10.0"),
+    entry("asm2.json.gz", "Assembler", "2.0"),
+    entry("asm201.json.gz", "Assembler", "2.01")];
+const original = JSON.stringify(releases);
+const editions = files(releases)[0].subMenu.entries();
+assert.deepEqual(editions.map((item) => item.name), ["2.0", "2.01", "10.0"]);
+editions.forEach((item, index) => checkTarget(item,
+    ["asm2.json.gz", "asm201.json.gz", "asm10.json.gz"][index]));
+assert.equal(JSON.stringify(releases), original, "menu must not rewrite catalog metadata");
+
+const mixed = files([entry("single.json.gz", "Compiler", "1.0"),
+    entry("v2/c.json.gz", "Compiler", "2.0"),
+    entry("v2/cpp.json.gz", "Compiler", "2.0")])[0].subMenu.entries();
+assert.deepEqual(mixed.map((item) => item.name), ["1.0", "2.0"]);
+checkTarget(mixed[0], "single.json.gz");
+const multi = mixed[1].subMenu.entries();
+assert.deepEqual(multi.map((item) => item.name), ["Reference (c)", "Reference (cpp)"]);
+multi.forEach((item, index) => checkTarget(item, ["v2/c.json.gz", "v2/cpp.json.gz"][index]));
+
+const sameEdition = files([entry("a.json.gz", "Compiler", "2.0", "Language"),
+    entry("b.json.gz", "Compiler", "2.0", "Library")])[0];
+assert.equal(sameEdition.name, "Compiler");
+assert.equal(sameEdition.subMenu.entries()[0].name, "2.0");
+assert.equal(sameEdition.subMenu.entries()[0].subMenu.entries().length, 2);
+
+const unversioned = files([entry("a.json.gz", "Guides", "", "First"),
+    entry("b.json.gz", "Guides", "", "Second"),
+    entry("c.json.gz", "Guides", "1.0")])[0].subMenu.entries();
+assert.deepEqual(unversioned.map((item) => item.name), ["First", "Second", "", "1.0"]);
+assert.equal(unversioned[2].separator, true);
+checkTarget(unversioned[3], "c.json.gz");
+const standalone = files([entry("solo.json.gz", "", "", "Standalone")])[0];
+assert.equal(standalone.name, "Standalone");
+checkTarget(standalone, "solo.json.gz");
+'''
+    result = subprocess.run(
+        [NODE, "-e", script, str(CORE_PATHS[0]), str(BUNDLE_PATHS[0])],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the widget lifecycle test")
 def test_scrollbar_and_resizer_destroy_global_resources():
     assert CORE_PATHS[0].read_bytes() == CORE_PATHS[1].read_bytes()
@@ -208,7 +381,11 @@ viewport.scrollHeight = 100;
 const x = buildAxis();
 const y = buildAxis();
 const host = new FakeTarget();
-host.querySelector = (selector) => selector === ".tv-scrollbar-x" ? x.root : y.root;
+host.querySelector = (selector) => {
+    if (selector === ":scope > .tv-scrollbar-x, :scope > .tv-bottom-bar > .tv-scrollbar-x") { return x.root; }
+    if (selector === ":scope > .tv-scrollbar-y, :scope > .tv-bottom-bar > .tv-scrollbar-y") { return y.root; }
+    return null;
+};
 const frame = new FakeTarget();
 frame.closest = (selector) => selector === ".tv-client-row" ? host : null;
 frame.parentElement = host;

@@ -117,13 +117,13 @@ class TVDownloadActionDialog extends TVDialog {
         const label = `${item.kind.toUpperCase()}: ${item.label}`;
         const notice = "Remove only clears this queue entry; files are kept."
             + (item.retryable ? "" : "\nRetry is unavailable while work runs or for this operation.");
-        const lines = wrapTextLines([label, "", item.error || "Download failed.", "", notice].join("\n"), width - 6);
+        const lines = wrapTextLines([label, "", item.error || item.phase || "Download failed.", "", notice].join("\n"), width - 6);
         const buttonWidth = 14, buttonGap = 3;
         const buttonsPerRow = Math.max(1, Math.min(3, Math.floor((width - 2 + buttonGap) / (buttonWidth + buttonGap))));
         const buttonRows = Math.ceil(3 / buttonsPerRow);
         const buttonsY = lines.length + 2;
         const height = lines.length + 4 + 2 * buttonRows;
-        super(new TVRect(0, 0, width, height), "Download failed");
+        super(new TVRect(0, 0, width, height), item.state === "blocked" ? "Download not completed" : "Download failed");
         this.setHelpCtx(TV_HELP_CONTEXTS.hcDownloads);
         this.setState(sfModal, true);
         const buttons = ["~R~etry", "Re~m~ove", "~C~ancel"].map((title, index) => {
@@ -179,23 +179,26 @@ class TVDownloadProgress extends TVSubMenu {
         this.stopped = false;
         this.requestSerial = 0;
         this.actionPending = false;
+        this.contentRevision = null;
+        this.onContentChange = null;
     }
 
     update(status, view) {
         this.status = status;
-        const showPercent = status.active || (status.percent > 0 && status.percent < 100);
-        this.name = showPercent ? `↓ ${status.percent}%` : "↓";
+        this.name = TVProgressDialog.downloadCaption(status);
         const width = Math.max(12, Math.min(64, Math.floor(window.innerWidth / (measureCells().width || 8)) - 18));
         const signature = width + ":" + status.items.map((item) => `${item.id}:${item.state === "done"}`).join("|");
         const changed = signature !== this.signature;
         const items = status.items.map((item) => {
-            const marker = item.state === "done" ? "✓" : item.state === "error" ? "!" : item.state === "running" ? "↓" : "·";
+            const marker = TVProgressDialog.downloadSymbol(item);
             const label = `${item.kind.toUpperCase()}: ${item.label}`;
             const title = `${marker} ${label.length > width ? label.slice(0, width - 1) + "…" : label}`;
             const row = this.rows.get(item.id) || new TVMenuItem("", "", 0, this.helpCtx);
             const wait = /in (\d+)s$/.exec(item.phase || "");
-            row.name = title; row.param = item.state === "error" ? "Failed" : wait ? `Wait ${wait[1]}s` : `${item.percent}%`;
-            row.command = item.state === "error" ? "downloads-failed" : "";
+            const percent = TVProgressDialog.downloadPercent(item);
+            row.name = title; row.param = item.state === "error" ? "Failed" : item.state === "blocked" ? "Not completed"
+                : wait ? `Wait ${wait[1]}s` : percent === null ? "" : `${percent}%`;
+            row.command = ["error", "blocked"].includes(item.state) ? "downloads-failed" : "";
             this.rows.set(item.id, row);
             return row;
         });
@@ -234,7 +237,7 @@ class TVDownloadProgress extends TVSubMenu {
     async failedItem(control, desktop) {
         if (this.actionPending || !desktop) { return; }
         const id = [...this.rows].find(([_id, row]) => row === control)?.[0];
-        const item = this.status.items.find((row) => row.id === id && row.state === "error");
+        const item = this.status.items.find((row) => row.id === id && ["error", "blocked"].includes(row.state));
         if (!item) { return; }
         this.actionPending = true;
         const dialog = new TVDownloadActionDialog(item);
@@ -276,6 +279,12 @@ class TVDownloadProgress extends TVSubMenu {
             const status = await response.json();
             if (serial !== this.requestSerial) { return; }
             if (!this.stopped) { this.update(status, this.getMenuView?.()); }
+            if (status.content_revision !== undefined) {
+                if (this.contentRevision !== null && status.content_revision !== this.contentRevision) {
+                    await this.onContentChange?.();
+                }
+                this.contentRevision = status.content_revision;
+            }
         } catch { /* A temporary network failure does not stop server work. */ }
         if (!this.stopped && serial === this.requestSerial) { this.pollTimer = window.setTimeout(() => void this.refresh(), this.status.active ? 1000 : 5000); }
     }
@@ -285,10 +294,13 @@ class TVDownloadProgress extends TVSubMenu {
 class TVApplicationMenuBar extends TVMenuBar {
     constructor(bounds, menu, rightItem, downloadItem = new TVDownloadProgress()) {
         const items = menu.entries();
-        items.splice(items.indexOf(rightItem) + 1, 0, downloadItem);
+        const indexItem = new TVMenuItem("▤", "global-index-show", 0, TV_HELP_CONTEXTS.hcSearch).setDisabled(true);
+        items.splice(items.indexOf(rightItem) + 1, 0, downloadItem, indexItem);
         super(bounds, pageMenu(items));
         this.rightItem = rightItem;
         this.downloadItem = downloadItem;
+        this.indexItem = indexItem;
+        this.indexStatus = { state: "idle" };
     }
     _drawItemName(item) {
         return item === this.rightItem && item.subMenu instanceof TVMenu
@@ -298,15 +310,33 @@ class TVApplicationMenuBar extends TVMenuBar {
         return item === this.rightItem && item.subMenu instanceof TVMenu ? "" : super.menuMnemonic(item);
     }
     draw() {
-        const left = this.menu.entries().filter((item) => item !== this.rightItem && item !== this.downloadItem);
+        const left = this.menu.entries().filter((item) =>
+            item !== this.rightItem && item !== this.downloadItem && item !== this.indexItem);
         return `<nav class="tv-menu-items">${left.map((item) => this.drawItem(item, "bar")).join("")}`
-            + `<div class="tv-menu-right">${this.drawItem(this.rightItem, "bar")}${this.drawItem(this.downloadItem, "bar")}</div></nav>`;
+            + `<div class="tv-menu-right">${this.drawItem(this.rightItem, "bar")}${this.drawItem(this.downloadItem, "bar")}${this.drawItem(this.indexItem, "bar")}</div></nav>`;
     }
     bindRoot(root) {
         super.bindRoot(root);
         this.downloadItem.update(this.downloadItem.status, this);
         this.showDownloads();
+        this.setIndexStatus(this.indexStatus);
         return this;
+    }
+    setIndexStatus(status) {
+        this.indexStatus = status || { state: "idle" };
+        const percent = this.indexStatus.percent;
+        this.indexItem.name = this.indexStatus.state === "paused" ? "▤ ‖"
+            : "▤" + (Number.isFinite(percent) ? ` ${Math.max(0, Math.min(100, Math.floor(percent)))}%` : "");
+        this.indexItem.setDisabled(!["building", "paused"].includes(this.indexStatus.state));
+        this.updateItem(this.indexItem);
+        this.showIndexProgress();
+    }
+    showIndexProgress() {
+        const element = this.itemElements.get(this.indexItem);
+        if (!element) { return; }
+        element.hidden = !["building", "paused"].includes(this.indexStatus.state);
+        this.topLevelActions = this.topLevelActions.filter((item) => !item.hidden);
+        if (!element.hidden && !this.topLevelActions.includes(element)) { this.topLevelActions.push(element); }
     }
     showDownloads() {
         const root = this.rootByItem.get(this.downloadItem);
@@ -317,7 +347,11 @@ class TVApplicationMenuBar extends TVMenuBar {
         this.menuRoots = this.menuRoots.filter((item) => !item.hidden);
         if (!root.hidden && !this.menuRoots.includes(root)) { this.menuRoots.push(root); }
     }
-    refresh() { super.refresh(); if (this.downloadItem) { this.showDownloads(); } }
+    refresh() {
+        super.refresh();
+        if (this.downloadItem) { this.showDownloads(); }
+        if (this.indexItem) { this.showIndexProgress(); }
+    }
 }
 
 function buildAccountMenu(session) {
@@ -354,6 +388,7 @@ function buildAccountMenu(session) {
 }
 
 function buildPageMenuBar(root, context, session = null, downloadProgress = root._tvMenuView?.downloadItem) {
+    const indexStatus = root._tvMenuView?.indexStatus;
     const dialog = (name, title) => pageMenuItem(title, "dialog-open", name);
     const savers = [
         pageMenuItem("~S~tars", "saver-start", "stars"),
@@ -400,6 +435,7 @@ function buildPageMenuBar(root, context, session = null, downloadProgress = root
     root.innerHTML = menuBar.draw()
         + '<div class="tv-menu-clock" data-tv-clock>00:00:00</div>';
     menuBar.bindRoot(root);
+    menuBar.setIndexStatus(indexStatus);
     return menuBar;
 }
 
@@ -919,6 +955,9 @@ class TVApplication extends TVProgram {
         let handled = true;
         if (event.command === "downloads-show") {
             this.downloadProgress?.showDialog(this.desktopView);
+        } else if (event.command === "global-index-show") {
+            this.searchDialog?.handleEvent(event);
+            return;
         } else if (event.command === "downloads-failed") {
             void this.downloadProgress?.failedItem(control, this.desktopView);
         } else if (event.command === "account-logout") {
@@ -1133,6 +1172,7 @@ class TVApplication extends TVProgram {
         this.registerDialog("grid", () => new TVGridDemoDialog());
         this.registerDialog("systeminfo", () => new TVSystemInformationDialog());
         this.searchDialog = this.registerDialog("search", () => new TVSearchDialog());
+        this.searchDialog.onIndexStatus = (status) => this.menus.menuView?.setIndexStatus(status);
         void this.searchDialog?.monitorIndex();
         this.initContextHelpWindow();
         this.helpController = new TVHelpController({

@@ -2182,16 +2182,6 @@ button.tv-status-item {
     text-align: center;
 }
 
-[data-tv-midi-track-list] {
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
-}
-
-[data-tv-midi-track-list] > .tv-vlist-viewport {
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
-}
-
 .tv-midi-track {
     display: grid;
     grid-template-columns: 4ch minmax(0, 1fr) 16ch 3ch;
@@ -2204,20 +2194,10 @@ button.tv-status-item {
     text-align: left;
     appearance: none;
     cursor: pointer;
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
-}
-
-.tv-midi-track:hover,
-.tv-midi-track:focus-visible,
-.tv-midi-track.is-selected {
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
-    outline: none;
 }
 
 .tv-midi-track-index {
-    color: var(--tv-link);
+    color: inherit;
     white-space: pre;
 }
 
@@ -2592,6 +2572,11 @@ button.tv-status-item {
 .tv-vlist-item.is-selected {
     background: var(--tv-dialog-list-selected-bg);
     color: var(--tv-dialog-list-selected-fg);
+}
+
+.tv-vlist-icon {
+    display: inline-block;
+    width: 3ch;
 }
 
 .tv-vlist-viewer.has-h-scrollbar .tv-vlist-item {

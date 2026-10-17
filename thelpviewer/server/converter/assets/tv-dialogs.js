@@ -52,6 +52,7 @@ const {
     isLeapYear,
     dayOfWeek,
     measureCells,
+    wrapTextLines,
     TV_HELP_CONTEXTS,
     evNothing,
     evMouseDown,
@@ -149,7 +150,7 @@ class TVMidiTrackButton extends TVButton {
         const data = this.commandData;
         return {
             ...super._drawParts(), dialog: false,
-            className: `tv-midi-track${data.selected ? " is-selected" : ""}`,
+            className: `tv-vlist-item tv-midi-track${data.selected ? " is-selected" : ""}`,
             ariaLabel: `${data.title || "MIDI track"}, ${data.credit || ""}, ${data.available ? "downloaded" : "not downloaded"}`,
             labelMarkup: [
                 `<span class="tv-midi-track-index">${escapeHtml(String(data.index + 1).padStart(2, "0"))}</span>`,
@@ -1181,29 +1182,36 @@ class TVServerConfigurationDialog extends TVDialog {
     static viewName = "server-configuration";
 
     constructor() {
-        super(new TVRect(0, 0, 84, 27), "Server Configuration");
+        super(new TVRect(0, 0, 82, 27), "Server Configuration");
         this.setHelpCtx(hcServerConfiguration);
         this.capacity = new TVInputLine(new TVRect(2, 2, 10, 3), 3)
             .setValidator(new TVFilterValidator("0123456789"));
-        this.backupCount = new TVInputLine(new TVRect(43, 2, 51, 3), 3)
+        this.backupCount = new TVInputLine(new TVRect(28, 2, 36, 3), 3)
             .setValidator(new TVFilterValidator("0123456789"));
-        this.runtime = new TVListBox(new TVRect(2, 8, 78, 17));
-        this.status = new TVStaticText(new TVRect(2, 23, 78, 25), "");
-        this.saveButton = new TVButton(new TVRect(2, 20, 15, 22), "~S~ave", "server-settings-save", bfDefault);
-        this.insert(new TVGroup(new TVRect(0, 0, 82, 25)).insertAll([
-            new TVLabel(new TVRect(2, 1, 40, 2), "~D~OS private overlay per user (MiB)", this.capacity),
+        this.cacheDays = new TVInputLine(new TVRect(54, 2, 62, 3), 4)
+            .setValidator(new TVFilterValidator("0123456789"));
+        this.runtime = new TVListBox(new TVRect(2, 8, 78, 14));
+        this.status = new TVStaticText(new TVRect(2, 21, 78, 23), "");
+        this.helpPackagesButton = new TVButton(new TVRect(2, 15, 26, 17), "~H~ELP Packages...", "account-help-packages");
+        this.dosPackagesButton = new TVButton(new TVRect(28, 15, 52, 17), "DOS ~P~ackages...", "account-dos-packages");
+        this.midiSourcesButton = new TVButton(new TVRect(54, 15, 78, 17), "~M~IDI Sources...", "account-midi-sources");
+        this.usersButton = new TVButton(new TVRect(2, 18, 26, 20), "~U~sers", "account-users");
+        this.colorsButton = new TVButton(new TVRect(28, 18, 52, 20), "C~o~lors...", "account-colors");
+        this.clearCacheButton = new TVButton(new TVRect(54, 18, 78, 20), "Clear c~a~che...", "server-cache-clear");
+        this.saveButton = new TVButton(new TVRect(48, 23, 62, 25), "~S~ave", "server-settings-save", bfDefault);
+        this.cancelButton = new TVButton(new TVRect(64, 23, 78, 25), "~C~ancel", "server-settings-cancel", bfNormal);
+        this.clearingCache = false;
+        this.insert(new TVGroup(new TVRect(0, 0, 80, 25)).insertAll([
+            new TVLabel(new TVRect(2, 1, 26, 2), "Private ~D~OS C (MiB)", this.capacity),
             this.capacity,
-            new TVLabel(new TVRect(43, 1, 78, 2), "Retained ~b~ackups per type", this.backupCount), this.backupCount,
-            new TVStaticText(new TVRect(2, 4, 78, 7), "Private C: 1–256 MiB, default 64. Shared files are excluded.\nBackups: 1–100 per HELP/DOS/MIDI; default 2, after successful jobs.\nLowering the C quota never deletes saved user files."),
+            new TVLabel(new TVRect(28, 1, 52, 2), "Retained ~b~ackups/type", this.backupCount), this.backupCount,
+            new TVLabel(new TVRect(54, 1, 78, 2), "Cache ~l~ifetime (days)", this.cacheDays), this.cacheDays,
+            new TVStaticText(new TVRect(2, 4, 78, 7), "Private C: 1–256 MiB/user; default 64. Shared files are excluded.\nBackups: 1–100 per HELP/DOS/MIDI; default 2, after successful jobs.\nDownloads + HELP originals expire after 1–3650 days; default 30."),
             new TVLabel(new TVRect(2, 7, 78, 8), "Runtime settings (read-only; environment/configuration files)", this.runtime), this.runtime,
-            new TVButton(new TVRect(2, 18, 25, 20), "~H~ELP Packages...", "account-help-packages"),
-            new TVButton(new TVRect(28, 18, 51, 20), "DOS ~P~ackages...", "account-dos-packages"),
-            new TVButton(new TVRect(54, 18, 78, 20), "~M~IDI Sources...", "account-midi-sources"),
-            this.saveButton,
-            new TVButton(new TVRect(18, 20, 31, 22), "~C~ancel", "server-settings-cancel", bfNormal),
-            new TVButton(new TVRect(36, 20, 55, 22), "C~o~lors...", "account-colors"),
-            new TVButton(new TVRect(58, 20, 78, 22), "~U~sers", "account-users"),
+            this.helpPackagesButton, this.dosPackagesButton, this.midiSourcesButton,
+            this.usersButton, this.colorsButton, this.clearCacheButton,
             this.status,
+            this.saveButton, this.cancelButton,
         ]));
         this.requestVersion = 0;
         this.rebuildTask = null;
@@ -1217,6 +1225,7 @@ class TVServerConfigurationDialog extends TVDialog {
         super.open();
         this.capacity.setData("");
         this.backupCount.setData("");
+        this.cacheDays.setData("");
         this.capacity.focus();
         void this.loadSettings();
     }
@@ -1235,9 +1244,10 @@ class TVServerConfigurationDialog extends TVDialog {
             if (version !== this.requestVersion || !this.isOpen()) { return; }
             this.capacity.setData(String(data.dos_user_disk_mb));
             this.backupCount.setData(String(data.backup_count));
+            this.cacheDays.setData(String(data.download_cache_days));
             this.capacity.selectAll();
             this.runtime.newList(Object.entries(data.runtime || {}).map(([key, value]) => ({ label: `${key}: ${value}` })));
-            this.status.setText("Backup retention applies after the next successful build/rebuild.");
+            this.status.setText("Downloads and HELP inputs expire at startup/hourly while idle.");
             this.saveButton.setState(sfDisabled, false);
         } catch (error) {
             if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
@@ -1260,12 +1270,20 @@ class TVServerConfigurationDialog extends TVDialog {
             this.backupCount.focus();
             return;
         }
+        const cacheValue = this.cacheDays.getData().trim();
+        const cacheDays = Number(cacheValue);
+        if (!/^\d{1,4}$/.test(cacheValue) || cacheDays < 1 || cacheDays > 3650) {
+            this.status.setText("Enter a cache lifetime between 1 and 3650 days.");
+            this.cacheDays.focus();
+            return;
+        }
         const version = ++this.requestVersion;
         this.saveButton.setState(sfDisabled, true);
         try {
-            await TVLoginDialog.request("/api/admin/settings", "PUT", { dos_user_disk_mb: capacity, backup_count: backupCount });
+            await TVLoginDialog.request("/api/admin/settings", "PUT", { dos_user_disk_mb: capacity,
+                backup_count: backupCount, download_cache_days: cacheDays });
             if (version === this.requestVersion && this.isOpen()) {
-                this.status.setText("Saved. Backup count applies to the next successful build/rebuild.\nRestart open DOS sessions to reload capacity.");
+                this.status.setText(`Saved. Cache expiry: ${cacheDays} days; checked hourly while idle.\nBackups apply after the next build. Restart DOS to reload capacity.`);
             }
         } catch (error) {
             if (version === this.requestVersion && this.isOpen()) { this.status.setText(error.message); }
@@ -1280,11 +1298,48 @@ class TVServerConfigurationDialog extends TVDialog {
         switch (event.command) {
             case "server-settings-save": void this.saveSettings(); break;
             case "server-settings-cancel": this.close(); break;
+            case "server-cache-clear": void this.clearCache(); break;
             case "server-rebuild-dos": void this.rebuild("dos"); break;
             case "server-rebuild-midi": void this.rebuild("midi"); break;
             default: return;
         }
         this.clearEvent(event);
+    }
+
+    async clearCache() {
+        if (this.clearingCache) { return; }
+        this.clearingCache = true;
+        this.clearCacheButton.setState(sfDisabled, true);
+        const box = new TVMessageBox();
+        this.owner.insert(box);
+        try {
+            const answer = await box.show({ title: "Clear download cache", type: TVMessageBox.MF_CONFIRMATION,
+                lines: ["Delete cached HELP, DOS and MIDI downloads?",
+                    "Also delete all original HELP and licence files in the sources directory.",
+                    "This includes manual files that may not be downloadable again.",
+                    "Published HELP, installed DOS/MIDI, backups and private data stay.",
+                    "Inputs are fetched again only when needed and still available."],
+                buttons: TVMessageBox.MF_OK_CANCEL });
+            if (answer !== "ok" || this.destroyed) { return; }
+            this.status.setText("Clearing download cache...");
+            const result = await TVLoginDialog.request("/api/admin/cache/clear", "POST");
+            if (this.destroyed) { return; }
+            const message = `Removed ${result.files} files (${(result.bytes / 1048576).toFixed(1)} MiB of downloads and HELP originals).`;
+            this.status.setText(message);
+            await box.show({ title: "Download cache cleared", type: TVMessageBox.MF_INFORMATION,
+                lines: [message, "Installed content and permanent user data were kept."],
+                buttons: TVMessageBox.MF_OK_BUTTON });
+        } catch (error) {
+            if (!this.destroyed) {
+                this.status.setText(error.message);
+                await box.show({ title: "Cannot clear download cache", type: TVMessageBox.MF_ERROR,
+                    lines: [error.message], buttons: TVMessageBox.MF_OK_BUTTON });
+            }
+        } finally {
+            box.destroy();
+            this.clearingCache = false;
+            if (!this.destroyed) { this.clearCacheButton.setState(sfDisabled, false); }
+        }
     }
 
     async rebuild(resource) {
@@ -4382,7 +4437,10 @@ class TVStatisticsDialog extends TVDialog {
                 ["↔ CLS", "cls"], ["⌁ INP", "inp"],
                 ["↓ HELP load", "help_load"], ["⇲ HELP unpack", "help_decompress"],
                 ["▧ HELP render", "help_render"], ["⚠ Client errors", "client_error"],
-            ].map(([label, key]) => ({ label, key }));
+            ].map(([text, key]) => {
+                const separator = text.indexOf(" ");
+                return { icon: text.slice(0, separator), label: text.slice(separator + 1), key };
+            });
             this.categories.newList(this.sections);
             this.showSection(0);
         } catch (error) {
@@ -4736,7 +4794,7 @@ class TVFindDialog extends TVDialog {
             const data = response.ok ? await response.json() : null;
             if (serial === this.availabilitySerial) {
                 this.availabilityChecked = true;
-                this.setAvailability(Boolean(data && ["ready", "building"].includes(data.state)));
+                this.setAvailability(Boolean(data && ["ready", "building", "paused"].includes(data.state)));
             }
         } catch {
             if (serial === this.availabilitySerial) {
@@ -4850,35 +4908,77 @@ class TVSearchResultsList extends TVListBox {
 class TVProgressDialog extends TVDialog {
     static viewName = "progress";
 
+    static downloadSymbol(item) {
+        if (item.state === "done") { return "✓"; }
+        if (item.state === "error") { return "!"; }
+        if (item.state === "blocked") { return "–"; }
+        if (item.state !== "running") { return "·"; }
+        return { download: "↓", extract: "▣", convert: "⚙", install: "⚙",
+            validate: "⚙", publish: "⚙", index: "⚙" }[item.stage] || "…";
+    }
+
+    static downloadPercent(item) {
+        if (item.state === "done") { return 100; }
+        return item.state === "running" && Number.isFinite(item.stage_percent)
+            ? Math.max(0, Math.min(100, Math.floor(item.stage_percent))) : null;
+    }
+
+    static downloadMarker(item) {
+        const percent = this.downloadPercent(item);
+        return this.downloadSymbol(item) + (percent === null ? "" : ` ${percent}%`);
+    }
+
+    static downloadCaption(status) {
+        const rows = status.items || [];
+        if (!status.active) {
+            return status.errors ? "!" : !rows.length ? "↓" : rows.every((item) => item.state === "done") ? "✓" : "–";
+        }
+        const stages = new Map();
+        rows.filter((item) => item.state === "running").forEach((item) => {
+            const symbol = this.downloadSymbol(item);
+            if (!stages.has(symbol)) { stages.set(symbol, []); }
+            stages.get(symbol).push(this.downloadPercent(item));
+        });
+        const text = [...stages].map(([symbol, values]) => symbol + (values.every(Number.isFinite)
+            ? ` ${Math.floor(values.reduce((sum, value) => sum + value, 0) / values.length)}%` : "")).join(" ");
+        return (status.errors ? "! " : "") + (text || (rows.some((item) => item.state === "pending") ? "…" : "⚙"));
+    }
+
     constructor(title = "Progress", initialSummary = "Preparing...") {
-        super(new TVRect(0, 0, 46, 10), title);
+        super(new TVRect(0, 0, 64, 11), title);
         this.setState(sfModal, true);
-        this.summary = new TVStaticText(new TVRect(2, 1, 42, 2), initialSummary);
-        this.file = new TVStaticText(new TVRect(2, 4, 42, 5), "");
-        this.bar = new TVBarGauge(new TVRect(2, 2, 42, 3), 100);
-        this.percent = new TVPercentGauge(new TVRect(19, 3, 26, 4), 100);
-        this.moreButton = new TVButton(new TVRect(29, 6, 41, 8), "~M~ore", "progress-more");
-        this.hideButton = new TVButton(new TVRect(17, 6, 29, 8), "~H~ide", "progress-hide", bfDefault);
-        this.detailsCaption = new TVStaticText(new TVRect(2, 8, 42, 9), "");
-        this.details = new TVListBox(new TVRect(2, 9, 42, 22));
+        this.summaryText = initialSummary;
+        this.fileText = "";
+        this.detailsCaptionText = "";
+        this.summary = new TVStaticText(new TVRect(), initialSummary);
+        this.file = new TVStaticText(new TVRect(), "");
+        this.bar = new TVBarGauge(new TVRect(), 100);
+        this.percent = new TVPercentGauge(new TVRect(), 100);
+        this.moreButton = new TVButton(new TVRect(), "~M~ore", "progress-more");
+        this.hideButton = new TVButton(new TVRect(), "~H~ide", "progress-hide", bfDefault);
+        this.detailsCaption = new TVStaticText(new TVRect(), "");
+        this.details = new TVListBox(new TVRect());
+        this.details.hScrollBar = new TVScrollBar(new TVRect());
         this.moreButton.hide(); this.detailsCaption.hide(); this.details.hide();
         this.detailsExpanded = false;
         this.downloadStatus = null;
         this.operationStatus = null;
-        this.insert(new TVGroup(new TVRect(0, 0, 44, 8)).insertAll([
+        this.insert(new TVGroup(new TVRect(0, 0, 62, 9)).insertAll([
             this.summary, this.bar, this.percent, this.file,
             this.moreButton, this.hideButton, this.detailsCaption, this.details,
         ]));
         this.onHide = null;
         this.bindCommonClose(() => this.hideProgress());
         this.bindDrag();
+        this.layoutProgress();
     }
 
     update(status) {
         const percent = Math.max(0, Math.min(100, Number(status.percent) || 0));
         const skipped = Array.isArray(status.warnings) ? status.warnings.length : 0;
-        this.summary.setText(`${status.phase ? status.phase + ": " : ""}${status.processed || 0} / ${status.total || 0}${skipped ? ` · ${skipped} skipped` : ""}`);
-        this.file.setText(String(status.file || "").slice(-40));
+        this.summaryText = `${status.phase ? status.phase + ": " : ""}${status.processed || 0} / ${status.total || 0}${skipped ? ` · ${skipped} skipped` : ""}`;
+        this.fileText = String(status.file || "");
+        this.layoutProgress();
         this.bar.updateView(percent);
         this.percent.updateView(percent);
     }
@@ -4890,12 +4990,12 @@ class TVProgressDialog extends TVDialog {
         if (!this.operationStatus) {
             const completed = !status.active && rows.length > 0 && rows.every((item) => item.state === "done");
             this.update({ percent: completed ? 100 : status.percent, processed: rows.filter((item) => ["done", "error"].includes(item.state)).length,
-                total: rows.length, file: current?.label || "", phase: status.active ? "Downloading" : status.errors ? "Finished with errors" : "Finished" });
+                total: rows.length, file: current?.label || "", phase: status.active ? current?.phase || "Waiting" : status.errors ? "Finished with errors" : "Finished" });
         }
         const counts = this.operationStatus?.downloads;
         const pending = rows.filter((item) => item.state !== "done");
         this.setDetails(pending.map((item) => ({ id: item.id, name: `${item.kind.toUpperCase()}: ${item.label}`,
-            marker: item.state === "error" ? "!" : `${item.percent}%` })),
+            marker: TVProgressDialog.downloadMarker(item) })),
             counts ? `${counts.new_files || 0} new · ${counts.cached_files || 0} cached · ${((counts.bytes || 0) / 1048576).toFixed(1)} MiB`
                 : `${pending.length} packages/albums · ${status.errors || 0} failed`);
     }
@@ -4907,17 +5007,19 @@ class TVProgressDialog extends TVDialog {
     }
 
     setDetails(rows, caption) {
-        const items = rows.map((row) => ({ id: row.id, label: `${Array.from(row.name || "").slice(0, 32).join("").padEnd(32)} ${String(row.marker).padStart(4)}` }));
+        const markerWidth = Math.max(1, ...rows.map((row) => Array.from(String(row.marker)).length));
+        const columns = Math.max(this.size.x - 10 - markerWidth, ...rows.map((row) => Array.from(row.name || "").length));
+        const items = rows.map((row) => ({ id: row.id, label: `${String(row.name || "").padEnd(columns)} ${String(row.marker).padStart(markerWidth)}` }));
         const selectedId = this.details.selectedItem()?.id;
         const selectedIndex = items.findIndex((item) => item.id === selectedId);
         const value = this.details.scrollbarWidget?.value || 0;
         this.details.setItems(items, selectedIndex >= 0 ? selectedIndex
             : Math.min(Math.max(0, this.details.selectedIndex), items.length - 1));
         this.details.scrollbarWidget?.setValue(value);
-        this.detailsCaption.setText(caption);
+        this.detailsCaptionText = caption;
         this.moreButton.setState(sfVisible, items.length > 0);
-        this.hideButton.locate(new TVRect(items.length ? 3 : 17, 6, items.length ? 15 : 29, 8));
         if (!items.length && this.detailsExpanded) { this.toggleDetails(false); }
+        else { this.layoutProgress(); }
     }
 
     toggleDetails(expanded = !this.detailsExpanded) {
@@ -4925,8 +5027,36 @@ class TVProgressDialog extends TVDialog {
         this.details.setState(sfVisible, this.detailsExpanded);
         this.detailsCaption.setState(sfVisible, this.detailsExpanded);
         this.moreButton.setTitle(this.detailsExpanded ? "~L~ess" : "~M~ore");
-        this.content.locate(new TVRect(0, 0, 44, this.detailsExpanded ? 24 : 8));
-        this.locate(new TVRect(0, 0, 46, this.detailsExpanded ? 26 : 10));
+        this.layoutProgress();
+    }
+
+    layoutProgress() {
+        const cells = measureCells();
+        const width = Math.min(64, Math.max(34, Math.floor(window.innerWidth / cells.width) - 2));
+        const right = width - 4, columns = right - 2;
+        const summary = wrapTextLines(this.summaryText, columns);
+        const file = this.fileText ? wrapTextLines(this.fileText, columns) : [];
+        const caption = wrapTextLines(this.detailsCaptionText, columns);
+        this.summary.setText(summary.join("\n"));
+        this.file.setText(file.join("\n"));
+        this.detailsCaption.setText(caption.join("\n"));
+        const barY = 2 + summary.length, fileY = barY + 2;
+        const buttonsY = fileY + file.length + 1, detailsY = buttonsY + 3 + caption.length;
+        const availableRows = Math.floor(window.innerHeight / cells.height) - 4;
+        const listRows = Math.max(3, Math.min(12, this.details.items.length, availableRows - detailsY - 3));
+        const height = this.detailsExpanded ? detailsY + listRows + 2 : buttonsY + 4;
+        const center = Math.floor((width - 2) / 2);
+        const hideX = this.moreButton.getState(sfVisible) ? 3 : center - 6;
+        this.summary.locate(new TVRect(2, 1, right, 1 + summary.length));
+        this.bar.locate(new TVRect(2, barY, right, barY + 1));
+        this.percent.locate(new TVRect(center - 3, barY + 1, center + 4, barY + 2));
+        this.file.locate(new TVRect(2, fileY, right, fileY + file.length));
+        this.hideButton.locate(new TVRect(hideX, buttonsY, hideX + 12, buttonsY + 2));
+        this.moreButton.locate(new TVRect(right - 13, buttonsY, right - 1, buttonsY + 2));
+        this.detailsCaption.locate(new TVRect(2, buttonsY + 3, right, detailsY));
+        this.details.locate(new TVRect(2, detailsY, right, detailsY + listRows));
+        this.content.locate(new TVRect(0, 0, width - 2, height - 2));
+        this.locate(new TVRect(0, 0, width, height));
         if (this.isOpen() && !this.hasPosition) { this.center(); }
         this.details.updateScrollbar();
     }
@@ -4995,6 +5125,9 @@ class TVSearchDialog extends TVDialog {
         this.searchTimer = null;
         this.indexMonitorTimer = null;
         this.indexMonitorSerial = 0;
+        this.indexStatus = { state: "idle" };
+        this.indexSearchPending = false;
+        this.onIndexStatus = null;
         this.indexProgress = null;
         this.progressDismissed = false;
         this.bindCommonClose(() => this.close());
@@ -5027,7 +5160,8 @@ class TVSearchDialog extends TVDialog {
             this.renderResults(this.input.getData());
             this.clearEvent(event);
         } else if (event.what === evCommand) {
-            if (event.command === "search-ok") { this.openSelected(); }
+            if (event.command === "global-index-show") { this.showIndexProgress(this.indexStatus, true); }
+            else if (event.command === "search-ok") { this.openSelected(); }
             else if (event.command === "search-cancel") { this.close(); }
             else { return; }
             this.clearEvent(event);
@@ -5158,7 +5292,7 @@ class TVSearchDialog extends TVDialog {
             const status = response.ok ? await response.json() : null;
             if (serial === this.availabilitySerial) {
                 this.availabilityChecked = true;
-                this.setAvailability(Boolean(status && ["ready", "building"].includes(status.state)));
+                this.setAvailability(Boolean(status && ["ready", "building", "paused"].includes(status.state)));
             }
         } catch {
             if (serial === this.availabilitySerial) {
@@ -5173,8 +5307,10 @@ class TVSearchDialog extends TVDialog {
         if (this.isOpen()) { this.renderResults(this.input.getData()); }
     }
 
-    showIndexProgress(status) {
-        if (this.progressDismissed || !(this.owner instanceof TV.TVDesktop)) { return; }
+    showIndexProgress(status, force = false) {
+        if (!["building", "paused"].includes(status.state) || !(this.owner instanceof TV.TVDesktop)) { return; }
+        if (force) { this.progressDismissed = false; }
+        if (this.progressDismissed) { return; }
         if (!this.indexProgress || this.indexProgress.destroyed) {
             this.indexProgress = new TVProgressDialog("Building Global Index", "Preparing HELP files and Docs...");
             this.indexProgress.setHelpCtx(hcSearch);
@@ -5182,7 +5318,7 @@ class TVSearchDialog extends TVDialog {
             this.owner.insert(this.indexProgress);
         }
         this.indexProgress.update(status);
-        if (!this.indexProgress.isOpen()) { this.indexProgress.open(); }
+        if (force || !this.indexProgress.isOpen()) { this.indexProgress.open(); }
     }
 
     clearIndexProgress() {
@@ -5192,34 +5328,60 @@ class TVSearchDialog extends TVDialog {
     }
 
     async monitorIndex() {
+        if (this.destroyed) { return; }
         const serial = ++this.indexMonitorSerial;
         if (this.indexMonitorTimer) { clearTimeout(this.indexMonitorTimer); }
         this.indexMonitorTimer = null;
         try {
             const response = await fetch("/api/search/status", { cache: "no-store" });
+            if (response.status === 404) {
+                if (serial !== this.indexMonitorSerial || this.destroyed) { return; }
+                this.indexStatus = { state: "unavailable" };
+                this.onIndexStatus?.(this.indexStatus);
+                this.clearIndexProgress();
+                return;
+            }
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
             const status = await response.json();
-            if (serial !== this.indexMonitorSerial) { return; }
-            if (status.state === "building") {
+            if (serial !== this.indexMonitorSerial || this.destroyed) { return; }
+            this.indexStatus = status;
+            this.onIndexStatus?.(status);
+            if (status.state === "ready" && this.indexSearchPending) {
+                this.indexSearchPending = false;
+                if (this.isOpen() && this.isGlobal()) { this.renderResults(this.input.getData()); }
+            }
+            if (["building", "paused"].includes(status.state)) {
                 this.showIndexProgress(status);
-                this.indexMonitorTimer = setTimeout(() => { void this.monitorIndex(); }, 250);
-            } else if (status.state === "ready") {
+                this.indexMonitorTimer = setTimeout(() => { void this.monitorIndex(); }, status.state === "paused" ? 1000 : 250);
+            } else if (status.state === "ready" && this.indexProgress) {
                 this.indexProgress?.update({ ...status, percent: 100 });
                 this.indexMonitorTimer = setTimeout(() => {
                     if (serial !== this.indexMonitorSerial) { return; }
                     this.indexMonitorTimer = null;
                     this.clearIndexProgress();
-                    if (this.isOpen() && this.isGlobal()) {
-                        this.renderResults(this.input.getData());
-                    }
+                    this.indexMonitorTimer = setTimeout(() => { void this.monitorIndex(); }, 5000);
                 }, 600);
             } else {
                 this.clearIndexProgress();
+                this.indexMonitorTimer = setTimeout(() => { void this.monitorIndex(); }, 5000);
             }
         } catch {
-            if (serial !== this.indexMonitorSerial) { return; }
+            if (serial !== this.indexMonitorSerial || this.destroyed) { return; }
+            this.indexStatus = { state: "unavailable" };
+            this.onIndexStatus?.(this.indexStatus);
             this.clearIndexProgress();
+            this.indexMonitorTimer = setTimeout(() => { void this.monitorIndex(); }, 5000);
         }
+    }
+
+    destroy() {
+        this.indexMonitorSerial += 1;
+        this.searchSerial += 1;
+        this.availabilitySerial += 1;
+        clearTimeout(this.indexMonitorTimer);
+        clearTimeout(this.searchTimer);
+        this.clearIndexProgress();
+        super.destroy();
     }
 
     async searchGlobal(query, serial) {
@@ -5227,13 +5389,19 @@ class TVSearchDialog extends TVDialog {
             const response = await fetch(`/api/search/global?q=${encodeURIComponent(query)}`, { cache: "no-store" });
             if (serial !== this.searchSerial || !this.isGlobal()) { return; }
             if (response.status === 202) {
-                this.resultsBox.setMessage("Building global index. Results will appear when ready.");
+                const status = await response.json();
+                if (serial !== this.searchSerial || !this.isGlobal()) { return; }
+                this.indexSearchPending = true;
+                this.resultsBox.setMessage(status.state === "paused"
+                    ? "Global indexing waits until HELP processing finishes."
+                    : "Building global index. Results will appear when ready.");
                 void this.monitorIndex();
                 return;
             }
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
             const data = await response.json();
             if (serial !== this.searchSerial || !this.isGlobal()) { return; }
+            this.indexSearchPending = ["building", "paused"].includes(data.status?.state);
             this.indexWarnings = Array.isArray(data.status?.warnings) ? data.status.warnings.length : 0;
             this.matches = Array.isArray(data.results) ? data.results : [];
             if (!this.matches.length) {
@@ -5244,7 +5412,7 @@ class TVSearchDialog extends TVDialog {
                 this.selectIndex(0);
             }
             this.resultsBox.updateScrollbar();
-            if (data.status?.state === "building") { void this.monitorIndex(); }
+            if (this.indexSearchPending) { void this.monitorIndex(); }
         } catch (error) {
             if (serial === this.searchSerial) {
                 this.resultsBox.setMessage(`Global search is unavailable: ${String(error?.message || error)}`);

@@ -127,6 +127,73 @@ async function run() {
             })()`);
             if (!valid) { throw new Error('Diagnostic topic became a website error'); }
         }
+        // Restore the application's own help through the same desktop URL as
+        // a shared Downloads-help link, not the generated-page fallback view.
+        const helpState = {v:1,a:0,z:[0],w:[{t:'h',f:'../assets/tv-context-help.json',
+            view:'topic',g:[20,20,76,28,0],topic:'2316',line:1,s:[0,0]}]};
+        const helpHash = 'tv=1.' + Buffer.from(JSON.stringify(helpState)).toString('base64url');
+        await send('Page.navigate', {url: appUrl + '?doc=README.md#' + helpHash});
+        await wait(`document.querySelector('[data-tv-bundle-window]')?._tvWindowView?.currentTopic === '2316'`);
+        const helpRows = await evaluate(`(() => {
+            const root = document.querySelector('[data-tv-bundle-window]');
+            const view = root._tvWindowView;
+            const rows = Array.from(root.querySelectorAll('.tv-topic-line'));
+            return {count:rows.length, expected:view.bundle.topics['2316'].content.length,
+                whiteSpace:getComputedStyle(root.querySelector('.tv-topic-pre')).whiteSpace,
+                tops:rows.slice(0,4).map(row => row.getBoundingClientRect().top),
+                height:parseFloat(getComputedStyle(rows[0]).lineHeight)};
+        })()`);
+        if (helpRows.count !== helpRows.expected || helpRows.whiteSpace !== 'pre'
+                || helpRows.tops.slice(1).some((top,index) => Math.abs(top-helpRows.tops[index]-helpRows.height)>1)) {
+            throw new Error('Context HELP lost its source line breaks: ' + JSON.stringify(helpRows));
+        }
+        await evaluate(String.raw`(async () => {
+            await document.fonts.ready;
+            const app = document.querySelector('[data-tv-bundle-desktop]')._tvView.owner;
+            const root = document.querySelector('[data-tv-bundle-window]');
+            const originalView = root._tvWindowView;
+            const bundle = originalView.bundle;
+            for (const [id,topic] of Object.entries(bundle.topics)) {
+                app.windowManager.showTopic(bundle,id);
+                const rows = Array.from(root.querySelectorAll('.tv-topic-line'));
+                const height = parseFloat(getComputedStyle(rows[0]).lineHeight);
+                const tops = rows.map(row => row.getBoundingClientRect().top);
+                if (root._tvWindowView !== originalView || rows.length !== topic.content.length
+                        || tops.slice(1).some((top,index) => Math.abs(top-tops[index]-height)>1)) {
+                    throw new Error('Context HELP row layout differs: '+id);
+                }
+                const viewport = root.querySelector('[data-tv-viewport]');
+                if (viewport.scrollWidth > viewport.clientWidth+1
+                        || root.querySelectorAll('.tv-scrollbar-y').length !== 1) {
+                    throw new Error('Context HELP escapes its standard window: '+id);
+                }
+                const expectedLinks = Array.from(topic.content.join('\n').matchAll(/\[link:topic=(\d+)\]/g), match => match[1]);
+                const renderedLinks = Array.from(root.querySelectorAll('.tv-topic-pre a[data-tv-bundle-topic]'),
+                    link => link.dataset.tvBundleTopic);
+                if (JSON.stringify(renderedLinks) !== JSON.stringify(expectedLinks)) {
+                    throw new Error('Context HELP topic links were not rendered: '+id);
+                }
+                if (id !== '1000') {
+                    const footer = topic.content.slice(topic.content.lastIndexOf('')+1);
+                    for (const line of footer) {
+                        const target = line.match(/\[link:topic=(\d+)\]/)[1];
+                        app.windowManager.showTopic(bundle,id);
+                        const link = Array.from(root.querySelectorAll('.tv-topic-pre a[data-tv-bundle-topic]'))
+                            .findLast(link => link.dataset.tvBundleTopic === target);
+                        link.click();
+                        if (originalView.currentTopic !== target || root._tvWindowView !== originalView
+                                || document.querySelectorAll('[data-tv-bundle-window]').length !== 1) {
+                            throw new Error('Context HELP footer did not navigate in place: '+id+' -> '+target);
+                        }
+                    }
+                }
+            }
+            app.windowManager.showTopic(bundle,'2060');
+            root.querySelector('a[data-tv-bundle-topic="2315"]').click();
+        })()`);
+        await wait(`document.querySelector('[data-tv-bundle-window]')?._tvWindowView?.currentTopic === '2315'`);
+        await send('Page.navigate', {url: appUrl + '?' + new URLSearchParams({file,topic:'719'})});
+        await wait(`document.querySelector('[data-tv-bundle-window]')?._tvWindowView?.currentTopic === '719'`);
         await evaluate(`(async () => {
             const dialog = document.querySelector('.tv-search-window').closest('.tv-dialog-overlay')._tvView;
             dialog.open();
@@ -141,7 +208,7 @@ async function run() {
                 const data = await response.json();
                 // The update finishes before the first progress poll: results
                 // must refresh even though no progress dialog was created.
-                if (++window.__searchCalls === 1) { data.status.state = 'building'; }
+                if (++window.__searchCalls === 1) { data.status.state = 'paused'; }
                 return new Response(JSON.stringify(data), { status: response.status,
                     headers: { 'Content-Type': 'application/json' } });
             };
@@ -158,6 +225,15 @@ async function run() {
         if (warning.count !== 1 || warning.skipped !== 1 || !warning.source.includes('skipped')) {
             throw new Error('Healthy results or warning missing: ' + JSON.stringify(warning));
         }
+        await evaluate(`(() => {
+            const search = document.querySelector('.tv-search-window').closest('.tv-dialog-overlay')._tvView;
+            search.showIndexProgress({ state: 'paused', phase: 'Waiting for HELP processing',
+                percent: 37, processed: 1, total: 3 }, true);
+            if (!search.indexProgress?.isOpen() || !search.indexProgress.summary.root.textContent.includes('Waiting for HELP processing')) {
+                throw new Error('Paused index progress is not visible in the shared dialog');
+            }
+            search.clearIndexProgress();
+        })()`);
         await evaluate(`(async () => {
             const TV = window.THelpViewerTV;
             const search = document.querySelector('.tv-search-window').closest('.tv-dialog-overlay')._tvView;
@@ -192,7 +268,7 @@ async function run() {
                     return new Response(JSON.stringify({ user }));
                 }
                 if (String(url) === '/api/admin/settings') {
-                    return new Response(JSON.stringify({ dos_user_disk_mb: 64, backup_count: 2, runtime: { host: '0.0.0.0', port: 5448 } }));
+                    return new Response(JSON.stringify({ dos_user_disk_mb: 64, backup_count: 2, download_cache_days: 30, runtime: { host: '0.0.0.0', port: 5448 } }));
                 }
                 if (String(url) === '/api/auth/session') { return new Response(JSON.stringify(session)); }
                 if (String(url) === '/api/auth/security') {
@@ -330,7 +406,7 @@ async function run() {
                 }
                 const actions = settings.children[0].children.filter(child => child instanceof TV.TVButton
                     && ['account-help-packages', 'account-dos-packages', 'account-midi-sources'].includes(child.command));
-                if (actions.length !== 3 || actions.some(button => button.bounds.y1 !== 18)) {
+                if (actions.length !== 3 || actions.some(button => button.bounds.y1 !== 15)) {
                     throw new Error('Server configuration launchers do not fit their action row');
                 }
                 for (const button of actions) {

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 
@@ -19,6 +20,110 @@ CONTEXT_HELP_JS_PATHS = (
     Path("www/assets/tv-context-help.js"),
     Path("thelpviewer/server/converter/assets/tv-context-help.js"),
 )
+
+
+def visible_help_line(line):
+    return re.sub(r"\[(?:/?[biur]|link:[^\]]+|/link)\]", "", line)
+
+
+@pytest.mark.parametrize("path", HELP_BUNDLE_PATHS)
+def test_all_context_help_rows_fit_their_declared_text_area(path):
+    bundle = json.loads(path.read_text(encoding="utf-8"))
+    width = bundle["metadata"]["display"]["cols"]
+    for ident, topic in bundle["topics"].items():
+        assert topic["content"], ident
+        for index, line in enumerate(topic["content"], 1):
+            assert "\n" not in line and "\r" not in line, (ident, index)
+            assert len(visible_help_line(line)) <= width, (ident, index, line)
+            for tag in ("b", "link"):
+                opens = len(re.findall(rf"\[{tag}(?::[^\]]+)?\]", line))
+                assert opens == line.count(f"[/{tag}]"), (ident, index, line)
+        if len(topic["content"]) > 6:
+            assert "" in topic["content"], ident
+    for ident in ("1000", "2320"):
+        rows = [line for line in bundle["topics"][ident]["content"] if line.startswith(("┌", "├", "│", "└"))]
+        assert len(rows) >= 8
+        assert len({len(row) for row in rows}) == 1
+
+
+@pytest.mark.parametrize("path", HELP_BUNDLE_PATHS)
+def test_context_help_categories_and_topic_footers_are_connected(path):
+    bundle = json.loads(path.read_text(encoding="utf-8"))
+    topics = bundle["topics"]
+    home = str(bundle["metadata"]["help_contents_topic_id"])
+    links = {
+        ident: set(re.findall(r"\[link:topic=(\d+)\]", "\n".join(topic["content"])))
+        for ident, topic in topics.items()
+    }
+    parents = {}
+
+    def visit(nodes, parent):
+        for node in nodes:
+            ident = str(node["topic_id"])
+            assert ident in topics
+            if ident != parent:
+                parents.setdefault(ident, set()).add(parent)
+                assert ident in links[parent], (parent, ident)
+            visit(node.get("children", []), ident)
+
+    visit(bundle["contents"], home)
+    assert set(parents) == set(topics) - {home}
+    for ident, topic in topics.items():
+        assert ident not in links[ident], ident
+        assert links[ident] <= set(topics), ident
+        if ident == home:
+            continue
+        lines = topic["content"]
+        footer_start = len(lines) - 1 - lines[::-1].index("")
+        footer = lines[footer_start + 1:]
+        assert footer[-1] == f"[link:topic={home}]Help Contents[/link]", ident
+        if home in parents[ident]:
+            assert len(footer) == 1, ident
+        else:
+            assert len(footer) == 2, ident
+            category = re.fullmatch(r"\[link:topic=(\d+)\].+\[/link\]", footer[0])
+            assert category and category[1] in parents[ident], ident
+        if "[b]Related topics[/b]" in lines:
+            navigation = "\n".join(lines[lines.index("[b]Related topics[/b]"):])
+            targets = re.findall(r"\[link:topic=(\d+)\]", navigation)
+            assert len(targets) == len(set(targets)), ident
+
+    reached = set()
+    pending = [home]
+    while pending:
+        ident = pending.pop()
+        if ident not in reached:
+            reached.add(ident)
+            pending.extend(links[ident] - reached)
+    assert reached == set(topics)
+
+
+@pytest.mark.parametrize(("ident", "rule_terms"), [
+    ("2140", ("A through O", "blank", "Fewer moves")),
+    ("2150", ("Down or Space", "hard drop", "Pentix")),
+    ("2160", ("9 x 9", "10 mines", "right-click", "not required")),
+    ("2170", ("three lives", "Space or Up", "paddle")),
+    ("2180", ("cannot be pulled", "Undo", "level reached first")),
+    ("2190", ("at least five", "three new balls", "two points")),
+    ("2200", ("captures nothing", "neither player", "margin")),
+    ("2210", ("all four", "A six", "home lane")),
+    ("2220", ("four pegs", "ten guesses", "colours may repeat")),
+    ("2230", ("cannot reverse", "does not wrap", "level")),
+    ("2240", ("five discs", "right tower", "31 moves")),
+    ("2250", ("simultaneously", "W/A/S/D", "draw")),
+])
+def test_each_game_help_explains_rules_controls_and_scoring(ident, rule_terms):
+    for path in HELP_BUNDLE_PATHS:
+        topic = json.loads(path.read_text(encoding="utf-8"))["topics"][ident]
+        text = " ".join(visible_help_line(line) for line in topic["content"])
+        headings = [line for line in topic["content"] if line.startswith("[b]")]
+        assert len(text.split()) >= 120
+        assert len(headings) >= 3
+        assert "Goal and rules" in text and "Controls" in text
+        assert any(re.search(r"\bscor(?:e|ing)\b", heading, re.IGNORECASE) for heading in headings)
+        for term in rule_terms:
+            assert term in text, (ident, term)
+        assert "[link:topic=1500]Games and Hall of Fame[/link]" in topic["content"]
 
 
 def test_dialogs_own_their_help_contexts_without_registration_maps():
@@ -104,6 +209,33 @@ def test_context_help_is_a_complete_uhf_bundle():
     assert 'dialogItem("~A~bout", "about")' not in system_menu
     assert 'dialogItem("~A~bout", "about")' in help_menu
     assert 'this._registerDialog("contexthelp"' not in app
+
+
+def test_downloads_help_has_separated_sections_and_current_recovery_instructions():
+    for path in HELP_BUNDLE_PATHS:
+        topic = json.loads(path.read_text(encoding="utf-8"))["topics"]["2316"]
+        lines = topic["content"]
+        headings = [index for index, line in enumerate(lines) if line.startswith("[b]")]
+        assert len(headings) > 5
+        for index in headings:
+            assert index == 0 or lines[index - 1] == ""
+            assert lines[index + 1] == ""
+        text = " ".join(lines)
+        assert "data/jobs.sqlite3" in text
+        assert "queued or interrupted jobs resume" in text
+        assert "restart clears it" not in text
+        prose = lambda line: bool(line) and not line.startswith(("[b]", "[link:"))
+        width = json.loads(path.read_text(encoding="utf-8"))["metadata"]["display"]["cols"]
+        for index, line in enumerate(lines):
+            if not prose(line):
+                continue
+            assert len(line) <= width
+            if index + 1 < len(lines) and prose(lines[index + 1]):
+                # A source row ends because the next word would not fit,
+                # not merely because a sentence has ended.
+                assert len(line) + 1 + len(lines[index + 1].split()[0]) > width
+        first_paragraph = lines[2:lines.index("", 2)]
+        assert any(not line.endswith((".", "!", "?")) for line in first_paragraph[:-1])
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for the help-context test")

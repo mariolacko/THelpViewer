@@ -20,13 +20,14 @@ class TVPackagesDialog extends TVDialog {
         this.setState(sfModal, false);
         this.kind = this.constructor.packageKind;
         const midi = this.kind === "midi";
+        const groupsRight = this.kind === "dos" ? 30 : 29;
         const right = this.size.x - 4;
-        this.categories = new TVListBox(new TVRect(2, 1, 29, midi ? 11 : 13));
+        this.categories = new TVListBox(new TVRect(2, 1, groupsRight, midi ? 11 : 13));
         this.categories.hScrollBar = new TVScrollBar(new TVRect());
         this.items = new TVCheckBoxes(new TVRect(32, 1, right, 11));
         this.items.vScrollBar = new TVScrollBar(new TVRect(), sbVertical);
         this.items.hScrollBar = new TVScrollBar(new TVRect());
-        this.categoryLabel = new TVLabel(new TVRect(2, 0, 29, 1), "~G~roups", this.categories);
+        this.categoryLabel = new TVLabel(new TVRect(2, 0, groupsRight, 1), "~G~roups", this.categories);
         this.itemLabel = new TVLabel(new TVRect(32, 0, right, 1), "~V~ersions", this.items);
         this.enabled = new TVCheckBoxes(new TVRect(2, 12, 29, 13));
         this.groupAll = new TVCheckBoxes(new TVRect(32, 12, right, 13), [{ label: "Selec~t~ / Deselect All" }]);
@@ -54,6 +55,7 @@ class TVPackagesDialog extends TVDialog {
         this.draft = null; this.category = null;
         this.requestVersion = 0; this.submitting = false; this.valid = false;
         this.pollTask = null; this.indexTask = null;
+        this.installing = false;
         this.onBeforeInstall = null; this.onInstalled = null; this.onMidiApplied = null;
         this.categories.bind({ onSelect: (item) => this.selectCategory(item?.id) });
         this.bindCommonClose(() => this.close()); this.bindDrag(); this.initControls();
@@ -146,6 +148,7 @@ class TVPackagesDialog extends TVDialog {
                 }
                 this.draft = { packages, categories, selected: new Set((old ? [...old.selected] : data.selection[field])
                     .filter((id) => packages.some((item) => item.id === id))) };
+                this.installing = data.status.scopes.includes(kind);
                 if (data.status.state === "building") { void this.followProgress(data.status); }
             }
             this.renderDraft();
@@ -166,7 +169,7 @@ class TVPackagesDialog extends TVDialog {
         const draft = this.draft, category = this.category;
         for (const item of draft.packages || []) { if (item.required) { draft.selected.add(item.id); } }
         this.items.setItems([]); this.category = null;
-        this.categories.newList(draft.categories.map((item) => ({ ...item, label: `${item.icon ? item.icon + " " : ""}${item.label}` })));
+        this.categories.newList(draft.categories);
         const index = this.categories.items.findIndex((item) => item.id === category);
         this.categories.select(index >= 0 ? index : 0); this.selectCategory(this.categories.selectedItem()?.id);
         this.valid = true; this.updateButtons();
@@ -250,35 +253,27 @@ class TVPackagesDialog extends TVDialog {
     }
 
     async applySelection() {
-        if (this.kind !== "midi" && this.pollTask) { this.progress?.open(); return; }
+        if (this.kind !== "midi" && this.installing) { this.progress?.open(); return; }
         if (this.applyButton.state & sfDisabled) { return; }
         this.rememberSelection();
         const kind = this.kind, draft = this.draft, selection = {};
-        let lines;
         if (kind === "midi") {
             selection.sources = draft.sources.filter((source) => source.selected).map((source) => source.id);
             selection.albums = Object.fromEntries(draft.sources.map((source) => [source.id,
                 source.all_albums ? null : source.albums.filter((album) => album.selected).map((album) => album.id)]));
-            lines = ["Use the selected MIDI sources and albums?", "Unselected music leaves the playlist and download queue.",
-                "Cached tracks and covers are kept; playback stops."];
         } else {
             selection[kind === "help" ? "help_packages" : "dos_packages"] = [...draft.selected];
-            const added = draft.packages.filter((item) => draft.selected.has(item.id) && !item.installed);
-            const removed = draft.packages.filter((item) => !draft.selected.has(item.id) && item.installed);
-            lines = [`${kind.toUpperCase()}: install ${added.length}, uninstall ${removed.length}.`,
-                ...added.slice(0, 3).map((item) => `Install: ${item.label}`),
-                ...(added.length > 3 ? [`...and ${added.length - 3} more.`] : []),
-                "Originals, download caches and private DOS files are kept.", "Previous installations are backed up."];
         }
-        const answer = await messageBox(this, { title: `Apply ${kind.toUpperCase()} selection`, type: TVMessageBox.MF_CONFIRMATION,
-            lines: [...lines, "Other content types stay unchanged."], buttons: TVMessageBox.MF_OK_CANCEL });
-        if (answer !== "ok" || !this.isOpen()) { return; }
+        if (!this.isOpen()) { return; }
         this.submitting = true; this.updateButtons();
         try {
             if (kind === "dos") { await this.onBeforeInstall?.(); }
             const status = await TVLoginDialog.request(kind === "midi" ? "/api/admin/midi-sources" : "/api/admin/content",
                 kind === "midi" ? "PUT" : "POST", selection);
-            if (kind === "midi") { this.onMidiApplied?.(); } else { void this.followProgress(status); }
+            if (kind === "midi") { this.onMidiApplied?.(); } else {
+                this.installing = status.scopes.includes(kind);
+                void this.followProgress(status);
+            }
         } catch (error) { this.showError(error); }
         finally { this.submitting = false; this.updateButtons(); }
     }
@@ -293,6 +288,7 @@ class TVPackagesDialog extends TVDialog {
         this.progress = this.owner.owner.downloadProgress.showDialog(this.owner);
         try {
             while (!this.destroyed) {
+                this.installing = status.scopes.includes(this.kind);
                 this.progress.setOperation(status);
                 if (status.state === "error") { throw new Error(status.error || "Content installation failed."); }
                 if (status.state !== "building") {

@@ -14,9 +14,9 @@ from thelpviewer.server.converter.writers.bundle import export_bundle_tree
 
 
 def test_original_debugger_revisions_export_into_distinct_release_branches(tmp_path):
-    originals = [Path("data/sources/Borland Turbo Debugger 1.0/TDHELP.TDH"),
-        Path("data/sources/Borland Turbo Assembler 1.0 with Turbo Debugger/TDHELP.TDH")]
-    results = export_bundle_tree(Path("data/sources"), tmp_path, layout="helps", source_paths=originals)
+    originals = [Path("var/sources/Borland Turbo Debugger 1.0/TDHELP.TDH"),
+        Path("var/sources/Borland Turbo Assembler 1.0 with Turbo Debugger/TDHELP.TDH")]
+    results = export_bundle_tree(Path("var/sources"), tmp_path, layout="helps", source_paths=originals)
     assert len(results) == 2
     assert {result.version for result in results} == {"1.0", "2.x"}
     assert all(result.product == "td" for result in results)

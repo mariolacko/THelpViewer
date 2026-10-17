@@ -32,7 +32,7 @@ def test_custom_font_screen_in_standard_help_window_draws_palette_pixels_and_rel
     native_topic, native_digest = "", ""
     art_topic, art_line, art_digest = "", "", ""
     blink_digest = ""
-    source = Path(f"data/sources/Scorpions Cheater DOS/Scorpions Cheater {version}" +
+    source = Path(f"var/sources/Scorpions Cheater DOS/Scorpions Cheater {version}" +
                   (" _shareware_" if version == 6 else "")) / (
         "PROGRAM.DAT" if version == 21 else "DATATEXT.SCO" if version < 6 else "DATATEXT.SCD")
     if source.is_file():
