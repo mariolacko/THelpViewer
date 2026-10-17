@@ -1,6 +1,7 @@
 """Shared queue, priority, nested pipelines, progress and access boundaries."""
 
 from contextvars import ContextVar
+from concurrent.futures import Future
 import io
 import threading
 import time
@@ -21,6 +22,33 @@ def wait_downloads(downloads):
     while downloads.snapshot(private=True)["active"] and time.monotonic() < deadline:
         time.sleep(.01)
     assert not downloads.snapshot(private=True)["active"]
+
+
+def test_pipeline_prefills_required_priority_before_optional_independent_sources():
+    downloads = OnlineDownloader()
+    downloads.defer_source("https://required.test/tool.zip", 60)
+    items = [{"id": ident, "priority": priority, "url": url} for ident, priority, url in [
+        ("tool", 0, "https://required.test/tool.zip"),
+        ("manager", 0, "https://required.test/manager.zip"),
+        ("game", 10, "https://other.test/game.zip"),
+        ("another", 10, "https://independent.test/game.zip"),
+    ]]
+    submitted = []
+    def submit(item):
+        submitted.append(item["id"])
+        future = Future()
+        future.set_result(item["id"])
+        return future
+    stream = downloads.pipeline(items, submit, ordered=True,
+        source=lambda item: item["url"], priority=lambda item: item["priority"])
+    try:
+        item, future = next(stream)
+        assert item["id"] == future.result() == "tool"
+        assert submitted == ["tool", "manager", "game"]
+        assert [item["id"] for item, _future in stream] == ["manager", "game", "another"]
+    finally:
+        stream.close()
+        downloads.close()
 
 
 def test_processing_is_bounded_without_holding_a_network_source_lane():

@@ -282,8 +282,11 @@ class ContentService:
             products = list(dict.fromkeys(item.split(":", 1)[0] for item in missing))
             self.dos.downloads.begin("help", plan_help_downloads(products, package_ids=missing), replace=replace)
         if "dos" in scope:
-            self.dos.downloads.begin("dos", [{"id": item["id"], "label": item["label"], "byte_progress": False}
-                for item in choices["dos_packages"] if item["id"] in values["dos_packages"] and not item["installed"]],
+            packages = {item["id"]: item for item in choices["dos_packages"]}
+            self.dos.downloads.begin("dos", [{"id": ident, "label": packages[ident]["label"], "byte_progress": False,
+                "priority": 0 if packages[ident]["required"] else 10}
+                for ident in select_dos_packages(self._dos_manifest(), values["dos_packages"])
+                if not packages[ident]["installed"]],
                 replace=replace)
 
     def _schedule(self):

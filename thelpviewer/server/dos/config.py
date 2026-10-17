@@ -36,8 +36,9 @@ def load_dos_config(path: Path | None) -> dict:
 
 
 def select_dos_packages(config: dict, source_ids: list[str]) -> list[str]:
-    """Validate an explicit selection and retain every manifest-required package."""
+    """Return required packages first, retaining manifest order within each group."""
     if set(source_ids) - {source["id"] for source in config["sources"]}:
         raise DosError("Unknown DOS package")
-    return list(dict.fromkeys([*source_ids,
-        *(source["id"] for source in config["sources"] if source.get("required", False))]))
+    selected = set(source_ids)
+    return [source["id"] for source in sorted(config["sources"], key=lambda source: not source.get("required", False))
+            if source["id"] in selected or source.get("required", False)]

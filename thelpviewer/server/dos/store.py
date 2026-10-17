@@ -262,24 +262,47 @@ class DosPromptStore:
             installed = json.loads(marker.read_text()) if marker.exists() else {}
             if not isinstance(installed, dict):
                 raise DosError("Invalid DOS disk installation marker")
+            if any(path.is_symlink() for path in (base, *base.parents)):
+                raise DosError("Shared DOS storage must not contain symbolic links")
+            owned = installed.get("_files", {})
+            if not isinstance(owned, dict):
+                raise DosError("Invalid DOS installation file inventory")
+            missing_required = set()
+            for source in config["sources"]:
+                if not source.get("required", False):
+                    continue
+                ident = source["id"]
+                names = owned.get(ident, [])
+                if not isinstance(names, list):
+                    raise DosError("Invalid DOS installation file inventory")
+                paths = [base / c_path(name) for name in names]
+                if any(parent.is_symlink() for path in paths for parent in (path, *path.parents)):
+                    raise DosError("Required DOS storage must not contain symbolic links")
+                if (installed.get(ident) != package_cache_key(source) or not paths
+                        or any(not path.is_file() for path in paths)):
+                    missing_required.add(ident)
+                    installed.pop(ident, None)  # A receipt alone cannot make an incomplete package bootable.
             initializing = installed.get("_complete") is not True
-            self.initializing = initializing or install_sources
+            self.initializing = initializing or install_sources or bool(missing_required)
             if initializing:
                 base.mkdir(parents=True, exist_ok=True)
             elif not base.is_dir():
                 raise DosError("The initialised C drive is missing; restore the server disk backup")
             seen = set()
+            if source_ids is None and not install_sources and not self.rebuilding:
+                source_ids = []  # Opening DOS bootstraps only manifest-required packages, not saved optional choices.
             if source_ids is None and self.source_selection:
                 source_ids = self.source_selection()
             if source_ids is None:
                 source_ids = [source["id"] for source in config["sources"] if source.get("enabled") is not False]
             source_ids = select_dos_packages(config, source_ids)
-            sources = [source for source in config["sources"] if self.initializing and source["id"] in source_ids]
+            source_map = {source["id"]: source for source in config["sources"]}
+            sources = [source_map[ident] for ident in source_ids] if self.initializing else []
             self.total = len(sources)
             pending_sources = [source for source in sources if installed.get(source["id"]) != package_cache_key(source)]
             if pending_sources:
                 self.downloads.begin("dos", [{"id": source["id"], "label": source.get("title", source["id"]),
-                                             "byte_progress": False}
+                                             "byte_progress": False, "priority": 0 if source.get("required", False) else 10}
                     for source in pending_sources],
                     replace=not preserve_downloads)
                 download_queue = True
@@ -288,7 +311,7 @@ class DosPromptStore:
                 target = c_path(source["target"]) + "/" if source.get("target") else ""
                 additions = {name: root_files.get(target + name, contents)
                              for name, contents in configured_files(source, limit).items()}
-                with self.downloads.context("dos", ident):
+                with self.downloads.context("dos", ident, priority=0 if source.get("required", False) else 10):
                     try:
                         incoming = self._prepare_package(source, base, additions, root_files, target, limit)
                     except Exception as error:
@@ -297,7 +320,8 @@ class DosPromptStore:
                     self._progress("Awaiting installation", 0.75, stage="install", ident=ident)
                     return incoming
             prepared = self.downloads.prepare(pending_sources, prepare, ordered=True,
-                source=lambda source: source.get("url", ""))
+                source=lambda source: source.get("url", ""),
+                priority=lambda source: 0 if source.get("required", False) else 10)
             self.processed = 0
             for source in sources:
                 if not isinstance(source, dict):
@@ -362,13 +386,13 @@ class DosPromptStore:
                 self.downloads.update("dos", ident, state="done", percent=100, phase="Installed", error="")
             for filename, contents in root_files.items():
                 destination = base / filename
-                if initializing or (install_sources and not destination.exists()):
+                if initializing or (self.initializing and not destination.exists()):
                     if destination.exists() and not destination.is_file():
                         raise DosError(f"Configured DOS file is not a regular file: {filename}")
                     atomic_file(destination, contents)
             files = {}
             self.phase = "Checking installed files"
-            if (initializing or install_sources) and config.get("software_catalog"):
+            if self.initializing and config.get("software_catalog"):
                 guide = list(config["software_catalog"])
                 if not all(isinstance(line, str) and "\n" not in line and "\r" not in line for line in guide):
                     raise DosError("DOS software_catalog must contain individual header lines")

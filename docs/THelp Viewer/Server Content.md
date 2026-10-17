@@ -95,6 +95,12 @@ Deselect All clears optional packages only; a required-only group has no
 editable group toggle. API requests omitting required IDs are normalized to
 include them, as are saved intent, direct disk configuration and rebuilds.
 The installed asterisk still reflects the receipt, not the required flag.
+Required DOS packages have queue priority 0 ahead of ordinary priority 10 work;
+urgent MIDI playback retains its reserved negative-priority lane. On opening
+DOS, a missing required receipt or owned file triggers required-only preparation,
+not installation of every optional saved selection. The DOS session and boot
+bundle remain unavailable until that preparation succeeds; failures cannot launch
+jsDOS with an incomplete required environment.
 
 Switching group or active window preserves each dialog's unsaved draft. The
 Select / Deselect All checkbox below the right pane affects only that group or

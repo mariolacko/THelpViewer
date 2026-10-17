@@ -140,8 +140,11 @@ includes FreeDOS EDIT, Volkov Commander and DOS games. Run `EDIT`, `VC` or
 progress dialog. Additional trusted
 software sources use public HTTPS, optional SHA-256 verification and ZIP/IMG
 extraction. `THELP_DOS_CONFIG_PATH` can select
-another manifest. The shared disk is created only once: later restarts do not
-reinstall software or change the disk from an edited source list. Runtime
+another manifest. Opening DOS automatically installs missing manifest-required
+packages before jsDOS starts; a matching receipt must also have its owned files
+on disk. Optional saved choices are not installed by opening DOS. The shared
+disk otherwise stays frozen: later restarts do not reinstall optional software
+or change it from an edited source list. Runtime
 memory/cycles changes still take effect after restarting the server. Use
 **Admin → Configuration → DOS Packages… → Apply** to install checked
 missing DOS packages or uninstall unchecked installed ones, with progress and

@@ -112,7 +112,7 @@ class OnlineDownloader:
         """Keep local extraction/validation out of the HTTP worker/source slots."""
         return self._enqueue(operation, priority, identity, "", None, processing=True)
 
-    def prepare(self, items, operation, *, ordered=False, source=None):
+    def prepare(self, items, operation, *, ordered=False, source=None, priority=None):
         """Bound orchestration separately from shared HTTP and local processing.
 
         Waiting for a remote site must not occupy an extraction worker or keep
@@ -121,7 +121,7 @@ class OnlineDownloader:
         with ThreadPoolExecutor(max_workers=3, thread_name_prefix="thelp-prepare") as executor:
             yield from self.pipeline(items,
                 lambda item: executor.submit(copy_context().run, operation, item),
-                ordered=ordered, source=source)
+                ordered=ordered, source=source, priority=priority)
 
     def process(self, operation):
         if threading.current_thread() in (*self._processing_workers, self._urgent_processing_worker):
@@ -129,7 +129,7 @@ class OnlineDownloader:
         current = _current.get()
         return self.enqueue_processing(operation, priority=current[3] if current else 10).result()
 
-    def pipeline(self, items, submit, *, ordered=False, source=None):
+    def pipeline(self, items, submit, *, ordered=False, source=None, priority=None):
         """Bound in-flight package work; drain writers before leaving on failure."""
         pending = {}
         inputs = list(enumerate(items))
@@ -144,12 +144,11 @@ class OnlineDownloader:
                 with self._lock:
                     def preference(entry):
                         index, item = entry
-                        if ordered and index == next_order:
-                            return (-1, 0, index)
                         origin = origins[index]
                         busy = origin in self._sources or self._cooldowns.get(origin, 0) > time.monotonic()
-                        return (int(busy), active[origin], index)
-                    entry = min(inputs, key=preference) if source else inputs[0]
+                        return (int(not (ordered and index == next_order)),
+                                priority(item) if priority else 0, int(busy), active[origin], index)
+                    entry = min(inputs, key=preference) if source or priority else inputs[0]
                 inputs.remove(entry)
                 pending[submit(entry[1])] = entry
         try:

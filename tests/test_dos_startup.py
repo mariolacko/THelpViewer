@@ -63,10 +63,12 @@ async function scenario(mode){
   setInterval(){return 1;},clearInterval(){},
   document:{currentScript:{src:'http://localhost/assets/tv-dos.js'},hidden:false,addEventListener(){},removeEventListener(){}},
   window:{THelpViewerTV:TV,AudioContext:Audio,Worker:class{},emulators:{
-   dosboxWorker:()=>mode==='worker-denied'?Promise.reject(new DOMException('Worker forbidden','SecurityError')):mode.endsWith('hang')?new Promise(()=>{}):Promise.resolve(ci),
+   dosboxWorker:()=>{assert.notEqual(mode,'required-failed');if(mode==='preparing')assert.ok(statusCalls>=3);
+    return mode==='worker-denied'?Promise.reject(new DOMException('Worker forbidden','SecurityError')):mode.endsWith('hang')?new Promise(()=>{}):Promise.resolve(ci);},
    dosboxDirect:()=>mode==='all-hang'?new Promise(()=>{}):Promise.resolve(ci)}},
   fetch:async url=>{requests.push(url);return {ok:true,json:async()=>url.endsWith('/status')?
-   (['preparing','cancel'].includes(mode)&&statusCalls++<2?{state:'building',initializing:true,percent:statusCalls*25,phase:'Downloading',current:'Game'}:{state:'ready'}):
+   (['preparing','cancel','required-failed'].includes(mode)&&statusCalls++<2?{state:'building',initializing:true,percent:statusCalls*25,phase:'Downloading',current:'Required tool'}:
+    mode==='required-failed'?{state:'error',error:'Required package unavailable'}:{state:'ready'}):
    {account:'',revision:0,base_id:'base',allow_full_disk_fallback:mode!=='worker-denied'},
    headers:{get:name=>name==='X-DOS-Revision'?'0':'base'},arrayBuffer:async()=>new ArrayBuffer(0)};}};
  vm.runInNewContext(source,context);
@@ -86,6 +88,11 @@ async function scenario(mode){
  }
  await boot;
  assert.equal(win.busy,false);
+ if(mode==='required-failed'){
+  assert.deepEqual(progress,[25,50]);assert.equal(destroyed,1);assert.equal(win.view.ci,null);
+  assert.match(errors[0],/Required package unavailable/);
+  assert.ok(!requests.some(url=>url.includes('/session')||url.includes('/bundle')));return;
+ }
  if(mode==='cancel'){
   assert.deepEqual(progress,[25]);assert.equal(destroyed,1);assert.deepEqual(errors,[]);
   assert.ok(!requests.some(url=>url.includes('/bundle')));return;
@@ -112,7 +119,7 @@ async function scenario(mode){
  }
  await win.stop(false);
 }
-(async()=>{for(const mode of ['constructor-denied','resume-denied','worker-hang','all-hang','worker-denied','preparing','cancel','unexpected-exit'])await scenario(mode);})().catch(error=>{console.error(error);process.exitCode=1;});
+(async()=>{for(const mode of ['constructor-denied','resume-denied','worker-hang','all-hang','worker-denied','preparing','required-failed','cancel','unexpected-exit'])await scenario(mode);})().catch(error=>{console.error(error);process.exitCode=1;});
 '''
     result = subprocess.run([NODE, "-e", script, str(source)], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr

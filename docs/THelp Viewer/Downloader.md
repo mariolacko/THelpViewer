@@ -159,8 +159,13 @@ drains active writers on exit/failure. Its optional source hint selects a later
 independent origin before filling slots with another waiting origin; HELP derives
 it from edition query URLs/provider identity. Hints are advisory, not permissions
 or locks: actual transport limits and fallback security remain authoritative.
-Ordered consumption always preserves DOS installation and post-install BAT
-dependencies in manifest order even when later inputs prepare first. HELP feeds
+Its optional `priority` callback, also accepted by `prepare`, ranks required
+DOS prerequisites before ordinary source look-ahead. Required DOS work uses
+priority 0 for its queue rows and HTTP/extraction context, ahead of default 10;
+this does not preempt active transfers or bypass a site's limit/cooldown.
+Ordered consumption preserves the normalized selection: required packages first,
+then optional packages, with manifest order within each set, even when later
+inputs prepare first. Post-install BAT dependencies keep that order. HELP feeds
 ready editions to one staged converter and publishes each validated edition
 immediately. MIDI source delays apply to subsequent HTTP transfers too.
 Cancelling pending MIDI work cancels its queued HTTP steps, not unrelated jobs;

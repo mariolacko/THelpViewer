@@ -5,6 +5,7 @@ import io
 import json
 import struct
 import sqlite3
+import threading
 import uuid
 import zipfile
 
@@ -15,6 +16,7 @@ from thelpviewer.server.accounts.sessions import new_session
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
 from thelpviewer.server.dos.packages import configured_files
+from thelpviewer.server.dos.config import select_dos_packages
 from thelpviewer.server.dos.store import DosPromptStore
 from thelpviewer.server.dos.paths import DosError, c_path
 from thelpviewer.server.archives.core import UnsafeArchiveError, find_unar, find_sevenzip
@@ -102,6 +104,118 @@ def test_required_packages_survive_empty_selection_initialization_and_rebuild(tm
     store._worker.join(5)
     assert store.state == "ready", store.error
     assert store.files == {"TOOLS/BASE/PROGRAM.EXE": b"required program"}
+
+
+def test_required_selection_and_queue_precede_optional_manifest_entries(tmp_path, monkeypatch):
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("PROGRAM.EXE", b"program")
+    config = tmp_path / "dos.json"
+    sources = [{"id": ident, "required": required, "url": f"https://{ident}.test/program.zip",
+                "format": "zip", "target": ident.upper()}
+               for ident, required in [("game", False), ("tool", True), ("another", False), ("manager", True)]]
+    config.write_text(json.dumps({"sources": sources}))
+    assert select_dos_packages({"sources": sources}, ["another", "game"]) == ["tool", "manager", "game", "another"]
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *args, **kwargs: output.getvalue())
+    store = DosPromptStore(tmp_path / "dos", config)
+    try:
+        store.configure(["another", "game"])
+        rows = store.downloads.snapshot(private=True)["items"]
+        assert [row["id"] for row in rows] == ["dos:tool", "dos:manager", "dos:game", "dos:another"]
+        assert [row["priority"] for row in rows] == [0, 0, 10, 10]
+    finally:
+        store.downloads.close()
+
+
+@pytest.mark.parametrize("damage", ["receipt", "file", "inventory"])
+def test_required_receipt_needs_owned_files_before_boot_and_preserves_existing_data(tmp_path, monkeypatch, damage):
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("PROGRAM.EXE", b"required")
+    manifest = tmp_path / "dos.json"
+    manifest.write_text(json.dumps({"sources": [
+        {"id": "tool", "required": True, "enabled": False, "url": "https://tools.test/tool.zip",
+         "format": "zip", "target": "TOOLS"},
+        {"id": "optional", "url": "https://games.test/game.zip", "format": "zip", "target": "GAME"},
+    ], "files": [{"path": "AUTOEXEC.BAT", "text": ["@echo off"]}]}))
+    fetched = []
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source",
+                        lambda source, *args, **kwargs: fetched.append(source["id"]) or output.getvalue())
+    store = DosPromptStore(tmp_path / "dos", manifest)
+    try:
+        store.configure(["optional"])
+        (store.disk_dir / "AUTOEXEC.BAT").write_bytes(b"administrator boot")
+        receipt = json.loads(store.installed_path.read_text())
+        if damage == "receipt":
+            del receipt["tool"]
+        elif damage == "inventory":
+            del receipt["_files"]["tool"]
+        else:
+            (store.disk_dir / "TOOLS/PROGRAM.EXE").unlink()
+        store.installed_path.write_text(json.dumps(receipt))
+        before = len(fetched)
+        reloaded = DosPromptStore(store.root, manifest, downloads=store.downloads)
+        reloaded.prepare()
+        assert reloaded.state == "ready", reloaded.error
+        assert reloaded.files["TOOLS/PROGRAM.EXE"] == b"required"
+        assert reloaded.files["GAME/PROGRAM.EXE"] == b"required"
+        assert reloaded.files["AUTOEXEC.BAT"] == b"administrator boot"
+        assert json.loads(reloaded.installed_path.read_text())["_files"]["tool"] == ["TOOLS/PROGRAM.EXE"]
+        assert len(fetched) == before  # Repair reuses the matching cached archive.
+    finally:
+        store.downloads.close()
+
+
+@pytest.mark.parametrize("empty_receipt", [False, True])
+@pytest.mark.parametrize("fail_required", [False, True])
+def test_dos_api_waits_for_required_bootstrap_not_optional_saved_choices(tmp_path, monkeypatch, empty_receipt, fail_required):
+    from test_server_content import config_for
+    config = config_for(tmp_path)
+    manifest = json.loads(config.dos_config_path.read_text())
+    manifest["sources"][1]["required"] = True
+    config.dos_config_path.write_text(json.dumps(manifest))
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("GAME.EXE", b"mandatory program")
+    entered, release = threading.Event(), threading.Event()
+    fetched = []
+    def fetch(source, *args, **kwargs):
+        fetched.append(source["id"])
+        entered.set()
+        assert release.wait(5)
+        if fail_required:
+            raise ValueError("Required package unavailable")
+        return output.getvalue()
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    app = create_app(config)
+    store = app.state.dos_prompt
+    app.state.content._save_selection({"configured": True, "help_packages": [], "dos_packages": ["one", "two"]})
+    if empty_receipt:
+        store.disk_dir.mkdir(parents=True)
+        (store.disk_dir / "KEEP.TXT").write_bytes(b"keep")
+        store.installed_path.write_text('{"_complete":true,"_files":{}}')
+    with TestClient(app, base_url=config.auth_origin) as client:
+        try:
+            assert client.get("/api/dos/status").json()["state"] == "building"
+            assert entered.wait(2)
+            assert client.get("/api/dos/session").status_code == 503
+            assert client.get("/api/dos/bundle").status_code == 503
+            assert fetched == ["two"]
+        finally:
+            release.set()
+            store._worker.join(5)
+        assert not store._worker.is_alive()
+        if fail_required:
+            assert store.state == "error" and "Required package unavailable" in store.error
+            assert client.get("/api/dos/session").status_code == 503
+            assert client.get("/api/dos/bundle").status_code == 503
+            return
+        assert store.state == "ready", store.error
+        assert client.get("/api/dos/session").status_code == 200
+        assert store.files["GAMES/TWO/GAME.EXE"] == b"mandatory program"
+        assert "GAMES/ONE/GAME.EXE" not in store.files
+        if empty_receipt:
+            assert store.files["KEEP.TXT"] == b"keep"
 
 
 def test_package_strip_components_merges_distribution_disks_after_member_selection(tmp_path):
@@ -409,7 +523,7 @@ def test_first_run_software_download_is_hash_checked_selected_and_resumable(tmp_
     data = output.getvalue()
     config = tmp_path / "dos.json"
     config.write_text(json.dumps({"sources": [{
-        "id": "editor", "url": "https://example.test/editor.zip", "sha256": hashlib.sha256(data).hexdigest(),
+        "id": "editor", "required": True, "url": "https://example.test/editor.zip", "sha256": hashlib.sha256(data).hexdigest(),
         "format": "zip", "target": "TOOLS", "members": ["BIN/*", "DOC/*"],
     }]}))
     fetched = []
@@ -447,7 +561,7 @@ def test_source_files_override_archive_on_fresh_install_and_remain_frozen(tmp_pa
     manifest.write_text(json.dumps({"sources": [source]}))
     monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *args, **kwargs: archive_data)
     store = DosPromptStore(tmp_path / "dos", manifest)
-    store.prepare()
+    store.prepare(install_sources=True)
     assert store.state == "ready", store.error
     assert store.files["GAMES/TEST/RUN.BAT"] == b"@ECHO OFF\r\nGAME\r\n"
     assert store.files["GAMES/TEST/DATA/RAW.BIN"] == bytes(range(256))

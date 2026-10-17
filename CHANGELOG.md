@@ -4,6 +4,14 @@
 
 ### 2.1 development
 
+- Prioritize manifest-required DOS packages in selection, queue display, bounded
+  preparation and shared HTTP/extraction work. Opening DOS bootstraps only the
+  required set, even if optional selections were saved. Verify required recipe
+  receipts and owned-file presence before declaring C ready; missing mandatory
+  files are restored using the normal cache/installer without removing optional
+  software or private data. Block DOS sessions, bundles and jsDOS startup until
+  preparation succeeds, including for an otherwise initialized empty disk.
+  Advancing preparation percentages also refresh the browser's idle deadline.
 - Set the menu clock immediately when the shared application menu binds its
   new root. F1 in Downloads and other menu rebuilds no longer briefly display
   `00:00:00` while waiting for the next periodic clock update; bundle and

@@ -137,6 +137,10 @@ backward-compatibility aliases.
   Selections use manifest IDs; an empty selection means none except DOS
   sources explicitly marked `required` in the manifest. Publish staged
   HELP only after validation, preserving unselected content and a backup.
+- DOS boot verifies required recipe receipts and owned-file presence, not only
+  configured selection or `_complete`. Missing required tools install before
+  jsDOS starts; opening DOS does not apply saved optional selections. Required
+  work leads the shared queue using the manifest flag, never hardcoded IDs.
 - Persist operation intent and processing progress in `data/jobs.sqlite3`.
   Recover only queued/interrupted jobs, not terminal failures or old saved
   selections. Validate output checkpoints against real files before skipping

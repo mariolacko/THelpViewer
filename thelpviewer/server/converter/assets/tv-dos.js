@@ -267,7 +267,7 @@ class TVDosWindow extends TVWindow {
                 const status = await (await dosRequest("/api/dos/status")).json();
                 if (status.state === "ready") { break; }
                 if (status.state === "error" || Date.now() > deadline) { throw new Error(status.error || "DOS preparation timed out"); }
-                const progress = JSON.stringify([status.current, status.phase, status.processed, status.received]);
+                const progress = JSON.stringify([status.current, status.phase, status.processed, status.received, status.percent]);
                 if (progress !== lastProgress) { deadline = Date.now() + 180000; lastProgress = progress; }
                 if (status.initializing && TV.TVLoadingDialog && this.owner) {
                     if (!initializingDialog) {

@@ -80,12 +80,14 @@ class DownloadProgress:
                 key = str(item["id"])
                 unit = {"id": key, "label": str(item["label"]),
                     "group": str(item.get("group", item["id"])), "state": "pending",
+                    "priority": item.get("priority", 10),
                     "byte_progress": item.get("byte_progress", True),
                     "stage": "prepare", "stage_percent": None,
                     "percent": 0, "phase": "Waiting", "received": 0, "bytes_total": 0, "error": "", "batch": self._batch}
                 if (key in previous and previous[key].get("batch") == self._batch
                         and (not replace or previous[key].get("priority", 10) < 0)):
                     unit = previous[key]
+                    unit["priority"] = min(unit.get("priority", 10), item.get("priority", 10))
                 job["items"][key] = unit
             self._persist(kind)
 

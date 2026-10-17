@@ -121,6 +121,17 @@ Changing categories retains the complete draft;
 Apply confirms installation/uninstallation across all DOS categories. Close
 discards the draft. HELP Packages remains a separate dialog.
 Before selection, opening DOS does not download the whole source manifest.
+It bootstraps only sources already marked `required: true`, not optional saved
+choices. Required packages lead the queue and preparation order. Before the
+disk becomes ready, the server checks each required source's recipe key and
+nonempty owned-file inventory against regular files on C. A receipt with missing
+files is not a completed installation: the normal installer/cache repairs the
+package, preserving other installed programs, administrator files and overlays.
+This also applies to an empty disk whose old receipt says `_complete: true`.
+While mandatory preparation runs, `/api/dos/session` and `/api/dos/bundle` return
+503 and the window shows progress without starting jsDOS. A mandatory-source
+failure keeps those endpoints blocked and displays the error; readiness is never
+inferred from the configured selection alone.
 Existing completed C disks are still loaded lazily on the first DOS request.
 The DOS window reports
 preparation status through a shared `TVLoadingDialog` with a solid-cell gauge,
@@ -426,7 +437,8 @@ Configured content overrides the same selected archive path in the incoming
 fresh installation. It does not overwrite an existing on-disk file with
 different bytes during resume/explicit installation: that reports a conflict.
 New missing files can be added during explicit installation. Ordinary server
-starts still leave completed base disks frozen; use administrator Rebuild DOS C to
+starts leave optional packages on completed base disks frozen; required-package
+receipts/files are checked before boot and missing tools are repaired. Use Rebuild DOS C to
 apply a changed recipe from scratch. User overlays are not rewritten. Paths,
 case-insensitive duplicates, file counts and combined byte sizes are checked.
 The default Volkov Commander entry demonstrates `files` with `START.BAT`.
@@ -480,12 +492,13 @@ source-recipe keys and per-package `_files` ownership. Old SHA-pinned receipts
 are recovered once from retained checksum-proven archives whose contents match
 the shared disk, before migrating those caches to readable names. No C files or
 private overlays are changed; missing/modified/ambiguous data is not guessed.
-After successful initialisation its `_complete` flag freezes
-automatic installation: later starts only read the existing disk, even if the
-manifest's source list changes. They do not redownload, restore deleted files
-or overwrite administrator edits. An interrupted initial installation without
-this flag resumes from verified package receipts. The earlier receipt-only
-prototype is completed once, retaining existing files and adding these games.
+After successful initialisation its `_complete` flag freezes optional
+automatic installation. Before boot, required recipe keys and their owned files
+are still checked; missing required tools use the normal installer/cache before
+the disk becomes ready. Other optional source-list changes and deleted optional
+files do not trigger downloads or repairs. Different administrator-edited bytes
+are never overwritten by automatic repair: conflicts remain errors. Interrupted
+initial preparation resumes from installed required-package receipts/files.
 Runtime memory/cycle/quota settings still reload on server restart. Later
 software changes use the administrator menu → Configuration → DOS Packages → Apply.
 The existing maintenance adapter `python -m thelpviewer.tools.install_dos_sources`
