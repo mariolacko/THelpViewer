@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### 3.0 development
+
+- Start 3.0.0.dev0 on the separate v3.0 development branch after the 2.1.0
+  release. Record the application-module contract and implementation stages:
+  a JavaScript client with an optional Python server component, shared host
+  services and existing TVision views. Existing applications remain directly
+  registered; the module loader and MOD Player are not implemented yet.
+
 ## [2.1.0] — 2026-10-18
 
 - Add optional HIEW 6.50 to DOS Packages / Editors, using the author's free

@@ -1,5 +1,24 @@
 # TODO
 
+## Version 3 application modules
+
+- [x] Release/tag 2.1.0 and open a separate 3.0.0.dev0 development branch.
+- [x] Define the client-plus-optional-Python contract in TurboVision JS docs.
+- [ ] Add a trusted application manifest and registry with unique stable IDs;
+  reject duplicate commands/help contexts and invalid entry points.
+- [ ] Connect new modules to both viewer shells' menus and TVEvent dispatch,
+  retaining existing direct registrations and shared TVWindow/TVDialog views.
+- [ ] Register optional Python routers and lifespan resources using the existing
+  FastAPI host/services. Test client-only modules and a server-equipped fixture,
+  including cleanup after failures; do not create dummy MOD Player server code.
+- [ ] Connect module help to Contents/Index and view-owned contexts, then add
+  public workspace state and isolated per-user settings without moving DOS data.
+- [ ] Implement MOD/XM/S3M Player as the first real client module using the shared
+  downloader. Select/verify a browser engine before implementing playback.
+- [ ] Consider shared/private per-application disks separately, after the module
+  lifecycle and ownership tests are stable. Do not migrate existing applications
+  or private overlays as part of the initial module infrastructure.
+
 ## Production inventory and restart/retry verification — 2026-10-17
 
 - [x] Deploy the MIDI restart/DOS Retry fixes and verify public assets, context

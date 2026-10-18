@@ -2,11 +2,18 @@
 
 import importlib
 
+from thelpviewer import __version__
 from thelpviewer.config import CONFIG_DIR, PROJECT_ROOT
 from thelpviewer.help_database import help_database_path, load_help_manifest
 from thelpviewer.server.config import load_config
 from thelpviewer.server.converter.writers.bundle import _write_bundle_index
 from thelpviewer.server.downloader.__main__ import _build_parser
+
+
+def test_checked_in_viewer_version_matches_the_package():
+    html = (PROJECT_ROOT / "www/index.html").read_text(encoding="utf-8")
+    assert f'data-tv-generator-version="{__version__}"' in html
+    assert f'content="THelp Viewer Converter {__version__}"' in html
 
 
 def test_default_configuration_is_grouped_and_explicit_overrides_still_work(tmp_path, monkeypatch):

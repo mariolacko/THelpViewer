@@ -22,6 +22,52 @@ The syntax highlighter detects Pascal, C and ASM independently for each
 contiguous code block, so one topic can safely contain examples in several
 languages.
 
+## Version 3 application-module contract (planned)
+
+This section defines the next development stage, not an available loader API.
+The existing JavaScript files above are source modules; application modules
+will additionally register their menu entries, commands, windows and help with
+the host. Existing DOS, MIDI, HELP, games and dialogs retain their current
+direct registration until explicitly migrated in a later change.
+
+An application module has a stable ID, a JavaScript client entry point and an
+optional Python server entry point. Both belong to the same module identity;
+the absence of Python is normal, not a missing dependency. A client-only module
+can still call shared server APIs. MOD Player will be the first such module,
+using shared downloads rather than owning another downloader or worker queue.
+
+The host/module boundary will provide:
+
+- Registration of a factory returning an ordinary TVWindow or TVDialog. The
+  shared desktop owns activation, focus, frames, resizing and TVEvent delivery.
+  Modules compose their controls from existing views; a module is not a new
+  widget base class, renderer or alternative HTML/CSS layout system.
+- Menu contributions built with TVMenuItem/TVSubMenu, routed as TVEvent commands.
+  Every concrete view owns its help context. Module UHF topics participate in
+  Contents and Index without a separate context-to-dialog map.
+- Explicit open/close/activation cleanup, including audio, timers, requests and
+  event subscriptions. Optional workspace state contains public view state only,
+  never credentials, local-folder handles or private file contents.
+- Access to existing login, shared downloader/jobs and configuration services.
+  A client-only module does not create a dummy Python package. A server module
+  registers an APIRouter under its own API namespace and optional startup/shutdown
+  work through the host lifespan; it does not start another web server.
+- Server checks for the current session, account ownership, roles and origin on
+  relevant writes. A caller-supplied account ID is not proof of ownership.
+  Module loading is restricted to trusted, configured code delivered with the
+  application, not arbitrary user-uploaded Python or external scripts.
+- Versioned manifests/settings defaults under the existing config directory.
+  Future per-user module settings belong under permanent data/users/<id>/apps/
+  <module-id>/, not var. Existing account files and data/dos/users overlays do
+  not move in this first stage. Dedicated application disks are a separate task.
+
+Implementation is ordered as registry/manifest validation, menu and TVEvent
+integration in both viewer shells, optional Python lifecycle/router integration,
+help/workspace/settings integration, then a client-only MOD Player. A small
+test-only server module will verify that Python components are genuinely
+optional and clean up on startup failure and normal shutdown. Until those
+stages land, adding a module is not yet a supported installation workflow.
+
 ---
 
 ## tv-core.js

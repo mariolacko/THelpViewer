@@ -163,6 +163,13 @@ backward-compatibility aliases.
 
 ## Turbo Vision JS
 
+- Version 3 application modules have a JavaScript client and an optional Python
+  server component under one stable identity. Client-only modules may use shared
+  server services; do not add empty Python backends (e.g. MOD Player) or duplicate
+  download queues. Keep existing applications directly registered until their
+  migration is explicitly requested. Follow the planned module contract in
+  docs/THelp Viewer/TurboVision JS.md; distinguish planned APIs from implemented
+  behavior. New module windows still use the TVision hierarchy and owner flow.
 - Match the original Turbo Vision hierarchy, constructor order, method names,
   state masks, owner flow and `TVEvent` handling wherever the browser permits.
   Concrete dialogs and games retain references to owned `TVView` children and

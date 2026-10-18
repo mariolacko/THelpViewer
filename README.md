@@ -8,6 +8,12 @@ single-page application.
 
 Homepage: [https://thelp.zdrojak.dev](https://thelp.zdrojak.dev)
 
+The `v3.0` branch starts 3.0 development; `v2.1.0` identifies the 2.1 release.
+The planned application modules have a JavaScript client and an optional
+Python server component. Existing applications remain unchanged. See the
+[module contract](docs/THelp%20Viewer/TurboVision%20JS.md#version-3-application-module-contract-planned)
+and [implementation tasks](TODO.md#version-3-application-modules).
+
 Reads multiple legacy DOS help formats including Borland THELP, Microsoft
 QuickHelp / BW03, Borland TDH/TFH runtime help, Norton Guide, FBHF,
 Software602, and text `.hlx` / `.hl6` sources, then serves them as an
