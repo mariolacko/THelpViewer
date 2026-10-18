@@ -395,6 +395,11 @@ class DosPromptStore:
             source_ids = select_dos_packages(config, source_ids)
             source_map = {source["id"]: source for source in config["sources"]}
             sources = [source_map[ident] for ident in source_ids] if preparing else []
+            if not initializing and not install_sources:
+                # Repair only invalid required packages on boot. Already verified
+                # packages keep their existing configuration, even if a new
+                # manifest supplies different first-install defaults.
+                sources = [source for source in sources if source["id"] in missing_required]
             for source in sources:
                 if not self._package_present(source, installed, base):
                     installed.pop(source["id"], None)

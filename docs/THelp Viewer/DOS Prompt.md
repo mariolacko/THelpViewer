@@ -622,7 +622,11 @@ fresh installation. It does not overwrite an existing on-disk file with
 different bytes during resume/explicit installation: that reports a conflict.
 New missing files can be added during explicit installation. Ordinary server
 starts leave optional packages on completed base disks frozen; required-package
-receipts/files are checked before boot and missing tools are repaired. Use Rebuild DOS C to
+receipts/files are checked before boot and missing tools are repaired.
+Already verified required packages are also left frozen while another required
+package is repaired; different first-install defaults never block that boot or
+overwrite the existing shared configuration. Explicit installation still reports
+conflicting bytes. Use Rebuild DOS C to
 apply a changed recipe from scratch. User overlays are not rewritten. Paths,
 case-insensitive duplicates, file counts and combined byte sizes are checked.
 When any source declares `path`, the installer manages the shared

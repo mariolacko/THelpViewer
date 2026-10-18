@@ -8,7 +8,8 @@ single-page application.
 
 Homepage: [https://thelp.zdrojak.dev](https://thelp.zdrojak.dev)
 
-The `v3.0` branch starts 3.0 development; `v2.1.0` identifies the 2.1 release.
+The `v3.0` branch starts 3.0 development; `v2.1` contains stable 2.1 releases
+(latest tag: `v2.1.1`).
 The planned application modules have a JavaScript client and an optional
 Python server component. Existing applications remain unchanged. See the
 [module contract](docs/THelp%20Viewer/TurboVision%20JS.md#version-3-application-module-contract-planned)
