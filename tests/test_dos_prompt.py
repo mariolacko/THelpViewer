@@ -952,6 +952,52 @@ def test_rar_package_is_optional_and_keeps_original_documents_without_registrati
     assert extracted["DOC/RAR/COPYING.EMX"] == b"original document"
 
 
+def test_required_boot_repair_leaves_verified_packages_and_shared_settings_frozen(tmp_path, monkeypatch):
+    store = store_at(tmp_path)
+    manifest = json.loads(store.config_path.read_text())
+    manifest["sources"] = [
+        {"id": ident, "url": f"https://{ident}.test/tool.zip", "format": "zip",
+         "target": "TOOLS/" + ident.upper(), "required": True,
+         "files": [{"path": "CONFIG.INI", "text": ["original defaults"]}]}
+        for ident in ("one", "two")]
+    store.config_path.write_text(json.dumps(manifest))
+    calls = []
+    def fetch(source, *_args, **_kwargs):
+        calls.append(source["id"])
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as output:
+            output.writestr("RUN.EXE", b"MZ program")
+        return archive.getvalue()
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    repaired = None
+    try:
+        store.configure(["one", "two"])
+        account = uuid.uuid4().hex
+        store.save(account, payload(store, files={"SAVE.DAT": b"private save"}))
+        config_file = store.disk_dir / "TOOLS/ONE/CONFIG.INI"
+        config_file.write_bytes(b"administrator settings")
+        manifest["sources"][0]["files"][0]["text"] = ["new first-install defaults"]
+        store.config_path.write_text(json.dumps(manifest))
+        (store.disk_dir / "TOOLS/TWO/RUN.EXE").unlink()
+        calls.clear()
+        repaired = DosPromptStore(store.root, store.config_path)
+        repaired.prepare()
+        assert repaired.state == "ready", repaired.error
+        assert repaired.processed == repaired.total == 1
+        assert repaired.files["TOOLS/ONE/CONFIG.INI"] == b"administrator settings"
+        assert repaired.files["TOOLS/TWO/RUN.EXE"] == b"MZ program"
+        assert repaired.published_packages() == {"one", "two"}
+        assert repaired.overlay(account)[1] == {"SAVE.DAT": b"private save"}
+        assert calls == []  # Only the incomplete package is repaired, from cache.
+        repaired.prepare(install_sources=True)
+        assert repaired.state == "error"
+        assert "Configured software file conflicts" in repaired.error
+        assert config_file.read_bytes() == b"administrator settings"
+    finally:
+        if repaired: repaired.downloads.close()
+        store.downloads.close()
+
+
 def test_volkov_install_seeds_exact_binary_ini_and_preserves_private_settings(tmp_path, monkeypatch):
     manifest = json.loads(Path("thelpviewer/config/dos-prompt.json").read_text())
     source = next(item for item in manifest["sources"] if item["id"] == "volkov-commander-405")

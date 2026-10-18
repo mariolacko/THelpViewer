@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [2.1.1] — 2026-10-18
+
+- During automatic DOS boot repair, prepare only invalid required packages.
+  Leave already verified packages and their existing shared settings frozen
+  when another mandatory tool needs installation. A changed first-install
+  default no longer blocks boot on an existing VC.INI; explicit installation
+  retains conflict checks and private overlays remain unchanged.
+
 ## [2.1.0] — 2026-10-18
 
 - Add optional HIEW 6.50 to DOS Packages / Editors, using the author's free
