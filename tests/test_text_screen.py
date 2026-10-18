@@ -161,7 +161,7 @@ for(const bad of [{...blink,blink:[true,false,false,false]},
 }
 assert.deepEqual(screen.palette,{0:'#000000',1:'#123456',2:'#abcdef'});
 const calls=[],context={fillStyle:'',fillRect(...args){calls.push([this.fillStyle,...args]);}};
-const view=new TVTextScreen(new TVRect()).setData(screen).bindRoot({getContext:()=>context});
+const view=new TVTextScreen(new TVRect()).setData(screen).bindRoot({tagName:'CANVAS',getContext:()=>context});
 assert.equal(view.dataSize(),12);assert.equal(view.root.width,4);assert.equal(view.root.height,4);
 assert.deepEqual(calls.slice(0,3),[['#000000',0,0,2,2],['#abcdef',0,0,1,1],['#abcdef',1,1,1,1]]);
 assert(view.draw().includes('width="4" height="4"'));assert(!view.draw().includes('<img'));
@@ -184,7 +184,7 @@ const timers=new Map(),listeners=new Set();let id=0;
 const motion={matches:false,addEventListener:(n,f)=>listeners.add(f),removeEventListener:(n,f)=>listeners.delete(f)};
 globalThis.window={matchMedia:()=>motion,setInterval:f=>{timers.set(++id,f);return id;},clearInterval:i=>timers.delete(i)};
 const animatedCalls=[],animatedContext={fillStyle:'',fillRect(...args){animatedCalls.push([this.fillStyle,...args]);}};
-const animatedView=new TVTextScreen(new TVRect()).setData(animated).bindRoot({getContext:()=>animatedContext,isConnected:true});
+const animatedView=new TVTextScreen(new TVRect()).setData(animated).bindRoot({tagName:'CANVAS',getContext:()=>animatedContext,isConnected:true});
 assert.equal(timers.size,1);assert.equal(listeners.size,1);animatedCalls.length=0;
 Array.from(timers.values())[0]();
 assert.deepEqual(animatedCalls[0],['#000000',0,0,2,2]);
@@ -200,6 +200,38 @@ assert.equal(timers.size,0);assert.equal(listeners.size,0);assert.equal(animated
 animatedView._onMotionChange();assert.equal(timers.size,0); // Already queued preference notification.
 '''
     result = subprocess.run([shutil.which("node"), "-e", script, str(bundle)], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required")
+def test_character_screen_uses_native_phase_cursor_and_updates_owned_cells():
+    script = r'''
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const source=fs.readFileSync('www/assets/tv-core.js','utf8');
+const a=source.indexOf('class TVTextScreen extends TVView'),b=source.indexOf('class TVImage extends TVView',a);
+class TVView {constructor(){this.root=null;}bindRoot(root){this.root=root;return this;}}
+class Element {constructor(){this.children=[];this.style={};}appendChild(child){this.children.push(child);}
+ replaceChildren(...children){this.children=children;}}
+global.document={createElement:()=>new Element()};
+global.window={setInterval(){throw Error('Live screen created an independent blink clock');},clearInterval(){}};
+const displayCp437Char=code=>String.fromCharCode(code);
+eval(source.slice(a,b)+';global.Screen=TVTextScreen');
+const view=new Screen(),data={cols:2,rows:1,cells:[[65,1,0],[60,0,1]],palette:['#000000','#aaaaaa'],
+ blink:[true,false],blinkVisible:false,cursor:{index:1,visible:true,start:80,end:100}};
+const root=new Element();view.setData(data).bindRoot(root);
+assert.equal(view._blinkTimer,null);assert.equal(root.children.length,1);
+const first=root.children[0].children[0],second=root.children[0].children[1];
+assert.equal(first.children[0].textContent,'A');assert.equal(first.style.color,'#000000');
+assert.equal(second.children[0].textContent,'<');assert(second.style.backgroundImage.includes('80%'));
+view.setData({...data,blinkVisible:true,cursor:{...data.cursor,visible:false}});
+assert.equal(root.children[0].children[0],first);assert.equal(first.style.color,'#aaaaaa');
+assert.equal(second.style.backgroundImage,'');assert.equal(view._blinkTimer,null);
+for(const bad of [{...data,blinkVisible:1},{...data,cursor:{...data.cursor,index:2}},
+ {...data,cursor:{...data.cursor,start:-1}},{...data,cursor:{...data.cursor,end:79}}])
+ assert.throws(()=>view.setData(bad),TypeError);
+view.destroy();assert.equal(view.root,null);assert.equal(view._blinkTimer,null);
+'''
+    result = subprocess.run([shutil.which("node"), "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
     for filename in ("tv-core.js", "tv-bundle-app.js", "tv-context-help.js", "turbovision.css"):
         assert (Path("www/assets") / filename).read_bytes() == (

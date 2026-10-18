@@ -200,7 +200,9 @@ class TVDownloadProgress extends TVSubMenu {
             const wait = /in (\d+)s$/.exec(item.phase || "");
             const percent = TVProgressDialog.downloadPercent(item);
             row.name = title; row.param = item.state === "error" ? "Failed" : item.state === "blocked" ? "Not completed"
-                : wait ? `Wait ${wait[1]}s` : item.state === "waiting" ? "Waiting" : percent === null ? "" : `${percent}%`;
+                : wait ? `Wait ${wait[1]}s` : item.state === "waiting"
+                    ? (item.phase || "Waiting").replace(/^(Waiting for|Awaiting)\s+/i, "")
+                    : percent === null ? "" : `${percent}%`;
             row.command = ["error", "blocked"].includes(item.state) ? "downloads-failed" : "";
             this.rows.set(item.id, row);
             return row;
@@ -542,7 +544,6 @@ class TurboVisionWindowResizer {
             this.handle.addEventListener("mousedown", this.onHandleMouseDown);
         }
         if (this.moveHandle) {
-            this.lastMoveDown = 0;
             this.moveHandle.addEventListener("mousedown", this.onMoveHandleMouseDown);
         }
     }
@@ -591,18 +592,11 @@ class TurboVisionWindowResizer {
     }
 
     startMove(event) {
-        if (event.button > 0 || this.moveState || this.dragState) { return; }
+        if (event.button > 0 || event.detail > 1 || this.moveState || this.dragState) { return; }
         if (event.target.closest(".tv-close-control")) {
             return;
         }
         event.preventDefault();
-        const now = Date.now();
-        const wasDblClick = now - this.lastMoveDown < 500;
-        this.lastMoveDown = wasDblClick ? 0 : now;
-        if (wasDblClick) {
-            this.toggleMaximize(event);
-            return;
-        }
         if (this.windowElement.classList.contains("is-maximized")) {
             return;
         }
@@ -698,8 +692,8 @@ class TurboVisionWindowResizer {
         const current = this.windowElement.classList.contains("is-maximized") && this.restoreSnapshot
             ? this.restoreSnapshot : this.captureGeometry();
         const cell = measureCells(), style = getComputedStyle(this.windowElement);
-        const maxCols = this.desktop ? Math.max(1, Math.floor(this.desktop.clientWidth / cell.width) - 2) : Infinity;
-        const maxRows = this.desktop ? Math.max(1, Math.floor((this.desktop.clientHeight - 2 * cell.width) / cell.height)) : Infinity;
+        const maxCols = this.desktop ? Math.max(1, Math.floor(this.desktop.clientWidth / cell.width)) : Infinity;
+        const maxRows = this.desktop ? Math.max(1, Math.floor(this.desktop.clientHeight / cell.height)) : Infinity;
         const cols = Math.min(maxCols, Math.max(this.defaultSize.cols, this.numericVar(style, "--tv-window-min-cols", 1)));
         const rows = Math.min(maxRows, Math.max(this.defaultSize.rows, this.numericVar(style, "--tv-window-min-rows", 1)));
         this.place({ cols, rows,
@@ -819,11 +813,6 @@ class TurboVisionWindowResizer {
         } else {
             this.maximize();
         }
-    }
-
-    toggleMaximize(event) {
-        if (event.target.closest(".tv-close-control")) { return; }
-        this.toggle();
     }
 
     onResizeMove = (event) => {

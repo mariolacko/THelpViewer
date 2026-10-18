@@ -20,7 +20,7 @@ def test_local_browser_auto_login_without_webauthn(tmp_path):
     manifest = tmp_path / "config.json"
     manifest.write_text(json.dumps({"categories": [{"id": "games", "label": "Games"},
         {"id": "development", "label": "Programming"}, {"id": "empty", "label": "Empty"}], "sources": [
-        {"id": "game", "category": "games", "title": "Test game", "language": "cs", "description": "First test game description", "url": "https://packages.test/game.zip",
+        {"id": "game", "category": "games", "title": "Test game", "language": "cs", "description": "First test game description: česká logická hra", "url": "https://packages.test/game.zip",
          "format": "zip", "target": "GAMES/TEST", "enabled": False},
         {"id": "second-game", "category": "games", "title": "Second game", "language": "en-US", "description": "Second test game description", "url": "https://packages.test/second.zip",
          "format": "zip", "target": "GAMES/SECOND", "enabled": False},
@@ -42,7 +42,9 @@ def test_local_browser_auto_login_without_webauthn(tmp_path):
         [sys.executable, "-m", "uvicorn", "thelpviewer.server.app:app", "--host", "127.0.0.1",
          "--port", str(port), "--log-level", "warning"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        env={**os.environ, "THELP_STATE_DIR": str(tmp_path), "THELP_HELPS_DIR": str(tmp_path / "helps"),
+        env={**os.environ, "THELP_STATE_DIR": str(tmp_path), "THELP_DATA_DIR": str(tmp_path),
+             "THELP_DOWNLOADS_DIR": str(tmp_path / "downloads"), "THELP_SOURCES_DIR": str(tmp_path / "sources"),
+             "THELP_HELPS_DIR": str(tmp_path / "helps"),
              "THELP_STATISTICS_PATH": str(tmp_path / "statistics.sqlite3"),
              "THELP_AUTH_ORIGIN": app_url.rstrip("/"), "THELP_PUBLIC_BASE_URL": "",
              "THELP_DEV_AUTO_LOGIN": "1", "THELP_MIDI_SOURCES_PATH": str(midi_manifest),
@@ -100,7 +102,8 @@ const [port,url,screenshotPrefix]=process.argv.slice(1);
   if(!(v instanceof TV.TVPackagesDialog)||!(v.categories instanceof TV.TVListBox)||!(v.items instanceof TV.TVCheckBoxes))
    throw Error('Chooser bypassed shared TVision views');
   if(v.kind!=='help'||!v.items.options.some(item=>item.id==='tp:7'))throw Error('HELP editions missing');
-  if(v.heading||v.size.x!==82||v.size.y!==24||v.items.bounds.y1!==1||v.groupAll.bounds.y1!==12)throw Error('Package dimensions/header rows');
+  if(v.heading||v.size.x!==82||v.size.y!==24||v.items.bounds.y1!==2||v.groupAll.bounds.y1!==12
+   ||!(v.filterInput instanceof TV.TVInputLine)||v.filterInput.bounds.y1!==0||v.filterLabel.link!==v.filterInput)throw Error('Package dimensions/filter row');
   if(v.descriptionBox.bounds.y1!==14||v.categories.bounds.y2!==v.groupAll.bounds.y2)throw Error('Package groups/description alignment');
   if(v.categoryLabel.root.textContent.includes('~')||!v.categoryLabel.root.querySelector('.tv-hotkey'))throw Error('Dynamic TVLabel lost its mnemonic');
   v.items.choiceElements[0].click();
@@ -262,6 +265,8 @@ const [port,url,screenshotPrefix]=process.argv.slice(1);
   if(v.helpCtx!==TV.TV_HELP_CONTEXTS.hcDosPackages||!document.querySelector('.tv-status-line').textContent.includes('Choose DOS categories'))throw Error('Window switch did not refresh context/mini help');
   help.close();help.open();await waitPackages(()=>help.valid&&!help.draft.selected.size,'Reopening treated draft as installed');
   v.close();v.open();await waitPackages(()=>v.valid,'DOS reopen failed');v.categories.selectItem(0);v.setAll(true);v.categories.selectItem(1);v.setAll(true);
+  v.filterInput.root.value='compiler';v.filterInput.root.dispatchEvent(new InputEvent('input',{bubbles:true}));
+  if(v.categories.items.length!==1||v.items.options.length!==1)throw Error('Apply fixture is not filtered');
   const request=TV.TVLoginDialog.request;let posts=0,state='building',scopes=['dos'];
   TV.TVLoginDialog.request=async(path,method,data)=>{
    if(path==='/api/admin/content'&&method==='POST'){
@@ -288,8 +293,12 @@ const [port,url,screenshotPrefix]=process.argv.slice(1);
    await next;
    if(posts!==2||!help.installing)throw Error('Second content type was not submitted while monitoring the first');
    state='ready';await waitPackages(()=>!v.pollTask&&!help.pollTask&&v.valid,'Package job never finished');
-   if([...v.draft.selected].join(',')!==selected||v.applyButton.disabled)throw Error('Completion discarded edits');
-  }finally{TV.TVLoginDialog.request=request;v.progress?.close();}
+   if([...v.draft.selected].join(',')!==selected||v.applyButton.disabled
+    ||v.filterInput.getData()!=='compiler'||v.items.options.length!==1)throw Error('Completion discarded edits/filter');
+  }finally{
+   TV.TVLoginDialog.request=request;v.progress?.close();
+   v.filterInput.root.value='';v.filterInput.root.dispatchEvent(new InputEvent('input',{bubbles:true}));
+  }
   const midi=dialogs.midi;manager.open('midi-sources');
   await waitPackages(()=>midi.valid&&midi.categories.items.length===2,'MIDI sources did not load');
   midi.selectAllButton.root.click();
@@ -341,12 +350,78 @@ const [port,url,screenshotPrefix]=process.argv.slice(1);
    if(writes!==1||midi.submitting)throw Error('MIDI selection was not saved exactly once');
   }finally{window.fetch=originalFetch;Object.values(dialogs).forEach(v=>v.close());}
  })()`);
+ await evaluate(`(async()=>{
+  const TV=window.THelpViewerTV,{help,dos,midi}=packageDialogs,manager=help.owner.dialogManager;
+  window.typePackageFilter=(v,text)=>{
+   v.filterInput.focus();v.filterInput.root.value=text;
+   v.filterInput.root.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));
+   if(document.activeElement!==v.filterInput.root)throw Error('Filtering stole input focus');
+  };
+  for(const v of [help,dos,midi]){v.open();await waitPackages(()=>v.valid,'Filter fixture failed to load');}
+  manager.open('dos-packages');dos.setAll(false);dos.categories.selectItem(0);
+  dos.items.choiceElements[1].click();
+  typePackageFilter(dos,'CESKA LOGICKA');
+  if(dos.categories.items.length!==1||dos.items.options.length!==1||dos.items.options[0].id!=='game'
+   ||!dos.draft.selected.has('second-game'))throw Error('Case/accent/description filter lost a hidden DOS selection');
+  dos.items.choiceElements[0].click();typePackageFilter(dos,'');
+  if(dos.categories.items.length!==3||!dos.items.mark(0)||!dos.items.mark(1))throw Error('Clearing filter lost DOS marks');
+  typePackageFilter(dos,'Programming');
+  if(dos.category!=='development'||dos.items.options[0]?.id!=='compiler')throw Error('Category-name filter did not cross groups');
+  typePackageFilter(dos,'no such package 192846');
+  if(dos.categories.items.length||dos.items.options.length||!dos.groupAll.getState(TV.sfDisabled)
+   ||dos.selectAllButton.disabled||!dos.descriptionRows[0].text.includes('No matching'))throw Error('Empty filter state is inconsistent');
+  let applies=0;const apply=dos.applySelection;dos.applySelection=async()=>{applies++;};
+  const enter=new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});
+  dos.filterInput.root.dispatchEvent(enter);dos.applySelection=apply;
+  if(applies||!enter.defaultPrevented)throw Error('Enter in Filter submitted an installation');
+  dos.selectAllButton.root.click();
+  if(dos.draft.selected.size!==3)throw Error('Global Select All was restricted by Filter');
+  typePackageFilter(dos,'First test');dos.groupAll.choiceElements[0].click();
+  if(dos.draft.selected.has('game')||!dos.draft.selected.has('second-game')||!dos.draft.selected.has('compiler'))
+   throw Error('Filtered group toggle modified hidden packages');
+  typePackageFilter(dos,'');
+  dos.filterInput.focus();
+ })()`);
+ // Real browser typing must take the same TVInputLine -> TVEvent path.
+ await send('Input.insertText',{text:'compiler'});
+ await evaluate(`(()=>{
+  const {dos,help,midi}=packageDialogs,manager=help.owner.dialogManager;
+  if(dos.items.options.length!==1||dos.items.options[0].id!=='compiler')throw Error('Native typing did not filter live');
+  dos.filterInput.root.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
+  if(document.activeElement!==dos.items.choiceElements[0])throw Error('Filter ArrowDown did not focus results');
+  typePackageFilter(dos,'');
+  manager.open('help-packages');help.setAll(false);
+  const selected=help.items.options[0].id,target=help.draft.packages.find(item=>item.id==='tp:7');
+  help.items.choiceElements[0].click();typePackageFilter(help,target.label.toUpperCase());
+  if(!help.items.options.some(item=>item.id===target.id)||!help.draft.selected.has(selected))throw Error('HELP filter lost the hidden edition');
+  help.items.choiceElements[help.items.options.findIndex(item=>item.id===target.id)].click();
+  typePackageFilter(help,'');
+  if(!help.draft.selected.has(selected)||!help.draft.selected.has(target.id))throw Error('HELP filter did not retain edition marks');
+  manager.open('midi-sources');midi.setAll(true);typePackageFilter(midi,'qUaKe');
+  if(midi.categories.items.length!==1||midi.items.options.length!==1||midi.items.options[0].name!=='Quake')throw Error('MIDI album filter failed');
+  midi.items.choiceElements[0].click();
+  const source=midi.draft.sources.find(s=>s.id==='one'),other=midi.draft.sources.find(s=>s.id==='two');
+  if(source.albums.find(a=>a.name==='Quake').selected||!source.albums.find(a=>a.name==='Doom').selected
+   ||source.all_albums||!other.all_albums||!other.albums[0].selected)throw Error('MIDI selection was stored by filtered row position rather than ID');
+  midi.setGroupAll(true);
+  if(source.all_albums||source.albums.some(a=>!a.selected))throw Error('Filtered MIDI selection incorrectly included future albums');
+  midi.setGroupAll(false);
+  if(!source.albums.find(a=>a.name==='Doom').selected||source.albums.find(a=>a.name==='Quake').selected)throw Error('Filtered MIDI deselection changed hidden albums');
+  typePackageFilter(midi,'');
+  if(midi.categories.items.length!==2||!midi.items.mark(0)||midi.items.mark(1))throw Error('Clearing MIDI filter changed marks');
+  typePackageFilter(midi,'no such album 192846');midi.selectAllButton.root.click();
+  if(midi.draft.sources.some(s=>!s.selected||!s.all_albums||s.albums.some(a=>!a.selected)))throw Error('Global MIDI select was filtered');
+  midi.deselectAllButton.root.click();
+  if(midi.draft.sources.some(s=>s.selected||s.all_albums||s.albums.some(a=>a.selected)))throw Error('Global MIDI clear was filtered');
+  typePackageFilter(midi,'');
+  Object.values(packageDialogs).forEach(v=>v.close());
+ })()`);
  for(const kind of ['help','dos','midi']){
   await evaluate(`(async()=>{const v=packageDialogs['${kind}'];v.open();await waitPackages(()=>v.valid,'Screenshot dialog did not load');
    if(v.size.x!==({help:82,dos:90,midi:94}['${kind}'])||v.size.y!==24||v.descriptionBox.bounds.y1!==14)throw Error('Wrong package layout');
    const body=v.content.root.getBoundingClientRect(),frame=v.dialog.getBoundingClientRect();
    if(frame.top<0||frame.bottom>innerHeight||frame.left<0||frame.right>innerWidth)throw Error('Package frame escapes desktop');
-   for(const control of [v.categories,v.items,v.descriptionBox,v.applyButton]){
+   for(const control of [v.filterInput,v.categories,v.items,v.descriptionBox,v.applyButton]){
     const r=control.root.getBoundingClientRect();if(r.right>body.right+1||r.bottom>body.bottom+1)throw Error('Package control escapes dialog');
    }
   })()`);
@@ -518,12 +593,17 @@ const [port,url,screenshotPrefix]=process.argv.slice(1);
       ['convert','Converting',100,'⚙ 100%'],['publish','Publishing',null,'⚙']]){
    Object.assign(data.items[0],{stage,phase,stage_percent:percent});p.update(data,v);
    const current=v.itemElements.get(row),marker=p.dialog.details.items[0].label.trim();
-   if(v.itemElements.get(p).textContent!==caption||!current.textContent.startsWith(caption.split(' ')[0])
+   if(v.itemElements.get(p).textContent!==caption.split(' ')[0]+' 50%'||!current.textContent.startsWith(caption.split(' ')[0])
       ||(percent===null&&current.textContent.includes('%'))||!marker.endsWith(caption)
       ||v.activePopup!==popup||popup.hidden||p.completed.subMenu.entries().length!==0)
     throw Error('Phase glyph/percentage/completion is wrong: '+JSON.stringify({stage,caption,actual:v.itemElements.get(p).textContent,text:current.textContent,marker}));
   }
-  Object.assign(data.items[0],{stage:'download',stage_percent:50,phase:'Downloading'});p.update(data,v);
+  for(const phase of ['Waiting for source','Waiting for processing','Awaiting publication']){
+   Object.assign(data.items[0],{state:'waiting',phase,stage:'install',stage_percent:null});p.update(data,v);
+   if(p.rows.get('dos:0').param!==phase.split(' ').at(-1)
+     ||v.itemElements.get(p).textContent!=='◷ 50%')throw Error('Waiting reason/batch percentage was lost: '+JSON.stringify({phase,param:p.rows.get('dos:0').param,caption:v.itemElements.get(p).textContent}));
+  }
+  Object.assign(data.items[0],{state:'running',stage:'download',stage_percent:50,phase:'Downloading'});p.update(data,v);
   data.items.push({id:'midi:new',kind:'midi',label:'DOOM',state:'running',percent:10});p.update(data,v);
   if(v.activePopup.hidden||!v.activePopup.textContent.includes('MIDI: DOOM'))throw Error('Added download did not preserve the open popup');
   data.items.unshift({id:'midi:track:urgent',kind:'midi',label:'Selected song',state:'running',percent:5,priority:-10});p.update(data,v);
@@ -551,7 +631,7 @@ const [port,url,screenshotPrefix]=process.argv.slice(1);
   if(v.rootByItem.get(p).hidden||v.itemElements.get(p).textContent!=='✓'||p.completed.subMenu.entries().length!==data.items.length)
    throw Error('Finished counter did not clear its percentage while retaining history');
   p.update({active:true,percent:0,errors:0,items:[...data.items,{id:'midi:next-batch',kind:'midi',label:'Next batch',state:'pending',percent:0}]},v);
-  if(v.itemElements.get(p).textContent!=='…')throw Error('Waiting batch invented a percentage or retained the completed tick');
+  if(v.itemElements.get(p).textContent!=='… 0%')throw Error('New batch did not restart its total at zero or retained the completed tick');
   const TV=window.THelpViewerTV,desktop=document.querySelector('.tv-desktop')._tvView;
   const failure={id:'midi:failed-test',kind:'midi',label:"Karl's IT Retro — DOS S: Space Quest: Chapter I – The Sarien Encounter",
    state:'error',percent:0,error:"'ascii' codec can't encode character '\\u2013': "+'Long error details. '.repeat(20)+'Final detail.',retryable:true};

@@ -50,6 +50,14 @@ three independent windows (`TVHelpPackagesDialog`, `TVDosPackagesDialog`,
 `TVMidiSourcesDialog`) derived from `TVPackagesDialog`. There is no mode
 selector. The shared base builds each window's TVListBox of groups/sources on
 the left and TVCheckBoxes of editions/packages/albums on the right.
+The shared Filter input at the top updates both panes immediately, matching
+package/album names, descriptions and group/source names across the current
+catalog without case or accent sensitivity. Nonmatching groups are hidden;
+clearing the input restores them. MIDI searches cached albums only; Load albums
+still reads an unindexed provider. Alt-F focuses Filter; Enter or Down moves
+to the matching checkboxes, never Apply. Typing keeps input focus and does
+not send API requests or change selections. The filter is independent in each
+window and is preserved across group/focus changes and catalog refreshes.
 HELP groups use the same product names as Help Files, including a single
 Microsoft QuickBASIC group containing 4.5 and 7.1. Versions come from verified
 manifest CRC entries, explicit product `versions` for non-CRC databases, and
@@ -90,7 +98,8 @@ HELP/DOS IDs removed from the manifest are omitted from saved intent; they canno
 break lazy DOS startup or unrelated HELP changes. Explicit requests containing
 unknown IDs still fail validation. Reading settings deletes no installed files.
 DOS sources marked `"required": true` are always selected and their checkboxes
-are disabled. Currently these are UTILS and Volkov Commander. Category/global
+are disabled. Currently these are COMPRESS (`utils`, installed in `COMPRESS`)
+and Volkov Commander. Category/global
 Deselect All clears optional packages only; a required-only group has no
 editable group toggle. API requests omitting required IDs are normalized to
 include them, as are saved intent, direct disk configuration and rebuilds.
@@ -105,10 +114,14 @@ jsDOS with an incomplete required environment.
 
 Switching group or active window preserves each dialog's unsaved draft. The
 Select / Deselect All checkbox below the right pane affects only that group or
-MIDI provider. It follows the visible selection and is disabled for an empty
-HELP/DOS group. The bottom Select All / Deselect All buttons affect **every
+MIDI provider. With a filter, it affects matching visible rows only; hidden
+selections are retained, including MIDI albums remembered by stable ID rather
+than their filtered row number. Selecting filtered MIDI albums is an explicit
+selection, not a request for future albums. The checkbox follows visible marks
+and is disabled when no matching editable rows exist (an unfiltered MIDI
+provider can still select future albums). The bottom Select All / Deselect All buttons affect **every
 group of that dialog**, including hidden groups, and remain available in an
-empty category when other packages exist. MIDI global selection also
+empty category or with no filter matches when other packages exist. MIDI global selection also
 enables/disables every provider; selecting all albums includes future ones.
 Apply submits **all groups of the current type** directly, without an additional
 selection-confirmation dialog, including hidden groups, but changes no other
@@ -198,8 +211,16 @@ HELP sends ready edition IDs to one converter while other inputs continue.
 Each edition gets an independently validated/staged publication, preserving
 already published siblings. A later download/conversion failure discards only
 that disposable stage, not successful editions or private data. Unchecked
-editions are removed after requested additions succeed. DOS consumes prepared packages and runs post-install scripts in manifest
-order, retaining dependencies such as UTILS. MIDI albums use the same bounded
+editions are removed after requested additions succeed. DOS consumes prepared
+packages and runs post-install scripts in manifest order, retaining dependencies
+such as COMPRESS. Each completed package is published through an independent
+disk/receipt transaction while later inputs continue preparing. Earlier successes
+survive later failures and are skipped through verified receipts on restart/retry.
+Required boot tools publish as a single bootstrap group; unchecked-package
+removals wait until requested additions succeed. Unchanged staged files use hard
+links when supported, but modified files are replaced atomically so neither live
+data nor retained backups are edited through a shared inode.
+MIDI albums use the same bounded
 queue with a separate urgent lane for playback. Failure/shutdown joins active
 writers and cancels pending owned steps rather than leaving orphan installers.
 

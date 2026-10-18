@@ -2,8 +2,8 @@
 (function () {
 "use strict";
 const TV = window.THelpViewerTV;
-const { TVView, TVWindow, TVStaticText, TVMessageBox, TVRect, TVPoint, TVEvent, evKeyDown,
-    evMouseDown, evMouseUp, evMouseMove, evCommand, sfVisible, sfDragging, escapeHtml, measureCells, fillBorders } = TV;
+const { TVView, TVGroup, TVWindow, TVDialog, TVButton, TVTextScreen, TVStaticText, TVMessageBox, TVRect, TVPoint, TVEvent, evKeyDown,
+    evMouseDown, evMouseUp, evMouseMove, evCommand, sfVisible, sfDragging, sfModal, bfDefault, escapeHtml, measureCells, fillBorders } = TV;
 const PREFIX = new URL("dos/emulators/", document.currentScript.src).href;
 let runtimePromise;
 
@@ -22,14 +22,14 @@ function loadRuntime() {
         runtimePromise = new Promise((resolve, reject) => {
             if (window.emulators) { resolve(window.emulators); return; }
             const script = document.createElement("script");
-            script.src = PREFIX + "emulators.js";
+            script.src = PREFIX + "emulators.js?v=20261018a";
             const timer = setTimeout(() => {
                 script.remove(); reject(new Error("DOSBox script loading timed out"));
             }, 20000);
             script.onload = () => { clearTimeout(timer); resolve(window.emulators); };
             script.onerror = () => { clearTimeout(timer); script.remove(); reject(new Error("Cannot load DOSBox runtime")); };
             document.head.appendChild(script);
-        }).then((runtime) => { runtime.pathPrefix = PREFIX; return runtime; }).catch((error) => { runtimePromise = null; throw error; });
+        }).then((runtime) => { runtime.pathPrefix = PREFIX; runtime.pathSuffix = "?v=20261018a"; return runtime; }).catch((error) => { runtimePromise = null; throw error; });
     }
     return runtimePromise;
 }
@@ -47,7 +47,7 @@ const KEY_CODES = { Escape: 256, Enter: 257, Tab: 258, Backspace: 259, Insert: 2
 for (let n = 1; n <= 12; n++) { KEY_CODES[`F${n}`] = 289 + n; }
 for (let n = 0; n <= 9; n++) { KEY_CODES[`Digit${n}`] = 48 + n; KEY_CODES[`Numpad${n}`] = 320 + n; }
 
-class TVDosView extends TVView {
+class TVDosView extends TVGroup {
     static viewName = "dos-view";
     constructor(bounds) {
         super(bounds);
@@ -59,19 +59,39 @@ class TVDosView extends TVView {
     }
     draw() {
         const attrs = Object.entries(this._drawAttrs()).map(([key, value]) => `${key}="${escapeHtml(String(value))}"`).join(" ");
-        return `<div class="tv-dos-view" ${attrs}><canvas width="640" height="400" tabindex="0" aria-label="DOS keyboard and mouse input"></canvas></div>`;
+        return `<div class="tv-dos-view" ${attrs} tabindex="0" aria-label="DOS keyboard and mouse input"><div class="tv-dos-surface"><canvas width="640" height="400"></canvas></div></div>`;
     }
     bindRoot(root) {
         super.bindRoot(root);
         this.canvas = root?.querySelector("canvas") || null;
         if (!this.canvas) { return this; }
+        this.surface = this.canvas.parentElement;
+        if (!this.textScreen) {
+            this.textScreen = this.insert(new TVTextScreen(new TVRect()));
+            this.pauseDialog = this.insert(new TVDialog(new TVRect(0, 0, 30, 7), "Paused"));
+            this.pauseDialog.flags = 0;
+            this.pauseDialog.setHelpCtx(TV.TV_HELP_CONTEXTS.hcDosPrompt);
+            this.pauseDialog.escapeCloses = false;
+            this.pauseDialog.setState(sfModal, true);
+            this.pauseDialog.insert(new TVGroup(new TVRect(0, 0, 28, 5)).insertAll([
+                new TVStaticText(new TVRect(2, 1, 26, 2), "\x03DOS is paused."),
+                new TVButton(new TVRect(7, 3, 21, 5), "~R~esume", "dos-resume", bfDefault),
+            ]));
+        }
+        root.appendChild(this.pauseDialog.overlay);
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = new ResizeObserver(() => {
+            this.layoutText();
+            if (this.pauseDialog.isOpen()) { this.pauseDialog.center(); }
+        });
+        this.resizeObserver.observe(root);
         this.canvas._tvView = this;
         const listen = (target, type, listener, capture = false) => {
             target.addEventListener(type, listener, capture); this.listeners.push([target, type, listener, capture]);
         };
         for (const type of ["keydown", "keyup"]) {
             listen(document, type, (nativeEvent) => {
-                if (document.fullscreenElement === this.canvas && this.owner?.getKeyCommand(nativeEvent)) {
+                if (document.fullscreenElement === this.root && this.owner?.getKeyCommand(nativeEvent)) {
                     this.dispatchEvent(new TVEvent(evKeyDown, { nativeEvent, infoPtr: this }));
                 }
             }, true);
@@ -79,18 +99,22 @@ class TVDosView extends TVView {
         for (const [type, what] of [["keydown", evKeyDown], ["keyup", evKeyDown],
             ["mousedown", evMouseDown], ["mouseup", evMouseUp], ["mousemove", evMouseMove]]) {
             const listener = (nativeEvent) => this.dispatchEvent(new TVEvent(what, { nativeEvent, infoPtr: this }));
-            listen(this.canvas, type, listener);
+            listen(root, type, listener);
         }
-        listen(this.canvas, "blur", () => this.releaseInput());
-        listen(this.canvas, "contextmenu", (event) => event.preventDefault());
+        listen(root, "blur", () => this.releaseInput());
+        listen(root, "contextmenu", (event) => event.preventDefault());
         listen(document, "mouseup", (nativeEvent) => {
-            if (this.buttons.size && nativeEvent.target !== this.canvas) {
+            if (this.buttons.size && !root.contains(nativeEvent.target)) {
                 this.dispatchEvent(new TVEvent(evMouseUp, { nativeEvent, infoPtr: this }));
             }
         });
         return this;
     }
     capturesKey() { return true; }
+    focus() {
+        if (this.pauseDialog?.isOpen()) { this.pauseDialog.dialog.focus({ preventScroll: true }); return this; }
+        return super.focus();
+    }
     releaseInput() {
         for (const key of this.keys) { this.ci?.sendKeyEvent(key, false); }
         for (const button of this.buttons) { this.ci?.sendMouseButton(button, false); }
@@ -99,7 +123,8 @@ class TVDosView extends TVView {
     handleEvent(event) {
         const native = event.nativeEvent;
         const command = event.what === evKeyDown ? this.owner?.getKeyCommand(native) : "";
-        if (!this.owner?.active && !(command && this.canvas && document.fullscreenElement === this.canvas)) { return; }
+        if (!command && native && this.pauseDialog?.overlay.contains(native.target)) { return; }
+        if (!this.owner?.active && !(command && this.root && document.fullscreenElement === this.root)) { return; }
         if (command) {
             if (native.type === "keydown" && !native.repeat) {
                 this.releaseInput();
@@ -121,8 +146,8 @@ class TVDosView extends TVView {
             }
         } else if ([evMouseDown, evMouseUp, evMouseMove].includes(event.what)) {
             if (blocked) { native.preventDefault(); native.stopPropagation(); this.clearEvent(event); return; }
-            if (event.what === evMouseDown) { this.canvas.focus(); this.owner.resumeSound(); }
-            const rect = this.canvas.getBoundingClientRect();
+            if (event.what === evMouseDown) { this.focus(); this.owner.resumeSound(); }
+            const rect = this.root.getBoundingClientRect();
             // object-fit:contain leaves letterboxes which are not DOS coordinates.
             const scale = Math.min(rect.width / this.canvas.width, rect.height / this.canvas.height);
             const width = this.canvas.width * scale, height = this.canvas.height * scale;
@@ -144,7 +169,9 @@ class TVDosView extends TVView {
             this.screenReady = true;
             this.canvas.width = width; this.canvas.height = height;
             this.owner.fitScreen();
+            this.layoutText();
         }
+        if (this.textMode) { return; }
         const image = new ImageData(width, height);
         if (rgba) { image.data.set(rgba); }
         else {
@@ -153,6 +180,52 @@ class TVDosView extends TVView {
             }
         }
         this.canvas.getContext("2d").putImageData(image, 0, 0);
+    }
+    setScreen(packet) {
+        if (!(packet instanceof Uint8Array) || packet.length < 16 || !this.canvas) { return; }
+        const cols = packet[1], rows = packet[2], height = packet[3];
+        const text = this.owner?.session?.text_rendering !== false
+            && packet[0] === 1 && cols > 0 && cols <= 160 && rows > 0 && rows <= 100
+            && [8, 14, 16].includes(height) && [8, 9].includes(packet[4]) && packet.length === 64 + cols * rows * 2;
+        this.textMode = text;
+        this.canvas.hidden = text;
+        if (!text) {
+            if (this.textScreen.root) { this.textScreen.root.hidden = true; }
+            return;
+        }
+        const palette = Array.from({ length: 16 }, (_, index) => "#" + Array.from(packet.subarray(16 + index * 3, 19 + index * 3), value => value.toString(16).padStart(2, "0")).join(""));
+        const blink = [], cells = Array.from({ length: cols * rows }, (_, index) => {
+            const attr = packet[65 + index * 2]; blink.push(Boolean(packet[5] && (attr & 128)));
+            return [packet[64 + index * 2], attr & 15, (attr >> 4) & (packet[5] ? 7 : 15)];
+        });
+        this.textScreen.setData({ cols, rows, cells, palette, blink, blinkVisible: Boolean(packet[6]),
+            cursor: { index: packet[9] * cols + packet[8], visible: Boolean(packet[7]) && packet[8] < cols && packet[9] < rows,
+                start: Math.min(100, packet[10] * 100 / height), end: Math.min(100, Math.max(packet[10], packet[11] + 1) * 100 / height) } });
+        if (!this.textScreen.root) {
+            const root = TVView._fromHTML(this.textScreen.draw());
+            this.surface.appendChild(root); this.textScreen.bindRoot(root);
+        }
+        this.textScreen.root.hidden = false;
+        this.layoutText();
+    }
+    layoutText() {
+        if (!this.textMode || !this.textScreen?.root || !this.root?.clientWidth || !this.canvas.width) { return; }
+        const root = this.textScreen.root;
+        const scale = Math.min(this.root.clientWidth / this.canvas.width, this.root.clientHeight / this.canvas.height);
+        const pixels = window.devicePixelRatio || 1, snap = value => Math.round(value * pixels) / pixels;
+        const width = snap(this.canvas.width * scale), height = snap(this.canvas.height * scale);
+        // Grid backgrounds paint directly at display size. Transform only the
+        // glyphs: scaling separate background boxes leaves dark antialias seams.
+        root.style.width = `${width}px`; root.style.height = `${height}px`;
+        root.style.left = `${snap((this.root.clientWidth - width) / 2)}px`;
+        root.style.top = `${snap((this.root.clientHeight - height) / 2)}px`;
+        this.textScreen._layoutText();
+    }
+    setPaused(paused) {
+        if (!this.root || !this.pauseDialog) { return; }
+        this.root.classList.toggle("is-paused", paused);
+        if (paused && !this.pauseDialog.isOpen()) { this.pauseDialog.open(); }
+        else if (!paused && this.pauseDialog.isOpen()) { this.pauseDialog.close(); this.focus(); }
     }
     chooseMedia(kind) {
         const input = document.createElement("input");
@@ -167,6 +240,7 @@ class TVDosView extends TVView {
         this.releaseInput();
         for (const [target, type, listener, capture] of this.listeners) { target.removeEventListener(type, listener, capture); }
         this.listeners = [];
+        this.resizeObserver?.disconnect(); this.textScreen?.destroy(); this.pauseDialog?.destroy();
         this.ci = null;
     }
 }
@@ -208,12 +282,12 @@ class TVDosWindow extends TVWindow {
         this.pendingScreenResize = true;
         const resizer = this.root?._tvResizer, canvas = this.view.canvas;
         if (!resizer?.desktop || !canvas?.width || !canvas.height
-            || document.fullscreenElement === canvas || this.root.classList.contains("is-maximized")) { return this; }
+            || document.fullscreenElement === this.view.root || this.root.classList.contains("is-maximized")) { return this; }
         const cell = measureCells(), desktop = resizer.desktop;
         if (!desktop.clientWidth || !desktop.clientHeight) { return this; }
-        // Match the shared frame's two columns/rows and its desktop margins.
-        const maxCols = Math.max(3, Math.floor(desktop.clientWidth / cell.width) - 2);
-        const maxRows = Math.max(3, Math.floor((desktop.clientHeight - 2 * cell.width) / cell.height));
+        // The frame is included by _screenGeometry; the shadow is not a size limit.
+        const maxCols = Math.max(3, Math.floor(desktop.clientWidth / cell.width));
+        const maxRows = Math.max(3, Math.floor(desktop.clientHeight / cell.height));
         const fit = (geometry) => {
             const { cols, rows } = this._screenGeometry(geometry, maxCols, maxRows);
             return { cols, rows,
@@ -261,7 +335,7 @@ class TVDosWindow extends TVWindow {
         }
         if (this.pendingScreenResize) { this.fitScreen(); }
         fillBorders(this.root);
-        this.view.canvas?.focus();
+        this.view.focus();
         this.onChange?.();
         return this;
     }
@@ -269,7 +343,7 @@ class TVDosWindow extends TVWindow {
         this.zoomGeometry = null;
         super.restoreSize();
         this.fitScreen();
-        this.view.canvas?.focus();
+        this.view.focus();
         this.onChange?.();
         return this;
     }
@@ -298,12 +372,14 @@ class TVDosWindow extends TVWindow {
     }
     setState(state, enable) {
         super.setState(state, enable);
-        if ((state & sfDragging) !== 0 && this.view?.ci) { this.syncPause(); }
+        if ((state & sfDragging) !== 0 && this.view) { this.syncPause(); }
         return this;
     }
     syncPause() {
-        if (!this.view.ci) { return; }
         const dragging = this.getState?.(sfDragging);
+        this.view.root?.classList?.toggle("is-dragging", Boolean(dragging));
+        this.view.setPaused(Boolean(this.view.ci && this.paused && !this.starting && !this.disposed));
+        if (!this.view.ci) { return; }
         if (this.starting && !dragging) { this.view.ci.resume(); return; }
         if (!this.active || this.paused || document.hidden || this.busy || this.snapshotting || dragging) {
             this.view.releaseInput(); this.view.ci.pause();
@@ -387,14 +463,16 @@ class TVDosWindow extends TVWindow {
                     ? entry.slice() : { path: entry.path, contents: entry.contents.slice() }) : init;
                 const workerScript = runtime.wdosboxJs;
                 const prefix = runtime.pathPrefix;
+                const suffix = runtime.pathSuffix;
                 try {
                     if (backend === "dosboxWorker") {
-                        const url = new URL("../tv-dos-worker.js?v=20261017m", PREFIX).href;
+                        const url = new URL("../tv-dos-worker.js?v=20261018a", PREFIX).href;
+                        runtime.pathSuffix = ""; // A blob worker URL must not acquire a query suffix.
                         if (window.isSecureContext && TV.DosLocalConnection && typeof BroadcastChannel === "function") {
                             this.localConnection = new TV.DosLocalConnection(local);
                             runtime.wdosboxJs = this.localConnection.workerScript(url);
                             runtime.pathPrefix = "";
-                        } else { runtime.wdosboxJs = "../tv-dos-worker.js?v=20261017m"; }
+                        } else { runtime.wdosboxJs = "../tv-dos-worker.js?v=20261018a"; }
                     }
                     if (backend === "dosboxDirect") {
                         this.notice("Worker unavailable: loading full disk fallback...");
@@ -422,7 +500,7 @@ class TVDosWindow extends TVWindow {
                         throw error;
                     }
                 } finally {
-                    clearTimeout(timer); runtime.wdosboxJs = workerScript; runtime.pathPrefix = prefix;
+                    clearTimeout(timer); runtime.wdosboxJs = workerScript; runtime.pathPrefix = prefix; runtime.pathSuffix = suffix;
                     this.localConnection?.releaseScript();
                 }
             }
@@ -431,14 +509,18 @@ class TVDosWindow extends TVWindow {
             this.starting = true;
             this.notice("Starting DOS command shell...");
             ci.events().onFrame((rgb, rgba) => this.view.renderFrame(rgb, rgba));
+            ci.events().onMessage((tag, packet) => {
+                if (tag === "thelp-screen" && this.view.ci === ci) { this.view.setScreen(packet); }
+            });
             ci.events().onSoundPush((samples) => this.playSound(samples));
             ci.events().onExit(() => {
                 if (this.view.ci === ci) {
                     this.view.ci = null;
+                    this.view.setPaused(false);
                     clearInterval(this.saveTimer);
                     clearInterval(this.localSaveTimer);
                     this.localConnection?.release(); this.localConnection = null;
-                    if (document.fullscreenElement === this.view.canvas) {
+                    if (document.fullscreenElement === this.view.root) {
                         void document.exitFullscreen().catch((error) => this.onError?.(error));
                     }
                     this.notice("DOS stopped. Choose Restart from DOS Prompt."); this.onChange?.();
@@ -467,7 +549,7 @@ class TVDosWindow extends TVWindow {
             this.cancelStartup = null;
             if (this.disposed) { return; }
             this.status.setState(sfVisible, false);
-            this.view.canvas.focus();
+            this.view.focus();
             this.visibility = () => { this.syncPause(); void this.autoSaveLocal(); };
             document.addEventListener("visibilitychange", this.visibility);
             this.saveTimer = setInterval(() => {
@@ -596,7 +678,7 @@ class TVDosWindow extends TVWindow {
         if (this.busy || this.disposed || this.view.ci !== ci) { return; }
         this.busy = true; this.onChange?.();
         try {
-            if (document.fullscreenElement === this.view.canvas) { await document.exitFullscreen(); }
+            if (document.fullscreenElement === this.view.root) { await document.exitFullscreen(); }
             await this.save();
             this.view.releaseInput(); await ci.exit();
         } catch (error) {
@@ -619,18 +701,19 @@ class TVDosWindow extends TVWindow {
         if (this.fullscreenChanged && !keepFullscreen) {
             document.removeEventListener("fullscreenchange", this.fullscreenChanged);
             this.fullscreenChanged = null;
-            if (document.fullscreenElement === this.view.canvas) { await document.exitFullscreen(); }
+            if (document.fullscreenElement === this.view.root) { await document.exitFullscreen(); }
         }
         clearInterval(this.saveTimer); clearInterval(this.localSaveTimer); clearTimeout(this.noticeTimer);
         this.localConnection?.release(); this.localConnection = null;
         document.removeEventListener("visibilitychange", this.visibility);
         this.view.releaseInput();
         const ci = this.view.ci; this.view.ci = null;
+        this.view.setPaused(false);
         if (ci) { await ci.exit(); }
         if (this.audio) { await this.audio.close(); this.audio = null; }
     }
     async confirmCloseWithoutSave(error) {
-        if (document.fullscreenElement === this.view.canvas) { await document.exitFullscreen(); }
+        if (document.fullscreenElement === this.view.root) { await document.exitFullscreen(); }
         const box = new TVMessageBox(), owner = this.owner;
         this.confirmation = box; owner?.insert(box);
         const wasPaused = this.paused;
@@ -648,31 +731,31 @@ class TVDosWindow extends TVWindow {
         }
     }
     fullScreen() {
-        const canvas = this.view.canvas;
-        if (document.fullscreenElement === canvas) {
+        const screen = this.view.root;
+        if (document.fullscreenElement === screen) {
             void document.exitFullscreen().catch((error) => this.onError?.(error)); return;
         }
-        if (!canvas?.requestFullscreen) { this.onError?.(new Error("Fullscreen is unavailable in this browser")); return; }
+        if (!screen?.requestFullscreen) { this.onError?.(new Error("Fullscreen is unavailable in this browser")); return; }
         if (this.fullscreenRequest) { return; }
         if (this.fullscreenChanged) {
             document.removeEventListener("fullscreenchange", this.fullscreenChanged);
         }
         this.fullscreenChanged = () => {
-            this.view.releaseInput(); canvas.focus();
-            if (document.fullscreenElement === canvas) { return; }
+            this.view.releaseInput(); this.view.focus(); this.view.layoutText();
+            if (document.fullscreenElement === screen) { return; }
             if (this.pendingScreenResize) { this.fitScreen(); }
             document.removeEventListener("fullscreenchange", this.fullscreenChanged);
             this.fullscreenChanged = null;
         };
         document.addEventListener("fullscreenchange", this.fullscreenChanged);
-        this.fullscreenRequest = canvas.requestFullscreen().catch((error) => {
+        this.fullscreenRequest = screen.requestFullscreen().catch((error) => {
             document.removeEventListener("fullscreenchange", this.fullscreenChanged);
             this.fullscreenChanged = null; this.onError?.(error);
         }).finally(() => { this.fullscreenRequest = null; });
     }
     async confirmRestart() {
         if (this.confirmation || this.closing || this.disposed) { return false; }
-        if (document.fullscreenElement === this.view.canvas) { await document.exitFullscreen(); }
+        if (document.fullscreenElement === this.view.root) { await document.exitFullscreen(); }
         const box = new TVMessageBox();
         const owner = this.owner;
         this.confirmation = box; owner?.insert(box);
@@ -693,7 +776,7 @@ class TVDosWindow extends TVWindow {
         }
         const handle = await window.showDirectoryPicker({ id: "thelp-dos-local", mode: "readwrite" });
         if (this.disposed || this.closing) { return; }
-        if (document.fullscreenElement === this.view.canvas) { await document.exitFullscreen(); }
+        if (document.fullscreenElement === this.view.root) { await document.exitFullscreen(); }
         const box = new TVMessageBox(); this.owner?.insert(box);
         this.confirmation = box;
         try {
@@ -751,11 +834,14 @@ class TVDosWindow extends TVWindow {
             this.clearEvent(event);
             if (command === "dos-menu") {
                 void (async () => {
-                    if (document.fullscreenElement === this.view.canvas) { await document.exitFullscreen(); }
+                    if (document.fullscreenElement === this.view.root) { await document.exitFullscreen(); }
                     if (!this.disposed) { this.onMenu?.(); }
                 })().catch((error) => this.onError?.(error));
             }
             else if (command === "dos-pause" && this.view.ci && !this.busy) { this.paused = !this.paused; this.syncPause(); this.onChange?.(); }
+            else if (command === "dos-resume" && this.view.ci && !this.busy) {
+                this.paused = false; this.syncPause(); this.view.focus(); this.resumeSound(); this.onChange?.();
+            }
             else if (command === "dos-save") { void this.save().catch((error) => this.onError?.(error)); }
             else if (command === "dos-save-local") { void this.save(true).catch((error) => this.onError?.(error)); }
             else if (command === "dos-mount-local" || command === "dos-unmount-local") {

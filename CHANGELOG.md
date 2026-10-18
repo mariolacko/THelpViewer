@@ -2,8 +2,85 @@
 
 ## [Unreleased]
 
-### 2.1 development
+## [2.1.0] — 2026-10-18
 
+- Add optional HIEW 6.50 to DOS Packages / Editors, using the author's free
+  DOS rebuild and the shared nested-archive recipe. Retain the original help,
+  configuration, English manual and detached signature without installing a
+  Windows demo or changing existing package selections.
+
+- Publish each prepared DOS package independently while later inputs continue
+  downloading/extracting. Preserve completed installations after later failures
+  and across restarts; retry skips their verified receipts. Required boot tools
+  publish as one bootstrap group; defer unchecked-package removals until additions
+  succeed. Mark each row done only after live disk/receipt publication and retain
+  the current queue counter throughout. Stage unchanged files with hard links
+  (copy fallback), replacing changed files atomically to protect live data/backups.
+- Show one whole-batch percentage in the top Downloads menu, using the shared
+  server total across pending, waiting and active packages rather than averaging
+  only active transfer/phase percentages. Keep per-phase percentages on package
+  rows; show what waiting rows await (source, processing, conversion,
+  installation or publication) instead of the same generic Waiting label.
+- Add LZEXE 0.91e and its utilities, UnLZEXE 0.91a, UPX 5.2.1, DIET 1.45f,
+  PKLITE 2.01, ARC 6.02 with its matching ARCE 3.1c and UltraCompressor II revision 3 to
+  COMPRESS. Keep programs directly in C:\COMPRESS and original manuals and
+  licence notices in C:\COMPRESS\DOC\<tool>, including the existing toolkit
+  and optional RAR. Extract documentation from nested source archives without
+  installing program sources. UC2's original self-extractor runs once in the
+  existing isolated DOS post-install step and is removed afterwards.
+- Install COMPRESS and optional RAR runtime files directly in C:\COMPRESS,
+  flattening selected archive roots through manifest rules without duplicate
+  EXE copies. Retain original names: P7ZIP/P7ZIPR and modern 7ZA/7ZR.
+  Discard the generated POSTINST.BAT after successful package preparation;
+  keep normal runtime BAT launchers. Add optional package `path`, relative to
+  C, to generate the shared AUTOEXEC.BAT PATH from installed packages and the
+  configured baseline, deduplicating directories and removing uninstalled
+  entries. Preserve other boot lines and private overlays. Post-install tools
+  use these declared directories instead of a hardcoded UTILS/BIN location.
+- Support targeted DOS package reinstallation through the store's `configure`
+  API: replace only explicitly selected packages' owned files in the staged
+  generation, reusing download caches. Retain other installations, shared
+  ownership, manual files and private overlays; back up the old disk and
+  roll back the failing package transaction if preparation or publication fails,
+  without discarding earlier successful package publications.
+- Expand the required COMPRESS toolkit (manifest ID `utils`, C:\COMPRESS) with
+  DOS 7-Zip 24.09, LZIP, LZMA, LZOP and LPQ1 from original FreeDOS archives.
+  Give each component explicit `members` selections for programs, runtime data
+  and documentation, without installing program sources or source archives.
+  Keep original downloads unchanged in cache. Add optional RAR 3.93 for DOS
+  with its EMX/RSX runtime, without registration keys; original licence terms
+  and the operator's redistribution permission still apply.
+- Include the prepared binary VC.INI in Volkov Commander's package `files`
+  as Base64, creating TOOLS/VC/VC.INI on installation without rewriting private
+  overlay preferences.
+- Add a live Filter input to the shared HELP Packages, DOS Packages and MIDI
+  Sources dialog layout, without enlarging the windows or adding CSS. Search
+  names, descriptions and groups without case/accent sensitivity; retain hidden
+  selections and independent drafts. The group checkbox affects matching rows;
+  bottom selection buttons still span the catalog. Filter Enter/Down focuses
+  results instead of applying changes. MIDI remembers filtered albums by ID.
+- Create Quadrax's default QUADRAX.CFG through the package manifest's `files`,
+  with Sound Blaster 16 music/effects enabled and the game's keyboard settings.
+  Keep private overlay settings separate from the shared installation defaults.
+- Route title-bar double-click through the window's Zoom command only, keeping
+  DOS proportional 2× zoom/restore instead of first stretching to the desktop.
+  Snap individual text-glyph edges to the font's pixel grid to join single/double
+  box lines at fractional scales and high DPI. Add DOS `text_rendering` (true
+  by default); false always uses the native canvas, without rebuilding C.
+  Verify automatic canvas fallback for application-uploaded VGA fonts.
+- Remove dark seams between enlarged DOS text cells by painting their
+  backgrounds on an untransformed display-sized grid and scaling only glyphs.
+  Fit window frames to the full desktop without reserving shadow space,
+  including manual resizing, DOS zoom/mode changes and Default Size.
+  Gray DOS contents during frame move/resize through `sfDragging`; restore
+  colors on release/cancel without opening the manual Pause dialog.
+- Render standard DOS text modes through the shared TVTextScreen character
+  view, including direct video-memory writes, palette attributes, cursor and
+  hardware blink. Automatically retain the DOSBox canvas for graphics,
+  custom/dual fonts and unsupported text effects without restarting DOS.
+  Manual Pause grays the DOS contents and opens a fixed, embedded TVDialog
+  with Resume; inactive/hidden/drag pauses do not open it. Native fullscreen
+  includes either screen and the pause dialog.
 - Toggle DOS native fullscreen with the same Alt+Enter shortcut in both
   directions, including keypad Enter and fullscreen focus changes. Do not
   create overlay revisions/snapshots for identical autosaves; verify retained

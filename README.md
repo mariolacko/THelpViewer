@@ -127,6 +127,11 @@ locally available again, then reload the page. See
 ### DOS Prompt
 
 Open **≡ → DOS Prompt** for a real WASM DOSBox inside a standard `TVWindow`.
+Standard text modes use shared TVTextScreen character cells; graphics and
+custom-font modes retain the canvas. Set `text_rendering: false` in the DOS
+manifest for canvas-only rendering (default: true/hybrid). Title-bar double-click
+uses proportional DOS Zoom. Manual Pause grays the contents and shows
+an embedded, fixed Resume dialog, including in native fullscreen.
 Its contextual top menu provides Pause/Resume, Restart, Save C to cloud,
 Mount local folder (D:), Disconnect local D, Mount CD/Floppy, Eject and Fullscreen.
 Ctrl+Alt+M returns keyboard focus to that menu. The emulator pauses when its

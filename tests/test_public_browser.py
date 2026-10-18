@@ -149,7 +149,16 @@ async function run() {
                     || geometry.left !== 40 || geometry.top !== 32 || root._tvWindowView !== view) {
                     throw new Error('Default Size failed after manual resize: '+JSON.stringify({geometry,defaults}));
                 }
+                resizer.place({left:0,top:0,cols:1000,rows:1000});
+                const grown=root.getBoundingClientRect(),area=resizer.desktop.getBoundingClientRect();
+                if(Math.abs(grown.width-area.width)>0.1||Math.abs(grown.height-area.height)>0.1)
+                    throw new Error('Manual sizing is capped by the window shadow');
                 resizer.maximize();
+                const full = root.getBoundingClientRect(), desktop = resizer.desktop.getBoundingClientRect();
+                if (Math.abs(full.left-desktop.left)>0.1 || Math.abs(full.top-desktop.top)>0.1
+                    || Math.abs(full.width-desktop.width)>0.1 || Math.abs(full.height-desktop.height)>0.1) {
+                    throw new Error('Maximized window reserves space for its shadow');
+                }
                 resetFromMenu();
                 geometry = resizer.captureGeometry();
                 const stored = JSON.parse(localStorage.getItem(resizer.storageKey));
@@ -208,7 +217,7 @@ async function run() {
                     id:'dos:prepared',kind:'dos',label:'Prepared package',state:'waiting',
                     percent:99,stage:'install',stage_percent:null,phase:'Awaiting publication',
                 }]}, menu);
-                if (downloads.name !== '↓ 25%' || downloads.rows.get('dos:prepared').param !== 'Waiting'
+                if (downloads.name !== '↓ 25%' || downloads.rows.get('dos:prepared').param !== 'publication'
                     || !downloads.rows.get('dos:prepared').name.startsWith('◷ ')) {
                     throw new Error('Waiting package was rendered as active processing');
                 }
@@ -725,6 +734,88 @@ async function run() {
                 if (player.allTracks.length!==2) { throw new Error('Closed player applied a stale catalog response'); }
             } finally { player.close(); window.fetch=originalFetch; }
         })()`, true);
+        // Paint actual DOM text backgrounds at fractional zooms. Adjacent colors
+        // must meet directly, without black seams or antialiased dark stripes.
+        for (const [width,height,dpr,rows] of [[1313,937,1,25],[959,733,1,25],[639,511,1,50],[1007,803,2,50]]) {
+            await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:dpr,mobile:false});
+            const clip = await evaluate(`(async()=>{
+                const TV=THelpViewerTV;
+                const help=document.querySelector('[data-tv-bundle-window]');
+                help._tvResizer.maximize();
+                const frame=help.getBoundingClientRect(),desktop=help._tvResizer.desktop.getBoundingClientRect();
+                if(Math.abs(frame.width-desktop.width)>0.1||Math.abs(frame.height-desktop.height)>0.1)
+                    throw Error('Responsive maximize does not fill the desktop');
+                if(!window.cellScreen){
+                    const view=new TV.TVDosView(new TV.TVRect()),root=TV.TVView._fromHTML(view.draw());
+                    document.body.append(root);view.bindRoot(root);window.cellScreen=view;
+                    Object.assign(root.style,{position:'fixed',inset:'0',zIndex:'2147483647'});
+                }
+                await document.fonts.ready;
+                const view=window.cellScreen,rows=${rows},packet=new Uint8Array(64+80*rows*2);
+                packet.set([1,80,rows,rows===50?8:16,8,0,1]);packet[21]=170;packet[23]=170;
+                for(let index=0;index<80*rows;index++){
+                    packet[64+index*2]=32;packet[65+index*2]=(1+(index+Math.floor(index/80))%2)<<4;
+                }
+                view.setScreen(packet);
+                await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+                view.layoutText();
+                const rect=view.textScreen.root.getBoundingClientRect();
+                return {x:Math.ceil(rect.x)+2,y:Math.ceil(rect.y)+2,width:Math.floor(rect.width)-4,height:Math.floor(rect.height)-4,scale:1};
+            })()`);
+            const capture=await send('Page.captureScreenshot',{format:'png',clip});
+            const wrong=await evaluate(`(async()=>{
+                const image=new Image();image.src='data:image/png;base64,${capture.data}';await image.decode();
+                const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+                const context=canvas.getContext('2d');context.drawImage(image,0,0);
+                const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;let wrong=0;
+                for(let i=0;i<pixels.length;i+=4){
+                    if(pixels[i]!==0||!((pixels[i+1]===0&&pixels[i+2]===170)||(pixels[i+1]===170&&pixels[i+2]===0)))wrong++;
+                }
+                return wrong;
+            })()`);
+            if(wrong)throw new Error('Text backgrounds have '+wrong+' seam pixels at '+width+' / DPR '+dpr+' / '+rows+' rows');
+            // Box-drawing glyphs, not just backgrounds, must join at every
+            // physical pixel. Uniform glyph transforms used to skip rows on DPR 2.
+            for(const vertical of [true,false]){
+                const screen=await evaluate(`(async()=>{
+                    const view=cellScreen,packet=new Uint8Array(64+80*${rows}*2);
+                    packet.set([1,80,${rows},${rows}===50?8:16,8,0,1]);packet[21]=170;packet.set([255,255,255],61);
+                    for(let i=0;i<80*${rows};i++){
+                        const n=${vertical}?i%80:Math.floor(i/80);
+                        packet[64+i*2]=n===10?${vertical?179:196}:n===20?${vertical?186:205}:32;
+                        packet[65+i*2]=31;
+                    }
+                    view.setScreen(packet);
+                    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+                    return view.textScreen.root.getBoundingClientRect().toJSON();
+                })()`);
+                const capture=await send('Page.captureScreenshot',{format:'png'});
+                const gaps=await evaluate(`(async()=>{
+                    const image=new Image();image.src='data:image/png;base64,${capture.data}';await image.decode();
+                    const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+                    const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
+                    const b=${JSON.stringify(screen)},d=devicePixelRatio;let gaps=0;
+                    for(const n of [10,20]){
+                        const x=${vertical}?Math.floor((b.left+b.width*n/80)*d)+1:Math.ceil(b.left*d)+2;
+                        const y=${vertical}?Math.ceil(b.top*d)+2:Math.floor((b.top+b.height*n/${rows})*d)+1;
+                        const w=${vertical}?Math.floor(b.width*d/80)-2:Math.floor(b.width*d)-4;
+                        const h=${vertical}?Math.floor(b.height*d)-4:Math.floor(b.height*d/${rows})-2;
+                        const p=ctx.getImageData(x,y,w,h).data;
+                        for(let a=0;a<(${vertical}?h:w);a++){
+                            let light=false;
+                            for(let b=0;b<(${vertical}?w:h);b++){
+                                const i=(${vertical}?a*w+b:b*w+a)*4;
+                                if(p[i]>200){light=true;break;}
+                            }
+                            if(!light)gaps++;
+                        }
+                    }
+                    return gaps;
+                })()`);
+                if(gaps)throw Error('Box glyphs have '+gaps+' gaps at '+width+' / DPR '+dpr+' / '+rows+' rows / vertical '+vertical);
+            }
+        }
+        await evaluate(`cellScreen.destroy();cellScreen.root.remove();delete window.cellScreen`);
         await send('Page.navigate', { url: appUrl + '?topic=719&file=References/diagnostics.json.gz&line=1#bookmark' });
         await wait(`document.querySelector('[data-tv-bundle-window]')?._tvWindowView?.currentTopic === '719'
             && window.location.search === '?file=References%2Fdiagnostics.json.gz&topic=719&line=1'

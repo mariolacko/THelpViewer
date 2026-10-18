@@ -10,13 +10,35 @@ NODE = shutil.which("node")
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required")
+def test_dos_focus_stays_with_embedded_pause_dialog_until_resume():
+    script = r'''
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+let focus='';class View{constructor(){this.eventMask=0;}focus(){focus='screen';return this;}}
+const TV={TVView:View,TVGroup:View,TVWindow:View};
+vm.runInNewContext(fs.readFileSync('www/assets/tv-dos.js','utf8'),{URL,
+ document:{currentScript:{src:'http://localhost/assets/tv-dos.js'}},window:{THelpViewerTV:TV}});
+const view=new TV.TVDosView();let open=false,opened=0,closed=0,gray=false;
+view.root={classList:{toggle(name,on){assert.equal(name,'is-paused');gray=on;}}};
+view.pauseDialog={isOpen:()=>open,dialog:{focus(){focus='resume';}},
+ open(){opened++;open=true;},close(){closed++;open=false;}};
+view.focus();assert.equal(focus,'screen');
+view.setPaused(true);view.setPaused(true);assert.equal(opened,1);assert(gray);
+view.focus();assert.equal(focus,'resume');
+view.setPaused(false);assert.equal(closed,1);assert(!gray);assert.equal(focus,'screen');
+view.setPaused(false);assert.equal(closed,1);
+'''
+    result = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required")
 def test_dos_resize_command_keeps_mode_ratio_and_other_windows_stay_free():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-class View{clearEvent(e){e.what=0;}setHelpCtx(){}handleEvent(){}setState(mask,on){this.state=on?(this.state|mask):(this.state&~mask);}getState(mask){return Boolean(this.state&mask);}}
+class View{focus(){this.root?.focus?.();}clearEvent(e){e.what=0;}setHelpCtx(){}handleEvent(){}setState(mask,on){this.state=on?(this.state|mask):(this.state&~mask);}getState(mask){return Boolean(this.state&mask);}}
 class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
 class Rect{constructor(x1=0,y1=0,x2=0,y2=0){Object.assign(this,{x1,y1,x2,y2});}get width(){return this.x2-this.x1;}get height(){return this.y2-this.y1;}}
-const TV={TVView:View,TVWindow:Window,TVStaticText:View,TVRect:Rect,
+const TV={TVView:View,TVGroup:View,TVWindow:Window,TVStaticText:View,TVRect:Rect,
  TVPoint:class{constructor(x,y){Object.assign(this,{x,y});}},TV_HELP_CONTEXTS:{hcDosPrompt:2320},
  TVEvent:class{constructor(what,data){Object.assign(this,{what},data);}},evCommand:1,
  TV_COMMANDS:{RESIZE:'resize'},measureCells:()=>({width:8,height:16}),fillBorders(){}};
@@ -65,8 +87,8 @@ assert.equal(vars.get('--tv-window-cols'),90);assert.equal(vars.get('--tv-window
 def test_dos_numpad_keys_keep_physical_codes_and_release_held_keys():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-class View{constructor(){this.eventMask=0;}clearEvent(e){e.what=0;}}
-const TV={TVView:View,TVWindow:View,TVRect:class{},evKeyDown:1};
+class View{focus(){this.root?.focus?.();}constructor(){this.eventMask=0;}clearEvent(e){e.what=0;}}
+const TV={TVView:View,TVGroup:View,TVWindow:View,TVRect:class{},evKeyDown:1};
 vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{URL,
  document:{currentScript:{src:'http://localhost/assets/tv-dos.js'}},window:{THelpViewerTV:TV}});
 const view=new TV.TVDosView(),keys=[];
@@ -98,10 +120,10 @@ assert.deepEqual(keys.slice(-2),[[328,true],[328,false]]);assert.equal(view.keys
 def test_dos_video_mode_resizes_frame_height_without_resetting_manual_geometry():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-class View{clearEvent(e){e.what=0;}setHelpCtx(value){this.helpCtx=value;}}
+class View{focus(){this.root?.focus?.();}clearEvent(e){e.what=0;}setHelpCtx(value){this.helpCtx=value;}}
 class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
 let filled=0,changed=0,painted=0,maximized=false;
-const TV={TVView:View,TVWindow:Window,TVStaticText:class{},TVRect:class{},
+const TV={TVView:View,TVGroup:View,TVWindow:Window,TVStaticText:class{},TVRect:class{},
  TVPoint:class{constructor(x,y){this.x=x;this.y=y;}},TV_HELP_CONTEXTS:{hcDosPrompt:2320},
  measureCells:()=>({width:8,height:16}),fillBorders:()=>filled++};
 const listeners=new Map();
@@ -112,7 +134,7 @@ vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{URL,document,
 const win=new TV.TVDosWindow();let width=640,height=400;
 const canvas={width,height,focus(){},getContext:()=>({putImageData(){painted++;}}),
  requestFullscreen:async()=>{document.fullscreenElement=canvas;}};
-win.view.canvas=canvas;win.view.ci={width:()=>width,height:()=>height};win.onChange=()=>changed++;
+win.view.canvas=canvas;win.view.root=canvas;win.view.ci={width:()=>width,height:()=>height};win.onChange=()=>changed++;
 const original={left:500,top:300,cols:82,rows:27};let geometry={...original};
 const resizer={desktop:{clientWidth:2000,clientHeight:1200},captureGeometry:()=>geometry,
  place:g=>{geometry=g;},restore:()=>{maximized=false;geometry={...original};}};
@@ -137,7 +159,7 @@ geometry={...original,top:1000};frame(640,400);frame(640,480);
 assert.ok(geometry.top+geometry.rows*16<=1200);
 resizer.desktop.clientWidth=800;resizer.desktop.clientHeight=500;
 frame(640,400);frame(640,480);
-assert.ok(geometry.cols<82);assert.ok(geometry.rows*16<=484);
+assert.ok(geometry.cols<82);assert.equal(geometry.rows,31); // Fill 496px; reserve no extra shadow row.
 assert.ok(geometry.left+geometry.cols*8<=800&&geometry.top+geometry.rows*16<=500);
 assert.ok((geometry.rows-2)*16>=(geometry.cols-2)*8*480/640);
 // A mode change must not leave native fullscreen or de-maximize the window.
@@ -161,14 +183,14 @@ assert.ok((geometry.rows-2)*16>=(geometry.cols-2)*8*480/640);
 def test_dos_zoom_doubles_client_area_restores_and_limits_to_desktop():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-class View{clearEvent(e){e.what=0;}setHelpCtx(value){this.helpCtx=value;}}
+class View{focus(){this.root?.focus?.();}clearEvent(e){e.what=0;}setHelpCtx(value){this.helpCtx=value;}}
 class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
 let filled=0,focused=0,changed=0;
-const TV={TVView:View,TVWindow:Window,TVStaticText:class{},TVRect:class{},TVPoint:class{},evCommand:1,TV_HELP_CONTEXTS:{hcDosPrompt:2320},
+const TV={TVView:View,TVGroup:View,TVWindow:Window,TVStaticText:class{},TVRect:class{},TVPoint:class{},evCommand:1,TV_HELP_CONTEXTS:{hcDosPrompt:2320},
  measureCells:()=>({width:8,height:16}),fillBorders:()=>filled++};
 vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{URL,window:{THelpViewerTV:TV},
  document:{currentScript:{src:'http://localhost/assets/tv-dos.js'}}});
-const win=new TV.TVDosWindow();win.view.canvas={focus(){focused++;}};win.onChange=()=>changed++;
+const win=new TV.TVDosWindow();win.view.canvas={focus(){focused++;}};win.view.root=win.view.canvas;win.onChange=()=>changed++;
 const original={left:500,top:300,cols:82,rows:27};let geometry=original;
 const resizer={desktop:{clientWidth:2000,clientHeight:1200},captureGeometry:()=>geometry,place:g=>{geometry=g;}};
 win.root={_tvResizer:resizer,classList:{contains:()=>false}};
@@ -195,17 +217,17 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const source=fs.readFileSync(process.argv[1],'utf8');
 async function scenario(mode){
  const timers=new Map();let next=0;const notices=[],requests=[],progress=[];let statusCalls=0,destroyed=0;
- class View{constructor(){this.eventMask=0;}clearEvent(e){e.what=0;}setHelpCtx(value){this.helpCtx=value;}}
+ class View{focus(){this.root?.focus?.();}constructor(){this.eventMask=0;}clearEvent(e){e.what=0;}setHelpCtx(value){this.helpCtx=value;}}
  class Window extends View{constructor(){super();this.root={isConnected:true};}insertAll(children){children.forEach(child=>child.owner=this);}}
  class Text extends View{setText(text){this.text=text;notices.push(text);}setState(flag,value){this.visible=value;}}
  let exitHandler;
- const ci={events:()=>({onFrame(){},onSoundPush(){},onExit(fn){exitHandler=fn;},onStdout(fn){fn('THelpViewer DOS Prompt - use the DOS Prompt menu for media.');}}),
+ const ci={events:()=>({onFrame(){},onMessage(){},onSoundPush(){},onExit(fn){exitHandler=fn;},onStdout(fn){fn('THelpViewer DOS Prompt - use the DOS Prompt menu for media.');}}),
   pause(){},resume(){},exit:async()=>{}};
  let resumeCalls=0;
  class Audio {constructor(){if(mode==='constructor-denied')throw new Error('Audio denied by embedded browser');}
   resume(){resumeCalls++;return Promise.reject(new Error('Autoplay denied'));}close(){return Promise.resolve();}}
  class Loading {constructor(title){assert.equal(title,mode==='updating'?'Updating DOS C':'Initializing DOS C');this.filenameView=new Text();}show(){}update(value){progress.push(value);if(mode==='cancel')this.cancelled=true;}destroy(){destroyed++;}}
- const TV={TVView:View,TVWindow:Window,TVStaticText:Text,TVRect:class{},TVPoint:class{},TVLoadingDialog:Loading,TV_HELP_CONTEXTS:{hcDosPrompt:2320}};
+ const TV={TVView:View,TVGroup:View,TVWindow:Window,TVStaticText:Text,TVRect:class{},TVPoint:class{},TVLoadingDialog:Loading,TV_HELP_CONTEXTS:{hcDosPrompt:2320}};
  const context={URL,URLSearchParams,AbortSignal,DOMException,Set,Promise,console,
   setTimeout(fn,ms){const id=++next;if(ms===500){Promise.resolve().then(fn);return id;}timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);},
   setInterval(){return 1;},clearInterval(){},
@@ -220,7 +242,7 @@ async function scenario(mode){
    {account:'',revision:0,base_id:'base',allow_full_disk_fallback:mode!=='worker-denied'},
    headers:{get:name=>name==='X-DOS-Revision'?'0':'base'},arrayBuffer:async()=>new ArrayBuffer(0)};}};
  vm.runInNewContext(source,context);
- const win=new TV.TVDosWindow();win.view.canvas={focus(){}};
+ const win=new TV.TVDosWindow();win.view.canvas={focus(){}};win.view.root=win.view.canvas;
  win.owner={insert(){}};
  const errors=[];win.onError=error=>errors.push(error.message);
  const boot=win.boot();
@@ -278,9 +300,9 @@ def test_native_fullscreen_pending_reentry_denial_and_stopped_menu():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const listeners=new Map(),errors=[];let requests=0,resolveRequest;
-class View{clearEvent(event){event.what=0;}dispatchEvent(event){this.handleEvent(event);}setHelpCtx(value){this.helpCtx=value;}}
+class View{focus(){this.root?.focus?.();}clearEvent(event){event.what=0;}dispatchEvent(event){this.handleEvent(event);}setHelpCtx(value){this.helpCtx=value;}}
 class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
-const TV={TVView:View,TVWindow:Window,TVStaticText:class{},TVRect:class{},TVPoint:class{},
+const TV={TVView:View,TVGroup:View,TVWindow:Window,TVStaticText:class{},TVRect:class{},TVPoint:class{},
  TVEvent:class{constructor(what,data){this.what=what;Object.assign(this,data);}},evCommand:1,evKeyDown:2,TV_HELP_CONTEXTS:{hcDosPrompt:2320}};
 const document={currentScript:{src:'http://localhost/assets/tv-dos.js'},fullscreenElement:null,
  addEventListener(type,fn){listeners.set(type,fn);},
@@ -291,7 +313,7 @@ vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),context);
 const win=new TV.TVDosWindow();win.onError=error=>errors.push(error.message);win.active=true;
 const canvas={focus(){},requestFullscreen(){requests++;return new Promise(resolve=>{
  resolveRequest=()=>{document.fullscreenElement=canvas;resolve();};});}};
-win.view.canvas=canvas;
+win.view.canvas=canvas;win.view.root=canvas;
 (async()=>{
  win.fullScreen();win.fullScreen();assert.equal(requests,1);
  resolveRequest();await win.fullscreenRequest;listeners.get('fullscreenchange')();
@@ -337,12 +359,12 @@ def test_cloud_close_failure_requires_explicit_discard_and_preserves_local_failu
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 let answer='cancel',exits=0,boxes=0,removed=0,local=0;
-class View{setHelpCtx(){}}
+class View{focus(){this.root?.focus?.();}setHelpCtx(){}}
 class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
 class Box{static MF_WARNING=0;static MF_OK_CANCEL=3;async show(options){boxes++;
  assert.match(options.title,/without saving C/);assert.match(options.lines.join('\n'),/will not be overwritten/);
  assert.equal(win.paused,true);return answer;}destroy(){removed++;}}
-const TV={TVView:View,TVWindow:Window,TVStaticText:View,TVMessageBox:Box,TVRect:class{},TVPoint:class{},TV_HELP_CONTEXTS:{}};
+const TV={TVView:View,TVGroup:View,TVWindow:Window,TVStaticText:View,TVMessageBox:Box,TVRect:class{},TVPoint:class{},TV_HELP_CONTEXTS:{}};
 const document={currentScript:{src:'http://localhost/assets/tv-dos.js'},fullscreenElement:null,removeEventListener(){}};
 vm.runInNewContext(fs.readFileSync('www/assets/tv-dos.js','utf8'),{URL,clearInterval(){},clearTimeout(){},document,window:{THelpViewerTV:TV}});
 const win=new TV.TVDosWindow();win.syncPause=()=>{};win.owner={insert(){},remove(){}};

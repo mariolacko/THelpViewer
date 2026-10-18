@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 
 from ..content_config import read_source_manifest
-from .paths import DosError, ID_RE
+from .paths import DosError, ID_RE, c_path
 
 
 def load_dos_config(path: Path | None) -> dict:
@@ -12,6 +12,8 @@ def load_dos_config(path: Path | None) -> dict:
         data = read_source_manifest(path, "DOS", ID_RE)
     except ValueError as error:
         raise DosError(str(error)) from error
+    if not isinstance(data.get("text_rendering", True), bool):
+        raise DosError("DOS text_rendering must be a boolean")
     if any(key in data for key in ("initial_files", "autoexec.bat", "config.sys")):
         raise DosError("Use files entries with path and text/base64 instead of initial_files/autoexec.bat/config.sys")
     if any(key in data for key in ("max_c_bytes", "max_c_files")):
@@ -21,6 +23,9 @@ def load_dos_config(path: Path | None) -> dict:
         raise DosError("DOS package language must be a language code such as cs, en or en-GB")
     if any(not isinstance(source.get("required", False), bool) for source in data["sources"]):
         raise DosError("DOS package required must be a boolean")
+    for source in data["sources"]:
+        if "path" in source:
+            c_path(source["path"])
     categories = data.get("categories", [])
     if not isinstance(categories, list):
         raise DosError("DOS categories must be a list")

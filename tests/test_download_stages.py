@@ -267,25 +267,28 @@ assert.equal(Progress.downloadMarker(row),'▣');
 row.stage='convert';row.stage_percent=25;
 assert.equal(Progress.downloadMarker(row),'⚙ 25%');
 row.stage='publish';row.stage_percent=null;
-assert.equal(Progress.downloadCaption({active:true,errors:0,items:[row]}),'⚙');
+assert.equal(Progress.downloadCaption({active:true,percent:35,errors:0,items:[row]}),'⚙ 35%');
 row.state='done';
 assert.equal(Progress.downloadSymbol(row),'✓');
 assert.equal(Progress.downloadCaption({active:false,errors:0,items:[row]}),'✓');
-assert.notEqual(Progress.downloadCaption({active:true,errors:0,items:[row]}),'✓');
+assert.equal(Progress.downloadCaption({active:true,percent:100,errors:0,items:[row]}),'⚙ 99%');
 row.state='error';
 assert.equal(Progress.downloadCaption({active:false,errors:1,items:[row]}),'!');
 row.state='pending';
 assert.equal(Progress.downloadMarker(row),'·');
-assert.equal(Progress.downloadCaption({active:true,errors:0,items:[row]}),'…');
+assert.equal(Progress.downloadCaption({active:true,percent:0,errors:0,items:[row]}),'… 0%');
 row.state='waiting';row.stage='install';row.stage_percent=100;
 assert.equal(Progress.downloadMarker(row),'◷');
-assert.equal(Progress.downloadCaption({active:true,errors:0,items:[row]}),'◷');
+assert.equal(Progress.downloadCaption({active:true,percent:75,errors:0,items:[row]}),'◷ 75%');
 const downloading={state:'running',stage:'download',stage_percent:50};
 const extracting={state:'running',stage:'extract',stage_percent:null};
 const converting={state:'running',stage:'convert',stage_percent:25};
-assert.equal(Progress.downloadCaption({active:true,errors:0,items:[downloading,extracting,converting]}),'↓ 50% ▣ ⚙ 25%');
-assert.equal(Progress.downloadCaption({active:true,errors:0,items:[downloading,row]}),'↓ 50%');
-assert.equal(Progress.downloadCaption({active:true,errors:0,items:[downloading,{...downloading,stage_percent:null}]}),'↓');
+assert.equal(Progress.downloadCaption({active:true,percent:15,errors:0,items:[downloading,extracting,converting]}),'↓ ▣ ⚙ 15%');
+assert.equal(Progress.downloadCaption({active:true,percent:25,errors:0,items:[downloading,row]}),'↓ 25%');
+assert.equal(Progress.downloadCaption({active:true,percent:10,errors:0,items:[downloading,{...downloading,stage_percent:null}]}),'↓ 10%');
+const pending=Array.from({length:19},()=>({state:'pending',percent:0}));
+assert.equal(Progress.downloadCaption({active:true,percent:2,errors:0,items:[downloading,...pending]}),'↓ 2%');
+assert.equal(Progress.downloadCaption({active:true,percent:50,errors:1,items:[downloading]}),'! ↓ 50%');
 '''
     result = subprocess.run([shutil.which("node"), "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr

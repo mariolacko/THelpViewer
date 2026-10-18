@@ -8,5 +8,6 @@ It deliberately excludes C602.CFG, PRIKLADY, spreadsheets, macros and all
 working/test documents. New settings are created in the user's DOS overlay.
 The DOS manifest's `file` field uses the existing bounded local-package loader.
 
-`UNARJ241.EXE` is the existing original DOS UnARJ package used by UTILS; its
-extraction and licence retention are defined by that package's archive recipe.
+`UNARJ241.EXE` is the original DOS UnARJ package used by COMPRESS. The manifest
+installs UNARJ.EXE directly in C:\COMPRESS and its original documentation and
+licence notices in C:\COMPRESS\DOC\UNARJ; program source files are not installed.

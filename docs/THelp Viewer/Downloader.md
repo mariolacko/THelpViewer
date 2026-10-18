@@ -1,6 +1,6 @@
 # Downloader
 
-> Updated: 2026-10-17
+> Updated: 2026-10-18
 
 ## Shared online queue
 
@@ -205,13 +205,19 @@ Queue rows use `pending` before work starts, `running` only during active work,
 and `waiting` between phases or while a resource/site is unavailable. The shared
 scheduler reports Waiting for download/processing/source; retry cooldowns retain
 their countdown with `waiting`. Verified HELP sources await conversion, extracted
-DOS inputs await ordered installation, and staged DOS packages await publication.
+DOS inputs await ordered installation, and each staged DOS package awaits its
+own publication while later downloads continue. Completed packages remain done
+if a later one fails; required boot tools publish as a group. Selection removals
+wait until requested additions succeed. Restart/retry validates real receipts
+and skips already published packages.
 These states do not change the existing three-unit preparation or per-site limits.
 
-Waiting rows show `◷` and Waiting in the menu, and `◷` in Downloads details.
+Waiting rows show `◷` and the reason (download, source, processing, conversion,
+installation or publication) in the menu, and `◷` in Downloads details.
 They keep their overall partial progress but no phase-local percentage. Only
-`running` rows contribute active-stage symbols/percentages in the top indicator;
-when all work is waiting, it shows `◷`. They remain unfinished and do not enter
+`running` rows contribute active-stage symbols in the top indicator; its single
+percentage is the current batch total, including waiting and pending work.
+When all work is waiting, it shows `◷` with that batch percentage. These rows remain unfinished and do not enter
 Completed downloads. Idle detection/finish cannot turn waiting into success;
 the domain owner must confirm completion (for DOS, the published disk/receipt).
 Failure blocks uncompleted waiting work, while interruption/restart restores it
@@ -355,13 +361,17 @@ APIs keep their existing administrator checks. Apply submits package/source
 selection directly; separate rebuild/delete actions retain their confirmations.
 The live `TVDownloadProgress` caption between account and clock uses
 `↓` for transfers, `▣` for extraction and `⚙` for conversion, installation,
-validation and publication. Simultaneous stages appear together. A phase shows
-a percentage only when its own byte or work count is known; otherwise only
-the symbol is shown. Discovery/waiting shows `…`; failure shows `!`.
+validation and publication. Simultaneous stages appear together, followed by
+one overall percentage from the server's batch snapshot, e.g. `↓ ▣ ⚙ 27%`.
+It counts all packages/albums in the current batch, not just running transfers;
+queued and waiting work stays in the denominator, completed work in that batch
+stays in the numerator, and history from earlier batches is excluded. Discovery
+shows `…`, waiting `◷`, and failure `!`.
 The API exposes `stage` and nullable `stage_percent` on each row. A new phase
 clears the previous phase's percentage; these values are separate from the
-owner-weighted overall `percent` used by the dialog's batch gauge.
-For example, transferring an archive may reach `↓ 100%`, followed by `▣`
+owner-weighted overall `percent` used by both the top caption and the dialog's
+batch gauge. Individual package rows retain phase-local progress.
+For example, an individual archive may reach `↓ 100%`, followed by `▣`
 without a known extraction total, then `⚙ 25%` during conversion.
 Python ZIP extraction counts extracted entries. External unar extraction uses
 the successfully completed entry lines and lsar's total entry count; 7-Zip uses
@@ -486,7 +496,8 @@ Archive.org, old-dos and Cheater release pages before archive downloads. The
 conversion stage independently checks authoritative CRC/source metadata before
 publication. Family-level maintenance calls omit `package_ids`; an empty list
 selects no editions. DOS Packages and MIDI Sources derive from the same dialog base;
-applying one type leaves the others unchanged. API progress uses
+its live Filter searches cached names/descriptions/groups without changing
+hidden selections. Applying one type leaves the others unchanged. API progress uses
 the job's callback and `processing.observe_progress()`, not captured terminal
 output. Transfers and local processing share context-local operation events.
 Empty server selections download nothing. Provider failures are surfaced as

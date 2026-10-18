@@ -93,9 +93,9 @@ function ciFor(drive,revision,nodes,dirty,files){const count=nodes=>nodes.reduce
 def test_local_save_serializes_with_cloud_and_flushes_before_account_close():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-class View{setHelpCtx(){}}
+class View{focus(){this.root?.focus?.();}setHelpCtx(){}}
 class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
-const TV={TVView:View,TVWindow:Window,TVStaticText:View,TVRect:class{},TVPoint:class{},TV_HELP_CONTEXTS:{}};
+const TV={TVView:View,TVGroup:View,TVWindow:Window,TVStaticText:View,TVRect:class{},TVPoint:class{},TV_HELP_CONTEXTS:{}};
 const context={URL,Promise,clearInterval(){},clearTimeout(){},window:{THelpViewerTV:TV},
  document:{currentScript:{src:'http://localhost/assets/tv-dos.js'},removeEventListener(){}}};
 vm.runInNewContext(fs.readFileSync('www/assets/tv-dos.js','utf8'),context);
@@ -127,11 +127,11 @@ def test_local_assets_are_mirrored_and_loaded_before_dos():
 def test_local_folder_picker_gesture_cancel_unsupported_and_guest_save():
     script = r'''
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-class View{clearEvent(e){e.what=0;}setHelpCtx(){}setText(){}setState(){}}
+class View{focus(){this.root?.focus?.();}clearEvent(e){e.what=0;}setHelpCtx(){}setText(){}setState(){}}
 class Window extends View{insertAll(children){children.forEach(child=>child.owner=this);}}
 let confirmation='cancel';
 class Message {static MF_CONFIRMATION=1;static MF_OK_CANCEL=2;async show(data){assert.match(data.lines.join(' '),/will not restart/);return confirmation;}destroy(){}}
-const TV={TVView:View,TVWindow:Window,TVStaticText:View,TVRect:class{},TVPoint:class{},evCommand:1,TV_HELP_CONTEXTS:{hcDosPrompt:2320},
+const TV={TVView:View,TVGroup:View,TVWindow:Window,TVStaticText:View,TVRect:class{},TVPoint:class{},evCommand:1,TV_HELP_CONTEXTS:{hcDosPrompt:2320},
  TVMessageBox:Message,
  DosLocalDrive:class{constructor(handle){this.handle=handle;this.writable=true;}static supported(){return true;}}};
 const context={URL,Promise,console,window:{THelpViewerTV:TV},document:{currentScript:{src:'http://localhost/assets/tv-dos.js'},hidden:false,fullscreenElement:null}};

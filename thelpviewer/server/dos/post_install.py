@@ -9,6 +9,7 @@ import uuid
 
 
 from .paths import DosError, c_path, MAX_FILES
+from .environment import dos_search_path
 
 
 def run_post_install(files, source, tools, limit):
@@ -32,6 +33,8 @@ def run_post_install(files, source, tools, limit):
         raise DosError("Post-install script conflicts with an archive file")
     tag = uuid.uuid4().hex[:8].upper()
     wrapper, marker = tag + ".BAT", tag + ".OK"
+    directories = list(dict.fromkeys(c_path(name).rsplit("/", 1)[0] for name in tools if "/" in c_path(name)))
+    search_path = dos_search_path(directories)
     with tempfile.TemporaryDirectory(prefix="thelp-dos-post-") as temporary:
         root = Path(temporary)
         disk = root / "c"
@@ -49,7 +52,7 @@ def run_post_install(files, source, tools, limit):
         config.write_text("[sdl]\noutput=surface\nfullscreen=false\n[dosbox]\nmemsize=64\n[cpu]\ncycles=max\n"
             "[mixer]\nnosound=true\n[midi]\nmididevice=none\n[serial]\nserial1=disabled\nserial2=disabled\n"
             "[ipx]\nipx=false\n[autoexec]\n"
-            f'mount c "{disk}"\nconfig -securemode\nc:\nset PATH=C:\\UTILS\\BIN;Z:\\\n{wrapper}\n', encoding="ascii")
+            f'mount c "{disk}"\nconfig -securemode\nc:\nset PATH={search_path}\n{wrapper}\n', encoding="ascii")
         try:
             result = subprocess.run([emulator, "-conf", str(config)], cwd=root,
                 env={**os.environ, "SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy"},
@@ -66,7 +69,7 @@ def run_post_install(files, source, tools, limit):
             if not path.is_file():
                 continue
             name = c_path(path.relative_to(disk).as_posix())
-            if name in (wrapper, marker):
+            if name in (wrapper, marker, script_path):
                 continue
             data = path.read_bytes()
             if name in tools and name not in package_names:

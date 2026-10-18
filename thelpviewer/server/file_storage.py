@@ -25,6 +25,17 @@ def file_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
+def clone_file(source, destination):
+    """Share unchanged staged bytes; callers must replace, never edit, clones."""
+    try:
+        os.link(source, destination)
+    except OSError as error:
+        if error.errno not in {errno.EXDEV, errno.EPERM, errno.EACCES, errno.ENOTSUP}:
+            raise
+        shutil.copy2(source, destination)
+    return destination
+
+
 def directory_files(root: Path) -> dict[Path, Path]:
     """Inventory regular storage without following links or special files."""
     if root.is_symlink():

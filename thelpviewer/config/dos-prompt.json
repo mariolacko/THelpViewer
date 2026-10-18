@@ -3,12 +3,13 @@
   "memory_mb": 64,
   "max_media_bytes": 134217728,
   "allow_full_disk_fallback": false,
+  "text_rendering": true,
   "files": [
     {
       "path": "AUTOEXEC.BAT",
       "text": [
         "@ECHO OFF",
-        "SET PATH=C:\\UTILS\\BIN;C:\\FREEDOS\\BIN;C:\\TOOLS\\VC;Z:\\",
+        "SET PATH=Z:\\",
         "vc"
       ]
     },
@@ -470,6 +471,31 @@
       "post_install": []
     },
     {
+      "id": "hiew-650",
+      "language": "en",
+      "category": "editors",
+      "title": "HIEW 6.50",
+      "enabled": false,
+      "url": "https://www.hiew.ru/files/hiew650dosfree.zip",
+      "format": "zip",
+      "target": "TOOLS/HIEW",
+      "extract": [
+        {
+          "archive": "HIEW_650.ZIP",
+          "format": "zip",
+          "members": ["HIEW.EXE", "HIEW.HLP", "HIEW.INI", "HIEWE.650"]
+        },
+        {
+          "members": ["HIEW_650.ASC"],
+          "target": "DOC"
+        }
+      ],
+      "launch": "CD \\TOOLS\\HIEW then HIEW <file>",
+      "license": "Proprietary; the author offers this old DOS 6.50 rebuild free of charge. Original help, release notes and archive signature retained; not an open-source licence.",
+      "description": "View and edit files as text, hexadecimal bytes or x86 disassembly. Includes the original DOS help, configuration and English manual; this is the author's free DOS rebuild, not the modern Windows demo.",
+      "post_install": []
+    },
+    {
       "id": "freedos-grafx2",
       "language": "en",
       "category": "graphics",
@@ -615,96 +641,668 @@
       "required": true,
       "language": "mul",
       "category": "archivers",
-      "title": "UTILS — DOS archive tools",
+      "title": "COMPRESS — DOS archive tools",
       "enabled": false,
       "format": "collection",
-      "target": "UTILS",
-      "description": "DOS command-line archive toolkit: create ZIP, ARJ and 7-Zip archives; unpack RAR, ARJ, LHA, CAB, TAR, GZIP, BZIP2 and ZOO formats.",
+      "target": "COMPRESS",
+      "path": "COMPRESS",
+      "description": "DOS archive and executable-compression toolkit: ZIP, RAR extraction, ARJ, 7-Zip, LHA, CAB, TAR, GZIP, BZIP2, ZOO, LZIP, LZMA, LZOP, LPQ1, ARC/ARCE, UC2, LZEXE/UnLZEXE, UPX, DIET and PKLITE. Programs in COMPRESS; original documentation and licences in COMPRESS/DOC/<tool>. RAR creation is a separate package.",
       "archives": [
         {
           "title": "unzip",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/unzip.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/UNZIP.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/UNZIP/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/UNZIP"
+            }
+          ]
         },
         {
           "title": "zip",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/zip.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/ZIP.EXE",
+                "BIN/ZIP16.EXE",
+                "BIN/ZIPCLOAK.EXE",
+                "BIN/ZIPNOTE.EXE",
+                "BIN/ZIPSPLIT.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/ZIP/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/ZIP"
+            }
+          ]
         },
         {
           "title": "unrar",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/unrar.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "ARCHIVER/UNRAR/UNRAR.EXE"
+              ],
+              "strip_components": 2
+            },
+            {
+              "members": [
+                "ARCHIVER/UNRAR/*.TXT"
+              ],
+              "strip_components": 2,
+              "target": "DOC/UNRAR"
+            }
+          ]
         },
         {
           "title": "arj",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/arj.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/ARJ.EXE",
+                "BIN/ARJDISP.EXE",
+                "BIN/REARJ.EXE",
+                "BIN/REARJ.CFG"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/ARJ/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/ARJ"
+            },
+            {
+              "archive": "SOURCE/ARJ/SOURCES.ZIP",
+              "format": "zip",
+              "members": [
+                "DOC/COPYING"
+              ],
+              "strip_components": 1,
+              "target": "DOC/ARJ"
+            }
+          ]
         },
         {
           "title": "p7zip",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/p7zip.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "ARCHIVER/P7ZIP/P7ZIP.EXE",
+                "ARCHIVER/P7ZIP/P7ZIPR.EXE",
+                "ARCHIVER/P7ZIP/7ZCON.SFX"
+              ],
+              "strip_components": 2
+            },
+            {
+              "members": [
+                "ARCHIVER/P7ZIP/*.TXT",
+                "ARCHIVER/P7ZIP/*.1",
+                "ARCHIVER/P7ZIP/MANUAL/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/P7ZIP"
+            }
+          ]
         },
         {
           "title": "cabext",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/cabext.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/CABEXT.EXE",
+                "BIN/CABINFO.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/CABEXT/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/CABEXT"
+            }
+          ]
         },
         {
           "title": "gzip",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/gzip.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/GZIP.EXE",
+                "BIN/GZIP386.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/GZIP/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/GZIP"
+            }
+          ]
         },
         {
           "title": "bz2",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/bz2.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/BUNZIP2.EXE",
+                "BIN/BZCAT.EXE",
+                "BIN/BZIP2.EXE",
+                "BIN/BZIP2REC.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/BZ2/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/BZIP2"
+            }
+          ]
         },
         {
           "title": "lha",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/lha.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "ARCHIVER/LHA/LHA.EXE"
+              ],
+              "strip_components": 2
+            },
+            {
+              "members": [
+                "ARCHIVER/LHA/README.DOS",
+                "ARCHIVER/LHA/LICENSE.TXT",
+                "ARCHIVER/LHA/LHA.HLP"
+              ],
+              "strip_components": 2,
+              "target": "DOC/LHA"
+            }
+          ]
         },
         {
           "title": "tar",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/tar.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/TAR.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/TAR/COPYING"
+              ],
+              "strip_components": 2,
+              "target": "DOC/TAR"
+            },
+            {
+              "archive": "DOC/TAR/LFNFILES.ZIP",
+              "format": "zip",
+              "members": [
+                "tar.info*"
+              ],
+              "target": "DOC/TAR"
+            },
+            {
+              "archive": "SOURCE/TAR/SOURCES.ZIP",
+              "format": "zip",
+              "members": [
+                "README",
+                "AUTHORS",
+                "NEWS",
+                "THANKS"
+              ],
+              "target": "DOC/TAR"
+            }
+          ]
         },
         {
           "title": "zoo",
           "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/zoo.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/FIZ.EXE",
+                "BIN/ZOO.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/ZOO/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/ZOO"
+            }
+          ]
         },
         {
           "title": "CWSDPMI runtime",
           "url": "https://www.delorie.com/pub/djgpp/current/v2misc/csdpmi7b.zip",
-          "format": "zip"
-        },
-        {
-          "title": "CWSDPMI source",
-          "url": "https://www.delorie.com/pub/djgpp/current/v2misc/csdpmi7s.zip",
-          "format": "zip"
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/CWSDPMI.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "BIN/*.DOC"
+              ],
+              "strip_components": 1,
+              "target": "DOC/CWSDPMI"
+            }
+          ]
         },
         {
           "title": "UnARJ 2.41",
           "file": "UNARJ241.EXE",
           "format": "archive",
-          "target": "UNARJ",
-          "retain_archive": "SOURCE/UNARJ/UNARJ241.EXE"
+          "extract": [
+            {
+              "members": [
+                "UNARJ.EXE"
+              ]
+            },
+            {
+              "members": [
+                "README.DOC",
+                "UNARJ.DOC",
+                "TECHNOTE.DOC",
+                "READ_THI"
+              ],
+              "strip_components": 0,
+              "target": "DOC/UNARJ"
+            }
+          ]
+        },
+        {
+          "title": "7-Zip 24.09",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/7zip.zip",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/7ZA.EXE",
+                "BIN/7ZR.EXE",
+                "BIN/7ZM.EXE",
+                "BIN/7ZDEC.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "archive": "SOURCE/7ZIP/SOURCES.ZIP",
+              "format": "archive",
+              "members": [
+                "COPYRIGHT.txt",
+                "README.md"
+              ],
+              "target": "DOC/7ZIP"
+            },
+            {
+              "archive": "SOURCE/7ZIP/SOURCES.ZIP",
+              "format": "archive",
+              "members": [
+                "DOC/License.txt",
+                "DOC/copying.txt",
+                "DOC/readme.txt",
+                "DOC/unRarLicense.txt",
+                "DOC/7zC.txt",
+                "DOC/7zFormat.txt"
+              ],
+              "strip_components": 1,
+              "target": "DOC/7ZIP"
+            }
+          ]
+        },
+        {
+          "title": "Lzip 1.20",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/lzip.zip",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/LZIP.EXE",
+                "BIN/LZIP-REC.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/LZIP/LZIP/*",
+                "DOC/LZIP/LZIPRCVR/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/LZIP"
+            }
+          ]
+        },
+        {
+          "title": "LZMA Utils 4.32.7a",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/lzma.zip",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/LZMA.EXE",
+                "BIN/LZMADEC.EXE",
+                "BIN/LZMAINFO.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/LZMA/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/LZMA"
+            },
+            {
+              "archive": "SOURCE/LZMA/LZMA.7Z",
+              "format": "archive",
+              "members": [
+                "COPYING*",
+                "README",
+                "AUTHORS"
+              ],
+              "target": "DOC/LZMA"
+            }
+          ]
+        },
+        {
+          "title": "lzop 1.04",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/lzop.zip",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "BIN/LZOP.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "DOC/LZOP/*"
+              ],
+              "strip_components": 2,
+              "target": "DOC/LZOP"
+            }
+          ]
+        },
+        {
+          "title": "LPQ1 2a",
+          "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.4/archiver/lpq1.zip",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "ARCHIVER/LPQ1/LPQ1.EXE"
+              ],
+              "strip_components": 2
+            },
+            {
+              "members": [
+                "ARCHIVER/LPQ1/LPQ1.TXT"
+              ],
+              "strip_components": 2,
+              "target": "DOC/LPQ1"
+            }
+          ]
+        },
+        {
+          "title": "LZEXE 0.91e",
+          "url": "https://bellard.org/lzexe/lzexe91e.zip",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "LZEXE.EXE",
+                "COMTOEXE.EXE",
+                "INFOEXE.EXE",
+                "UPACKEXE.EXE"
+              ]
+            },
+            {
+              "members": [
+                "*.DOC",
+                "README"
+              ],
+              "strip_components": 0,
+              "target": "DOC/LZEXE"
+            }
+          ]
+        },
+        {
+          "title": "UnLZEXE 0.91a",
+          "url": "https://classicdosgames.com/files/utilities/unlzexe.zip",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "UNLZEXE.EXE"
+              ]
+            },
+            {
+              "members": [
+                "UNLZEXE.DOC"
+              ],
+              "target": "DOC/UNLZEXE"
+            }
+          ]
+        },
+        {
+          "title": "UPX 5.2.1",
+          "url": "https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-dos.zip",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "UPX-5.2.1-DOS/UPX.EXE"
+              ],
+              "strip_components": 1
+            },
+            {
+              "members": [
+                "UPX-5.2.1-DOS/COPYING",
+                "UPX-5.2.1-DOS/LICENSE",
+                "UPX-5.2.1-DOS/NEWS",
+                "UPX-5.2.1-DOS/README",
+                "UPX-5.2.1-DOS/THANKS.TXT",
+                "UPX-5.2.1-DOS/UPX-DOC.*",
+                "UPX-5.2.1-DOS/UPX.1"
+              ],
+              "strip_components": 1,
+              "target": "DOC/UPX"
+            }
+          ]
+        },
+        {
+          "title": "DIET 1.45f",
+          "url": "https://www.sac.sk/download/pack/diet145f.zip",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "DIET.EXE"
+              ]
+            },
+            {
+              "members": [
+                "*.DOC"
+              ],
+              "strip_components": 0,
+              "target": "DOC/DIET"
+            }
+          ]
+        },
+        {
+          "title": "PKLITE 2.01",
+          "url": "https://www.sac.sk/download/pack/pklts201.exe",
+          "format": "archive",
+          "extract": [
+            {
+              "members": [
+                "PKLITE.EXE",
+                "CHK4LITE.EXE"
+              ]
+            },
+            {
+              "members": [
+                "*.TXT",
+                "*.ASP",
+                "*.201",
+                "*.ICO",
+                "*.PIF"
+              ],
+              "strip_components": 0,
+              "target": "DOC/PKLITE"
+            }
+          ]
+        },
+        {
+          "title": "ARC 6.02",
+          "url": "https://www.sac.sk/download/pack/arc602.exe",
+          "format": "archive",
+          "extract": [
+            {
+              "members": [
+                "ARC.EXE",
+                "ARCE.COM",
+                "MKSARC.EXE"
+              ]
+            },
+            {
+              "members": [
+                "ARC.DOC",
+                "ARC.TXT",
+                "ARCORDER.TXT"
+              ],
+              "target": "DOC/ARC"
+            },
+            {
+              "members": [
+                "ARCE.DOC"
+              ],
+              "target": "DOC/ARCE"
+            }
+          ]
+        },
+        {
+          "title": "UltraCompressor II revision 3",
+          "url": "https://files.mpoli.fi/software/DOS/COMPRESS/UC2R3.ZIP",
+          "format": "zip",
+          "extract": [
+            {
+              "members": [
+                "UC2R3.EXE"
+              ]
+            },
+            {
+              "members": [
+                "FILE_ID.DIZ"
+              ],
+              "strip_components": 0,
+              "target": "DOC/UC2"
+            }
+          ]
         }
       ],
       "post_install": [
         "@ECHO OFF",
-        "IF NOT EXIST BIN MD BIN",
-        "COPY ARCHIVER\\UNRAR\\UNRAR.EXE BIN\\UNRAR.EXE >NUL",
-        "COPY ARCHIVER\\LHA\\LHA.EXE BIN\\LHA.EXE >NUL",
-        "COPY ARCHIVER\\P7ZIP\\P7ZIP.EXE BIN\\7ZA.EXE >NUL",
-        "COPY ARCHIVER\\P7ZIP\\P7ZIPR.EXE BIN\\7ZR.EXE >NUL",
-        "COPY UNARJ\\UNARJ.EXE BIN\\UNARJ.EXE >NUL"
+        "UC2R3.EXE -o . >NUL",
+        "IF ERRORLEVEL 1 GOTO END",
+        "COPY U_MANUAL.TXT DOC\\UC2\\U_MANUAL.TXT >NUL",
+        "IF ERRORLEVEL 1 GOTO END",
+        "COPY ORDER.FRM DOC\\UC2\\ORDER.FRM >NUL",
+        "IF ERRORLEVEL 1 GOTO END",
+        "COPY USEAL.FRM DOC\\UC2\\USEAL.FRM >NUL",
+        "IF ERRORLEVEL 1 GOTO END",
+        "DEL U_MANUAL.TXT",
+        "DEL ORDER.FRM",
+        "DEL USEAL.FRM",
+        "DEL UC2R3.EXE",
+        ":END"
       ],
-      "launch": "CD \\UTILS\\BIN then ZIP, UNZIP, UNRAR, UNARJ, ARJ or 7ZA",
-      "license": "Info-ZIP, GPL/LGPL, public-domain and original UnRAR/UnARJ terms; complete licence documents and provided sources retained. No RAR compressor or registered keys included"
+      "launch": "CD \\COMPRESS then ZIP, UNZIP, ARJ, 7ZA, ARC, UC, LZEXE, UNLZEXE, UPX, DIET or PKLITE",
+      "license": "Original Info-ZIP, GPL/LGPL, BSD/public-domain and proprietary/shareware terms apply. Original manuals and licence notices are retained in DOC/<tool>, not program sources or registration keys. UnLZEXE, DIET, PKLITE, ARC/ARCE and UC2 retain their original evaluation, commercial-use and distribution restrictions; documentation does not grant extra rights."
+    },
+    {
+      "id": "rar-dos-393",
+      "language": "en",
+      "category": "archivers",
+      "title": "RAR 3.93 for DOS",
+      "enabled": false,
+      "url": "https://www.rarlab.com/rar/rarx393.exe",
+      "format": "archive",
+      "target": "COMPRESS",
+      "path": "COMPRESS",
+      "launch": "CD \\COMPRESS then RAR32",
+      "license": "Proprietary shareware, 40-day evaluation. Last DOS release; installation/distribution requires the operator's permission and applicable RAR licence. No registration key is included.",
+      "description": "Create, update, test and extract RAR archives with the last DOS version, 3.93. Includes the EMX/RSX runtime and SFX module in COMPRESS, manuals/licences in DOC/RAR. Run RAR32; this optional shareware package is separate from COMPRESS and does not support RAR5.",
+      "post_install": [],
+      "extract": [
+        {
+          "members": [
+            "RAR/RAR32.EXE",
+            "RAR/EMX.EXE",
+            "RAR/RSX.EXE",
+            "RAR/EMX.DLL",
+            "RAR/DEFAULT.SFX",
+            "RAR/RARFILES.LST"
+          ],
+          "strip_components": 1
+        },
+        {
+          "members": [
+            "RAR/*.TXT",
+            "RAR/COPYING.EMX",
+            "RAR/COPYING.RSX"
+          ],
+          "strip_components": 1,
+          "target": "DOC/RAR"
+        }
+      ]
     },
     {
       "id": "freedos-edit",
@@ -714,6 +1312,7 @@
       "url": "https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/1.3/base/edit.zip",
       "format": "zip",
       "target": "FREEDOS",
+      "path": "FREEDOS/BIN",
       "members": [
         "BIN/*",
         "DOC/EDIT/*",
@@ -733,6 +1332,7 @@
       "url": "https://vc.vvv.kyiv.ua/download/vc405sw.zip",
       "format": "zip",
       "target": "TOOLS/VC",
+      "path": "TOOLS/VC",
       "files": [
         {
           "path": "LICENSE.TXT",
@@ -765,6 +1365,10 @@
             "ANY  WAY  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE",
             "POSSIBILITY OF SUCH DAMAGE."
           ]
+        },
+        {
+          "path": "VC.INI",
+          "base64": "VlZWAAABAQAIAAAAAAAAAAAAAAAAAABDOlwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQEACAAAAAAAAAAAAAAAAAAAQzpcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHBxsHBwdwcDBwcHAPDx4PDw9/CT4JcHAPDx4PDw8HBwcHBwdwcDBwcHBwcDBwcHAPDw8PDw9wcDBwcHBwcD9wcHB/cD5wcHAHDw8PDw8PDw4PDw9wcDBwcHBwcDNwcHAHB3AHBwcPD34PDw9wcDBwcHAHBz8HBwdwcA9wcHAPDz4PDw9/CQ4JcHBwcD9wcHAHBw8HBwcHBxMHBwdwcDBwcHAHBzAHBwcPDz8PDw9wcA9wcHAPCT4JDw8HB08HBwdwcHBwcHAPD04PDw9wcDBwcHAPDx4PDw8HBwsHBwcPDw8PDw8CAgECAAACAgICAgIBAAEBAQABAQEBAQUBAQEAAAEBAAABAQIBAAEAAQEBADwA+vkHBA8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACONA=="
         },
         {
           "path": "START.BAT",
@@ -1574,6 +2178,40 @@
         "QUADRAX/*"
       ],
       "launch": "CD \\GAMES\\QUADRAX then QUADRAX",
+      "files": [
+        {
+          "path": "QUADRAX/QUADRAX.CFG",
+          "text": [
+            "\t\t\tQUADRAX CONFIGURATION FILE",
+            "",
+            "[SOUND CARD]",
+            "TYPE=3\t\t\t; 0=NO SOUND,1=SB,2=SB PRO,3=SB 16,4=GRAVIS ULTRASOUND",
+            "BASE=220",
+            "IRQ=7 ",
+            "DMA=1",
+            "",
+            "[SETTINGS]",
+            "MUSIC=1\t\t\t; MUSIC 1=on/0=off",
+            "FX=1\t\t\t; FX 1=on/0=off",
+            "MUSIC_VOLUME=16\t\t; 0-16",
+            "FX_VOLUME=16\t\t; 0-16",
+            "AUTOMATIC_ENTER=1\t; 0/1",
+            "",
+            "[KEYS]",
+            "LEFT1=4B",
+            "RIGHT1=4D",
+            "UP1=48",
+            "DOWN1=50",
+            "ACTIVATION1=1D",
+            "LEFT2=14",
+            "RIGHT2=15",
+            "UP2=10",
+            "DOWN2=1E",
+            "ACTIVATION2=2E",
+            "SWITCH=38"
+          ]
+        }
+      ],
       "license": "",
       "description": "Coordinate two explorers to move blocks, operate mechanisms and open a route out of each logic-puzzle room.",
       "post_install": []

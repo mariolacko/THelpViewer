@@ -517,7 +517,7 @@ if (defaults.cols !== 80 || defaults.rows !== 25 || defaults.left !== 16 || defa
 desktop.clientWidth = 32; desktop.clientHeight = 16;
 resizer.restoreDefaultSize();
 defaults = resizer.captureGeometry();
-if (defaults.cols > 2 || defaults.rows > 1 || defaults.left < 0 || defaults.top < 0
+if (defaults.cols > 4 || defaults.rows > 1 || defaults.left < 0 || defaults.top < 0
     || defaults.left + defaults.cols * 8 > desktop.clientWidth
     || defaults.top + defaults.rows * 16 > desktop.clientHeight) {
     throw new Error("default size escaped a small desktop");
@@ -553,7 +553,6 @@ if (animationFrames.size || windowElement.style.getPropertyValue("--tv-window-le
 }
 if (ownedView.state & sfDragging) { throw new Error("move left sfDragging set"); }
 for (const reason of ["release", "blur"]) {
-    resizer.lastMoveDown = 0;
     resizer.startMove({ clientX: 10, clientY: 20, target: { closest() { return null; } }, preventDefault() {} });
     if (reason === "release") { resizer.onMoveDrag({ buttons: 0 }); }
     else { window.listeners.get("blur")(); }

@@ -3,9 +3,9 @@
 DOS runs in the browser through the locally bundled `emulators` 8.5.2 DOSBox
 WASM backend, not as a process or shell on the server. `TVDosWindow` inherits
 the shared `TVWindow` frame, movement, resize and title controls. Its specialised
-`TVDosView` owns only the DOS canvas, audio and native input bridge into
+`TVDosView` owns the text/graphics screens, embedded pause dialog and native input bridge into
 `TVEvent.handleEvent()`. There is no second js-dos player UI or player CSS.
-Both text-mode software and graphical DOS programs are supported. The canvas
+Both text-mode software and graphical DOS programs are supported. The screen
 follows DOSBox's video-mode size; BIOS VGA 320x200 and 640x480 tests verify real
 graphics and the transition back to text mode. Individual games still depend on DOSBox
 compatibility, configured memory/cycles and the browser's performance.
@@ -28,13 +28,16 @@ the page pauses DOS and clears held keyboard/mouse buttons. Moving/resizing
 the frame also pauses DOS through `sfDragging`; mouse events belong exclusively
 to the shared frame mover, including mouse-up over the canvas. Releasing the
 mouse or losing browser focus clears dragging and preserves manual Pause.
+The DOS contents are gray during move/resize, for both text and graphics;
+releasing or cancelling the gesture restores colors unless manually paused.
+Dragging does not open the embedded Resume panel.
 The numeric keypad forwards physical keys separately from the main keyboard:
 0–9, decimal/comma, divide, multiply, subtract, add and Enter use jsDOS keypad
 codes 320–335. NumLock is forwarded too, leaving number/navigation behavior to
 DOS. Keypad equals uses ordinary `=` (61), because the bundled backend exposes
 no distinct keypad-equals code. Browser/OS-reserved combinations can still be
 intercepted before the page receives them.
-With the DOS canvas focused, **Alt+Enter** toggles native fullscreen and
+With the DOS screen focused, **Alt+Enter** toggles native fullscreen and
 **Alt+Pause** toggles pause/resume (also **Alt+F16** for the classic Mac mapping).
 These match the [classic DOSBox bindings](https://www.dosbox.com/wiki/Special_Keys).
 Classic DOSBox has no standard restart binding; **Ctrl+Alt+R** is a THelpViewer
@@ -42,13 +45,67 @@ extension. Restart confirmation leaves fullscreen so the standard TVision
 message box is visible; cancelling preserves the running session. Shortcut
 repeats/key releases are consumed, not forwarded as extra DOS keystrokes.
 
+Manual **Pause** grays the DOS contents and opens an immovable `TVDialog`
+inside the DOS client area, with a **Resume** button. Resume (or Alt+Pause)
+continues the same running program. The panel has no Close control and does
+not block the rest of the desktop. Automatic inactive-window, hidden-page,
+snapshot and frame-drag pauses do not display it.
+
+## Text and graphics screens
+
+The pinned classic DOSBox has a small native bridge at its completed-video-
+frame boundary. It reads the active VGA text buffer, not DOS stdout, so direct
+B800 writes by file managers and editors are visible too. Standard CP437 text
+uses the existing `TVTextScreen` without a bitmap font: real DOM character
+cells with foreground/background palette indexes. Geometry and cell scaling
+follow the native mode; 80x25 and 80x50 are covered by browser tests. The shared
+IBM VGA web font is fitted to the mode's character grid, not replaced with a
+pixel screenshot. Native cursor scanlines and blink phase are supplied by
+DOSBox; there is no independent browser blink clock for the live screen.
+Background cells form an untransformed display-sized grid with device-pixel-
+snapped outer bounds. Only glyphs are scaled; their individual edges are
+snapped to the font's whole-CSS-pixel raster grid, not uniformly centered in
+fractional cells (half-CSS-pixel heights can lose a font row even on Retina).
+Neighboring backgrounds and single/double box lines therefore meet even at
+fractional zoom or high-DPI resolutions.
+
+Graphics modes continue using the existing canvas. Custom/dual hardware fonts,
+underline effects, panning/split-screen and unsupported machines/layouts also
+retain DOSBox's pixel renderer rather than showing incorrect characters.
+Switching presentations never restarts the emulator or changes mounted drives,
+memory or the input target. UHF bitmap-font TextScreens remain unchanged.
+
+The top-level `text_rendering` boolean in `thelpviewer/config/dos-prompt.json`
+selects the presentation. The default, `true`, uses character cells where the
+native font/mode is supported and canvas otherwise. Set it to `false` to use
+DOSBox's canvas for everything, including ordinary text. Restart the server
+and reopen DOS Prompt to apply it; neither rebuilding C nor modifying user
+data is required. A program that uploads its own font always uses its exact
+native pixels, even with `text_rendering: true`; restoring the ROM font
+returns to character cells automatically.
+
+The bridge protocol uses the existing CI message transport. `thelp-screen`
+carries a copied Uint8Array, not a RAM dump: 16 header bytes, sixteen RGB
+palette entries and interleaved character/attribute bytes. Header offsets:
+0 text/fallback flag; 1 columns; 2 rows; 3 glyph height; 4 glyph width;
+5 attribute-blink enabled; 6 blink phase; 7 cursor visible; 8/9 cursor column/row
+(255 if absent); 10/11 cursor first/last scanline; 12–15 reserved zero.
+Palette RGB starts at 16; cells start at 64. A fallback packet is 16 zero bytes.
+Changed state is emitted at native frame boundaries, with a periodic refresh
+for late listeners. The API preserves this one typed message instead of
+converting it to a log string. Source, reproducible build steps and license are
+in [the bundled emulator README](../../www/assets/dos/emulators/README.md).
+
 **Zoom 2×** enlarges the window's DOS client area up to twice its current size,
 limited uniformly by the available desktop. **Zoom back** restores the prior
 window position and dimensions. This uses the shared window resizer/frame,
 not browser fullscreen or extra CSS scaling; the DOS image retains its aspect
-ratio. The frame's Zoom button uses the same operation. A successful cloud
+ratio. The frame's Zoom button and title-bar double-click use the same
+`TVWindow` command, without a separate mover maximize action. A successful cloud
 save is silent, including periodic autosaves, so it does not cover the DOS
 image. Save failures still display an error.
+Size limits include the window frame but never reserve space for its shadow;
+at the desktop edge the shadow is simply clipped.
 
 **Windows → Default Size** restores the declared default width (82 columns for
 the standard DOS Prompt) and derives its height from the current video mode,
@@ -98,9 +155,10 @@ close/page exit; abrupt crashes or failed exit delivery can lose an interval.
 ## Native fullscreen
 
 **DOS Prompt → Fullscreen** requests the browser's native Fullscreen API for
-the DOS canvas itself. Only DOS is visible: there is no TVision menu/frame,
+the DOS screen container. Only DOS is visible: there is no TVision menu/frame,
 desktop or browser toolbar. The image keeps its aspect ratio, with black
-letterboxing where needed, and the canvas retains keyboard/mouse input.
+letterboxing where needed, and either text or graphics retains keyboard/mouse
+input. Manual Pause and its embedded Resume button remain visible in fullscreen.
 Entering/leaving fullscreen alone does not change the TVWindow geometry or
 maximized state. A video-mode change while fullscreen defers the normal-window
 height adjustment until fullscreen exits.
@@ -156,7 +214,7 @@ games, programming, editors, file managers, archive tools, graphics, sound and
 antivirus and office software. They appear on the left; the selected category's package checkboxes
 are on the right. The checkbox below the right pane selects/clears only that
 category; the bottom Select All / Deselect All buttons affect all categories.
-Required packages remain checked and disabled in both cases. UTILS and Volkov
+Required packages remain checked and disabled in both cases. COMPRESS and Volkov
 Commander are required by the manifest and cannot be uninstalled through the
 dialog, API or direct disk reconfiguration; rebuild retains this selection rule.
 Changing categories retains the complete draft;
@@ -186,7 +244,16 @@ server installer; Restart reconnects to its progress. FreeDOS EDIT (`EDIT`),
 BlockDrop, Sudoku86, Zmiy and Volkov Commander 4.05 (`VC`) retain their licence
 notices. Volkov Commander has no separate source-code package; its original
 BSD copyright/conditions/disclaimer are included as LICENSE.TXT through the
-existing `files` mechanism. Quadrax's primary language is Slovak.
+existing `files` mechanism. The same package seeds `TOOLS/VC/VC.INI` with the
+prepared Volkov Commander preferences. VC.INI is a 511-byte binary file, so its
+exact contents are stored as Base64 in the package's `files`, not converted to
+text or generated by a BAT. Private overlay settings remain independent.
+Quadrax's primary language is Slovak. Its package
+also creates `GAMES/QUADRAX/QUADRAX.CFG` through `files`, with Sound Blaster 16
+at port 220, IRQ 7, DMA 1, music/effects enabled and the game's keyboard
+settings. It is plain CP437/CRLF text, not a post-install BAT or server-side
+special case. Private overlay configuration files continue to override these
+shared defaults and are not rewritten by package installation.
 `TYPE C:\SOFTWARE.TXT` lists installed software
 and launch commands.
 
@@ -320,6 +387,13 @@ to the current DOS shell, not competing global AUTOEXEC settings.
 | As-Easy-As 5.7 | `OFFICE/ASEASY` | `ASEASY` |
 | Ability Plus 3.0 | `OFFICE/ABILITY` | `AB3` |
 | VisiCalc, IBM PC 1981 | `OFFICE/VISICALC` | `VC`; `/SQY` quits |
+| HIEW 6.50 | `TOOLS/HIEW` | `HIEW <file>` |
+
+HIEW uses the author's free DOS 6.50 rebuild from
+[hiew.ru](https://www.hiew.ru/), not the modern Windows demo. The shared
+extractor opens the nested HIEW_650.ZIP and installs the executable, original
+HIEW.HLP, HIEW.INI and HIEWE.650 manual. The detached archive signature is
+retained under DOC. It is optional and unchecked until selected in Editors.
 
 Watcom retains DOS tools/headers/libraries, not Windows/OS2 executables and
 headers. Free Pascal uses the original project's nested DOS ZIP distribution.
@@ -342,19 +416,73 @@ current directory. Excel has no standalone DOS release; these spreadsheets
 are DOS alternatives, not Excel binaries. Archived original download URLs
 are used where the publisher's old server is unavailable.
 
-UTILS is one required package composed of original FreeDOS/DJGPP archives:
-ZIP/UnZip, UnRAR, open-source ARJ, P7ZIP/7ZA/7ZR, LHA, CAB, GZIP, BZIP2,
-TAR, ZOO and CWSDPMI, plus the administrator's original UNARJ241.EXE from
-DOS Universum's DOSBox disk. Its immutable source envelope lives in
-`thelpviewer/server/assets/dos/`; the generated disk retains it under
-UTILS/SOURCE/UNARJ and retains the entire extracted UNARJ package. Licence
-documents and available sources from the other archives are also included.
-The common commands are placed in C:\UTILS\BIN and added to the default PATH.
-PKZIP/RAR registered copies and registration keys from the private collection
-are not included. The located ARCE licence specifically requires permission
-for bundling with another product, so it is not treated as unrestricted
-freeware. RAR compression is not supplied as a supposedly free RAR licence;
-UnRAR provides extraction, while ZIP/ARJ/7-Zip provide archive creation.
+COMPRESS is the required archive toolkit (`id: "utils"`, target `COMPRESS`).
+It combines original FreeDOS/DJGPP packages for ZIP/UnZip, UnRAR, ARJ,
+P7ZIP, 7-Zip 24.09, LHA, CAB, GZIP, BZIP2, TAR, ZOO, LZIP, LZMA, LZOP,
+LPQ1 and the CWSDPMI runtime, plus LZEXE 0.91e, UnLZEXE 0.91a, UPX 5.2.1,
+DIET 1.45f, PKLITE 2.01, ARC 6.02/ARCE 3.1c, UC2 revision 3 and the
+operator's original UNARJ241.EXE
+from DOS Universum's DOSBox disk. That immutable local source envelope
+remains in `thelpviewer/server/assets/dos/`.
+
+Every component explicitly selects program/runtime paths with `members` and
+uses the shared `extract` rules to put original manuals, readmes and licence
+notices in **C:\COMPRESS\DOC\<tool>**. Thus unrelated README/LICENSE files do
+not overwrite each other. Some FreeDOS packages keep their licence only in a
+nested source archive: the recipe extracts the licence, not the program source.
+UnLZEXE 0.91a's original manual and terms are in DOC\UNLZEXE\UNLZEXE.DOC.
+Raw downloads stay unchanged under
+`var/downloads/dos/`.
+
+All programs remain directly in C:\COMPRESS, without BIN, ARCHIVER or UNARJ
+subdirectories. `strip_components` removes each verified archive prefix;
+filenames remain the original names from their archives:
+
+| Command | Implementation |
+| --- | --- |
+| `P7ZIP`, `P7ZIPR` | Existing P7ZIP DOS tools |
+| `7ZA`, `7ZR`, `7ZM`, `7ZDEC` | DOS 7-Zip 24.09 aggregate, reduced, minimal and decoder builds |
+| `LZIP`, `LZIP-REC` | Lzip compressor and recovery tool |
+| `LZMA`, `LZMADEC`, `LZMAINFO` | LZMA compressor, decoder and stream information |
+| `LZOP`, `LPQ1` | Additional LZO and LPQ archive tools |
+| `LZEXE`, `UNLZEXE` | Compress DOS MZ executables and unpack LZEXE 0.90/0.91 files |
+| `COMTOEXE`, `INFOEXE`, `UPACKEXE` | LZEXE's COM converter, executable information and EXEPACK unpacker |
+| `UPX` | UPX 5.2.1 executable packer, DOS build |
+| `DIET`, `PKLITE`, `CHK4LITE` | Period executable/data packers and PKLITE recognition utility |
+| `ARC`, `ARCE`, `MKSARC` | ARC 6.02 archive creation/extraction, its matching ARCE 3.1c and self-extractor builder |
+| `UC`, `VU` | UltraCompressor II revision 3 command line and graphical shell |
+
+The original [LZEXE author archive](https://bellard.org/lzexe/) and
+[UPX release](https://github.com/upx/upx/releases/tag/v5.2.1) supply those
+tools. Other period originals are retrieved from SAC and the Metropoli archive,
+with exact release URLs in the manifest. UC2's original self-extractor is not
+supported by host archive tools: the existing isolated server DOSBox runs it
+once, moves its documentation into DOC\UC2 and removes UC2R3.EXE. Neither it
+nor POSTINST.BAT is published on the shared disk.
+To browse UC2's native manual after relocating documentation, change to
+`C:\COMPRESS\DOC\UC2` and run `UC -??`; UC remains reachable through PATH.
+
+UnLZEXE, DIET, PKLITE, ARC/ARCE and UC2 retain their original personal/commercial-use,
+evaluation and redistribution restrictions. Keeping documentation does not
+grant additional permission, and the collection is not wholly open source.
+No registration keys are included. Read each tool's original documents before
+using or redistributing it.
+
+The DOS 7-Zip build comes from [retro7zip](https://github.com/dajhorn/retro7zip)
+via the FreeDOS repository. Its reduced/minimal variants use less memory;
+they do not support every format handled by the aggregate build.
+
+RAR is a separate, optional `rar-dos-393` package from the
+[original RARLAB archive](https://www.rarlab.com/rar/rarx393.exe).
+The publisher identifies 3.93 as the
+[last DOS/OS2 release](https://winrar.es/descargas/39/descargar-rar-393-para-dos-32bits-os2-en-ingles).
+RAR32.EXE, EMX/RSX runtime files, DEFAULT.SFX and RARFILES.LST are installed
+directly in C:\COMPRESS too; manuals and licence notices go to DOC\RAR.
+Run `RAR32`. It can create and
+extract older RAR archives, not RAR5. It remains proprietary shareware with a
+40-day evaluation, not freeware. The operator confirmed redistribution
+permission; no registration key is included. Both archive packages declare
+`"path": "COMPRESS"`; the installer adds C:\COMPRESS to the shared PATH once.
 
 Antivirus includes the complete ThunderBYTE 8.03 evaluation package (TBAV)
 and the free, limited Norton AntiVirus Michelangelo Edition (NAV).
@@ -373,7 +501,7 @@ DOS program archive with suitable distribution terms was found; a freeware
 mention or old registration key alone is not enough to add a package.
 
 The manifest contains `cycles` (`auto`, `max` or a numeric DOSBox cycle count),
-`memory_mb` (4–64), `max_media_bytes` (default
+`memory_mb` (4–64), `text_rendering` (boolean, default true), `max_media_bytes` (default
 128 MiB), a `categories` list of unique `{id, label, icon}` entries and a `sources`
 list. Each source has:
 
@@ -437,14 +565,23 @@ list. Each source has:
   and exactly one of `text` (individual CP437 lines with CRLF) or `base64`
   (strict Base64 bytes, without whitespace or a data-URL prefix);
 - `license`: a human-readable provenance/licence note, not a permission check.
+- `path`: optional single directory relative to C, independent of `target`.
+  For example, `"path": "COMPRESS"` adds `C:\COMPRESS` and
+  `"path": "TOOLS/VC"` adds `C:\TOOLS\VC`. Absolute paths, traversal and
+  command separators are rejected. Only installed packages contribute entries;
+  equal directories are deduplicated, and uninstallation removes an entry
+  only when no remaining package declares it. This also provides tools to
+  isolated post-install DOSBox runs.
 - `post_install`: optional individual CP437 BAT lines, including optional
   `@ECHO OFF`. The server writes POSTINST.BAT and calls it once after extraction
   in native DOSBox with only a temporary C mounted, secure mode enabled and a
   120-second timeout. The package sees its final C:\target path and an unchanged
-  copy of available UTILS/BIN commands. Output outside the package, altered
+  copy of commands from installed packages' declared `path` directories.
+  Output outside the package, altered
   utility files, links, invalid names, excessive size/count and unsuccessful
-  completion are rejected. BAT remains in the installed package but is not
-  called on normal browser boots; existing completed installations are not
+  completion are rejected. The generated POSTINST.BAT is discarded before
+  publication; ordinary runtime BAT files are retained. It is never called on
+  normal browser boots; existing completed installations are not
   rerun. Apply a changed recipe by removing/reinstalling it or Rebuild DOS.
   This is for administrator-trusted software, not a general security sandbox
   for arbitrary DOS executables. Scripts are never executed in the host shell.
@@ -488,7 +625,45 @@ starts leave optional packages on completed base disks frozen; required-package
 receipts/files are checked before boot and missing tools are repaired. Use Rebuild DOS C to
 apply a changed recipe from scratch. User overlays are not rewritten. Paths,
 case-insensitive duplicates, file counts and combined byte sizes are checked.
-The default Volkov Commander entry demonstrates `files` with `START.BAT`.
+When any source declares `path`, the installer manages the shared
+AUTOEXEC.BAT's SET PATH line during initialization and explicit package
+changes. Paths come first in manifest order, followed by the baseline from
+the root AUTOEXEC.BAT definition (Z:\ in the default manifest). Put additional
+permanent search directories in that configured baseline; manually editing
+the generated SET PATH line is not persistent. Other existing boot lines are
+preserved. If no SET PATH exists, it is inserted before the first program
+launch, following a leading @ECHO OFF if present. Normal starts of a completed
+disk do not rewrite this line. Private AUTOEXEC.BAT overlays remain independent
+and can override the shared file, including its PATH.
+
+The default Volkov Commander entry demonstrates `files` with `START.BAT`
+and the binary `VC.INI` encoded as Base64.
+
+For a targeted forced reinstall, the server-side Python API accepts
+`store.configure(selected_ids, reinstall=[...])`. Include every package to
+retain in `selected_ids`; `reinstall` must be a subset after mandatory packages
+are included. Only those packages' recorded owned files are removed from the
+staged generation, and their receipts are cleared so the normal installer
+extracts them again. Root files, files owned by surviving packages, unowned
+manual files and private overlays remain protected. Old files no longer in the
+recipe disappear only if owned exclusively by a replaced package. Downloads
+are reused; this does not force another network transfer. Publication and
+backups use the same atomic workflow as other package changes. When invoking
+this directly for maintenance, stop the web server first to exclude concurrent
+writers. This is not an HTTP endpoint or a change to ordinary Apply behavior.
+DOS Apply prepares up to three inputs while publishing each completed package
+in its own staged transaction. Earlier published packages survive a later
+download, post-install or publication failure; restart/retry checks receipts and
+owned files before skipping them. The required boot tools publish as one group,
+and unchecked packages are removed only after requested additions succeed.
+Unchanged files can share hard-linked storage across staging/backups, with a
+copy fallback on unsupported filesystems; changed files are always replaced
+atomically, never edited through those links.
+`Awaiting installation` means extracted input is ready;
+`Awaiting publication` means installation into staging has finished. Such rows
+remain unfinished until that package's live disk generation and receipt are
+published successfully, not until every selected download finishes. Existing
+published queue rows do not revert to waiting during later package transactions.
 
 Root-level `files` uses exactly the same list of `path` + `text` or `base64`
 definitions as package `sources[].files`. Root paths start at C, while package

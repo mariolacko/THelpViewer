@@ -2,11 +2,11 @@
 (function () {
 "use strict";
 const TV = window.THelpViewerTV;
-const { TVDialog, TVRect, TVGroup, TVLabel, TVListBox, TVCheckBoxes,
+const { TVDialog, TVRect, TVGroup, TVLabel, TVInputLine, TVListBox, TVCheckBoxes,
     TVButton, TVInfoBox, TVInfoRow, TVMessageBox, messageBox, TVLoginDialog, TVRegistrationDialog,
-    TVProgressDialog, bfDefault, evCommand, evBroadcast, sfDisabled, sfModal, sfVisible,
+    TVProgressDialog, bfDefault, evCommand, evBroadcast, evKeyDown, sfDisabled, sfModal, sfVisible,
     sbVertical, TVScrollBar, TVPoint, gfGrowLoX, gfGrowLoY, gfGrowHiX, gfGrowHiY,
-    wrapTextLines, TV_HELP_CONTEXTS } = TV;
+    wrapTextLines, normalizeSearchText, TV_HELP_CONTEXTS } = TV;
 
 function languageFlag(language) {
     const region = language?.split("-")[1] || ({ cs: "CZ", sk: "SK", en: "GB", de: "DE", fr: "FR", es: "ES",
@@ -22,13 +22,16 @@ class TVPackagesDialog extends TVDialog {
         const midi = this.kind === "midi";
         const groupsRight = this.kind === "dos" ? 30 : 29;
         const right = this.size.x - 4;
-        this.categories = new TVListBox(new TVRect(2, 1, groupsRight, midi ? 11 : 13));
+        this.filterInput = new TVInputLine(new TVRect(11, 0, right, 1), 255);
+        this.filterLabel = new TVLabel(new TVRect(2, 0, 11, 1), "~F~ilter:", this.filterInput);
+        this.filterText = "";
+        this.categories = new TVListBox(new TVRect(2, 2, groupsRight, midi ? 11 : 13));
         this.categories.hScrollBar = new TVScrollBar(new TVRect());
-        this.items = new TVCheckBoxes(new TVRect(32, 1, right, 11));
+        this.items = new TVCheckBoxes(new TVRect(32, 2, right, 11));
         this.items.vScrollBar = new TVScrollBar(new TVRect(), sbVertical);
         this.items.hScrollBar = new TVScrollBar(new TVRect());
-        this.categoryLabel = new TVLabel(new TVRect(2, 0, groupsRight, 1), "~G~roups", this.categories);
-        this.itemLabel = new TVLabel(new TVRect(32, 0, right, 1), "~V~ersions", this.items);
+        this.categoryLabel = new TVLabel(new TVRect(2, 1, groupsRight, 2), "~G~roups", this.categories);
+        this.itemLabel = new TVLabel(new TVRect(32, 1, right, 2), "~V~ersions", this.items);
         this.enabled = new TVCheckBoxes(new TVRect(2, 12, 29, 13));
         this.groupAll = new TVCheckBoxes(new TVRect(32, 12, right, 13), [{ label: "Selec~t~ / Deselect All" }]);
         this.descriptionRows = Array.from({ length: 3 }, (_item, row) => new TVInfoRow(new TVRect(0, row + 1, right - 4, row + 2)));
@@ -41,14 +44,14 @@ class TVPackagesDialog extends TVDialog {
         this.closeButtonView = new TVButton(new TVRect(right - (midi ? 11 : 13), 20, right, 22), "~C~lose", "packages-close");
         this.categories.growMode = gfGrowHiY;
         this.items.growMode = gfGrowHiX | gfGrowHiY;
-        this.itemLabel.growMode = gfGrowHiX;
+        this.itemLabel.growMode = this.filterInput.growMode = gfGrowHiX;
         this.groupAll.growMode = this.descriptionBox.growMode = gfGrowHiX | gfGrowLoY | gfGrowHiY;
         for (const view of [this.enabled, this.indexButton, this.selectAllButton, this.deselectAllButton, this.applyButton]) {
             view.growMode = gfGrowLoY | gfGrowHiY;
         }
         this.refreshButton.growMode = this.closeButtonView.growMode = gfGrowLoX | gfGrowHiX | gfGrowLoY | gfGrowHiY;
         this.insert(new TVGroup(new TVRect(0, 0, this.size.x - 2, this.size.y - 2)).insertAll([
-            this.indexButton, this.categoryLabel, this.categories, this.itemLabel, this.items,
+            this.filterLabel, this.filterInput, this.indexButton, this.categoryLabel, this.categories, this.itemLabel, this.items,
             this.enabled, this.groupAll, this.descriptionBox, this.selectAllButton, this.deselectAllButton, this.applyButton,
             this.refreshButton, this.closeButtonView,
         ]));
@@ -68,6 +71,7 @@ class TVPackagesDialog extends TVDialog {
             this.categories.newList([]); this.items.setItems([]);
             this.enabled.setItems([]); this.groupAll.setData(0);
             void this.loadChoices();
+            this.filterInput.focus();
         }
     }
     close() { this.requestVersion += 1; super.close(); }
@@ -123,9 +127,10 @@ class TVPackagesDialog extends TVDialog {
         this.selectAllButton.setState(sfDisabled, empty); this.deselectAllButton.setState(sfDisabled, empty);
         const source = this.draft?.sources?.find((item) => item.id === this.category);
         const optional = this.items.options.flatMap((item, index) => item.required ? [] : [index]);
+        const futureAlbums = this.kind === "midi" && source && !this.filterText;
         this.indexButton.setState(sfDisabled, !this.valid || !source || source.indexed || Boolean(this.indexTask));
-        this.groupAll.setState(sfDisabled, !this.valid || (!optional.length && !source));
-        this.groupAll.setData(this.kind === "midi" && source?.all_albums
+        this.groupAll.setState(sfDisabled, !this.valid || (!optional.length && !futureAlbums));
+        this.groupAll.setData(futureAlbums && source.all_albums
             || optional.length > 0 && optional.every((index) => this.items.mark(index)) ? 1 : 0);
     }
 
@@ -169,10 +174,26 @@ class TVPackagesDialog extends TVDialog {
         const draft = this.draft, category = this.category;
         for (const item of draft.packages || []) { if (item.required) { draft.selected.add(item.id); } }
         this.items.setItems([]); this.category = null;
-        this.categories.newList(draft.categories);
+        this.categories.newList(draft.categories.filter((item) => !this.filterText
+            || normalizeSearchText(item.label).includes(this.filterText) || this.matchingItems(item.id).length));
         const index = this.categories.items.findIndex((item) => item.id === category);
         this.categories.select(index >= 0 ? index : 0); this.selectCategory(this.categories.selectedItem()?.id);
         this.valid = true; this.updateButtons();
+    }
+
+    matchingItems(category) {
+        const draft = this.draft, group = draft?.categories.find((item) => item.id === category);
+        const items = this.kind === "midi" ? draft?.sources.find((item) => item.id === category)?.albums || []
+            : (draft?.packages || []).filter((item) => item.category === category);
+        return items.filter((item) => !this.filterText || normalizeSearchText([
+            group?.label, item.label, item.name, item.description,
+        ].filter(Boolean).join(" ")).includes(this.filterText));
+    }
+
+    applyFilter() {
+        this.filterText = normalizeSearchText(this.filterInput.getData().trim());
+        if (!this.valid) { return; }
+        this.rememberSelection(); this.renderDraft();
     }
 
     rememberSelection() {
@@ -180,7 +201,10 @@ class TVPackagesDialog extends TVDialog {
         if (!draft || !this.category) { return; }
         if (this.kind === "midi") {
             const source = draft.sources.find((item) => item.id === this.category);
-            if (source) { source.albums.forEach((album, index) => { album.selected = this.items.mark(index); }); }
+            const selected = new Map(this.items.options.map((item, index) => [item.id, this.items.mark(index)]));
+            if (source) { source.albums.forEach((album) => {
+                if (selected.has(album.id)) { album.selected = selected.get(album.id); }
+            }); }
         } else {
             this.items.options.forEach((item, index) => {
                 if (item.required || this.items.mark(index)) { draft.selected.add(item.id); } else { draft.selected.delete(item.id); }
@@ -194,9 +218,9 @@ class TVPackagesDialog extends TVDialog {
         if (this.kind === "midi") {
             const source = draft?.sources.find((item) => item.id === this.category);
             this.enabled.setItems(source ? [{ label: "~E~nable source", checked: source.selected }] : []);
-            this.items.setItems((source?.albums || []).map((album) => ({ ...album, label: album.name, checked: album.selected })));
+            this.items.setItems(this.matchingItems(this.category).map((album) => ({ ...album, label: album.name, checked: album.selected })));
         } else {
-            this.items.setItems((draft?.packages || []).filter((item) => item.category === this.category).map((item) => ({
+            this.items.setItems(this.matchingItems(this.category).map((item) => ({
                 ...item, checked: item.required || draft.selected.has(item.id), disabled: Boolean(item.required),
                 label: this.packageLabel(item),
             })));
@@ -216,7 +240,8 @@ class TVPackagesDialog extends TVDialog {
     updateDescription() {
         const item = this.items.options[this.items.sel];
         const text = item ? (this.kind === "midi" ? item.name : item.description || "No description available.")
-            : this.kind === "midi" ? "No cached albums. Use Load albums to read this source." : "No packages in this group.";
+            : this.filterText ? "No matching packages or cached albums."
+                : this.kind === "midi" ? "No cached albums. Use Load albums to read this source." : "No packages in this group.";
         const lines = text.split("\n").flatMap((line) => wrapTextLines(line, this.descriptionBox.innerW - 1));
         this.descriptionRows.forEach((row, index) => this.descriptionBox.updateRow(row, lines[index] || ""));
     }
@@ -227,7 +252,7 @@ class TVPackagesDialog extends TVDialog {
         this.rememberSelection();
         if (this.kind === "midi") {
             const source = this.draft?.sources.find((item) => item.id === this.category);
-            if (source) { source.all_albums = all; }
+            if (source) { source.all_albums = all && !this.filterText; }
         }
         this.updateButtons();
     }
@@ -336,7 +361,9 @@ class TVPackagesDialog extends TVDialog {
     handleEvent(event) {
         super.handleEvent(event);
         if (event.what === evBroadcast) {
-            if (event.command === "cluster-press") {
+            if (event.infoPtr === this.filterInput && event.nativeEvent?.type === "input") {
+                this.applyFilter();
+            } else if (event.command === "cluster-press") {
                 if (!this.valid) { this.clearEvent(event); return; }
                 else if (event.infoPtr === this.items) {
                     this.rememberSelection();
@@ -351,6 +378,10 @@ class TVPackagesDialog extends TVDialog {
                 } else { return; }
             } else if (event.command === "cluster-moved-to" && event.infoPtr === this.items) { this.updateDescription(); }
             else { return; }
+        } else if (event.what === evKeyDown && event.infoPtr === this.filterInput
+                && ["ArrowDown", "Enter"].includes(event.nativeEvent?.key)) {
+            if (this.items.options.length) { this.items.focus(); }
+            event.nativeEvent.preventDefault();
         } else if (event.what === evCommand) {
             switch (event.command) {
                 case "packages-index": this.loadAlbumIndex(); break;

@@ -1,5 +1,5 @@
-// File-on-demand adapter for the pinned DOSBox runtime; vendor files stay unchanged.
-importScripts(self.location.origin + "/assets/dos/emulators/wdosbox.js");
+// File-on-demand adapter for the pinned DOSBox runtime with native text cells.
+importScripts(self.location.origin + "/assets/dos/emulators/wdosbox.js?v=20261018a");
 
 const createDosbox = WDOSBOX;
 WDOSBOX = async function (options) {

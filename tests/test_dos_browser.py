@@ -17,8 +17,8 @@ from test_dos_prompt import floppy_image, cd_image
 
 
 @pytest.mark.skipif(NODE is None or CHROME is None, reason="Chrome and Node.js are required")
-@pytest.mark.parametrize("blocked_worker", [False, True])
-def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker):
+@pytest.mark.parametrize("blocked_worker,text_rendering", [(False, True), (True, True), (False, False)])
+def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker, text_rendering):
     with tempfile.TemporaryDirectory(prefix="thelp-dos-browser-") as temporary:
         root = Path(temporary).resolve()
         # DOS interaction must not race a modal rebuild of the developer's
@@ -28,7 +28,9 @@ def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker)
         (helps / "catalog.json").write_text("[]\n", encoding="utf-8")
         docs = root / "docs"
         docs.mkdir()
-        (root / "config.json").write_text('{"sources": [], "memory_mb":64, "allow_full_disk_fallback": true, "files": [{"path":"README.TXT","text":["Shared test disk"]}]}')
+        (root / "config.json").write_text(json.dumps({"sources": [], "memory_mb": 64,
+            "allow_full_disk_fallback": True, "text_rendering": text_rendering,
+            "files": [{"path": "README.TXT", "text": ["Shared test disk"]}]}))
         accounts = AccountStore(root / "var")
         accounts.create_user("player")
         # This fixture is an already configured DOS server, not first-run setup.
@@ -68,6 +70,18 @@ def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker)
         # BIOS mode 12h: 640x480 with a red last pixel; wait, then restore text.
         (store.root / "base" / "c" / "GFX480.COM").write_bytes(bytes.fromhex(
             "b81200cd10b8040c31dbb97f02badf01cd1031c0cd16b80300cd10cd20"))
+        # Direct B800 writes, not DOS stdout: 'A' and a CP437 full block.
+        (store.root / "base" / "c" / "TEXTMEM.COM").write_bytes(bytes.fromhex(
+            "b800b88ec026c7060000411f26c7060200db2e31c0cd16b80300cd10cd20"))
+        # Standard ROM 8x8 font switches an 80-column mode to 50 text rows.
+        (store.root / "base" / "c" / "TEXT50.COM").write_bytes(bytes.fromhex(
+            "b8121131dbcd1031c0cd16b80300cd10cd20"))
+        # BIOS uploads a custom solid glyph for A, paints it, waits, then restores
+        # the ROM font. The browser must never substitute CP437 for this glyph.
+        custom = bytearray.fromhex(
+            "0e07b81011bb0010b90100ba4100bd0000cd10b800b88ec026c7060000411f31c0cd16b80300cd10cd20")
+        custom[15:17] = (0x100 + len(custom)).to_bytes(2, "little")
+        (store.root / "base" / "c" / "CUSTOM.COM").write_bytes(custom + b"\xff" * 16)
         # Set the BIOS NumLock flag in this isolated test, independent of host LEDs.
         (store.root / "base" / "c" / "NUMON.COM").write_bytes(bytes.fromhex(
             "1eb840008ed8800e1700201fc3"))
@@ -99,7 +113,7 @@ def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker)
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             debugging = _wait_for_file(root / "chrome" / "DevToolsActivePort").splitlines()[0]
             script = r'''
-const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame, gameCommand, audioTest, softwarePath, softwareCommand, screenshotPath, softwareOutput] = process.argv.slice(1);
+const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame, gameCommand, audioTest, softwarePath, softwareCommand, screenshotPath, softwareOutput, textRendering] = process.argv.slice(1);
 (async () => {
  const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, {method:'PUT'})).json();
  const socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -149,7 +163,6 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   if(root.classList.contains('is-window-inactive')||left.getAttribute('data-tv-border-side')!=='║'
    ||right.getAttribute('data-tv-border-side')!=='║')throw new Error('Active DOS frame was not restored');
   const mover=root._tvResizer,before=mover.captureGeometry();
-  mover.lastMoveDown=0;
   root.querySelector('.tv-window-caption').dispatchEvent(new MouseEvent('mousedown',{clientX:100,clientY:100,buttons:1,bubbles:true,cancelable:true}));
   const maxLeft=mover.moveState.maxLeft,maxTop=mover.moveState.maxTop;
   for(let i=0;i<50;i++)document.dispatchEvent(new MouseEvent('mousemove',{clientX:110+i,clientY:110+i,buttons:1,bubbles:true}));
@@ -160,11 +173,27 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    ||root.classList.contains('is-moving')||mover.moveFrame!==null)throw new Error('DOS drag did not commit mouse-up position');
   mover.place(before);
  })()`);
+ // Send the complete real mouse sequence, not just a synthetic dblclick. The
+ // mover must not maximize on the second mousedown before TVWindow zooms.
+ const initialGeometry=await evaluate(`dos.root._tvResizer.captureGeometry()`);
+ for(let cycle=0;cycle<2;cycle++){
+  const point=await evaluate(`(()=>{const r=dos.root.querySelector('.tv-window-caption').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+  for(const clickCount of [1,2]){
+   await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount,...point});
+   await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount,...point});
+  }
+  await evaluate(`(()=>{
+   if(dos.root.classList.contains('is-maximized')||Boolean(dos.zoomGeometry)!==${cycle===0})throw Error('Double-click bypassed DOS proportional Zoom');
+   const rect=dos.view.root.getBoundingClientRect(),ratio=dos.view.canvas.height/dos.view.canvas.width;
+   if(rect.height<rect.width*ratio-1||rect.height-rect.width*ratio>17)throw Error('Double-click stretched DOS screen');
+  })()`);
+ }
+ const doubleClickGeometry=await evaluate(`dos.root._tvResizer.captureGeometry()`);
+ if(JSON.stringify(doubleClickGeometry)!==JSON.stringify(initialGeometry))throw Error('Double-click Zoom back lost geometry');
  const result=await evaluate(`(async()=>{
   const canvas=dos.view.canvas;
   console.log('DOS flags',dos.active,dos.paused,document.hidden,canvas.width,canvas.height,dos.view.owner===dos,dos.view.listeners.length);
   await new Promise(r=>setTimeout(r,1000));
-  dos.view.ci.events().onStdout(text=>console.log('DOS stdout: '+text));
   const frameOkay=!dos.root.querySelector('.tv-scrollbar')&&getComputedStyle(canvas).backgroundColor==='rgb(0, 0, 0)';
   const bottom=dos.root.querySelector('.tv-bottom-bar');
   const bottomFill=bottom.querySelector('.tv-border-fill:not(.tv-control-gap)');
@@ -175,10 +204,12 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    .every(el=>getComputedStyle(el).backgroundColor==='rgb(0, 0, 0)');
   const nestedLoaded=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/FREEDOS/APPINFO/TEST.LSM')).includes('nested software');
   const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
-  const rendered=pixels.some((value,index)=>index%4!==3&&value>0);
+  const rendered=dos.view.textMode ? dos.view.textScreen.root.textContent.includes('C:') : pixels.some((value,index)=>index%4!==3&&value>0);
   async function command(text,keypad=false){
-   canvas.focus();
+   if(window.commandCi!==dos.view.ci){window.commandCi=dos.view.ci;dos.view.ci.events().onStdout(text=>console.log('DOS command stdout: '+text));}
+   dos.view.focus();
    for(const char of text){
+    while(dos.snapshotting||dos.busy){await new Promise(r=>setTimeout(r,20));}
     const shifted=char==='>'||char===':'||char==='_';
     const keypadCode=keypad?({'.':'NumpadDecimal','/':'NumpadDivide','*':'NumpadMultiply','-':'NumpadSubtract','+':'NumpadAdd'}[char]||(/^[0-9]$/.test(char)?'Numpad'+char:'')):'';
     const code=keypadCode||(char==='>'?'Period':char===' '?'Space':char==='.'?'Period':char==='/'?'Slash':char===':'?'Semicolon':char==='-'||char==='_'?'Minus':char.charCodeAt(0)===92?'Backslash':/^[0-9]$/.test(char)?'Digit'+char:'Key'+char.toUpperCase());
@@ -191,9 +222,42 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    await new Promise(r=>setTimeout(r,250));
   }
   window.dosCommand=command;
+  await command('custom');
+  await new Promise((resolve,reject)=>{const end=Date.now()+3000;const check=()=>{
+   const p=canvas.getContext('2d').getImageData(0,0,8,16).data;
+   if(!dos.view.textMode&&!canvas.hidden&&p.every((v,i)=>i%4===3||v===255)){resolve();return;}
+   if(Date.now()>end){reject(Error('Custom DOS font did not retain native pixel rendering: '+JSON.stringify({text:dos.view.textMode,hidden:canvas.hidden,pixels:Array.from(p.slice(0,32)),width:canvas.width,height:canvas.height})));return;}setTimeout(check,30);
+  };check();});
+  await command('');
+  if(${JSON.stringify(textRendering)}==='false'){
+   await new Promise(resolve=>setTimeout(resolve,250));
+   if(dos.session.text_rendering!==false||dos.view.textMode||canvas.hidden
+    ||!canvas.getContext('2d').getImageData(0,0,640,400).data.some((v,i)=>i%4!==3&&v>0))
+    throw Error('Configured canvas-only rendering did not display DOS text');
+   await dos.stop(false);return {smokeOnly:true,canvasOnly:true};
+  }
+  if(!dos.view.textMode||!canvas.hidden||dos.view.textScreen.owner!==dos.view)
+   throw Error('Standard DOS text was not rendered by the shared character view');
+  await command('textmem');
+  await new Promise((resolve,reject)=>{const end=Date.now()+3000;const check=()=>{
+   const screen=dos.view.textScreen.screen;
+   if(dos.view.textMode&&screen.cells[0][0]===65&&screen.cells[1][0]===219){resolve();return;}
+   if(Date.now()>end){reject(Error('Direct video-memory cells were not published'));return;}setTimeout(check,30);
+  };check();});
+  const chars=dos.view.textScreen.root.querySelectorAll('.tv-text-screen-row > span');
+  if(chars[0].textContent!=='A'||chars[1].textContent!=='█'||getComputedStyle(chars[0]).color!=='rgb(255, 255, 255)'
+   ||getComputedStyle(chars[0]).backgroundColor!=='rgb(0, 0, 170)')throw Error('Native glyph/attribute palette differs');
+  await command('');
+  await command('text50');
+  await new Promise((resolve,reject)=>{const end=Date.now()+3000;const check=()=>{
+   if(dos.view.textMode&&dos.view.textScreen.screen.rows===50){resolve();return;}
+   if(Date.now()>end){reject(Error('80x50 text mode was not published'));return;}setTimeout(check,30);
+  };check();});
+  await command('');
   if(${JSON.stringify(softwarePath)}){
    await command('cd '+String.fromCharCode(92)+${JSON.stringify(softwarePath)}.replaceAll('/',String.fromCharCode(92)).toLowerCase());
    const before=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+   const beforeText=JSON.stringify(dos.view.textScreen.screen?.cells);
    const commands=${JSON.stringify(softwareCommand)};
    for(const line of (commands.startsWith('[')?JSON.parse(commands):[commands])){await command(line);}
    await new Promise(resolve=>setTimeout(resolve,2000));
@@ -208,11 +272,14 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    }
    const running=await dos.view.ci.getRunningProgram();
    const after=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
-   const changed=after.some((value,index)=>index%4!==3&&value!==before[index]);
+   const changed=dos.view.textMode ? JSON.stringify(dos.view.textScreen.screen?.cells)!==beforeText
+    : after.some((value,index)=>index%4!==3&&value!==before[index]);
    if(!changed||!running||running.toUpperCase().includes('COMMAND.COM')){
     let log='';try{log=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/'+${JSON.stringify(softwarePath)}+'/BUILD.LOG'));}catch{}
     throw Error('Software did not start: '+running+' '+log);
    }
+   dos.root._tvResizer.maximize();
+   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
    return {smokeOnly:true,software:${JSON.stringify(softwarePath)},running,rendered:true};
   }
   let audibleSamples=0;
@@ -261,7 +328,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   const textGeometry=dos.root._tvResizer.captureGeometry();
   await command('gfx480');
   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
-   if(canvas.width===640&&canvas.height===480){resolve(true);return;}
+   if(canvas.width===640&&canvas.height===480&&!dos.view.textMode&&!canvas.hidden){resolve(true);return;}
    if(Date.now()>deadline){reject(new Error('640x480 video mode was not rendered'));return;}setTimeout(check,50);
   };check();});
   const highGeometry=dos.root._tvResizer.captureGeometry(),client=canvas.getBoundingClientRect();
@@ -295,14 +362,14 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    throw new Error('DOS default size lost video ratio or restarted emulation: '+JSON.stringify(defaultGeometry));
   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
-   if(canvas.height===400&&dos.root._tvResizer.captureGeometry().rows===textGeometry.rows){resolve(true);return;}
+   if(canvas.height===400&&dos.view.textMode&&canvas.hidden&&dos.root._tvResizer.captureGeometry().rows===textGeometry.rows){resolve(true);return;}
    if(Date.now()>deadline){reject(new Error('DOS frame did not shrink back to text mode'));return;}setTimeout(check,50);
   };check();});
   await command('gfx');
   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
    const pixel=canvas.getContext('2d').getImageData(100,100,1,1).data;
    if(canvas.width===320&&canvas.height===200&&pixel[0]>100&&pixel[1]===0&&pixel[2]===0){resolve(true);return;}
-   if(Date.now()>deadline){reject(new Error('DOS VGA graphics were not rendered'));return;}setTimeout(check,50);
+   if(Date.now()>deadline){reject(new Error('DOS VGA graphics were not rendered: '+JSON.stringify({active:dos.active,paused:dos.paused,busy:dos.busy,dragging:dos.getState(THelpViewerTV.sfDragging),width:canvas.width,height:canvas.height,text:dos.view.textMode})));return;}setTimeout(check,50);
   };check();});
   const graphics=true;
   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
@@ -335,7 +402,15 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   const revision=dos.session.revision;
   const pause=document.querySelector('[data-tv-command="dos-pause"]');pause.click();
   const paused=dos.paused;
-  document.querySelector('[data-tv-command="dos-pause"]').click();
+  const panel=dos.view.pauseDialog,vm=dos.view.ci;
+  if(!panel.isOpen()||panel.owner!==dos.view||panel.flags!==0||!panel.closeButton.hidden
+   ||getComputedStyle(dos.view.surface).filter!=='grayscale(1)')throw Error('Manual pause panel/gray screen missing');
+  const box=panel.dialog.getBoundingClientRect();
+  panel.startDrag({target:panel.titlebar,clientX:1,clientY:1});
+  if(panel.dragState||panel.dialog.getBoundingClientRect().left!==box.left)throw Error('Pause panel can be moved');
+  panel.overlay.querySelector('[data-tv-command="dos-resume"]').click();
+  if(dos.paused||panel.isOpen()||dos.view.ci!==vm||getComputedStyle(dos.view.surface).filter!=='none')
+   throw Error('Resume did not restore the same running DOS instance');
   await dos.restart(${JSON.stringify(mediaId)});
   console.log('DOS check: restarted');
   const restored=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/STATE.TXT')).toLowerCase().includes('hello');
@@ -364,6 +439,10 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    const programAfterMount=await dos.view.ci.getRunningProgram();
    if(!programAfterMount.toUpperCase().includes('GFX')||canvas.width!==320||canvas.height!==200)throw Error('Local mount interrupted the running VGA program: '+JSON.stringify({programAfterMount,width:canvas.width,height:canvas.height}));
    for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(resolve=>setTimeout(resolve,30));}
+   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=async()=>{
+    if(/^(COMMAND|DOSBOX)$/.test((await dos.view.ci.getRunningProgram()).trim().toUpperCase())){resolve();return;}
+    if(Date.now()>deadline){reject(Error('Graphics fixture did not return to the command shell'));return;}setTimeout(check,30);
+   };void check();});
    if(!dos.localDrive||!dos.view.ci)throw Error('Local mount failed: '+dos.status.root.textContent);
    const connectedMount=dos.localDrive.id;
    try{await dos.localConnection.replace({mount:'invalid',writable:true,maxFileBytes:1024,entries:[{path:'../OUTSIDE',directory:true}]});throw Error('Accepted unsafe staged local path');}
@@ -378,6 +457,8 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
     ...new TextEncoder().encode('D:'+String.fromCharCode(92)+'INPUT.TXT'),0]));
    await command('rescan -a');
    await command('hold');
+   const holding=await dos.view.ci.getRunningProgram();
+   if(!holding.toUpperCase().includes('HOLD'))throw Error('Local open-file fixture did not start: '+holding);
    try{await dos.changeLocalFolder(null);throw Error('Disconnected an open local file');}
    catch(error){if(!/Close files/.test(error.message))throw error;}
    if(dos.view.ci!==originalCi||!dos.localDrive)throw Error('Failed disconnect replaced the running DOS session');
@@ -423,6 +504,11 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
  }
  if(!result.frameOkay||!result.bottomOkay||!result.allBlack||!result.nestedLoaded||!result.rendered||!result.paused||!result.restored||!result.deleted||!result.mounted||!result.cdMounted||result.revision<1||result.account!=='player'||errors.length){throw new Error(JSON.stringify({result,errors}));}
  await evaluate(`(()=>{
+  dos.setActive(false);
+  if(dos.view.pauseDialog.isOpen()||dos.view.root.classList.contains('is-paused'))throw Error('Inactivity opened the manual pause panel');
+  dos.setActive(true);
+ })()`);
+ await evaluate(`(()=>{
   const resizer=dos.root._tvResizer,geometry=resizer.captureGeometry(),ci=dos.view.ci;
   const original={pause:ci.pause,resume:ci.resume,motion:ci.sendMouseMotion,button:ci.sendMouseButton};
   let pauses=0,resumes=0,mouse=0;
@@ -430,18 +516,21 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   ci.resume=function(){resumes++;return original.resume.call(this);};
   ci.sendMouseMotion=function(...args){mouse++;return original.motion.apply(this,args);};
   ci.sendMouseButton=function(...args){mouse++;return original.button.apply(this,args);};
-  const down=()=>{resizer.lastMoveDown=0;resizer.moveHandle.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,button:0,buttons:1,clientX:100,clientY:100}));};
+  const down=()=>{resizer.moveHandle.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,button:0,buttons:1,clientX:100,clientY:100}));};
   try{
    dos.setActive(true);down();
    if(!dos.getState(THelpViewerTV.sfDragging)||!resizer.moveState||!pauses)throw Error('DOS movement did not pause through sfDragging');
+   if(getComputedStyle(dos.view.surface).filter!=='grayscale(1)'||dos.view.pauseDialog.isOpen())throw Error('Dragging did not gray DOS without a pause panel');
    dos.view.canvas.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,cancelable:true,buttons:1,clientX:140,clientY:140}));
    if(!resizer.moveState||mouse)throw Error('DOS stole the frame drag over its canvas');
    const resumed=resumes;
    dos.view.canvas.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,button:0,buttons:0,clientX:160,clientY:160}));
    if(resizer.moveState||dos.getState(THelpViewerTV.sfDragging)||dos.root.classList.contains('is-moving')||mouse||resumes<=resumed)throw Error('Mouse-up over DOS did not finish/resume the frame drag');
+   if(getComputedStyle(dos.view.surface).filter!=='none')throw Error('Dragging left DOS gray');
    dos.paused=true;dos.syncPause();down();const manuallyPaused=resumes;
    window.dispatchEvent(new Event('blur'));
    if(resizer.moveState||dos.getState(THelpViewerTV.sfDragging)||!dos.paused||resumes!==manuallyPaused)throw Error('Blur left a stuck drag or lost manual DOS pause');
+   if(getComputedStyle(dos.view.surface).filter!=='grayscale(1)'||!dos.view.pauseDialog.isOpen())throw Error('Ending a drag lost manual Pause presentation');
   }finally{ci.pause=original.pause;ci.resume=original.resume;ci.sendMouseMotion=original.motion;ci.sendMouseButton=original.button;dos.paused=false;dos.syncPause();resizer.place(geometry);}
  })()`);
  await evaluate(`(()=>{
@@ -455,10 +544,29 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
  })()`);
  await evaluate(`dos.view.canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',altKey:true,bubbles:true,cancelable:true}))`,true);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
-  const r=dos.view.canvas.getBoundingClientRect();
-  if(document.fullscreenElement===dos.view.canvas&&!dos.root.classList.contains('is-maximized')&&Math.abs(r.width-innerWidth)<1&&Math.abs(r.height-innerHeight)<1){resolve(true);return;}if(Date.now()>deadline){reject(new Error('Native canvas fullscreen failed'));return;}setTimeout(check,50);
+  const r=dos.view.root.getBoundingClientRect();
+  if(document.fullscreenElement===dos.view.root&&!dos.root.classList.contains('is-maximized')&&Math.abs(r.width-innerWidth)<1&&Math.abs(r.height-innerHeight)<1){resolve(true);return;}if(Date.now()>deadline){reject(new Error('Native canvas fullscreen failed'));return;}setTimeout(check,50);
  };check();})`);
  await evaluate(`(()=>{const key=()=>dos.view.canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Pause',code:'Pause',altKey:true,bubbles:true,cancelable:true}));key();if(!dos.paused)throw new Error('Alt-Pause did not pause DOS');key();if(dos.paused)throw new Error('Alt-Pause did not resume DOS');})()`);
+ await evaluate(`(()=>{
+  dos.dispatchEvent(new THelpViewerTV.TVEvent(THelpViewerTV.evCommand,{command:'dos-pause'}));
+  const panel=dos.view.pauseDialog,rect=panel.dialog.getBoundingClientRect();
+  if(!panel.isOpen()||!document.fullscreenElement.contains(panel.dialog)||rect.left<0||rect.top<0
+   ||rect.right>innerWidth||rect.bottom>innerHeight)throw Error('Pause panel is outside native fullscreen');
+  for(const el of [panel.dialog,panel.titlebar,panel.dialog.querySelector('.tv-static-text')]){
+   const style=getComputedStyle(el);
+   if(!style.fontFamily.includes('IBM VGA')||parseFloat(style.fontSize)!==16)
+    throw Error('Embedded TVDialog lost the shared font: '+style.fontFamily+' / '+style.fontSize);
+  }
+ })()`);
+ if(screenshotPath){const capture=await send('Page.captureScreenshot',{format:'png'});require('node:fs').writeFileSync(screenshotPath,Buffer.from(capture.data,'base64'));}
+ await evaluate(`(()=>{
+  const panel=dos.view.pauseDialog;
+  dos.view.focus();
+  if(document.activeElement!==panel.dialog)throw Error('DOS focus escaped the pause panel');
+  panel.dialog.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));
+  if(dos.paused||panel.isOpen())throw Error('Enter did not press the default Resume button');
+ })()`);
  // A fullscreen key can target the document after browser focus changes.
  await evaluate(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',altKey:true,bubbles:true,cancelable:true}))`,true);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
@@ -466,7 +574,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
  };check();})`);
  await evaluate(`dos.view.canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'NumpadEnter',altKey:true,bubbles:true,cancelable:true}))`,true);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
-  if(document.fullscreenElement===dos.view.canvas){resolve(true);return;}if(Date.now()>deadline){reject(new Error('DOS fullscreen re-entry failed'));return;}setTimeout(check,50);
+  if(document.fullscreenElement===dos.view.root){resolve(true);return;}if(Date.now()>deadline){reject(new Error('DOS fullscreen re-entry failed'));return;}setTimeout(check,50);
  };check();})`);
  await evaluate(`dos.view.canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'r',code:'KeyR',ctrlKey:true,altKey:true,bubbles:true,cancelable:true}))`);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
@@ -480,9 +588,9 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
  };check();})`);
  await evaluate(`dos.view.canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',altKey:true,bubbles:true,cancelable:true}))`,true);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
-  if(document.fullscreenElement===dos.view.canvas){resolve(true);return;}if(Date.now()>deadline){reject(new Error('DOS fullscreen after cancelling restart failed'));return;}setTimeout(check,50);
+  if(document.fullscreenElement===dos.view.root){resolve(true);return;}if(Date.now()>deadline){reject(new Error('DOS fullscreen after cancelling restart failed'));return;}setTimeout(check,50);
  };check();})`);
- await evaluate(`(async()=>{await dos.restart();if(document.fullscreenElement!==dos.view.canvas)throw new Error('Restart lost DOS fullscreen');})()`);
+ await evaluate(`(async()=>{await dos.restart();if(document.fullscreenElement!==dos.view.root)throw new Error('Restart lost DOS fullscreen');})()`);
  await evaluate(`(()=>{dos.view.canvas.dispatchEvent(new KeyboardEvent('keydown',{key:'m',code:'KeyM',ctrlKey:true,altKey:true,bubbles:true,cancelable:true}));})()`);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
   const menu=document.querySelector('[data-tv-menu-bar] .tv-menu-popup:not([hidden])');
@@ -492,7 +600,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
  await evaluate(`dos.view.canvas.click()`);
  await evaluate(`document.querySelector('[data-tv-command="dos-fullscreen"]').click()`,true);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
-  if(document.fullscreenElement===dos.view.canvas){resolve(true);return;}if(Date.now()>deadline){reject(new Error('DOS fullscreen before EXIT failed'));return;}setTimeout(check,50);
+  if(document.fullscreenElement===dos.view.root){resolve(true);return;}if(Date.now()>deadline){reject(new Error('DOS fullscreen before EXIT failed'));return;}setTimeout(check,50);
  };check();})`);
  await evaluate(`(async()=>{dos.view.ci.events().onStdout(text=>console.log('EXIT stdout: '+text));console.log('EXIT flags',dos.active,dos.paused,document.hidden);await dosCommand('echo exit-save>exit.txt');await dosCommand('exit');})()`);
  await evaluate(`new Promise((resolve,reject)=>{const deadline=Date.now()+5000;const check=()=>{
@@ -583,11 +691,11 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
                 launch = next(source["launch"] for source in sources if f"\\GAMES\\{extra_game} then " in source.get("launch", ""))
                 game_command = launch.split(" then ", 1)[1]
             result = subprocess.run([NODE, "-e", script, debugging, url, token, media_id, cd_id, str(blocked_worker).lower(), installed_games, extra_game, game_command, str(audio_test).lower(),
-                extra_software, os.environ.get("THELP_DOS_TEST_SOFTWARE_COMMAND", "start"), os.environ.get("THELP_DOS_TEST_SCREENSHOT", ""), os.environ.get("THELP_DOS_TEST_SOFTWARE_OUTPUT", "")], capture_output=True, text=True, timeout=180)
+                extra_software, os.environ.get("THELP_DOS_TEST_SOFTWARE_COMMAND", "start"), os.environ.get("THELP_DOS_TEST_SCREENSHOT", ""), os.environ.get("THELP_DOS_TEST_SOFTWARE_OUTPUT", ""), str(text_rendering).lower()], capture_output=True, text=True, timeout=180)
             assert result.returncode == 0, result.stderr
             if extra_software:
                 print(result.stdout)
-            if not blocked_worker and not extra_game and not extra_software:
+            if text_rendering and not blocked_worker and not extra_game and not extra_software:
                 trace = (root / "server.log").read_text()
                 assert "name=GFX.COM" in trace
                 assert "name=UNUSED.DAT" not in trace

@@ -4962,16 +4962,14 @@ class TVProgressDialog extends TVDialog {
         if (!status.active) {
             return status.errors ? "!" : !rows.length ? "↓" : rows.every((item) => item.state === "done") ? "✓" : "–";
         }
-        const stages = new Map();
+        const stages = new Set();
         rows.filter((item) => item.state === "running").forEach((item) => {
-            const symbol = this.downloadSymbol(item);
-            if (!stages.has(symbol)) { stages.set(symbol, []); }
-            stages.get(symbol).push(this.downloadPercent(item));
+            stages.add(this.downloadSymbol(item));
         });
-        const text = [...stages].map(([symbol, values]) => symbol + (values.every(Number.isFinite)
-            ? ` ${Math.floor(values.reduce((sum, value) => sum + value, 0) / values.length)}%` : "")).join(" ");
-        return (status.errors ? "! " : "") + (text || (rows.some((item) => item.state === "waiting") ? "◷"
-            : rows.some((item) => item.state === "pending") ? "…" : "⚙"));
+        const text = [...stages].join(" ") || (rows.some((item) => item.state === "waiting") ? "◷"
+            : rows.some((item) => item.state === "pending") ? "…" : "⚙");
+        const percent = Math.max(0, Math.min(99, Math.floor(Number(status.percent) || 0)));
+        return (status.errors ? "! " : "") + text + ` ${percent}%`;
     }
 
     constructor(title = "Progress", initialSummary = "Preparing...") {

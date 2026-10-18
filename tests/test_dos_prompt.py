@@ -3,6 +3,7 @@ from dataclasses import replace
 import hashlib
 import io
 import json
+from pathlib import Path
 import struct
 import sqlite3
 import threading
@@ -15,7 +16,7 @@ import pytest
 from thelpviewer.server.accounts.sessions import new_session
 from thelpviewer.server.app import create_app
 from thelpviewer.server.config import load_config
-from thelpviewer.server.dos.packages import configured_files
+from thelpviewer.server.dos.packages import DosPackageExtractor, configured_files
 from thelpviewer.server.dos.config import select_dos_packages
 from thelpviewer.server.dos.store import DosPromptStore
 from thelpviewer.server.dos.paths import DosError, c_path
@@ -29,6 +30,30 @@ def store_at(tmp_path):
     store.prepare()
     assert store.state == "ready", store.error
     return store
+
+
+def test_text_rendering_option_does_not_rebuild_or_change_the_disk(tmp_path):
+    store = store_at(tmp_path)
+    try:
+        assert store.bundle(None)[1]["text_rendering"] is True
+        before = store.base_id, dict(store.files)
+        config = json.loads(store.config_path.read_text())
+        config["text_rendering"] = False
+        store.config_path.write_text(json.dumps(config))
+        store.prepare()
+        assert store.bundle(None)[1]["text_rendering"] is False
+        assert (store.base_id, dict(store.files)) == before
+    finally:
+        store.downloads.close()
+
+
+@pytest.mark.parametrize("value", ["false", 0, None, []])
+def test_text_rendering_requires_a_boolean(tmp_path, value):
+    from thelpviewer.server.dos.config import load_dos_config
+    config = tmp_path / "dos.json"
+    config.write_text(json.dumps({"sources": [], "text_rendering": value}))
+    with pytest.raises(DosError, match="text_rendering must be a boolean"):
+        load_dos_config(config)
 
 
 def test_package_selection_uninstalls_only_owned_files_and_preserves_private_and_shared_files(tmp_path, monkeypatch):
@@ -58,6 +83,88 @@ def test_package_selection_uninstalls_only_owned_files_and_preserves_private_and
     assert store.overlay(account)[1] == {"GAMES/SAVE.DAT": b"saved"}
     assert (store.root.parent / store.backup / "c" / "GAMES/GAME.EXE").read_bytes() == b"game"
     assert "two" not in json.loads(store.installed_path.read_text())
+
+
+@pytest.mark.parametrize("failure", [None, "prepare", "publication"])
+def test_selected_reinstall_replaces_owned_files_atomically_and_preserves_private_data(tmp_path, monkeypatch, failure):
+    fetched = []
+    def fetch(source, *_args, **_kwargs):
+        fetched.append(source["id"])
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, "w") as archive:
+            archive.writestr(source["id"].upper() + ".EXE", source["id"].encode())
+            archive.writestr("COMMON.DAT", b"shared runtime")
+            archive.writestr("OLD.TXT", b"old document")
+        return stream.getvalue()
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
+    sources = [{"id": ident, "required": ident != "keep", "url": f"https://packages.test/{ident}.zip",
+                "format": "zip", "target": "TOOLS", "members": [ident.upper() + ".EXE", "COMMON.DAT"]}
+               for ident in ("one", "two", "keep")]
+    sources[0]["members"].append("OLD.TXT")
+    sources[1]["files"] = [{"path": "TWO.INI", "text": ["old default"]}]
+    manifest = tmp_path / "dos.json"
+    manifest.write_text(json.dumps({"sources": sources}))
+    store = DosPromptStore(tmp_path / "dos", manifest)
+    try:
+        store.configure(["keep"])
+        account = uuid.uuid4().hex
+        store.save(account, payload(store, files={"TOOLS/TWO.INI": b"private preference"}))
+        (store.disk_dir / "TOOLS/MANUAL.TXT").write_bytes(b"not package-owned")
+        (store.disk_dir / "TOOLS/ONE.EXE").write_bytes(b"needs replacement")
+        before = {p.relative_to(store.disk_dir).as_posix(): p.read_bytes()
+                  for p in store.disk_dir.rglob("*") if p.is_file()}
+        receipt = store.installed_path.read_bytes()
+        sources[0]["members"].remove("OLD.TXT")
+        sources[1]["files"][0]["text"] = ["new default"]
+        manifest.write_text(json.dumps({"sources": sources}))
+        if failure == "prepare":
+            prepare = store._prepare_package
+            def fail(source, *args, **kwargs):
+                if source["id"] == "two":
+                    raise DosError("preparation failed")
+                return prepare(source, *args, **kwargs)
+            monkeypatch.setattr(store, "_prepare_package", fail)
+        elif failure == "publication":
+            write = __import__("thelpviewer.server.dos.store", fromlist=["atomic_file"]).atomic_file
+            def fail(path, contents):
+                if path == store._published_receipt:
+                    raise OSError("publication failed")
+                return write(path, contents)
+            monkeypatch.setattr("thelpviewer.server.dos.store.atomic_file", fail)
+        if failure:
+            with pytest.raises(DosError, match="failed"):
+                store.configure(["keep"], reinstall=["one", "two"])
+            assert store.installed_path.read_bytes() == receipt
+            assert {p.relative_to(store.disk_dir).as_posix(): p.read_bytes()
+                    for p in store.disk_dir.rglob("*") if p.is_file()} == before
+        else:
+            store.configure(["keep"], reinstall=["one", "two"])
+            assert store.files["TOOLS/ONE.EXE"] == b"one"
+            assert store.files["TOOLS/TWO.INI"] == b"new default\r\n"
+            assert "TOOLS/OLD.TXT" not in store.files
+            assert store.files["TOOLS/COMMON.DAT"] == b"shared runtime"
+            assert store.files["TOOLS/KEEP.EXE"] == b"keep"
+            assert store.files["TOOLS/MANUAL.TXT"] == b"not package-owned"
+            assert store.published_packages() == {"one", "two", "keep"}
+            backup = store.root.parent / store.backup / "c"
+            assert (backup / "TOOLS/ONE.EXE").read_bytes() == b"needs replacement"
+            assert (backup / "TOOLS/OLD.TXT").is_file()
+        assert store.overlay(account)[1]["TOOLS/TWO.INI"] == b"private preference"
+        assert sorted(fetched) == ["keep", "one", "two"]  # Reinstall reuses original downloads.
+    finally:
+        store.downloads.close()
+
+
+def test_reinstall_rejects_unselected_packages_before_changing_the_disk(tmp_path):
+    store = store_at(tmp_path)
+    try:
+        receipt, files = store.installed_path.read_bytes(), dict(store.files)
+        with pytest.raises(DosError, match="must be selected"):
+            store.configure([], reinstall=["unknown"])
+        assert store.installed_path.read_bytes() == receipt and store.files == files
+        assert not list(store.disk_dir.parent.glob(".dos-packages-*"))
+    finally:
+        store.downloads.close()
 
 
 def test_failed_package_publication_restores_original_disk_receipt_and_memory(tmp_path, monkeypatch):
@@ -100,15 +207,19 @@ def test_dos_completion_means_published_not_staged_and_retry_reuses_cache(tmp_pa
         return output.getvalue()
     def write(path, contents):
         if path == live_marker:
-            rows = downloads.snapshot(private=True)["items"]
-            assert rows and all(row["state"] == "waiting" and row["phase"] == "Awaiting publication" for row in rows)
+            rows = {row["id"]: row for row in downloads.snapshot(private=True)["items"]}
+            current = "two" if "two" in json.loads(contents) else "one"
+            assert rows["dos:" + current]["state"] == "waiting"
+            assert rows["dos:" + current]["phase"] == "Awaiting publication"
+            if current == "two" and "dos:one" in rows:
+                assert rows["dos:one"]["state"] == "done"
             seen.append("publication")
-            if failure == "publication":
+            if failure == "publication" and current == "two":
                 raise OSError("publication failed")
         original(path, contents)
     def progress(_status):
         choices = app.state.content.choices()
-        assert not any(item["installed"] for item in choices["dos_packages"])
+        assert {item["id"] for item in choices["dos_packages"] if item["installed"]} == store.published_packages()
         assert not store.status(start=False)["initializing"]
         assert store.status(start=False)["configuring"]
     monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", fetch)
@@ -118,10 +229,11 @@ def test_dos_completion_means_published_not_staged_and_retry_reuses_cache(tmp_pa
             with pytest.raises(DosError, match="offline|publication failed"):
                 store.configure(["one", "two"], on_progress=progress)
             rows = {row["id"]: row for row in downloads.snapshot(private=True)["items"]}
-            assert rows["dos:one"]["state"] == "blocked" and rows["dos:one"]["retryable"]
-            assert all(row["state"] != "done" for row in rows.values())
-            assert store.files == before and store.installed_path.read_bytes() == marker
-            assert store.published_packages() == set()
+            assert rows["dos:one"]["state"] == "done"
+            assert rows["dos:two"]["state"] == "error" and rows["dos:two"]["retryable"]
+            assert store.published_packages() == {"one"}
+            assert store.files["GAMES/ONE/GAME.EXE"] == b"one"
+            assert "GAMES/TWO/GAME.EXE" not in store.files
             fetched.clear()
             previous_failure, failure = failure, None
             store.configure(["one", "two"], on_progress=progress)
@@ -734,6 +846,140 @@ def test_first_run_software_download_is_hash_checked_selected_and_resumable(tmp_
     assert invalid.state == "error" and "SHA-256 mismatch" in invalid.error
     with pytest.raises(UnsafeArchiveError):
         store._source_files(_unsafe_zip(), {"format": "zip"})
+
+
+def test_quadrax_install_creates_config_and_preserves_private_settings(tmp_path, monkeypatch):
+    manifest = json.loads(Path("thelpviewer/config/dos-prompt.json").read_text())
+    source = next(item for item in manifest["sources"] if item["id"] == "bog-quadrax")
+    manifest["sources"], manifest["files"] = [source], []
+    config = tmp_path / "dos.json"
+    config.write_text(json.dumps(manifest))
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("QUADRAX/QUADRAX.EXE", b"test program")
+        archive.writestr("QUADRAX/QUADRAX.CFG", b"unconfigured archive default")
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *_a, **_kw: output.getvalue())
+    store = DosPromptStore(tmp_path / "dos", config)
+    try:
+        store.prepare(install_sources=True)
+        assert store.state == "ready", store.error
+        name = "GAMES/QUADRAX/QUADRAX.CFG"
+        defaults = store.files[name]
+        assert defaults == configured_files(source, 4096)["QUADRAX/QUADRAX.CFG"]
+        assert b"TYPE=3\t" in defaults and b"BASE=220\r\nIRQ=7 \r\nDMA=1\r\n" in defaults
+        assert b"MUSIC=1\t" in defaults and b"FX=1\t" in defaults and b"SWITCH=38\r\n" in defaults
+        assert b"\n" not in defaults.replace(b"\r\n", b"")
+        account = uuid.uuid4().hex
+        customized = defaults.replace(b"MUSIC=1", b"MUSIC=0")
+        store.save(account, payload(store, files={name: customized}))
+        store.configure([source["id"]])
+        assert store.files[name] == defaults
+        assert store.overlay(account)[1][name] == customized
+    finally:
+        store.downloads.close()
+
+
+def test_compress_collection_flattens_programs_and_namespaces_original_documents():
+    manifest = json.loads(Path("thelpviewer/config/dos-prompt.json").read_text())
+    source = next(item for item in manifest["sources"] if item["id"] == "utils")
+    assert source["required"] is True and source["target"] == source["path"] == "COMPRESS"
+    assert "UC2R3.EXE -o . >NUL" in source["post_install"]
+    assert "COMPRESS" in source["title"]
+    expected = {}
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as collection:
+        for index, component in enumerate(source["archives"]):
+            assert "retain_archive" not in component and "exclude_members" not in component
+            rules = component.get("extract", [{"members": component.get("members", [])}])
+            originals, nested = {}, {}
+            for rule in rules:
+                for pattern in rule["members"]:
+                    name = pattern.replace("*", "SAMPLE")
+                    data = f"{index}:{name}".encode()
+                    entries = nested.setdefault(rule["archive"], {}) if "archive" in rule else originals
+                    entries[name] = data
+                    stripped = "/".join(name.split("/")[rule.get("strip_components", 0):])
+                    output_name = c_path((rule["target"] + "/" if rule.get("target") else "") + stripped)
+                    assert "/" not in output_name or output_name.startswith("DOC/")
+                    expected[output_name] = data
+                if "archive" in rule:
+                    rule["format"] = "zip"  # Synthetic nested ZIP, not the original 7z.
+            for name, entries in nested.items():
+                nested_stream = io.BytesIO()
+                with zipfile.ZipFile(nested_stream, "w") as archive:
+                    for path, data in entries.items():
+                        archive.writestr(path, data)
+                    archive.writestr("SOURCE.C", b"not installed")
+                originals[name] = nested_stream.getvalue()
+            contents = io.BytesIO()
+            with zipfile.ZipFile(contents, "w") as archive:
+                for name, data in originals.items():
+                    archive.writestr(name, data)
+                archive.writestr("SOURCE/SOURCES.ZIP", b"unselected source archive")
+                archive.writestr("UNSELECT.C", b"unselected source code")
+            collection.writestr(f"{index}.archive", contents.getvalue())
+            component["format"] = "zip"  # Synthetic archive, not the original SFX.
+    extracted = DosPackageExtractor(1024 * 1024).extract(stream.getvalue(), source)
+    assert extracted == expected
+    assert all("/" not in name or name.startswith("DOC/") for name in extracted)
+    assert {"LZIP.EXE", "LZMA.EXE", "LZOP.EXE", "LPQ1.EXE", "P7ZIP.EXE",
+            "P7ZIPR.EXE", "7ZA.EXE", "7ZR.EXE", "CWSDPMI.EXE", "LZEXE.EXE", "UNLZEXE.EXE",
+            "UPX.EXE", "DIET.EXE", "PKLITE.EXE", "ARC.EXE", "ARCE.COM", "UC2R3.EXE"} <= extracted.keys()
+    assert {"DOC/ARJ/COPYING", "DOC/UPX/LICENSE", "DOC/UNZIP/SAMPLE"} <= extracted.keys()
+
+
+def test_rar_package_is_optional_and_keeps_original_documents_without_registration_keys():
+    manifest = json.loads(Path("thelpviewer/config/dos-prompt.json").read_text())
+    source = next(item for item in manifest["sources"] if item["id"] == "rar-dos-393")
+    assert not source["enabled"] and not source.get("required")
+    assert source["target"] == source["path"] == "COMPRESS"
+    assert "shareware" in source["license"] and "40-day" in source["license"]
+    source["format"] = "zip"  # Test selection with synthetic original paths.
+    expected = {"RAR/RAR32.EXE", "RAR/EMX.EXE", "RAR/RSX.EXE", "RAR/EMX.DLL",
+                "RAR/DEFAULT.SFX", "RAR/RARFILES.LST"}
+    assert set(source["extract"][0]["members"]) == expected
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        for name in expected:
+            archive.writestr(name, name.encode())
+        for name in ("RAR/README.TXT", "RAR/RAR.TXT", "RAR/WHATSNEW.TXT", "RAR/COPYING.EMX", "RAR/COPYING.RSX"):
+            archive.writestr(name, b"original document")
+        archive.writestr("RAR/RARREG.KEY", b"not installed")
+    extracted = DosPackageExtractor(1024 * 1024).extract(stream.getvalue(), source)
+    assert set(extracted) == {Path(name).name for name in expected} | {
+        "DOC/RAR/README.TXT", "DOC/RAR/RAR.TXT", "DOC/RAR/WHATSNEW.TXT",
+        "DOC/RAR/COPYING.EMX", "DOC/RAR/COPYING.RSX"}
+    assert extracted["DOC/RAR/COPYING.EMX"] == b"original document"
+
+
+def test_volkov_install_seeds_exact_binary_ini_and_preserves_private_settings(tmp_path, monkeypatch):
+    manifest = json.loads(Path("thelpviewer/config/dos-prompt.json").read_text())
+    source = next(item for item in manifest["sources"] if item["id"] == "volkov-commander-405")
+    manifest["sources"], manifest["files"] = [source], []
+    config = tmp_path / "dos.json"
+    config.write_text(json.dumps(manifest))
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("VC.COM", b"test program")
+        archive.writestr("VC.INI", b"archive default")
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *_a, **_kw: output.getvalue())
+    store = DosPromptStore(tmp_path / "dos", config)
+    try:
+        store.prepare(install_sources=True)
+        assert store.state == "ready", store.error
+        name = "TOOLS/VC/VC.INI"
+        defaults = store.files[name]
+        assert len(defaults) == 511 and defaults.startswith(b"VVV\0")
+        assert hashlib.sha256(defaults).hexdigest() == "2d117a7fce8b878baf16c908f3f1bdf6c31c4f507c0b2e9ff8b86d36d8661aa5"
+        assert defaults == configured_files(source, 4096)["VC.INI"]
+        account = uuid.uuid4().hex
+        customized = defaults[:-1] + bytes([defaults[-1] ^ 1])
+        store.save(account, payload(store, files={name: customized}))
+        store.configure([source["id"]])
+        assert store.files[name] == defaults
+        assert store.overlay(account)[1][name] == customized
+    finally:
+        store.downloads.close()
 
 
 def test_source_files_override_archive_on_fresh_install_and_remain_frozen(tmp_path, monkeypatch):

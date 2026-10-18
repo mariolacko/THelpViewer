@@ -1836,10 +1836,10 @@ class TVTextScreen extends TVView {
             throw new TypeError("Invalid TVTextScreen dimensions/cells");
         }
         const font = screen.font;
-        if (!font || !Number.isInteger(font.width) || font.width < 1 || font.width > 32
+        if (font && (!Number.isInteger(font.width) || font.width < 1 || font.width > 32
             || !Number.isInteger(font.height) || font.height < 1 || font.height > 64
             || !(font.data instanceof Uint8Array)
-            || font.data.length !== 256 * font.height * Math.ceil(font.width / 8)) {
+            || font.data.length !== 256 * font.height * Math.ceil(font.width / 8))) {
             throw new TypeError("Invalid TVTextScreen bitmap font");
         }
         if (screen.cells.some(cell => !Array.isArray(cell) || cell.length !== 3
@@ -1851,11 +1851,23 @@ class TVTextScreen extends TVView {
             || screen.blink.length !== screen.cells.length || screen.blink.some(flag => typeof flag !== "boolean"))) {
             throw new TypeError("Invalid TVTextScreen blink mask");
         }
-        if (screen.cols * font.width * screen.rows * font.height > 16777216) {
+        if (screen.blinkVisible !== undefined && typeof screen.blinkVisible !== "boolean") {
+            throw new TypeError("Invalid TVTextScreen blink phase");
+        }
+        const cursor = screen.cursor;
+        if (cursor && (!Number.isInteger(cursor.index) || typeof cursor.visible !== "boolean"
+            || (cursor.visible && (cursor.index < 0 || cursor.index >= screen.cells.length))
+            || !Number.isFinite(cursor.start) || !Number.isFinite(cursor.end)
+            || cursor.start < 0 || cursor.end < cursor.start || cursor.end > 100)) {
+            throw new TypeError("Invalid TVTextScreen cursor");
+        }
+        if (font && screen.cols * font.width * screen.rows * font.height > 16777216) {
             throw new TypeError("TVTextScreen bitmap is too large");
         }
         this._stopBlink();
         this.screen = screen;
+        this._blinkVisible = screen.blinkVisible !== false;
+        if (this.root && (this.root.tagName === "CANVAS") !== Boolean(font)) { this.drawView(); }
         this._paint();
         this._startBlink();
         return this;
@@ -1869,6 +1881,10 @@ class TVTextScreen extends TVView {
         const { cols, rows, font, text = [] } = this.screen;
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds || `width:${cols}ch;height:${rows}em`;
+        if (!font) {
+            return `<div class="tv-text-screen tv-text-screen-text" ${attrsToString(this._drawAttrs())}`
+                + ` style="${escapeHtml(style)}"></div>`;
+        }
         return `<canvas class="tv-text-screen" ${attrsToString(this._drawAttrs())}`
             + ` width="${cols * font.width}" height="${rows * font.height}" style="${escapeHtml(style)}"`
             + ` role="img" aria-label="${escapeHtml(text.join("\n"))}">${escapeHtml(text.join("\n"))}</canvas>`;
@@ -1877,6 +1893,9 @@ class TVTextScreen extends TVView {
     bindRoot(root) {
         this._stopBlink();
         super.bindRoot(root);
+        this._textLayout = null;
+        if (!root) { this._textRoot = null; this._textCells = []; this._textGlyphs = []; this._textState = []; }
+        this._blinkVisible = this.screen?.blinkVisible !== false;
         this._paint();
         this._startBlink();
         return this;
@@ -1893,6 +1912,7 @@ class TVTextScreen extends TVView {
     }
 
     _startBlink() {
+        if (typeof this.screen?.blinkVisible === "boolean") { return; } // Live hardware supplies its own phase.
         if (!this.root || !this.screen?.blink?.some(Boolean) || typeof window === "undefined") { return; }
         this._motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)") || null;
         this._motionQuery?.addEventListener("change", this._onMotionChange);
@@ -1915,6 +1935,7 @@ class TVTextScreen extends TVView {
 
     _paint() {
         if (!this.root || !this.screen) { return; }
+        if (!this.screen.font) { this._paintText(); return; }
         const context = this.root.getContext?.("2d");
         if (!context) { return; }
         const { cols, rows, cells, font, palette } = this.screen;
@@ -1933,6 +1954,65 @@ class TVTextScreen extends TVView {
                     if (byte & (0x80 >> (bit % 8))) { context.fillRect(x + bit, y + row, 1, 1); }
                 }
             }
+        });
+    }
+
+    _paintText() {
+        const { cols, rows, cells, palette, blink, cursor } = this.screen;
+        if (this._textRoot !== this.root || this._textCols !== cols || this._textRows !== rows) {
+            this._textRoot = this.root; this._textCols = cols; this._textRows = rows;
+            this._textLayout = null;
+            this._textCells = []; this._textGlyphs = []; this._textState = [];
+            const lines = Array.from({ length: rows }, () => {
+                const line = document.createElement("div"); line.className = "tv-text-screen-row";
+                line.style.gridTemplateColumns = `repeat(${cols},minmax(0,1fr))`;
+                for (let col = 0; col < cols; col++) {
+                    const cell = document.createElement("span"), glyph = document.createElement("span");
+                    cell.appendChild(glyph); line.appendChild(cell);
+                    this._textCells.push(cell); this._textGlyphs.push(glyph);
+                }
+                return line;
+            });
+            this.root.replaceChildren(...lines);
+            this.root.style.width = `${cols}ch`; this.root.style.height = `${rows}em`;
+            this.root.style.gridTemplateRows = `repeat(${rows},minmax(0,1fr))`;
+        }
+        cells.forEach(([glyph, fg, bg], index) => {
+            const foreground = palette[fg], background = palette[bg];
+            const hidden = blink?.[index] && !this._blinkVisible;
+            const mark = cursor?.visible && cursor.index === index;
+            const state = [glyph, foreground, background, hidden, mark, cursor?.start, cursor?.end].join(":");
+            if (this._textState[index] === state) { return; }
+            this._textState[index] = state;
+            const cell = this._textCells[index];
+            this._textGlyphs[index].textContent = displayCp437Char(glyph);
+            cell.style.color = hidden ? background : foreground;
+            cell.style.backgroundColor = background;
+            cell.style.backgroundImage = mark
+                ? `linear-gradient(to bottom,transparent ${cursor.start}%,${foreground} ${cursor.start}%,${foreground} ${cursor.end}%,transparent ${cursor.end}%)` : "";
+        });
+        this._layoutText();
+    }
+
+    _layoutText() {
+        if (!this._textGlyphs?.length || !this.root?.getBoundingClientRect) { return; }
+        const rect = this.root.getBoundingClientRect(), cell = measureCells(), pixels = window.devicePixelRatio || 1;
+        if (!rect.width || !rect.height) { return; }
+        const key = [rect.left, rect.top, rect.width, rect.height, cell.width, cell.height, pixels].join(":");
+        if (key === this._textLayout) { return; }
+        this._textLayout = key;
+        // The VGA web font is hinted on CSS pixels before compositing. Half-CSS-
+        // pixel heights on Retina can still lose a bitmap row, despite physical
+        // pixel alignment. Fit glyphs to whole raster cells, not centered boxes.
+        const snap = value => Math.round(value);
+        // Read all grid bounds before writing. Adjacent glyphs share rounded
+        // edges; centering uniformly scaled glyphs leaves row gaps.
+        const bounds = this._textCells.map(item => item.getBoundingClientRect());
+        bounds.forEach((bounds, index) => {
+            const glyph = this._textGlyphs[index];
+            glyph.style.left = `${snap(bounds.left) - bounds.left}px`;
+            glyph.style.top = `${snap(bounds.top) - bounds.top}px`;
+            glyph.style.transform = `scale(${(snap(bounds.right) - snap(bounds.left)) / cell.width},${(snap(bounds.bottom) - snap(bounds.top)) / cell.height})`;
         });
     }
 }
@@ -5724,7 +5804,7 @@ class TVDialog extends TVWindow {
             }
         }
         if (event.what === evCommand && event.command === "dialog-close") {
-            this.closeAction();
+            if (this.flags & wfClose) { this.closeAction(); }
             this.clearEvent(event);
         }
     }
@@ -5744,6 +5824,7 @@ class TVDialog extends TVWindow {
     drawContent() {
         const body = this._query(".tv-dialog-body");
         if (!body) { return; }
+        if (this.closeButton) { this.closeButton.hidden = (this.flags & wfClose) === 0; }
         const render = (view) => view?.draw?.() || "";
         const side = '<span class="tv-border-side" data-tv-border-side="║" aria-hidden="true"></span>';
         if (this.children.length <= 1) {
@@ -5810,12 +5891,12 @@ class TVDialog extends TVWindow {
         if (this.destroyed) {
             return;
         }
-        if (!(this.owner instanceof TVDesktop) || !this.overlay.isConnected) {
-            throw new Error("TVDialog must be inserted into TVDesktop before open()");
+        if (!(this.owner instanceof TVGroup) || !this.overlay.isConnected) {
+            throw new Error("TVDialog must be inserted into a connected TVGroup before open()");
         }
         // Temporary dialogs (including MessageBox) need the same owner stack,
         // activation and focus rules as dialogs registered by the application.
-        if (!this.manager) { this.owner.dialogManager.register(this.viewId, this); }
+        if (!this.manager && this.owner instanceof TVDesktop) { this.owner.dialogManager.register(this.viewId, this); }
         const wasOpen = this.isOpen();
         if (!wasOpen) {
             this.previousFocus = document.activeElement instanceof HTMLElement
@@ -5978,6 +6059,7 @@ class TVDialog extends TVWindow {
     }
 
     startDrag(event) {
+        if ((this.flags & wfMove) === 0) { return; }
         if (event.target.closest("button, input, a")) {
             return;
         }

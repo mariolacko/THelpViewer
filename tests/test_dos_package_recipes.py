@@ -24,6 +24,36 @@ def zipped(files):
     return stream.getvalue()
 
 
+def test_hiew_nested_distribution_installs_original_runtime_and_documentation(tmp_path, monkeypatch):
+    source = next(item for item in json.loads((CONFIG_DIR / "dos-prompt.json").read_text())["sources"]
+                  if item["id"] == "hiew-650")
+    original = {"hiew.exe": b"MZ original DOS", "HIEW.HLP": b"help",
+                "HIEW.INI": b"configuration", "HIEWE.650": b"Free re-build dos-version."}
+    archive = zipped({"hiew_650.zip": zipped({**original, "UNRELATED.EXE": b"not selected"}),
+                      "hiew_650.asc": b"original signature"})
+    files = DosPackageExtractor(10000).extract(archive, source)
+    expected = {name.upper(): contents for name, contents in original.items()}
+    expected["DOC/HIEW_650.ASC"] = b"original signature"
+    assert files == expected
+    assert source["enabled"] is False and not source.get("required")
+    store = store_at(tmp_path)
+    config = json.loads(store.config_path.read_text())
+    config["sources"] = [source]
+    config["categories"] = [{"id": "editors", "label": "Editors"}]
+    store.config_path.write_text(json.dumps(config))
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source", lambda *_args, **_kwargs: archive)
+    try:
+        store.configure([source["id"]])
+        assert store.published_packages() == {source["id"]}
+        receipt = json.loads(store.installed_path.read_text())
+        assert set(receipt["_files"][source["id"]]) == {"TOOLS/HIEW/" + name for name in expected}
+        assert store.files["TOOLS/HIEW/HIEW.EXE"].startswith(b"MZ")
+        store.configure([])
+        assert not any(name.startswith("TOOLS/HIEW/") for name in store.files)
+    finally:
+        store.downloads.close()
+
+
 def test_dos_install_falls_back_with_its_recipe_then_preserves_private_data(tmp_path, monkeypatch):
     from urllib.error import HTTPError
     from test_dos_prompt import payload
@@ -209,26 +239,68 @@ def fake_dosbox(monkeypatch, action):
         config = Path(command[2]).read_text()
         assert "config -securemode" in config and kwargs["env"]["SDL_VIDEODRIVER"] == "dummy"
         action(root / "c")
-        wrapper = next((root / "c").glob("*.BAT"))
+        wrapper = root / "c" / config.splitlines()[-1]
         wrapper.with_suffix(".OK").write_bytes(b"OK\r\n")
         return SimpleNamespace(returncode=0)
     monkeypatch.setattr("thelpviewer.server.dos.post_install.subprocess.run", run)
 
 
-def test_post_install_keeps_bat_and_generated_files_without_changing_tools(tmp_path, monkeypatch):
-    fake_dosbox(monkeypatch, lambda disk: (disk / "TOOLS/TEST/READY.TXT").write_bytes(b"ready"))
-    source = {"target": "TOOLS/TEST", "post_install": ["@ECHO OFF", "ECHO ready>READY.TXT"]}
-    result = run_post_install({"FILE.TXT": b"source"}, source, {"UTILS/BIN/UNZIP.EXE": b"tool"}, 10000)
-    assert result == {"FILE.TXT": b"source", "READY.TXT": b"ready",
-                      "POSTINST.BAT": b"@ECHO OFF\r\nECHO ready>READY.TXT\r\n"}
+@pytest.mark.parametrize("target", ["TOOLS/TEST", ""])
+def test_post_install_discards_its_bat_but_keeps_runtime_bats_and_generated_files(tmp_path, monkeypatch, target):
+    def install(disk):
+        assert (disk / target / "POSTINST.BAT").read_bytes() == b"@ECHO OFF\r\nECHO ready>READY.TXT\r\n"
+        (disk / target / "READY.TXT").write_bytes(b"ready")
+    fake_dosbox(monkeypatch, install)
+    source = {"target": target, "post_install": ["@ECHO OFF", "ECHO ready>READY.TXT"]}
+    result = run_post_install({"FILE.TXT": b"source", "START.BAT": b"runtime launcher"}, source,
+                              {"COMPRESS/UNZIP.EXE": b"tool"}, 10000)
+    assert result == {"FILE.TXT": b"source", "START.BAT": b"runtime launcher", "READY.TXT": b"ready"}
 
 
-@pytest.mark.parametrize("path,message", [("OUTSIDE.TXT", "outside"), ("UTILS/BIN/UNZIP.EXE", "utility")])
+@pytest.mark.parametrize("path,message", [("OUTSIDE.TXT", "outside"), ("COMPRESS/UNZIP.EXE", "utility")])
 def test_post_install_rejects_writes_outside_its_package(tmp_path, monkeypatch, path, message):
     fake_dosbox(monkeypatch, lambda disk: (disk / path).write_bytes(b"changed"))
     with pytest.raises(DosError, match=message):
         run_post_install({"FILE.TXT": b"source"}, {"target": "TOOLS/TEST", "post_install": ["REM test"]},
-                         {"UTILS/BIN/UNZIP.EXE": b"tool"}, 10000)
+                         {"COMPRESS/UNZIP.EXE": b"tool"}, 10000)
+
+
+def test_post_install_uses_declared_tool_directories_on_its_dos_path(tmp_path, monkeypatch):
+    fake_dosbox(monkeypatch, lambda disk: None)
+    run = __import__("thelpviewer.server.dos.post_install", fromlist=["subprocess"]).subprocess.run
+    def check(command, **kwargs):
+        config = Path(command[2]).read_text()
+        assert "set PATH=C:\\COMPRESS;C:\\TOOLS\\OTHER;Z:\\" in config
+        return run(command, **kwargs)
+    monkeypatch.setattr("thelpviewer.server.dos.post_install.subprocess.run", check)
+    assert run_post_install({}, {"target": "APP", "post_install": ["REM test"]},
+        {"COMPRESS/UNZIP.EXE": b"zip", "COMPRESS/ARJ.EXE": b"arj", "TOOLS/OTHER/TOOL.COM": b"tool"}, 10000) == {}
+
+
+def test_installer_supplies_declared_tools_and_publishes_no_post_install_bat(tmp_path, monkeypatch):
+    store = store_at(tmp_path)
+    config = json.loads(store.config_path.read_text())
+    config["sources"] = [
+        {"id": "tools", "required": True, "format": "zip", "target": "COMPRESS", "path": "COMPRESS", "url": "https://tools.test/tools.zip"},
+        {"id": "app", "format": "zip", "target": "APP", "url": "https://tools.test/app.zip", "post_install": ["ECHO ready>READY.TXT"]},
+    ]
+    store.config_path.write_text(json.dumps(config))
+    monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source",
+        lambda source, *_a, **_kw: zipped({"TOOL.EXE" if source["id"] == "tools" else "APP.EXE": b"program"}))
+    def install(disk):
+        assert (disk / "COMPRESS/TOOL.EXE").read_bytes() == b"program"
+        assert (disk / "APP/POSTINST.BAT").is_file()
+        (disk / "APP/READY.TXT").write_bytes(b"ready")
+    fake_dosbox(monkeypatch, install)
+    try:
+        store.configure(["app"])
+        assert store.state == "ready", store.error
+        assert store.files["APP/READY.TXT"] == b"ready"
+        assert "APP/POSTINST.BAT" not in store.files
+        assert "APP/POSTINST.BAT" not in json.loads(store.installed_path.read_text())["_files"]["app"]
+        assert store.files["COMPRESS/TOOL.EXE"] == b"program"
+    finally:
+        store.downloads.close()
 
 
 @pytest.mark.parametrize("lines", ["echo wrong", [42], ["a\nb"], ["a\0b"], ["🙂"]])

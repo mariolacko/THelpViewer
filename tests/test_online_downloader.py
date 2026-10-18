@@ -734,6 +734,24 @@ def test_completed_files_do_not_claim_finished_publication():
     downloads.close()
 
 
+def test_batch_percentage_includes_every_pending_and_waiting_package():
+    downloads = OnlineDownloader()
+    try:
+        downloads.begin("dos", [{"id": str(i), "label": f"Package {i}", "byte_progress": False}
+                                for i in range(20)])
+        downloads.update("dos", "0", state="running", stage="download", stage_percent=90, percent=50)
+        status = downloads.snapshot(private=True)
+        assert status["active"] and status["percent"] == 2  # 50 / 20, not the active phase's 90%.
+        downloads.update("dos", "0", state="waiting", phase="Awaiting publication", stage="install", percent=99)
+        downloads.update("dos", "1", state="running", stage="extract", stage_percent=100, percent=75)
+        status = downloads.snapshot(private=True)
+        assert status["percent"] == 8  # (99 + 75) / 20, with the remaining 18 still queued.
+        assert len(status["items"]) == 20
+        assert next(row for row in status["items"] if row["id"] == "dos:0")["state"] == "waiting"
+    finally:
+        downloads.close()
+
+
 def test_completed_counter_resets_and_a_new_batch_excludes_history():
     downloads = OnlineDownloader()
     try:

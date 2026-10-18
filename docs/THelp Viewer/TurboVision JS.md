@@ -52,10 +52,18 @@ Core widget hierarchy and infrastructure.
 - **TVTextScreen** — `constructor(bounds)`, `setData(screen)`, `getData()` and
   `dataSize()`. A shared native character-cell view, not a bitmap-image
   wrapper. Data contains `cols`, `rows`, flat `[glyph, fg, bg]` cells,
-  a bitmap font (`width`, `height`, decoded `Uint8Array data`), resolved
+  an optional bitmap font (`width`, `height`, decoded `Uint8Array data`), resolved
   indexed `palette`, optional literal `text` rows and an explicit boolean
   `blink` mask (one flag per cell). `draw()` owns its
-  canvas markup; `bindRoot()` paints glyph bits with palette colors.
+  canvas markup for bitmap fonts; `bindRoot()` paints glyph bits with palette
+  colors. Without a font, it draws CP437 DOM character cells in the shared VGA
+  font and updates only changed cells. A live source may supply boolean
+  `blinkVisible` and `cursor` (`index`, `visible`, `start`/`end` as percentages
+  of the cell height); its hardware phase replaces the view's animation timer.
+  Backgrounds use a display-sized grid, separate from scaled glyphs, so
+  fractional zoom cannot introduce black seams between adjacent colors.
+  Individual glyph edges are snapped to the font's pixel grid on layout changes,
+  preserving continuous single/double box lines at fractional scales/high DPI.
   UHF supplies Base64 font resources and palette references, decoded by
   the HELP adapter. HELP owns row views explicitly, releases their roots on
   navigation and uses the existing `TVWindow`/scrollbars. Pixel scaling
@@ -740,11 +748,19 @@ current time immediately, independently of the desktop's one-second timer.
 
 `tv-content.js` composes three independent windows, `TVHelpPackagesDialog`,
 `TVDosPackagesDialog` and `TVMidiSourcesDialog`, from `TVPackagesDialog`.
-The base owns the group/source TVListBox, edition/package/album TVCheckBoxes,
+The base owns a linked Filter TVLabel/TVInputLine, group/source TVListBox, edition/package/album TVCheckBoxes,
 description, labels, buttons and scrollbars; there is no HELP/DOS/MIDI mode
 switch. Each instance retains its own draft across group/focus changes and
 sends only its content type's API field. First-run setup opens HELP Packages
 after administrator sign-in; the other types remain separate menu actions.
+Input broadcasts are handled through `handleEvent()` and filter the cached
+draft by normalized names/descriptions/group labels. Hidden marks remain in
+the draft; MIDI albums are remembered by ID, not filtered indexes. No CSS or
+dialog-specific DOM listeners/selectors are needed. The group checkbox acts on
+matching rows, while the bottom buttons still select/deselect the whole type.
+Enter/Down in Filter focuses results instead of activating the default Apply.
+Filter occupies the first client row, with pane labels/lists one row lower;
+window dimensions, group checkbox, description and button rows are unchanged.
 The shared scrollable
 TVCluster primitive paints its entire bounded rectangle, including empty rows.
 Individual HELP products and DOS packages are
@@ -1180,7 +1196,7 @@ Application shell: menus, status bar, window management, initialization.
 |-------|---------|
 | `TVMenuBar` | Shared core `TVMenuView` subclass that draws linked top-level items and submenus |
 | `TVStatusLine` | Renders status line items |
-| `TurboVisionWindowResizer` | Window drag-move and resize, double-click maximize |
+| `TurboVisionWindowResizer` | Window drag-move and resize; geometry for window Zoom |
 | `TurboVisionMenus` | Generated-page adapter for the shared `TVMenuController` |
 | `TVApplication` | Main application coordinator |
 
@@ -1199,8 +1215,14 @@ Entry point. Called via `TV.initTurboVision()`.
 ### TurboVisionWindowResizer
 
 - Draggable title bar (move), resize handle (bottom-right corner)
-- `maximize()`, `restore()`, `toggle()`/`toggleMaximize()`; `TVWindow.zoom()`
+- `maximize()`, `restore()`, `toggle()`; `TVWindow.zoom()`
   uses this shared resizer when one is bound, including HELP and Docs windows
+- Title-bar double-click is owned by `TVWindow`: it dispatches the same
+  `TVEvent` Zoom command as the frame control. The mover ignores the second
+  mouse-down, so DOS retains its proportional Zoom override.
+- Size limits use the desktop area for the frame, without reserving shadow
+  margins. Maximize fills that area; shadows at its edges are clipped. Default
+  Size and DOS proportional fitting use the same shadow-free limits.
 - Persists geometry to localStorage per optional `data-tv-window-storage-key`
 - `destroy()` persists the final geometry and detaches drag, handle and
   `beforeunload` listeners.

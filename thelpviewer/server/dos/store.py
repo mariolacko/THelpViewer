@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import closing
 import io
 import json
 import logging
@@ -19,7 +20,9 @@ from ..downloader.online import OnlineDownloader
 from ..downloader.packages import download_package, migrate_package_cache, package_cache_key, read_package_cache
 from ..rebuild import archive_rebuild_directory, prune_backups
 from ..settings import ServerSettings
+from ..file_storage import clone_file
 from .config import load_dos_config, select_dos_packages
+from .environment import autoexec_with_path, package_paths
 from .media import DosMediaStore
 from .migration import migrate_legacy_packages
 from .overlay import DosOverlayStore
@@ -108,15 +111,86 @@ class DosPromptStore:
         finally:
             self.on_progress = None
 
-    def configure(self, source_ids: list[str], *, on_progress=None, preserve_downloads=False) -> None:
-        """Publish a selected shared disk generation; never touch private overlays."""
+    def configure(self, source_ids: list[str], *, on_progress=None, preserve_downloads=False,
+                  reinstall: list[str] | None = None) -> None:
+        """Publish ready packages independently; retain successes if later work fails."""
         with self._lock:
             if self.state == "building" or self.configuring or (self._worker and self._worker.is_alive()):
                 raise DosError("DOS C drive is already being prepared")
             self.configuring = True
-            previous = (self.files, self.file_hashes, self.base_id, self.state)
-            self.state, self.error = "building", ""
             self.on_progress = on_progress
+            self.error = ""
+        active = []
+        try:
+            config = load_dos_config(self.config_path)
+            source_ids = select_dos_packages(config, source_ids)
+            reinstall = set(reinstall or ())
+            if reinstall - set(source_ids):
+                raise DosError("Reinstalled DOS packages must be selected")
+            published = self.published_packages()
+            sources = [source for source in config["sources"] if source["id"] in source_ids
+                       and (source["id"] not in published or source["id"] in reinstall)]
+            sources.sort(key=lambda source: not source.get("required", False))
+            self.config = config
+            self.downloads.begin("dos", [{"id": source["id"], "label": source.get("title", source["id"]),
+                "byte_progress": False, "priority": 0 if source.get("required", False) else 10}
+                for source in sources], replace=not preserve_downloads)
+            root_files = configured_files(config, MAX_PACKAGE_BYTES)
+            def prepare(source):
+                ident = source["id"]
+                target = c_path(source["target"]) + "/" if source.get("target") else ""
+                additions = {name: root_files.get(target + name, contents)
+                             for name, contents in configured_files(source, MAX_PACKAGE_BYTES).items()}
+                with self.downloads.context("dos", ident, priority=0 if source.get("required", False) else 10):
+                    try:
+                        incoming = self._prepare_package(source, self._published_disk, additions,
+                                                         root_files, target, MAX_PACKAGE_BYTES)
+                    except Exception as error:
+                        self.downloads.update("dos", ident, state="error", phase="Failed", error=str(error))
+                        raise
+                    self._progress("Awaiting installation", 0.75, stage="install", ident=ident, state="waiting")
+                    return incoming
+            required = [source["id"] for source in sources if source.get("required", False)]
+            groups = ([required] if required else []) + [[source["id"]] for source in sources
+                                                        if not source.get("required", False)]
+            # Even an empty selection must apply removals and root metadata.
+            with closing(self.downloads.prepare(sources, prepare, ordered=True,
+                    source=lambda source: source.get("url", ""),
+                    priority=lambda source: 0 if source.get("required", False) else 10)) as pending:
+                for index, active in enumerate(groups or [[]]):
+                    incoming = {}
+                    for ident in active:
+                        source, future = next(pending)
+                        if source["id"] != ident:
+                            raise DosError("DOS package preparation order changed")
+                        incoming[ident] = future.result()
+                    final = index == len(groups) - 1 or not groups
+                    self._configure_transaction(source_ids if final else active,
+                        reinstall=reinstall & set(active), prepared_sources=incoming,
+                        remove_unselected=final)
+                    for ident in active:
+                        self.downloads.update("dos", ident, state="done", percent=100,
+                                              phase="Installed", stage="install", error="")
+            self.downloads.reconcile("dos", set(source_ids), completed=source_ids, phase="Installed")
+            self.downloads.finish("dos")
+        except Exception as error:
+            self.error = str(error)
+            published = self.published_packages()
+            for ident in set(active) - published:
+                self.downloads.update("dos", ident, state="error", phase="Failed", error=str(error))
+            self.downloads.reconcile("dos", set(source_ids) | published | {"operation"},
+                completed=published, incomplete=set(source_ids) - published, phase="Installed")
+            self.downloads.finish("dos", error=str(error))
+            raise DosError(str(error)) from error
+        finally:
+            self.configuring = False
+            self.on_progress = None
+
+    def _configure_transaction(self, source_ids, *, reinstall, prepared_sources, remove_unselected):
+        """Atomically publish one package (or the required bootstrap group)."""
+        previous = (self.files, self.file_hashes, self.base_id, self.state)
+        self.state = "building"
+        with self._lock:
             self.processed = self.percent = self.received = 0
             self.total = len(source_ids)
             self.phase, self.current = "Preparing DOS package changes", ""
@@ -125,39 +199,40 @@ class DosPromptStore:
         backup = None
         published = False
         committed = False
-        previously_published = set()
         try:
             backup_count = self.settings.get()["backup_count"]
             config = load_dos_config(self.config_path)
             sources = {source["id"]: source for source in config["sources"]}
             source_ids = select_dos_packages(config, source_ids)
-            self.downloads.begin("dos", [], replace=not preserve_downloads)
+            reinstall = set(reinstall or ())
+            if reinstall - set(source_ids):
+                raise DosError("Reinstalled DOS packages must be selected")
             if disk.is_symlink() or disk.parent.is_symlink() or marker.is_symlink():
                 raise DosError("Shared DOS storage must not contain symbolic links")
             if disk.exists() and (not disk.is_dir() or any(p.is_symlink() for p in disk.rglob("*"))):
                 raise DosError("Shared DOS storage must be a regular directory")
-            previously_published = self.published_packages()
             original_receipt = marker.read_bytes() if marker.exists() else None
             installed = json.loads(original_receipt) if original_receipt is not None else {}
             self.initializing = installed.get("_complete") is not True
             self.config = config
             owned = self._package_inventory(installed, sources, disk)
-            removed = (set(installed) & sources.keys()) - set(source_ids)
+            removed = (set(installed) & sources.keys()) - set(source_ids) if remove_unselected else set()
+            replaced = removed | reinstall
             protected = set(configured_files(config, MAX_PACKAGE_BYTES))
-            protected.update(name for ident, names in owned.items() if ident not in removed for name in names)
+            protected.update(name for ident, names in owned.items() if ident not in replaced for name in names)
             disk.parent.mkdir(parents=True, exist_ok=True)
             temporary = Path(tempfile.mkdtemp(prefix=".dos-packages-", dir=disk.parent))
             staged = temporary / "c"
             if disk.exists():
-                shutil.copytree(disk, staged)
+                shutil.copytree(disk, staged, copy_function=clone_file)
             self.disk_dir, self.installed_path = staged, temporary / "installed.json"
             installed["_files"] = owned
-            for ident in removed:
-                for name in owned.pop(ident):
+            for ident in replaced:
+                for name in owned.pop(ident, []):
                     path = staged / name
                     if name not in protected and path.is_file():
                         path.unlink()
-                del installed[ident]
+                installed.pop(ident, None)
             if staged.exists():
                 for directory in sorted((p for p in staged.rglob("*") if p.is_dir()),
                                         key=lambda p: len(p.parts), reverse=True):
@@ -166,7 +241,8 @@ class DosPromptStore:
             if original_receipt is not None:
                 atomic_file(self.installed_path, json.dumps(installed).encode())
             self._progress("Applying DOS packages", 0)
-            self.prepare(install_sources=True, source_ids=source_ids, preserve_downloads=preserve_downloads)
+            self.prepare(install_sources=True, source_ids=source_ids, preserve_downloads=True,
+                         prepared_sources=prepared_sources)
             if self.state != "ready":
                 raise DosError(self.error or "DOS package configuration failed")
             self.state = "building"
@@ -193,21 +269,13 @@ class DosPromptStore:
             except OSError:
                 logging.getLogger(__name__).exception("DOS published; old backup cleanup deferred")
             self.state = "ready"
-            self.downloads.reconcile("dos", set(source_ids), completed=source_ids, phase="Installed")
-            self.downloads.finish("dos")
         except Exception as error:
             if not committed:
                 self.files, self.file_hashes, self.base_id, self.state = previous
             self.error = str(error)
-            self.downloads.reconcile("dos", set(source_ids) | previously_published | {"operation"},
-                completed=source_ids if committed else previously_published,
-                incomplete=() if committed else set(source_ids) - previously_published, phase="Installed")
-            self.downloads.finish("dos", error=str(error))
             raise DosError(str(error)) from error
         finally:
             self.disk_dir, self.installed_path = disk, marker
-            self.configuring = False
-            self.on_progress = None
             if temporary is not None:
                 shutil.rmtree(temporary)
 
@@ -279,7 +347,7 @@ class DosPromptStore:
             self._worker.start()
 
     def prepare(self, *, install_sources: bool = False, source_ids: list[str] | None = None,
-                preserve_downloads=False) -> None:
+                preserve_downloads=False, prepared_sources=None) -> None:
         download_queue = False
         prepared = None
         try:
@@ -345,7 +413,8 @@ class DosPromptStore:
                              for name, contents in configured_files(source, package_limit).items()}
                 with self.downloads.context("dos", ident, priority=0 if source.get("required", False) else 10):
                     try:
-                        incoming = self._prepare_package(source, base, additions, root_files, target, package_limit)
+                        incoming = (prepared_sources[ident] if prepared_sources is not None and ident in prepared_sources
+                                    else self._prepare_package(source, base, additions, root_files, target, package_limit))
                     except Exception as error:
                         self.downloads.update("dos", ident, state="error", phase="Failed", error=str(error))
                         raise
@@ -385,9 +454,10 @@ class DosPromptStore:
                     if changed:
                         atomic_file(marker, json.dumps(installed).encode())
                     self.processed += 1
-                    self.downloads.update("dos", ident, state="waiting" if self.configuring else "done",
-                        percent=99 if self.configuring else 100,
-                        phase="Awaiting publication" if self.configuring else "Installed", error="", stage="install")
+                    if not self.configuring or changed:
+                        self.downloads.update("dos", ident, state="waiting" if self.configuring else "done",
+                            percent=99 if self.configuring else 100,
+                            phase="Awaiting publication" if self.configuring else "Installed", error="", stage="install")
                     continue
                 self.current = str(source.get("title", ident))
                 self.phase = "Waiting for preparation"
@@ -400,9 +470,12 @@ class DosPromptStore:
                 self._progress("Installing", 0.75, stage="install", stage_percent=0)
                 if source.get("post_install"):
                     self._progress("Post-install script", 0.85, stage="convert")
-                    tools_dir = base / "UTILS" / "BIN"
-                    tools = ({"UTILS/BIN/" + path.name: path.read_bytes() for path in tools_dir.iterdir() if path.is_file()}
-                             if tools_dir.is_dir() else {})
+                    tools = {}
+                    for directory in package_paths(config, installed):
+                        tools_dir = base / directory
+                        if tools_dir.is_dir():
+                            tools.update({directory + "/" + path.name: path.read_bytes()
+                                          for path in tools_dir.iterdir() if path.is_file()})
                     incoming = run_post_install(incoming, source, tools, package_limit)
                 if len(incoming) > MAX_FILES or sum(len(value) for value in incoming.values()) > package_limit:
                     raise DosError("Software exceeds per-package extraction safety limits")
@@ -431,6 +504,11 @@ class DosPromptStore:
                     if destination.exists() and not destination.is_file():
                         raise DosError(f"Configured DOS file is not a regular file: {filename}")
                     atomic_file(destination, contents)
+            if preparing and any("path" in source for source in config["sources"]):
+                autoexec = base / "AUTOEXEC.BAT"
+                configured = root_files.get("AUTOEXEC.BAT", b"")
+                contents = autoexec.read_bytes() if autoexec.exists() else configured
+                atomic_file(autoexec, autoexec_with_path(contents, configured, package_paths(config, installed)))
             files = {}
             self.phase = "Checking installed files"
             if preparing and config.get("software_catalog"):
@@ -536,7 +614,7 @@ class DosPromptStore:
             kind = "floppy" if media.suffix == ".img" else "iso"
             drive = "a" if kind == "floppy" else "e"
             commands.append(f"imgmount {drive} media/{media.name} -t {kind}")
-        commands += ["c:", "set PATH=C:\\FREEDOS\\BIN;Z:\\", "cls",
+        commands += ["c:", "set PATH=Z:\\", "cls",
                      "echo THelpViewer DOS Prompt - use the DOS Prompt menu for media.",
                      "if exist C:\\AUTOEXEC.BAT call C:\\AUTOEXEC.BAT",
                      "Z:\\COMMAND.COM", "echo THelpViewer DOS session ended.", "pause >nul"]
@@ -572,6 +650,7 @@ class DosPromptStore:
             "max_overlay_bytes": self.overlay_limit(account_id) if account_id else 0,
             "overlay_files": list(overlay), "remote_files": remote_files,
             "allow_full_disk_fallback": self.config.get("allow_full_disk_fallback") is True,
+            "text_rendering": self.config.get("text_rendering", True),
             "max_media_bytes": self.config.get("max_media_bytes", 128 * 1024 * 1024),
         }
         return buffer.getvalue(), metadata
