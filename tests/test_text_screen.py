@@ -204,32 +204,18 @@ animatedView._onMotionChange();assert.equal(timers.size,0); // Already queued pr
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is required")
-def test_character_screen_uses_native_phase_cursor_and_updates_owned_cells():
+def test_shared_text_screen_requires_an_explicit_bitmap_font():
     script = r'''
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const source=fs.readFileSync('www/assets/tv-core.js','utf8');
 const a=source.indexOf('class TVTextScreen extends TVView'),b=source.indexOf('class TVImage extends TVView',a);
 class TVView {constructor(){this.root=null;}bindRoot(root){this.root=root;return this;}}
-class Element {constructor(){this.children=[];this.style={};}appendChild(child){this.children.push(child);}
- replaceChildren(...children){this.children=children;}}
-global.document={createElement:()=>new Element()};
-global.window={setInterval(){throw Error('Live screen created an independent blink clock');},clearInterval(){}};
-const displayCp437Char=code=>String.fromCharCode(code);
 eval(source.slice(a,b)+';global.Screen=TVTextScreen');
 const view=new Screen(),data={cols:2,rows:1,cells:[[65,1,0],[60,0,1]],palette:['#000000','#aaaaaa'],
- blink:[true,false],blinkVisible:false,cursor:{index:1,visible:true,start:80,end:100}};
-const root=new Element();view.setData(data).bindRoot(root);
-assert.equal(view._blinkTimer,null);assert.equal(root.children.length,1);
-const first=root.children[0].children[0],second=root.children[0].children[1];
-assert.equal(first.children[0].textContent,'A');assert.equal(first.style.color,'#000000');
-assert.equal(second.children[0].textContent,'<');assert(second.style.backgroundImage.includes('80%'));
-view.setData({...data,blinkVisible:true,cursor:{...data.cursor,visible:false}});
-assert.equal(root.children[0].children[0],first);assert.equal(first.style.color,'#aaaaaa');
-assert.equal(second.style.backgroundImage,'');assert.equal(view._blinkTimer,null);
-for(const bad of [{...data,blinkVisible:1},{...data,cursor:{...data.cursor,index:2}},
- {...data,cursor:{...data.cursor,start:-1}},{...data,cursor:{...data.cursor,end:79}}])
- assert.throws(()=>view.setData(bad),TypeError);
-view.destroy();assert.equal(view.root,null);assert.equal(view._blinkTimer,null);
+ blink:[true,false]};
+for(const font of [undefined,null,{}, {width:8,height:16,data:new Uint8Array(4)}])
+ assert.throws(()=>view.setData({...data,font}),/bitmap font/);
+assert.equal(view.root,null);assert.equal(view.getData(),null);
 '''
     result = subprocess.run([shutil.which("node"), "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr

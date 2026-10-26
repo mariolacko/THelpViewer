@@ -734,8 +734,8 @@ async function run() {
                 if (player.allTracks.length!==2) { throw new Error('Closed player applied a stale catalog response'); }
             } finally { player.close(); window.fetch=originalFetch; }
         })()`, true);
-        // Paint actual DOM text backgrounds at fractional zooms. Adjacent colors
-        // must meet directly, without black seams or antialiased dark stripes.
+        // Scale native pixel frames, not an HTML grid, at fractional zooms.
+        // Adjacent colors and continuous strokes must not develop dark seams.
         for (const [width,height,dpr,rows] of [[1313,937,1,25],[959,733,1,25],[639,511,1,50],[1007,803,2,50]]) {
             await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:dpr,mobile:false});
             const clip = await evaluate(`(async()=>{
@@ -749,18 +749,26 @@ async function run() {
                     const view=new TV.TVDosView(new TV.TVRect()),root=TV.TVView._fromHTML(view.draw());
                     document.body.append(root);view.bindRoot(root);window.cellScreen=view;
                     Object.assign(root.style,{position:'fixed',inset:'0',zIndex:'2147483647'});
+                    view.owner={fitScreen(){}};
+                    view.ci={width:()=>640,height:()=>400};
+                    window.nativeScreenRect=()=>{
+                        const r=view.canvas.getBoundingClientRect();
+                        const scale=Math.min(r.width/640,r.height/400),width=640*scale,height=400*scale;
+                        return {left:r.left+(r.width-width)/2,top:r.top+(r.height-height)/2,width,height};
+                    };
                 }
                 await document.fonts.ready;
-                const view=window.cellScreen,rows=${rows},packet=new Uint8Array(64+80*rows*2);
-                packet.set([1,80,rows,rows===50?8:16,8,0,1]);packet[21]=170;packet[23]=170;
-                for(let index=0;index<80*rows;index++){
-                    packet[64+index*2]=32;packet[65+index*2]=(1+(index+Math.floor(index/80))%2)<<4;
+                const view=window.cellScreen,rows=${rows},pixels=new Uint8ClampedArray(640*400*4);
+                for(let y=0;y<400;y++)for(let x=0;x<640;x++){
+                    const i=(y*640+x)*4,green=(Math.floor(x/8)+Math.floor(y/(400/rows)))%2;
+                    pixels.set(green?[0,170,0,255]:[0,0,170,255],i);
                 }
-                view.setScreen(packet);
+                view.renderFrame(null,pixels);
                 await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-                view.layoutText();
-                const rect=view.textScreen.root.getBoundingClientRect();
-                return {x:Math.ceil(rect.x)+2,y:Math.ceil(rect.y)+2,width:Math.floor(rect.width)-4,height:Math.floor(rect.height)-4,scale:1};
+                if(view.root.querySelectorAll('canvas').length!==1||view.root.querySelector('.tv-text-screen'))
+                    throw Error('DOS video frame created character nodes');
+                const rect=nativeScreenRect();
+                return {x:Math.ceil(rect.left)+2,y:Math.ceil(rect.top)+2,width:Math.floor(rect.width)-4,height:Math.floor(rect.height)-4,scale:1};
             })()`);
             const capture=await send('Page.captureScreenshot',{format:'png',clip});
             const wrong=await evaluate(`(async()=>{
@@ -774,20 +782,19 @@ async function run() {
                 return wrong;
             })()`);
             if(wrong)throw new Error('Text backgrounds have '+wrong+' seam pixels at '+width+' / DPR '+dpr+' / '+rows+' rows');
-            // Box-drawing glyphs, not just backgrounds, must join at every
-            // physical pixel. Uniform glyph transforms used to skip rows on DPR 2.
+            // Single and double strokes cross every row/column of the bitmap.
             for(const vertical of [true,false]){
                 const screen=await evaluate(`(async()=>{
-                    const view=cellScreen,packet=new Uint8Array(64+80*${rows}*2);
-                    packet.set([1,80,${rows},${rows}===50?8:16,8,0,1]);packet[21]=170;packet.set([255,255,255],61);
-                    for(let i=0;i<80*${rows};i++){
-                        const n=${vertical}?i%80:Math.floor(i/80);
-                        packet[64+i*2]=n===10?${vertical?179:196}:n===20?${vertical?186:205}:32;
-                        packet[65+i*2]=31;
+                    const view=cellScreen,pixels=new Uint8ClampedArray(640*400*4),cellHeight=400/${rows};
+                    for(let y=0;y<400;y++)for(let x=0;x<640;x++){
+                        const pos=${vertical}?x:y,step=${vertical}?8:cellHeight;
+                        const n=Math.floor(pos/step),offset=pos%step;
+                        const light=(n===10&&offset===3)||(n===20&&(offset===2||offset===5));
+                        pixels.set(light?[255,255,255,255]:[0,0,170,255],(y*640+x)*4);
                     }
-                    view.setScreen(packet);
+                    view.renderFrame(null,pixels);
                     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-                    return view.textScreen.root.getBoundingClientRect().toJSON();
+                    return nativeScreenRect();
                 })()`);
                 const capture=await send('Page.captureScreenshot',{format:'png'});
                 const gaps=await evaluate(`(async()=>{
@@ -815,7 +822,7 @@ async function run() {
                 if(gaps)throw Error('Box glyphs have '+gaps+' gaps at '+width+' / DPR '+dpr+' / '+rows+' rows / vertical '+vertical);
             }
         }
-        await evaluate(`cellScreen.destroy();cellScreen.root.remove();delete window.cellScreen`);
+        await evaluate(`cellScreen.destroy();cellScreen.root.remove();delete window.cellScreen;delete window.nativeScreenRect`);
         await send('Page.navigate', { url: appUrl + '?topic=719&file=References/diagnostics.json.gz&line=1#bookmark' });
         await wait(`document.querySelector('[data-tv-bundle-window]')?._tvWindowView?.currentTopic === '719'
             && window.location.search === '?file=References%2Fdiagnostics.json.gz&topic=719&line=1'

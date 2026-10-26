@@ -3452,7 +3452,6 @@ class TVBundleApp extends TVProgram {
             this.dosWindow?.handleEvent(event);
             return;
         } else if (event.command === "account-logout") {
-            this.dialogManager.open("login");
             this.dialogManager.get("login")?.handleEvent(new TVEvent(TV.evCommand, { command: "login-sign-out" }));
         } else if (String(event.command).startsWith("account-")) {
             if (["account-rebuild-dos", "account-rebuild-midi"].includes(event.command)) {

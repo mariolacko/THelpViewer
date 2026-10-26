@@ -12,8 +12,6 @@ def load_dos_config(path: Path | None) -> dict:
         data = read_source_manifest(path, "DOS", ID_RE)
     except ValueError as error:
         raise DosError(str(error)) from error
-    if not isinstance(data.get("text_rendering", True), bool):
-        raise DosError("DOS text_rendering must be a boolean")
     if any(key in data for key in ("initial_files", "autoexec.bat", "config.sys")):
         raise DosError("Use files entries with path and text/base64 instead of initial_files/autoexec.bat/config.sys")
     if any(key in data for key in ("max_c_bytes", "max_c_files")):

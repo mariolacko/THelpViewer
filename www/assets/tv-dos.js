@@ -2,7 +2,7 @@
 (function () {
 "use strict";
 const TV = window.THelpViewerTV;
-const { TVView, TVGroup, TVWindow, TVDialog, TVButton, TVTextScreen, TVStaticText, TVMessageBox, TVRect, TVPoint, TVEvent, evKeyDown,
+const { TVView, TVGroup, TVWindow, TVDialog, TVButton, TVStaticText, TVMessageBox, TVRect, TVPoint, TVEvent, evKeyDown,
     evMouseDown, evMouseUp, evMouseMove, evCommand, sfVisible, sfDragging, sfModal, bfDefault, escapeHtml, measureCells, fillBorders } = TV;
 const PREFIX = new URL("dos/emulators/", document.currentScript.src).href;
 let runtimePromise;
@@ -22,14 +22,14 @@ function loadRuntime() {
         runtimePromise = new Promise((resolve, reject) => {
             if (window.emulators) { resolve(window.emulators); return; }
             const script = document.createElement("script");
-            script.src = PREFIX + "emulators.js?v=20261018a";
+            script.src = PREFIX + "emulators.js?v=20261019a";
             const timer = setTimeout(() => {
                 script.remove(); reject(new Error("DOSBox script loading timed out"));
             }, 20000);
             script.onload = () => { clearTimeout(timer); resolve(window.emulators); };
             script.onerror = () => { clearTimeout(timer); script.remove(); reject(new Error("Cannot load DOSBox runtime")); };
             document.head.appendChild(script);
-        }).then((runtime) => { runtime.pathPrefix = PREFIX; runtime.pathSuffix = "?v=20261018a"; return runtime; }).catch((error) => { runtimePromise = null; throw error; });
+        }).then((runtime) => { runtime.pathPrefix = PREFIX; runtime.pathSuffix = "?v=20261019a"; return runtime; }).catch((error) => { runtimePromise = null; throw error; });
     }
     return runtimePromise;
 }
@@ -66,8 +66,7 @@ class TVDosView extends TVGroup {
         this.canvas = root?.querySelector("canvas") || null;
         if (!this.canvas) { return this; }
         this.surface = this.canvas.parentElement;
-        if (!this.textScreen) {
-            this.textScreen = this.insert(new TVTextScreen(new TVRect()));
+        if (!this.pauseDialog) {
             this.pauseDialog = this.insert(new TVDialog(new TVRect(0, 0, 30, 7), "Paused"));
             this.pauseDialog.flags = 0;
             this.pauseDialog.setHelpCtx(TV.TV_HELP_CONTEXTS.hcDosPrompt);
@@ -81,7 +80,6 @@ class TVDosView extends TVGroup {
         root.appendChild(this.pauseDialog.overlay);
         this.resizeObserver?.disconnect();
         this.resizeObserver = new ResizeObserver(() => {
-            this.layoutText();
             if (this.pauseDialog.isOpen()) { this.pauseDialog.center(); }
         });
         this.resizeObserver.observe(root);
@@ -169,9 +167,7 @@ class TVDosView extends TVGroup {
             this.screenReady = true;
             this.canvas.width = width; this.canvas.height = height;
             this.owner.fitScreen();
-            this.layoutText();
         }
-        if (this.textMode) { return; }
         const image = new ImageData(width, height);
         if (rgba) { image.data.set(rgba); }
         else {
@@ -180,46 +176,6 @@ class TVDosView extends TVGroup {
             }
         }
         this.canvas.getContext("2d").putImageData(image, 0, 0);
-    }
-    setScreen(packet) {
-        if (!(packet instanceof Uint8Array) || packet.length < 16 || !this.canvas) { return; }
-        const cols = packet[1], rows = packet[2], height = packet[3];
-        const text = this.owner?.session?.text_rendering !== false
-            && packet[0] === 1 && cols > 0 && cols <= 160 && rows > 0 && rows <= 100
-            && [8, 14, 16].includes(height) && [8, 9].includes(packet[4]) && packet.length === 64 + cols * rows * 2;
-        this.textMode = text;
-        this.canvas.hidden = text;
-        if (!text) {
-            if (this.textScreen.root) { this.textScreen.root.hidden = true; }
-            return;
-        }
-        const palette = Array.from({ length: 16 }, (_, index) => "#" + Array.from(packet.subarray(16 + index * 3, 19 + index * 3), value => value.toString(16).padStart(2, "0")).join(""));
-        const blink = [], cells = Array.from({ length: cols * rows }, (_, index) => {
-            const attr = packet[65 + index * 2]; blink.push(Boolean(packet[5] && (attr & 128)));
-            return [packet[64 + index * 2], attr & 15, (attr >> 4) & (packet[5] ? 7 : 15)];
-        });
-        this.textScreen.setData({ cols, rows, cells, palette, blink, blinkVisible: Boolean(packet[6]),
-            cursor: { index: packet[9] * cols + packet[8], visible: Boolean(packet[7]) && packet[8] < cols && packet[9] < rows,
-                start: Math.min(100, packet[10] * 100 / height), end: Math.min(100, Math.max(packet[10], packet[11] + 1) * 100 / height) } });
-        if (!this.textScreen.root) {
-            const root = TVView._fromHTML(this.textScreen.draw());
-            this.surface.appendChild(root); this.textScreen.bindRoot(root);
-        }
-        this.textScreen.root.hidden = false;
-        this.layoutText();
-    }
-    layoutText() {
-        if (!this.textMode || !this.textScreen?.root || !this.root?.clientWidth || !this.canvas.width) { return; }
-        const root = this.textScreen.root;
-        const scale = Math.min(this.root.clientWidth / this.canvas.width, this.root.clientHeight / this.canvas.height);
-        const pixels = window.devicePixelRatio || 1, snap = value => Math.round(value * pixels) / pixels;
-        const width = snap(this.canvas.width * scale), height = snap(this.canvas.height * scale);
-        // Grid backgrounds paint directly at display size. Transform only the
-        // glyphs: scaling separate background boxes leaves dark antialias seams.
-        root.style.width = `${width}px`; root.style.height = `${height}px`;
-        root.style.left = `${snap((this.root.clientWidth - width) / 2)}px`;
-        root.style.top = `${snap((this.root.clientHeight - height) / 2)}px`;
-        this.textScreen._layoutText();
     }
     setPaused(paused) {
         if (!this.root || !this.pauseDialog) { return; }
@@ -240,7 +196,7 @@ class TVDosView extends TVGroup {
         this.releaseInput();
         for (const [target, type, listener, capture] of this.listeners) { target.removeEventListener(type, listener, capture); }
         this.listeners = [];
-        this.resizeObserver?.disconnect(); this.textScreen?.destroy(); this.pauseDialog?.destroy();
+        this.resizeObserver?.disconnect(); this.pauseDialog?.destroy();
         this.ci = null;
     }
 }
@@ -466,13 +422,13 @@ class TVDosWindow extends TVWindow {
                 const suffix = runtime.pathSuffix;
                 try {
                     if (backend === "dosboxWorker") {
-                        const url = new URL("../tv-dos-worker.js?v=20261018a", PREFIX).href;
+                        const url = new URL("../tv-dos-worker.js?v=20261019a", PREFIX).href;
                         runtime.pathSuffix = ""; // A blob worker URL must not acquire a query suffix.
                         if (window.isSecureContext && TV.DosLocalConnection && typeof BroadcastChannel === "function") {
                             this.localConnection = new TV.DosLocalConnection(local);
                             runtime.wdosboxJs = this.localConnection.workerScript(url);
                             runtime.pathPrefix = "";
-                        } else { runtime.wdosboxJs = "../tv-dos-worker.js?v=20261018a"; }
+                        } else { runtime.wdosboxJs = "../tv-dos-worker.js?v=20261019a"; }
                     }
                     if (backend === "dosboxDirect") {
                         this.notice("Worker unavailable: loading full disk fallback...");
@@ -509,9 +465,6 @@ class TVDosWindow extends TVWindow {
             this.starting = true;
             this.notice("Starting DOS command shell...");
             ci.events().onFrame((rgb, rgba) => this.view.renderFrame(rgb, rgba));
-            ci.events().onMessage((tag, packet) => {
-                if (tag === "thelp-screen" && this.view.ci === ci) { this.view.setScreen(packet); }
-            });
             ci.events().onSoundPush((samples) => this.playSound(samples));
             ci.events().onExit(() => {
                 if (this.view.ci === ci) {
@@ -741,7 +694,7 @@ class TVDosWindow extends TVWindow {
             document.removeEventListener("fullscreenchange", this.fullscreenChanged);
         }
         this.fullscreenChanged = () => {
-            this.view.releaseInput(); this.view.focus(); this.view.layoutText();
+            this.view.releaseInput(); this.view.focus();
             if (document.fullscreenElement === screen) { return; }
             if (this.pendingScreenResize) { this.fitScreen(); }
             document.removeEventListener("fullscreenchange", this.fullscreenChanged);

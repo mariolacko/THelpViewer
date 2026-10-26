@@ -279,7 +279,6 @@ button:focus-visible {
 .tv-dos-view { position: relative; background: #000; outline: none; }
 .tv-dos-surface { position: absolute; inset: 0; overflow: hidden; }
 .tv-dos-surface > canvas { background: #000; object-fit: contain; image-rendering: pixelated; }
-.tv-dos-surface > .tv-text-screen-text { position: absolute; }
 .tv-dos-view.is-paused > .tv-dos-surface,
 .tv-dos-view.is-dragging > .tv-dos-surface { filter: grayscale(1); }
 .tv-dos-window .tv-viewport > .tv-static-text { color: #fff; background: #000; }
@@ -1400,19 +1399,6 @@ button.tv-status-item {
     display: inline-block;
     vertical-align: top;
     image-rendering: pixelated;
-}
-
-.tv-text-screen-text { display: inline-grid; font-family: var(--tv-font-chrome) !important; line-height: 1; white-space: pre; }
-.tv-text-screen-row { display: grid; min-height: 0; }
-.tv-text-screen-row > span { position: relative; min-width: 0; }
-.tv-text-screen-row > span > span {
-    position: absolute;
-    z-index: 1;
-    left: 0;
-    top: 0;
-    width: 1ch;
-    height: 1em;
-    transform-origin: 0 0;
 }
 
 .tv-index-document {

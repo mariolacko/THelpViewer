@@ -1,4 +1,4 @@
-"""Rebuild the pinned classic DOSBox with THelp's small text-screen bridge.
+"""Rebuild the pinned classic DOSBox canvas backend.
 
 Run inside the official emscripten/emsdk:4.0.8 image; see the bundled README.
 Only generated wdosbox.js/wasm are published. Source archives remain untouched.
@@ -50,21 +50,6 @@ def main() -> None:
     replace_once(cmake, "set(GL4ES true)", "set(GL4ES false)")
     for target in ("dhry2", "sokol", "dosbox-sdl", "dosbox-x-sdl2"):
         replace_once(cmake, f'include("${{TARGETS_DIR}}/{target}.cmake")', "")
-    with cmake.open("a") as output:
-        output.write(f'\ntarget_sources(wdosbox PRIVATE "{assets / "native/text-screen.cpp"}")\n'
-                     'target_include_directories(wdosbox PRIVATE "${NATIVE_DIR}/dosbox/src/ints")\n')
-    native = source / "native/jsdos/dosbox/jsdos-main.cpp"
-    replace_once(native, "void GFX_EndUpdate(const Bit16u *changedLines) {",
-                 "extern void thelp_video_frame();\nvoid GFX_EndUpdate(const Bit16u *changedLines) {")
-    replace_once(native, "    if (changedLines) {", "    thelp_video_frame();\n    if (changedLines) {")
-    # Keep binary screen packets typed; ordinary upstream log messages remain
-    # strings. The distributed API needs only this corresponding protocol edit.
-    replace_once(source / "src/protocol/protocol.ts",
-                 'private onLog(tag: string, message: string) {\n        this.eventsImpl.fireMessage("log", "[" + tag + "]" + message);',
-                 'private onLog(tag: string, message: string | Uint8Array) {\n'
-                 '        if (tag === "thelp-screen" && message instanceof Uint8Array) {\n'
-                 '            this.eventsImpl.fireMessage("thelp-screen", message); return;\n        }\n'
-                 '        this.eventsImpl.fireMessage("log", "[" + tag + "]" + message);')
     subprocess.run(["emcmake", "cmake", "-GUnix Makefiles", "-DCMAKE_BUILD_TYPE=Release", "-DDOSBOX_DEBUG=OFF",
                     "-S", str(source), "-B", str(build)], check=True)
     subprocess.run(["cmake", "--build", str(build), "--target", "wdosbox", "-j4"], check=True)
@@ -72,14 +57,7 @@ def main() -> None:
     worker = (source / "src/dos/dosbox/ts/worker-server.js").read_text().replace("@MODULE_NAME@", "WDOSBOX").replace("@SOCKDRIVE@", "")
     (options.output_dir / "wdosbox.js").write_text((build / "wdosbox.js").read_text() + "\n" + worker)
     shutil.copyfile(build / "wdosbox.wasm", options.output_dir / "wdosbox.wasm")
-    api = (assets / "emulators/emulators.js").read_text()
-    original = 'onLog(e,t){this.eventsImpl.fireMessage("log","["+e+"]"+t)}'
-    modified = 'onLog(e,t){if(e==="thelp-screen"&&t instanceof Uint8Array){this.eventsImpl.fireMessage("thelp-screen",t);return}this.eventsImpl.fireMessage("log","["+e+"]"+t)}'
-    if api.count(modified) != 1:
-        if api.count(original) != 1:
-            raise RuntimeError("Pinned emulators API no longer matches")
-        api = api.replace(original, modified)
-    (options.output_dir / "emulators.js").write_text(api)
+    shutil.copyfile(assets / "emulators/emulators.js", options.output_dir / "emulators.js")
 
 
 if __name__ == "__main__":

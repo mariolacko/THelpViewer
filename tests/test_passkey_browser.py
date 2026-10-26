@@ -15,7 +15,7 @@ from test_browser_smoke import CHROME, NODE, _free_port, _wait_for_file, _wait_f
 @pytest.mark.skipif(NODE is None or CHROME is None, reason="Node.js and Chrome are required")
 def test_passkey_enrollment_and_login_in_browser():
     with tempfile.TemporaryDirectory(prefix="thelp-passkey-state-") as state_dir:
-        state = Path(state_dir)
+        state = Path(state_dir).resolve()
         helps = state / "helps"
         helps.mkdir()
         empty = state / "empty.json"
@@ -26,14 +26,22 @@ def test_passkey_enrollment_and_login_in_browser():
         server = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "thelpviewer.server.app:app", "--host", "127.0.0.1",
              "--port", str(port), "--log-level", "warning"],
-            cwd=Path.cwd(), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
-            env={**os.environ, "THELP_STATE_DIR": state_dir, "THELP_HELPS_DIR": str(helps),
+            cwd=Path.cwd(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            env={**os.environ, "THELP_STATE_DIR": str(state), "THELP_HELPS_DIR": str(helps),
+                 "THELP_DATA_DIR": str(state), "THELP_SOURCES_DIR": str(state / "sources"),
+                 "THELP_DOWNLOADS_DIR": str(state / "downloads"), "THELP_DOCS_DIR": str(state / "public-docs"),
+                 "THELP_DEV_AUTO_LOGIN": "0", "THELP_PUBLIC_BASE_URL": "",
                  "THELP_STATISTICS_PATH": str(state / "statistics.sqlite3"),
                  "THELP_MIDI_SOURCES_PATH": str(empty), "THELP_DOS_CONFIG_PATH": str(empty),
                  "THELP_AUTH_ORIGIN": app_url.rstrip("/")},
         )
         try:
-            _wait_for_url(app_url + "healthz")
+            try:
+                _wait_for_url(app_url + "healthz", timeout=60)
+            except TimeoutError:
+                if server.poll() is not None:
+                    pytest.fail(server.stderr.read())
+                raise
             bootstrap = server.stdout.readline().strip().split(": ", 1)[1]
             assert re.fullmatch(r"[A-Z2-9]{5}(?:-[A-Z2-9]{5}){4}", bootstrap)
             with tempfile.TemporaryDirectory(prefix="thelp-passkey-chrome-") as profile_dir:
@@ -92,7 +100,8 @@ async function run() {
         const deadline = Date.now() + 10000;
         const check = () => {
             const item = document.querySelector('[data-tv-command="account-login"]');
-            if (item) { item.click(); resolve(true); return; }
+            const welcome = document.querySelector('.tv-welcome-window')?.closest('.tv-dialog-overlay')?._tvView;
+            if (item && welcome?.isOpen()) { welcome.close(); item.click(); resolve(true); return; }
             if (Date.now() > deadline) { reject(new Error('Login menu did not load')); return; }
             setTimeout(check, 30);
         };
@@ -100,6 +109,22 @@ async function run() {
     })`, true);
     const guestPlacement=await evaluate(`(()=>{const nav=document.querySelector('.tv-menu-items'),item=document.querySelector('.tv-menu-right');return nav&&item&&Math.abs(nav.getBoundingClientRect().right-item.getBoundingClientRect().right)<1;})()`);
     if(!guestPlacement)throw new Error('Login was not aligned to the right');
+    await evaluate(`new Promise((resolve,reject)=>{
+        const end=Date.now()+5000;const check=()=>{
+            const login=document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView;
+            if(login.session?.enabled&&!login.actions.some(button=>button.disabled)){resolve();return;}
+            if(Date.now()>end){reject(Error('Login actions did not become ready'));return;}setTimeout(check,20);
+        };check();})`,true);
+    await evaluate(`(()=>{
+        const login=document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView;
+        if(login.root.querySelector('[data-tv-command="login-sign-out"]'))throw Error('Login still offers Sign Out');
+        if(document.activeElement!==login.username.root)throw Error('Login does not focus email/username');
+        const client=login.content.root.getBoundingClientRect();
+        for(const button of login.actions){
+            const bounds=button.root.getBoundingClientRect();
+            if(bounds.left<client.left||bounds.right>client.right||bounds.bottom>client.bottom)throw Error('Login button outside frame');
+        }
+    })()`);
     await evaluate(`document.querySelector('.tv-login-window [data-tv-command="login-register"]').click()`);
     await evaluate(`(() => {
         const dialog = document.querySelector('.tv-registration-window');
@@ -447,11 +472,52 @@ async function run() {
         .some((node) => node._tvMenuItem?.name.replaceAll('~', '') === 'Registration Token')`);
     if (tokenMenuAfterSignOut) { throw new Error('Admin registration-token menu remained after sign-out'); }
     if(await evaluate(`document.querySelector('.tv-menu-right [data-tv-command="account-login"]')?.textContent.replaceAll('~','')`)!=='Login')throw new Error('Guest Login menu was not restored');
+    if(!await evaluate(`!accountTestLogin.isOpen()`))throw Error('Sign Out opened Login');
+    await evaluate(`document.querySelector('[data-tv-command="account-login"]').click()`);
+    await evaluate(`accountTestLogin.refreshSession()`,true);
+    // Cancellation, duplicate submissions and closing must not leave the form
+    // disabled or let an old ceremony overwrite a newly opened Login.
+    await evaluate(`(async()=>{
+        const TV=window.THelpViewerTV,login=accountTestLogin;
+        const authenticate=TV.TVLoginDialog.authenticate;
+        login.username.setData('test@example.test');
+        try{
+            TV.TVLoginDialog.authenticate=async()=>{throw new DOMException('Cancelled','NotAllowedError');};
+            await login.passkey();
+            if(!login.isOpen()||!login.status.text.includes('cancelled')||login.actions.some(button=>button.disabled)){
+                throw Error('Cancelled Passkey cannot be retried');
+            }
+            TV.TVLoginDialog.authenticate=async()=>({authenticated:false});
+            await login.passkey();
+            if(!login.isOpen()||!login.status.text.includes('did not confirm')||login.actions.some(button=>button.disabled)){
+                throw Error('Unverified Passkey was accepted or cannot be retried');
+            }
+            TV.TVLoginDialog.authenticate=async()=>({authenticated:true});
+            await login.passkey();
+            if(!login.isOpen()||!login.status.text.includes('Allow cookies'))throw Error('Unconfirmed session counted as login');
+            let calls=0,signal;
+            TV.TVLoginDialog.authenticate=(username,abortSignal)=>{
+                calls++;signal=abortSignal;
+                return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true}));
+            };
+            const first=login.passkey();
+            await login.passkey();
+            if(calls!==1||!login.actions.every(button=>button.disabled))throw Error('Duplicate Passkey ceremony started');
+            login.close();login.open();await login.refreshSession();await first;
+            if(!signal.aborted||!login.isOpen()||!login.status.text.includes('Sign In uses a Passkey')
+                    ||login.actions.some(button=>button.disabled))throw Error('Closed ceremony changed reopened Login');
+        }finally{TV.TVLoginDialog.authenticate=authenticate;}
+    })()`,true);
     await evaluate(`(()=>{const dialog=document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView;
         dialog.username.setData('test@example.test');dialog.passwordInput.setData('Moonlit rivers carry 42 boats!');
         dialog.dialog.querySelector('[data-tv-command="login-password"]').click();})()`);
     await waitSecurity(`document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView.status.text.includes('Signed in as Test User')`);
+    if(await evaluate(`accountTestLogin.isOpen()||Boolean(accountTestLogin.passwordInput.getData())`))throw Error('Password login did not close and clear the password');
     await evaluate(`document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView.signOut()`,true);
+    await evaluate(`document.querySelector('[data-tv-command="account-login"]').click()`);
+    await evaluate(`accountTestLogin.refreshSession()`,true);
+    // Signing in requires credentials.get, not credentials.create.
+    await evaluate(`window.loginOriginalCreate=navigator.credentials.create;navigator.credentials.create=undefined`);
     await evaluate(`(() => {
         const dialog = document.querySelector('.tv-login-window');
         dialog.querySelector('.tv-input-line').value = 'test@example.test';
@@ -469,10 +535,12 @@ async function run() {
         check();
     })`, true);
     const session = await evaluate(`fetch('/api/auth/session').then((response) => response.json())`, true);
+    if(await evaluate(`accountTestLogin.isOpen()`))throw Error('Verified Passkey login did not close Login');
     if (!session.authenticated || session.user.username !== 'test@example.test'
         || session.user.role !== 'admin') {
         throw new Error('Authenticated server session is missing');
     }
+    await evaluate(`navigator.credentials.create=window.loginOriginalCreate`);
     // Create from the real administrator dialog, then enroll as the new user.
     await evaluate(`(() => {
         const login = document.querySelector('.tv-login-window').closest('.tv-dialog-overlay')._tvView;

@@ -1062,7 +1062,6 @@ class TVApplication extends TVProgram {
         } else if (event.command === "downloads-failed") {
             void this.downloadProgress?.failedItem(control, this.desktopView);
         } else if (event.command === "account-logout") {
-            this.dialogManager.open("login");
             this.dialogManager.get("login")?.handleEvent(new TVEvent(evCommand, { command: "login-sign-out" }));
         } else if (String(event.command).startsWith("account-")) {
             if (["account-rebuild-dos", "account-rebuild-midi"].includes(event.command)) {

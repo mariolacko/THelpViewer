@@ -1,10 +1,10 @@
-"""The distributed bridge recipe matches its pinned sources and paired assets."""
+"""The distributed canvas backend matches its pinned sources and paired assets."""
 from pathlib import Path
 import runpy
 import sys
 
 
-def test_text_backend_recipe_and_published_asset_mirrors(tmp_path, monkeypatch):
+def test_canvas_backend_recipe_and_published_asset_mirrors(tmp_path, monkeypatch):
     assets = Path("www/assets/dos")
     build_script = assets / "native/build.py"
     recipe = runpy.run_path(str(build_script))
@@ -26,10 +26,11 @@ def test_text_backend_recipe_and_published_asset_mirrors(tmp_path, monkeypatch):
     assert len(commands) == 2
     source = work / "source"
     native = (source / "native/jsdos/dosbox/jsdos-main.cpp").read_text()
-    assert native.count("thelp_video_frame();") == 2  # declaration and frame call
-    assert 'fireMessage("thelp-screen", message)' in (source / "src/protocol/protocol.ts").read_text()
+    assert "thelp_video_frame" not in native
+    assert "thelp-screen" not in (source / "src/protocol/protocol.ts").read_text()
+    assert "thelp-screen" not in (output / "emulators.js").read_text()
     assert (output / "emulators.js").read_bytes() == (assets / "emulators/emulators.js").read_bytes()
     assert "WDOSBOX" in (output / "wdosbox.js").read_text()
-    for relative in ("native/build.py", "native/text-screen.cpp", "emulators/emulators.js",
+    for relative in ("native/build.py", "emulators/emulators.js",
                      "emulators/wdosbox.js", "emulators/wdosbox.wasm", "emulators/README.md", "tv-dos-worker.js"):
         assert (assets / relative).read_bytes() == (Path("thelpviewer/server/converter/assets/dos") / relative).read_bytes()

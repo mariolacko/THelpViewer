@@ -220,7 +220,16 @@ password-recovery endpoint in this change.
 
 Login's Sign In continues to use WebAuthn. Password submits the optional password
 with the email/original username, using the same HttpOnly/Secure/SameSite cookie
-policy. Password attempts are limited to 10 per account in 15 minutes (aliases
+policy. Login offers Sign In, Password, Register and Close; Sign Out belongs only
+to the authenticated account menu and does not open Login. The dialog closes
+after authentication verification and a fresh `/api/auth/session` check confirm
+the signed-in user. A cancelled browser prompt or failed/missing session keeps
+Login open with an explanation and allows retry. Pending sign-in disables repeat
+submissions; closing cancels the browser credential request and ignores its stale
+completion if Login is reopened. Registration retains its separate success
+MessageBox and closes both dialogs after confirmation.
+
+Password attempts are limited to 10 per account in 15 minutes (aliases
 share the limit), and 120 per client address/window to bound spraying; KDF work
 is also bounded. Counters contain hashes of identifiers/addresses, not passwords
 or raw addresses, and expire after the window. A shared reverse proxy may share

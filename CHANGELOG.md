@@ -4,6 +4,41 @@
 
 ### 3.0 development
 
+- Make Login a sign-in-only dialog; keep Sign Out in the account menu without
+  opening Login. Close after verified Passkey/password authentication and a
+  confirmed server session. Prevent duplicate submissions, cancel pending
+  Passkey requests on close and leave cancelled/failed sign-ins retryable.
+- Render DOS Prompt text and graphics through the same native DOSBox canvas.
+  Remove the per-character HTML grid, its CSS/layout code, text-mode setting
+  and native text-packet bridge. Preserve original VGA/custom fonts, colors,
+  cursor/blink, proportional sizing and the shared Pause/drag behavior; keep
+  UHF bitmap-font TextScreens unchanged.
+- Record JS-only application UI composition through existing TVision objects,
+  without per-application HTML templates or CSS layouts. Plan incremental removal
+  of redundant core CSS while retaining essential shared browser rendering and
+  optional Python server logic. No runtime CSS was removed in this design update.
+- Define optional application contributions to the top menu and shared bottom
+  status line, scoped to the active window through existing TVision views and
+  TVEvent commands. Record restoration on focus changes/close and modules with
+  neither contribution; this is a planned contract, not an implemented loader.
+- Distinguish permanent global application files/settings in
+  `data/<application-id>/` from virtual disks in `data/disk/<application-id>/`
+  and the optional `data/<application-id>.sqlite` database. No paths moved.
+- Record optional server-managed application databases at
+  `data/<application-id>.sqlite`, with account-scoped private records, explicit
+  schema migrations and preservation across cache cleanup or module removal.
+  This is part of the version 3 design; no database was created or relocated.
+- Extend the planned application storage contract with global permanent disks
+  in `data/disk/<application-id>/`, temporary per-user data in
+  `var/<account-id>/<application-id>/` and generated/global data in
+  `var/<application-id>/`. Keep ownership checks, separate permanent files from
+  caches, and retain shared service caches without per-application duplicates.
+  Runtime paths have not moved yet.
+- Record the approved application-disk layout
+  `data/disk/<account-id>/<application-id>/<drive>/`, including dos_prompt/c.
+  Plan shared disk APIs, the existing DOS adapter and verified data migration
+  before the module registry. This documents the design only; runtime paths and
+  private data have not changed.
 - Start 3.0.0.dev0 on the separate v3.0 development branch after the 2.1.0
   release. Record the application-module contract and implementation stages:
   a JavaScript client with an optional Python server component, shared host

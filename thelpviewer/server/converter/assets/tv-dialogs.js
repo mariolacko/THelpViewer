@@ -232,20 +232,22 @@ class TVLoginDialog extends TVDialog {
         const signIn = new TVButton(new TVRect(2, 7, 15, 9), "~S~ign In", "login-sign-in", bfDefault);
         const passwordSignIn = new TVButton(new TVRect(16, 7, 29, 9), "~P~assword", "login-password", bfNormal);
         const register = new TVButton(new TVRect(31, 7, 44, 9), "~R~egister", "login-register", bfNormal);
-        const signOut = new TVButton(new TVRect(24, 10, 39, 12), "Sign ~O~ut", "login-sign-out", bfNormal);
         const close = new TVButton(new TVRect(46, 7, 59, 9), "~C~lose", "login-close", bfNormal);
-        const status = new TVStaticText(new TVRect(2, 13, 59, 15), "Checking account status...");
-        super(new TVRect(0, 0, 64, 18), "Login");
+        const status = new TVStaticText(new TVRect(2, 10, 59, 13), "Checking account status...");
+        super(new TVRect(0, 0, 64, 16), "Login");
         this.setHelpCtx(hcAccount);
-        this.insert(new TVGroup(new TVRect(0, 0, 62, 16)).insertAll([
+        this.insert(new TVGroup(new TVRect(0, 0, 62, 14)).insertAll([
             new TVLabel(new TVRect(2, 1, 25, 2), "~E~mail or username", username), username,
             new TVLabel(new TVRect(2, 4, 59, 5), "Pass~w~ord (optional)", password), password,
-            signIn, passwordSignIn, register, signOut, close, status,
+            signIn, passwordSignIn, register, close, status,
         ]));
         this.username = username;
         this.passwordInput = password;
         this.status = status;
-        this.actions = [signIn, passwordSignIn, register, signOut];
+        this.actions = [signIn, passwordSignIn, register];
+        this.session = null;
+        this.loginRequest = null;
+        this.signingOut = false;
         this.onRegister = null;
         this.onSessionChange = null;
         this.sessionRequestVersion = 0;
@@ -266,11 +268,12 @@ class TVLoginDialog extends TVDialog {
         return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
     }
 
-    static async request(path, method = "GET", body) {
+    static async request(path, method = "GET", body, signal) {
         const response = await fetch(path, {
             method,
             credentials: "same-origin",
             cache: "no-store",
+            signal,
             ...(body === undefined ? {} : {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body),
@@ -287,8 +290,8 @@ class TVLoginDialog extends TVDialog {
         return data;
     }
 
-    static async post(path, body = {}) {
-        return TVLoginDialog.request(path, "POST", body);
+    static async post(path, body = {}, signal) {
+        return TVLoginDialog.request(path, "POST", body, signal);
     }
 
     static defaultPasskeyName() {
@@ -319,22 +322,22 @@ class TVLoginDialog extends TVDialog {
         return TVLoginDialog.credentialAnswer(credential, true);
     }
 
-    static async authenticate(username) {
+    static async authenticate(username, signal) {
         if (!window.isSecureContext || !navigator.credentials?.get) {
             throw new Error("Passkeys require HTTPS or localhost and a compatible browser.");
         }
         const prefix = "/api/auth/passkey/login";
-        const request = await TVLoginDialog.post(`${prefix}/options`, { username });
+        const request = await TVLoginDialog.post(`${prefix}/options`, { username }, signal);
         const options = request.options;
         options.challenge = TVLoginDialog.decodeBase64Url(options.challenge);
         options.allowCredentials = (options.allowCredentials || []).map(entry => ({
             ...entry, id: TVLoginDialog.decodeBase64Url(entry.id),
         }));
-        const credential = await navigator.credentials.get({ publicKey: options });
+        const credential = await navigator.credentials.get({ publicKey: options, signal });
         if (!credential) { throw new Error("Passkey operation was cancelled."); }
         return TVLoginDialog.post(`${prefix}/verify`, {
             ceremony_id: request.ceremony_id, credential: TVLoginDialog.credentialAnswer(credential, false),
-        });
+        }, signal);
     }
 
     static credentialAnswer(credential, registering) {
@@ -366,11 +369,29 @@ class TVLoginDialog extends TVDialog {
     open() {
         super.open();
         this.passwordInput.setData("");
+        this.status.setText("Checking account status...");
+        this.session = null;
+        this.updateActions();
         this.username.focus();
         void this.refreshSession();
     }
 
-    close() { this.passwordInput.setData(""); super.close(); }
+    close() {
+        this.sessionRequestVersion += 1;
+        this.loginRequest?.abort();
+        this.loginRequest = null;
+        this.passwordInput.setData("");
+        super.close();
+    }
+
+    updateActions() {
+        const disabled = Boolean(this.loginRequest) || !this.session?.enabled || this.session.authenticated;
+        this.actions.forEach(button => button.setState(sfDisabled, disabled));
+    }
+
+    setStatus(text) {
+        this.status.setText(wrapTextLines(text, this.status.bounds.width).join("\n"));
+    }
 
     async refreshSession() {
         const version = ++this.sessionRequestVersion;
@@ -378,16 +399,23 @@ class TVLoginDialog extends TVDialog {
             const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
             const session = await response.json();
-            if (version === this.sessionRequestVersion) { this.updateSession(session); }
+            if (version === this.sessionRequestVersion) { this.updateSession(session); return session; }
         } catch {
-            if (version === this.sessionRequestVersion) { this.status.setText("Account server is unavailable."); }
+            if (version === this.sessionRequestVersion) {
+                this.session = null;
+                this.updateActions();
+                this.setStatus("Account server is unavailable. Close Login and try again.");
+            }
         }
+        return null;
     }
 
     updateSession(data) {
         this.sessionRequestVersion += 1;
+        this.session = data;
+        this.updateActions();
         this.onSessionChange?.(data);
-        this.status.setText(!data.enabled
+        this.setStatus(!data.enabled
             ? "Passkey login is not configured for this host."
             : data.authenticated
                 ? `Signed in as ${data.user.display_name} (${data.user.username}).`
@@ -395,6 +423,7 @@ class TVLoginDialog extends TVDialog {
     }
 
     async passkey() {
+        if (this.loginRequest || !this.isOpen()) { return; }
         const username = this.username.getData().trim();
         if (!username) {
             this.status.setText("Enter email or username.");
@@ -403,47 +432,79 @@ class TVLoginDialog extends TVDialog {
         if (!this.username.valid()) {
             this.status.setText("Enter a valid email address or username."); this.username.focus(); return;
         }
-        if (!window.isSecureContext || !navigator.credentials?.create || !navigator.credentials?.get) {
-            this.status.setText("Passkeys require HTTPS or localhost and a compatible browser.");
+        if (!window.isSecureContext || !navigator.credentials?.get) {
+            this.setStatus("Passkeys require HTTPS or localhost and a compatible browser.");
             return;
         }
-        this.actions.forEach((button) => button.setState(sfDisabled, true));
+        const request = this.loginRequest = new AbortController();
+        this.updateActions();
+        this.status.setText("Confirm your Passkey in the browser...");
         try {
-            await TVLoginDialog.authenticate(username);
-            await this.refreshSession();
+            const result = await TVLoginDialog.authenticate(username, request.signal);
+            if (request.signal.aborted) { return; }
+            if (!result.authenticated) { throw new Error("The server did not confirm sign-in."); }
+            const session = await this.refreshSession();
+            if (request.signal.aborted) { return; }
+            if (!session?.authenticated || !session.user) {
+                throw new Error("Cannot confirm the signed-in session. Allow cookies and try again.");
+            }
+            this.close();
         } catch (error) {
-            this.status.setText(error?.message || "Passkey operation failed.");
+            if (!request.signal.aborted) {
+                this.setStatus(error?.name === "NotAllowedError"
+                    ? "Passkey cancelled or unavailable. Try again and choose your saved key."
+                    : error?.message || "Passkey operation failed.");
+            }
         } finally {
-            this.actions.forEach((button) => button.setState(sfDisabled, false));
+            if (this.loginRequest === request) { this.loginRequest = null; this.updateActions(); }
         }
     }
 
     async passwordLogin() {
+        if (this.loginRequest || !this.isOpen()) { return; }
         if (!this.username.valid() || !this.passwordInput.getData()) {
             this.status.setText("Enter your email/username and password."); return;
         }
-        this.actions.forEach(button => button.setState(sfDisabled, true));
+        const request = this.loginRequest = new AbortController();
+        this.updateActions();
+        this.status.setText("Signing in...");
         try {
-            await TVLoginDialog.post("/api/auth/password/login", {
+            const result = await TVLoginDialog.post("/api/auth/password/login", {
                 username: this.username.getData().trim(), password: this.passwordInput.getData(),
-            });
-            await this.refreshSession();
-        } catch (error) { this.status.setText(error.message); }
+            }, request.signal);
+            if (request.signal.aborted) { return; }
+            if (!result.authenticated) { throw new Error("The server did not confirm sign-in."); }
+            const session = await this.refreshSession();
+            if (request.signal.aborted) { return; }
+            if (!session?.authenticated || !session.user) {
+                throw new Error("Cannot confirm the signed-in session. Allow cookies and try again.");
+            }
+            this.close();
+        } catch (error) {
+            if (!request.signal.aborted) { this.setStatus(error.message); }
+        }
         finally {
-            this.passwordInput.setData("");
-            this.actions.forEach(button => button.setState(sfDisabled, false));
+            if (this.loginRequest === request) {
+                this.passwordInput.setData("");
+                this.loginRequest = null;
+                this.updateActions();
+            }
         }
     }
 
     async signOut() {
+        if (this.signingOut) { return; }
+        this.signingOut = true;
         this.sessionRequestVersion += 1;
         this.status.setText("Signing out...");
         try {
             await TVLoginDialog.post("/api/auth/logout");
-            await this.refreshSession();
+            const session = await this.refreshSession();
+            if (!session) { throw new Error("Cannot confirm sign-out. Check your connection and try again."); }
         } catch (error) {
-            this.status.setText(error?.message || "Sign out failed.");
-        }
+            await TV.messageBox(this, { title: "Sign out failed", type: TVMessageBox.MF_ERROR,
+                lines: [error?.message || "Sign out failed."] });
+        } finally { this.signingOut = false; }
     }
 
     handleEvent(event) {
@@ -451,7 +512,7 @@ class TVLoginDialog extends TVDialog {
         if (event.what !== evCommand) { return; }
         if (event.command === "login-sign-in") { void this.passkey(); }
         else if (event.command === "login-password") { void this.passwordLogin(); }
-        else if (event.command === "login-register") { this.onRegister?.(); }
+        else if (event.command === "login-register") { if (!this.loginRequest) { this.onRegister?.(); } }
         else if (event.command === "login-sign-out") { void this.signOut(); }
         else if (event.command === "login-close") { this.close(); }
         else { return; }
