@@ -109,6 +109,36 @@ backward-compatibility aliases.
   databases and private DOS overlays/media in `data/dos/users/<id>/`.
   HTTP URLs and product/release-relative paths follow the current canonical
   layout; rebuild catalogs/indexes after an intentional layout change.
+- The approved version 3 application storage layout is permanent global files
+  in `data/<application-id>/`, permanent per-user disk storage in
+  `data/disk/<account-id>/<application-id>/`, permanent global virtual disks in
+  `data/disk/<application-id>/`, temporary per-user
+  `var/<account-id>/<application-id>/`, and temporary/generated global
+  `var/<application-id>/`. Drive directories belong below these roots, for
+  example `data/disk/<account-id>/dos_prompt/c/`. Use the immutable account ID,
+  never a nickname/email, and stable application IDs; keep the user/global
+  namespaces disjoint. Global application settings/files belong in
+  `data/<application-id>/`; keep server-only disk metadata and private settings
+  outside guest-visible drive contents. User-scoped runtime files
+  remain private and owner-checked even though they are temporary.
+  The current DOS storage path above remains implemented until a stopped-server,
+  verified migration preserves files, revisions, tombstones, media and quotas.
+  The current shared DOS base is `var/dos/c/`; its version 3 generated-data
+  destination is `var/dos_prompt/c/`, not a permanent-data or per-user copy.
+  Global permanent DOS application files belong in `data/dos_prompt/`, while
+  permanent global virtual disks, if needed, belong in `data/disk/dos_prompt/`.
+  Shared downloader/cache services keep their own global service directories;
+  this rule does not duplicate downloads under each application.
+  Shared disk operations and the DOS adapter precede the new module registry.
+- Version 3 applications may request an optional server-managed SQLite database
+  at `data/<application-id>.sqlite`, separate from their disk directories. Derive
+  its filename from the validated registered application ID, never a client path.
+  One application database may hold global and user-scoped records; authenticate
+  and filter every private operation by the immutable account ID. Do not expose
+  database files or arbitrary SQL to browser clients. Keep schema migrations
+  explicit and transactional; preserve databases during cache cleanup, rebuild
+  and module disable/uninstall. Existing SQLite locations/extensions do not
+  change until a separately verified migration is implemented.
 - Cache new HELP/DOS/MIDI raw downloads under `var/downloads/help/`,
   `var/downloads/dos/` and `var/downloads/midi/`. Extracted/manual HELP originals
   and licence notices belong in `var/sources/`; retain them across uninstall
@@ -170,18 +200,32 @@ backward-compatibility aliases.
   migration is explicitly requested. Follow the planned module contract in
   docs/THelp Viewer/TurboVision JS.md; distinguish planned APIs from implemented
   behavior. New module windows still use the TVision hierarchy and owner flow.
+- Application modules may optionally contribute top menus via TVSubMenu/TVMenuItem
+  and bottom status-line actions via TVStatusDef/TVStatusItem. The host applies
+  contributions for the active application window only and restores the next
+  window's/default chrome on focus changes and close. Use existing menu/status
+  views and TVEvent dispatch, never a module-owned HTML bar or DOM handlers.
 - Match the original Turbo Vision hierarchy, constructor order, method names,
   state masks, owner flow and `TVEvent` handling wherever the browser permits.
   Concrete dialogs and games retain references to owned `TVView` children and
   handle commands/input in `handleEvent()`. Do not rediscover owned controls
   with dialog-wide `data-tv-*` selectors or parallel DOM click handlers.
   Private DOM queries inside shared drawing primitives are permitted.
-- Compose dialog client areas from shared views (`TVGroup`, `TVStaticText`,
+- Compose application interfaces and dialog client areas only in JavaScript
+  from shared views (`TVGroup`, `TVStaticText`,
   `TVLabel`, `TVInputLine`, `TVListViewer`, `TVOutline`, `TVCluster`, `TVButton`).
-  Keep handwritten HTML/CSS in shared frame/window/dialog/scrollbar drawing,
-  not in each dialog. Game chrome uses shared views; only the changing
+  Applications/modules do not ship HTML UI templates, custom CSS stylesheets,
+  injected styles or CSS layout options. Bounds, growth, palette and state belong
+  to TVision objects; do not duplicate geometry in CSS or merely move CSS strings
+  into application JS. Minimal browser DOM/CSS stays inside shared drawing
+  primitives. Game chrome uses shared views; only the changing
   playfield may stay specialised. Do not add a one-off dialog control when an
-  existing shared view fits.
+  existing shared view fits. This UI rule does not remove optional Python logic.
+- Gradually remove redundant CSS from the core too, reusing existing TVision
+  geometry, palettes and state. Change one shared responsibility at a time and
+  verify focus, frames, scrollbars, resizing, active/inactive colors and both
+  asset mirrors. Retain browser-essential drawing/font rules until an equivalent
+  tested rendering path replaces them; do not remove them by selector count.
 - Public constructors describe TVision objects, not browser nodes. Use
   positional forms such as `TVView(bounds)`, `TVGroup(bounds)`,
   `TVStaticText(bounds, text)`, `TVLabel(bounds, text, link)`,

@@ -36,13 +36,40 @@ the absence of Python is normal, not a missing dependency. A client-only module
 can still call shared server APIs. MOD Player will be the first such module,
 using shared downloads rather than owning another downloader or worker queue.
 
+Application interfaces will be composed only in JavaScript from the existing
+TVision views. A module does not supply HTML templates, a custom stylesheet,
+injected styles or a second layout system. Use TVRect bounds, child insertion,
+growMode, palettes, state masks and handleEvent() for composition and behavior.
+Moving CSS strings into application JavaScript is not a substitute for TVision
+objects. Optional Python components provide server logic/APIs, not UI markup.
+Specialized media, game and emulator surfaces remain owned TVView adapters;
+their surrounding window and controls use the same shared views.
+
+The core's browser drawing primitives may still use minimal DOM/CSS for fonts,
+text/canvas presentation and native input integration. Redundant core CSS will
+be removed incrementally where TVision JS already owns geometry, state or
+palette behavior. Keep one source of truth rather than parallel JS/CSS sizing.
+Verify affected frame, focus, scrolling, resize and active/inactive behavior,
+including both asset trees, before removing each rule. This is a gradual
+implementation task, not a claim that current core CSS has already been removed.
+
 The host/module boundary will provide:
 
 - Registration of a factory returning an ordinary TVWindow or TVDialog. The
   shared desktop owns activation, focus, frames, resizing and TVEvent delivery.
   Modules compose their controls from existing views; a module is not a new
   widget base class, renderer or alternative HTML/CSS layout system.
-- Menu contributions built with TVMenuItem/TVSubMenu, routed as TVEvent commands.
+- Optional top-menu contributions built with TVMenuItem/TVSubMenu, and optional
+  bottom status-line actions built with TVStatusDef/TVStatusItem for the shared
+  TVStatusLine. A module may provide either, both or neither. The host applies
+  contributions when its application window becomes active, as the current
+  DOS Prompt contextual menu does. Opening an inactive window does not take
+  over another window's chrome. Switching focus or closing the window restores
+  the newly active window's/default contributions, including after dialogs.
+  Repeated activation must not accumulate menu/status items or listeners.
+  Route menu clicks and status-line clicks/shortcuts as TVEvent commands to
+  the active view's owner chain; retain host shortcuts and command enablement.
+  Modules do not render their own HTML bars or attach parallel DOM handlers.
   Every concrete view owns its help context. Module UHF topics participate in
   Contents and Index without a separate context-to-dialog map.
 - Explicit open/close/activation cleanup, including audio, timers, requests and
@@ -57,16 +84,77 @@ The host/module boundary will provide:
   Module loading is restricted to trusted, configured code delivered with the
   application, not arbitrary user-uploaded Python or external scripts.
 - Versioned manifests/settings defaults under the existing config directory.
-  Future per-user module settings belong under permanent data/users/<id>/apps/
-  <module-id>/, not var. Existing account files and data/dos/users overlays do
-  not move in this first stage. Dedicated application disks are a separate task.
+  Application storage distinguishes permanent files from virtual disks and
+  temporary/generated state as below. For private DOS C the approved path is
+  `data/disk/<account-id>/dos_prompt/c/`. The account ID is immutable, not a
+  nickname, email or login name. Global settings/files belong in
+  `data/<application-id>/`; server-only metadata and private settings remain
+  outside guest-visible drive contents.
+- A shared host disk service for listing, reading, writing, renaming, creating
+  directories and deleting paths, also available to client-only modules through
+  the common API. Applications resolve logical disks, never arbitrary server
+  paths. Each application has its own storage namespace; access to another
+  application's disk must be explicit and scoped to the same authenticated
+  account. The server validates ownership and writes, not a supplied user ID.
 
-Implementation is ordered as registry/manifest validation, menu and TVEvent
+| Purpose | Location |
+| --- | --- |
+| Global permanent application files/settings | `data/<application-id>/` |
+| Global permanent virtual disks | `data/disk/<application-id>/` |
+| Per-user permanent disk storage | `data/disk/<account-id>/<application-id>/` |
+| Global temporary/generated state | `var/<application-id>/` |
+| Per-user temporary state | `var/<account-id>/<application-id>/` |
+
+Global does not imply publicly readable/writable: access follows the host's
+permissions, and private temporary files retain their account ownership checks.
+Validated account IDs and application IDs must not collide in either namespace.
+Temporary roots never hold the only copy of settings, saves or private files;
+those belong in the permanent roots. Shared downloader/cache services retain
+their own global directories rather than making per-application download copies.
+
+An application may additionally request a server-managed SQLite database at
+`data/<application-id>.sqlite`, for example `data/mod_player.sqlite`. This is
+optional: using the shared disk or downloader does not require an application
+database or a dummy Python backend. The registered application ID determines
+the database filename; clients cannot choose a host path or another module's
+database. Global and user-specific rows may share this application database,
+but private reads/writes must be scoped to the authenticated immutable account ID.
+Access goes through server APIs, never a downloadable SQLite file or arbitrary
+browser-supplied SQL. Applications own explicit, transactional schema migrations;
+the host manages database lifecycle and safe backups. Disable, uninstall, cache
+cleanup and rebuild do not delete permanent database contents. Existing database
+files and extensions stay unchanged until their migration is explicitly designed.
+
+The private DOS C directory contains new/changed files, not a full copy of the
+software library. Its generated read-only shared base is currently `var/dos/c/`,
+with `var/dos_prompt/c/` as the version 3 destination. Permanent global DOS
+application files belong under `data/dos_prompt/`; permanent global virtual
+disks, if needed, belong under `data/disk/dos_prompt/`. Neither duplicates the
+rebuildable library. These are planned paths, not an additional live disk. Deletion
+records hide base files for that user. Quotas apply to private content, not the
+shared base; existing capacity settings must survive migration. Server-only
+metadata, media and recovery revisions must not appear in a guest drive listing.
+The browser-local D folder remains separate and is never moved or uploaded.
+
+Current DOS overlays still use `data/dos/users/<account-id>/`. No data has moved
+as part of this design decision. Implement migration with the old server stopped,
+verify file bytes and ownership, preserve revisions, tombstones, empty folders,
+media and settings, refuse conflicts, and retain a recovery copy. Move generated
+application state to the corresponding version 3 root with active jobs stopped,
+preserving or explicitly rebuilding it rather than silently discarding it.
+Do not keep a permanent old-path fallback after migration. Shared disk changes need file-level
+conflict checks and synchronization with a running DOS client; the current
+whole-overlay revision/snapshot API must not silently replace another module's
+saved changes.
+
+Implementation is ordered as shared disk service and DOS adapter, verified
+migration to the approved layout, registry/manifest validation, menu and TVEvent
 integration in both viewer shells, optional Python lifecycle/router integration,
-help/workspace/settings integration, then a client-only MOD Player. A small
-test-only server module will verify that Python components are genuinely
-optional and clean up on startup failure and normal shutdown. Until those
-stages land, adding a module is not yet a supported installation workflow.
+help/workspace/settings integration, then a client-only MOD Player. Keep existing
+applications directly registered during the disk work. A small test-only server
+module will verify that Python components are genuinely optional and clean up
+on startup failure and normal shutdown. Until those stages land, adding a module
+is not yet a supported installation workflow.
 
 ---
 
@@ -98,18 +186,12 @@ Core widget hierarchy and infrastructure.
 - **TVTextScreen** — `constructor(bounds)`, `setData(screen)`, `getData()` and
   `dataSize()`. A shared native character-cell view, not a bitmap-image
   wrapper. Data contains `cols`, `rows`, flat `[glyph, fg, bg]` cells,
-  an optional bitmap font (`width`, `height`, decoded `Uint8Array data`), resolved
+  a bitmap font (`width`, `height`, decoded `Uint8Array data`), resolved
   indexed `palette`, optional literal `text` rows and an explicit boolean
   `blink` mask (one flag per cell). `draw()` owns its
-  canvas markup for bitmap fonts; `bindRoot()` paints glyph bits with palette
-  colors. Without a font, it draws CP437 DOM character cells in the shared VGA
-  font and updates only changed cells. A live source may supply boolean
-  `blinkVisible` and `cursor` (`index`, `visible`, `start`/`end` as percentages
-  of the cell height); its hardware phase replaces the view's animation timer.
-  Backgrounds use a display-sized grid, separate from scaled glyphs, so
-  fractional zoom cannot introduce black seams between adjacent colors.
-  Individual glyph edges are snapped to the font's pixel grid on layout changes,
-  preserving continuous single/double box lines at fractional scales/high DPI.
+  canvas markup; `bindRoot()` paints glyph bits and backgrounds with palette
+  colors in a single bitmap, without per-character DOM elements. DOS Prompt
+  uses DOSBox's own canvas output instead of this UHF resource view.
   UHF supplies Base64 font resources and palette references, decoded by
   the HELP adapter. HELP owns row views explicitly, releases their roots on
   navigation and uses the existing `TVWindow`/scrollbars. Pixel scaling

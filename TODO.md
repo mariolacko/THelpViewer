@@ -4,20 +4,52 @@
 
 - [x] Release/tag 2.1.0 and open a separate 3.0.0.dev0 development branch.
 - [x] Define the client-plus-optional-Python contract in TurboVision JS docs.
+- [x] Require JS-only application UI composition from TVision objects, with no
+  application HTML templates/custom CSS, while retaining optional Python logic.
+- [x] Agree on permanent application disks under
+  `data/disk/<account-id>/<application-id>/<drive>/`; DOS uses `dos_prompt/c`.
+- [x] Agree on global permanent virtual disks in `data/disk/<application-id>/`,
+  private temporary data in `var/<account-id>/<application-id>/` and global
+  temporary/generated data in `var/<application-id>/`.
+- [x] Keep global permanent application files/settings in `data/<application-id>/`,
+  distinct from virtual disks and the optional application database.
+- [x] Agree on optional server-managed application databases at
+  `data/<application-id>.sqlite`, with account-scoped private records.
+- [ ] Extract a shared disk service and adapt the existing DOS overlay before
+  adding the module registry. Support explicit same-account cross-application
+  disk access, private-content quotas, file-level conflict checks and running-DOS
+  synchronization without exposing server paths or duplicating the shared C base.
+- [ ] Migrate `data/dos/users/<account-id>/` into `data/disk/<account-id>/dos_prompt/`
+  with the server stopped, verifying bytes, revisions, deletion records, empty
+  directories, media and settings, retaining recovery copies and refusing conflicts.
+- [ ] Align application runtime/generated paths with the same stable IDs, e.g.
+  `var/dos/c/` becomes `var/dos_prompt/c/`, with affected jobs stopped. Preserve
+  needed generated state or explicitly rebuild it. Keep shared service caches
+  separate and leave unrelated accounts, HELP publication and databases in place.
 - [ ] Add a trusted application manifest and registry with unique stable IDs;
   reject duplicate commands/help contexts and invalid entry points.
-- [ ] Connect new modules to both viewer shells' menus and TVEvent dispatch,
-  retaining existing direct registrations and shared TVWindow/TVDialog views.
+- [ ] Connect new modules to both viewer shells' TVEvent dispatch and optional
+  contextual top menus/bottom status-line actions using existing TVMenuItem,
+  TVSubMenu, TVStatusDef and TVStatusItem. Test modules with either/both/neither
+  contribution, focus/dialog/close restoration and repeated activation without
+  duplicate items or listeners. Retain existing registrations and shared views.
 - [ ] Register optional Python routers and lifespan resources using the existing
   FastAPI host/services. Test client-only modules and a server-equipped fixture,
   including cleanup after failures; do not create dummy MOD Player server code.
+- [ ] Add the optional application-database capability: validated filenames,
+  server-only access, transactional schema migrations, ownership checks, consistent
+  backups and preservation on disable/uninstall/rebuild. Do not create databases
+  for modules that only consume shared host services or rename existing databases
+  without a verified migration.
 - [ ] Connect module help to Contents/Index and view-owned contexts, then add
-  public workspace state and isolated per-user settings without moving DOS data.
+  public workspace state and isolated per-user settings in the approved
+  application storage tree, without a second unrelated data migration.
+- [ ] Reduce redundant core CSS incrementally as responsibilities move to shared
+  TVision bounds/growth/palette/state APIs. Do not replace stylesheets with inline
+  style strings in application JS. Verify frames, focus, scrolling, resizing,
+  active/inactive colors and both asset trees; retain essential browser drawing.
 - [ ] Implement MOD/XM/S3M Player as the first real client module using the shared
   downloader. Select/verify a browser engine before implementing playback.
-- [ ] Consider shared/private per-application disks separately, after the module
-  lifecycle and ownership tests are stable. Do not migrate existing applications
-  or private overlays as part of the initial module infrastructure.
 
 ## Production inventory and restart/retry verification — 2026-10-17
 

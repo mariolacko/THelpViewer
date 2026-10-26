@@ -441,6 +441,60 @@ destinations, retains their mtime, and removes old paths only after every copy
 is verified. Entries no longer identifiable from the manifest are retained for
 expiry, not assigned guessed software names or used through legacy aliases.
 
+### Planned version 3 application storage
+
+The data-locations table above describes implemented storage. The approved
+version 3 application roots are:
+
+| Purpose | Location |
+| --- | --- |
+| Global permanent application files/settings | `data/<application-id>/` |
+| Global permanent virtual disks | `data/disk/<application-id>/` |
+| Per-user permanent disk storage | `data/disk/<account-id>/<application-id>/` |
+| Global temporary/generated state | `var/<application-id>/` |
+| Per-user temporary state | `var/<account-id>/<application-id>/` |
+
+An application may request an optional SQLite database at
+`data/<application-id>.sqlite`, outside the disk tree. For example,
+`data/mod_player.sqlite` would be shared by that application, with any private
+rows explicitly scoped to the authenticated account ID. Global records are
+separate from private records. The server derives the path from the validated
+application identity, manages connections and transactional schema migrations,
+and exposes domain APIs, not arbitrary SQL or public database downloads.
+Include permanent databases in consistent backups and retain them when a module
+is disabled/uninstalled or its caches/generated data are rebuilt. This is not
+an instruction to create a database for every application or rename the existing
+accounts, statistics, jobs or DOS metadata databases now.
+
+Drive directories go below the corresponding root, for example
+`data/disk/<account-id>/dos_prompt/c/`. The account ID is the stable
+internal ID, not a mutable login, email or display name. Global files/settings
+use `data/<application-id>/`, not the virtual-disk directory. Server-only disk
+metadata and private settings remain outside guest-visible drive contents.
+Private DOS C stores only new/changed files. The common generated software base
+currently at `var/dos/c/` will use `var/dos_prompt/c/`; it is rebuildable and is
+not copied into permanent or per-user storage. Permanent global DOS files/settings
+belong under `data/dos_prompt/`; permanent global virtual disks, if requested,
+use `data/disk/dos_prompt/`. Explicit same-account disk access will
+allow other applications to use it through shared file APIs, without exposing
+NAS paths or other users.
+
+This is a version 3 design, not an active path or completed migration. Move the
+current `data/dos/users/<account-id>/` only through a verified stopped-server
+migration retaining files, revisions, deletion records, empty directories, media,
+capacity settings and a recovery copy. Do not duplicate the shared library or
+include private disks in cache cleanup/rebuild targets. Browser-local DOS D data
+and its handles remain local to the browser.
+
+Validate user and application namespaces to prevent collisions. Global roots
+are not automatically public, and temporary user roots retain the same ownership
+checks as permanent user storage. Never put the sole copy of private files,
+saves or settings in var. Shared downloader, extraction and cache services keep
+their own global service directories; do not duplicate their inputs per app.
+Move generated/runtime application paths only with affected jobs stopped and
+with explicit preservation/rebuild rules. These decisions change neither the
+running server's paths nor current cache cleanup targets yet.
+
 ### Docker runtime dependencies
 
 HELP archive extraction requires `unar` with `lsar`, or `7zz`/`7z`; DOS package
