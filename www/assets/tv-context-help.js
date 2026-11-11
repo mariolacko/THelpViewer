@@ -68,23 +68,23 @@ const {
 
 const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcApplication]: { title: "THelpViewer", text: "Use the menu bar to open HELP files, documentation, tools and games.\n\nF10 activates the menu bar. F1 opens help for the current view. F6 and Shift-F6 cycle windows." },
-    [hcSystemMenu]: { title: "System menu", text: "The system menu contains utilities, Widget Gallery, System Information and screen savers. Signed-in users find Colors/Theme in their Configuration menu; guests use the system menu. About is available from Help." },
+    [hcSystemMenu]: { title: "System menu", text: "The system menu contains utilities, Widget Gallery, System Information and screen savers. Signed-in users find Colors/Theme in their Configuration menu; guests use the system menu. About is available from Help. Bottom-bar actions follow the current HELP context; disabled actions cannot run by click or shortcut." },
     [hcHelpFiles]: { title: "Help Files", text: "Open installs a HELP or Docs file. Catalog submenus open a source directly. The viewer preserves links between related files when the target exists." },
     [hcDocuments]: { title: "Documents", text: "Documentation opens in a read-only Editor-style window. Use Ctrl-F to find text and Ctrl-L to find the next occurrence." },
     [hcSearch]: { title: "Search", text: "Choose server-wide Search all HELP/Docs or Find in active window. Search Topics shows topics and their source; Find Again repeats the active window's query. Server HELP processing pauses the global index (▤ ‖); it resumes from the final published library when HELP work ends, even after failure. Committed search data stays available. DOS/MIDI-only jobs do not pause it. Index jobs survive restart; committed unchanged files are skipped and unchanged corrupt-file failures stay recorded." },
     [hcGames]: { title: "Games", text: "Games share Turbo Vision dialogs, keyboard focus, inactive-window pause policies and a server-wide ten-entry Hall of Fame with local fallback." },
-    [hcWindows]: { title: "Windows", text: "Tile, Cascade and Window List arrange windows. Default Size restores initial dimensions. F5 zooms, F6 selects the next window and Alt-F3 closes it." },
+    [hcWindows]: { title: "Windows", text: "Normally the first click only activates a background window; click again to use its controls. A tool can explicitly allow first-click input. Tile, Cascade and Window List arrange windows. Default Size restores initial dimensions. F5 zooms, F6 selects the next window and Alt-F3 closes it." },
     [hcContextHelp]: { title: "Context Help", text: "This is THelpViewer's own context-sensitive help. Each view and menu item carries an hc... identifier, following Turbo Vision's helpCtx model." },
     [hcAbout]: { title: "About", text: "Shows the application version and authors. The version is read from the running package metadata." },
     [hcFileOpen]: { title: "Open a File", text: "Choose a HELP or Docs file from the two-column list. The down-arrow opens recent files; press it again or Escape to close the history." },
     [hcChangeDirectory]: { title: "Change Directory", text: "Select a virtual HELP/DOCS directory. Chdir applies it to Open a File, Revert restores the initial path and the arrow opens directory history." },
     [hcFind]: { title: "Find", text: "Choose Search all HELP/Docs or Find in active window. Alt-F focuses the input through its label. The arrow opens previous queries; Escape or its close control dismisses history." },
     [hcColors]: { title: "Colors", text: "All users can edit colors. Default restores one item; Reset All restores the complete palette. Colors are saved in this browser, not synchronized between accounts/devices." },
-    [hcWidgetGallery]: { title: "Widget Gallery", text: "Exercises shared labels, inputs, lists, clusters, scrollbars, buttons, static text, terminal and message-box components." },
-    [hcMidiPlayer]: { title: "CD/MIDI Player", text: "Play game MIDI with a SoundFont synthesizer and available cover art. RIFF/RMID and counted DOS MIDI are decoded to Standard MIDI. Click the progress bar to seek. More reveals tracks, Filter/history and Random next track. A cloud marks missing downloads; playing prioritizes them. A partial library shows ready tracks and the download-error count; Downloads contains album/member errors while other music remains usable. Valid tracks and covers survive rejected ZIP members; text renamed .mid is rejected and partial albums remain failed/retryable. Downloads beside the account/clock shows the shared queue and album percentages without a separate automatic window. Closing the menu does not stop downloading. Local admins can rebuild the MIDI library." },
+    [hcWidgetGallery]: { title: "Widget Gallery", text: "Exercises shared labels, inputs, lists, clusters, scrollbars, buttons, static text, terminal and message-box components. Multi-state choices and their Event log use the same saved state; restoring choices restores their visible marks." },
     [hcHelpViewer]: { title: "HELP viewer", text: "Links open topics or external companion HELP files. Use Back, Index, Contents and Search from the status line or menus. Native TextScreens keep original glyphs and palette colors with embedded fonts in the same window." },
     [hcDocumentViewer]: { title: "Document viewer", text: "Markdown is displayed with the read-only Editor palette. The lower-left indicator reports the current line and column." },
-    [hcDialog]: { title: "Dialog and Clipboard", text: "Tab and Shift-Tab move focus. Enter activates the default button and Escape closes the dialog unless the control uses Escape itself. Clicking outside never closes a dialog; a modal dialog blocks background mouse input. System clipboard: Ctrl+Ins copies, Shift+Del cuts, Shift+Ins pastes. Native Cmd+C/X/V on macOS and Ctrl+C/X/V on Windows/Linux also work. Input Paste respects validators and length. HELP/Docs permit Copy only. Clipboard contents are never sent to the server." },
+    [hcDialog]: { title: "Dialog and Clipboard", text: "Tab and Shift-Tab move focus through available controls, including read-only fields, and stay in an empty dialog. Alt plus a marked letter focuses its field or activates its button in the current window. A button activates once on mouse release over it; Space or Enter activates a focused button. Hidden/disabled controls and their groups are skipped and reject edits, choices, list and scrollbar input. Disabled commands are unavailable in buttons, menus and shortcuts. Hiding or disabling a group cancels pending Cut/Paste edits. Focusing a command button temporarily makes it default; returning to a field restores the original action. Enter activates the current default button and Escape closes the dialog unless the control uses Escape itself. Normally a background window consumes its first mouse gesture for activation only. Clicking outside never closes a dialog; a modal dialog blocks background mouse input. Closing a menu preserves newer focus in the active window. System clipboard: Ctrl+Ins copies, Shift+Del cuts, Shift+Ins pastes. Native Cmd+C/X/V on macOS and Ctrl+C/X/V on Windows/Linux also work. Copy, Cut and Paste commands from controls follow the same rules. A modal dialog limits clipboard actions to its own controls and selected text. Input Paste respects validators and length. HELP/Docs permit Copy only. Clipboard contents are never sent to the server." },
+    [hcMidiPlayer]: { title: "CD/MIDI Player", text: "Play game MIDI with a SoundFont synthesizer and available cover art. RIFF/RMID and counted DOS MIDI are decoded to Standard MIDI. Click the progress bar to seek. More reveals tracks, Filter/history and Random next track. A cloud marks missing downloads; playing prioritizes them. A partial library shows ready tracks and the download-error count; Downloads contains album/member errors while other music remains usable. Valid tracks and covers survive rejected ZIP members; text renamed .mid is rejected and partial albums remain failed/retryable. Downloads beside the account/clock shows the shared queue and album percentages without a separate automatic window. Closing the menu does not stop downloading. Local admins can rebuild the MIDI library." },
     [hcCalendar]: { title: "Calendar", text: "Browse months and years with the arrow controls. Date calculations use Gregorian leap-year rules." },
     [hcAsciiTable]: { title: "ASCII Table", text: "Shows character codes and glyphs using the configured DOS code page presentation." },
     [hcCalculator]: { title: "Calculator", text: "Use number and operation buttons or the keyboard. Escape is reserved by the calculator and does not close it." },
@@ -116,9 +116,8 @@ const TV_CONTEXT_HELP_TOPICS = Object.freeze({
     [hcGridDemo]: { title: "Grid Viewer", text: "TVGridView displays rows and columns with optional headers and shared horizontal/vertical scrollbars. Arrow keys select cells; Hide headers toggles titles." },
 });
 
-const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20261018j";
+const TV_CONTEXT_HELP_BUNDLE_URL = "assets/tv-context-help.json?v=20261110a";
 let contextHelpBundlePromise = null;
-
 function loadContextHelpBundle() {
     if (!contextHelpBundlePromise) {
         contextHelpBundlePromise = fetch(TV_CONTEXT_HELP_BUNDLE_URL, { cache: "no-cache" })
@@ -151,7 +150,7 @@ function contextHelpTag(tagBody) {
     if (lowered === "b") { return { name: "b", open: "<b>", close: "</b>", raw: tagBody }; }
     if (lowered === "i") { return { name: "i", open: "<i>", close: "</i>", raw: tagBody }; }
     if (lowered === "u") { return { name: "u", open: "<u>", close: "</u>", raw: tagBody }; }
-    const link = tagBody.match(/^link:topic=(-?\d+)$/i);
+    const link = tagBody.match(/^link:topic=(-?\d+|app:[a-z][a-z0-9_]{0,63}:[a-z][a-z0-9-]{0,63})$/i);
     if (link) {
         return {
             name: "link",
@@ -208,21 +207,30 @@ function renderContextHelpInline(text) {
     return root.children.join("");
 }
 
+function renderUhfRule() {
+    return "─".repeat(512);
+}
+
+function wrapTopicLineMarkup(lineNumber, html, rule = false) {
+    return `<span class="tv-topic-line${rule ? " tv-topic-line-rule" : ""}" data-tv-line="${lineNumber}">${html}</span>`;
+}
+
 function renderContextHelpTopic(topic) {
     const content = Array.isArray(topic?.content) ? topic.content : [];
-    const lines = content.map((line) => {
+    const lines = content.map((line, index) => {
         const raw = String(line || "");
         if (raw === "[rule]") {
-            return '<div class="tv-context-help-line tv-context-help-rule" aria-hidden="true"></div>';
+            return wrapTopicLineMarkup(index + 1, renderUhfRule(), true);
         }
-        return `<div class="tv-context-help-line">${raw ? renderContextHelpInline(raw) : "&nbsp;"}</div>`;
-    }).join("");
+        return wrapTopicLineMarkup(index + 1, renderContextHelpInline(raw));
+    });
     return [
-        '<div class="tv-document tv-context-help-document">',
         `<div class="tv-topic-heading">${escapeHtml(topic?.title || "Help")}</div>`,
-        lines,
-        "</div>",
-    ].join("");
+        '<pre class="tv-pre tv-topic-pre">',
+        "",
+        ...lines,
+        "</pre>",
+    ].join("\n");
 }
 
 class TVHelpViewer extends TVScroller {
@@ -290,10 +298,7 @@ class TVHelpViewer extends TVScroller {
     destroy() {
         this.textScreens.forEach(view => { view.bindRoot(null); view.owner = null; });
         this.textScreens = [];
-        this.root?.removeEventListener("click", this.onContentClick);
         super.destroy();
-        this.viewport = null;
-        this.bindRoot(null);
     }
 }
 
@@ -335,8 +340,6 @@ class TVHelpWindow extends TVWindow {
     }
 }
 
-class TVContextHelpViewer extends TVHelpViewer {}
-
 class TVContextHelpWindow extends TVHelpWindow {
     static viewName = "context-help";
     static palette = "help";
@@ -349,10 +352,6 @@ class TVContextHelpWindow extends TVHelpWindow {
         this.bundle = null;
         this.topicHistory = [];
         this.openAction = null;
-    }
-
-    initViewer(bounds, bundle) {
-        return new TVContextHelpViewer(bounds, bundle);
     }
 
     handleEvent(event) {
@@ -423,9 +422,10 @@ Object.assign(TV, {
     TV_CONTEXT_HELP_TOPICS,
     TV_CONTEXT_HELP_BUNDLE_URL,
     loadContextHelpBundle,
+    renderUhfRule,
+    wrapTopicLineMarkup,
     TVHelpViewer,
     TVHelpWindow,
-    TVContextHelpViewer,
     TVContextHelpWindow,
 });
 })();

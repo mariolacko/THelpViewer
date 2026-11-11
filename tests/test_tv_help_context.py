@@ -22,6 +22,66 @@ CONTEXT_HELP_JS_PATHS = (
 )
 
 
+@pytest.mark.skipif(NODE is None, reason="Node.js is required")
+def test_context_help_uses_shared_uhf_lines_rules_and_viewer():
+    script = r'''
+const fs=require('node:fs'),assert=require('node:assert/strict');
+global.window={};global.document={addEventListener(){}};
+eval(fs.readFileSync('www/assets/tv-core.js','utf8'));
+eval(fs.readFileSync('www/assets/tv-context-help.js','utf8'));
+const TV=window.THelpViewerTV,view=new TV.TVContextHelpWindow();
+view.bundle={topics:{'1000':{id:1000,title:'Probe',content:['First','','[rule]',
+ '[b]Bold[/b] [i]Italic[/i] [u]Underlined[/u]',
+ '[link:topic=app:probe:detail]Details[/link]','<script>unsafe</script>']},
+ 'app:probe:detail':{id:'app:probe:detail',title:'Details',content:['Detail']}}};
+view.showTopic(1000);
+assert.equal(view.viewer.constructor,TV.TVHelpViewer);
+const html=view.viewer.content;
+assert(html.includes('class="tv-pre tv-topic-pre"'));
+assert(html.includes('<span class="tv-topic-line" data-tv-line="2"></span>'));
+assert(html.includes(TV.wrapTopicLineMarkup(3,TV.renderUhfRule(),true)));
+assert(html.includes('<b>Bold</b> <i>Italic</i> <u>Underlined</u>'));
+assert(html.includes('data-tv-context-help-topic="app:probe:detail"'));
+assert(html.includes('&lt;script&gt;unsafe&lt;/script&gt;'));
+assert(!html.includes('tv-context-help-line')&&!html.includes('tv-context-help-document'));
+view.handleEvent(new TV.TVEvent(TV.evCommand,{command:'help-link',infoPtr:{
+ hasAttribute:name=>name==='data-tv-context-help-topic',dataset:{tvContextHelpTopic:'app:probe:detail'}}}));
+assert.equal(view.context,'app:probe:detail');view.goBack();assert.equal(view.context,1000);
+view.destroy();
+'''
+    result = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is required")
+def test_named_application_contexts_follow_views_menus_and_status_definitions():
+    script = r'''
+const fs=require('node:fs'),assert=require('node:assert/strict');
+global.window={};global.document={addEventListener(){}};
+eval(fs.readFileSync('www/assets/tv-core.js','utf8'));
+const TV=window.THelpViewerTV,context='app:probe:main';
+assert.equal(TV.normalizeHelpContext(context),context);
+assert.equal(TV.normalizeHelpContext('app:other:main'),'app:other:main');
+for(const value of ['main','app:probe:','app:probe:Main','app:../probe:main','app:probe:main:extra']){
+ assert.equal(TV.normalizeHelpContext(value,1000),1000);
+}
+assert.equal(TV.normalizeHelpContext('1000'),1000);
+const view=new TV.TVView(new TV.TVRect());view.setHelpCtx(context);
+assert.equal(view.getHelpCtx(),context);
+assert.equal(new TV.TVMenuItem('Probe','app:probe:open',0,context).helpCtx,context);
+const generic=[new TV.TVStatusItem('Help',TV.kbF1,'context-help')];
+const exact=[new TV.TVStatusItem('Probe',0,'app:probe:open')];
+const defs=new TV.TVStatusDef(context,context,exact,new TV.TVStatusDef(0,65535,generic));
+const line=new TV.TVStatusLine(new TV.TVRect(),defs);
+assert.equal(line.findItems(context),exact);
+assert.equal(line.findItems('app:other:main'),generic);
+assert.equal(line.findItems(1000),generic);
+assert.equal(new TV.TVStatusLine(new TV.TVRect(),new TV.TVStatusDef(1000,2000,generic)).findItems(context).length,0);
+'''
+    result = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
 def visible_help_line(line):
     return re.sub(r"\[(?:/?[biur]|link:[^\]]+|/link)\]", "", line)
 
@@ -138,7 +198,7 @@ def test_dialogs_own_their_help_contexts_without_registration_maps():
     for context in (
         "hcAbout", "hcWidgetGallery", "hcFileOpen",
         "hcChangeDirectory", "hcAsciiTable", "hcCalculator", "hcCalendar",
-        "hcColors", "hcMidiPlayer", "hcFind", "hcSearch",
+        "hcColors", "hcFind", "hcSearch",
         "hcStatistics", "hcSystemInformation",
         "hcAccount", "hcRegistration", "hcRegistrationTokens", "hcServerConfiguration",
         "hcGridDemo", "hcUsers",
@@ -170,7 +230,7 @@ def test_context_help_is_a_complete_uhf_bundle():
 
     expected_contexts = {
         1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700,
-        2000, 2010, 2020, 2030, 2040, 2050, 2060, 2070,
+        2000, 2010, 2020, 2030, 2040, 2050, 2070,
         2080, 2090, 2100, 2110, 2120, 2130,
         2140, 2150, 2160, 2170, 2180, 2190,
         2200, 2210, 2220, 2230, 2240, 2250, 2260, 2270,

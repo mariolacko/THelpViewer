@@ -87,17 +87,14 @@ const {
     hcGridDemo,
 } = TV_HELP_CONTEXTS;
 
-class TVFileScrollButton extends TVButton {
-    _drawParts() {
-        return { ...super._drawParts(), dialog: false, className: "tv-file-open-scroll-button", tabIndex: -1 };
-    }
-}
-
 class TVAsciiCellButton extends TVButton {
+    getPalette() { return [this._appColor(this.commandData.selected || this._nativeHovered || this._nativeFocused ? 135 : 29)]; }
     _drawParts() {
+        const selected = Boolean(this.commandData.selected);
         return {
-            ...super._drawParts(), dialog: false, className: "tv-ascii-cell",
+            ...super._drawParts(), dialog: false, className: selected ? "is-selected" : "",
             labelMarkup: escapeHtml(displayCp437Char(this.value)), ariaLabel: `ASCII ${this.value}`,
+            ariaPressed: selected, tabIndex: selected ? 0 : -1,
         };
     }
 }
@@ -105,7 +102,7 @@ class TVAsciiCellButton extends TVButton {
 class TVCalculatorButton extends TVButton {
     _drawParts() {
         return {
-            ...super._drawParts(), baseClass: "tv-dialog-button tv-calc-button",
+            ...super._drawParts(),
             ariaLabel: `Calculator key ${this.commandData.description || this.title}`,
             tooltip: this.commandData.description || "",
         };
@@ -113,12 +110,13 @@ class TVCalculatorButton extends TVButton {
 }
 
 class TVCalendarButton extends TVButton {
+    getPalette() { return [this._appColor(this._nativeHovered || this._nativeFocused ? 135 : 21)]; }
     _drawParts() {
         const labels = {
             "calendar-prev": "Previous month", "calendar-next": "Next month", "calendar-today": "Today",
         };
         return {
-            ...super._drawParts(), dialog: false, className: "tv-calendar-arrow",
+            ...super._drawParts(), dialog: false, className: "",
             labelMarkup: renderHotkeyMarkup({
                 "calendar-prev": displayCp437Char(30),
                 "calendar-next": displayCp437Char(31),
@@ -129,63 +127,21 @@ class TVCalendarButton extends TVButton {
 }
 
 class TVColorCellButton extends TVButton {
-    _drawParts() {
-        const data = this.commandData;
-        const full = escapeHtml(displayCp437Char(219));
-        return {
-            ...super._drawParts(), dialog: false,
-            className: `tv-color-cell${data.selected ? " is-selected" : ""}`,
-            style: data.color ? `--tv-color-cell:${data.color}` : "",
-            labelMarkup: data.selected
-                ? `${full}<span class="tv-color-cell-marker">${escapeHtml(displayCp437Char(8))}</span>${full}`
-                : full.repeat(3),
-            ariaLabel: `Color ${this.value}`, ariaPressed: Boolean(data.selected),
-            tabIndex: data.selected ? 0 : -1,
-        };
+    constructor(bounds, title, command, flags) {
+        super(bounds, title, command, flags);
+        this.marker = new TVStaticText(new TVRect(1, 0, 2, 1), displayCp437Char(8));
+        this.marker.owner = this;
+        this.marker.getPalette = () => [2];
     }
-}
-
-class TVMidiTrackButton extends TVButton {
+    getPalette() { return [this.value, this.value === 0 ? 0x70 : this.value]; }
+    bindRoot(root) { super.bindRoot(root); this.marker?.resolve(root); if (!root) { this.marker?.bindRoot(null); } return this; }
+    drawView() { super.drawView(); this.marker?.resolve(this.root); return this; }
     _drawParts() {
-        const data = this.commandData;
-        return {
-            ...super._drawParts(), dialog: false,
-            className: `tv-vlist-item tv-midi-track${data.selected ? " is-selected" : ""}`,
-            ariaLabel: `${data.title || "MIDI track"}, ${data.credit || ""}, ${data.available ? "downloaded" : "not downloaded"}`,
-            labelMarkup: [
-                `<span class="tv-midi-track-index">${escapeHtml(String(data.index + 1).padStart(2, "0"))}</span>`,
-                `<span class="tv-midi-track-title">${escapeHtml(data.title || "")}</span>`,
-                `<span class="tv-midi-track-credit">${escapeHtml(data.credit || "")}</span>`,
-                `<span class="tv-midi-track-availability" aria-hidden="true">${data.available ? " " : "☁"}</span>`,
-            ].join(""),
-        };
-    }
-}
-
-class TVMidiControlButton extends TVButton {
-    _drawParts() {
-        const tooltips = {
-            "midi-previous": "Previous track", "midi-pause": "Pause", "midi-next": "Next track",
-        };
-        return {
-            ...super._drawParts(),
-            ariaExpanded: this.command === "midi-more" ? Boolean(this.commandData.expanded) : null,
-            tooltip: tooltips[this.command] || "",
-        };
-    }
-}
-
-class TVSearchResultButton extends TVButton {
-    _drawParts() {
-        const data = this.commandData;
-        return {
-            ...super._drawParts(), dialog: false,
-            className: `tv-search-result${data.selected ? " is-selected" : ""}`,
-            labelMarkup: [
-                ["tv-search-result-title", data.title],
-                ["tv-search-result-meta", data.meta],
-            ].map(([className, value]) => `<span class="${className}">${escapeHtml(value || "")}</span>`).join(""),
-        };
+        const selected = Boolean(this.commandData.selected);
+        this.marker.setState(sfVisible, selected);
+        return { ...super._drawParts(), dialog: false, className: selected ? "is-selected" : "",
+            labelMarkup: escapeHtml(displayCp437Char(219)).repeat(3) + this.marker.draw(),
+            ariaLabel: `Color ${this.value}`, ariaPressed: selected, tabIndex: selected ? 0 : -1 };
     }
 }
 
@@ -232,20 +188,22 @@ class TVLoginDialog extends TVDialog {
         const signIn = new TVButton(new TVRect(2, 7, 15, 9), "~S~ign In", "login-sign-in", bfDefault);
         const passwordSignIn = new TVButton(new TVRect(16, 7, 29, 9), "~P~assword", "login-password", bfNormal);
         const register = new TVButton(new TVRect(31, 7, 44, 9), "~R~egister", "login-register", bfNormal);
-        const signOut = new TVButton(new TVRect(24, 10, 39, 12), "Sign ~O~ut", "login-sign-out", bfNormal);
         const close = new TVButton(new TVRect(46, 7, 59, 9), "~C~lose", "login-close", bfNormal);
-        const status = new TVStaticText(new TVRect(2, 13, 59, 15), "Checking account status...");
-        super(new TVRect(0, 0, 64, 18), "Login");
+        const status = new TVStaticText(new TVRect(2, 10, 59, 13), "Checking account status...");
+        super(new TVRect(0, 0, 64, 16), "Login");
         this.setHelpCtx(hcAccount);
-        this.insert(new TVGroup(new TVRect(0, 0, 62, 16)).insertAll([
+        this.insert(new TVGroup(new TVRect(0, 0, 62, 14)).insertAll([
             new TVLabel(new TVRect(2, 1, 25, 2), "~E~mail or username", username), username,
             new TVLabel(new TVRect(2, 4, 59, 5), "Pass~w~ord (optional)", password), password,
-            signIn, passwordSignIn, register, signOut, close, status,
+            signIn, passwordSignIn, register, close, status,
         ]));
         this.username = username;
         this.passwordInput = password;
         this.status = status;
-        this.actions = [signIn, passwordSignIn, register, signOut];
+        this.actions = [signIn, passwordSignIn, register];
+        this.session = null;
+        this.loginRequest = null;
+        this.signingOut = false;
         this.onRegister = null;
         this.onSessionChange = null;
         this.sessionRequestVersion = 0;
@@ -266,11 +224,12 @@ class TVLoginDialog extends TVDialog {
         return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
     }
 
-    static async request(path, method = "GET", body) {
+    static async request(path, method = "GET", body, signal) {
         const response = await fetch(path, {
             method,
             credentials: "same-origin",
             cache: "no-store",
+            signal,
             ...(body === undefined ? {} : {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body),
@@ -287,8 +246,8 @@ class TVLoginDialog extends TVDialog {
         return data;
     }
 
-    static async post(path, body = {}) {
-        return TVLoginDialog.request(path, "POST", body);
+    static async post(path, body = {}, signal) {
+        return TVLoginDialog.request(path, "POST", body, signal);
     }
 
     static defaultPasskeyName() {
@@ -319,22 +278,22 @@ class TVLoginDialog extends TVDialog {
         return TVLoginDialog.credentialAnswer(credential, true);
     }
 
-    static async authenticate(username) {
+    static async authenticate(username, signal) {
         if (!window.isSecureContext || !navigator.credentials?.get) {
             throw new Error("Passkeys require HTTPS or localhost and a compatible browser.");
         }
         const prefix = "/api/auth/passkey/login";
-        const request = await TVLoginDialog.post(`${prefix}/options`, { username });
+        const request = await TVLoginDialog.post(`${prefix}/options`, { username }, signal);
         const options = request.options;
         options.challenge = TVLoginDialog.decodeBase64Url(options.challenge);
         options.allowCredentials = (options.allowCredentials || []).map(entry => ({
             ...entry, id: TVLoginDialog.decodeBase64Url(entry.id),
         }));
-        const credential = await navigator.credentials.get({ publicKey: options });
+        const credential = await navigator.credentials.get({ publicKey: options, signal });
         if (!credential) { throw new Error("Passkey operation was cancelled."); }
         return TVLoginDialog.post(`${prefix}/verify`, {
             ceremony_id: request.ceremony_id, credential: TVLoginDialog.credentialAnswer(credential, false),
-        });
+        }, signal);
     }
 
     static credentialAnswer(credential, registering) {
@@ -366,11 +325,29 @@ class TVLoginDialog extends TVDialog {
     open() {
         super.open();
         this.passwordInput.setData("");
+        this.status.setText("Checking account status...");
+        this.session = null;
+        this.updateActions();
         this.username.focus();
         void this.refreshSession();
     }
 
-    close() { this.passwordInput.setData(""); super.close(); }
+    close() {
+        this.sessionRequestVersion += 1;
+        this.loginRequest?.abort();
+        this.loginRequest = null;
+        this.passwordInput.setData("");
+        super.close();
+    }
+
+    updateActions() {
+        const disabled = Boolean(this.loginRequest) || !this.session?.enabled || this.session.authenticated;
+        this.actions.forEach(button => button.setState(sfDisabled, disabled));
+    }
+
+    setStatus(text) {
+        this.status.setText(wrapTextLines(text, this.status.bounds.width).join("\n"));
+    }
 
     async refreshSession() {
         const version = ++this.sessionRequestVersion;
@@ -378,16 +355,23 @@ class TVLoginDialog extends TVDialog {
             const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
             if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
             const session = await response.json();
-            if (version === this.sessionRequestVersion) { this.updateSession(session); }
+            if (version === this.sessionRequestVersion) { this.updateSession(session); return session; }
         } catch {
-            if (version === this.sessionRequestVersion) { this.status.setText("Account server is unavailable."); }
+            if (version === this.sessionRequestVersion) {
+                this.session = null;
+                this.updateActions();
+                this.setStatus("Account server is unavailable. Close Login and try again.");
+            }
         }
+        return null;
     }
 
     updateSession(data) {
         this.sessionRequestVersion += 1;
+        this.session = data;
+        this.updateActions();
         this.onSessionChange?.(data);
-        this.status.setText(!data.enabled
+        this.setStatus(!data.enabled
             ? "Passkey login is not configured for this host."
             : data.authenticated
                 ? `Signed in as ${data.user.display_name} (${data.user.username}).`
@@ -395,6 +379,7 @@ class TVLoginDialog extends TVDialog {
     }
 
     async passkey() {
+        if (this.loginRequest || !this.isOpen()) { return; }
         const username = this.username.getData().trim();
         if (!username) {
             this.status.setText("Enter email or username.");
@@ -403,47 +388,79 @@ class TVLoginDialog extends TVDialog {
         if (!this.username.valid()) {
             this.status.setText("Enter a valid email address or username."); this.username.focus(); return;
         }
-        if (!window.isSecureContext || !navigator.credentials?.create || !navigator.credentials?.get) {
-            this.status.setText("Passkeys require HTTPS or localhost and a compatible browser.");
+        if (!window.isSecureContext || !navigator.credentials?.get) {
+            this.setStatus("Passkeys require HTTPS or localhost and a compatible browser.");
             return;
         }
-        this.actions.forEach((button) => button.setState(sfDisabled, true));
+        const request = this.loginRequest = new AbortController();
+        this.updateActions();
+        this.status.setText("Confirm your Passkey in the browser...");
         try {
-            await TVLoginDialog.authenticate(username);
-            await this.refreshSession();
+            const result = await TVLoginDialog.authenticate(username, request.signal);
+            if (request.signal.aborted) { return; }
+            if (!result.authenticated) { throw new Error("The server did not confirm sign-in."); }
+            const session = await this.refreshSession();
+            if (request.signal.aborted) { return; }
+            if (!session?.authenticated || !session.user) {
+                throw new Error("Cannot confirm the signed-in session. Allow cookies and try again.");
+            }
+            this.close();
         } catch (error) {
-            this.status.setText(error?.message || "Passkey operation failed.");
+            if (!request.signal.aborted) {
+                this.setStatus(error?.name === "NotAllowedError"
+                    ? "Passkey cancelled or unavailable. Try again and choose your saved key."
+                    : error?.message || "Passkey operation failed.");
+            }
         } finally {
-            this.actions.forEach((button) => button.setState(sfDisabled, false));
+            if (this.loginRequest === request) { this.loginRequest = null; this.updateActions(); }
         }
     }
 
     async passwordLogin() {
+        if (this.loginRequest || !this.isOpen()) { return; }
         if (!this.username.valid() || !this.passwordInput.getData()) {
             this.status.setText("Enter your email/username and password."); return;
         }
-        this.actions.forEach(button => button.setState(sfDisabled, true));
+        const request = this.loginRequest = new AbortController();
+        this.updateActions();
+        this.status.setText("Signing in...");
         try {
-            await TVLoginDialog.post("/api/auth/password/login", {
+            const result = await TVLoginDialog.post("/api/auth/password/login", {
                 username: this.username.getData().trim(), password: this.passwordInput.getData(),
-            });
-            await this.refreshSession();
-        } catch (error) { this.status.setText(error.message); }
+            }, request.signal);
+            if (request.signal.aborted) { return; }
+            if (!result.authenticated) { throw new Error("The server did not confirm sign-in."); }
+            const session = await this.refreshSession();
+            if (request.signal.aborted) { return; }
+            if (!session?.authenticated || !session.user) {
+                throw new Error("Cannot confirm the signed-in session. Allow cookies and try again.");
+            }
+            this.close();
+        } catch (error) {
+            if (!request.signal.aborted) { this.setStatus(error.message); }
+        }
         finally {
-            this.passwordInput.setData("");
-            this.actions.forEach(button => button.setState(sfDisabled, false));
+            if (this.loginRequest === request) {
+                this.passwordInput.setData("");
+                this.loginRequest = null;
+                this.updateActions();
+            }
         }
     }
 
     async signOut() {
+        if (this.signingOut) { return; }
+        this.signingOut = true;
         this.sessionRequestVersion += 1;
         this.status.setText("Signing out...");
         try {
             await TVLoginDialog.post("/api/auth/logout");
-            await this.refreshSession();
+            const session = await this.refreshSession();
+            if (!session) { throw new Error("Cannot confirm sign-out. Check your connection and try again."); }
         } catch (error) {
-            this.status.setText(error?.message || "Sign out failed.");
-        }
+            await TV.messageBox(this, { title: "Sign out failed", type: TVMessageBox.MF_ERROR,
+                lines: [error?.message || "Sign out failed."] });
+        } finally { this.signingOut = false; }
     }
 
     handleEvent(event) {
@@ -451,7 +468,7 @@ class TVLoginDialog extends TVDialog {
         if (event.what !== evCommand) { return; }
         if (event.command === "login-sign-in") { void this.passkey(); }
         else if (event.command === "login-password") { void this.passwordLogin(); }
-        else if (event.command === "login-register") { this.onRegister?.(); }
+        else if (event.command === "login-register") { if (!this.loginRequest) { this.onRegister?.(); } }
         else if (event.command === "login-sign-out") { void this.signOut(); }
         else if (event.command === "login-close") { this.close(); }
         else { return; }
@@ -576,7 +593,7 @@ class TVAccountDialog extends TVDialog {
         const rows = data.passkeys.map(key => ({ ...key, label: key.name }));
         this.passkeys.newList(rows);
         const index = Math.max(0, rows.findIndex(key => key.id === selected));
-        this.passkeys.select(index);
+        this.passkeys.focusItem(index);
         this.selectPasskey(rows[index]);
         this.passwordButton.setState(sfDisabled, false);
         this.addPasskeyButton.setState(sfDisabled, false);
@@ -742,7 +759,7 @@ class TVUsersDialog extends TVDialog {
             const rows = data.users.map((user) => ({ ...user, label: `${user.display_name} (${user.role})${user.active ? "" : " [disabled]"}` }));
             this.users.newList(rows);
             const index = Math.max(0, rows.findIndex((user) => user.id === selectedId));
-            this.users.select(index);
+            this.users.focusItem(index);
             this.selectUser(rows[index]);
             this.status.setText(`${rows.length} account(s). Founding admin cannot be disabled or demoted.`);
         } catch (error) {
@@ -946,7 +963,7 @@ class TVAddUserDialog extends TVRegistrationDialog {
         this.requestVersion = 0;
         this.created = false;
         this.invitation = new TVInputLine(new TVRect(2, 14, 56, 15), 29);
-        this.changeBounds(new TVRect(0, 0, 60, 22));
+        this.growTo(60, 22);
         this.content.setBounds(new TVRect(0, 0, 58, 20));
         this.status.setBounds(new TVRect(2, 17, 56, 19));
         this.content.insertAll([
@@ -1090,7 +1107,7 @@ class TVRegistrationTokenDialog extends TVDialog {
                 label: `${item.token || "[older token: value unavailable]"}  ${new Date(item.expires_at * 1000).toLocaleString()}`,
             }));
             this.tokens.newList(rows);
-            this.tokens.select(-1);
+            this.tokens.focusItem(-1);
             this.selectToken(null);
             this.status.setText(rows.length ? `${rows.length} valid token(s). Select one to copy or delete.` : "No valid tokens.");
             return true;
@@ -1347,10 +1364,11 @@ class TVServerConfigurationDialog extends TVDialog {
         const task = { progress: null };
         this.rebuildTask = task;
         const path = `/api/admin/rebuild/${resource}`;
+        const statusPath = path;
         const title = resource === "dos" ? "Rebuild DOS C" : "Rebuild MIDI";
         let result = "", failed = false;
         try {
-            let status = await TVLoginDialog.request(path);
+            let status = await TVLoginDialog.request(statusPath);
             if (!status.rebuilding) {
                 const box = new TVMessageBox();
                 this.owner.insert(box);
@@ -1366,7 +1384,7 @@ class TVServerConfigurationDialog extends TVDialog {
                             "Replace all game MIDI tracks, covers and catalog?",
                             "The current library will move to a server backup.",
                             "The old downloader stops before the data is replaced.",
-                            "Sources will be downloaded again from midi-sources.json.",
+                            "Sources will be downloaded again from the MIDI module configuration.",
                         ], buttons: TVMessageBox.MF_OK_CANCEL });
                 } finally { box.destroy(); }
                 if (answer !== "ok") { return; }
@@ -1394,7 +1412,7 @@ class TVServerConfigurationDialog extends TVDialog {
                     break;
                 }
                 await new Promise((resolve) => setTimeout(resolve, 1000));
-                status = await TVLoginDialog.request(path);
+                status = await TVLoginDialog.request(statusPath);
             }
         } catch (error) {
             result = error.message;
@@ -1481,8 +1499,8 @@ class TVViewGalleryDialog extends TVDialog {
         this.applyButton = applyButton;
         this.messageButton = messageButton;
         this.clearLogButton = clearLogButton;
-        this.infoBox = infoBox.resolve(this.dialog);
-        this.terminal = terminal.bind(terminal.root);
+        this.infoBox = infoBox;
+        this.terminal = terminal;
         this.messageBox = null;
         this.listBox = listBox;
         this.listBox.setItems([
@@ -1506,12 +1524,7 @@ class TVViewGalleryDialog extends TVDialog {
         });
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bindGallery();
         this.setStatus("Ready");
-    }
-
-    bindGallery() {
-        // TVDialog translates browser input to Turbo Vision events.
     }
 
     handleEvent(event) {
@@ -1520,14 +1533,14 @@ class TVViewGalleryDialog extends TVDialog {
             if (event.infoPtr === this.nameInput) {
                 this.setStatus(`Name: ${this.nameInput.getData() || "(empty)"}`);
             } else if (event.infoPtr === this.checks || event.infoPtr === this.radios) {
-                const option = event.infoPtr.options[event.infoLong];
+                const option = event.infoPtr.strings[event.infoLong];
                 if (option) {
                     const checked = event.infoPtr.mark(event.infoLong);
                     this.setStatus(`${option.value}: ${checked ? "on" : "off"}`);
                 }
             } else if (event.infoPtr === this.multiChecks) {
-                const option = this.multiChecks.options[event.infoLong];
-                if (option) { this.setStatus(`${option.value}: state ${option.state}`); }
+                const option = this.multiChecks.strings[event.infoLong];
+                if (option) { this.setStatus(`${option.value}: state ${this.multiChecks.multiMark(event.infoLong)}`); }
             } else { return; }
             this.clearEvent(event);
             return;
@@ -1623,6 +1636,8 @@ class TVHistoryViewer extends TVListBox {
 
     _semanticName() { return `${this.historyId}-history-list`; }
 
+    getPalette() { return [50, 51, 51].map(index => this._appColor(index)); }
+
     defaultContent(item, index) {
         const text = item?.virtualPath ?? item?.displayPath ?? item?.value ?? item?.label;
         return escapeHtml(text == null ? String(index) : String(text));
@@ -1646,33 +1661,40 @@ class TVHistory extends TVButton {
         this.link = link;
         this.historyId = normalizedId || "thelp:history";
         this.store = new TVHistoryStore(this.historyId);
+        this.iconViews = [
+            [new TVRect(0, 0, 1, 1), "", 2], [new TVRect(0.5, 0, 1, 1), "", 3],
+            [new TVRect(1, 0, 2, 1), "↓", 1],
+            [new TVRect(2, 0, 3, 1), "", 2], [new TVRect(2, 0, 2.5, 1), "", 3],
+        ].map(([bounds, text, color]) => {
+            const view = new TVStaticText(bounds, text); view.owner = this; view.getPalette = () => [color]; return view;
+        });
+        this.arrow = this.iconViews[2];
         this.setCommandData({ expanded: false });
         this.setState(sfDisabled, true);
         this.window = null;
     }
 
+    getPalette() {
+        const sides = this._appColor(54);
+        return [this._appColor(this.disabled ? 44 : 53), sides, ((sides & 15) << 4) | (sides >> 4)];
+    }
+
+    bindRoot(root) {
+        super.bindRoot(root);
+        this.iconViews?.forEach(view => root ? view.resolve(root) : view.bindRoot(null));
+        return this;
+    }
+
+    _drawPalette() {
+        super._drawPalette(); this.iconViews?.forEach(view => view._drawPalette()); return this;
+    }
+
     _drawParts() {
-        const parts = super._drawParts();
-        const classes = ["tv-file-open-history-button"];
-        if (this.command === "change-dir-history") { classes.push("tv-change-dir-history-button"); }
-        if (this.command === "find-history") { classes.push("tv-find-history-button"); }
-        return {
-            ...parts,
-            dialog: false,
-            className: classes.join(" "),
-            labelMarkup: [
-                '<span class="tv-file-open-history-side" aria-hidden="true">▐</span>',
-                '<span class="tv-file-open-history-arrow" aria-hidden="true">↓</span>',
-                '<span class="tv-file-open-history-side" aria-hidden="true">▌</span>',
-            ].join(""),
-            ariaLabel: {
-                "file-open-history": "History",
-                "change-dir-history": "Directory history",
-                "find-history": "Find history",
-                "midi-filter-history": "Filter history",
-            }[this.command],
-            ariaExpanded: Boolean(this.commandData.expanded),
-        };
+        return { ...super._drawParts(), dialog: false, className: "",
+            labelMarkup: this.iconViews.map(view => view.draw()).join(""),
+            ariaLabel: { "file-open-history": "History", "change-dir-history": "Directory history",
+                "find-history": "Find history", "midi-filter-history": "Filter history" }[this.command],
+            ariaExpanded: Boolean(this.commandData.expanded) };
     }
 
     keys() { return this.store.keys(); }
@@ -1697,6 +1719,8 @@ class TVHistory extends TVButton {
 }
 
 class TVHistoryWindow extends TVWindow {
+    static palette = "history";
+
     constructor(bounds, historyId) {
         super(bounds, "", wnNoNumber);
         this.flags = wfClose;
@@ -1716,9 +1740,22 @@ class TVHistoryWindow extends TVWindow {
         this.onOutsideMouseDown = (nativeEvent) => {
             this.dispatchEvent(new TVEvent(evMouseDown, { infoPtr: this, nativeEvent }));
         };
+        this.onPopupKeyDown = (nativeEvent) => {
+            let window = this.owner;
+            while (window && !(window instanceof TVWindow)) { window = window.owner; }
+            if (nativeEvent.key === "Escape" && (window?.root?.contains(nativeEvent.target)
+                    || this.root?.contains(nativeEvent.target) || this.buttonView?.root?.contains(nativeEvent.target))) {
+                this.dispatchEvent(new TVEvent(evKeyDown, { infoPtr: this, nativeEvent }));
+            }
+        };
     }
 
     _semanticName() { return `${this.historyId}-history-popup`; }
+
+    bindRoot(root) {
+        if (!root) { this.hide(); }
+        return super.bindRoot(root);
+    }
 
     connect(button, items = () => [], onSelect = null) {
         this.buttonView = button instanceof TVHistory ? button : null;
@@ -1758,6 +1795,7 @@ class TVHistoryWindow extends TVWindow {
         this.refresh();
         this._setOpen(true);
         document.addEventListener("mousedown", this.onOutsideMouseDown);
+        document.addEventListener("keydown", this.onPopupKeyDown, true);
         fillBorders(this.root);
         window.requestAnimationFrame(() => {
             this.viewer.updateScrollbar();
@@ -1773,6 +1811,7 @@ class TVHistoryWindow extends TVWindow {
 
     hide({ restoreFocus = false } = {}) {
         document.removeEventListener("mousedown", this.onOutsideMouseDown);
+        document.removeEventListener("keydown", this.onPopupKeyDown, true);
         this._setOpen(false);
         if (restoreFocus) { this.buttonView?.focus(); }
     }
@@ -1781,6 +1820,10 @@ class TVHistoryWindow extends TVWindow {
 
     handleEvent(event) {
         super.handleEvent(event);
+        if (event.what === evKeyDown && event.nativeEvent && this.handleEscape(event.nativeEvent)) {
+            this.clearEvent(event);
+            return;
+        }
         if (event.what !== evMouseDown || !event.nativeEvent || !this.isOpen()) { return; }
         const target = event.nativeEvent?.target;
         if (this.buttonView?.root?.contains(target) || this.root?.contains(target)) { return; }
@@ -1802,55 +1845,6 @@ class TVFileList extends TVListBox {
 
     constructor(bounds, numCols = 2) {
         super(bounds, numCols);
-        this.rows = 8;
-        this.onViewportChange = null;
-    }
-
-    bindRoot(root) {
-        super.bindRoot(root);
-        this.root?.style.setProperty("--tv-file-list-rows", String(this.rows));
-        return this;
-    }
-
-    select(index, options = {}) {
-        super.select(index, options);
-        if (this.onViewportChange) { this.onViewportChange(); }
-    }
-
-    firstColumn() {
-        const viewport = this.scrollViewport;
-        if (!viewport || !viewport.clientWidth) { return 0; }
-        const columnWidth = viewport.clientWidth / 2;
-        return Math.max(0, Math.round(viewport.scrollLeft / columnWidth));
-    }
-
-    scrollColumns(delta) {
-        const viewport = this.scrollViewport;
-        if (!viewport || !this.items.length) { return; }
-        const columns = Math.ceil(this.items.length / this.rows);
-        const maxColumn = Math.max(0, columns - 2);
-        const nextColumn = Math.min(maxColumn, Math.max(0, this.firstColumn() + delta));
-        viewport.scrollLeft = nextColumn * (viewport.clientWidth / 2);
-        if (this.onViewportChange) { this.onViewportChange(); }
-    }
-
-    ensureSelectionVisible() {
-        if (!this.scrollViewport || this.selectedIndex < 0) { return; }
-        const column = Math.floor(this.selectedIndex / this.rows);
-        const firstColumn = this.firstColumn();
-        if (column < firstColumn) {
-            this.scrollColumns(column - firstColumn);
-        } else if (column > firstColumn + 1) {
-            this.scrollColumns(column - firstColumn - 1);
-        }
-    }
-
-    keyDestination(index, key) {
-        if (key === "ArrowRight") { return Math.min(this.items.length - 1, index + this.rows); }
-        if (key === "ArrowLeft") { return Math.max(0, index - this.rows); }
-        if (key === "PageDown") { return Math.min(this.items.length - 1, index + this.rows * 2); }
-        if (key === "PageUp") { return Math.max(0, index - this.rows * 2); }
-        return super.keyDestination(index, key);
     }
 }
 
@@ -1864,22 +1858,16 @@ class TVFileOpenDialog extends TVDialog {
         const openButton = new TVButton(new TVRect(34, 2, 45, 4), "~O~pen", "file-open-confirm", bfDefault);
         const cancelButton = new TVButton(new TVRect(34, 5, 45, 7), "Cancel", "file-open-cancel", bfNormal);
         const historyButton = new TVHistory(new TVRect(30, 2, 33, 3), nameInput, "thelp:file-open-history");
-        const fileList = new TVFileList(new TVRect(2, 5, 33, 13), 2);
-        const scrollLeftButton = new TVFileScrollButton(new TVRect(2, 13, 3, 14), displayCp437Char(17), "file-open-scroll-left", bfNormal);
-        const scrollTrack = new TVStaticText(new TVRect(3, 13, 32, 14), "");
-        const scrollRightButton = new TVFileScrollButton(new TVRect(32, 13, 33, 14), displayCp437Char(16), "file-open-scroll-right", bfNormal);
+        const fileList = new TVFileList(new TVRect(2, 5, 33, 14), 2);
         const pathLabel = new TVStaticText(new TVRect(0, 15, 47, 16), "");
         const detailLabel = new TVStaticText(new TVRect(0, 16, 47, 17), "");
-        const historyPopup = new TVHistoryWindow(new TVRect(0, 0, 32, 8), "file-open");
+        const historyPopup = new TVHistoryWindow(new TVRect(1, 1, 33, 9), "file-open");
         const fileOpenMain = new TVGroup(new TVRect(0, 0, 47, 17)).insertAll([
             nameLabel,
             nameInput,
             historyButton,
             filesLabel,
             fileList,
-            scrollLeftButton,
-            scrollTrack,
-            scrollRightButton,
             openButton,
             cancelButton,
             pathLabel,
@@ -1904,11 +1892,7 @@ class TVFileOpenDialog extends TVDialog {
         this.cancelButton = cancelButton;
         this.historyButton = historyButton;
         this.historyPopup = historyPopup;
-        this.scrollLeftButton = scrollLeftButton;
-        this.scrollRightButton = scrollRightButton;
-        this.scrollTrack = scrollTrack;
         this.fileList = fileList;
-        this.fileList.onViewportChange = () => this.updateHorizontalScrollbar();
         this.historyList = historyPopup.viewer;
         this.fileList.bind({
             onSelect: (item) => this.selectItem(item),
@@ -1921,7 +1905,6 @@ class TVFileOpenDialog extends TVDialog {
         );
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bindFileOpen();
     }
 
     configure(entries = [], onOpen = null) {
@@ -1934,21 +1917,11 @@ class TVFileOpenDialog extends TVDialog {
         this.refresh();
     }
 
-    bindFileOpen() {
-        // Browser input is translated by TVDialog and handled in handleEvent.
-    }
-
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what === evKeyDown && this.historyWindow.handleEscape(event.nativeEvent)) {
-            this.clearEvent(event);
-            return;
-        }
         if (event.what === evCommand) {
             if (event.command === "file-open-confirm") { this.openSelected(); }
             else if (event.command === "file-open-cancel") { this.close(); }
-            else if (event.command === "file-open-scroll-left") { this.fileList.scrollColumns(-1); }
-            else if (event.command === "file-open-scroll-right") { this.fileList.scrollColumns(1); }
             else { return; }
             this.clearEvent(event);
             return;
@@ -1982,7 +1955,7 @@ class TVFileOpenDialog extends TVDialog {
         this.refresh();
         super.open();
         window.requestAnimationFrame(() => {
-            this.updateHorizontalScrollbar();
+            this.fileList.updateScrollbar();
             this.nameInput.focus();
             this.nameInput.selectAll();
         });
@@ -2059,7 +2032,6 @@ class TVFileOpenDialog extends TVDialog {
         this.nameInput.setData("*.*");
         this.updateInfo(this.currentItems[0] || null);
         this.updateHistoryState();
-        this.updateHorizontalScrollbar();
     }
 
     currentMaskPath() {
@@ -2104,7 +2076,7 @@ class TVFileOpenDialog extends TVDialog {
         if (!query || query.includes("*")) { return; }
         const index = this.currentItems.findIndex((item) => item.label.toLocaleLowerCase().startsWith(query));
         if (index >= 0) {
-            this.fileList.select(index);
+            this.fileList.focusItem(index);
             this.updateInfo(this.currentItems[index]);
         }
     }
@@ -2126,18 +2098,6 @@ class TVFileOpenDialog extends TVDialog {
         this.remember(entry);
         this.close();
         this.onOpen(entry);
-    }
-
-    updateHorizontalScrollbar() {
-        const trackLength = 29;
-        const columns = Math.max(1, Math.ceil(this.currentItems.length / this.fileList.rows));
-        const maxColumn = Math.max(0, columns - 2);
-        const position = maxColumn
-            ? Math.round((this.fileList.firstColumn() / maxColumn) * (trackLength - 1))
-            : -1;
-        const cells = Array.from({ length: trackLength }, () => displayCp437Char(177));
-        if (position >= 0) { cells[position] = displayCp437Char(254); }
-        this.scrollTrack.setText(cells.join(""));
     }
 
     storedHistoryKeys() {
@@ -2171,7 +2131,7 @@ class TVFileOpenDialog extends TVDialog {
         const index = this.currentItems.findIndex((item) => (
             item.type === "file" && item.entry.historyKey === entry.historyKey
         ));
-        this.fileList.select(index);
+        this.fileList.focusItem(index);
         this.selectItem(this.currentItems[index]);
         if (activate) {
             this.openEntry(entry);
@@ -2195,7 +2155,7 @@ class TVChangeDirectoryDialog extends TVDialog {
         const historyButton = new TVHistory(new TVRect(31, 2, 34, 3), directoryInput, "thelp:directory-history");
         const directoryList = new TVOutline(new TVRect(2, 5, 31, 13));
         const detailView = new TVStaticText(new TVRect(2, 14, 42, 15), "");
-        const historyPopup = new TVHistoryWindow(new TVRect(0, 0, 33, 8), "change-dir");
+        const historyPopup = new TVHistoryWindow(new TVRect(1, 1, 34, 9), "change-dir");
         const changeDirectoryMain = new TVGroup(new TVRect(0, 0, 44, 16)).insertAll([
             directoryLabel,
             directoryInput,
@@ -2303,10 +2263,6 @@ class TVChangeDirectoryDialog extends TVDialog {
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what === evKeyDown && this.historyWindow.handleEscape(event.nativeEvent)) {
-            this.clearEvent(event);
-            return;
-        }
         if (event.what === evCommand) {
             if (event.command === "change-dir-confirm") { this.commit(); }
             else if (event.command === "change-dir-revert") { this.setDirectory(this.initialDirectory); }
@@ -2436,19 +2392,23 @@ class TVAsciiTable extends TVGroup {
     constructor(bounds) {
         super(bounds);
         this.cells = Array.from({ length: 256 }, (_unused, code) => {
-            const button = new TVAsciiCellButton(new TVRect(), displayCp437Char(code), "ascii-code", bfNormal).setValue(code);
+            const x = code % 32, y = Math.floor(code / 32);
+            const button = new TVAsciiCellButton(new TVRect(x, y, x + 1, y + 1), displayCp437Char(code), "ascii-code", bfNormal).setValue(code);
             button.setCommandData({ selected: code === 0 });
             return button;
         });
         this.insertAll(this.cells);
     }
 
-    select(code) {
+    setCode(code) {
+        if (!Number.isInteger(code) || code < 0 || code >= this.cells.length) { return; }
         this.cells.forEach((cell, index) => {
             const selected = index === code;
             cell.commandData.selected = selected;
             cell.root?.classList.toggle("is-selected", selected);
+            cell._drawPalette();
             cell.root?.setAttribute("aria-pressed", selected ? "true" : "false");
+            if (cell.root) { cell.root.tabIndex = selected ? 0 : -1; }
         });
         this.cells[code]?.root?.focus();
     }
@@ -2459,8 +2419,8 @@ class TVAsciiTableDialog extends TVDialog {
     static palette = "ascii";
 
     constructor() {
-        const chart = new TVAsciiTable(new TVRect());
-        const report = new TVStaticText(new TVRect(), "");
+        const chart = new TVAsciiTable(new TVRect(0, 0, 32, 8));
+        const report = new TVStaticText(new TVRect(0, 0, 32, 1), "");
         super(new TVRect(0, 0, 34, 12), "ASCII Chart");
         this.setHelpCtx(hcAsciiTable);
         this.insertAll([chart, report]);
@@ -2485,7 +2445,7 @@ class TVAsciiTableDialog extends TVDialog {
 
     open() {
         super.open();
-        this.chartView.select(this.selectedCode);
+        this.chartView.setCode(this.selectedCode);
         this.updateReport(this.selectedCode);
     }
 
@@ -2516,7 +2476,7 @@ class TVAsciiTableDialog extends TVDialog {
     selectCode(code) {
         if (!Number.isInteger(code) || code < 0 || code > 255) { return; }
         this.selectedCode = code;
-        this.chartView.select(code);
+        this.chartView.setCode(code);
         this.updateReport(code);
     }
 
@@ -2577,6 +2537,7 @@ class TVCalculatorDialog extends TVDialog {
                 .setCommandData({ description: aria })
         ));
         const displayView = new TVStaticText(new TVRect(2, 1, 20, 2), "");
+        displayView.getPalette = () => [0x1f];
         const keypad = new TVGroup(new TVRect(1, 3, 21, 13)).insertAll(buttons);
         const calcMain = new TVGroup(new TVRect(0, 0, 22, 14)).insertAll([
             displayView,
@@ -2802,21 +2763,38 @@ class TVCalendarView extends TVGroup {
 
     constructor(bounds) {
         super(bounds);
-        this.cells = Array.from({ length: 42 }, () => {
-            return new TVStaticText(new TVRect(), "  ");
+        this.monthData = null;
+        this.cells = Array.from({ length: 42 }, (_unused, index) => {
+            const x = (index % 7) * 4, y = Math.floor(index / 7);
+            const cell = new TVStaticText(new TVRect(x, y, x + 4, y + 1), "\x03  ");
+            cell.getPalette = () => {
+                const normal = cell._appColor(21), current = cell._appColor(22);
+                const [, , today, selected] = this.monthData || [];
+                return [cell.value && cell.value === selected ? current
+                    : cell.value && cell.value === today ? (normal & 0xf0) | (current & 15) : normal];
+            };
+            return cell;
         });
         this.insertAll(this.cells);
     }
 
+    resolve(root) {
+        super.resolve(root);
+        if (this.monthData) { this.setMonth(...this.monthData); }
+        return this;
+    }
+
     setMonth(first, days, today = 0, selected = today) {
+        this.monthData = [first, days, today, selected];
         this.cells.forEach((cell, index) => {
             const day = first + index;
             const inMonth = day >= 1 && day <= days;
-            cell.setText(inMonth ? String(day).padStart(2, " ") : "  ");
+            cell.setText("\x03" + (inMonth ? String(day).padStart(2, " ") : "  "));
             cell.value = inMonth ? day : 0;
             cell.root?.classList.toggle("is-current", inMonth && day === today);
             cell.root?.classList.toggle("is-selected", inMonth && day === selected);
             cell.root?.classList.toggle("is-empty", !inMonth);
+            cell._drawPalette();
         });
     }
 }
@@ -2965,8 +2943,9 @@ class TVColorSelector extends TVGroup {
         const background = this.colorCount === 8;
         this.background = background;
         this.buttons = Array.from({ length: this.colorCount }, (_unused, index) => {
-            const button = new TVColorCellButton(new TVRect(), "", "color-index", bfNormal).setValue(index);
-            button.setCommandData({ selected: index === 0, color: DOS_COLORS[index] });
+            const x = (index % 4) * 3, y = Math.floor(index / 4);
+            const button = new TVColorCellButton(new TVRect(x, y, x + 3, y + 1), "", "color-index", bfNormal).setValue(index);
+            button.setCommandData({ selected: index === 0 });
             return button;
         });
         this.insertAll(this.buttons);
@@ -2995,23 +2974,25 @@ class TVColorSelector extends TVGroup {
         if (color < 0) { return; }
         event.nativeEvent.preventDefault();
         event.nativeEvent.stopPropagation();
-        this.select(color, true);
+        this.setColor(color, true);
         event.what = evCommand;
         event.command = "color-index";
         event.infoPtr = this.buttons[color];
     }
 
-    select(index, focus = false) {
+    setColor(index, focus = false) {
         if (!Number.isInteger(index) || index < 0 || index >= this.buttons.length) { return; }
+        const restoreFocus = focus || this.buttons.some((button) => button.root === document.activeElement);
         this.selected = index;
         this.buttons.forEach((button, color) => {
             const selected = color === index;
+            const changed = button.commandData.selected !== selected;
             button.commandData.selected = selected;
-            if (button.root) {
+            if (button.root && changed) {
                 button.drawView();
             }
         });
-        if (focus) { this.buttons[index].root?.focus(); }
+        if (restoreFocus) { this.buttons[index].root?.focus(); }
     }
 
     buttonAt(index) {
@@ -3031,9 +3012,11 @@ class TVColorDisplay extends TVGroup {
         this.insert(sample);
     }
 
-    setColors(foreground, background) {
-        this.root?.style.setProperty("--tv-colors-sample-fg", foreground);
-        this.root?.style.setProperty("--tv-colors-sample-bg", background);
+    getPalette() { return [this.color ?? 0x70]; }
+
+    setColor(attribute) {
+        this.color = attribute & 255;
+        this._drawPalette(); this.children.forEach(view => view._drawPalette());
     }
 }
 
@@ -3126,7 +3109,7 @@ class TVColorsDialog extends TVDialog {
                 if (selector === this.foregroundView || selector === this.backgroundView) {
                     this.selectColor(selector, Number(event.infoPtr.value));
                     if (event.nativeEvent?.type === "keydown") {
-                        selector.select(Number(event.infoPtr.value), true);
+                        selector.setColor(Number(event.infoPtr.value), true);
                     }
                 }
             }
@@ -3256,8 +3239,8 @@ class TVColorsDialog extends TVDialog {
         }
         const fg = item.attr & 0x0F;
         const bg = (item.attr >> 4) & 0x0F;
-        this.foregroundView.select(fg);
-        this.backgroundView.select(bg);
+        this.foregroundView.setColor(fg);
+        this.backgroundView.setColor(bg);
     }
 
     renderDisplay() {
@@ -3265,9 +3248,7 @@ class TVColorsDialog extends TVDialog {
         if (!item) {
             return;
         }
-        const fg = dosColor(item.attr, 0);
-        const bg = dosColor(item.attr, 4);
-        this.displayView.setColors(fg, bg);
+        this.displayView.setColor(item.attr);
     }
 }
 
@@ -3511,14 +3492,18 @@ class TVMidiSynth {
         this.onProgress = null;
         this.onDone = null;
         this.loadingTimes = {};
+        this.disposed = false;
     }
 
     static loadScript(url) {
         return new Promise((resolve, reject) => {
             const script = document.createElement("script");
             script.src = url;
-            script.onload = resolve;
-            script.onerror = () => reject(new Error(`Cannot load MIDI synthesizer: ${url}`));
+            const timeout = setTimeout(() => {
+                script.remove(); reject(new Error("MIDI synthesizer loading timed out."));
+            }, 30000);
+            script.onload = () => { clearTimeout(timeout); resolve(); };
+            script.onerror = () => { clearTimeout(timeout); script.remove(); reject(new Error(`Cannot load MIDI synthesizer: ${url}`)); };
             document.head.appendChild(script);
         });
     }
@@ -3526,14 +3511,14 @@ class TVMidiSynth {
     static loadAssets() {
         if (!this.assetsPromise) {
             this.assetsPromise = (async () => {
-                const base = "/assets/midi/synth/";
+                const base = new URL("assets/midi/synth/", document.baseURI).href;
                 const scriptsStarted = performance.now();
                 await this.loadScript(`${base}libfluidsynth-2.4.6-with-libsndfile.js`);
                 await this.loadScript(`${base}js-synthesizer.min.js`);
                 await window.JSSynth.waitForReady();
                 const scriptsMs = performance.now() - scriptsStarted;
                 const soundfontStarted = performance.now();
-                const response = await fetch(`${base}FluidR3Mono_GM.sf3?v=2aacd036d705`);
+                const response = await fetch(`${base}FluidR3Mono_GM.sf3?v=2aacd036d705`, { signal: AbortSignal.timeout(60000) });
                 if (!response.ok) { throw new Error(`Cannot load MIDI SoundFont (HTTP ${response.status}).`); }
                 const soundFont = await response.arrayBuffer();
                 this.assetTiming = {
@@ -3551,6 +3536,7 @@ class TVMidiSynth {
     }
 
     async ensureContext() {
+        if (this.disposed) { throw new DOMException("MIDI Player closed", "AbortError"); }
         const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextCtor) {
             throw new Error("Web Audio is not available in this browser.");
@@ -3561,9 +3547,11 @@ class TVMidiSynth {
         if (this.context.state === "suspended") {
             await this.context.resume();
         }
+        if (this.disposed) { throw new DOMException("MIDI Player closed", "AbortError"); }
         if (!this.initPromise) {
             this.initPromise = (async () => {
                 const soundFont = await TVMidiSynth.loadAssets();
+                if (this.disposed) { throw new DOMException("MIDI Player closed", "AbortError"); }
                 const synthStarted = performance.now();
                 const synth = new window.JSSynth.Synthesizer();
                 synth.init(this.context.sampleRate);
@@ -3572,6 +3560,7 @@ class TVMidiSynth {
                 try {
                     const soundfontStarted = performance.now();
                     await synth.loadSFont(soundFont);
+                    if (this.disposed) { throw new DOMException("MIDI Player closed", "AbortError"); }
                     this.loadingTimes = {
                         ...TVMidiSynth.assetTiming,
                         synthInitMs: performance.now() - synthStarted,
@@ -3593,12 +3582,22 @@ class TVMidiSynth {
         return this.initPromise;
     }
 
+    async dispose() {
+        this.disposed = true;
+        this.stop(false);
+        this.audioNode?.disconnect();
+        this.synth?.close();
+        this.audioNode = null; this.synth = null;
+        if (this.context && this.context.state !== "closed") { await this.context.close(); }
+    }
+
     async play(sequence, onProgress, onDone, offset = 0) {
         this.stop(false);
         const generation = this.generation;
         const synth = await this.ensureContext();
         if (generation !== this.generation) { return false; }
         await synth.resetPlayer();
+        if (generation !== this.generation) { return false; }
         await synth.addSMFDataToPlayer(sequence.data);
         if (generation !== this.generation) { return false; }
         await synth.playPlayer();
@@ -3683,23 +3682,6 @@ class TVMidiSynth {
     }
 }
 
-class TVMidiTrackList extends TVListBox {
-    static viewName = "midi-track-list";
-
-    itemMarkup(track, index) {
-        return new TVMidiTrackButton(new TVRect(), "", "midi-track", bfNormal)
-            .setValue(index)
-            .setCommandData({
-                listIndex: index,
-                selected: index === this.selectedIndex,
-                index,
-                title: track.title,
-                credit: track.credit,
-                available: track.available,
-            })
-            .draw();
-    }
-}
 
 class TVMidiDisplay extends TVGroup {
     static viewName = "midi-display";
@@ -3720,28 +3702,23 @@ class TVMidiDisplay extends TVGroup {
         ]);
     }
 
-    resolve(root) {
-        super.resolve(root);
-        for (const [view, part] of [
-            [this.trackLabelView, "label"],
-            [this.trackNumberView, "number"],
-            [this.timeView, "time"],
-            [this.titleView, "title"],
-            [this.statusView, "status"],
-        ]) {
-            view.root?.setAttribute("data-tv-midi-part", part);
+    getPalette() { return [0x03, 0x07, 0x0e, 0x0f, 0x0a]; }
+
+    setColors() {
+        for (const [view, index] of [[this.trackLabelView, 2], [this.trackNumberView, 3],
+            [this.timeView, 3], [this.titleView, 4], [this.statusView, 5]]) {
+            view.getPalette = () => [index];
         }
-        return this;
     }
 
     setTrack(track, number) {
         this.trackNumberView.setText(number);
-        this.titleView.setText(track.title);
-        this.timeView.setText("0:00 / 0:00");
+        this.titleView.setText(track.title || "");
+        this.setTime(0, 0);
     }
 
     setTime(elapsed, duration) {
-        this.timeView.setText(`${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}`);
+        this.timeView.setText(`${formatMidiTime(elapsed)} / ${formatMidiTime(duration)}`.padStart(20));
     }
 
     setStatus(message) {
@@ -3753,23 +3730,25 @@ class TVMidiPlayerDialog extends TVDialog {
     static viewName = "midi";
 
     constructor() {
-        const previousButton = new TVMidiControlButton(new TVRect(1, 6, 9, 8), "◄◄", "midi-previous", bfNormal);
+        const previousButton = new TVButton(new TVRect(1, 6, 9, 8), "◄◄", "midi-previous", bfNormal);
         const playButton = new TVButton(new TVRect(10, 6, 17, 8), "►", "midi-play", bfDefault);
-        const pauseButton = new TVMidiControlButton(new TVRect(18, 6, 25, 8), "▌▌", "midi-pause", bfNormal);
-        const stopButton = new TVButton(new TVRect(26, 6, 33, 8), "■", "midi-stop", bfNormal);
-        const nextButton = new TVMidiControlButton(new TVRect(34, 6, 41, 8), "►►", "midi-next", bfNormal);
-        const moreButton = new TVMidiControlButton(new TVRect(42, 6, 52, 8), "~M~ore", "midi-more", bfNormal)
+        const pauseButton = new TVButton(new TVRect(18, 6, 26, 8), "▌▌", "midi-pause", bfNormal);
+        const stopButton = new TVButton(new TVRect(27, 6, 34, 8), "■", "midi-stop", bfNormal);
+        const nextButton = new TVButton(new TVRect(35, 6, 43, 8), "►►", "midi-next", bfNormal);
+        const moreButton = new TVButton(new TVRect(44, 6, 52, 8), "~M~ore", "midi-more", bfNormal)
             .setCommandData({ expanded: false });
         const filterInput = new TVInputLine(new TVRect(8, 1, 48, 2), 255);
         const filterLabel = new TVLabel(new TVRect(0, 1, 8, 2), "~F~ilter:", filterInput);
         const filterHistory = new TVHistory(new TVRect(48, 1, 51, 2), filterInput, "thelp:midi-filter-history");
-        const filterHistoryPopup = new TVHistoryWindow(new TVRect(0, 0, 32, 6), "midi-filter");
+        const filterHistoryPopup = new TVHistoryWindow(new TVRect(8, -5, 40, 1), "midi-filter");
         const randomNext = new TVCheckBoxes(new TVRect(0, 3, 51, 4), [
             { label: "~R~andom next track" },
         ]);
         const cover = new TVImage(new TVRect(1, 0, 11, 5));
         const display = new TVMidiDisplay(new TVRect(12, 0, 52, 3));
+        display.setColors();
         const meter = new TVBarGauge(new TVRect(12, 4, 52, 5), 100);
+        meter.getPalette = () => [0x03];
         const advanced = new TVGroup(new TVRect(1, 16, 52, 21)).insertAll([
             filterLabel,
             filterInput,
@@ -3778,7 +3757,7 @@ class TVMidiPlayerDialog extends TVDialog {
             filterHistoryPopup,
         ]);
         advanced.setState(sfVisible, false);
-        const trackList = new TVMidiTrackList(new TVRect(1, 8, 52, 16));
+        const trackList = new TVListBox(new TVRect(1, 8, 52, 16));
         trackList.setState(sfVisible, false);
         const main = new TVGroup(new TVRect(0, 0, 53, 8)).insertAll([
             cover,
@@ -3837,6 +3816,13 @@ class TVMidiPlayerDialog extends TVDialog {
         );
         this.randomNext = randomNext;
         this.trackListBox = trackList;
+        trackList.getText = (index) => {
+            const track = trackList.items[index];
+            if (!track) { return ""; }
+            const width = Math.max(1, trackList.size.x - 1);
+            const label = `${String(index + 1).padStart(2, "0")} ${track.game ? track.game + ": " : ""}${track.title}`;
+            return [...label].slice(0, width - 1).join("").padEnd(width - 1, " ") + (track.available ? " " : "☁");
+        };
         this.bindCommonClose(() => this.close());
         this.bindDrag();
         this.bind();
@@ -3860,6 +3846,11 @@ class TVMidiPlayerDialog extends TVDialog {
 
     handleEvent(event) {
         super.handleEvent(event);
+        if (event.what === evBroadcast && ["content-changed", "content-reset"].includes(event.command) && event.infoPtr === "midi") {
+            this.stopPlayback();
+            if (event.command === "content-changed") { void this.refreshCatalog(); }
+            this.clearEvent(event); return;
+        }
         if (event.what === evKeyDown && this.historyWindow.handleEscape(event.nativeEvent)) {
             this.clearEvent(event);
             return;
@@ -3906,6 +3897,12 @@ class TVMidiPlayerDialog extends TVDialog {
         this.catalogPending = null;
         this.stopPlayback();
         super.close();
+    }
+
+    destroy() {
+        if (this.destroyed) { return; }
+        this.close(); this.synth.dispose(); this.cache.clear();
+        super.destroy();
     }
 
     open() {
@@ -4017,7 +4014,7 @@ class TVMidiPlayerDialog extends TVDialog {
         this.moreButton.commandData.expanded = expanded;
         this.moreButton.root?.setAttribute("aria-expanded", expanded ? "true" : "false");
         this.moreButton.setTitle(expanded ? "~L~ess" : "~M~ore");
-        this.locate(new TVRect(0, 0, 55, expanded ? 23 : 10));
+        this.growTo(55, expanded ? 23 : 10);
         this.trackListBox.updateScrollbar();
     }
 
@@ -4036,7 +4033,7 @@ class TVMidiPlayerDialog extends TVDialog {
         }
         if (this.pausedPosition?.file !== this.tracks[index].file) { this.pausedPosition = null; }
         this.selectedIndex = index;
-        if (this.trackListBox.selectedIndex !== index) { this.trackListBox.select(index); }
+        if (this.trackListBox.selectedIndex !== index) { this.trackListBox.focusItem(index); }
         if (!this.pausedPosition) { this.updateDisplay(); }
     }
 
@@ -4098,7 +4095,7 @@ class TVMidiPlayerDialog extends TVDialog {
         if (!track) { this.setStatus("No game MIDI track is available yet."); return; }
         this.pendingPlay = null;
         if (this.trackListBox.selectedIndex !== this.selectedIndex) {
-            this.trackListBox.select(this.selectedIndex);
+            this.trackListBox.focusItem(this.selectedIndex);
         }
         if (!track.available) {
             this.stopPlayback();
@@ -4297,7 +4294,7 @@ class TVGridDemoDialog extends TVDialog {
             { title: "Purpose", width: 38 },
         ]);
         this.headerButton = new TVButton(new TVRect(2, 15, 20, 17), "~H~ide headers", "grid-headers");
-        this.status = new TVStaticText(new TVRect(2, 14, 62, 15), "Arrow keys select a cell; both scrollbars are shared TVScrollBar views.");
+        this.status = new TVStaticText(new TVRect(2, 14, 62, 15), "Arrows select a cell; scrollbars move the table.");
         this.insert(new TVGroup(new TVRect(0, 0, 64, 17)).insertAll([
             new TVStaticText(new TVRect(2, 1, 62, 2), "TVGridView: selectable rows and columns"),
             this.grid,
@@ -4702,7 +4699,7 @@ class TVSystemInformationDialog extends TVDialog {
         const selected = Math.max(0, this.categories.selectedIndex || 0);
         this.sections = systemInformationSections();
         this.categories.newList(this.sections);
-        this.categories.select(Math.min(selected, this.sections.length - 1));
+        this.categories.focusItem(Math.min(selected, this.sections.length - 1));
         this.showSection(this.categories.selectedIndex);
         const server = this.sections.find((section) => section.server);
         server.rows = await systemInformationServerRows();
@@ -4726,7 +4723,7 @@ class TVFindDialog extends TVDialog {
             { label: "Find in ~a~ctive window", value: "local" },
         ]);
         const historyButton = new TVHistory(new TVRect(32, 2, 35, 3), findInput, "thelp:find-history");
-        const historyPopup = new TVHistoryWindow(new TVRect(0, 0, 34, 7), "find");
+        const historyPopup = new TVHistoryWindow(new TVRect(1, 1, 35, 8), "find");
         const findMain = new TVGroup(new TVRect(0, 0, 47, 10)).insertAll([
             findLabel,
             findInput,
@@ -4773,10 +4770,6 @@ class TVFindDialog extends TVDialog {
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what === evKeyDown && this.historyWindow.handleEscape(event.nativeEvent)) {
-            this.clearEvent(event);
-            return;
-        }
         if (event.what === evCommand && event.command === "find-confirm") {
             this.performFind();
             this.clearEvent(event);
@@ -4904,32 +4897,65 @@ class TVSearchResultsList extends TVListBox {
     }
 
     setMessage(text) {
-        const messageView = new TVStaticText(new TVRect(), String(text ?? ""));
+        this.messageText = String(text ?? "");
+        if (this.messageView) {
+            this.messageView.setText(this.messageText);
+            if (this.scrollViewport) { this.scrollViewport.scrollTop = 0; }
+            this.focusItem(-1, { scroll: false });
+            return;
+        }
+        const messageView = new TVStaticText(new TVRect(), this.messageText);
         messageView.owner = this;
         this.messageView = messageView;
         super.setItems([messageView], -1);
-        messageView.resolve(this.itemsRoot());
+    }
+
+    _renderItems() {
+        super._renderItems();
+        if (this.itemsRoot()) { this.messageView?.resolve(this.itemsRoot()); }
+        else { this.messageView?.bindRoot(null); }
+        this._layoutItems();
+    }
+
+    _itemHeight() { return 2; }
+
+    _layoutItems() {
+        super._layoutItems();
+        if (!this.viewport || !this.messageView?.root) { return; }
+        const width = this.viewport.clientWidth
+            ? Math.floor(this.viewport.clientWidth / measureCells().width) : this.size.x - 1;
+        const columns = Math.max(1, width - 2);
+        const lines = wrapTextLines(this.messageText, columns);
+        this.messageView.setText(lines.join("\n"));
+        this.messageView.locate(new TVRect(1, 1, 1 + columns, 1 + lines.length));
     }
 
     setItems(items, selectedIndex = -1) {
+        if (this.messageView) {
+            this.messageView.bindRoot(null);
+            this.messageView.owner = null;
+        }
         this.messageView = null;
         super.setItems(items, selectedIndex);
+    }
+
+    destroy() {
+        this.setItems([]);
+        super.destroy();
     }
 
     itemMarkup(entry, index) {
         if (entry === this.messageView) {
             return entry.draw();
         }
+        return super.itemMarkup(entry, index);
+    }
+
+    getText(index, maxLen = Number.MAX_SAFE_INTEGER) {
+        const entry = this.items[index];
+        if (!entry || entry === this.messageView) { return ""; }
         const source = entry.source_file || entry.file || "Current HELP file";
-        return new TVSearchResultButton(new TVRect(), "", "search-index", bfNormal)
-            .setValue(index)
-            .setCommandData({
-                listIndex: index,
-                selected: index === this.selectedIndex,
-                title: entry.title,
-                meta: source,
-            })
-            .draw();
+        return Array.from(`${entry.title || ""}\n${source}`).slice(0, Math.max(0, Number(maxLen) || 0)).join("");
     }
 }
 
@@ -5084,8 +5110,8 @@ class TVProgressDialog extends TVDialog {
         this.detailsCaption.locate(new TVRect(2, buttonsY + 3, right, detailsY));
         this.details.locate(new TVRect(2, detailsY, right, detailsY + listRows));
         this.content.locate(new TVRect(0, 0, width - 2, height - 2));
-        this.locate(new TVRect(0, 0, width, height));
-        if (this.isOpen() && !this.hasPosition) { this.center(); }
+        this.growTo(width, height);
+        if (this.isOpen() && (this.options & TV.ofCentered) !== 0) { this.center(); }
         this.details.updateScrollbar();
     }
 
@@ -5252,6 +5278,7 @@ class TVSearchDialog extends TVDialog {
     close() {
         clearTimeout(this.searchTimer);
         this.searchSerial += 1;
+        this.indexSearchPending = false;
         this.scope.setData(0);
         super.close();
     }
@@ -5277,7 +5304,7 @@ class TVSearchDialog extends TVDialog {
     }
 
     updateSelectionUi() {
-        this.resultsBox.select(this.selectedIndex);
+        this.resultsBox.focusItem(this.selectedIndex);
         this.okButton.setState(sfDisabled, this.selectedIndex < 0);
         const match = this.matches[this.selectedIndex];
         const name = match?.help_name || (match?.kind === "doc" ? "Docs" : "");
@@ -5346,7 +5373,8 @@ class TVSearchDialog extends TVDialog {
             this.owner.insert(this.indexProgress);
         }
         this.indexProgress.update(status);
-        if (force || !this.indexProgress.isOpen()) { this.indexProgress.open(); }
+        const activate = Boolean(force || (this.indexSearchPending && this.isActive() && this.isGlobal()));
+        if (activate || !this.indexProgress.isOpen()) { this.indexProgress.open(activate); }
     }
 
     clearIndexProgress() {
@@ -5409,6 +5437,7 @@ class TVSearchDialog extends TVDialog {
         clearTimeout(this.indexMonitorTimer);
         clearTimeout(this.searchTimer);
         this.clearIndexProgress();
+        this.resultsBox.destroy();
         super.destroy();
     }
 
@@ -5452,6 +5481,7 @@ class TVSearchDialog extends TVDialog {
         if (!this.resultsBox.itemsRoot()) {
             return;
         }
+        this.indexSearchPending = false;
         this.matches = [];
         this.selectedIndex = -1;
         this.indexWarnings = 0;

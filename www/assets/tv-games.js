@@ -568,6 +568,9 @@ if (typeof module === "object" && module.exports && !(root && root.document)) {
 
 const {
     escapeHtml,
+    TVView,
+    TVEvent,
+    wrapTextLines,
     renderHotkeyMarkup,
     TVDialog,
     TVRect,
@@ -599,33 +602,269 @@ const {
     ofCentered,
 } = TV;
 
-class TVGameSurface extends TVStaticText {
+const openGamePalettes = new Set();
+let gamePaletteObserver = null;
+let gameApplicationColors = null;
+
+const gameEffects = new Set();
+let gameEffectTimer = null;
+let gameMotionPreference = null;
+
+function activeGame(view) {
+    while (view && !(view instanceof TVGameDialog)) { view = view.owner; }
+    return view?.isActive() || false;
+}
+function gameEffectAttribute(view, attribute) {
+    const data = view.cell || {};
+    if (data.ghost) { attribute &= 0xf7; }
+    if (gameMotionPreference?.matches || !activeGame(view)) { return attribute; }
+    let effect = data.flash ? { attribute: data.flash, duration: data.flashDuration || 160 }
+        : data.pulse ? { attribute: attribute ^ 8, duration: 600 } : null;
+    for (let owner = view; owner; owner = owner.owner) { if (owner.gameFlash) { effect = owner.gameFlash; } }
+    if (!effect) { return attribute; }
+    return Math.floor(performance.now() / (effect.duration / 2)) % 2 ? effect.attribute : attribute;
+}
+function syncGameEffects() {
+    const needed = !gameMotionPreference?.matches && [...gameEffects].some(activeGame);
+    if (needed && !gameEffectTimer) {
+        gameEffectTimer = window.setInterval(() => {
+            for (const view of gameEffects) { if (view.root) { paintGameTree(view); } }
+        }, 50);
+    } else if (!needed && gameEffectTimer) {
+        window.clearInterval(gameEffectTimer); gameEffectTimer = null;
+        gameEffects.forEach(paintGameTree);
+    }
+}
+function trackGameEffect(view) {
+    if (view.root && (view.cell?.flash || view.cell?.pulse || view.gameFlash)) { gameEffects.add(view); }
+    else { gameEffects.delete(view); }
+    syncGameEffects();
+}
+
+function gameAppColor(index) {
+    if (!gameApplicationColors) {
+        gameApplicationColors = new Map(TV.buildPaletteFromCurrentStyle().flatMap(group => group.items.map(item => [item.paletteIndex, item.attr])));
+    }
+    return gameApplicationColors.get(index) ?? TV.TV2_APP_COLOR_ATTRIBUTES[index - 1];
+}
+
+function paletteGroupOwner(view) {
+    for (let owner = view.owner; owner; owner = owner.owner) { if (owner instanceof TVGamePaletteGroup) { return owner; } }
+    return null;
+}
+
+function gamePalette(view, attribute) { return [gameEffectAttribute(view, attribute) + (paletteGroupOwner(view) ? 2 : 0)]; }
+function gamePaper(view) { return (paletteGroupOwner(view)?.getPaletteAttribute() ?? gameAppColor(37)) & 0xf0; }
+function gameInk(view, foreground) { return gamePaper(view) | foreground; }
+function gameFrameColor(view) {
+    let owner = view;
+    while (owner && !(owner instanceof TVGameDialog)) { owner = owner.owner; }
+    return gameInk(view, gameAppColor(owner?.getState(sfActive) ? 33 : 32) & 15);
+}
+function swapGameColor(attribute) { return ((attribute & 15) << 4) | (attribute >> 4); }
+
+function paintGameTree(view) {
+    view._drawPalette();
+    view.children?.forEach(paintGameTree);
+}
+
+function watchGamePalette(view, enable) {
+    if (!enable) {
+        openGamePalettes.delete(view);
+        for (const effect of gameEffects) {
+            let owner = effect; while (owner && owner !== view) { owner = owner.owner; }
+            if (owner === view) { gameEffects.delete(effect); }
+        }
+    }
+    else { openGamePalettes.add(view); }
+    if (openGamePalettes.size && !gamePaletteObserver) {
+        gamePaletteObserver = new MutationObserver(() => {
+            gameApplicationColors = null;
+            for (const game of openGamePalettes) {
+                if (game.destroyed || !game.isOpen()) { continue; }
+                if (game.gameView) { game.gameView.render(); } else { game.render?.(); }
+                paintGameTree(game);
+            }
+        });
+        gamePaletteObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    } else if (!openGamePalettes.size && gamePaletteObserver) {
+        gamePaletteObserver.disconnect(); gamePaletteObserver = null; gameApplicationColors = null;
+    }
+    if (openGamePalettes.size && !gameMotionPreference) {
+        gameMotionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+        gameMotionPreference.addEventListener("change", syncGameEffects);
+    } else if (!openGamePalettes.size && gameMotionPreference) {
+        gameMotionPreference.removeEventListener("change", syncGameEffects); gameMotionPreference = null;
+    }
+    if (enable) {
+        const restore = item => { if (item.cell?.flash || item.cell?.pulse || item.gameFlash) { gameEffects.add(item); } item.children?.forEach(restore); };
+        restore(view); paintGameTree(view);
+    }
+    syncGameEffects();
+}
+
+function bindGamePalette(view, root) {
+    if (!view._gamePaletteEvents) {
+        view._gamePaletteEvents = Object.fromEntries(["mouseenter", "mouseleave", "focus", "blur"].map(type => [type, () => {
+            if (type === "mouseenter" || type === "mouseleave") { view._gameHovered = type === "mouseenter"; }
+            else { view._gameFocused = type === "focus"; }
+            paintGameTree(view);
+        }]));
+    }
+    for (const [type, handler] of Object.entries(view._gamePaletteEvents)) {
+        view._gamePaletteRoot?.removeEventListener(type, handler); root?.addEventListener(type, handler);
+    }
+    view._gamePaletteRoot = root; view._gameHovered = false; view._gameFocused = false;
+    if (!root) { gameEffects.delete(view); syncGameEffects(); }
+    if (root) { view._drawPalette(); }
+}
+
+class TVGamePaletteGroup extends TVGroup {
+    _drawRole() { return "game-board"; }
+    getPaletteAttribute() { return gameAppColor(37); }
+    getPalette() {
+        const nested = Boolean(paletteGroupOwner(this));
+        if (!this._gamePalette || this._nestedGamePalette !== nested) {
+            this._gamePalette = [0, ...Array.from({ length: 256 }, (_, index) => nested ? index + 2 : index)];
+            this._nestedGamePalette = nested;
+        }
+        this._gamePalette[0] = gameEffectAttribute(this, this.getPaletteAttribute()) + (nested ? 2 : 0);
+        return this._gamePalette;
+    }
+    bindRoot(root) { if (root === this.root) { return this; } super.bindRoot(root); bindGamePalette(this, root); return this; }
+    destroy() { this.bindRoot(null); }
+}
+
+class TVGameText extends TVStaticText {
+    _drawRole() { return ""; }
+    getPaletteAttribute() { return this.attribute ?? (gamePaper(this) | (gameAppColor(37) & 15)); }
+    getPalette() { return gamePalette(this, this.getPaletteAttribute()); }
+    bindRoot(root) {
+        if (root === this.root) { return this; }
+        super.bindRoot(root); this._drawPalette();
+        if (!root) { gameEffects.delete(this); syncGameEffects(); }
+        return this;
+    }
+}
+class TVGameFrameText extends TVGameText { getPaletteAttribute() { return gameFrameColor(this); } }
+
+class TVGameButton extends TVButton {
+    getPaletteAttribute() { return gamePaper(this) | (gameAppColor(37) & 15); }
+    getPalette() { return gamePalette(this, this.getPaletteAttribute()); }
+    _drawParts() {
+        return { ...super._drawParts(), dialog: false, className: "tv-game-cell", style: this._paletteStyle() };
+    }
+    bindRoot(root) { if (root === this.root) { return this; } super.bindRoot(root); bindGamePalette(this, root); return this; }
+}
+
+function tileAttribute(view) {
+    const data = view.cell;
+    const base = data.frame ? gameFrameColor(view) : data.attribute ?? gameInk(view, data.foreground ?? (gameAppColor(37) & 15));
+    if ((view._gameHovered || view._gameFocused) && !view.disabled && data.hotAttribute !== undefined) { return data.hotAttribute; }
+    return base;
+}
+function paintGameTile(view) {
+    if (!view.root) { return; }
+    view._drawPalette();
+    trackGameEffect(view);
+    if (view.cell.label) { view.root.setAttribute("aria-label", view.cell.label); }
+}
+function setGameFlash(view, attribute, enable, duration = 160) {
+    if (!view) { return; }
+    view.gameFlash = enable ? { attribute, duration } : null;
+    trackGameEffect(view); paintGameTree(view);
+}
+function sameGameTile(before, after) {
+    return ["text", "kind", "attribute", "foreground", "frame", "hotAttribute", "label", "selected", "disabled", "tabIndex",
+        "ghost", "pulse", "flash", "flashDuration"].every(key => before[key] === after[key]);
+}
+class TVGameTile extends TVGameText {
+    constructor(bounds) { super(bounds, ""); this.cell = {}; }
+    _drawRole() { return "game-cell"; }
+    bindRoot(root) { super.bindRoot(root); if (this.cell) { paintGameTile(this); } return this; }
+    getPaletteAttribute() { return tileAttribute(this); }
+    setData(cell) {
+        if (sameGameTile(this.cell, cell)) { return this; }
+        this.cell = { ...cell }; this.setText(cell.text || " "); paintGameTile(this); return this;
+    }
+    destroy() { this.bindRoot(null); }
+}
+class TVGameTileButton extends TVGameButton {
+    constructor(bounds, title, command, flags = bfNormal) { super(bounds, title, command, flags); this.cell = {}; }
+    bindRoot(root) { super.bindRoot(root); if (this.cell) { paintGameTile(this); } return this; }
+    getPaletteAttribute() { return tileAttribute(this); }
+    _drawParts() {
+        return { ...super._drawParts(), className: "tv-game-cell", labelMarkup: escapeHtml(this.title),
+            ariaLabel: this.cell.label || "", tabIndex: this.cell.tabIndex ?? 0 };
+    }
+    setData(cell) {
+        if (sameGameTile(this.cell, cell)) { return this; }
+        this.cell = { ...cell };
+        if (this.title !== cell.text) { this.setTitle(cell.text || " "); }
+        this.setState(sfDisabled, Boolean(cell.disabled)); paintGameTile(this);
+        if (this.root && this.root.tabIndex !== (cell.tabIndex ?? 0)) { this.root.tabIndex = cell.tabIndex ?? 0; }
+        return this;
+    }
+}
+class TVGameStatus extends TVStaticText {
+    _drawAttrs(attrs = {}) { return super._drawAttrs({ ...attrs, "aria-live": "polite" }); }
+}
+
+class TVGameBoard extends TVGamePaletteGroup {
     constructor(bounds) {
-        super(bounds, "");
+        super(bounds);
+        this.cells = [];
+        this.columns = 0;
+        this.messageText = "";
+        this.message = new TVGameText(new TVRect(), "");
+        this.message.attribute = this.constructor.messageAttribute ?? 0x0e;
+        this.message.hide();
+        this.insert(this.message);
+    }
+    getPaletteAttribute() { return this.constructor.attribute ?? 0x00; }
+    setGrid(columns, data) {
+        this.columns = columns;
+        while (this.cells.length > data.length) {
+            const cell = this.cells.pop(), root = cell.root;
+            cell.destroy(); root?.remove(); this.remove(cell);
+        }
+        data.forEach((value, index) => {
+            const x = (index % columns) * 2, y = Math.floor(index / columns), bounds = new TVRect(x, y, x + 2, y + 1);
+            let cell = this.cells[index];
+            if (!cell) {
+                const command = this.constructor.cellCommand;
+                cell = command ? new TVGameTileButton(bounds, "", command).setValue(index) : new TVGameTile(bounds);
+                this.cells.push(cell); this.insertBefore(cell, this.message); cell.setData(value);
+                if (this.root) { const root = TVView._fromHTML(cell.draw()); this.root.insertBefore(root, this.message.root); cell.resolve(root); }
+            } else {
+                if (!cell.bounds.equals(bounds)) { cell.locate(bounds); }
+                cell.setData(value);
+            }
+        });
+        return this;
+    }
+    changeBounds(bounds) { super.changeBounds(bounds); this.setMessage(this.messageText); return this; }
+    setMessage(text = "") {
+        this.messageText = text;
+        if (!text) { this.message.hide(); return this; }
+        const width = Math.min(this.size.x, Math.max(...text.split("\n").map(line => line.length)) + 4);
+        const lines = wrapTextLines(text, Math.max(1, width - 4));
+        const height = Math.min(this.size.y, lines.length + 2);
+        const x = Math.floor((this.size.x - width) / 2), y = Math.floor((this.size.y - height) / 2);
+        this.message.locate(new TVRect(x, y, x + width, y + height));
+        this.message.setText("\x03\n" + lines.join("\n")); this.message.show(); return this;
     }
 }
 
-class TVTetrisPreview extends TVGameSurface { static viewName = "tetris-preview"; }
-class TVMinesField extends TVGameSurface { static viewName = "mines-grid"; }
-class TVBreakOutField extends TVGameSurface { static viewName = "break-field"; }
-class TVSokobanField extends TVGameSurface { static viewName = "sokoban-field"; }
-class TVLinesField extends TVGameSurface { static viewName = "lines-grid"; }
-class TVReversiField extends TVGameSurface { static viewName = "reversi-grid"; }
-class TVLudoBoard extends TVGameSurface {
-    static viewName = "ludo-board";
+class TVBreakOutField extends TVGameBoard { static viewName = "break-field"; }
+class TVSokobanField extends TVGameBoard { static viewName = "sokoban-field"; static messageAttribute = 0x1e; }
+class TVLinesField extends TVGameBoard { static viewName = "lines-grid"; static attribute = 0x11; static messageAttribute = 0x1e; static cellCommand = "lines-cell"; }
+class TVReversiField extends TVGameBoard { static viewName = "reversi-grid"; static attribute = 0x22; static cellCommand = "reversi-cell"; }
+class TVTronField extends TVGameBoard {
+    static viewName = "tron-field";
+    _drawAttrs(attrs = {}) { return super._drawAttrs({ ...attrs, role: "img", "aria-label": "Tron arena" }); }
 }
-class TVMastermindBoard extends TVGameSurface { static viewName = "mastermind-board"; }
-class TVMastermindStatus extends TVGameSurface { static viewName = "mastermind-status"; }
-class TVTronField extends TVGameSurface { static viewName = "tron-field"; }
-class TVTronStatus extends TVGameSurface { static viewName = "tron-status"; }
-class TVHanoiBoard extends TVGameSurface { static viewName = "hanoi-board"; }
-class TVHanoiHistory extends TVGameSurface { static viewName = "hanoi-history"; }
-class TVHanoiStatus extends TVGameSurface { static viewName = "hanoi-status"; }
-class TVSnakeField extends TVGameSurface { static viewName = "snake-field"; }
-
-class TVGameInfoBox extends TVInfoBox {
-    static borderRole = "game-border";
-}
+class TVSnakeField extends TVGameBoard { static viewName = "snake-field"; }
 
 const {
     hcGames,
@@ -643,39 +882,21 @@ const {
     hcTron,
 } = TV_HELP_CONTEXTS;
 
-class TVMinesFaceButton extends TVButton {
+class TVMinesFaceButton extends TVGameButton {
     _drawParts() {
-        return { ...super._drawParts(), dialog: false, className: "tv-mines-face" };
+        return { ...super._drawParts(), dialog: false, className: "tv-game-cell" };
     }
 }
 
-class TVLudoPlayerButton extends TVButton {
+class TVLudoPlayerButton extends TVGameButton {
+    getPaletteAttribute() { return this._gameHovered || this._gameFocused ? gameAppColor(58) : gameInk(this, this.off ? 8 : [12, 10, 14, 9][this.value]); }
     _drawParts() {
         const data = this.commandData;
         return {
             ...super._drawParts(), dialog: false,
-            className: `tv-ludo-player-toggle tv-ludo-${data.color || "red"}`,
+            className: "tv-game-cell",
+            labelMarkup: TVInfoBox.rowHtml(Math.max(0, this.size.x - 2), this.title, ""),
             ariaLabel: `${data.playerName || this.title} player mode`,
-        };
-    }
-}
-
-class TVLudoPieceButton extends TVButton {
-    _drawParts() {
-        const data = this.commandData;
-        return {
-            ...super._drawParts(), dialog: false, className: data.classes || "",
-            labelMarkup: '<span class="tv-ludo-piece-glyph">♟</span>',
-            ariaLabel: `${data.playerName || "Ludo"} piece ${Number(this.value) + 1}`,
-        };
-    }
-}
-
-class TVMastermindColorButton extends TVButton {
-    _drawParts() {
-        return {
-            ...super._drawParts(),
-            className: `tv-mastermind-color tv-mastermind-color-${this.commandData.color ?? 0}`,
         };
     }
 }
@@ -942,25 +1163,30 @@ class TVHallOfFameDialog extends TVDialog {
         this.setState(sfModal, true);
     }
 
+    open() { super.open(); watchGamePalette(this, true); }
+    close() { watchGamePalette(this, false); super.close(); }
+    destroy() { watchGamePalette(this, false); super.destroy(); releaseGameChildren(this); }
+
     setRows(rows) {
+        releaseGameChildren(this.body);
         this.body.children.slice().forEach((view) => this.body.remove(view));
         this.body.insertAll(rows);
         this.drawContent();
     }
 }
 
-class TVHallRow extends TVGroup {
+class TVHallRow extends TVGamePaletteGroup {
     constructor(bounds, kind, rank, player, score) {
         super(bounds);
         this.kind = String(kind || "");
         this.insertAll([
             new TVStaticText(new TVRect(1, 0, 5, 1), rank),
             new TVStaticText(new TVRect(6, 0, 24, 1), player),
-            new TVStaticText(new TVRect(25, 0, 42, 1), score),
+            new TVStaticText(new TVRect(25, 0, 42, 1), String(score).padStart(17)),
         ]);
     }
 
-    _drawRole() { return this.kind; }
+    getPaletteAttribute() { return gameAppColor(this.kind === "hall-header" ? 58 : 57); }
 }
 
 function hallOfFameRows(game, entries) {
@@ -981,9 +1207,10 @@ function hallOfFameRows(game, entries) {
 
 function showHallOfFame(ownerDialog, game) {
     const config = hallOfFameConfig(game);
-    const body = new TVGroup(new TVRect(0, 0, 43, 13)).insertAll(
+    const body = new TVGamePaletteGroup(new TVRect(0, 0, 43, 13)).insertAll(
         hallOfFameRows(game, loadHallOfFame(game)),
     );
+    body.getPaletteAttribute = () => gameAppColor(57);
     const dlg = new TVHallOfFameDialog(
         `${config.title} Hall of Fame`,
         ownerDialog?.getHelpCtx?.() || hcGames,
@@ -1003,7 +1230,20 @@ function showHallOfFame(ownerDialog, game) {
     }).catch(() => {});
 }
 
+function releaseGameChildren(owner) {
+    for (const view of owner.children || []) {
+        releaseGameChildren(view); view.destroy?.(); view.bindRoot(null);
+    }
+}
+
 class TVGameDialog extends TVDialog {
+    destroy() {
+        if (this.destroyed) { return; }
+        watchGamePalette(this, false);
+        super.destroy();
+        releaseGameChildren(this);
+    }
+
     getGameResult() {
         const status = String(this.game?.status || "").toLowerCase();
         if (this.solved || this.won || status === "won") { return "won"; }
@@ -1016,9 +1256,18 @@ class TVGameDialog extends TVDialog {
     open() {
         const wasOpen = this.isOpen();
         super.open();
+        if (!this.destroyed) { watchGamePalette(this, true); }
         if (!wasOpen && this.hallOfFameGame) {
             void loadServerHallOfFame(this.hallOfFameGame).catch(() => {});
         }
+    }
+
+    close() { watchGamePalette(this, false); super.close(); }
+
+    setState(state, enable) {
+        const result = super.setState(state, enable);
+        if ((state & sfActive) !== 0 && this.root) { paintGameTree(this); syncGameEffects(); }
+        return result;
     }
 
     setHallOfFame(game) {
@@ -1033,6 +1282,9 @@ class TVGameDialog extends TVDialog {
     }
 
     handleEvent(event) {
+        if ((event.what & (evCommand | evKeyDown | evMouseDown)) !== 0 && !this.isActive()) {
+            this.clearEvent(event); return;
+        }
         super.handleEvent(event);
         if (event.what === evCommand && event.command === "hall-of-fame" && this.hallOfFameGame) {
             showHallOfFame(this, this.hallOfFameGame);
@@ -1047,11 +1299,50 @@ function installHallOfFame(ownerDialog, game) {
 
 // ── Puzzle (15-game) ────────────────────────────────────────────────
 
-class TVPuzzleBoard extends TVStaticText {
+class TVPuzzleCellButton extends TVGameButton {
+    getPaletteAttribute() {
+        return this._gameHovered || this._gameFocused ? gameAppColor(135) : gameAppColor(this.highlighted ? 14 : 13);
+    }
+    _drawParts() {
+        return {
+            ...super._drawParts(), dialog: false,
+            className: `tv-game-cell${this.highlighted ? " is-highlight" : ""}${this.title === " " ? " is-blank" : ""}`,
+            labelMarkup: escapeHtml(` ${this.title} `),
+            ariaLabel: this.title === " " ? "Blank tile" : `Puzzle tile ${this.title}`,
+        };
+    }
+
+    setTile(value, highlighted) {
+        this.highlighted = Boolean(highlighted);
+        if (this.title !== value) { this.setTitle(value); }
+        if (this.root) {
+            this.root.classList.toggle("is-highlight", this.highlighted);
+            this.root.classList.toggle("is-blank", this.title === " ");
+            this._drawPalette();
+            const label = this._drawParts().ariaLabel;
+            if (this.root.getAttribute("aria-label") !== label) { this.root.setAttribute("aria-label", label); }
+        }
+    }
+}
+
+class TVPuzzleBoard extends TVGamePaletteGroup {
     static viewName = "puzzle-grid";
+    getPaletteAttribute() { return gameAppColor(13); }
 
     constructor(bounds) {
-        super(bounds, "");
+        super(bounds);
+        this.cells = PUZZLE_START.map((value, index) => {
+            const x = (index % 4) * 3, y = Math.floor(index / 4);
+            return new TVPuzzleCellButton(new TVRect(x, y, x + 3, y + 1), value, "puzzle-tile", bfNormal).setValue(index);
+        });
+        this.insertAll(this.cells);
+    }
+
+    setBoard(board, solved) {
+        this.cells.forEach((cell, index) => {
+            const value = board[index], code = value === " " ? -1 : value.charCodeAt(0) - 65;
+            cell.setTile(value, !solved && code >= 0 && PUZZLE_HIGHLIGHT_MAP[code] === 1);
+        });
     }
 }
 
@@ -1062,11 +1353,12 @@ class TVPuzzleDialog extends TVGameDialog {
     constructor() {
         const GRID_W = 12;  // 4 cols × 3ch
         const INFO_X = GRID_W + 1;
+        const INFO_W = 5;
         const gridView = new TVPuzzleBoard(new TVRect(0, 0, GRID_W, 4));
-        const movesView = new TVStaticText(new TVRect(INFO_X, 1, INFO_X + 6, 2), "0");
-        const puzzleMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + 6), (0) + (4))).insertAll([
+        const movesView = new TVStaticText(new TVRect(INFO_X, 1, INFO_X + INFO_W, 2), "0");
+        const puzzleMain = new TVGroup(new TVRect(0, 0, INFO_X + INFO_W, 4)).insertAll([
                 gridView,
-                new TVStaticText(new TVRect(INFO_X, 0, INFO_X + 6, 1), "Move"),
+                new TVStaticText(new TVRect(INFO_X, 0, INFO_X + INFO_W, 1), "Move"),
                 movesView,
             ]);
         super(new TVRect(0, 0, 20, 6), "Puzzle");
@@ -1085,45 +1377,21 @@ class TVPuzzleDialog extends TVGameDialog {
 
     handleEvent(event) {
         super.handleEvent(event);
-        if (event.what === evMouseDown && event.infoPtr === this.gridView) {
-            this.onGridClick(event.nativeEvent);
+        if (event.what === evCommand && event.command === "puzzle-tile" && this.gridView.cells.includes(event.infoPtr)) {
+            if (this.solved) { this.scramble(); }
+            else { this.moveTile(event.infoPtr.value); }
             this.clearEvent(event);
-        } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
-        }
-    }
-
-    onGridClick(event) {
-        const tile = event.target.closest("[data-tv-puzzle-index]");
-        if (!tile) {
-            return;
-        }
-        if (this.solved) {
-            this.scramble();
-            return;
-        }
-        const index = Number.parseInt(tile.getAttribute("data-tv-puzzle-index"), 10);
-        if (Number.isInteger(index)) {
-            this.moveTile(index);
-        }
-    }
-
-    onKeyDown(event) {
-        if (!this.isActive()) {
-            return;
-        }
-        if (event.target && event.target.closest("input, textarea, select")) {
-            return;
-        }
-        if (this.solved && (event.key.startsWith("Arrow") || event.key.length === 1)) {
-            event.preventDefault();
-            this.scramble();
-            return;
-        }
-        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
-            event.preventDefault();
-            this.moveByKey(event.key);
+        } else if (event.what === evKeyDown && this.isActive() && !(event.infoPtr instanceof TVInputLine)) {
+            const key = event.nativeEvent?.key || "";
+            if (this.solved && (key.startsWith("Arrow") || key.length === 1)) {
+                event.nativeEvent.preventDefault();
+                this.scramble();
+                this.clearEvent(event);
+            } else if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) {
+                event.nativeEvent.preventDefault();
+                this.moveByKey(key);
+                this.clearEvent(event);
+            }
         }
     }
 
@@ -1215,19 +1483,7 @@ class TVPuzzleDialog extends TVGameDialog {
     }
 
     render() {
-        const cells = this.board.map((value, index) => {
-            const tileCode = value === " " ? -1 : value.charCodeAt(0) - 65;
-            const highlight = !this.solved && tileCode >= 0 && PUZZLE_HIGHLIGHT_MAP[tileCode] === 1;
-            return `
-                <button
-                    type="button"
-                    class="tv-puzzle-cell${highlight ? " is-highlight" : ""}${value === " " ? " is-blank" : ""}"
-                    data-tv-puzzle-index="${index}"
-                    aria-label="${value === " " ? "Blank tile" : `Puzzle tile ${escapeHtml(value)}`}"
-                >${escapeHtml(value === " " ? " " : value)}</button>
-            `;
-        });
-        this.gridView._setHTML(cells.join(""));
+        this.gridView.setBoard(this.board, this.solved);
         this.movesView.setText(String(this.moves).padStart(3, " "));
     }
 }
@@ -1276,24 +1532,82 @@ const TETRIS_CROT = [
     4,4,4,4,3,4,4, 1,2,3,2, 5,3,4,4,3,3,4,4,3,3,3,3,3,4,4,3,4
 ];
 const TETRIS_COLORS = [
-    "#ffffff", "#ffff55", "#ff55ff", "#ff5555",
-    "#55ffff", "#55ff55", "#5555ff",
+    15, 14, 13, 12, 11, 10, 9,
 ];
 const TETRIS_DELAYS = [1600, 1200, 1000, 600, 500, 400, 300, 200, 100, 80];
 const TETRIS_BEST_KEY = "tv-tetris-best";
 const PENTIX_BEST_KEY = "tv-pentix-best";
 
+class TVTetrisPreview extends TVGamePaletteGroup {
+    static viewName = "tetris-preview";
+
+    constructor(bounds) {
+        super(bounds);
+        this.figure = null;
+        this.attribute = 0x0f;
+        this.leftSide = new TVGameFrameText(new TVRect(), "");
+        this.field = new TVGameText(new TVRect(), "");
+        this.field.attribute = this.attribute;
+        this.rightSide = new TVGameFrameText(new TVRect(), "");
+        this.insertAll([this.leftSide, this.field, this.rightSide]);
+        this.layoutPreview();
+    }
+
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        this.layoutPreview();
+        return this;
+    }
+
+    layoutPreview() {
+        const width = this.size.x, height = this.size.y, side = Math.min(1, width / 2);
+        this.leftSide.locate(new TVRect(0, 0, side, height));
+        this.field.locate(new TVRect(side, 0, Math.max(side, width - side), height));
+        this.rightSide.locate(new TVRect(width - side, 0, width, height));
+        const border = Array.from({ length: Math.max(0, Math.floor(height)) }, () => "│").join("\n");
+        this.leftSide.setText(border);
+        this.rightSide.setText(border);
+        this.setData(this.figure);
+    }
+
+    getData() { return this.figure; }
+
+    setData(figure) {
+        const grid = Array.from({ length: TETRIS_PREVIEW_ROWS }, () => new Array(TETRIS_PREVIEW_COLS).fill(false));
+        if (figure !== null) {
+            const cells = TETRIS_FIGURES[figure];
+            const rows = cells.map(([row]) => row), cols = cells.map(([, col]) => col);
+            const minR = Math.min(...rows), minC = Math.min(...cols);
+            const height = Math.max(...rows) - minR + 1, width = Math.max(...cols) - minC + 1;
+            const offR = Math.floor((TETRIS_PREVIEW_ROWS - height) / 2) - minR;
+            const offC = Math.floor((TETRIS_PREVIEW_COLS - width) / 2) - minC;
+            cells.forEach(([row, col]) => { grid[row + offR][col + offC] = true; });
+        }
+        const padding = Math.max(0, Math.floor(this.field.size.x) - TETRIS_PREVIEW_COLS * 2);
+        const text = grid.map(row => " ".repeat(Math.floor(padding / 2))
+            + row.map(filled => filled ? "██" : "  ").join("")
+            + " ".repeat(Math.ceil(padding / 2))).join("\n");
+        const attribute = figure === null ? 0x0f : 15 - figure % 7;
+        const changedColor = this.attribute !== attribute;
+        this.figure = figure;
+        this.attribute = attribute;
+        this.field.setText(text);
+        this.field.attribute = attribute;
+        if (changedColor) { this.field._drawPalette(); }
+        return this;
+    }
+}
+
 class TVTetrisGameInfo extends TVInfoBox {
-    static borderRole = "game-border";
 
     constructor(bounds, previewView) {
-        const scoreView = new TVInfoRow(new TVRect());
-        const linesView = new TVInfoRow(new TVRect());
-        const levelView = new TVInfoRow(new TVRect());
-        const bestNameView = new TVInfoRow(new TVRect());
-        const bestScoreView = new TVInfoRow(new TVRect());
-        const nextSeparator = new TVStaticText(new TVRect(), TVInfoBox.separator(bounds.width - 2, "Next"));
-        const bestSeparator = new TVStaticText(new TVRect(), TVInfoBox.separator(bounds.width - 2, "Best"));
+        const scoreView = new TVInfoRow(new TVRect(0, 1, bounds.width, 2));
+        const linesView = new TVInfoRow(new TVRect(0, 2, bounds.width, 3));
+        const levelView = new TVInfoRow(new TVRect(0, 3, bounds.width, 4));
+        const bestNameView = new TVInfoRow(new TVRect(0, 13, bounds.width, 14));
+        const bestScoreView = new TVInfoRow(new TVRect(0, 14, bounds.width, 15));
+        const nextSeparator = new TVStaticText(new TVRect(0, 4, bounds.width, 5), TVInfoBox.separator(bounds.width - 2, "Next"));
+        const bestSeparator = new TVStaticText(new TVRect(0, 12, bounds.width, 13), TVInfoBox.separator(bounds.width - 2, "Best"));
         super(bounds, "Info", [
             scoreView,
             linesView,
@@ -1320,11 +1634,11 @@ class TVTetrisGameInfo extends TVInfoBox {
     }
 }
 
-class TVTetrisGameView extends TVStaticText {
+class TVTetrisGameView extends TVGameBoard {
     static viewName = "tetris-grid";
 
     constructor(bounds) {
-        super(bounds, "");
+        super(bounds);
         this.options |= ofFramed | ofSelectable | ofPreProcess;
         this.eventMask = 0xffff;
         this.glass = [];
@@ -1382,59 +1696,61 @@ class TVTetrisGameView extends TVStaticText {
             else { return; }
             this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                const window = this.gameWindow();
+                if (!window?.isActive()) { break keyInput; }
+                if (nativeEvent.key === "Escape") { nativeEvent.preventDefault(); window.close(); break keyInput; }
+                if (this.gameOver) {
+                    if (nativeEvent.key === "Enter" || nativeEvent.key === " ") {
+                        nativeEvent.preventDefault();
+                        this.newGame();
+                    }
+                    break keyInput;
+                }
+                if (this.paused) {
+                    if (nativeEvent.key === "p" || nativeEvent.key === "P") {
+                        nativeEvent.preventDefault();
+                        this.togglePause();
+                    }
+                    break keyInput;
+                }
+                switch (nativeEvent.key) {
+                    case "ArrowLeft":
+                    case "Home":
+                        nativeEvent.preventDefault();
+                        this.moveFig(-1, 0);
+                        break;
+                    case "ArrowRight":
+                    case "PageUp":
+                        nativeEvent.preventDefault();
+                        this.moveFig(1, 0);
+                        break;
+                    case "ArrowDown":
+                    case " ":
+                        nativeEvent.preventDefault();
+                        this.hardDrop();
+                        break;
+                    case "ArrowUp":
+                        nativeEvent.preventDefault();
+                        this.rotate();
+                        break;
+                    case "n": case "N":
+                        nativeEvent.preventDefault();
+                        this.newGame();
+                        break;
+                    case "p": case "P":
+                        nativeEvent.preventDefault();
+                        this.togglePause();
+                        break;
+                }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
-    onKeyDown(event) {
-        const window = this.gameWindow();
-        if (!window?.isActive()) { return; }
-        if (event.key === "Escape") { event.preventDefault(); window.close(); return; }
-        if (this.gameOver) {
-            if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                this.newGame();
-            }
-            return;
-        }
-        if (this.paused) {
-            if (event.key === "p" || event.key === "P") {
-                event.preventDefault();
-                this.togglePause();
-            }
-            return;
-        }
-        switch (event.key) {
-            case "ArrowLeft":
-            case "Home":
-                event.preventDefault();
-                this.moveFig(-1, 0);
-                break;
-            case "ArrowRight":
-            case "PageUp":
-                event.preventDefault();
-                this.moveFig(1, 0);
-                break;
-            case "ArrowDown":
-            case " ":
-                event.preventDefault();
-                this.hardDrop();
-                break;
-            case "ArrowUp":
-                event.preventDefault();
-                this.rotate();
-                break;
-            case "n": case "N":
-                event.preventDefault();
-                this.newGame();
-                break;
-            case "p": case "P":
-                event.preventDefault();
-                this.togglePause();
-                break;
-        }
-    }
+
 
     togglePause() {
         if (this.gameOver) { return; }
@@ -1642,81 +1958,21 @@ class TVTetrisGameView extends TVStaticText {
             }
         }
 
-        const curColor = TETRIS_COLORS[this.curFig % 7];
-        const lines = [];
-        for (let row = 0; row < TETRIS_ROWS; row++) {
-            const cells = [];
-            for (let col = 0; col < TETRIS_COLS; col++) {
-                const v = display[row][col];
-                if (v > 0) {
-                    const color = TETRIS_COLORS[(15 - v) % 7];
-                    cells.push(`<span class="tv-tetris-cell tv-tetris-filled" style="color:${color}">██</span>`);
-                } else if (v < 0) {
-                    cells.push(`<span class="tv-tetris-cell tv-tetris-ghost" style="color:${curColor}">░░</span>`);
-                } else {
-                    cells.push(`<span class="tv-tetris-cell">  </span>`);
-                }
-            }
-            lines.push(cells.join(""));
-        }
-
+        const color = TETRIS_COLORS[this.curFig % 7];
+        this.setGrid(TETRIS_COLS, display.flatMap(row => row.map(value => value > 0
+            ? { text: "██", kind: "filled", foreground: TETRIS_COLORS[(15 - value) % 7] }
+            : value < 0 ? { text: "░░", kind: "ghost", foreground: color, ghost: true } : { text: "  " })));
         if (this.paused) {
-            this._setHTML(`<div class="tv-tetris-overlay-msg">PAUSED<br><small>Press P</small></div>`);
-        } else if (this.gameOver) {
-            this._setHTML(lines.join("") +
-                `<div class="tv-tetris-overlay-msg">GAME OVER<br><small>Score: ${this.score}</small><br><small>Press Enter</small></div>`);
+            this.cells.forEach(cell => cell.hide());
+            this.setMessage("PAUSED\nPress P");
         } else {
-            this._setHTML(lines.join(""));
+            this.cells.forEach(cell => cell.show());
+            this.setMessage(this.gameOver ? `GAME OVER\nScore: ${this.score}\nPress Enter` : "");
         }
     }
 
     renderPreview() {
-        const PCOLS = TETRIS_PREVIEW_COLS;
-        const PROWS = TETRIS_PREVIEW_ROWS;
-        const PAD = (TETRIS_INFO_WIDTH - 2) - PCOLS * 2;
-        const emptyCell = '<span class="tv-tetris-cell">  </span>';
-        const border = '<span class="tv-tetris-preview-border tv-game-border">\u2502</span>';
-        const renderRows = (grid, color = "") => {
-            const rows = [];
-            for (let row = 0; row < PROWS; row++) {
-                rows.push(border);
-                rows.push(`<span class="tv-tetris-preview-pad">${" ".repeat(Math.floor(PAD / 2))}</span>`);
-                for (let col = 0; col < PCOLS; col++) {
-                    rows.push(grid[row][col]
-                        ? `<span class="tv-tetris-cell tv-tetris-filled" style="color:${color}">██</span>`
-                        : emptyCell);
-                }
-                rows.push(`<span class="tv-tetris-preview-pad">${" ".repeat(Math.ceil(PAD / 2))}</span>`);
-                rows.push(border);
-            }
-            return rows.join("");
-        };
-        if (!this.preview || this.gameOver) {
-            const emptyGrid = Array.from({ length: PROWS }, () => new Array(PCOLS).fill(false));
-            this.previewView._setHTML(renderRows(emptyGrid));
-            return;
-        }
-        const fig = TETRIS_FIGURES[this.nextFig];
-        const color = TETRIS_COLORS[this.nextFig % 7];
-        // Find bounding box of figure
-        let minR = 99, maxR = 0, minC = 99, maxC = 0;
-        for (const [r, c] of fig) {
-            if (r < minR) { minR = r; }
-            if (r > maxR) { maxR = r; }
-            if (c < minC) { minC = c; }
-            if (c > maxC) { maxC = c; }
-        }
-        const figW = maxC - minC + 1;
-        const figH = maxR - minR + 1;
-        const offC = Math.floor((PCOLS - figW) / 2) - minC;
-        const offR = Math.floor((PROWS - figH) / 2) - minR;
-        const grid = Array.from({ length: PROWS }, () => new Array(PCOLS).fill(false));
-        for (const [r, c] of fig) {
-            const nr = r + offR;
-            const nc = c + offC;
-            if (nr >= 0 && nr < PROWS && nc >= 0 && nc < PCOLS) { grid[nr][nc] = true; }
-        }
-        this.previewView._setHTML(renderRows(grid, color));
+        this.previewView.setData(this.preview && !this.gameOver ? this.nextFig : null);
     }
 }
 
@@ -1789,7 +2045,7 @@ class TVTetrisDialog extends TVGameDialog {
         const infoX = gridWidth + 4;
         const infoWidth = TETRIS_INFO_WIDTH;
         const gameView = new TVTetrisGameView(new TVRect(2, 2, 2 + gridWidth, 2 + TETRIS_ROWS));
-        const previewView = new TVTetrisPreview(new TVRect());
+        const previewView = new TVTetrisPreview(new TVRect(0, 5, infoWidth, 12));
         const infoView = new TVTetrisGameInfo(new TVRect(infoX, 1, infoX + infoWidth, 17), previewView);
         gameView.attach(infoView, previewView);
         const newButton = new TVButton(new TVRect(infoX, 17, infoX + 10, 19), "~N~ew", "tetris-new", bfNormal);
@@ -1856,14 +2112,87 @@ const MINES_ROWS = 9;
 const MINES_COLS = 9;
 const MINES_COUNT = 10;
 
+class TVMinesCellButton extends TVGameButton {
+    getPaletteAttribute() {
+        if (this.cellState === "bomb") { return 0x4f; }
+        if (this.cellState === "empty") { return 0x77; }
+        if (this.cellState === "number") { return 0x70 | this.numberColor; }
+        if (this.cellState === "flag") { return 0x74; }
+        return this._gameHovered ? 0xf0 : 0x78;
+    }
+    _drawParts() {
+        return {
+            ...super._drawParts(), dialog: false,
+            className: `tv-game-cell${this.cursor ? " is-cursor" : ""}${["bomb", "empty", "number"].includes(this.cellState) ? " is-readonly" : ""}`,
+            labelMarkup: escapeHtml(this.title),
+            ariaLabel: `Row ${Math.floor(this.value / MINES_COLS) + 1}, column ${this.value % MINES_COLS + 1}, ${this.description || "hidden"}`,
+            tabIndex: this.cursor ? 0 : -1,
+        };
+    }
+
+    setData({ value, revealed, flagged, gameOver, cursor }) {
+        const colors = [0, 1, 2, 4, 1, 4, 3, 0, 8];
+        this.cellState = revealed ? value === -1 ? (gameOver ? "bomb" : "")
+            : value ? "number" : "empty" : flagged ? "flag" : "hidden";
+        this.numberColor = revealed && value > 0 ? colors[value] : 0;
+        this.cursor = cursor;
+        this.description = revealed ? value === -1 ? "mine" : `revealed ${value || "empty"}` : flagged ? "flagged" : "hidden";
+        const title = revealed ? value === -1 ? "💣" : value ? String(value) : " " : flagged ? "⚑" : "■";
+        if (this.title !== title) { this.setTitle(title); }
+        if (this.root) {
+            this.root.classList.toggle("is-readonly", revealed);
+            this.root.classList.toggle("is-cursor", this.cursor);
+            this._drawPalette();
+            if (this.root.tabIndex !== (this.cursor ? 0 : -1)) { this.root.tabIndex = this.cursor ? 0 : -1; }
+            const label = this._drawParts().ariaLabel;
+            if (this.root.getAttribute("aria-label") !== label) { this.root.setAttribute("aria-label", label); }
+        }
+        return this;
+    }
+
+    handleEvent(event) {
+        if (event.what === evMouseDown && event.nativeEvent?.type === "contextmenu" && !this.disabled) {
+            event.nativeEvent.preventDefault();
+            event.what = evCommand;
+            event.command = "mines-flag";
+            event.infoPtr = this;
+        } else { super.handleEvent(event); }
+    }
+}
+
+class TVMinesField extends TVGamePaletteGroup {
+    static viewName = "mines-grid";
+    getPaletteAttribute() { return 0x78; }
+
+    constructor(bounds) {
+        super(bounds);
+        this.cells = Array.from({ length: MINES_ROWS * MINES_COLS }, (_, index) => {
+            const x = (index % MINES_COLS) * 2, y = Math.floor(index / MINES_COLS);
+            return new TVMinesCellButton(new TVRect(x, y, x + 2, y + 1), "■", "mines-reveal", bfNormal).setValue(index);
+        });
+        this.insertAll(this.cells);
+    }
+
+    setBoard(game) {
+        this.cells.forEach((cell, index) => {
+            const row = Math.floor(index / MINES_COLS), col = index % MINES_COLS;
+            cell.setData({ value: game.board[row][col], revealed: game.revealed[row][col],
+                flagged: game.flagged[row][col], gameOver: game.gameOver,
+                cursor: row === game.cursorRow && col === game.cursorCol });
+        });
+    }
+}
+
 class TVMinesDialog extends TVGameDialog {
     static viewName = "mines";
 
     constructor() {
         const GRID_W = MINES_COLS * 2;  // 18ch
-        const remainingView = new TVStaticText(new TVRect(1, 0, 5, 1), String(MINES_COUNT));
+        const remainingView = new TVGameText(new TVRect(1, 0, 5, 1), String(MINES_COUNT));
+        remainingView.getPaletteAttribute = () => gameInk(remainingView, 4);
         const faceButton = new TVMinesFaceButton(new TVRect(9, 0, 11, 1), "☺", "mines-face", bfNormal);
-        const timerView = new TVStaticText(new TVRect(15, 0, 19, 1), "0");
+        const timerView = new TVGameText(new TVRect(15, 0, 19, 1), "   0");
+        timerView.getPaletteAttribute = () => gameInk(timerView, 4);
         const gridView = new TVMinesField(new TVRect(1, 1, 1 + GRID_W, 1 + MINES_ROWS));
         const minesMain = new TVGroup(new TVRect(0, 0, (0) + (GRID_W + 2), (0) + (MINES_ROWS + 1))).insertAll([
                 remainingView,
@@ -1903,13 +2232,30 @@ class TVMinesDialog extends TVGameDialog {
         if (event.what === evCommand && event.command === "mines-face") {
             this.newGame();
             this.clearEvent(event);
-        } else if (event.what === evMouseDown && event.infoPtr === this.gridView) {
-            if (event.nativeEvent.type === "contextmenu") { this.onCellRightClick(event.nativeEvent); }
-            else { this.onCellClick(event.nativeEvent); }
+        } else if (event.what === evCommand && ["mines-reveal", "mines-flag"].includes(event.command)
+            && this.isActive() && this.gridView.cells.includes(event.infoPtr)) {
+            this.cursorRow = Math.floor(event.infoPtr.value / MINES_COLS);
+            this.cursorCol = event.infoPtr.value % MINES_COLS;
+            if (event.command === "mines-flag") { this.toggleFlag(this.cursorRow, this.cursorCol, true); }
+            else { this.revealCell(this.cursorRow, this.cursorCol, true); }
             this.clearEvent(event);
-        } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+        } else if (event.what === evKeyDown && this.isActive() && !(event.infoPtr instanceof TVInputLine)) {
+            if (event.infoPtr instanceof TVButton && !this.gridView.cells.includes(event.infoPtr)) { return; }
+            const nativeEvent = event.nativeEvent, key = nativeEvent?.key;
+            if (key === " " || key === "Enter") { this.revealCell(this.cursorRow, this.cursorCol, true); }
+            else if (key === "f" || key === "F") { this.toggleFlag(this.cursorRow, this.cursorCol, true); }
+            else {
+                if (key === "ArrowUp") { this.cursorRow = Math.max(0, this.cursorRow - 1); }
+                else if (key === "ArrowDown") { this.cursorRow = Math.min(MINES_ROWS - 1, this.cursorRow + 1); }
+                else if (key === "ArrowLeft") { this.cursorCol = Math.max(0, this.cursorCol - 1); }
+                else if (key === "ArrowRight") { this.cursorCol = Math.min(MINES_COLS - 1, this.cursorCol + 1); }
+                else if (key === "Home") { this.cursorCol = 0; }
+                else if (key === "End") { this.cursorCol = MINES_COLS - 1; }
+                else { return; }
+                this.render(true);
+            }
+            nativeEvent.preventDefault();
+            this.clearEvent(event);
         }
     }
 
@@ -1978,7 +2324,7 @@ class TVMinesDialog extends TVGameDialog {
         this.timerId = setInterval(() => {
             if (!this.isActive()) { return; }
             this.seconds++;
-            this.timerView.setText(String(this.seconds));
+            this.timerView.setText(String(this.seconds).padStart(4));
         }, 1000);
     }
 
@@ -1987,67 +2333,6 @@ class TVMinesDialog extends TVGameDialog {
             clearInterval(this.timerId);
             this.timerId = null;
         }
-    }
-
-    onCellClick(event) {
-        const cell = event.target.closest("[data-tv-mine-r]");
-        if (!cell) { return; }
-        const r = Number.parseInt(cell.getAttribute("data-tv-mine-r"), 10);
-        const c = Number.parseInt(cell.getAttribute("data-tv-mine-c"), 10);
-        this.cursorRow = r;
-        this.cursorCol = c;
-        this.revealCell(r, c, true);
-    }
-
-    onCellRightClick(event) {
-        event.preventDefault();
-        const cell = event.target.closest("[data-tv-mine-r]");
-        if (!cell) { return; }
-        const r = Number.parseInt(cell.getAttribute("data-tv-mine-r"), 10);
-        const c = Number.parseInt(cell.getAttribute("data-tv-mine-c"), 10);
-        this.cursorRow = r;
-        this.cursorCol = c;
-        this.toggleFlag(r, c, true);
-    }
-
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (event.key === "Escape") {
-            event.preventDefault();
-            this.close();
-            return;
-        }
-        const targetButton = event.target?.closest?.("button");
-        if (targetButton && !targetButton.matches("[data-tv-mine-r]")) { return; }
-        let nextRow = this.cursorRow;
-        let nextCol = this.cursorCol;
-        if (event.key === "ArrowUp") {
-            nextRow = Math.max(0, nextRow - 1);
-        } else if (event.key === "ArrowDown") {
-            nextRow = Math.min(MINES_ROWS - 1, nextRow + 1);
-        } else if (event.key === "ArrowLeft") {
-            nextCol = Math.max(0, nextCol - 1);
-        } else if (event.key === "ArrowRight") {
-            nextCol = Math.min(MINES_COLS - 1, nextCol + 1);
-        } else if (event.key === "Home") {
-            nextCol = 0;
-        } else if (event.key === "End") {
-            nextCol = MINES_COLS - 1;
-        } else if (event.key === " " || event.key === "Enter") {
-            event.preventDefault();
-            this.revealCell(this.cursorRow, this.cursorCol, true);
-            return;
-        } else if (event.key === "f" || event.key === "F") {
-            event.preventDefault();
-            this.toggleFlag(this.cursorRow, this.cursorCol, true);
-            return;
-        } else {
-            return;
-        }
-        event.preventDefault();
-        this.cursorRow = nextRow;
-        this.cursorCol = nextCol;
-        this.render(true);
     }
 
     revealCell(r, c, focusCursor = false) {
@@ -2108,46 +2393,14 @@ class TVMinesDialog extends TVGameDialog {
     }
 
     render(focusCursor = false) {
-        const NUM_COLORS = ["", "#0000aa", "#00aa00", "#aa0000", "#000080", "#800000", "#008080", "#000000", "#555555"];
-        const lines = [];
-        for (let r = 0; r < MINES_ROWS; r++) {
-            const cells = [];
-            for (let c = 0; c < MINES_COLS; c++) {
-                const isCursor = r === this.cursorRow && c === this.cursorCol;
-                const cursorClass = isCursor ? " is-cursor" : "";
-                const stateLabel = this.revealed[r][c]
-                    ? (this.board[r][c] === -1 ? "mine" : `revealed ${this.board[r][c] || "empty"}`)
-                    : (this.flagged[r][c] ? "flagged" : "hidden");
-                const attrs = `type="button" tabindex="${isCursor ? 0 : -1}" aria-label="Row ${r + 1}, column ${c + 1}, ${stateLabel}" data-tv-mine-r="${r}" data-tv-mine-c="${c}"`;
-                if (this.revealed[r][c]) {
-                    if (this.board[r][c] === -1) {
-                        const cls = this.gameOver ? `tv-mines-cell tv-mines-bomb${cursorClass}` : `tv-mines-cell${cursorClass}`;
-                        cells.push(`<button class="${cls}" ${attrs}>💣</button>`);
-                    } else if (this.board[r][c] === 0) {
-                        cells.push(`<button class="tv-mines-cell tv-mines-empty${cursorClass}" ${attrs}> </button>`);
-                    } else {
-                        const color = NUM_COLORS[this.board[r][c]] || "#000";
-                        cells.push(`<button class="tv-mines-cell tv-mines-number${cursorClass}" style="color:${color}" ${attrs}>${this.board[r][c]}</button>`);
-                    }
-                } else if (this.flagged[r][c]) {
-                    cells.push(`<button class="tv-mines-cell tv-mines-flag${cursorClass}" ${attrs}>⚑</button>`);
-                } else {
-                    cells.push(`<button class="tv-mines-cell tv-mines-hidden${cursorClass}" ${attrs}>■</button>`);
-                }
-            }
-            lines.push(cells.join(""));
-        }
-        this.gridView._setHTML(lines.join("\n"));
+        this.gridView.setBoard(this);
 
         const flagCount = this.flagged.flat().filter(Boolean).length;
         this.remainingView.setText(String(MINES_COUNT - flagCount));
-        this.timerView.setText(String(this.seconds));
+        this.timerView.setText(String(this.seconds).padStart(4));
         this.faceButton.setTitle(this.gameOver && !this.won ? "☹" : "☺");
         if (focusCursor) {
-            const cursor = this.gridView._query(
-                `[data-tv-mine-r="${this.cursorRow}"][data-tv-mine-c="${this.cursorCol}"]`
-            );
-            if (cursor) { cursor.focus(); }
+            this.gridView.cells[this.cursorRow * MINES_COLS + this.cursorCol].focus();
         }
     }
 }
@@ -2158,7 +2411,7 @@ const BREAK_COLS = 14;
 const BREAK_ROWS = 5;
 const BREAK_PADDLE_W = 4;
 const BREAK_BEST_KEY = "tv-breakout-best";
-const BREAK_BRICK_COLORS = ["#ff5555", "#ffff55", "#55ff55", "#55ffff", "#5555ff"];
+const BREAK_BRICK_COLORS = [12, 14, 10, 11, 9];
 const BREAK_FPS = 20;
 
 class TVBreakOutDialog extends TVGameDialog {
@@ -2171,16 +2424,16 @@ class TVBreakOutDialog extends TVGameDialog {
         const INFO_W = 19;
         const fieldView = new TVBreakOutField(new TVRect(FIELD_X, 0, FIELD_X + FIELD_W, 20));
         const newButton = new TVButton(new TVRect(INFO_X, 17, INFO_X + INFO_W, 19), '~N~ew', "break-new", bfNormal);
-        const scoreRow = new TVInfoRow(new TVRect());
-        const livesRow = new TVInfoRow(new TVRect());
-        const levelRow = new TVInfoRow(new TVRect());
-        const bestRow = new TVInfoRow(new TVRect());
-        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
+        const scoreRow = new TVInfoRow(new TVRect(0, 1, INFO_W, 2));
+        const livesRow = new TVInfoRow(new TVRect(0, 2, INFO_W, 3));
+        const levelRow = new TVInfoRow(new TVRect(0, 3, INFO_W, 4));
+        const bestRow = new TVInfoRow(new TVRect(0, 1, INFO_W, 2));
+        const infoBox = new TVInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
                 scoreRow,
                 livesRow,
                 levelRow,
             ]);
-        const bestBox = new TVGameInfoBox(new TVRect(INFO_X, 5, INFO_X + INFO_W, 8), "Best", [
+        const bestBox = new TVInfoBox(new TVRect(INFO_X, 5, INFO_X + INFO_W, 8), "Best", [
                 bestRow,
             ]);
         const breakMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (20))).insertAll([
@@ -2244,26 +2497,28 @@ class TVBreakOutDialog extends TVGameDialog {
             this.newGame();
             this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                if (!this.isActive()) { break keyInput; }
+                if (nativeEvent.key === "Escape") { nativeEvent.preventDefault(); this.close(); break keyInput; }
+                this.keysDown.add(nativeEvent.key);
+                if (this.gameOver && (nativeEvent.key === "Enter" || nativeEvent.key === " " || nativeEvent.key === "n" || nativeEvent.key === "N")) {
+                    nativeEvent.preventDefault();
+                    this.newGame();
+                } else if (this.waiting && (nativeEvent.key === " " || nativeEvent.key === "ArrowUp")) {
+                    nativeEvent.preventDefault();
+                    this.launch();
+                } else if (nativeEvent.key === "n" || nativeEvent.key === "N") {
+                    nativeEvent.preventDefault();
+                    this.newGame();
+                }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (event.key === "Escape") { event.preventDefault(); this.close(); return; }
-        this.keysDown.add(event.key);
-        if (this.gameOver && (event.key === "Enter" || event.key === " " || event.key === "n" || event.key === "N")) {
-            event.preventDefault();
-            this.newGame();
-        } else if (this.waiting && (event.key === " " || event.key === "ArrowUp")) {
-            event.preventDefault();
-            this.launch();
-        } else if (event.key === "n" || event.key === "N") {
-            event.preventDefault();
-            this.newGame();
-        }
-    }
+
 
     onDialogKeyUp(event) {
         this.keysDown.delete(event.key);
@@ -2440,36 +2695,19 @@ class TVBreakOutDialog extends TVGameDialog {
     }
 
     renderField() {
-        // Build display grid: fieldW × fieldH
-        const lines = [];
+        const cells = [];
         for (let row = 0; row < this.fieldH; row++) {
-            const cells = [];
             for (let col = 0; col < this.fieldW; col++) {
-                // Bricks at rows 1..BREAK_ROWS
-                const brickRow = row - 1;
-                if (brickRow >= 0 && brickRow < BREAK_ROWS && col < BREAK_COLS && this.bricks[brickRow][col]) {
-                    const color = BREAK_BRICK_COLORS[brickRow % BREAK_BRICK_COLORS.length];
-                    cells.push(`<span class="tv-break-cell tv-break-brick" style="color:${color}">▓▓</span>`);
-                } else if (row === this.fieldH - 1 && col >= this.paddleX && col < this.paddleX + BREAK_PADDLE_W) {
-                    cells.push('<span class="tv-break-cell tv-break-paddle">▀▀</span>');
-                } else if (row === this.ballY && col === this.ballX) {
-                    cells.push('<span class="tv-break-cell tv-break-ball">⬤ </span>');
-                } else {
-                    cells.push('<span class="tv-break-cell">  </span>');
-                }
+                const brick = row - 1;
+                cells.push(brick >= 0 && brick < BREAK_ROWS && this.bricks[brick][col]
+                    ? { text: "▓▓", kind: "brick", foreground: BREAK_BRICK_COLORS[brick] }
+                    : row === this.fieldH - 1 && col >= this.paddleX && col < this.paddleX + BREAK_PADDLE_W
+                        ? { text: "▀▀", kind: "paddle", foreground: (gameAppColor(41) >> 4) }
+                        : row === this.ballY && col === this.ballX ? { text: "⬤ ", kind: "ball", foreground: 15 } : { text: "  " });
             }
-            lines.push(cells.join(""));
         }
-
-        if (this.gameOver) {
-            this.fieldView._setHTML(lines.join("") +
-                `<div class="tv-break-overlay-msg">GAME OVER<br><small>Score: ${this.score}</small><br><small>Press Enter</small></div>`);
-        } else if (this.waiting) {
-            this.fieldView._setHTML(lines.join("") +
-                `<div class="tv-break-overlay-msg"><small>Press Space</small></div>`);
-        } else {
-            this.fieldView._setHTML(lines.join(""));
-        }
+        this.fieldView.setGrid(this.fieldW, cells).setMessage(this.gameOver
+            ? `GAME OVER\nScore: ${this.score}\nPress Enter` : this.waiting ? "Press Space" : "");
     }
 }
 
@@ -2579,14 +2817,14 @@ class TVSokobanDialog extends TVGameDialog {
         const INFO_X = FIELD_W + 1;
         const INFO_W = 20;
         const fieldView = new TVSokobanField(new TVRect(0, 0, FIELD_W, 10));
-        const restartButton = new TVButton(new TVRect(INFO_X, 6, INFO_X + 9, 8), '~R~estart', "sokoban-restart", bfNormal);
-        const undoButton = new TVButton(new TVRect(INFO_X + 10, 6, INFO_X + 19, 8), '~U~ndo', "sokoban-undo", bfNormal);
+        const restartButton = new TVButton(new TVRect(INFO_X, 6, INFO_X + 11, 8), '~R~estart', "sokoban-restart", bfNormal);
+        const undoButton = new TVButton(new TVRect(INFO_X + 12, 6, INFO_X + INFO_W, 8), '~U~ndo', "sokoban-undo", bfNormal);
         const prevButton = new TVButton(new TVRect(INFO_X, 9, INFO_X + 9, 11), '< Prev', "sokoban-prev", bfNormal);
         const nextButton = new TVButton(new TVRect(INFO_X + 10, 9, INFO_X + 19, 11), 'Next >', "sokoban-next", bfNormal);
-        const levelRow = new TVInfoRow(new TVRect());
-        const movesRow = new TVInfoRow(new TVRect());
-        const pushesRow = new TVInfoRow(new TVRect());
-        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
+        const levelRow = new TVInfoRow(new TVRect(0, 1, INFO_W, 2));
+        const movesRow = new TVInfoRow(new TVRect(0, 2, INFO_W, 3));
+        const pushesRow = new TVInfoRow(new TVRect(0, 3, INFO_W, 4));
+        const infoBox = new TVInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
                 levelRow,
                 movesRow,
                 pushesRow,
@@ -2642,34 +2880,36 @@ class TVSokobanDialog extends TVGameDialog {
             else { return; }
             this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                if (!this.isActive()) { break keyInput; }
+                if (nativeEvent.key === "Escape") { nativeEvent.preventDefault(); this.close(); break keyInput; }
+                if (this.solved) {
+                    if (nativeEvent.key === "Enter" || nativeEvent.key === " ") {
+                        nativeEvent.preventDefault();
+                        if (this.levelIndex === SOKOBAN_LEVELS.length - 1) {
+                            this.newGame();
+                        } else {
+                            this.changeLevel(1);
+                        }
+                    }
+                    break keyInput;
+                }
+                switch (nativeEvent.key) {
+                    case "ArrowUp": nativeEvent.preventDefault(); this.move(0, -1); break;
+                    case "ArrowDown": nativeEvent.preventDefault(); this.move(0, 1); break;
+                    case "ArrowLeft": nativeEvent.preventDefault(); this.move(-1, 0); break;
+                    case "ArrowRight": nativeEvent.preventDefault(); this.move(1, 0); break;
+                    case "r": case "R": nativeEvent.preventDefault(); this.loadLevel(this.levelIndex); break;
+                    case "u": case "U": nativeEvent.preventDefault(); this.undo(); break;
+                }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (event.key === "Escape") { event.preventDefault(); this.close(); return; }
-        if (this.solved) {
-            if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                if (this.levelIndex === SOKOBAN_LEVELS.length - 1) {
-                    this.newGame();
-                } else {
-                    this.changeLevel(1);
-                }
-            }
-            return;
-        }
-        switch (event.key) {
-            case "ArrowUp": event.preventDefault(); this.move(0, -1); break;
-            case "ArrowDown": event.preventDefault(); this.move(0, 1); break;
-            case "ArrowLeft": event.preventDefault(); this.move(-1, 0); break;
-            case "ArrowRight": event.preventDefault(); this.move(1, 0); break;
-            case "r": case "R": event.preventDefault(); this.loadLevel(this.levelIndex); break;
-            case "u": case "U": event.preventDefault(); this.undo(); break;
-        }
-    }
+
 
     open() {
         const wasOpen = this.isOpen();
@@ -2814,45 +3054,27 @@ class TVSokobanDialog extends TVGameDialog {
     }
 
     renderField() {
-        if (this.fieldView.root) { this.fieldView.root.style.gridTemplateColumns = `repeat(${this.boardW}, 2ch)`; }
-        const lines = [];
+        const cells = [];
         for (let y = 0; y < this.boardH; y++) {
-            const cells = [];
             for (let x = 0; x < this.boardW; x++) {
-                const cell = this.board[y][x];
-                const isPlayer = (x === this.playerX && y === this.playerY);
-                if (isPlayer) {
-                    const onTarget = (cell === ".");
-                    cells.push(`<span class="tv-sokoban-cell tv-sokoban-player${onTarget ? " tv-sokoban-on-target" : ""}">☻ </span>`);
-                } else if (cell === "#") {
-                    cells.push('<span class="tv-sokoban-cell tv-sokoban-wall">██</span>');
-                } else if (cell === "$") {
-                    cells.push('<span class="tv-sokoban-cell tv-sokoban-box">▓▓</span>');
-                } else if (cell === "*") {
-                    cells.push('<span class="tv-sokoban-cell tv-sokoban-box-done">▓▓</span>');
-                } else if (cell === ".") {
-                    cells.push('<span class="tv-sokoban-cell tv-sokoban-target">··</span>');
-                } else {
-                    cells.push('<span class="tv-sokoban-cell">  </span>');
-                }
+                const value = this.board[y][x];
+                cells.push(x === this.playerX && y === this.playerY
+                    ? { text: "☻ ", kind: "player", attribute: value === "." ? 0x2e : 0x0e }
+                    : value === "#" ? { text: "██", kind: "wall", attribute: 0x87 }
+                        : value === "$" ? { text: "▓▓", kind: "box", attribute: 0x06 }
+                            : value === "*" ? { text: "▓▓", kind: "box-done", attribute: 0x2a }
+                                : value === "." ? { text: "··", kind: "target", attribute: 0x0a } : { text: "  " });
             }
-            lines.push(cells.join(""));
         }
-        if (this.solved) {
-            const prompt = this.levelIndex === SOKOBAN_LEVELS.length - 1
-                ? "Press Enter for new game" : "Press Enter for next level";
-            this.fieldView._setHTML(lines.join("") +
-                `<div class="tv-sokoban-overlay-msg">SOLVED!<br><small>Moves: ${this.moves}</small><br><small>${prompt}</small></div>`);
-        } else {
-            this.fieldView._setHTML(lines.join(""));
-        }
+        const prompt = this.levelIndex === SOKOBAN_LEVELS.length - 1 ? "Press Enter for new game" : "Press Enter for next level";
+        this.fieldView.setGrid(this.boardW, cells).setMessage(this.solved ? `SOLVED!\nMoves: ${this.moves}\n${prompt}` : "");
     }
 }
 
 // ── Lines (Color Lines / Shar) ──────────────────────────────────────
 
 const LINES_SIZE = 9;
-const LINES_COLORS = ["#ff5555", "#55ff55", "#5555ff", "#ffff55", "#ff55ff", "#55ffff", "#ffffff"];
+const LINES_COLORS = [12, 10, 9, 14, 13, 11, 15];
 const LINES_MATCH = 5; // need 5 in a row
 const LINES_SPAWN = 3; // new balls per turn
 const LINES_BEST_KEY = "tv-lines-best";
@@ -2866,15 +3088,17 @@ class TVLinesDialog extends TVGameDialog {
         const INFO_W = 18;
         const gridView = new TVLinesField(new TVRect(0, 0, GRID_W, LINES_SIZE));
         const newButton = new TVButton(new TVRect(INFO_X, 9, INFO_X + INFO_W, 11), '~N~ew', "lines-new", bfNormal);
-        const scoreRow = new TVInfoRow(new TVRect());
-        const bestRow = new TVInfoRow(new TVRect());
-        const nextRow = new TVInfoRow(new TVRect());
-        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 4), "Info", [
+        const scoreRow = new TVInfoRow(new TVRect(0, 1, INFO_W, 2));
+        const bestRow = new TVInfoRow(new TVRect(0, 2, INFO_W, 3));
+        const nextRow = new TVInfoRow(new TVRect(0, 1, INFO_W, 2));
+        const nextBalls = Array.from({ length: LINES_SPAWN }, (_, index) => new TVGameTile(new TVRect(2 + index * 2, 1, 4 + index * 2, 2)));
+        const infoBox = new TVInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 4), "Info", [
                 scoreRow,
                 bestRow,
             ]);
-        const nextBox = new TVGameInfoBox(new TVRect(INFO_X, 5, INFO_X + INFO_W, 8), "Next", [
+        const nextBox = new TVInfoBox(new TVRect(INFO_X, 5, INFO_X + INFO_W, 8), "Next", [
                 nextRow,
+                ...nextBalls,
             ]);
         const linesMain = new TVGroup(new TVRect(0, 0, INFO_X + INFO_W, LINES_SIZE + 2)).insertAll([
                 gridView,
@@ -2895,6 +3119,7 @@ class TVLinesDialog extends TVGameDialog {
         this.scoreRow = scoreRow;
         this.bestRow = bestRow;
         this.nextRow = nextRow;
+        this.nextBalls = nextBalls;
 
         this.board = [];
         this.selected = null; // {r, c}
@@ -2923,20 +3148,23 @@ class TVLinesDialog extends TVGameDialog {
         if (event.what === evCommand && event.command === "lines-new") {
             this.newGame();
             this.clearEvent(event);
-        } else if (event.what === evMouseDown && event.infoPtr === this.gridView) {
-            this.onCellClick(event.nativeEvent);
+        } else if (event.what === evCommand && event.command === "lines-cell" && this.isActive()
+            && this.gridView.cells.includes(event.infoPtr)) {
+            this.activateCell(Math.floor(event.infoPtr.value / LINES_SIZE), event.infoPtr.value % LINES_SIZE);
             this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                if (!this.isActive()) { break keyInput; }
+                if (nativeEvent.key === "Escape") { nativeEvent.preventDefault(); this.close(); }
+                else if (nativeEvent.key === "n" || nativeEvent.key === "N") { nativeEvent.preventDefault(); this.newGame(); }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (event.key === "Escape") { event.preventDefault(); this.close(); }
-        else if (event.key === "n" || event.key === "N") { event.preventDefault(); this.newGame(); }
-    }
+
 
     open() {
         super.open();
@@ -3005,11 +3233,8 @@ class TVLinesDialog extends TVGameDialog {
         });
     }
 
-    onCellClick(event) {
-        const cell = event.target.closest("[data-tv-lines-r]");
-        if (!cell || this.gameOver) { return; }
-        const r = Number.parseInt(cell.getAttribute("data-tv-lines-r"), 10);
-        const c = Number.parseInt(cell.getAttribute("data-tv-lines-c"), 10);
+    activateCell(r, c) {
+        if (this.gameOver) { return; }
         if (this.board[r][c] !== 0) {
             // Select this ball
             this.selected = { r, c };
@@ -3098,36 +3323,17 @@ class TVLinesDialog extends TVGameDialog {
             ? this.bestName + " " + this.bestScore
             : "Best:  " + this.bestScore;
         this.infoBox.updateRow(this.bestRow, bestText);
-        const balls = this.nextColors.map((c) =>
-            `<span style="color:${LINES_COLORS[(c - 1) % LINES_COLORS.length]}">● </span>`
-        ).join("");
-        this.nextBox.updateRowHTML(this.nextRow, balls, LINES_SPAWN * 2);
+        this.nextBalls.forEach((ball, index) => ball.setData({ text: "● ", foreground: LINES_COLORS[(this.nextColors[index] - 1) % LINES_COLORS.length] }));
     }
 
     renderGrid() {
-        const lines = [];
-        for (let r = 0; r < LINES_SIZE; r++) {
-            const cells = [];
-            for (let c = 0; c < LINES_SIZE; c++) {
-                const attrs = `data-tv-lines-r="${r}" data-tv-lines-c="${c}"`;
-                const v = this.board[r][c];
-                const isSel = this.selected && this.selected.r === r && this.selected.c === c;
-                if (v > 0) {
-                    const color = LINES_COLORS[(v - 1) % LINES_COLORS.length];
-                    const cls = isSel ? "tv-lines-cell tv-lines-ball tv-lines-selected" : "tv-lines-cell tv-lines-ball";
-                    cells.push(`<button class="${cls}" style="color:${color}" ${attrs}>● </button>`);
-                } else {
-                    cells.push(`<button class="tv-lines-cell tv-lines-empty" ${attrs}>· </button>`);
-                }
-            }
-            lines.push(cells.join(""));
-        }
-        if (this.gameOver) {
-            this.gridView._setHTML(lines.join("") +
-                `<div class="tv-lines-overlay-msg">GAME OVER<br><small>Score: ${this.score}</small><br><small>Press N</small></div>`);
-        } else {
-            this.gridView._setHTML(lines.join(""));
-        }
+        this.gridView.setGrid(LINES_SIZE, this.board.flatMap((row, r) => row.map((value, c) => ({
+            text: value ? "● " : "· ",
+            kind: value ? "ball" + (this.selected?.r === r && this.selected?.c === c ? " selected" : "") : "empty",
+            foreground: value ? LINES_COLORS[(value - 1) % LINES_COLORS.length] : 9,
+            pulse: Boolean(value && this.selected?.r === r && this.selected?.c === c),
+            label: `Row ${r + 1}, column ${c + 1}, ${value ? "ball " + value : "empty"}`,
+        })))).setMessage(this.gameOver ? `GAME OVER\nScore: ${this.score}\nPress N` : "");
     }
 }
 
@@ -3143,10 +3349,10 @@ class TVReversiDialog extends TVGameDialog {
         const GRID_W = REVERSI_SIZE * 2;  // 16ch
         const INFO_X = GRID_W + 1;
         const INFO_W = 17;
-        const blackRow = new TVInfoRow(new TVRect());
-        const whiteRow = new TVInfoRow(new TVRect());
-        const turnRow = new TVInfoRow(new TVRect());
-        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
+        const blackRow = new TVInfoRow(new TVRect(0, 1, INFO_W, 2));
+        const whiteRow = new TVInfoRow(new TVRect(0, 2, INFO_W, 3));
+        const turnRow = new TVInfoRow(new TVRect(0, 3, INFO_W, 4));
+        const infoBox = new TVInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
                 blackRow,
                 whiteRow,
                 turnRow,
@@ -3186,20 +3392,25 @@ class TVReversiDialog extends TVGameDialog {
         if (event.what === evCommand && event.command === "reversi-new") {
             this.newGame();
             this.clearEvent(event);
-        } else if (event.what === evMouseDown && event.infoPtr === this.gridView) {
-            this.onCellClick(event.nativeEvent);
+        } else if (event.what === evCommand && event.command === "reversi-cell" && this.isActive()
+            && this.gridView.cells.includes(event.infoPtr)) {
+            if (!this.gameOver && this.currentPlayer === 1) {
+                this._makeMove(Math.floor(event.infoPtr.value / REVERSI_SIZE), event.infoPtr.value % REVERSI_SIZE, 1);
+            }
             this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                if (!this.isActive()) { break keyInput; }
+                if (nativeEvent.key === "Escape") { nativeEvent.preventDefault(); this.close(); }
+                else if (nativeEvent.key === "n" || nativeEvent.key === "N") { nativeEvent.preventDefault(); this.newGame(); }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (event.key === "Escape") { event.preventDefault(); this.close(); }
-        else if (event.key === "n" || event.key === "N") { event.preventDefault(); this.newGame(); }
-    }
+
 
     open() {
         super.open();
@@ -3267,14 +3478,6 @@ class TVReversiDialog extends TVGameDialog {
             }
         }
         return { black, white };
-    }
-
-    onCellClick(event) {
-        const cell = event.target.closest("[data-tv-reversi-r]");
-        if (!cell || this.gameOver || this.currentPlayer !== 1) { return; }
-        const r = Number.parseInt(cell.getAttribute("data-tv-reversi-r"), 10);
-        const c = Number.parseInt(cell.getAttribute("data-tv-reversi-c"), 10);
-        this._makeMove(r, c, 1);
     }
 
     _makeMove(r, c, player) {
@@ -3365,37 +3568,14 @@ class TVReversiDialog extends TVGameDialog {
     }
 
     renderGrid() {
-        if (!this.gridView.root) { return; }
-        const validMoves = new Set();
-        if (!this.gameOver && this.currentPlayer === 1) {
-            for (let r = 0; r < REVERSI_SIZE; r++) {
-                for (let c = 0; c < REVERSI_SIZE; c++) {
-                    if (this._getFlips(r, c, 1).length > 0) {
-                        validMoves.add(r * REVERSI_SIZE + c);
-                    }
-                }
-            }
-        }
-        const lines = [];
-        for (let r = 0; r < REVERSI_SIZE; r++) {
-            const cells = [];
-            for (let c = 0; c < REVERSI_SIZE; c++) {
-                const attrs = `data-tv-reversi-r="${r}" data-tv-reversi-c="${c}"`;
-                const v = this.board[r][c];
-                const isValid = validMoves.has(r * REVERSI_SIZE + c);
-                if (v === 1) {
-                    cells.push(`<button class="tv-reversi-cell tv-reversi-black" ${attrs}>● </button>`);
-                } else if (v === 2) {
-                    cells.push(`<button class="tv-reversi-cell tv-reversi-white" ${attrs}>○ </button>`);
-                } else if (isValid) {
-                    cells.push(`<button class="tv-reversi-cell tv-reversi-valid" ${attrs}>· </button>`);
-                } else {
-                    cells.push(`<button class="tv-reversi-cell tv-reversi-empty" ${attrs}>  </button>`);
-                }
-            }
-            lines.push(cells.join(""));
-        }
-        this.gridView._setHTML(lines.join(""));
+        this.gridView.setGrid(REVERSI_SIZE, this.board.flatMap((row, r) => row.map((value, c) => {
+            const valid = !this.gameOver && this.currentPlayer === 1 && this._getFlips(r, c, 1).length > 0;
+            return { text: value === 1 ? "● " : value === 2 ? "○ " : valid ? "· " : "  ",
+                kind: value === 1 ? "black" : value === 2 ? "white" : valid ? "valid" : "empty",
+                attribute: value === 1 ? 0x20 : value === 2 ? 0x2f : valid ? 0x2a : 0x22,
+                hotAttribute: value === 1 ? 0x20 : value === 2 ? 0x2f : valid ? 0x2a : 0x22,
+                label: `Row ${r + 1}, column ${c + 1}, ${value === 1 ? "black" : value === 2 ? "white" : valid ? "legal move" : "empty"}` };
+        })));
     }
 }
 
@@ -3432,14 +3612,46 @@ LUDO_START_OFFSETS.forEach((offset, player) => {
     LUDO_START_CELLS.set(LUDO_CELL_KEY(row, col), player);
 });
 
+class TVLudoBoard extends TVGamePaletteGroup {
+    static viewName = "ludo-board";
+    _drawAttrs(attrs = {}) { return super._drawAttrs({ ...attrs, role: "grid", "aria-label": "Ludo board" }); }
+    constructor(bounds) {
+        super(bounds);
+        this.paths = new TVGameFrameText(this.getExtent(), "");
+        this.insert(this.paths);
+        this.markers = Array.from({ length: LUDO_BOARD_SIZE * LUDO_BOARD_SIZE }, (_, index) => {
+            const x = 2 + (index % LUDO_BOARD_SIZE) * 4, y = 1 + Math.floor(index / LUDO_BOARD_SIZE) * 2;
+            return this.insert(new TVGameTile(new TVRect(x, y, x + 1, y + 1)));
+        });
+        this.pieces = Array.from({ length: 16 }, (_, index) => {
+            const piece = new TVGameTileButton(new TVRect(0, 0, 1, 1), "♟", "ludo-piece").setValue(index % 4);
+            piece.player = Math.floor(index / 4); piece.hide(); return this.insert(piece);
+        });
+        const connected = (r, c, nr, nc) => LUDO_ROUTE_EDGES.has(`${LUDO_CELL_KEY(r, c)}>${LUDO_CELL_KEY(nr, nc)}`);
+        const lines = [" ".repeat(45)];
+        for (let row = 0; row < LUDO_BOARD_SIZE; row++) {
+            let nodes = "  ", links = "  ";
+            for (let col = 0; col < LUDO_BOARD_SIZE; col++) {
+                nodes += " "; links += connected(row, col, row + 1, col) ? "│" : " ";
+                if (col < LUDO_BOARD_SIZE - 1) {
+                    nodes += connected(row, col, row, col + 1) ? "───" : "   "; links += "   ";
+                }
+            }
+            lines.push(nodes + "  ");
+            if (row < LUDO_BOARD_SIZE - 1) { lines.push(links + "  "); }
+        }
+        lines.push(" ".repeat(45)); this.paths.setText(lines.join("\n"));
+    }
+}
+
 class TVLudoDialog extends TVGameDialog {
     static viewName = "ludo";
 
     constructor() {
-        const turnRow = new TVInfoRow(new TVRect());
-        const diceRow = new TVInfoRow(new TVRect());
-        const statusRow = new TVInfoRow(new TVRect());
-        const infoBox = new TVGameInfoBox(new TVRect(46, 0, 68, 5), "Game", [
+        const turnRow = new TVInfoRow(new TVRect(0, 1, 22, 2));
+        const diceRow = new TVInfoRow(new TVRect(0, 2, 22, 3));
+        const statusRow = new TVInfoRow(new TVRect(0, 3, 22, 4));
+        const infoBox = new TVInfoBox(new TVRect(46, 0, 68, 5), "Game", [
                 turnRow,
                 diceRow,
                 statusRow,
@@ -3447,9 +3659,9 @@ class TVLudoDialog extends TVGameDialog {
         const playerButtons = LUDO_PLAYER_NAMES.map((name, player) => (
             new TVLudoPlayerButton(new TVRect(0, player + 1, 22, player + 2), name, "ludo-player-mode", bfNormal)
                 .setValue(player)
-                .setCommandData({ color: LUDO_PLAYER_COLORS[player], playerName: name })
+                .setCommandData({ playerName: name })
         ));
-        const playersBox = new TVGameInfoBox(new TVRect(46, 6, 68, 12), "Players", playerButtons);
+        const playersBox = new TVInfoBox(new TVRect(46, 6, 68, 12), "Players", playerButtons);
         const rollButton = new TVButton(new TVRect(46, 14, 56, 16), "~R~oll", "ludo-roll", bfNormal);
         const newButton = new TVButton(new TVRect(57, 14, 67, 16), "~N~ew", "ludo-new", bfNormal);
         const boardView = new TVLudoBoard(new TVRect(0, 0, 45, 23));
@@ -3496,16 +3708,57 @@ class TVLudoDialog extends TVGameDialog {
         if (event.what === evCommand) {
             if (event.command === "ludo-roll") { this.rollHuman(); }
             else if (event.command === "ludo-new") { this.newGame(); }
-            else if (event.command === "ludo-player-mode") { this.cyclePlayerMode(Number(event.infoPtr.value)); }
+            else if (event.command === "ludo-player-mode" && this.playerButtons.includes(event.infoPtr)) { this.cyclePlayerMode(Number(event.infoPtr.value)); }
+            else if (event.command === "ludo-piece" && this.isActive() && this.boardView.pieces.includes(event.infoPtr)
+                && event.infoPtr.player === this.game.currentPlayer) { this.moveHumanPiece(event.infoPtr.value); }
             else { return; }
             this.clearEvent(event);
-        } else if (event.what === evMouseDown && event.infoPtr === this.boardView) {
-            const piece = event.nativeEvent.target.closest("[data-tv-ludo-piece]");
-            if (piece) { this.moveHumanPiece(Number(piece.getAttribute("data-tv-ludo-piece"))); }
-            this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                if (!this.isActive()) { break keyInput; }
+                if (nativeEvent.key === "Escape") {
+                    nativeEvent.preventDefault();
+                    this.close();
+                    break keyInput;
+                }
+                if (nativeEvent.key === "n" || nativeEvent.key === "N") {
+                    nativeEvent.preventDefault();
+                    this.newGame();
+                    break keyInput;
+                }
+                if ((nativeEvent.key === "r" || nativeEvent.key === "R" || nativeEvent.key === " ") && this.game.phase === "roll") {
+                    nativeEvent.preventDefault();
+                    this.rollHuman();
+                    break keyInput;
+                }
+                if (this.animating || this.game.phase !== "move" || this.game.playerMode() !== "human") { break keyInput; }
+                const legal = this.game.legalPieces();
+                if (!legal.length) { break keyInput; }
+                if (/^[1-4]$/.test(nativeEvent.key)) {
+                    const piece = Number(nativeEvent.key) - 1;
+                    if (legal.includes(piece)) {
+                        nativeEvent.preventDefault();
+                        this.moveHumanPiece(piece);
+                    }
+                    break keyInput;
+                }
+                if (["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(nativeEvent.key)) {
+                    nativeEvent.preventDefault();
+                    const direction = nativeEvent.key === "ArrowLeft" || nativeEvent.key === "ArrowUp" ? -1 : 1;
+                    const current = Math.max(0, legal.indexOf(this.selectedPiece));
+                    this.selectedPiece = legal[(current + direction + legal.length) % legal.length];
+                    this.renderBoard();
+                    this.boardView.pieces[this.game.currentPlayer * 4 + this.selectedPiece]?.focus();
+                    break keyInput;
+                }
+                if (nativeEvent.key === "Enter" && legal.includes(this.selectedPiece)) {
+                    nativeEvent.preventDefault();
+                    this.moveHumanPiece(this.selectedPiece);
+                }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
@@ -3586,49 +3839,7 @@ class TVLudoDialog extends TVGameDialog {
         this.performMove(piece);
     }
 
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (event.key === "Escape") {
-            event.preventDefault();
-            this.close();
-            return;
-        }
-        if (event.key === "n" || event.key === "N") {
-            event.preventDefault();
-            this.newGame();
-            return;
-        }
-        if ((event.key === "r" || event.key === "R" || event.key === " ") && this.game.phase === "roll") {
-            event.preventDefault();
-            this.rollHuman();
-            return;
-        }
-        if (this.animating || this.game.phase !== "move" || this.game.playerMode() !== "human") { return; }
-        const legal = this.game.legalPieces();
-        if (!legal.length) { return; }
-        if (/^[1-4]$/.test(event.key)) {
-            const piece = Number(event.key) - 1;
-            if (legal.includes(piece)) {
-                event.preventDefault();
-                this.moveHumanPiece(piece);
-            }
-            return;
-        }
-        if (["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key)) {
-            event.preventDefault();
-            const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
-            const current = Math.max(0, legal.indexOf(this.selectedPiece));
-            this.selectedPiece = legal[(current + direction + legal.length) % legal.length];
-            this.renderBoard();
-            const selected = this.boardView._query(`[data-tv-ludo-piece="${this.selectedPiece}"]`);
-            if (selected) { selected.focus(); }
-            return;
-        }
-        if (event.key === "Enter" && legal.includes(this.selectedPiece)) {
-            event.preventDefault();
-            this.moveHumanPiece(this.selectedPiece);
-        }
-    }
+
 
     scheduleCpu() {
         window.clearTimeout(this.cpuTimer);
@@ -3674,7 +3885,7 @@ class TVLudoDialog extends TVGameDialog {
         this.animation = null;
         this.captureFlash = null;
         if (this.dialog) {
-            this.dialog.classList.remove("is-ludo-capture-flash");
+            setGameFlash(this.boardView, 0x4e, false);
         }
     }
 
@@ -3731,13 +3942,13 @@ class TVLudoDialog extends TVGameDialog {
     flashCapture(captured) {
         this.captureFlash = new Set(captured.map(([player, piece]) => `${player}:${piece}`));
         if (this.dialog) {
-            this.dialog.classList.add("is-ludo-capture-flash");
+            setGameFlash(this.boardView, 0x4e, true, 320);
         }
         this.render();
         this.captureFlashTimer = window.setTimeout(() => {
             this.captureFlash = null;
             if (this.dialog) {
-                this.dialog.classList.remove("is-ludo-capture-flash");
+                setGameFlash(this.boardView, 0x4e, false);
             }
             this.finishMove();
         }, LUDO_CAPTURE_FLASH_MS);
@@ -3818,9 +4029,9 @@ class TVLudoDialog extends TVGameDialog {
             const current = this.game.currentPlayer === player && this.game.winner === null;
             const name = LUDO_PLAYER_NAMES[player].padEnd(6);
             const label = `${current ? ">" : " "} ${LUDO_PLAYER_NAMES[player][0]} ${name} ${LUDO_MODE_LABELS[mode]} ${home}/4`;
-            button._setHTML(TVInfoBox.rowHtml(20, label, "tv-game-border"));
-            button.root?.classList.toggle("is-current", this.game.currentPlayer === player && this.game.winner === null);
-            button.root?.classList.toggle("is-off", mode === "off");
+            if (button.title !== label) { button.setTitle(label); }
+            button.off = mode === "off";
+            button._drawPalette();
         });
     }
 
@@ -3852,77 +4063,86 @@ class TVLudoDialog extends TVGameDialog {
         const legal = !this.animating && this.game.playerMode() === "human" && this.game.phase === "move"
             ? new Set(this.game.legalPieces())
             : new Set();
-        const connected = (fromRow, fromCol, toRow, toCol) => LUDO_ROUTE_EDGES.has(
-            `${LUDO_CELL_KEY(fromRow, fromCol)}>${LUDO_CELL_KEY(toRow, toCol)}`
-        );
-        const line = (html, textKind = "") => `<div class="${escapeHtml(`tv-ludo-ascii-line ${textKind}`.trim())}">${html}</div>`;
-        const textCell = (text, classes = []) => `<span class="${escapeHtml(["tv-ludo-ascii-cell", ...classes].join(" "))}">${escapeHtml(text)}</span>`;
-        const pathSegment = (text) => `<span class="tv-ludo-ascii-path">${escapeHtml(text)}</span>`;
-        const cellContent = (row, col) => {
-            const key = LUDO_CELL_KEY(row, col);
-            if (!activeCells.has(key)) { return textCell(" "); }
-            const startPlayer = LUDO_START_CELLS.get(key);
-            const homePlayer = LUDO_HOME_CELLS.get(key);
-            const base = LUDO_BASE_CELLS.get(key);
+        this.boardView.pieces.forEach(piece => piece.hide());
+        this.boardView.markers.forEach((marker, index) => {
+            const row = Math.floor(index / LUDO_BOARD_SIZE), col = index % LUDO_BOARD_SIZE, key = LUDO_CELL_KEY(row, col);
+            const start = LUDO_START_CELLS.get(key), home = LUDO_HOME_CELLS.get(key), base = LUDO_BASE_CELLS.get(key);
             const occupant = occupied.get(key);
-            const cellClasses = [];
-            if (startPlayer !== undefined) {
-                cellClasses.push("tv-ludo-start", `tv-ludo-${LUDO_PLAYER_COLORS[startPlayer]}`);
-            } else if (homePlayer !== undefined) {
-                cellClasses.push("tv-ludo-home", `tv-ludo-${LUDO_PLAYER_COLORS[homePlayer]}`);
-            } else if (base) {
-                cellClasses.push("tv-ludo-base", `tv-ludo-${LUDO_PLAYER_COLORS[base[0]]}`);
-            }
-            if (!occupant) {
-                return textCell(cellClasses.length ? "●" : "○", cellClasses);
-            }
-
-            const [player, piece] = occupant;
+            const square = start ?? home ?? base?.[0];
+            marker.setData({ text: square !== undefined ? "●" : "○", frame: square === undefined, foreground: square === undefined ? undefined : [12, 10, 14, 9][square] });
+            marker.setState(TV.sfVisible, activeCells.has(key) && !occupant);
+            if (!occupant) { return; }
+            const [player, piece] = occupant, view = this.boardView.pieces[player * 4 + piece];
             const isLegal = player === this.game.currentPlayer && legal.has(piece);
-            const isCapturedFlash = this.captureFlash && this.captureFlash.has(`${player}:${piece}`);
-            const pieceClasses = [
-                "tv-ludo-ascii-piece",
-                `tv-ludo-${LUDO_PLAYER_COLORS[player]}`,
-                ...cellClasses,
-                isLegal ? "is-legal" : "",
-                isLegal && piece === this.selectedPiece ? "is-selected" : "",
-                animation && player === animation.player && piece === animation.piece ? "is-moving" : "",
-                isCapturedFlash ? "is-captured" : "",
-            ].filter(Boolean).join(" ");
-            return new TVLudoPieceButton(new TVRect(), "", "ludo-piece", bfNormal)
-                .setValue(piece)
-                .setCommandData({ classes: pieceClasses, playerName: LUDO_PLAYER_NAMES[player] })
-                .setState(sfDisabled, !isLegal)
-                .draw();
-        };
-
-        const lines = [line(" ".repeat(45))];
-        for (let row = 0; row < LUDO_BOARD_SIZE; row++) {
-            const nodeParts = ["  "];
-            for (let col = 0; col < LUDO_BOARD_SIZE; col++) {
-                nodeParts.push(cellContent(row, col));
-                if (col < LUDO_BOARD_SIZE - 1) {
-                    nodeParts.push(pathSegment(connected(row, col, row, col + 1) ? "───" : "   "));
-                }
-            }
-            nodeParts.push("  ");
-            lines.push(line(nodeParts.join("")));
-            if (row === LUDO_BOARD_SIZE - 1) { break; }
-
-            const pathParts = ["  "];
-            for (let col = 0; col < LUDO_BOARD_SIZE; col++) {
-                pathParts.push(pathSegment(connected(row, col, row + 1, col) ? "│" : " "));
-                if (col < LUDO_BOARD_SIZE - 1) { pathParts.push("   "); }
-            }
-            pathParts.push("  ");
-            lines.push(line(pathParts.join("")));
-        }
-        lines.push(line(" ".repeat(45)));
-        this.boardView._setHTML(lines.join(""));
+            const moving = animation && player === animation.player && piece === animation.piece;
+            const captured = this.captureFlash?.has(`${player}:${piece}`);
+            const x = 2 + col * 4, y = 1 + row * 2;
+            view.locate(new TVRect(x, y, x + 1, y + 1));
+            const selected = isLegal && piece === this.selectedPiece;
+            const attribute = isLegal ? gameAppColor(58) : gameInk(view, [12, 10, 14, 9][player]);
+            view.setData({ text: "♟", attribute: selected ? swapGameColor(attribute) : attribute,
+                hotAttribute: isLegal ? swapGameColor(gameAppColor(58)) : undefined,
+                flash: captured ? 0xfe : moving ? swapGameColor(gameAppColor(58)) : undefined, flashDuration: moving ? 110 : 160,
+                disabled: !isLegal, label: `${LUDO_PLAYER_NAMES[player]} piece ${piece + 1}` });
+            view.show();
+        });
     }
 }
 
 // ── Mastermind ───────────────────────────────────────────────────────
+
+class TVMastermindRow extends TVGamePaletteGroup {
+    constructor(bounds, index) {
+        super(bounds); this.isCurrentTurn = false;
+        this.number = new TVGameText(new TVRect(0, 0, 3, 1), String(index + 1).padStart(2, " ") + ".");
+        this.number.getPaletteAttribute = () => this.getPaletteAttribute();
+        this.pegs = Array.from({ length: 4 }, (_, position) => new TVGameTileButton(
+            new TVRect(3 + position * 2, 0, 5 + position * 2, 1), "· ", "mastermind-peg").setValue(position));
+        this.feedback = new TVGameText(new TVRect(11, 0, bounds.width, 1), "");
+        this.insertAll([this.number, ...this.pegs, this.feedback]);
+    }
+    getPaletteAttribute() { return gameAppColor(this.isCurrentTurn ? 58 : 37); }
+    setTurn(turn, current, game) {
+        this.isCurrentTurn = current;
+        this._drawPalette();
+        this.pegs.forEach((peg, position) => {
+            const color = turn ? turn.guess[position] : current ? game.currentGuess[position] : null;
+            peg.setData({ text: color === null ? "· " : "●",
+                foreground: color === null ? gameAppColor(44) & 15 : current && position === game.cursor ? gameAppColor(40) & 15 : [12, 10, 14, 9, 13, 11][color],
+                selected: current && position === game.cursor, disabled: !current,
+                tabIndex: current && position === game.cursor ? 0 : -1,
+                label: color === null ? "Empty turn" : `Position ${position + 1}, color ${color + 1}` });
+        });
+        this.feedback.setText(turn ? ` ${"●".repeat(turn.exact)}${"○".repeat(turn.misplaced)}` : "");
+        paintGameTree(this);
+    }
+}
+
+class TVMastermindBoard extends TVGamePaletteGroup {
+    static viewName = "mastermind-board";
+    constructor(bounds) {
+        super(bounds);
+        this.rows = Array.from({ length: 10 }, (_, index) => this.insert(new TVMastermindRow(new TVRect(0, index, bounds.width, index + 1), index)));
+    }
+    setData(game) { this.rows.forEach((row, index) => row.setTurn(game.turns[index], game.status === "playing" && index === game.turns.length, game)); }
+}
+
+class TVMastermindStatus extends TVGamePaletteGroup {
+    constructor(bounds) {
+        super(bounds);
+        this.label = new TVStaticText(new TVRect(0, 0, bounds.width, 2), "");
+        this.secret = Array.from({ length: 4 }, (_, index) => new TVGameTile(new TVRect(20 + index * 2, 0, 22 + index * 2, 1)));
+        this.insertAll([this.label, ...this.secret]);
+    }
+    setData(game) {
+        this.label.setText(game.status === "won" ? `Code broken in ${game.turns.length} turn(s).`
+            : game.status === "lost" ? "No turns left. Code: " : "1-6 choose color, arrows move, Enter guesses.");
+        this.secret.forEach((peg, position) => {
+            peg.setData({ text: "●", foreground: [12, 10, 14, 9, 13, 11][game.secret[position]] });
+            peg.setState(TV.sfVisible, game.status === "lost");
+        });
+    }
+}
 
 class TVMastermindDialog extends TVGameDialog {
     static viewName = "mastermind";
@@ -3931,9 +4151,8 @@ class TVMastermindDialog extends TVGameDialog {
         const paletteButtons = Array.from({ length: 6 }, (_, color) => {
             const x = 34 + (color % 3) * 6;
             const y = 2 + Math.floor(color / 3) * 2;
-            return new TVMastermindColorButton(new TVRect(x, y, x + 5, y + 2), String(color + 1), "mastermind-color", bfNormal)
-                .setValue(color)
-                .setCommandData({ color });
+            return new TVButton(new TVRect(x, y, x + 5, y + 2), String(color + 1), "mastermind-color", bfNormal)
+                .setValue(color);
         });
         const boardView = new TVMastermindBoard(new TVRect(3, 1, 31, 11));
         const guessButton = new TVButton(new TVRect(34, 8, 45, 10), "~G~uess", "mastermind-guess", bfDefault);
@@ -3965,42 +4184,40 @@ class TVMastermindDialog extends TVGameDialog {
     handleEvent(event) {
         super.handleEvent(event);
         if (event.what === evCommand) {
-            if (event.command === "mastermind-color") { this.setColor(Number(event.infoPtr.value)); }
+            if (event.command === "mastermind-color" && this.paletteButtons.includes(event.infoPtr)) { this.setColor(Number(event.infoPtr.value)); }
+            else if (event.command === "mastermind-peg" && this.isActive() && this.boardView.rows.some(row => row.isCurrentTurn && row.pegs.includes(event.infoPtr))) {
+                this.game.cursor = event.infoPtr.value; this.render();
+            }
             else if (event.command === "mastermind-guess") { this.submitGuess(); }
             else if (event.command === "mastermind-new") { this.newGame(); }
             else { return; }
             this.clearEvent(event);
-        } else if (event.what === evMouseDown && event.infoPtr === this.boardView) {
-            const peg = event.nativeEvent.target.closest("[data-tv-mastermind-peg]");
-            if (peg) {
-                this.game.cursor = Number(peg.dataset.tvMastermindPeg);
-                this.render();
-            }
-            this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                if (!this.isActive()) { break keyInput; }
+                if (/^[1-6]$/.test(nativeEvent.key)) {
+                    nativeEvent.preventDefault();
+                    this.setColor(Number(nativeEvent.key) - 1);
+                } else if (nativeEvent.key === "ArrowLeft" || nativeEvent.key === "ArrowRight") {
+                    nativeEvent.preventDefault();
+                    const step = nativeEvent.key === "ArrowLeft" ? -1 : 1;
+                    this.game.cursor = (this.game.cursor + step + this.game.codeLength) % this.game.codeLength;
+                    this.render();
+                } else if (nativeEvent.key === "Enter" || nativeEvent.key.toLocaleLowerCase() === "g") {
+                    nativeEvent.preventDefault();
+                    this.submitGuess();
+                } else if (nativeEvent.key.toLocaleLowerCase() === "n") {
+                    nativeEvent.preventDefault();
+                    this.newGame();
+                }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (/^[1-6]$/.test(event.key)) {
-            event.preventDefault();
-            this.setColor(Number(event.key) - 1);
-        } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-            event.preventDefault();
-            const step = event.key === "ArrowLeft" ? -1 : 1;
-            this.game.cursor = (this.game.cursor + step + this.game.codeLength) % this.game.codeLength;
-            this.render();
-        } else if (event.key === "Enter" || event.key.toLocaleLowerCase() === "g") {
-            event.preventDefault();
-            this.submitGuess();
-        } else if (event.key.toLocaleLowerCase() === "n") {
-            event.preventDefault();
-            this.newGame();
-        }
-    }
+
 
     setColor(color) {
         const position = this.game.cursor;
@@ -4021,39 +4238,10 @@ class TVMastermindDialog extends TVGameDialog {
         this.render();
     }
 
-    renderPeg(color, { current = false, position = -1 } = {}) {
-        const classes = [
-            "tv-mastermind-peg",
-            `tv-mastermind-color-${color}`,
-            current && position === this.game.cursor ? "is-selected" : "",
-        ].filter(Boolean).join(" ");
-        const attrs = current ? ` type="button" data-tv-mastermind-peg="${position}"` : "";
-        const tag = current ? "button" : "span";
-        return `<${tag}${attrs} class="${classes}" aria-label="Color ${color + 1}">●</${tag}>`;
-    }
-
     render() {
-        const rows = [];
-        for (let index = 0; index < this.game.maxTurns; index += 1) {
-            const turn = this.game.turns[index];
-            const isCurrent = this.game.status === "playing" && index === this.game.turns.length;
-            const pegs = turn
-                ? turn.guess.map((color) => this.renderPeg(color)).join("")
-                : isCurrent
-                    ? this.game.currentGuess.map((color, position) => this.renderPeg(color, { current: true, position })).join("")
-                    : '<span class="tv-mastermind-empty">· · · ·</span>';
-            const feedback = turn ? ` ${"●".repeat(turn.exact)}${"○".repeat(turn.misplaced)}` : "";
-            rows.push(`<div class="tv-mastermind-row${isCurrent ? " is-current" : ""}"><span>${String(index + 1).padStart(2, " ")}.</span>${pegs}<span class="tv-mastermind-feedback">${feedback}</span></div>`);
-        }
-        this.boardView._setHTML(rows.join(""));
+        this.boardView.setData(this.game);
         this.guessButton.setState(sfDisabled, this.game.status !== "playing");
-        if (this.game.status === "won") {
-            this.statusView.setText(`Code broken in ${this.game.turns.length} turn(s).`);
-        } else if (this.game.status === "lost") {
-            this.statusView._setHTML(`No turns left. Code: ${this.game.secret.map((color) => this.renderPeg(color)).join("")}`);
-        } else {
-            this.statusView.setText("1-6 choose color, arrows move, Enter guesses.");
-        }
+        this.statusView.setData(this.game);
         fillBorders(this.root);
     }
 }
@@ -4076,7 +4264,7 @@ class TVTronDialog extends TVGameDialog {
         const fieldWidth = TRON_COLS * 2;
         const infoX = fieldWidth + 2;
         const fieldView = new TVTronField(new TVRect(0, 0, fieldWidth, TRON_ROWS));
-        const statusView = new TVTronStatus(new TVRect(infoX, 5, infoX + 22, 9));
+        const statusView = new TVGameStatus(new TVRect(infoX, 5, infoX + 22, 9), "");
         const newButton = new TVButton(new TVRect(infoX, 10, infoX + 15, 12), "~N~ew round", "tron-new", bfDefault);
         const pauseButton = new TVButton(new TVRect(infoX, 13, infoX + 15, 15), "~P~ause", "tron-pause", bfNormal);
         const tronMain = new TVGroup(new TVRect(0, 0, (0) + (infoX + 22), (0) + (TRON_ROWS))).insertAll([
@@ -4114,26 +4302,28 @@ class TVTronDialog extends TVGameDialog {
             else { return; }
             this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                if (!this.isActive()) { break keyInput; }
+                const key = nativeEvent.key.length === 1 ? nativeEvent.key.toLocaleLowerCase() : nativeEvent.key;
+                const direction = TRON_DIRECTIONS.get(key);
+                if (direction) {
+                    nativeEvent.preventDefault();
+                    this.game.queueDirection(direction[0], direction[1], direction[2]);
+                } else if (key === "n" || (this.game.status !== "running" && nativeEvent.key === "Enter")) {
+                    nativeEvent.preventDefault();
+                    this.newGame();
+                } else if (key === "p") {
+                    nativeEvent.preventDefault();
+                    this.togglePause();
+                }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        const key = event.key.length === 1 ? event.key.toLocaleLowerCase() : event.key;
-        const direction = TRON_DIRECTIONS.get(key);
-        if (direction) {
-            event.preventDefault();
-            this.game.queueDirection(direction[0], direction[1], direction[2]);
-        } else if (key === "n" || (this.game.status !== "running" && event.key === "Enter")) {
-            event.preventDefault();
-            this.newGame();
-        } else if (key === "p") {
-            event.preventDefault();
-            this.togglePause();
-        }
-    }
+
 
     open() {
         super.open();
@@ -4235,26 +4425,98 @@ class TVTronDialog extends TVGameDialog {
                 const key = `${x},${y}`;
                 const owner = owners.get(key);
                 const head = heads.get(key);
-                const playerClass = owner === 0 ? " tv-tron-player-one" : owner === 1 ? " tv-tron-player-two" : "";
-                const headClass = head !== undefined ? " is-head" : "";
-                cells.push(`<span class="tv-tron-cell${playerClass}${headClass}">${owner === undefined ? "  " : head !== undefined ? "@@" : "██"}</span>`);
+                cells.push({ text: owner === undefined ? "  " : head !== undefined ? "@@" : "██",
+                    attribute: head !== undefined ? 0xf0 : owner === 0 ? 0x1b : owner === 1 ? 0x4e : 0x00 });
             }
         }
-        this.fieldView._setHTML(cells.join(""));
+        this.fieldView.setGrid(TRON_COLS, cells);
     }
 }
 
 // ── Tower of Hanoi ──────────────────────────────────────────────────
+
+class TVHanoiDisk extends TVGameText {
+    constructor(bounds, disk) {
+        super(bounds, "\x03" + disk); this.value = disk; this.alternate = false; this.draggable = false;
+        this.onStart = nativeEvent => this.dispatchEvent(new TVEvent(evCommand, { command: "hanoi-drag-start", infoPtr: this, nativeEvent }));
+        this.onEnd = nativeEvent => this.dispatchEvent(new TVEvent(evCommand, { command: "hanoi-drag-end", infoPtr: this, nativeEvent }));
+    }
+    getPaletteAttribute() { return this.alternate ? 0x1e : 0x30; }
+    bindRoot(root) {
+        this.root?.removeEventListener("dragstart", this.onStart); this.root?.removeEventListener("dragend", this.onEnd);
+        super.bindRoot(root);
+        this.root?.addEventListener("dragstart", this.onStart); this.root?.addEventListener("dragend", this.onEnd);
+        if (this.root) { this.root.draggable = this.draggable; }
+        return this;
+    }
+    destroy() { this.bindRoot(null); }
+}
+
+class TVHanoiTower extends TVGamePaletteGroup {
+    constructor(bounds, tower) {
+        super(bounds); this.value = tower; this.selected = false; this.focused = false;
+        const rod = new TVGameText(new TVRect(8.5, 1, 9.5, 8), ""); rod.attribute = 0x66;
+        const base = new TVGameText(new TVRect(1, 8, 17, 9), "═".repeat(16)); base.getPaletteAttribute = () => gameInk(base, 6);
+        const number = new TVGameText(new TVRect(0, 9, 18, 10), "\x03" + (tower + 1));
+        this.insertAll([rod, base, number]);
+        this.onOver = nativeEvent => this.dispatchEvent(new TVEvent(evCommand, { command: "hanoi-drag-over", infoPtr: this, nativeEvent }));
+        this.onDrop = nativeEvent => this.dispatchEvent(new TVEvent(evCommand, { command: "hanoi-drop", infoPtr: this, nativeEvent }));
+    }
+    getPaletteAttribute() { return gameAppColor(this.selected || this._gameFocused ? 58 : 37); }
+    bindRoot(root) {
+        this.root?.removeEventListener("dragover", this.onOver); this.root?.removeEventListener("drop", this.onDrop);
+        super.bindRoot(root);
+        this.root?.addEventListener("dragover", this.onOver); this.root?.addEventListener("drop", this.onDrop);
+        if (this.root) {
+            this.root.setAttribute("role", "button"); this.root.setAttribute("aria-label", `Tower ${this.value + 1}`);
+            this.root.tabIndex = this.focused ? 0 : -1; this._drawPalette();
+        }
+        return this;
+    }
+    handleEvent(event) {
+        super.handleEvent(event);
+        if (event.what === evMouseDown && event.nativeEvent?.type === "click") {
+            event.what = evCommand; event.command = "hanoi-tower"; event.infoPtr = this;
+        }
+    }
+    destroy() { this.children.forEach(child => child.destroy?.()); this.bindRoot(null); }
+}
+
+class TVHanoiBoard extends TVGamePaletteGroup {
+    static viewName = "hanoi-board";
+    constructor(bounds) {
+        super(bounds);
+        this.towers = Array.from({ length: 3 }, (_, index) => this.insert(new TVHanoiTower(new TVRect(index * 18, 0, index * 18 + 18, 10), index)));
+        this.disks = Array.from({ length: 5 }, (_, index) => this.towers[0].insert(new TVHanoiDisk(new TVRect(), index + 1)));
+    }
+    setBoard(game, focused, selected) {
+        this.towers.forEach((tower, index) => {
+            tower.focused = focused === index; tower.selected = selected === index;
+            if (tower.root) { tower.root.tabIndex = tower.focused ? 0 : -1; }
+            game.towers[index].forEach((value, level) => {
+                const disk = this.disks[value - 1], width = 4 + value * 2, x = (18 - width) / 2;
+                if (disk.owner !== tower) {
+                    disk.owner.remove(disk); tower.insert(disk);
+                    if (disk.root && tower.root) { tower.root.append(disk.root); }
+                }
+                disk.locate(new TVRect(x, 7 - level, x + width, 8 - level));
+                disk.alternate = level % 2 === 0; disk.draggable = value === game.top(index) && game.status !== "won";
+                if (disk.root) { disk.root.draggable = disk.draggable; disk._drawPalette(); }
+            });
+            paintGameTree(tower);
+        });
+    }
+}
 
 class TVHanoiDialog extends TVGameDialog {
     static viewName = "hanoi";
 
     constructor() {
         const boardView = new TVHanoiBoard(new TVRect(1, 1, 55, 11));
-        const historyView = new TVHanoiHistory(new TVRect(56, 1, 76, 9));
+        const historyView = new TVGameStatus(new TVRect(56, 1, 76, 9), "");
         const undoButton = new TVButton(new TVRect(56, 9, 68, 11), "~U~ndo", "hanoi-undo", bfNormal);
         const newButton = new TVButton(new TVRect(56, 12, 68, 14), "~N~ew", "hanoi-new", bfDefault);
-        const statusView = new TVHanoiStatus(new TVRect(1, 12, 55, 14));
+        const statusView = new TVGameStatus(new TVRect(1, 12, 55, 14), "");
         const hanoiMain = new TVGroup(new TVRect(0, 0, 77, 15)).insertAll([
                 boardView,
                 historyView,
@@ -4279,38 +4541,7 @@ class TVHanoiDialog extends TVGameDialog {
         this.message = "Select a source tower.";
         this.bindCommonClose(() => this.close());
         this.bindDrag();
-        this.bind();
         this.render();
-    }
-
-    bind() {
-        this.boardView.root.addEventListener("dragstart", (event) => {
-            const disk = event.target.closest("[data-tv-hanoi-disk][draggable=\"true\"]");
-            if (!disk) { event.preventDefault(); return; }
-            this.dragTower = Number(disk.dataset.tvHanoiTower);
-            this.selectedTower = this.dragTower;
-            event.dataTransfer?.setData("text/plain", String(this.dragTower));
-            if (event.dataTransfer) { event.dataTransfer.effectAllowed = "move"; }
-            disk.closest(".tv-hanoi-tower")?.classList.add("is-selected");
-        });
-        this.boardView.root.addEventListener("dragover", (event) => {
-            if (event.target.closest("[data-tv-hanoi-tower]")) { event.preventDefault(); }
-        });
-        this.boardView.root.addEventListener("drop", (event) => {
-            const tower = event.target.closest("[data-tv-hanoi-tower]");
-            if (!tower || this.dragTower === null) { return; }
-            event.preventDefault();
-            const from = this.dragTower;
-            this.dragTower = null;
-            this.selectedTower = null;
-            this.focusedTower = Number(tower.dataset.tvHanoiTower);
-            this.move(from, this.focusedTower, true);
-        });
-        this.boardView.root.addEventListener("dragend", () => {
-            this.dragTower = null;
-            this.selectedTower = null;
-            this.render(false);
-        });
     }
 
     handleEvent(event) {
@@ -4318,46 +4549,64 @@ class TVHanoiDialog extends TVGameDialog {
         if (event.what === evCommand) {
             if (event.command === "hanoi-undo") { this.undo(); }
             else if (event.command === "hanoi-new") { this.newGame(); }
-            else { return; }
-            this.clearEvent(event);
-        } else if (event.what === evMouseDown && event.infoPtr === this.boardView) {
-            const tower = event.nativeEvent.target.closest("[data-tv-hanoi-tower]");
-            if (tower) {
-                this.focusedTower = Number(tower.dataset.tvHanoiTower);
-                this.activateTower(this.focusedTower);
-            }
+            else if (event.command === "hanoi-tower" && this.isActive() && this.boardView.towers.includes(event.infoPtr)) {
+                this.focusedTower = event.infoPtr.value; this.activateTower(this.focusedTower);
+            } else if (event.command === "hanoi-drag-start" && this.isActive() && this.boardView.disks.includes(event.infoPtr)) {
+                const disk = event.infoPtr;
+                if (!disk.draggable) { event.nativeEvent.preventDefault(); return; }
+                this.dragTower = disk.owner.value; this.selectedTower = this.dragTower;
+                event.nativeEvent.dataTransfer?.setData("text/plain", String(this.dragTower));
+                if (event.nativeEvent.dataTransfer) { event.nativeEvent.dataTransfer.effectAllowed = "move"; }
+                this.render();
+            } else if (["hanoi-drag-over", "hanoi-drop"].includes(event.command) && this.isActive()
+                && this.dragTower !== null && this.boardView.towers.includes(event.infoPtr)) {
+                event.nativeEvent.preventDefault();
+                if (event.command === "hanoi-drop") {
+                    const from = this.dragTower; this.dragTower = null; this.selectedTower = null;
+                    this.focusedTower = event.infoPtr.value; this.move(from, this.focusedTower, true);
+                }
+            } else if (event.command === "hanoi-drag-end" && this.boardView.disks.includes(event.infoPtr)) {
+                this.dragTower = null; this.selectedTower = null; if (this.isOpen()) { this.render(); }
+            } else { return; }
             this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                if (!this.isActive()) { break keyInput; }
+                if (nativeEvent.key === "ArrowLeft" || nativeEvent.key === "ArrowRight") {
+                    nativeEvent.preventDefault();
+                    const step = nativeEvent.key === "ArrowLeft" ? -1 : 1;
+                    this.focusTower((this.focusedTower + step + 3) % 3);
+                } else if (/^[1-3]$/.test(nativeEvent.key)) {
+                    nativeEvent.preventDefault();
+                    this.focusTower(Number(nativeEvent.key) - 1);
+                } else if (nativeEvent.key === "Enter" || nativeEvent.key === " ") {
+                    nativeEvent.preventDefault();
+                    this.activateTower(this.focusedTower);
+                } else if (nativeEvent.key.toLocaleLowerCase() === "u") {
+                    nativeEvent.preventDefault();
+                    this.undo();
+                } else if (nativeEvent.key.toLocaleLowerCase() === "n") {
+                    nativeEvent.preventDefault();
+                    this.newGame();
+                }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-            event.preventDefault();
-            const step = event.key === "ArrowLeft" ? -1 : 1;
-            this.focusTower((this.focusedTower + step + 3) % 3);
-        } else if (/^[1-3]$/.test(event.key)) {
-            event.preventDefault();
-            this.focusTower(Number(event.key) - 1);
-        } else if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            this.activateTower(this.focusedTower);
-        } else if (event.key.toLocaleLowerCase() === "u") {
-            event.preventDefault();
-            this.undo();
-        } else if (event.key.toLocaleLowerCase() === "n") {
-            event.preventDefault();
-            this.newGame();
-        }
-    }
+
 
     open() {
         super.open();
         this.newGame();
-        window.requestAnimationFrame(() => this.focusTower(0));
+        window.requestAnimationFrame(() => { if (!this.destroyed && this.isActive()) { this.focusTower(0); } });
+    }
+
+    close() {
+        this.dragTower = null; this.selectedTower = null;
+        super.close();
     }
 
     newGame() {
@@ -4373,7 +4622,7 @@ class TVHanoiDialog extends TVGameDialog {
     focusTower(tower) {
         this.focusedTower = Math.max(0, Math.min(2, Number(tower) || 0));
         this.render(false);
-        this.boardView._query(`[data-tv-hanoi-tower="${this.focusedTower}"]`)?.focus();
+        this.boardView.towers[this.focusedTower].focus();
     }
 
     activateTower(tower) {
@@ -4432,21 +4681,11 @@ class TVHanoiDialog extends TVGameDialog {
         this.undoButton.setState(sfDisabled, this.game.history.length === 0);
         fillBorders(this.root);
         if (focus) {
-            this.boardView._query(`[data-tv-hanoi-tower="${this.focusedTower}"]`)?.focus();
+            this.boardView.towers[this.focusedTower].focus();
         }
     }
 
-    renderBoard() {
-        this.boardView._setHTML(this.game.towers.map((disks, tower) => {
-            const top = this.game.top(tower);
-            const diskMarkup = disks.map((disk) => (
-                `<span class="tv-hanoi-disk tv-hanoi-disk-${disk}" data-tv-hanoi-disk="${disk}" data-tv-hanoi-tower="${tower}"`
-                + ` style="--tv-hanoi-disk-width:${4 + disk * 2}ch" draggable="${disk === top}">${disk}</span>`
-            )).join("");
-            const selected = this.selectedTower === tower ? " is-selected" : "";
-            return `<div class="tv-hanoi-tower${selected}" data-tv-hanoi-tower="${tower}" role="button" tabindex="${tower === this.focusedTower ? 0 : -1}" aria-label="Tower ${tower + 1}"><span class="tv-hanoi-rod" aria-hidden="true"></span>${diskMarkup}<span class="tv-hanoi-base" aria-hidden="true">${"═".repeat(16)}</span><span class="tv-hanoi-number">${tower + 1}</span></div>`;
-        }).join(""));
-    }
+    renderBoard() { this.boardView.setBoard(this.game, this.focusedTower, this.selectedTower); }
 
     renderHistory() {
         const recent = this.game.history.slice(-7);
@@ -4474,16 +4713,16 @@ class TVSnakeDialog extends TVGameDialog {
         const INFO_W = 18;
         const fieldView = new TVSnakeField(new TVRect(0, 0, FIELD_W, SNAKE_ROWS));
         const newButton = new TVButton(new TVRect(INFO_X, 13, INFO_X + INFO_W, 15), '~N~ew', "snake-new", bfNormal);
-        const scoreRow = new TVInfoRow(new TVRect());
-        const levelRow = new TVInfoRow(new TVRect());
-        const lengthRow = new TVInfoRow(new TVRect());
-        const bestRow = new TVInfoRow(new TVRect());
-        const infoBox = new TVGameInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
+        const scoreRow = new TVInfoRow(new TVRect(0, 1, INFO_W, 2));
+        const levelRow = new TVInfoRow(new TVRect(0, 2, INFO_W, 3));
+        const lengthRow = new TVInfoRow(new TVRect(0, 3, INFO_W, 4));
+        const bestRow = new TVInfoRow(new TVRect(0, 1, INFO_W, 2));
+        const infoBox = new TVInfoBox(new TVRect(INFO_X, 0, INFO_X + INFO_W, 5), "Info", [
                 scoreRow,
                 levelRow,
                 lengthRow,
             ]);
-        const bestBox = new TVGameInfoBox(new TVRect(INFO_X, 5, INFO_X + INFO_W, 8), "Best", [
+        const bestBox = new TVInfoBox(new TVRect(INFO_X, 5, INFO_X + INFO_W, 8), "Best", [
                 bestRow,
             ]);
         const snakeMain = new TVGroup(new TVRect(0, 0, (0) + (INFO_X + INFO_W), (0) + (SNAKE_ROWS))).insertAll([
@@ -4538,27 +4777,29 @@ class TVSnakeDialog extends TVGameDialog {
             this.newGame();
             this.clearEvent(event);
         } else if (event.what === evKeyDown) {
-            this.onKeyDown(event.nativeEvent);
-            if (event.nativeEvent?.defaultPrevented) { this.clearEvent(event); }
+            const nativeEvent = event.nativeEvent;
+            if (!nativeEvent || nativeEvent.defaultPrevented) { return; }
+            keyInput: {
+                if (!this.isActive()) { break keyInput; }
+                if (nativeEvent.key === "Escape") { nativeEvent.preventDefault(); this.close(); break keyInput; }
+                if (this.gameOver && (nativeEvent.key === "Enter" || nativeEvent.key === " " || nativeEvent.key === "n" || nativeEvent.key === "N")) {
+                    nativeEvent.preventDefault();
+                    this.newGame();
+                    break keyInput;
+                }
+                switch (nativeEvent.key) {
+                    case "ArrowUp":    if (this.dir.dy !== 1)  { this.nextDir = { dx: 0, dy: -1 }; } nativeEvent.preventDefault(); break;
+                    case "ArrowDown":  if (this.dir.dy !== -1) { this.nextDir = { dx: 0, dy: 1 }; }  nativeEvent.preventDefault(); break;
+                    case "ArrowLeft":  if (this.dir.dx !== 1)  { this.nextDir = { dx: -1, dy: 0 }; } nativeEvent.preventDefault(); break;
+                    case "ArrowRight": if (this.dir.dx !== -1) { this.nextDir = { dx: 1, dy: 0 }; }  nativeEvent.preventDefault(); break;
+                    case "n": case "N": nativeEvent.preventDefault(); this.newGame(); break;
+                }
+            }
+            if (nativeEvent.defaultPrevented) { this.clearEvent(event); }
         }
     }
 
-    onKeyDown(event) {
-        if (!this.isActive()) { return; }
-        if (event.key === "Escape") { event.preventDefault(); this.close(); return; }
-        if (this.gameOver && (event.key === "Enter" || event.key === " " || event.key === "n" || event.key === "N")) {
-            event.preventDefault();
-            this.newGame();
-            return;
-        }
-        switch (event.key) {
-            case "ArrowUp":    if (this.dir.dy !== 1)  { this.nextDir = { dx: 0, dy: -1 }; } event.preventDefault(); break;
-            case "ArrowDown":  if (this.dir.dy !== -1) { this.nextDir = { dx: 0, dy: 1 }; }  event.preventDefault(); break;
-            case "ArrowLeft":  if (this.dir.dx !== 1)  { this.nextDir = { dx: -1, dy: 0 }; } event.preventDefault(); break;
-            case "ArrowRight": if (this.dir.dx !== -1) { this.nextDir = { dx: 1, dy: 0 }; }  event.preventDefault(); break;
-            case "n": case "N": event.preventDefault(); this.newGame(); break;
-        }
-    }
+
 
     open() {
         super.open();
@@ -4705,30 +4946,10 @@ class TVSnakeDialog extends TVGameDialog {
         }
         if (this.food) { grid[this.food.y][this.food.x] = 3; }
 
-        const lines = [];
-        for (let y = 0; y < SNAKE_ROWS; y++) {
-            const cells = [];
-            for (let x = 0; x < SNAKE_COLS; x++) {
-                const v = grid[y][x];
-                if (v === 2) {
-                    cells.push('<span class="tv-snake-cell tv-snake-head">@@</span>');
-                } else if (v === 1) {
-                    cells.push('<span class="tv-snake-cell tv-snake-segment">██</span>');
-                } else if (v === 3) {
-                    cells.push('<span class="tv-snake-cell tv-snake-food">◆ </span>');
-                } else {
-                    cells.push('<span class="tv-snake-cell">  </span>');
-                }
-            }
-            lines.push(cells.join(""));
-        }
-
-        if (this.gameOver) {
-            this.fieldView._setHTML(lines.join("") +
-                `<div class="tv-snake-overlay-msg">GAME OVER<br><small>Score: ${this.score}</small><br><small>Press Enter</small></div>`);
-        } else {
-            this.fieldView._setHTML(lines.join(""));
-        }
+        this.fieldView.setGrid(SNAKE_COLS, grid.flatMap(row => row.map(value => value === 2
+            ? { text: "@@", kind: "head", foreground: 14 } : value === 1 ? { text: "██", kind: "segment", foreground: 10 }
+                : value === 3 ? { text: "◆ ", kind: "food", foreground: 12 } : { text: "  " })))
+            .setMessage(this.gameOver ? `GAME OVER\nScore: ${this.score}\nPress Enter` : "");
     }
 }
 

@@ -8,6 +8,10 @@ single-page application.
 
 Homepage: [https://thelp.zdrojak.dev](https://thelp.zdrojak.dev)
 
+This checkout prepares stable version **2.1.2**, carrying shared TVision/CSS
+maintenance from 3.0. MIDI remains directly registered and the 2.1 server/storage
+APIs stay in place. The application module system is developed separately in 3.0.
+
 Reads multiple legacy DOS help formats including Borland THELP, Microsoft
 QuickHelp / BW03, Borland TDH/TFH runtime help, Norton Guide, FBHF,
 Software602, and text `.hlx` / `.hl6` sources, then serves them as an
@@ -127,9 +131,8 @@ locally available again, then reload the page. See
 ### DOS Prompt
 
 Open **≡ → DOS Prompt** for a real WASM DOSBox inside a standard `TVWindow`.
-Standard text modes use shared TVTextScreen character cells; graphics and
-custom-font modes retain the canvas. Set `text_rendering: false` in the DOS
-manifest for canvas-only rendering (default: true/hybrid). Title-bar double-click
+Text and graphics use the same native DOSBox canvas, preserving uploaded fonts,
+hardware blink and video-mode aspect ratios. Title-bar double-click
 uses proportional DOS Zoom. Manual Pause grays the contents and shows
 an embedded, fixed Resume dialog, including in native fullscreen.
 Its contextual top menu provides Pause/Resume, Restart, Save C to cloud,

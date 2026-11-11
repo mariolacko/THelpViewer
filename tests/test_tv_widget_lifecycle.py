@@ -29,27 +29,10 @@ def test_dos_navigator_gauges_receive_broadcast_progress_commands():
     assert CORE_PATHS[0].read_bytes() == CORE_PATHS[1].read_bytes()
     script = r'''
 const fs = require("fs");
-const source = fs.readFileSync(process.argv[1], "utf8");
-const start = source.indexOf("class TVPercentGauge");
-const end = source.indexOf("\nclass TVLabel", start);
-const evBroadcast = 0x0200;
-const cmUpdateGauge = 12000;
-const cmResetGauge = 12001;
-const cmAddGauge = 12002;
-class TVRect {
-    constructor(x1 = 0, y1 = 0, x2 = 0, y2 = 0) { this.x1 = x1; this.y1 = y1; this.x2 = x2; this.y2 = y2; }
-    get width() { return this.x2 - this.x1; }
-}
-class TVView {
-    constructor(bounds) { this.bounds = bounds; this.size = { x: bounds.width }; this.eventMask = 0; this.root = null; }
-    handleEvent() {}
-    drawView() { this.drawCount = (this.drawCount || 0) + 1; return this; }
-    _drawAttrs(attrs) { return attrs; }
-    static _viewBoundsStyle() { return ""; }
-}
-const attrsToString = (attrs) => Object.entries(attrs).map(([key, value]) => `${key}="${value}"`).join(" ");
-const escapeHtml = (value) => String(value);
-eval(source.slice(start, end) + "\nglobalThis.PercentGauge = TVPercentGauge; globalThis.BarGauge = TVBarGauge;");
+global.window={};global.document={addEventListener(){}};
+eval(fs.readFileSync(process.argv[1],"utf8"));
+const {TVRect,TVPercentGauge:PercentGauge,TVBarGauge:BarGauge,
+ evBroadcast,cmUpdateGauge,cmResetGauge,cmAddGauge}=window.THelpViewerTV;
 
 const percent = new PercentGauge(new TVRect(0, 0, 5, 1), 200);
 percent.handleEvent({ what: evBroadcast, command: cmUpdateGauge, infoLong: 50 });
@@ -69,6 +52,26 @@ if (!markup.includes('role="progressbar"') || !markup.includes('aria-valuenow="4
 }
 bar.updateView(100);
 if (!bar.draw().includes("██████████")) throw new Error("completed track is not solid");
+const exact = new BarGauge(new TVRect(0, 0, 100, 1), 100);
+for(let value=0;value<=100;value++){
+    exact.updateView(value);
+    if(exact.solveForX(value,100)!==value||exact.solveForY(value,100)!==value
+        ||!exact.draw().includes('█'.repeat(value)+'░'.repeat(100-value))) throw new Error('Whole-cell progress lost precision at '+value);
+}
+for(const value of [-10,0,150,NaN,Infinity]){
+    bar.updateView(value);percent.maxValue=100;percent.updateView(value);
+    const clipped=Number.isFinite(value)?Math.max(0,Math.min(100,value)):0;
+    if(!bar.draw().includes('█'.repeat(Math.floor(clipped/10))+'░'.repeat(10-Math.floor(clipped/10)))
+        ||!percent.draw().includes(String(clipped).padEnd(3,' ')+'%'))throw new Error('Invalid/over-range progress is inconsistent');
+}
+bar.maxValue=0;bar.updateView(20);
+if(!bar.draw().includes('░'.repeat(10))||!bar.draw().includes('aria-valuenow="0"'))throw new Error('Zero-range progress is not empty');
+percent.maxValue=1e308;percent.updateView(1e308);
+bar.maxValue=1e308;bar.updateView(1e308);
+if(!percent.draw().includes('100%')||!bar.draw().includes('█'.repeat(10)))throw new Error('Large progress counters overflowed');
+percent.maxValue=0.29;percent.updateView(0.29);
+bar.maxValue=0.1;bar.growTo(43,1);bar.updateView(0.1);
+if(!percent.draw().includes('100%')||!bar.draw().includes('█'.repeat(43)))throw new Error('Completed fractional counters lost their final percent/cell');
 '''
     result = subprocess.run(
         [NODE, "-e", script, str(CORE_PATHS[0])],
@@ -117,6 +120,7 @@ global.clearTimeout = (id) => timers.delete(id);
 const make = () => {
     const search = Object.create(Search.prototype);
     Object.assign(search, { indexMonitorSerial: 0, indexMonitorTimer: null, indexProgress: null,
+        resultsBox: { destroy() { this.destroyed = true; } },
         indexStatus: { state: "idle" }, searchSerial: 0, availabilitySerial: 0, statuses: [],
         onIndexStatus(status) { this.statuses.push(status); }, isOpen() { return false; },
         showIndexProgress() {
@@ -141,6 +145,7 @@ const onlyTimer = (delay) => {
     await waitingSearch.monitorIndex();
     assert.equal(refreshed, 1, "idle polling reset a completed search");
     waitingSearch.destroy();
+    assert.equal(waitingSearch.resultsBox.destroyed, true);
     assert.equal(timers.size, 0);
     const search = make();
     global.fetch = async () => response("ready", 100);
@@ -354,11 +359,19 @@ global.SCROLL_REPEAT_MS = 100;
 global.TRACK_CHAR = "░";
 global.DISABLED_TRACK_CHAR = "─";
 global.THUMB_CHAR = "█";
-global.TVRect = class {};
-global.TVView = class {
-    constructor() { this.root = null; }
-    bindRoot(root) { this.root = root; return this; }
+global.TVRect = class {
+    constructor(x1=0,y1=0,x2=0,y2=0) { Object.assign(this,{x1,y1,x2,y2}); }
+    get width(){return this.x2-this.x1;} get height(){return this.y2-this.y1;}
 };
+global.sfVisible=1;global.sfDisabled=0x100;
+global.TVView = class {
+    constructor() { this.root = null; this.state=sfVisible; }
+    getState(mask) { return (this.state & mask)=== mask; }
+    static _fromElement(element) { return element?._tvView || null; }
+    bindRoot(root) { this.root = root; return this; }
+    _placePart() {}
+};
+global.TVWindow = class extends TVView {};
 
 let observer;
 class FakeResizeObserver {
@@ -373,8 +386,8 @@ global.sbHorizontal = 0x0000;
 const core = fs.readFileSync(process.argv[1], "utf8");
 const scrollbarStart = core.indexOf("class TVScrollBar");
 const scrollbarEnd = core.indexOf("\nclass TVProgram", scrollbarStart);
-eval(core.slice(scrollbarStart, scrollbarEnd) + "\nglobalThis.TestScrollbar = TVScrollBar;");
-TestScrollbar.prototype.update = function () { this.updateCalls = (this.updateCalls || 0) + 1; };
+eval(core.slice(core.indexOf('function viewAcceptsInput'), core.indexOf('\nfunction owningDesktop'))
+    + core.slice(scrollbarStart, scrollbarEnd) + "\nglobalThis.TestScrollbar = TVScrollBar;");
 
 const viewport = new FakeTarget();
 viewport.firstElementChild = new FakeTarget();
@@ -391,7 +404,7 @@ const frame = new FakeTarget();
 frame.closest = (selector) => selector === ".tv-client-row" ? host : null;
 frame.parentElement = host;
 frame.querySelector = (selector) => selector === "[data-tv-viewport]" ? viewport : null;
-const logicalOwner = {};
+const logicalOwner = new TVView();
 frame._tvView = logicalOwner;
 
 const scrollbar = new TestScrollbar(new TVRect()).bindRoot(frame);
@@ -421,10 +434,14 @@ if (!observer || observer.observed.length !== 2) {
 let inactivePrevented = false;
 scrollbar.setActive(false);
 scrollbar.startRepeat({ preventDefault() { inactivePrevented = true; } }, "y", 1);
-if (inactivePrevented || scrollbar.repeatTimer !== null || x.root.getAttribute("aria-disabled") !== "true") {
+if (inactivePrevented || scrollbar.repeatTimer !== null || x.root.getAttribute("aria-disabled") !== "true"
+    || !y.parts["[data-role='forward']"].disabled) {
     throw new Error("inactive scrollbar accepted input");
 }
 scrollbar.setActive(true);
+if (y.parts["[data-role='forward']"].disabled || !x.parts["[data-role='forward']"].disabled) {
+    throw new Error("activation ignored the available scroll range");
+}
 scrollbar.destroy();
 scrollbar.destroy();
 if (viewport.listeners.has("scroll") || frame.listeners.has("wheel")
@@ -445,12 +462,19 @@ const moveHandle = new FakeTarget();
 const desktop = new FakeTarget();
 desktop.clientWidth = 800;
 desktop.clientHeight = 500;
+desktop.getBoundingClientRect = () => ({width:desktop.clientWidth,height:desktop.clientHeight});
 const windowElement = new FakeTarget();
 global.sfDragging = 0x0080;
-const ownedView = { state: 0, setState(mask, enable) { this.state = enable ? this.state | mask : this.state & ~mask; } };
+const ownedView = {
+    state: 0, origin: {x:0,y:0}, size: {x:80,y:25},
+    setState(mask, enable) { this.state = enable ? this.state | mask : this.state & ~mask; },
+    sizeLimits() { return {min:{x:16,y:6},max:{x:10000,y:10000}}; },
+    locate(rect) { this.origin={x:rect.x1,y:rect.y1}; this.size={x:rect.width,y:rect.height}; },
+    moveTo(x,y) { this.origin={x,y}; },
+};
 windowElement._tvView = ownedView;
-windowElement.style.setProperty("--tv-window-cols", "80");
-windowElement.style.setProperty("--tv-window-rows", "25");
+Object.defineProperty(windowElement,"offsetWidth",{configurable:true,get(){return Math.min(ownedView.size.x*8,desktop.clientWidth);}});
+Object.defineProperty(windowElement,"offsetHeight",{configurable:true,get(){return Math.min(ownedView.size.y*16,desktop.clientHeight);}});
 const zoomGlyph = { textContent: "↓" };
 windowElement.closest = () => desktop;
 windowElement.querySelector = (selector) => {
@@ -461,18 +485,19 @@ windowElement.querySelector = (selector) => {
 };
 
 const resizer = new TestResizer(windowElement);
-if (!resizeHandle.listeners.has("mousedown") || !moveHandle.listeners.has("mousedown") || !window.listeners.has("beforeunload")) {
+if (!resizeHandle.listeners.has("mousedown") || !moveHandle.listeners.has("mousedown")
+    || !window.listeners.has("beforeunload") || !window.listeners.has("resize")) {
     throw new Error("resizer did not bind its resources");
 }
 const readStoredState = resizer.readStoredState;
 for (const [state, expectedLeft, expectedTop] of [
     [{ left: 16, top: 32, cols: 70, rows: 20 }, 16, 32],
-    [{ left: 424, top: 6069, cols: 70, rows: 20 }, 424, 475],
-    [{ left: 9999, top: 9999, cols: 70, rows: 20 }, 720, 475],
+    [{ left: 424, top: 6069, cols: 70, rows: 20 }, 240, 180],
+    [{ left: 9999, top: 9999, cols: 70, rows: 20 }, 240, 180],
     [{ left: 9999, top: 9999, cols: 70, rows: 20,
         restore: { left: 24, top: 48, cols: 60, rows: 18 } }, 24, 48],
     [{ left: 0, top: 0, cols: 70, rows: 20, maximized: true,
-        restore: { left: 9999, top: 9999, cols: 70, rows: 20 } }, 720, 475],
+        restore: { left: 9999, top: 9999, cols: 70, rows: 20 } }, 240, 180],
 ]) {
     resizer.readStoredState = () => state;
     if (!resizer.restoreState() || resizer.restoreSnapshot.left !== expectedLeft
@@ -499,7 +524,7 @@ if (!windowElement.classList.contains("is-moving")) {
 windowElement.classList.add("is-maximized");
 resizer.place({ left: 16, top: 32, cols: 70, rows: 20 });
 if (windowElement.classList.contains("is-maximized") || zoomGlyph.textContent !== "↑"
-    || windowElement.style.getPropertyValue("--tv-window-cols") !== "70"
+    || ownedView.size.x !== 70
     || resizer.restoreSnapshot.left !== 16 || resizer.restoreSnapshot.rows !== 20) {
     throw new Error("window layout did not update resizer geometry and restore state");
 }
@@ -537,17 +562,17 @@ if (!(ownedView.state & sfDragging) || !document.captures.get("mousemove") || !d
 widthReads = heightReads = 0;
 for (let i = 0; i < 50; i++) { resizer.onMoveDrag({ clientX: 100 + i, clientY: 200 + i }); }
 if (animationFrames.size !== 1 || widthReads || heightReads
-    || windowElement.style.getPropertyValue("--tv-window-left") !== "16px") {
+    || resizer.captureGeometry().left !== 16) {
     throw new Error("drag did not coalesce writes or cached bounds were reread");
 }
 const [frameId, apply] = animationFrames.entries().next().value;
 animationFrames.delete(frameId); apply();
-if (windowElement.style.getPropertyValue("--tv-window-left") !== "155px") {
+if (resizer.captureGeometry().left !== 155) {
     throw new Error("drag did not apply the latest queued position");
 }
 resizer.onMoveEnd({ clientX: 110, clientY: 220, buttons: 0 });
-if (animationFrames.size || windowElement.style.getPropertyValue("--tv-window-left") !== "116px"
-    || windowElement.style.getPropertyValue("--tv-window-top") !== "232px"
+if (animationFrames.size || resizer.captureGeometry().left !== 116
+    || resizer.captureGeometry().top !== 232
     || resizer.restoreSnapshot.left !== 116 || resizer.restoreSnapshot.top !== 232) {
     throw new Error("drag did not flush and persist the final mouse-up position");
 }
@@ -569,7 +594,8 @@ resizer.destroy();
 resizer.destroy();
 if (animationFrames.size) { throw new Error("destroy left a queued drag frame behind"); }
 if (windowElement._tvResizer) { throw new Error("destroy left a stale resizer reference"); }
-if (resizeHandle.listeners.has("mousedown") || moveHandle.listeners.has("mousedown") || window.listeners.has("beforeunload")) {
+if (resizeHandle.listeners.has("mousedown") || moveHandle.listeners.has("mousedown")
+    || window.listeners.has("beforeunload") || window.listeners.has("resize")) {
     throw new Error("resizer left a listener behind");
 }
 """
@@ -600,7 +626,7 @@ def test_dynamic_windows_destroy_widgets_before_removing_the_dom():
     assert "windowEl._tvResizer.destroy()" in source
     assert "this._destroyWindowWidgets(existing);\n            existing._tvWindowView?.destroy();\n            existing.remove();" in source
     assert "this._destroyWindowWidgets(el);\n            el._tvWindowView?.destroy();\n            el.remove();" in source
-    assert "destroyWindowWidgets(windowEl);\n            windowEl.remove();" in source
+    assert "destroyWindowWidgets(windowEl);\n            windowView.bindRoot(null);\n            windowEl.remove();" in source
     context_help = CONTEXT_HELP_PATHS[0].read_text(encoding="utf-8")
     assert 'frame?.querySelector(".tv-scrollbar")?._tvScrollbar?.refresh()' in context_help
 
@@ -671,11 +697,9 @@ def test_active_window_state_controls_scrollbars_and_scopes_frame_redraw():
     assert "fillBorders();" not in frame_state
     assert 'windowElement.classList.contains("is-moving")' in frame_state
     assert '.tv-scrollbar, .tv-menu-bar' not in shell
-    assert ".tv-scrollbar.is-inactive" in css
+    assert ".tv-scrollbar.is-inactive" not in css
     assert ".tv-vlist-scrollbar.is-inactive" not in css
-    inactive_scrollbar_css = css[
-        css.index(".tv-scrollbar.is-inactive"):
-        css.index(".tv-js .tv-scrollbar")
-    ]
-    assert "--tv-frame-passive" not in inactive_scrollbar_css
-    assert "pointer-events: none" in inactive_scrollbar_css
+    disabled_start = css.index(".tv-scroll-arrow:disabled")
+    disabled_controls_css = css[disabled_start:css.index("}", disabled_start)]
+    assert "--tv-frame-passive" not in disabled_controls_css
+    assert "pointer-events: none" in disabled_controls_css

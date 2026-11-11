@@ -32,7 +32,7 @@ def test_hall_of_fame_uses_managed_modal_dialogs_for_every_game():
         helper.index("function hallOfFameRows(game, entries)"):
         helper.index("function installHallOfFame", helper.index("function hallOfFameRows(game, entries)"))
     ]
-    assert "new TVGroup(new TVRect(0, 0, 43, 13))" in hall
+    assert "new TVGamePaletteGroup(new TVRect(0, 0, 43, 13))" in hall
     assert "new TVHallRow(new TVRect(" in hall
     assert 'new TVStaticText(new TVRect(1, 3, 42, 4), "\\x03No scores yet.")' in hall
     assert "class TVHallBody" not in source
@@ -198,7 +198,16 @@ const fs = require("fs");
 const source = fs.readFileSync(process.argv[1], "utf8");
 const start = source.indexOf("const MINES_ROWS");
 const end = source.indexOf("// ── BreakOut", start);
-class TVGameDialog {}
+class TVButton {}
+class TVGroup {}
+class TVGameButton extends TVButton {}
+class TVGamePaletteGroup extends TVGroup {}
+class TVInputLine {}
+class TVGameDialog {
+    handleEvent() {}
+    clearEvent(event) { event.what = 0; }
+}
+const evMouseDown = 1, evKeyDown = 16, evCommand = 256;
 eval(source.slice(start, end) + "\nglobalThis.TestMines = TVMinesDialog;");
 
 const rows = 9;
@@ -255,7 +264,16 @@ const fs = require("fs");
 const source = fs.readFileSync(process.argv[1], "utf8");
 const start = source.indexOf("const MINES_ROWS");
 const end = source.indexOf("// ── BreakOut", start);
-class TVGameDialog {}
+class TVButton {}
+class TVGroup {}
+class TVGameButton extends TVButton {}
+class TVGamePaletteGroup extends TVGroup {}
+class TVInputLine {}
+class TVGameDialog {
+    handleEvent() {}
+    clearEvent(event) { event.what = 0; }
+}
+const evMouseDown = 1, evKeyDown = 16, evCommand = 256;
 eval(source.slice(start, end) + "\nglobalThis.TestMines = TVMinesDialog;");
 
 const game = Object.create(TestMines.prototype);
@@ -271,7 +289,7 @@ game.render = (focusCursor) => { focused = focusCursor; };
 
 const key = (value) => {
     let prevented = false;
-    game.onKeyDown({ key: value, target: null, preventDefault: () => { prevented = true; } });
+    game.handleEvent({ what: evKeyDown, nativeEvent: { key: value, preventDefault: () => { prevented = true; } } });
     if (!prevented) { throw new Error(`${value} was not handled`); }
 };
 key("ArrowLeft");
@@ -283,10 +301,15 @@ if (!game.flagged[4][3]) { throw new Error("F did not toggle a flag"); }
 
 let clickedFocus = false;
 game.revealCell = (r, c, focusCursor) => { clickedFocus = r === 2 && c === 7 && focusCursor; };
-game.onCellClick({
-    target: { closest: () => ({ getAttribute: (name) => name.endsWith("-r") ? "2" : "7" }) },
-});
+const cell = { value: 25 };
+game.gridView = { cells: [cell] };
+game.handleEvent({ what: evCommand, command: "mines-reveal", infoPtr: cell });
 if (!clickedFocus) { throw new Error("mouse reveal did not preserve the board cursor focus"); }
+clickedFocus = false;
+game.handleEvent({ what: evCommand, command: "mines-reveal", infoPtr: { value: 25 } });
+game.isActive = () => false;
+game.handleEvent({ what: evCommand, command: "mines-reveal", infoPtr: cell });
+if (clickedFocus) { throw new Error("foreign or inactive cell accepted reveal input"); }
 '''
     subprocess.run(
         [NODE, "-e", script, str(GAME_PATHS[0])],
@@ -294,3 +317,20 @@ if (!clickedFocus) { throw new Error("mouse reveal did not preserve the board cu
         capture_output=True,
         text=True,
     )
+
+
+def test_games_have_no_css_palettes_layout_or_animations():
+    css = Path("www/assets/turbovision.css").read_text()
+    import re
+    game_rules = [(selectors, declarations) for selectors, declarations
+                  in re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+                  if re.search(r"\.tv-game[^\s{,:]*", selectors)]
+    assert len(game_rules) == 1
+    selectors, declarations = game_rules[0]
+    assert re.findall(r"\.tv-game[^\s{,:]*", selectors) == [".tv-game-board"]
+    assert declarations.strip() == "overflow: hidden;"
+    assert not re.search(r"\.tv-(?:puzzle|tetris|mines|break|sokoban|lines|reversi|ludo|mastermind|hanoi|tron|snake|hall)[-\s{:]", css)
+    assert "--tv-puzzle-" not in css
+    source = GAME_PATHS[0].read_text()
+    assert "style=" not in source
+    assert ".style." not in source

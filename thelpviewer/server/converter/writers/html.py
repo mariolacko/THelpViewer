@@ -199,7 +199,8 @@ class HelpHtmlRenderer:
         title = html.escape(page_title)
         window_title = html.escape(self._header_label())
         body_class = " ".join(part for part in ("tv-page", page_class) if part)
-        window_style = html.escape(self._window_style())
+        cols, rows = self._window_geometry()
+        window_size = html.escape(json.dumps([cols, rows, *self._window_min_geometry(cols, rows)]))
         body_attrs = " ".join(
             [
                 f'class="{body_class}"',
@@ -253,14 +254,17 @@ class HelpHtmlRenderer:
                 "<header class=\"tv-menu-bar\" data-tv-menu-bar></header>",
                 "<div class=\"tv-desktop\">",
                 f"<pre class=\"tv-desktop-pattern\" data-tv-desktop-pattern=\"{TV_DESKTOP_PATTERN_CHAR}\" aria-hidden=\"true\"></pre>",
-                f"<main class=\"tv-window\" data-tv-window style=\"{window_style}\">",
+                f"<main class=\"tv-window\" data-tv-window=\"{window_size}\">",
                 "<div class=\"tv-shell\">",
                 "<div class=\"tv-border-row tv-border-top\" data-tv-move-handle>",
                 "<span class=\"tv-border-corner\" aria-hidden=\"true\">╔</span>",
+                "<span class=\"tv-border-fill tv-control-gap\" data-tv-border-fill=\"═\" aria-hidden=\"true\"></span>",
                 "<a class=\"tv-close-control\" data-tv-close-button href=\"index.html\" aria-label=\"Close window\">[<span class=\"tv-close-glyph\" data-tv-close-glyph>■</span>]</a>",
                 "<span class=\"tv-border-fill\" data-tv-border-fill=\"═\" aria-hidden=\"true\"></span>",
-                f"<div class=\"tv-window-caption\">{window_title}</div>",
+                f"<div class=\"tv-window-caption\"><span class=\"tv-frame-title\">{window_title}</span></div>",
                 "<span class=\"tv-border-fill\" data-tv-border-fill=\"═\" aria-hidden=\"true\"></span>",
+                "<span class=\"tv-border-fill tv-frame-control-placeholder\" data-tv-border-fill=\"═\" aria-hidden=\"true\"></span>",
+                "<span class=\"tv-border-fill tv-control-gap\" data-tv-border-fill=\"═\" aria-hidden=\"true\"></span>",
                 "<span class=\"tv-border-corner\" aria-hidden=\"true\">╗</span>",
                 "</div>",
                 "<div class=\"tv-client-row\">",
@@ -275,6 +279,7 @@ class HelpHtmlRenderer:
                 self._render_scrollbar("y"),
                 "<div class=\"tv-bottom-bar\">",
                 "<span class=\"tv-scroll-corner tv-scroll-corner-left\" aria-hidden=\"true\">╚</span>",
+                "<span class=\"tv-border-fill tv-control-gap\" data-tv-border-fill=\"═\" aria-hidden=\"true\"></span>",
                 self._render_scrollbar("x"),
                 "<button type=\"button\" class=\"tv-grow-handle\" data-tv-resize-handle aria-label=\"Resize window\">─┘</button>",
                 "</div>",
@@ -288,15 +293,6 @@ class HelpHtmlRenderer:
                 "</html>",
             ]
         ) + "\n"
-
-    def _window_style(self) -> str:
-        """Expose preferred Turbo Vision window size through CSS variables."""
-        cols, rows = self._window_geometry()
-        min_cols, min_rows = self._window_min_geometry(cols, rows)
-        return (
-            f"--tv-window-cols:{cols}; --tv-window-rows:{rows}; "
-            f"--tv-window-min-cols:{min_cols}; --tv-window-min-rows:{min_rows};"
-        )
 
     def _window_geometry(self) -> tuple[int, int]:
         """Choose a stable outer window size instead of stretching to the viewport."""

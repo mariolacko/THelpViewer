@@ -53,48 +53,21 @@ snapshot and frame-drag pauses do not display it.
 
 ## Text and graphics screens
 
-The pinned classic DOSBox has a small native bridge at its completed-video-
-frame boundary. It reads the active VGA text buffer, not DOS stdout, so direct
-B800 writes by file managers and editors are visible too. Standard CP437 text
-uses the existing `TVTextScreen` without a bitmap font: real DOM character
-cells with foreground/background palette indexes. Geometry and cell scaling
-follow the native mode; 80x25 and 80x50 are covered by browser tests. The shared
-IBM VGA web font is fitted to the mode's character grid, not replaced with a
-pixel screenshot. Native cursor scanlines and blink phase are supplied by
-DOSBox; there is no independent browser blink clock for the live screen.
-Background cells form an untransformed display-sized grid with device-pixel-
-snapped outer bounds. Only glyphs are scaled; their individual edges are
-snapped to the font's whole-CSS-pixel raster grid, not uniformly centered in
-fractional cells (half-CSS-pixel heights can lose a font row even on Retina).
-Neighboring backgrounds and single/double box lines therefore meet even at
-fractional zoom or high-DPI resolutions.
+DOSBox renders text and graphics into the same canvas inside TVDosView.
+The browser displays completed native video frames, not an HTML element for
+each text cell. Direct video-memory writes, the original ROM and uploaded
+fonts, palette changes, cursor scanlines and hardware blink are rendered by
+DOSBox itself. Mode changes keep the same canvas, emulator session, mounted
+drives and input target; no text-buffer bridge or presentation setting is used.
 
-Graphics modes continue using the existing canvas. Custom/dual hardware fonts,
-underline effects, panning/split-screen and unsupported machines/layouts also
-retain DOSBox's pixel renderer rather than showing incorrect characters.
-Switching presentations never restarts the emulator or changes mounted drives,
-memory or the input target. UHF bitmap-font TextScreens remain unchanged.
+The canvas scales as one image with pixelated sampling and keeps the current
+video-mode aspect ratio. It has no gaps between separately scaled character
+backgrounds or glyphs. Manual Pause and moving/resizing still gray the screen
+and pause guest execution; the embedded Resume dialog uses the shared TVision
+views. UHF bitmap-font TextScreens are separate and remain unchanged.
 
-The top-level `text_rendering` boolean in `thelpviewer/config/dos-prompt.json`
-selects the presentation. The default, `true`, uses character cells where the
-native font/mode is supported and canvas otherwise. Set it to `false` to use
-DOSBox's canvas for everything, including ordinary text. Restart the server
-and reopen DOS Prompt to apply it; neither rebuilding C nor modifying user
-data is required. A program that uploads its own font always uses its exact
-native pixels, even with `text_rendering: true`; restoring the ROM font
-returns to character cells automatically.
-
-The bridge protocol uses the existing CI message transport. `thelp-screen`
-carries a copied Uint8Array, not a RAM dump: 16 header bytes, sixteen RGB
-palette entries and interleaved character/attribute bytes. Header offsets:
-0 text/fallback flag; 1 columns; 2 rows; 3 glyph height; 4 glyph width;
-5 attribute-blink enabled; 6 blink phase; 7 cursor visible; 8/9 cursor column/row
-(255 if absent); 10/11 cursor first/last scanline; 12–15 reserved zero.
-Palette RGB starts at 16; cells start at 64. A fallback packet is 16 zero bytes.
-Changed state is emitted at native frame boundaries, with a periodic refresh
-for late listeners. The API preserves this one typed message instead of
-converting it to a log string. Source, reproducible build steps and license are
-in [the bundled emulator README](../../www/assets/dos/emulators/README.md).
+Source, reproducible build steps and licence information are in
+[the bundled emulator README](../../www/assets/dos/emulators/README.md).
 
 **Zoom 2×** enlarges the window's DOS client area up to twice its current size,
 limited uniformly by the available desktop. **Zoom back** restores the prior
@@ -501,7 +474,7 @@ DOS program archive with suitable distribution terms was found; a freeware
 mention or old registration key alone is not enough to add a package.
 
 The manifest contains `cycles` (`auto`, `max` or a numeric DOSBox cycle count),
-`memory_mb` (4–64), `text_rendering` (boolean, default true), `max_media_bytes` (default
+`memory_mb` (4–64), `max_media_bytes` (default
 128 MiB), a `categories` list of unique `{id, label, icon}` entries and a `sources`
 list. Each source has:
 

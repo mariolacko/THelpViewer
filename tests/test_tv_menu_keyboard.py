@@ -21,6 +21,7 @@ const fs = require("node:fs");
 
 class FakeElement {
     constructor() {
+        this.children = [];
         this.dataset = {};
         this.attributes = new Map();
         this.style = { setProperty() {}, removeProperty() {} };
@@ -48,6 +49,7 @@ global.window.THelpViewerTV = {};
 global.window.localStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
 global.window.matchMedia = () => ({ matches: false });
 global.window.addEventListener = () => {};
+global.window.removeEventListener = () => {};
 global.window.requestAnimationFrame = (callback) => callback();
 global.document = {
     activeElement: null,
@@ -65,9 +67,10 @@ eval(fs.readFileSync(process.argv[1], "utf8"));
 const TV = window.THelpViewerTV;
 eval(fs.readFileSync(process.argv[2], "utf8"));
 const guestAccount=TV.buildAccountMenu(null);
+const registeredApplications={registry:{applications:new Map([['midi_player',{}]])}};
 if(guestAccount.command!=='account-login'||guestAccount.subMenu)throw new Error('Guest account item is not Login');
 for(const role of ['member','admin']){
- const account=TV.buildAccountMenu({authenticated:true,user:{username:'test',display_name:'Test ~<Name>~',role}});
+ const account=TV.buildAccountMenu({authenticated:true,user:{username:'test',display_name:'Test ~<Name>~',role}},registeredApplications);
  const collect=menu=>menu.entries().flatMap(item=>[item.command,...(item.subMenu?collect(item.subMenu):[])]);
  const commands=collect(account.subMenu);
  const configuration=account.subMenu.entries().find(item=>item.name.replaceAll('~','')==='Configuration');
@@ -100,28 +103,27 @@ for(const role of ['member','admin']){
  if(!indexElement.hidden||!bar.indexItem.disabled||bar.topLevelActions.includes(indexElement))throw new Error('Finished index indicator remains active');
 }
 for(const role of ['member','admin']){
- const account=TV.buildAccountMenu({authenticated:true,development:true,user:{username:'local',display_name:'Local',role}});
+ const account=TV.buildAccountMenu({authenticated:true,development:true,user:{username:'local',display_name:'Local',role}},registeredApplications);
  const commands=account.subMenu.entries().flatMap(item=>[item.command,...(item.subMenu?.entries()||[]).map(child=>child.command)]);
  if(commands.includes('account-rebuild-dos')!==(role==='admin')||commands.includes('account-rebuild-midi')!==(role==='admin'))throw new Error('Local rebuild menu permissions are incorrect');
  if(!commands.includes('account-colors'))throw new Error('Colors is unavailable to a local member');
 }
 
 const RealDate = global.Date, queryElements = document.querySelectorAll;
-const clock = new FakeElement();
-clock.textContent = "00:00:00";
+const header = new FakeElement();
 global.Date = class extends RealDate {
     constructor(...args) { super(...(args.length ? args : [2026, 9, 17, 12, 34, 56])); }
 };
-document.querySelectorAll = (selector) => selector === "[data-tv-clock]" ? [clock] : queryElements(selector);
+document.querySelectorAll = (selector) => selector === "[data-tv-menu-bar]" ? [header] : queryElements(selector);
 try {
     const downloads = new TV.TVSubMenu("↓");
     downloads.status = {items:[]}; downloads.update = () => {};
     const menu = new TV.TVApplicationMenuBar(new TV.TVRect(), TV.NewMenu(guestAccount), guestAccount, downloads);
-    menu.bindRoot(new FakeElement());
-    if (clock.textContent !== "12:34:56") throw new Error("Menu clock awaits a periodic tick after binding");
-    clock.textContent = "00:00:00";
-    menu.bindRoot(new FakeElement());
-    if (clock.textContent !== "12:34:56") throw new Error("Menu rebinding reset the clock");
+    menu.bindRoot(header);
+    if (!(menu.clock instanceof TV.TVStaticText) || menu.clock.getText() !== "\x0312:34:56") throw new Error("Menu clock awaits a periodic tick after binding");
+    menu.clock.setText("\x0300:00:00");
+    menu.bindRoot(header);
+    if (menu.clock.getText() !== "\x0312:34:56") throw new Error("Menu rebinding reset the clock");
 } finally { global.Date = RealDate; document.querySelectorAll = queryElements; }
 
 const linkedSecond = TV.NewItem("~S~econd", "F4", TV.kbF3, "second", 20);
@@ -258,7 +260,7 @@ statusButton.closest = (selector) => selector === "button, a" ? statusButton : n
 const statusRoot = new FakeElement();
 statusRoot.querySelectorAll = (selector) => selector === "button.tv-status-item" ? [statusButton] : [];
 const statusLine = new TV.TVStatusLine(new TV.TVRect(),
-    TV.NewStatusDef(0, 0xffff, [statusItem])).bindRoot(statusRoot);
+    TV.NewStatusDef(0, 0, [statusItem])).bindRoot(statusRoot);
 commandController.root = { querySelector(selector) {
     return selector === "[data-tv-status-line]" ? statusRoot : null;
 } };
@@ -266,6 +268,28 @@ commandController.onCommand({ target: statusButton, preventDefault() {} });
 if (statusButton._tvStatusItem !== statusItem || dispatched?.command !== "status-open"
     || dispatched.infoPtr !== statusItem) {
     throw new Error("status click did not dispatch its TVStatusItem");
+}
+dispatched = null;
+statusItem.setDisabled(true);
+let statusPrevented = false;
+commandController.onCommand({ target: statusButton, preventDefault() { statusPrevented = true; } });
+if (dispatched || !statusPrevented) {
+    throw new Error("status click ignored a disabled model before redraw");
+}
+statusItem.setDisabled(false);
+statusLine.findItems(1);
+statusPrevented = false;
+commandController.onCommand({ target: statusButton, preventDefault() { statusPrevented = true; } });
+if (dispatched || !statusPrevented) {
+    throw new Error("status click used the previous context before redraw");
+}
+statusLine.findItems(0);
+const statusKey = keyEvent("F3");
+const statusEvent = new TV.TVEvent(TV.evKeyDown, { nativeEvent: statusKey });
+statusLine.handleEvent(statusEvent);
+if (statusEvent.what !== TV.evCommand || statusEvent.command !== "status-open"
+    || statusEvent.infoPtr !== statusItem || !statusKey.defaultPrevented) {
+    throw new Error("TVStatusLine.handleEvent did not select its keyboard command");
 }
 
 const nestedSubmenu = TV.NewSubMenu(
@@ -434,12 +458,12 @@ if (filtered.length !== 1 || filtered[0] !== enabled) {
 def test_live_catalog_refresh_keeps_active_help_and_dos_menus():
     script = r'''
 const fs=require('fs'),source=fs.readFileSync(process.argv[1],'utf8');
-global.TVProgram=class {};
+global.TVProgram=class { insert(view) { this.ownedMenu=view; view.owner=this; } };
 let catalogData=[],docsCatalogData=[];
 const CATALOG_FILE='helps/catalog.json',DOCS_CATALOG_FILE='docs/catalog.json';
 const bundleWindowKey=()=> 'active-help';
 const fillBorders=()=>{};
-const buildBundleMenuBar=(catalog,bundle,session,dos,downloads)=>({catalog,bundle,dos,downloads});
+const buildBundleMenuBar=(catalog,bundle,session,dos,downloads)=>({catalog,bundle,dos,downloads,view:{}});
 global.window={location:{search:'?file=active'}};
 global.fetch=async url=>({ok:true,json:async()=>url===CATALOG_FILE?[{file:'new.json.gz',name:'New Help'}]:[]});
 const start=source.indexOf('class TVBundleApp'),end=source.indexOf('// ── Bootstrap',start);
@@ -452,6 +476,7 @@ eval(source.slice(start,end)+'\nglobalThis.App=TVBundleApp;');
  if(app.menuState.bundle!==bundle||app.menuState.dos!==app.dosWindow||app.menuState.catalog.length!==1)
   throw Error('Live publication discarded active Help Contents or DOS context');
  if(app.menuState.downloads!==app.downloadProgress)throw Error('Live publication replaced the download monitor');
+ if(app.ownedMenu!==app.menuState.view||app.ownedMenu.owner!==app)throw Error('Live publication did not register the replacement menu');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 '''
     result = subprocess.run([NODE, "-e", script, "www/assets/tv-bundle-app.js"], capture_output=True, text=True)
@@ -492,7 +517,8 @@ def test_shell_and_bundle_use_the_shared_menu_controller():
     assert "this.menuView?.handleEvent(new TVEvent(evMouseDown" in core
     assert "_handleMenuShortcut" not in bundle
     assert "_menuGlobalsBound" not in bundle
-    assert ".tv-menu-popup-item.is-menu-selected" in css
+    assert ".tv-menu-popup-item.is-menu-selected" not in css
+    assert "_paintMenuItem(item" in core
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is required for command-state behavior tests")
@@ -507,7 +533,7 @@ const HOST_WINDOW_TOKEN = "__host__";
 const TV_COMMANDS = {
     CLOSE: "close", CANCEL: "cancel", ZOOM: "zoom", NEXT: "next", PREVIOUS: "previous", DEFAULT_SIZE: "default-size",
 };
-const wfGrow = 2, evCommand = 0x100;
+const wfGrow = 2, wfClose = 4, evCommand = 0x100;
 class TVEvent { constructor(what, values) { Object.assign(this, {what}, values); } }
 global.TVView = { _fromElement: (element) => element?._tvView || null };
 global.TVWindow = class {};
@@ -545,13 +571,20 @@ if (!manager.canDispatchCommand(TV_COMMANDS.DEFAULT_SIZE) || !manager.dispatchCo
 }
 ownedWindow.flags = 0;
 if (manager.canDispatchCommand(TV_COMMANDS.DEFAULT_SIZE)) throw new Error("Fixed window reset was enabled");
+if (manager.canDispatchCommand(TV_COMMANDS.CLOSE) || manager.dispatchCommand(TV_COMMANDS.CLOSE)) {
+    throw new Error("Window close command bypassed wfClose");
+}
+ownedWindow.flags = wfClose;
+if (!manager.canDispatchCommand(TV_COMMANDS.CLOSE) || !manager.dispatchCommand(TV_COMMANDS.CLOSE)) {
+    throw new Error("Reenabled window close did not recover");
+}
 ownedWindow.flags = wfGrow;
 manager.windows.set("second", { isConnected: true });
 manager.stackOrder.push("second");
 if (!manager.canDispatchCommand(TV_COMMANDS.NEXT) || !manager.canDispatchCommand(TV_COMMANDS.PREVIOUS)) {
     throw new Error("window cycling was not enabled for multiple targets");
 }
-manager.dialogs.set("dialog", { isOpen: () => true });
+manager.dialogs.set("dialog", { isOpen: () => true, flags: wfClose });
 manager.stackOrder.push("dialog");
 manager.activeTarget = "dialog";
 if (!manager.canDispatchCommand(TV_COMMANDS.CLOSE) || manager.canDispatchCommand(TV_COMMANDS.ZOOM)
@@ -621,6 +654,7 @@ let windowCount = 0;
 let targetCount = 0;
 const enabledCommands = new Set();
 app.dialogManager = {
+    get: () => null,
     openWindowCount: () => windowCount,
     openTargets: () => new Array(targetCount),
     canDispatchCommand: (command) => enabledCommands.has(command),
@@ -660,6 +694,5 @@ if (byCommand.next.disabled || byCommand.previous.disabled) {
     assert result.returncode == 0, result.stderr
 
     css = css_paths[0].read_text(encoding="utf-8")
-    assert '--tv-palette-menu-disabled-fg: #555555;' in css
-    assert '--tv-menu-disabled: var(--tv-palette-menu-disabled-fg);' in css
-    assert '.tv-menu-popup-item[aria-disabled="true"]' in css
+    assert '--tv-menu-disabled' not in css
+    assert ':is(.tv-menu-item, .tv-menu-popup-item)[aria-disabled="true"]' in css

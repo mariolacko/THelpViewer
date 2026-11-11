@@ -3,6 +3,11 @@
 This document describes the current public object model and module layout.
 Implementation history and user-visible changes are recorded in `CHANGELOG.md`.
 
+The stable 2.1.2 backport uses these shared views in both the bundle viewer and
+generated HTML pages. MIDI remains a directly registered `TVMidiPlayerDialog`
+with the 2.1 server API. Application discovery, module backends and the 3.0 disk
+storage migration are outside this stable version.
+
 THelpViewer uses a modular JavaScript framework inspired by Borland's TurboVision TUI toolkit. The runtime assets are served from `www/assets/`:
 
 | File | Purpose |
@@ -42,28 +47,119 @@ Core widget hierarchy and infrastructure.
   directly.
   `setHelpCtx()` and `getHelpCtx()` attach or resolve a Turbo Vision-style
   context identifier.
+  `getState(mask)` is a read-only query requiring every bit in the numeric
+  mask, following
+  [TView::getState](https://github.com/magiblot/tvision/blob/master/source/tvision/tview.cpp).
+  For example, `getState(sfSelected | sfFocused)` succeeds only when both
+  flags are set; visibility alone does not satisfy `sfVisible | sfDisabled`.
+  The empty mask `0` is always satisfied, even when the view has no state bits.
+  A query for any one of several states must instead use an explicit bit test
+  such as `(view.state & (sfSelected | sfFocused)) !== 0`. Single-flag queries
+  keep the same meaning in windows, controls and dialogs.
+  `focus()` checks availability throughout the owner chain and records the
+  owned current/selected/focused path only if native focus succeeds. Editor,
+  list and cluster variants use their actual inner focus target. Reentrant
+  selection/focus callbacks supersede the previous request; an unfocused bound
+  button cannot reclaim the temporary default role after a callback redirect.
+  `select()` requires a currently owned child with `ofSelectable`, following
+  [TView::select](https://github.com/magiblot/tvision/blob/master/source/tvision/tview.cpp).
+  An unowned, removed or nonselectable view is left unchanged. Normal Select
+  delegates to its owner's SetCurrent without changing drawing order. With
+  `ofTopSelect`, it first uses MakeFirst; an ordinary group then selects the
+  still-owned visible target if no newer selection/focus superseded the request.
+  Selection is finalized by the owner, with no unconditional sfSelected write
+  afterward, so callbacks can select another child or remove/transfer the target.
+  In control groups this is programmatic model selection, separate from Focus:
+  it does not call native focus, select input text or claim an unfocused button's
+  temporary default role. Availability checks for native input remain separate;
+  normal programmatic SetCurrent still accepts hidden/disabled children.
+  Desktop-owned managed windows use the existing manager's active-target policy.
+  With `ofTopSelect` cleared they activate without reordering the stack; with it
+  set they raise and activate. Closed/disabled windows and attempts to leave an
+  active modal are blocked. Repeated selection preserves the active input's
+  selection/direction. The standalone host retains its foreground/background
+  policy. Explicit Focus remains the operation for moving editing focus.
+  `makeFirst()` raises an owned view to the front. `putInFrontOf(target)` places
+  it immediately above a sibling; null/omitted target sends it to the back.
+  These use the visual-order semantics of
+  [TView::putInFrontOf](https://github.com/magiblot/tvision/blob/master/source/tvision/tview.cpp),
+  without transferring ownership. Self, foreign, removed and unowned targets
+  are no-ops. Ordinary control groups retain their current/selected/focused
+  path rather than focusing another control as a side effect of reordering.
+  `nextView()` / `prevView()` return the immediate sibling in the owner's
+  current child-array order, following the boundary behavior of
+  [TView sibling navigation](https://github.com/magiblot/tvision/blob/master/source/tvision/tview.cpp).
+  The last child's NextView and first child's PrevView return null; so do both
+  queries on a sole, unowned or removed child. These read-only queries include
+  hidden/disabled siblings, do not descend into nested groups, and do not
+  change current/focused/selected state. Insert, Remove, explicit transfer and
+  reordering are reflected immediately. Tab navigation is separate: the group's
+  FindNext/FocusNext/SelectNext still wrap among eligible focus targets.
+- **TVCommandSet** — Shared command availability, with `has(command)`,
+  `enableCmd(command)`, `disableCmd(command)` and `isEmpty()` following
+  [TCommandSet / TView](https://github.com/magiblot/tvision/blob/master/source/tvision/tview.cpp).
+  `new TVCommandSet()` is empty; an iterable supplies enabled commands and
+  `new TVCommandSet(other)` copies a snapshot. `TVView.getCommands()` returns
+  an independent TVCommandSet, not a list restricted to `TV_COMMANDS`.
+  `setCommands(set)` replaces the complete global set; `enableCommands()` and
+  `disableCommands()` union/subtract a TVCommandSet or explicit command values.
+  SetCommands copies its input; later edits cannot mutate live availability.
+  The browser extension supports numeric and string command identities without
+  the reference implementation's 256-command limit. Initially all commands
+  are available, including command names; snapshots preserve that
+  default and exceptions without enumerating every possible command.
+  Real changes synchronously send `cmCommandSetChanged = 52` as evBroadcast
+  through the existing owned-group traversal; unlike the DOS idle loop, this
+  occurs within the browser call. Bound standalone command views also receive
+  it and unsubscribe on detach. Unchanged sets do not broadcast. Reentrant
+  changes queue another traversal; receivers always read the current set.
+  Buttons combine global availability with local `sfDisabled`; menu/status
+  items combine it with their explicit disabled flag. Enabling a command never
+  clears local validation restrictions. Repaint keeps roots/captions and menu
+  geometry intact; unavailable temporary defaults release their claims.
+  Mouse, mnemonics, default/native Enter, Space, Press, menu/status shortcuts
+  and clipboard events check availability. Raw application-sent TVEvents and
+  programmatic editing APIs retain their explicit model/update behavior.
 - **TVRect** — Character-cell bounds used by windows and dialogs. It mirrors
   Turbo Vision's `(x1, y1, x2, y2)` rectangle convention.
 - **TVStaticText** — `constructor(bounds, text)`. `getText()`, `setText()` and
-  `draw()` mirror the basic `TStaticText` contract.
+  `draw()` mirror the basic `TStaticText` contract. Repeating unchanged plain
+  text retains its text node; a different value still replaces foreign markup
+  and applies or clears the DOS centering control. Initial drawing honors
+  `sfVisible` even when the view was hidden before mounting. A positive width
+  and height clip drawing to the character rectangle. ChangeBounds updates
+  that rule on the existing root, including when switching to or from a
+  natural zero-extent text surface; it does not discard the full text value.
 - **TVImage** — `constructor(bounds)`, `setImage(src, alt)`. A shared bounded
   view for optional bitmap art; bounds still use `TVRect` character cells.
   The MIDI Player uses it for source-provided game/soundtrack cover images.
+  Binding owns the native image's load/error handlers. `drawView()` reuses the
+  mounted root/image and only assigns `src` when it changes; resizing does not
+  restart a transfer or discard decoding. Readiness is derived from the native
+  image's completion, decoded size and current source, so stale events cannot
+  hide a newer ready image. The placeholder shows Loading while reading and
+  No cover for absent/failed art. `destroy()`/detach remove handlers and cached
+  DOM references while retaining model data for a later binding. The frame is
+  included in the declared view size. The primitive places the bitmap inside
+  that frame and gives the fallback caption a centered, clipped character
+  rectangle. CSS does not divide the view into grid tracks or repeat image
+  percentage/minimum sizes. Native `object-fit: contain` retains the original
+  image proportions; CSS retains the frame, font and clipping paint rules.
+  Its default `getPalette()` is DOS attribute `0x07` (gray on black), drawn by
+  TVView rather than a second pair of fixed CSS colors.
+  `changeBounds()` and visibility changes update the same mounted parts. A
+  native resize observer handles font changes, attachment and revealing a
+  hidden owner before painting; rebinding/detaching disconnects the previous
+  observer and stale callbacks cannot redraw another root.
 - **TVTextScreen** — `constructor(bounds)`, `setData(screen)`, `getData()` and
   `dataSize()`. A shared native character-cell view, not a bitmap-image
   wrapper. Data contains `cols`, `rows`, flat `[glyph, fg, bg]` cells,
-  an optional bitmap font (`width`, `height`, decoded `Uint8Array data`), resolved
+  a bitmap font (`width`, `height`, decoded `Uint8Array data`), resolved
   indexed `palette`, optional literal `text` rows and an explicit boolean
   `blink` mask (one flag per cell). `draw()` owns its
-  canvas markup for bitmap fonts; `bindRoot()` paints glyph bits with palette
-  colors. Without a font, it draws CP437 DOM character cells in the shared VGA
-  font and updates only changed cells. A live source may supply boolean
-  `blinkVisible` and `cursor` (`index`, `visible`, `start`/`end` as percentages
-  of the cell height); its hardware phase replaces the view's animation timer.
-  Backgrounds use a display-sized grid, separate from scaled glyphs, so
-  fractional zoom cannot introduce black seams between adjacent colors.
-  Individual glyph edges are snapped to the font's pixel grid on layout changes,
-  preserving continuous single/double box lines at fractional scales/high DPI.
+  canvas markup; `bindRoot()` paints glyph bits and backgrounds with palette
+  colors in a single bitmap, without per-character DOM elements. DOS Prompt
+  uses DOSBox's own canvas output instead of this UHF resource view.
   UHF supplies Base64 font resources and palette references, decoded by
   the HELP adapter. HELP owns row views explicitly, releases their roots on
   navigation and uses the existing `TVWindow`/scrollbars. Pixel scaling
@@ -73,47 +169,199 @@ Core widget hierarchy and infrastructure.
   view stops timers and removes preference listeners. Packed DOS bit-7 modes
   are interpreted by the HELP adapter, not guessed by this shared view.
 - **TVLabel** — `constructor(bounds, text, link)`. The third argument is the
-  target `TVInputLine` object; the browser renderer creates any native id/for
+  target TVView (input line, list or cluster); shared drawing creates any native id/for
   pair internally. As in DOS Navigator's `TLabel`, `~F~` marks a mnemonic:
   Alt+F focuses the linked view through the owner event chain; clicking the
-  label also focuses it.
+  label also focuses it. A label and its linked view must both be visible and
+  enabled throughout their owner chains; a disabled label cancels native
+  label/input activation too. Caption updates retain the label root and unchanged
+  mnemonic spans; relinking updates the native association. Changing between
+  linked and unlinked labels requires the native label/span kind to change.
+  Labels share StaticText's bounds-based clipping, preventing long captions
+  from painting across the next field without losing their full mnemonic text.
+  Numeric palette slots map to cpAppColor 38/39/40 for normal, linked-focus and
+  mnemonic colors. `light` follows focus within the linked view, including its
+  list/cluster children, through a native focus bridge in the owning group.
+  The link need not be a DOM child of the label. Shared palette painting retains
+  input selections and unchanged mnemonic spans through live color edits;
+  detaching the label releases the focus bridge and palette subscription.
 - **TVInputLine** — `constructor(bounds, maxLen)`, plus `getData()`,
   `setData()`, `setValidator()` and disabled-state handling. It accepts no DOM
-  id, attributes, class or style. `TVPXPictureValidator` implements the fixed
+  id, attributes, class or style. Its numeric `getPalette()` maps normal
+  paint to cpAppColor 50 through TVView; live palette edits retain the root,
+  native text, selection/direction, horizontal offset and undo history.
+  CSS retains the native selection colors from cpAppColor 51 and the input
+  reset/insets. Uninitialized browser palette values use TV2 defaults.
+  `TVPXPictureValidator` implements the fixed
   `!` (uppercase character) and literal-separator subset of Turbo Vision's
   picture validator; registration tokens use five groups of five characters.
   `TVFilterValidator(validChars)` follows the original character-filter API
   (`isValidInput`, `isValid`); Users uses digits only. Invalid native edits are
-  rejected through the shared `TVInputLine.handleEvent`, restoring the prior
-  text, while an empty capacity inherits the default. InputLine subscribes to
-  `evBroadcast` so validators run while typing/pasting.
-  and `TVEmailValidator(allowEmpty = false, allowUsername = false)` uses the same `isValidInput`/`isValid`
+  rejected through the shared `TVInputLine.handleEvent`, while an empty
+  capacity inherits the default. The input's native `beforeinput` bridge uses
+  `TVEvent` to capture text, selection/direction and horizontal offset before
+  an edit. Predictable invalid insertions are cancelled before mutation,
+  preserving native Undo; other invalid edits restore that snapshot. Without
+  a preceding `beforeinput`, validation restores the cached buffer and clamps
+  the available selection. Rejected edits and helper `beforeinput` broadcasts
+  do not notify the owning dialog; accepted `input` reaches it once.
+  Formatting and `setValidator()` map selection endpoints through formatted
+  prefixes rather than moving the cursor to the end. Native edits use the
+  same length limit as `setData()`. Disabled/read-only views reject editing
+  broadcasts; hidden/disabled owners also reject native edits and restore the
+  accepted buffer after a late input event. Programmatic `setData()` remains
+  available. Ignore foreign or
+  stale native input targets. InputLine subscribes to `evBroadcast` so
+  validators run while typing/pasting.
+  `TVEmailValidator(allowEmpty = false, allowUsername = false)` uses the same `isValidInput`/`isValid`
   contract for email syntax. Account, Users, Add User, Registration and Login use the latter;
   only Users allows a blank address for a legacy account. No HTML email validator
   or per-dialog native input handler is added. Login enables `allowUsername` to
   retain existing Unicode-letter/digit and dot/underscore/dash account names.
+  `drawView()` updates the mounted input in place, preserving native editing
+  history, focus, selection/direction, read-only state and horizontal offset.
+  Repeating `setData()` with the current value does not assign the native value.
+  `bindRoot()` applies a prepared buffer, secret/disabled/visible state, length
+  limit and browser input attributes; rebinding the same root is a no-op. Detach
+  captures the current native buffer, and a new binding restores it. Serialization
+  also uses the current buffer, so owner redraw does not revert unbroadcast edits.
+  `destroy()` detaches the clipboard/key/beforeinput bridge and root reference; it does not
+  erase the buffer. Dialog close handlers clear secret values explicitly.
 - **TVGroup** — `constructor(bounds)`. Children are added with `insert()` or
-  `insertAll()`; only `TVView` instances are accepted. `setCurrent(child)`
+  `insertAll()`; only unowned `TVView` instances are accepted. Each insertion
+  validates ownership before changing the tree, following the ownership guard
+  in [TGroup::insertBefore](https://github.com/magiblot/tvision/blob/master/source/tvision/tgroup.cpp).
+  Duplicate insertion, inserting a foreign-owned view and self/ancestor cycles
+  throw JavaScript errors. Transfer a view by removing it from its old group
+  first. `insertBefore(child, target)` requires a target currently owned by this
+  group; null/omitted target appends. A foreign target never silently appends.
+  Validation applies to each insert; InsertAll is a sequence of inserts.
+  `remove(child)` releases selection/focus while the old owner still receives
+  notifications, then finalizes ownership in a finally block. Callback errors
+  propagate without leaving a removed view falsely owned; newer current-child
+  decisions survive. It does not destroy the view or erase its native buffer.
+  Reordering is a separate in-place operation, not Remove/Insert. The forward
+  child array paints back to front, so raising appends and placing above a
+  sibling inserts after it; `first()` still returns the first array entry.
+  Mounted sibling roots follow that order without redrawing/rebinding controls.
+  The browser bridge uses state-preserving MoveBefore where available; otherwise
+  it moves peers around the focused subtree to avoid blur/default-button
+  release. Both paths restore text selection endpoints, since retaining focus
+  alone does not retain an editor's selection. Native input selection/direction,
+  values and the ability to type survive. Roots in different native drawing
+  parents are not moved between drawing contexts.
+  The application-level TVProgram screen-slot refresh stays idempotent; a new
+  menu/status/desktop replacement is validated before the old slot is removed.
+  `setCurrent(child)`
   makes `getHelpCtx()` inherit from the current child,
   matching the relevant part of `TGroup::getHelpCtx()`.
+  The group updates `current` before releasing the old child's selected/focused
+  state, preserving a newer selection made by that child's callbacks. Removing
+  the current child clears its state and the old inherited help context.
+  `setState(mask, enable)` follows the separate propagation categories in
+  [TGroup::setState](https://github.com/magiblot/tvision/blob/master/source/tvision/tgroup.cpp):
+  `sfActive`/`sfDragging` reach descendants, `sfFocused` follows the current
+  child, and `sfExposed` reaches visible children. These passes are independent
+  for combined masks. Our combined-mask support forwards only each category's
+  relevant bits: owner visibility, disabled state, selection, modal/cursor and
+  shadow flags do not overwrite a child's local flags. Hidden groups block
+  exposure below them while still receiving activity/dragging updates.
+  Each recipient pass takes a snapshot and rechecks ownership. A callback
+  removing/reparenting a view does not skip a surviving recipient or mutate a
+  foreign view. Before delivery, the group rechecks each pending bit against
+  its live state; a nested state change supersedes stale delivery while an
+  unrelated pending bit can still propagate. Focus uses the live current
+  child and never selects or focuses every peer in the group.
+  One shared native focus bridge on the outer bound group tracks actual
+  owned controls through nested groups. Native Tab/click and explicit focus
+  therefore agree on `current`, `sfSelected` and `sfFocused`. It stops before
+  Desktop/Program selection, which remains the window manager's responsibility;
+  DOM nesting alone does not make a view an owned child. Leaving the group
+  clears focused state while retaining its remembered current/selected path.
+  Focusing a group/frame itself clears the remembered child's focused state.
+  Rebinding/detach removes the previous capture listeners and DOM aliases.
+  `handleEvent()` resolves Alt mnemonics among its owned labels and buttons,
+  skipping controls in hidden/disabled groups. Nested groups get the first
+  opportunity through the owner chain. Desktop and Program do not recursively
+  search other windows for a matching mnemonic. Already prevented keys and
+  Ctrl/Meta combinations are left alone.
+  `findNext(forwards = true)` returns the next eligible view without changing
+  selection; `focusNext()` / `selectNext()` focus it and wrap at either end.
+  With no current eligible child, forward starts at the first and backward at
+  the last. Traversal follows owned child order, flattening non-focusable
+  layout groups; a focusable group is one entry and nested windows are separate
+  scopes. Hidden/disabled owners, cleared `ofSelectable` and unavailable native
+  focus targets are skipped. A target's negative tabindex, hidden/disabled state
+  or detached DOM root excludes it, while read-only fields remain eligible.
+  Controls own the minimal native target lookup: lists use their selected/first
+  row, editors their text surface, and clusters their current enabled choice.
+  No group-wide HTML selector determines order. An empty candidate set leaves
+  programmatic selection and focus intact; a window's Tab handler instead keeps
+  focus on its frame. Newer callback focus wins over a pending FocusNext.
+  `broadcast(command, infoPtr = null, infoLong = 0)` notifies subscribed
+  descendants and then the addressed group through one shared traversal.
+  Child event masks apply to their branch; recipients removed during delivery
+  are skipped. Each recipient receives its own TVEvent, so consumption leaves
+  other subscriptions intact. Native event identity is preserved when a button
+  initiates fanout. Upward input notifications retain their existing owner
+  route, keeping validation and parent callbacks single-delivery.
 - **TVListViewer** — `constructor(bounds, numCols)`. Items and selection are
-  supplied through `setItems()`/`select()`; its DOM root is attached later
-  through `bindRoot()`.
+  supplied through `setItems()`/`focusItem()`; its DOM root is attached later
+  through `bindRoot()`. Inherited `select()` selects the view in its owner;
+  it does not change a row/cell or emit an item notification. The same contract
+  applies to ListBox, GridView and Outline. `focusItem(index, {scroll = true})`
+  updates the current item, roving tab entry, drawing and optional scrolling
+  without taking browser focus or notifying item handlers, following
+  [TListViewer::focusItem](https://github.com/magiblot/tvision/blob/master/source/tvision/tlstview.cpp).
+  `focusItem(-1)` clears the current row, including token/result lists.
+  `focusItemNum(index)` clamps an integer to the nonempty list range; empty
+  ranges and noninteger requests are ignored. `focus()` / `focusSelectedItem()`
+  explicitly move native focus. Pointer/key handlers perform both steps when
+  needed. `selectItem(index)` retains the explicit owner-notification contract;
+  model updates remain possible without triggering that handler.
 - **TVListBox** — Interactive selectable list. `setItems(items, index)`,
-  `select(index)`, `bind({onSelect, onActivate})`; click selects and
+  `focusItem(index)`, `bind({onSelect, onActivate})`; click selects and
   double-click/Enter activates. It owns the shared scrollbar integration,
   row rendering and palette, roving tab focus,
   pointer-coordinate row selection, Arrow, Home/End and Page Up/Down keyboard
   navigation. `TVListViewer.handleEvent()` processes the browser bridge's
   `TVEvent` for these actions; `TVListBox` supplies its viewport-specific
-  pointer and page movement without a second set of DOM handlers. Visibility
+  pointer selection and scrollbar integration without a second set of DOM
+  handlers. Shared TVListViewer owns column/page movement. Visibility
+  and disabled state throughout the owner chain gate native selection, focus,
+  selection callbacks, wheel and scrollbar input. Programmatic `setItems()`
+  and `focusItem()` remain available while the group is unavailable. Visibility
   is measured against the real viewport rectangle, so
   focus changes cannot introduce an offset between a drawn and clicked row.
   While its dialog is inactive, the scrollbar keeps its Turbo Vision palette
   but ignores input. Browser item classes, data hooks and row markup are
   private to concrete list subclasses, not caller-set `TVListBox` options.
-  When a view owns an `hScrollBar`, an overlong row reveals the shared bottom
-  scrollbar and can be moved horizontally; short rows leave it hidden.
+  With one list column, an overlong row reveals a declared bottom scrollbar;
+  short rows leave it hidden. Shared drawing gives each item explicit
+  character bounds rather than CSS grid tracks. `_itemHeight()` is one row
+  by default; a specialised list may draw a taller logical item through
+  `_layoutItem()`, and paging/`topItem` use the same item height. Long plain
+  text and icons are measured in the current font and rounded up to whole
+  columns for horizontal scrolling; hidden zero-width measurements are not
+  cached. Unbounded outlines keep rows in natural document flow so the HELP
+  window supplies scrolling. Bounded rows place the existing text span in a
+  TVRect with one-column side insets, shrinking those insets on rows narrower
+  than two columns. They do not use CSS padding or percentage text widths.
+  Rows marked as document flow retain native block text and its side padding,
+  allowing an unbounded HELP outline to grow with its owner without caching
+  a fixed text width. Switching between bounded and document layout clears
+  stale text rectangles and retains the mounted row/text and focused choice.
+  With `numCols > 1`, TVListViewer lays items out
+  down each column in character-cell rectangles, derives rows from the actual
+  client height and places subsequent columns horizontally. Column stride is
+  `floor(clientColumns / numCols) + 1`, following
+  [the reference TListViewer](https://github.com/magiblot/tvision/blob/master/source/tvision/tlstview.cpp).
+  The final column is clipped to the page width rather than producing an empty
+  extra scroll step. Up/Down move one item, Left/Right one column, and Page
+  Up/Down one full page. Native scrolling updates `topItem`. Bounds, item changes
+  and showing a hidden list update geometry through the existing scrollbar
+  observer, retaining mounted items and focus. Multi-column TVListBox creates a
+  persistent shared horizontal bar; there is no separate file-list scroll code.
   Plain list items may supply `icon` alongside `label`; the shared row drawing
   reserves three character cells so emoji and single-cell symbols align.
   MIDI rows reuse the same normal, selected and focused palette as other lists;
@@ -123,7 +371,25 @@ Core widget hierarchy and infrastructure.
 - **TVGridView** — Read-only two-dimensional `TVListBox` subclass.
   `TVGridView(bounds, columns, hScrollBar, vScrollBar)` takes column titles and
   optional character widths; `setRows()` accepts arrays of cell values.
+  Widths are whole character cells (default 12, minimum 3, maximum 200).
+  Shared drawing calculates cumulative `TVRect` column bounds, one-row-high
+  data rows and the scrollable content extent. Rows and headers fill at least
+  the viewport width; they do not use CSS grid tracks or list-row sizing.
+  Each column contains a text rectangle inset by one character on either side;
+  the same drawing path is used for titles and values. Cell geometry and inset
+  text bounds come from the declared column width, not CSS padding or minimum
+  sizes. Native overflow/ellipsis paint clips long values to that rectangle.
+  The outer cell retains the full-column selection palette and hit target;
+  clicks on its text resolve to the same cell. Raw values and GetText remain
+  unchanged, including escaped punctuation and Unicode.
+  Resizing reuses mounted rows, cells, headers and shared scrollbar controls.
   Headers are visible by default and `setHeadersVisible()` toggles them.
+  The header stays pinned vertically and scrolls horizontally with its columns.
+  Keyboard selection is revealed below the header; Page Up/Page Down count
+  only visible data rows. Hiding the header releases its row, and an empty grid
+  with hidden headers has no horizontal content to scroll.
+  Table columns belong to `columns`; the inherited list has one logical column
+  of rows, so it does not enter the multi-column list layout.
   Click or Left/Right/Up/Down selects a cell, while the inherited shared
   scrollbars move the viewport in both directions. Grid Viewer in the system
   menu exercises the control; cells are not edited in this first version.
@@ -132,6 +398,9 @@ Core widget hierarchy and infrastructure.
   navigation in `handleEvent()`. HELP Contents and Change Directory both use it.
 - **TVScroller** — `TVScroller(bounds, hScrollBar, vScrollBar)` keeps the
   original scroller/scrollbar ownership split and exposes `delta` and `limit`.
+  Its native viewport receives its full extent without scrollbars, or the
+  shared adapter reserves the declared axes. `changeBounds()` updates those
+  rectangles in place; `destroy()` detaches the adapter and its root.
 - **TVMenu** / **TVMenuItem** — Source-shaped menu and command records. A
   `TVMenu` owns the head of a linked `TVMenuItem.next` list plus `deflt`;
   neither object exposes browser markup options. `NewItem()`, `NewMenu()`,
@@ -147,37 +416,111 @@ Core widget hierarchy and infrastructure.
   `~mnemonic~` text is translated only while drawing.
 - **TVMenuBar** — Shared top-level `TVMenuView`; generated pages and the bundle
   application now compose the same object tree instead of assembling menu
-  HTML.
+  HTML. `getItemRect()` exposes each visible item's character bounds. The view
+  measures rendered label/shortcut widths, places labels in shared drawing
+  parts and recalculates layout after resize, font readiness and label changes.
+  Repainting refreshes cached cell metrics so responsive font-size changes keep
+  the groups aligned. A bound scroll listener repositions open popups when the
+  command strip moves and detaches on unbind.
 - **TVMenuBox** — `TVMenuView` popup subclass constructed from bounds, a
-  `TVMenu` and an optional parent menu.
+  `TVMenu` and an optional parent menu. Menu views retain their child boxes;
+  binding shares the parent's item references instead of redrawing each
+  descendant again. The box measures rendered labels (including Unicode),
+  assigns character bounds to frame/segments/items and exposes `getItemRect()`
+  for the item's logical row including separator rows. The shared scrollbar
+  occupies the column just inside the right frame only when rows overflow.
+  Open menus fit the viewport and nested menus can flip left. Resizing keeps
+  the selected item visible; label updates retain mounted item controls.
+  Replacing or unbinding a menu releases old scrollbar observers/listeners.
 - **TVMenuController** — Browser boundary only: translates DOM click, hover
-  and key events into `TVEvent` for the bound menu view. Status-line commands
-  retain their separate command bridge.
+  and key events into `TVEvent` for the bound menu/status views, then forwards
+  their selected commands to the program.
 - **TVStatusLine** / **TVStatusItem** — Shared status-line command views.
+  Captions are plain text with `~mnemonic~` markers, escaped and drawn by the
+  status line; callers do not supply HTML. `getItemRect()` exposes each item's
+  character bounds. `handleEvent()` selects a command for `evMouseDown` or
+  `evKeyDown` and changes that event to `evCommand`, retaining its native event
+  and setting `infoPtr` to the selected `TVStatusItem`. `dispatchEvent()` then
+  follows the normal owner chain; the browser adapter forwards the same event
+  to its command target. Keyboard activation reveals clipped commands.
+  Binding maps native controls to their records. Activation checks current
+  `items`/`rightItems`, item disabled state and sfVisible/sfDisabled before
+  selecting an action, including between a context/state update and redraw.
+  Hidden/disabled lines leave unhandled keys available to other views but
+  consume clicks on their stale controls. Enabled links keep native navigation.
+  The browser bridge accepts only controls belonging to the bound line. Unbinding
+  releases its resize listener and owned hint/separator roots.
   The bundle application supplies Previous/Next items from the active HELP
   topic's `nav.Prev`/`nav.Next` targets; `TVEvent` resolves the real UHF target
   through the same window manager as inline links. No guessed page IDs or
   format-specific DOM handlers are used.
+- **TVStatusLink** — Browser-specific `TVStatusItem` record constructed as
+  `TVStatusLink(text, url, newWindow = false)`. The status line draws a native
+  anchor, retaining ordinary browser navigation and modifier-key behavior;
+  optional new-window links use `noopener`. Disabled links cannot navigate.
+  This keeps href handling inside shared drawing code instead of shell HTML.
 - **TVCheckBoxes** — Native checkbox group rendered with DOS `[ ]` / `[X]`
   marks; supports click, Space, focus and disabled state. Arrow/Home/End and
   Page Up/Down move focus without toggling. Optional shared `hScrollBar` and
   `vScrollBar` properties provide a framed scrolling cluster and wheel input;
   `setItems()` replaces its option model without rediscovering child inputs.
+  `TVCluster.strings` holds the choice records; inherited `options` remains
+  numeric TVView flags, including `ofSelectable`, rather than the choice array.
   Labels are plain text with optional mnemonic markup; DOS package names use
   ordinary space padding before their language flags, not a separate column
   control or styling. All cluster variants
   retain `sfVisible` when drawn again, not only when state changes on a bound root.
+  Native click/key/change and direct Press/Cycle refuse hidden/disabled owner
+  groups too. A rejected native change restores marks from the model; ancestor
+  state does not overwrite individual masks or values. SetData and model cursor
+  updates remain available, and reenabling the owner restores interaction.
+  TVCluster binds its own native click/input/change/keydown bridge and sends
+  TVEvents from the cluster through its owner chain. Checkbox/radio change
+  events update the model before notifying owners; multi-state click and
+  Space/Enter use the existing Press/Cycle handler. This works in ordinary
+  TVWindow hosts as well as dialogs. TVDialog skips redispatching cluster
+  events, while retaining default Enter when a radio leaves it unhandled.
+  Same-root binding is idempotent; detach/destroy removes the native bridge,
+  focus handlers and scrollbar bindings.
 - **TVRadioButtons** — Native mutually exclusive radio group rendered with DOS
-  `( )` / `(·)` marks. The renderer generates the native browser group name;
-  it is not part of the public constructor.
+  `( )` / `(•)` marks. The renderer generates the native browser group name;
+  it is not part of the public constructor. Tab enters at the selected enabled
+  choice; native arrows update exclusive selection and the group's Tab entry.
 - **TVMultiCheckBoxes** — `TVCluster` subclass with configurable three-state
   DOS marks, keyboard-focusable buttons, disabled state and `aria-checked`.
-- **TVTerminal** — Bounded append-only line buffer. `append(text)`, `clear()`
-  and `bind(root)` update a fixed set of framed terminal rows. `appendChunk()`
-  retains incomplete trailing lines when process output arrives in pieces.
-  Its `TVRect`
-  width includes both `TVInfoBox` side characters, so the right border cannot
-  be painted outside and clipped by the owning view.
+  Uses the same bounded rows and optional shared scrollbars as other clusters.
+  `setButtonState(mask, enable)` updates native disabled state and palette
+  without changing the stored multi-check values. Shared cluster navigation
+  and one Tab entry match checkbox groups; Space/Enter call Press once.
+  Its positional constructor is
+  `TVMultiCheckBoxes(bounds, options, selRange = 3, flags = cfTwoBits, states = " X?")`,
+  following the [reference TMultiCheckBoxes](https://github.com/magiblot/tvision/blob/master/source/tvision/tmulchkb.cpp).
+  `cfOneBit = 0x0101`, `cfTwoBits = 0x0203`, `cfFourBits = 0x040f` and
+  `cfEightBits = 0x08ff` select the state mask and per-item stride.
+  `multiMark(i)` reads `(value >> (stride * i)) & mask`; `mark(i)` tests whether
+  that state is nonzero. Press advances only that field modulo `selRange`.
+  GetData, SetData and rendering use the same packed record. A three-state,
+  two-bit group with states 1 and 2 has value 9; SetData(5) displays 1 and 1.
+  Options may supply `state` for initialization/SetItems, but the view consumes
+  it rather than retaining a second live state property. Widget Gallery uses
+  multiMark for its Event log. SetData preserves unused record bits and rejects
+  negative, unsafe or out-of-range data and invalid per-item states before
+  changing anything; invalid SetItems also leaves the previous model intact.
+  Records use unsigned 32-bit Number values by default. As a browser extension,
+  collections exceeding 32 packed bits use BigInt, independently of the
+  per-option enable mask.
+- **TVTerminal** — `TVTerminal(bounds, maxLines)` is a bounded append-only line
+  buffer. `append(text)` adds complete lines and `appendChunk(text)` retains an
+  incomplete final line, normalizing CR/LF even when a CRLF pair arrives in two
+  calls. `clear()` forgets complete/partial lines and pending CR state. Shared
+  `bindRoot()`/owned-view resolution restores buffered text on mount or redraw;
+  there is no separate `bind()` API. The current extent supplies the row count
+  and width. `changeBounds()` retains the root/common row nodes, adds/removes
+  rows as needed, and renders from full buffered text rather than earlier clipped
+  output. Each row occupies an explicit one-row character rectangle; unchanged
+  row contents are retained and CSS supplies no flex flow or row height.
+  Its width includes both `TVInfoBox` side characters, keeping the right border
+  inside the view. Assign growMode to resize it with an owning information box.
 - **TVEditor** and **TVIndicator** — `TVEditor(bounds, hScrollBar, vScrollBar,
   indicator, bufSize)` defaults to a read-only document control with selection,
   `find()`, `findNext()`, cursor position reporting and explicit lifecycle.
@@ -188,14 +531,47 @@ Core widget hierarchy and infrastructure.
   retain their editor, and HELP windows retain a Find editor only after their
   first search; both are destroyed with their owning `TVWindow`.
   `setReadOnly(false)` enables plain-text editing; HELP and Docs do not use it.
+  Editable surfaces reject beforeinput in unavailable owner groups and restore
+  their accepted text after a late input event. Programmatic SetData remains
+  available. The shared link-event bridge rejects unavailable-view clicks.
+  A bounded editor with declared scrollbars uses the shared TVScrollBar client
+  layout; horizontal/vertical bars reserve one row/column and remain visible
+  with disabled input while text fits. ChangeBounds updates their bounds without
+  replacing the text surface or selection. With no scrollbars, the text surface
+  itself occupies the full view or binds to an external document viewport.
+  Native editors and their indicators use one fixed DOS attribute `0x1e`
+  (yellow on blue), shared with the document-window preset. TVView paints the
+  retained root and editing surface through `getPalette()`; CSS supplies no
+  duplicate editor colors. The source HELP Find adapter overrides this palette
+  with `null` so searching does not recolor the file's viewport.
+  The document window owns its separate indicator and detaches both views on
+  close, releasing native editing handlers and palette subscriptions.
 - **TVScrollBar** — `TVScrollBar(bounds, options)` is the sole scrollbar view;
-  `sbHorizontal`/`sbVertical` select its axis. It owns
+  `sbHorizontal`/`sbVertical` select its axis, stored separately from inherited
+  view `options`; orientation does not make the bar selectable. It owns
   the original value/range/page-step/arrow-step state and the corresponding
   `setParams()`, `setRange()`, `setStep()` and `setValue()` operations.
   Windows, menus and list viewers bind it to their rendered frame; no second
   scrolling implementation exists. Binding treats that frame as a browser
   host and does not replace its logical `_tvView`, so keyboard/command events
   continue through the owning list or scroller.
+  The view places both arrows, the track, its text cells and thumb through
+  shared character bounds, without CSS flex/grid tracks or minimum arrow sizes.
+  Normal arrows occupy one cell; bars shorter than two cells divide the
+  available space between clipped arrows. Tracks with no complete cell draw
+  neither a track glyph nor a thumb. Fractional outer extents remain contained.
+  Activation refreshes geometry immediately after a hidden dialog becomes
+  visible; native viewport scrolling and resize observation keep it current.
+  Moving/resizing the thumb retains its mounted text and palette properties.
+  Track updates determine availability once from active state and scroll range.
+  Both arrows receive native `disabled`, matching tab stops and ARIA state;
+  inactive controls retain their palette and cannot start repeat. Disabled
+  arrow hit areas pass through to the owning window for activation. Cursor and
+  disabled pointer paint reuse the shared native-control rules in CSS.
+  Rebinding the same frame retains its client extent without duplicate input
+  listeners. Rebinding a different frame or destroying the adapter stops
+  repeating arrows/dragging, disconnects observers and removes old DOM aliases
+  and event bindings. CSS keeps native-scrollbar hiding and glyph painting.
 - **TVWindow** / **TVDesktop** — Bounds-first groups. `TVWindow` receives title
   and number; browser roots are attached with `bindRoot()` after construction.
 - **TVButton** — Dialog command button. Like Turbo Vision's `TButton`, it is
@@ -203,20 +579,87 @@ Core widget hierarchy and infrastructure.
   its title, command and `bfNormal`/`bfDefault`/`bfLeftJust`/
   `bfBroadcast` flags; `draw()`, `press()`,
   `makeDefault()` and `setState()` provide the basic control operations. It no
-  longer represents menus or status-line items and has no `buttonKind`. Its
-  shared minimum width is the original ten character cells; individual
-  dialogs express wider buttons through their `TVRect`. `press()` dispatches
-  its command through the owner chain; Enter on a dialog's default button does
-  not synthesize a browser click. Its base `_drawParts()` now draws only the
+  longer represents menus or status-line items and has no `buttonKind`.
+  `command` keeps its supplied numeric or string identity, matching `TVEvent`,
+  `TVMenuItem` and `TVStatusItem`. Standard constants such as `cmCopy` therefore
+  reach numeric command handlers, while application command strings stay
+  strings. Command `0` is inactive. Press, mouse, mnemonic/default activation,
+  native Space/Enter and `bfBroadcast` use this same model value; serialized
+  DOM attributes do not supply or convert the dispatched command.
+  The constructor's `bfDefault` declares the original default; `amDefault`
+  records the current role. As in the
+  [reference TButton](https://github.com/magiblot/tvision/blob/master/source/tvision/tbutton.cpp),
+  `makeDefault(enable)` temporarily changes a non-declared button's role,
+  preserving flags. Focus/blur enters `setState(sfFocused, ...)` and uses
+  `cmGrabDefault = 61` / `cmReleaseDefault = 62` to suppress/restore the declared
+  default. Layout groups share the nearest TVWindow's scope; embedded or
+  independent windows retain their own defaults. Unbound model groups use
+  their owning group scope. Availability changes and detach release a temporary
+  role, and a reenabled bound group follows actual browser focus.
+  The source updates its role before notifying subscribers; declared buttons
+  reconcile eligible temporary roles in their own scope, preserving newer
+  decisions made by callbacks. Default changes update palette/class state in
+  place, retaining composite controls such as History's owned icon views.
+  Its outer width/height come from `TVRect`, without a CSS minimum size;
+  callers reserve at least two rows for the raised face and bottom shadow.
+  `press()` dispatches
+  an ordinary command through the owner chain; Enter on a dialog's default button does
+  not synthesize a browser click. A bound button translates its own native
+  click into `TVEvent(evMouseDown)`, then `handleEvent()` changes it to its
+  command. Dialog delegation skips this already-routed click, so the same
+  button works once in both ordinary TVWindow and TVDialog owners.
+  Its base `_drawParts()` now draws only the
   generic dialog button; specialized faces belong to the concrete ASCII,
   calendar, color, MIDI, search-result and game controls.
-  `changeBounds()`/`locate()` recompute the bottom-shadow glyph row at the new
-  width, including an initially empty bound. This updates only the shared
-  button's shadow text, preserving its root, focus and pressed state.
+  `drawView()` and `changeBounds()`/`locate()` update the title and both shadows,
+  including an initially empty bound, without replacing the button/label roots
+  or losing focus and pressed state. `setTitle()` recalculates the caption too;
+  unchanged caption glyphs and shadow text nodes are retained. Redraw refreshes
+  owned command/accessibility attributes and removes obsolete attributes while
+  retaining palette state.
+  Drawing follows [TButton's cell algorithm](https://github.com/magiblot/tvision/blob/master/source/tvision/tbutton.cpp):
+  for width `w`, height `h` and title length `n` excluding mnemonic tildes,
+  the text starts at column `1 + max(1, trunc((w-n-2)/2))`, or column 2 for
+  `bfLeftJust`, and row `max(0, floor(h/2)-1)`. The raised face has a blank
+  shadow-background cell on the left and `▄`/`█` cells on the right; the final
+  row begins with two blanks followed by `▀` cells. Pressing shifts the face
+  right by one cell and hides the side/bottom shadows. Taller buttons grow the
+  face and side shadow. The view assigns explicit character rectangles to the
+  face, inset, caption and shadows. The inset is a real drawing part instead
+  of a CSS pseudo-element; no CSS grid tracks or pressed transform set their
+  geometry. Numeric palette slots 1–6 map to cpAppColor 41–46: normal,
+  default, selected, disabled, shortcut and shadow. Focused or pressed buttons
+  use the selected face; disabled state takes precedence. The mnemonic keeps
+  its shortcut foreground on that face's background, except when disabled.
+  Insets and both shadows use the shadow attribute; the outer root remains
+  transparent. `makeDefault()`, `drawState()`, state changes and live palette
+  edits repaint existing parts without replacing caption nodes or focus.
+  Flat subclasses retain their own palettes. CSS supplies clipping and native
+  control resets, without button palette aliases or state color selectors.
+  Calculator keys use this same drawing without a separate label-sizing rule.
+  The shared native-input boundary calls `drawState()` for left mouse presses
+  and Space/Enter on a focused button, leaving command delivery to the existing
+  `TVEvent` owner path. Matching release, pointer leave, focus/window blur,
+  disabling and detach clear the drawn state and temporary release listeners.
+  Rebinding/destruction remove old root references and pending press listeners.
+  With `bfBroadcast`, Press addresses its owner TVGroup with `evBroadcast`,
+  following the [reference TButton](https://github.com/magiblot/tvision/blob/master/source/tvision/tbutton.cpp).
+  The owner and its subscribed descendants receive the button as infoPtr;
+  delivery stays within that group. Mouse release, Alt, default Enter and
+  native Space/Enter use the same mode. An unowned broadcast button cannot
+  dispatch. Normal mode retains evCommand. Explicit programmatic group
+  broadcasts also reach hidden/disabled receivers; unavailable buttons refuse
+  user activation through the shared hierarchy checks.
+  Alt plus the `~marked~` title character calls `press()` through
+  `handleEvent()`, delivering one command with the button as `infoPtr`.
+  Buttons in hidden/disabled owner groups cannot activate by mouse, mnemonic
+  or direct `press()`; a matching enabled sibling remains eligible.
 - **TVEvent** — Turbo Vision-style event record with `what`, `command`,
   `infoPtr`, `infoLong` and the private browser-event bridge.
   `TVButton.handleEvent()`
-  changes `evMouseDown` into `evCommand`; `TVView.dispatchEvent()` propagates
+  changes ordinary `evMouseDown` into `evCommand`; broadcast buttons invoke
+  their owner group's notification traversal and consume the mouse event.
+  `TVView.dispatchEvent()` propagates
   the event through `owner` until `clearEvent()` changes it to `evNothing`.
 - **TVPercentGauge** / **TVBarGauge** — progress views modelled on DOS
   Navigator `GAUGE.PAS`. They receive `cmUpdateGauge`, `cmResetGauge` and
@@ -224,7 +667,12 @@ Core widget hierarchy and infrastructure.
   these commands through owned groups, so dialogs do not manipulate gauge DOM
   or duplicate progress rendering. `TVBarGauge` draws a fixed-width `░` track
   that fills with solid `█` cells, and is shared by global indexing, HELP
-  loading and MIDI playback.
+  loading and MIDI playback. Its cell count follows the current view width
+  through `changeBounds()` and owner growth. Both gauges update mounted text
+  and progress attributes in place, retaining focus, palette and input routing;
+  unchanged text is reused. Displayed values are bounded by zero and the finite
+  nonnegative maximum; an empty range or nonfinite current value displays zero.
+  Finite raw counters are retained so a later range change can use them.
 - **TVMenuItem** / **TVStatusItem** — Command descriptors drawn by
   `TVMenuView`/`TVMenuBox` and the status line, matching Turbo Vision's
   separation between `TButton`, `TMenuItem` and `TStatusItem`.
@@ -233,7 +681,8 @@ Core widget hierarchy and infrastructure.
   status line selects records through `findItems(helpCtx)`.
 - Original Turbo Vision calls the virtual `TStatusLine.Hint(HelpCtx)` after the
   visible status commands, but its base implementation returns an empty
-  string. DOS Navigator does not override it. THelpViewer's contextual sentence
+  string. Our `TVStatusLine.hint(helpCtx)` has that same empty default.
+  DOS Navigator does not override it. THelpViewer's contextual sentence
   in that space is therefore a deliberate application extension, not default
   Turbo Vision menu behaviour.
 - **TVMessageBox** — Modal Promise-based `TVDialog` composed from
@@ -280,29 +729,62 @@ clipboard never deletes the selection. Read-only HELP/Docs permit Copy but not
 Cut/Paste; application-level Copy also handles selected HELP text without creating
 an extra editor. Editable editors insert plain text, not clipboard HTML.
 
+With an active modal dialog, UI clipboard commands only target its owned
+controls, and application Copy only accepts a text selection contained in that
+dialog. A stale browser focus/selection in a background window cannot copy,
+cut or paste its contents; the shared bridge consumes that event and restores
+focus to the modal dialog. Without a modal, selected desktop HELP/Docs text
+remains available to application Copy. This policy applies to UI event dispatch;
+it does not change the control's direct editing API.
+
+InputLine and Editor clipboard methods also require a visible, enabled owner
+hierarchy before accessing the system clipboard. Cut/Paste recheck that
+hierarchy after asynchronous access, preserving the buffer if an owner was
+hidden or disabled in the meantime. Rejected native clipboard events are
+cancelled before export or editing; programmatic SetData is independent.
+
 `writeClipboardText()` / `readClipboardText()` are the shared browser bridge;
 token Copy buttons use the same writer. Browser clipboard access is subject to
 [secure-context, permission and user-activation rules](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API).
 Reads happen only after a user clipboard action. Clipboard text is never polled,
 persisted or sent to the server. Errors use `messageBox(owner, options)`, which
 inserts the existing `TVMessageBox` into the owning desktop and destroys it after
-the response. No separate clipboard renderer or per-dialog clipboard listener exists.
+the response. Clipboard dispatch and MessageBox share owner-based desktop
+resolution, including manager-bound HELP/Docs windows. No separate clipboard
+renderer or per-dialog clipboard listener exists.
 
 ### TVInfoBox
 
-Reusable framed info-box borders (used for game info panels).
+`TVInfoBox(bounds, title, children)` is a `TVGroup` for framed information panels,
+package descriptions and the gallery Event log. `topFrame` and `bottomFrame` are
+owned `TVStaticText` views. Body views receive explicit local `TVRect` bounds;
+the first and last rows belong to the frame. There is no implicit flex flow or
+separate CSS mode for positioned children. The same group owner/resolve/growth
+path handles inputs, lists and nested controls inside the box.
+
+`TVInfoRow` includes both border glyphs in its bounds, grows horizontally with
+the box and derives its inner text width from its owner. `updateRow(row, text)`
+clips plain text to that width. `updateRowHTML(row, html, visibleLength)` retains
+trusted styled content across drawing/resizing; callers supply content sized to
+the available inner width. Narrow titles are clipped instead of producing
+negative border padding. Resizing updates existing frame/row nodes, preserving
+focused input fields and list controls.
 
 Static methods:
 - `TVInfoBox.header(width, title)` → `"┌── Title ──┐"`
 - `TVInfoBox.footer(width)` → `"└───────────┘"`
 - `TVInfoBox.separator(width, title)` → `"├── Title ──┤"`
 - `TVInfoBox.rowHtml(width, content, borderClass)` → `"│ content    │"` (as HTML with styled border span)
-- `TVInfoBox.applyBorders(width, specs)` — Batch apply header/footer/separator to DOM elements.
 
 Header, footer and both row-side glyphs inherit the same current frame color.
-When an info box contains bounded children, its header and footer remain fixed
-to the first and last `TVRect` rows; positioned terminals therefore cannot
-remove the bottom border or push it directly below the title.
+The frame remains on the first and last `TVRect` rows; positioned terminals
+cannot remove the bottom border or push it directly below the title.
+
+The common `TVPackagesDialog` content group declares `gfGrowHiX | gfGrowHiY`.
+Its description box and rows use this same shared owner growth; the dialog does
+not apply its own second child delta or rebuild the description HTML. Width
+changes still repad DOS names/flags and rewrap descriptions. `TVCluster.drawView()`
+preserves the focused choice and scroll position when redrawing those labels.
 
 ### TVFrame, TVWindow & TVDialog
 
@@ -315,6 +797,17 @@ confirmation and progress use shared TVMessageBox/TVProgressDialog objects,
 with all commands handled through TVEvent and no dialog-specific HTML/CSS.
 
 - **TVFrame** — Generates dialog window markup (titlebar, body, footer, borders).
+  Dialog geometry is calculated in character bounds, without CSS grid tracks.
+  The titlebar/footer each occupy one row; the body fills the extent between
+  them, with one-column sides and a client width reduced by two columns.
+  Multiple owned sections use their TVRect high-Y extents, separated by exactly
+  one row. Any remaining body space extends the last client and its side borders.
+  The shared paint pass updates these bounds after owner growth and desktop
+  resize/load, using the rendered extent when the browser clamps the width.
+  No extra resize observer is installed. Frame parts retain their mounted nodes
+  and unchanged bounds are not rewritten, preserving control focus/selection.
+  The frame binds to its owner's drawing surface without replacing that
+  surface's logical TVView; destruction clears the binding.
   Its active frame uses the Turbo Vision 2.0 double-line glyphs; the passive
   frame uses single-line glyphs. An inactive dialog keeps its close control
   visible and clickable in passive colors; standard windows retain their
@@ -322,15 +815,47 @@ with all commands handled through TVEvent and no dialog-specific HTML/CSS.
   passive dialog icon is an intentional local
   exception to the original Turbo Vision 2.0 frame, which draws no icons in
   inactive windows. The close control
-  is overlaid at columns 2–4 and the title is centered over one continuous
-  frame line, matching `TFrame` rather than participating in the layout.
+  is overlaid at columns 2–4. Additional registered controls, including `[H]`,
+  occupy three-column slots from the right. The title is centered on a whole
+  column over one continuous frame line, with its width limited to protect the
+  controls' hit areas. An empty title hides the caption and leaves the line
+  continuous. `drawTitle()` recalculates this geometry after a title change.
+  The caption's inner text has its own one-column inset bounds, without CSS
+  padding. Corners, sides and grow handles use the frame's rectangles without
+  additional CSS grid/flex tracks or minimum dimensions. `drawTitle()` retains
+  the caption parts and unchanged text nodes; reused HELP windows update their
+  model title through this same method. CSS retains clipping, fonts, palettes
+  and native-button resets.
   `drawTitleControl()` / `createTitleControl()` are the single renderer for
   bracketed title controls: brackets inherit the title color while the inner
   glyph uses the owner's frame-icon color. Dialog close, History close and the
   games' Hall of Fame `[H]` use this path.
+  Passive Zoom uses an explicit three-cell drawing part in those same bounds,
+  instead of CSS-generated text. Its real zoom glyph remains intact underneath,
+  including maximize/restore while inactive. `bindRoot()` installs the shared
+  close press/release bridge for the owner's frame; shells and applications
+  do not scan the document or initialize close buttons themselves.
 - **TVWindow** — Shared `TVGroup` base and standard window-frame composition
-  used by HELP, Docs and dialogs. On a passive standard window, the Close
+  used by HELP, Docs and dialogs. Drawing emits the model origin as character
+  offsets, including zero and negative positions. MoveTo/ChangeBounds and
+  redraw preserve that same origin; nested windows do not rely on CSS position
+  overrides. Ordinary windows draw their position and visible size directly
+  from `origin`/`size`, clipping to the desktop without changing their normal
+  model bounds. `sizeLimits()` owns the minimum/maximum, with a desktop smaller
+  than the minimum allowed to clip the visible frame. CSS has no second copy
+  of window dimensions, position, minima or maximized geometry. Zoom fills the
+  complete desktop, including its partial final cell; child views receive the
+  available whole-cell extent. Workspace and localStorage geometry convert
+  model coordinates to pixel positions and whole-cell dimensions at the browser
+  boundary. Standalone HTML exports serialize `[cols, rows, minCols, minRows]`
+  in the existing window marker; `bindRoot()` initializes the zero-extent host
+  model from that declaration. Regenerate static exports when updating this
+  asset contract. On a passive standard window with `wfClose`, the Close
   control remains clickable and Zoom becomes a single-line frame segment.
+  Frame activation retains a close control's `wfClose` visibility policy.
+  `window-close` and manager Close/Cancel require the flag for owned windows
+  and dialogs, including commands originating outside the title control.
+  Direct programmatic `close()`/`destroy()` remain available for cleanup.
   This preserves the centered caption and both
   frame corners while matching the inactive `TFrame` drawing.
   Windows without an outer scrollbar update both vertical frame sides, not
@@ -356,24 +881,65 @@ with all commands handled through TVEvent and no dialog-specific HTML/CSS.
   defined single-line `─┘` icon. Generated standalone pages bind a `TVWindow`
   to their existing frame, so their anchor-style Close control dispatches the
   same window command and then follows its original `index.html` destination.
-- **TVDialog** — `TVWindow` subclass constructed from `TVRect` bounds, a title
-  and semantic options/content; it may be modal or non-modal. Callers do not
+- **TVDialog** — `TVWindow` subclass constructed from `TVRect` bounds and a
+  title, with owned views inserted as its content; it may be modal or non-modal. Callers do not
   provide CSS class names, close attributes or handwritten frame footers.
-  - `open()`, `close()`, `destroy()`, `center()`, `isOpen()`, `isActive()`
+  - `open(activate = true)`, `close()`, `destroy()`, `center()`, `isOpen()`, `isActive()`
+    Opening with `false` shows the dialog below the current active target and
+    preserves its focus. Normal opens still select and focus the dialog.
   - `changeBounds(bounds)` / `locate(bounds)` — Change the Turbo Vision bounds
     and immediately redraw the affected character frame. Dynamic dialogs must
     use these instead of setting browser dimension variables directly.
+    `growTo(width, height)` resizes without resetting the current origin;
+    MIDI More and Downloads use that path.
+  - The dialog's `origin`/`size` own its inner window rectangle. The overlay is
+    only the browser input/containing surface. CSS has no duplicate width,
+    height or position variables and no extra overlay padding. Drawing retains
+    a one-cell horizontal gutter on each side and clips height to the available
+    viewport while keeping the declared logical dimensions. Workspace capture
+    uses those dimensions, not the clipped DOM size; capture/apply infer the
+    window type from the bound TVView without an extra dialog flag.
+  - `options` initially includes `ofCentered`. `ofCenterX`/`ofCenterY` select
+    individual centering axes. `center()` preserves these option bits; explicit
+    MoveTo, a changed origin, dragging or workspace restoration clears them.
+    Reopening a manually placed dialog preserves that position, including
+    `0,0`. On viewport/font resize, automatic dialogs follow their centering
+    axes and manual dialogs are kept within the visible area. Closing or
+    destroying the dialog releases its viewport resize subscription.
   - `close()` hides a reusable dialog; `destroy()` permanently removes a
     dynamic dialog, its drag listeners and its manager registration.
+    TVFrame emits the dialog's shared view identity on its overlay. A parent's
+    ordinary Resolve can therefore retain an already mounted child dialog's
+    root, controls and visibility binding, including the embedded DOS Pause
+    panel; it needs no application-specific root lookup or binding exception.
+    Open/close apply the inherited `sfVisible` state directly. On an owned,
+    connected dialog, Show/Hide and SetState(sfVisible, ...) enter that shared
+    lifecycle; Show restores the dialog in the background. Other state bits in
+    the same mask, including sfModal, are retained. Pre-mount state changes
+    configure the view without registering it or moving focus. Base state calls
+    avoid MessageBox's modal Show/Hide overloads and concrete application
+    close/discard workflows, so hiding a tool preserves its draft/resources.
   - `bindCommonClose(callback)` — Bind the common close action
   - Escape, menu Close/Cancel, title control and backdrop clicks converge on
     the `dialog-close` command in `handleEvent()`.
   - `bindDrag()` — Enable title bar drag. While moving, the shared frame uses
     the single-line Turbo Vision drag glyphs and restores its active/passive
-    frame after mouse release.
+    frame after mouse release. The browser bridge caches desktop/window limits
+    at mouse-down and coalesces motion into one composited translation per
+    animation frame. It updates the TVDialog origin without rereading layout
+    or changing the base drawing position while moving thousands of owned list
+    rows. Release draws the final model position and restores the prior
+    transform; blur, lost buttons
+    and close flush/cancel pending motion and detach temporary listeners.
   - `setManager(manager, name)` — Register with TVDialogManager
-  - `focusableElements()` — Return the current keyboard focus cycle
-  - `onDialogKeyDown(event)` — Shared Escape, default Enter and Tab handling
+  - A mouse-down raises an inactive dialog; it does not refocus an already
+    active dialog's whole window. Focused controls and repeated close presses
+    keep their native focus and pressed state.
+  - Tab/Shift+Tab use inherited `TVWindow.handleEvent()` and `TVGroup.focusNext()`.
+    They wrap owned controls and retain frame focus when none are available,
+    including an empty modal. Reenabling/showing controls restores them without
+    rebuilding. The former HTML-enumerating `focusableElements()` is removed.
+  - `onDialogKeyDown(event)` — Shared Escape and default Enter handling
   - Native click, input, change and key-down events are translated once into
     `TVEvent` and propagated through the target view's owner chain.
     A shared key-up bridge exists only for controls that need held-key state;
@@ -382,11 +948,20 @@ with all commands handled through TVEvent and no dialog-specific HTML/CSS.
     dialogs do not use it to rediscover controls they created.
   - `setState(sfModal, ...)`, `keyboard` and `escapeCloses` customize shared
     interaction without duplicating document-level key handlers. Default Enter
-    resolves the nested `TVButton` carrying `bfDefault` through the owner tree;
-    there is no DOM selector option. The concrete dialog's static palette keeps
+    resolves a mounted nested `TVButton` with `amDefault` through the owner tree;
+    it skips unmounted/hidden/disabled controls and unavailable ancestor groups.
+    There is no DOM
+    selector option. The concrete dialog's static palette keeps
     identical active/passive/drag frame semantics.
   - `setHelpCtx()` writes the dialog-owned context to both its window and
     overlay roots. Application registration no longer maps names to contexts.
+  - `close()` restores browser focus only if the dialog was active. A background
+    close/destroy leaves the active control untouched. A saved control must
+    belong to the surviving active managed window; otherwise focus returns to
+    that window's root instead of an unrelated or destroyed window.
+    Shared `TVWindow` roots have `tabIndex=-1`, allowing explicit focus without
+    adding a window-level Tab stop. They share the dialog's native outline reset
+    so browser focus paint does not cover the Turbo Vision frame.
 
 ### Window behavior compared with Turbo Vision 2.0
 
@@ -397,34 +972,125 @@ especially `TFrame` drawing/handling and `ofFirstClick` selection semantics.
 |---|---|---|
 | Active/passive frame | Double-line active and single-line passive frames | Inactive dialog `[■]` remains visible but disabled at the user's request; original `TFrame` omits inactive icons. |
 | Frame commands | Close executes on mouse release; title-row double-click and zoom icon both send the window Zoom command | Browser click/double-click are translated to the existing `TVEvent` command path. |
-| First click on an inactive window | `TVDialogManager` activates it on `mousedown` | `ofFirstClick` is defined but not yet enforced; a child control can still act on the activating click. Original windows normally only select on that first click. |
-| Tab focus | `TVDialog` cycles browser-focusable elements | Original `TGroup` cycles selectable child views; reconcile these before replacing the DOM focus bridge, preserving native input focus and accessibility. |
+| First click on an inactive window | Shared capture translates `mousedown` to `TVEvent`; the manager selects the window before child handlers run | A window without `ofFirstClick` consumes that gesture. An opted-in window permits immediate input. Ordinary windows, dialogs and the standalone host share this policy. |
+| Tab focus | `TVWindow.handleEvent()` calls shared group navigation over selectable owned views; an empty window retains frame focus | Follows the original window/group responsibility split. JS layout groups are flattened; leaf controls retain their native editing/roving focus targets. No dialog-wide HTML query supplies order. |
 
-The remaining first-click and focus differences are recorded here rather than
-changed speculatively across every dialog in one pass.
+The window-level policy follows
+[TView::handleEvent](https://github.com/magiblot/tvision/blob/master/source/tvision/tview.cpp).
+Native child focus synchronizes the logical owner/current path through the
+shared group bridge. The Tab path follows
+[TWindow::handleEvent](https://github.com/magiblot/tvision/blob/master/source/tvision/twindow.cpp)
+and [TGroup navigation](https://github.com/magiblot/tvision/blob/master/source/tvision/tgroup.cpp).
+Our insertion order is forward Tab order, rather than the reference's reversed
+linked insertion order. Modified/consumed keys and guest `capturesKey()` remain
+with their existing handlers. One window-root bubble bridge supplies unhandled
+native Tab events for ordinary windows, skipping already routed/consumed events
+and detaching on rebind. Shared TVEvent dispatch cancels the browser's default
+Tab action when a control consumes that key with `clearEvent()`, so native
+navigation cannot repeat or override it. Full group preprocessing/postprocessing
+is separate.
 
 ### TVDialogManager
 
 Manages dialog lifecycle, z-ordering, and active state.
 
+Activation, dialog raising, reordering and Desktop.SetCurrent share one private
+active-target publication step. It updates z indices, frame/application state
+and change notifications before focusing the surviving target. A newer
+selection generation supersedes pending notifications/focus. Desktop.SetCurrent
+delegates a registered owned view to this path while retaining stack order;
+unmanaged views use ordinary group selection. The manager remains the authority
+for active top-level windows rather than maintaining a second Desktop.current.
+
+Desktop-owned registered windows/dialogs delegate MakeFirst/PutInFrontOf to
+the manager's existing stack. Their ownership/insertion order and roots stay
+intact; explicit z indices and active frames/chrome follow the new stack.
+Sending the active window behind another selects the front available,
+selectable window. Reordering a background window leaves the active input
+and selection intact. Closed/disabled source windows and foreign targets do
+not open or activate. An active modal dialog blocks these order changes;
+raising that modal is harmless. Newer selection callbacks supersede pending
+focus/notifications. The standalone host retains its existing two-position
+policy: foreground when raised/placed above a managed window, background
+when sent to the back. Managed windows placed above an inactive host go to
+the bottom of the managed stack; above the active host they become foreground.
+
+The desktop owns one mouse capture bridge. `TVDialogManager.handleEvent()`
+resolves current registrations from the target's ancestor roots, selects an
+available window and applies its `ofFirstClick` option. The selecting gesture
+is consumed through release/click/context-menu, preserving native input
+selection and preventing guest mouse presses/moves/releases. Release cleanup
+is deferred until the browser has dispatched its click; blur and a new press
+also release the gate. Already-active windows do not repeat activation.
+Modal, disabled/unselectable windows, replaced registrations and activation
+callbacks that choose a newer target cannot receive stale input. Registered
+roots keep their normal frame/drag handlers; the standalone host uses this
+same bridge. Desktop rebinding/destruction removes capture and temporary
+release listeners. No application-specific DOM activation handler is needed.
+
 - `register(name, dialog)` — Register a named dialog
 - `unregister(name, dialog)` — Remove a dynamic dialog registration safely
-- `registerWindow(name, element, commands)` — Register a managed window and
-  its command handlers
+- `registerWindow(name, element, commands, activate = true)` — Register a managed
+  window and its command handlers; `false` inserts below the active target
+  without selecting it
 - `setHostWindow(element, commands)` — Register the generated page's host
   window and its command handlers
-- `open(name, {exclusive})` — Open a dialog (optionally closing others)
+- `open(name, {exclusive, activate})` — Open a dialog (optionally closing others);
+  `activate` defaults to true, while false preserves the current selection/focus
 - `close(name)` — Close a dialog
 - `bringToFront(name)` — Activate and focus a dialog
 - `activateHostWindow()` — Deactivate all dialogs, activate host window
 - `dispatchCommand(command)` — Send a command to the active dialog, viewer,
   document or host window
 - `cycleTarget(delta)` — Activate the next or previous managed window/dialog
+  F6/Shift-F6 and Next/Previous remain unavailable while the active dialog is
+  modal. Toggling sfModal on an open dialog immediately refreshes command state.
 - `openTargets()` / `openWindowCount()` — Report currently usable managed targets
+- `isOpen(name)` — Check visibility of a registered dialog or regular window
 - `canDispatchCommand(command)` — Report whether the active target accepts a command
 - `applyAllZIndices()` — Recalculate z-index stack
 - `applyActiveStates()` — Update `is-window-active` / `is-window-inactive` classes
 - `getHelpCtx()` — Return the active dialog/window/host context
+
+Selecting an existing managed window also moves browser focus into that window
+if focus was elsewhere. Reselecting a window/dialog already containing the
+focused control preserves that control and its text selection. Focus is applied
+after manager callbacks and only if the requested target is still active, so a
+callback that opens a newer tool retains its keyboard target.
+The shared focus return first preserves a control already inside the active
+root. A saved control is restored only if it belongs to that root; otherwise
+the root itself receives focus. Dialog close and menu dismissal use this policy.
+
+The manager's `selectionVersion` increases on explicit window/dialog/host
+selection and workspace stack restoration. Automatic selection
+of the next window during close/unregister does not increase this version, so
+completing an expected close does not invalidate a queued reopen. Removing an
+active registration focuses its surviving target; removing a background one
+preserves the current input.
+
+`setManager(manager, name)` belongs to `TVWindow` and is inherited by dialogs.
+Regular-window registration binds its model to the manager; unregister releases
+that binding. A registered regular window's `setState(sfVisible, ...)` reports
+Show/Hide immediately. Hide removes it from the selection stack and focuses the
+next visible target while retaining registration for reuse or cleanup. Show
+rejoins the stack in the background. Dialog close uses the same stack-removal
+path while retaining its saved-control focus restoration.
+
+Visible-target queries drive F6, window counts, commands, Tile/Cascade and
+Window List. Connected but hidden windows are excluded; explicit selection of a
+hidden or missing regular target has no effect. The bundle Window List reads
+registered model titles and updates its owned ListBox through SetData on manager
+changes, preserving selection by target name. It includes ordinary tool
+windows, excludes itself and uses no DOM MutationObserver or caption queries.
+Regular-window statistics use that same visibility check: Hide ends its
+statistics session immediately, and Show starts a new session just as reopening
+a dialog does. Time spent hidden during cleanup is not an open-window session.
+
+Mouse registration keeps one handler per root with a mutable current name.
+Re-registering the same window/dialog root updates that name; callbacks verify
+the live registry still points to their own root/view. Detached registrations
+and old roots replaced under the same name cannot select another view, and
+reuse does not accumulate duplicate activation handlers.
 
 URL-state restoration keeps every open modal dialog above ordinary windows
 and makes the top modal active, even when an older serialized stack recorded
@@ -499,8 +1165,9 @@ interpret the rendered button's `data-tv-command`. The status line follows
 the same rule with retained `TVStatusItem` objects. Shortcuts activate the
 same command path as mouse selection.
 
-`TVCluster` keeps checkbox/radio selection and multi-check state in its
-options and value. The DOM input or button is mapped to its option when the
+`TVCluster` keeps checkbox/radio selection in value. Multi-check states are
+packed fields in that same model, accessed with multiMark, not option.state.
+The DOM input or button is mapped to its option when the
 view is resolved; `TVEvent.infoLong` reports that option to its owner.
 Checkbox values retain numeric masks for up to 31 options; larger configurable
 collections use BigInt masks so indices 32 and above cannot alias earlier
@@ -521,17 +1188,36 @@ Small `TVGroup` owner shared by the generated-page and bundle applications.
 `TVProgram : TVGroup` is the common application-level owner. The generated
 viewer's `TVApplication` and the catalog viewer's `TVBundleApp` both derive
 from it; their constructors remain source-shaped and browser roots are bound
-only during `start()`. Both applications insert their `TVDesktop` into this group. Thus a
-button command bubbles through control → group → dialog → desktop → program;
-it does not need a dialog-specific application callback or native click handler.
-It owns the desktop root, one `TVDialogManager`, border/background layout,
-clock updates and the global load/resize lifecycle. Product-specific startup
-and navigation remain in `TVApplication` and `TVBundleApp`.
+only during `start()`. Both applications insert their `TVMenuBar`, `TVDesktop`
+and `TVStatusLine` into this group. A button command bubbles through control →
+group → dialog → desktop → program; it does not need a dialog-specific
+application callback or native click handler.
+
+`TVProgram.initScreen()` reads the browser surface in character units. It
+reserves one top row for `menuBar`, one bottom row for `statusLine`, and gives
+the remaining extent to `desktopView`. An absent bar releases its row. Inserting
+a replacement bar removes the previous view from the owner; repeated insertion
+does not duplicate children. `changeBounds()` applies an explicit surface size;
+browser resize and font readiness refresh the measured surface. Binding another
+root or `null` releases the previous screen resize subscription.
+
+The browser surface retains its native full-height containing block; CSS does
+not divide it into rows or pad the desktop. Desktop windows retain their normal
+bounds on a screen resize; their existing browser adapters reapply clipping and
+maximized geometry after the new desktop extent is assigned. Screen layout
+updates mounted roots without replacing content, focused controls or selections.
+
+`TVDesktop` owns its root, one `TVDialogManager`, border/background drawing,
+clock updates and the global load/resize lifecycle. Its background covers the
+desktop extent through shared character bounds and retains unchanged text nodes
+on redraw. Product-specific startup and navigation remain in `TVApplication`
+and `TVBundleApp`.
 
 ### TVMenuController
 
 Browser event adapter used by both the generated-page shell and the bundle
-viewer. Menu state and navigation belong to `TVMenuView`.
+viewer. Menu state and navigation belong to `TVMenuView`; status-line action
+selection belongs to `TVStatusLine.handleEvent()` rather than the DOM adapter.
 
 - `refresh()` — Discover the newly rendered `TVMenuView`
 - `onCommand()` / `onHover()` / `onKeyDown()` — Convert browser events to
@@ -541,9 +1227,12 @@ viewer. Menu state and navigation belong to `TVMenuView`.
   `Enter`, Space, Tab/Shift+Tab and `Esc`, including remembered selection and
   focus restoration. Disabled commands are skipped by mouse, keyboard and
   mnemonic navigation.
-- Closing a menu after a command preserves focus when the command has moved it
-  into a newly opened dialog. Commands that do not choose a new target still
-  restore the focus held before menu navigation.
+- Closing a menu preserves a control already focused in the active window,
+  including a new modal dialog opened while the menu was active. Otherwise it
+  restores the saved control only inside the surviving active root. Ordinary
+  keyboard dismissal still restores the original input and its text selection.
+  A mouse-down outside the menu dismisses it without restoring an older control,
+  leaving the user's newly clicked keyboard target intact.
 
 The bundle desktop keeps one managed window per opened HELP bundle and one per
 Markdown document. `F6`/`Shift-F6`, Window List, Tile and Cascade all operate
@@ -574,6 +1263,21 @@ Custom scrollbar for `[data-tv-scroll-frame]` containers. Handles thumb drag, tr
 Axis controls belong directly to their host, with the window's horizontal axis
 in its bottom bar. Binding never selects a scrollbar inside a nested list/menu,
 so the Download popup and Completed downloads scroll independently.
+Input gating resolves the frame's logical TVView and its owner hierarchy;
+hidden/disabled groups reject wheel, arrow, track and thumb actions. The
+adapter retains the logical frame owner, and programmatic SetValue remains
+available independently of user-input availability.
+
+Each axis draws its shaded track into one text node, with newlines for vertical
+rows. A separate text element draws the one-cell thumb. Its `TVRect` is relative
+to the track and is applied through the shared bounds renderer; the element's
+actual hit area is exactly its cell. Unchanged text nodes survive scrolling,
+and unchanged thumb bounds do not rewrite its inline geometry. No DOM element
+is allocated per track cell and no CSS grid-repeat template is generated on each
+scroll event. Resizing redraws the track text when its cell count changes.
+The track/thumb use the same owner palette as before; an inactive scrollbar
+rejects input, while content that fits hides its thumb and uses the disabled
+track glyph. These mechanics are shared by HELP, lists, grids, editors and menus.
 
 - `refresh()` — Re-observe replaced viewport content and redraw both axes.
 - `setActive(active)` — Enable input for the active window or make both axes
@@ -585,7 +1289,7 @@ so the Download popup and Completed downloads scroll independently.
 
 - `initializeTVTheme()` — Shared shell/bundle startup, including stored theme
   and palette restoration
-- `applyThemePreset(preset)` — Apply "light", "dark", or "auto" theme
+- `applyThemePreset(preset)` — Apply a named preset from `THEME_PRESETS`
 - `applyColorPalette(palette)` — Apply custom color palette from `DOS_COLORS`
 - `setColorPaletteAttribute(palette, index, attr)` — Update every Color-dialog
   view that references the same 1-based `cpAppColor` index
@@ -600,18 +1304,23 @@ frame state. Common list and scrollbar controls inherit from that owner.
 ### Utility Functions
 
 - `measureCells()` — Returns `{width, height}` of a monospace character cell
-- `fillBorders()` — Measures cells and fills `data-tv-border-fill` / `data-tv-border-side` elements
+- `fillBorders(root)` — Fills the root's `data-tv-border-fill` /
+  `data-tv-border-side` elements. Read extents together before changing text,
+  reuse unchanged text nodes and cached cell metrics, and invalidate metrics
+  through screen/font resizing. Opening a dialog passes its own drawing root;
+  it does not refill the entire desktop.
 - `fillDesktopPatterns()` — Fill desktop background pattern elements
 - `escapeHtml(text)` — HTML entity escaping
 - `renderHotkeyMarkup(text)` — Convert `~X~` to `<span class="tv-hotkey">X</span>`
 - `displayCp437Char(code)` — Convert a CP437 byte to a display character
-- `updateClocks()` — Update all `[data-tv-clock]` elements with current time
+- `updateClocks()` — Update menu views' owned TVStaticText clocks with current time
 - `dosColor(index)` — Get CSS color string for DOS color index (0-15)
 
 ### Key Constants
 
 - `DOS_COLORS` — 16 standard DOS color strings
-- `THEME_PRESETS` — 5 predefined theme configurations
+- `THEME_PRESETS` — Default, Light, Dark, Auto, Green, Amber and Gray choices;
+  direct canonical palette/content-color overrides
 - `TV_COMMANDS` — Shared `menu`, `close`, `zoom`, `resize`, `next`,
   `previous`, `ok`, `cancel` and `default` command identifiers
 - `PUZZLE_START`, `PUZZLE_HIGHLIGHT_MAP` — 15-puzzle initial state
@@ -631,15 +1340,25 @@ content is owned by concrete controls such as `TVAsciiTable`,
 `TVCalendarView`, `TVColorSelector`, `TVColorDisplay` and the shared list
 classes. `TVRect` bounds emitted by `TVView` are authoritative for window,
 dialog and control position and size. CSS is limited to palette presentation,
-the intrinsic browser structure of shared primitives (for example a list's
-scrollbar column or a button's two-row face), and the internal cells of a
-specialised game surface. It must not repeat outer dialog/control dimensions.
+font and native-input rendering, overflow/clipping and the intrinsic browser
+structure of shared primitives and specialised game surfaces. Shared TVision
+views place list/cluster scrollbars and button captions/shadows in character
+cells; CSS must not repeat these or outer dialog/control dimensions.
 ASCII Chart, Calculator, Colors, History, MIDI, Window List and the game
 windows follow this rule; their concrete geometry is declared in JS.
-Open a File derives its two-column grid row count from `TVFileList.rows` and
-keeps arrow/Page navigation in `keyDestination()` on the shared
-`TVListViewer.handleEvent()` path. The MIDI display marks its five owned text
-views by semantic part so its palette does not depend on child order.
+Calendar days use seven columns of four-cell-wide TVStaticText views, each one
+row high; `\x03` supplies shared StaticText centering. The view retains the month,
+current day and selected day for redraw. Color selectors use four columns of
+three-cell-wide TVButton views, with four foreground rows or two background
+rows. These owned cells have explicit TVRect bounds rather than CSS grid tracks
+or minimum dimensions, and moving/resizing the groups retains their cell roots.
+Open a File derives its two-column row count from `visibleRows()` on the shared
+TVListViewer and uses the same item geometry, key destinations and
+`handleEvent()` path as other multi-column lists. The MIDI display maps its five owned text
+views through numeric palettes instead of semantic CSS selectors.
+Bounded StaticText clips through the shared primitive while retaining the full
+text value, including complete error messages; dialogs do not truncate their
+underlying status strings merely to keep drawing inside the display.
 The MIDI playlist is a `TVListBox` containing ready and cloud-marked pending
 items, with the cloud at the row's right edge. Its Filter is a `TVLabel` linked
 to a `TVInputLine`; input broadcasts
@@ -650,6 +1369,29 @@ queues the download through the server and uses the existing progress-dialog/
 gauge views for download progress.
 After the initial list render, `TVListViewer` updates only the old and new
 selection rows instead of revisiting the full catalog on every click.
+Large bounded single-column lists without horizontal scrolling mount only
+visible rows, one viewport of reserve above/below and selected/native-focused
+rows. The complete `items`/`range` model remains available. A private extent
+preserves the full scroll range; mounted rows keep their logical indices and
+ARIA positions. Scrolling retains surviving row nodes and native focus, while
+Home/End, selection and resizing use the same list/scrollbar event path.
+Small lists, flowing content, multiple columns and horizontal text measurement
+retain complete rendering. This is shared list drawing, not a MIDI renderer.
+
+`TVPagedCollection(pageSize, loader)` is a browser extension for remote data,
+passed to `TVListBox.newList()` (or `TVListViewer.setItems()`). Its sparse `items`
+array has the complete logical length without allocating every record. The loader
+receives `{offset, limit, revision, track, signal, etag, cached}` and returns
+`{offset, total, revision, items}` plus optional metadata/ETag. `refresh(track,
+offset)` locates/revalidates a page; `load(index)` waits for a logical item.
+The host loader owns HTTP and filtering. The shared collection deduplicates pages,
+cancels obsolete reads, rejects stale completions and keeps at most eight cached
+pages, retaining selected/native-focused rows. Visible-range loading requires a
+bounded single-column view without horizontal text measurement. Missing rows use
+Loading; ordinary array lists retain their existing rendering and constructors.
+Data/error changes follow owned `TVEvent` broadcasts (`list-data` / `list-error`),
+and the view retains native editing focus while updating rows. Close cancels reads;
+view destruction releases the collection. This API is not a DOS Turbo Vision API.
 `TVListBox` resolves a row from the event target first; geometry scanning is
 only a fallback when the target is outside a row.
 The Filter uses the shared `TVHistory`/`TVHistoryWindow` popup; selecting a
@@ -662,8 +1404,12 @@ axes. A track click calculates its target from the axis's track element and
 scrolls the owned viewport directly.
 `TVImage` binds its drawn root like other shared views, so
 `setImage()` updates the visible game cover.
+The two-character Previous, Pause and Next captions use eight-column buttons;
+single-character Play/Stop retain seven columns. One-column gaps and the
+original TVButton text algorithm determine alignment; no MIDI centering CSS
+or extra caption markup is used. Less/More occupies the remaining eight columns.
 Under More, a shared `TVCheckBoxes` control selects sequential (default) or
-random next-track playback. The audio engine remains inside `TVMidiSynth`, but
+random next-track playback. The player's `TVMidiSynth` audio engine
 uses FluidSynth with a General MIDI SoundFont instead of per-note oscillators;
 the dialog still owns the transport commands and reacts to completion. The
 SoundFont fetch starts when the player opens, before the first track click. Pause
@@ -688,6 +1434,40 @@ that client viewport, and nested groups with bounded children preserve their
 absolute `TVRect` coordinates. Dynamic `changeBounds()` operations therefore
 resize content without moving controls into the title, footer or outside the
 frame.
+
+`TVGroup.changeBounds(bounds)` also propagates the owner's size delta to owned
+views through `calcBounds(bounds, delta)` and `changeBounds()`, recursively for
+nested groups. `TVDialog` inherits this same path; only frame drawing differs.
+`setBounds()` updates the model alone and is not a resize/layout operation.
+Use `changeBounds()`, `locate()` or `growTo()` for a live view. Browser drag-resize,
+Zoom/restore and URL workspace restoration feed these same logical bounds.
+The browser adapter retains pixel positioning while the layout uses text cells.
+
+The `gfGrowLoX`/`gfGrowLoY` flags move the corresponding low edge by the owner's
+size delta; `gfGrowHiX`/`gfGrowHiY` do the same for the high edge. Set both edges
+of an axis to move a control with its right/bottom margin intact, or only the high
+edge to stretch it. The default zero mask keeps local bounds unchanged.
+`gfGrowRel` scales flagged edges by new owner size / old owner size, rounding to
+character cells; an old zero extent leaves that axis unchanged. `calcBounds()`
+initializes its output from the current bounds and clamps the resulting size to
+the view's `sizeLimits()` without changing the view until `changeBounds()`.
+Pure owner moves do not resize its children. A group does not replace unchanged
+DOM roots, so focus, input text/selection and button press state survive growth.
+
+```javascript
+const content = new TV.TVGroup(new TV.TVRect(0, 0, 46, 14));
+content.growMode = TV.gfGrowHiX | TV.gfGrowHiY;
+const input = new TV.TVInputLine(new TV.TVRect(2, 1, 44, 2), 80);
+input.growMode = TV.gfGrowHiX;
+const close = new TV.TVButton(new TV.TVRect(32, 11, 44, 13), "~C~lose", command);
+close.growMode = TV.gfGrowAll;
+content.insertAll([input, close]);
+windowView.insert(content);
+```
+
+The owner/child calculation follows the [Turbo Vision TGroup source](https://github.com/magiblot/tvision/blob/master/source/tvision/tgroup.cpp)
+and [TView grow-mode calculation](https://github.com/magiblot/tvision/blob/master/source/tvision/tview.cpp).
+Browser drawing updates existing nodes instead of using a terminal draw buffer.
 
 ### Dialogs
 
@@ -740,8 +1520,14 @@ not under Help or the system menu. Authentication/name/role changes rebuild
 the menu; delayed session responses cannot restore a stale signed-in state.
 The standard Turbo Vision 2.0 `TMenuBar` lays out items from the left and has
 no per-item right alignment option; right alignment is our application-level
-`drawItem()` extension, retaining normal menu objects and TVEvent handling.
-Only the drawing primitive uses the minimal right-item layout CSS.
+layout extension, retaining normal menu objects and TVEvent handling. It
+allocates a bounded right-hand group for the account and visible download/index
+items, followed by the clock; account captions are limited to a third of the
+bar and shorten visually when needed. The left group uses the remaining cells
+with native horizontal scrolling and no visible scrollbar. Menu labels and
+group bounds are assigned in JavaScript; CSS retains palette, glyph clipping
+and native scroll behavior. The clock is an ordinary owned TVStaticText with
+centered text, not a separately emitted HTML fragment or selector-driven value.
 `TVApplicationMenuBar.bindRoot()` updates the menu clock synchronously after
 binding. Menu rebuilds (including opening F1 help from Downloads) show the
 current time immediately, independently of the desktop's one-second timer.
@@ -783,7 +1569,9 @@ The selectors support arrow-key navigation in
 `TVColorSelector.handleEvent()`. The selector converts the owned button's
 `evKeyDown` into `evCommand`; `TVColorsDialog` receives that command through
 the normal owner chain and updates the palette. The dialog therefore has no
-parallel DOM key handler.
+parallel DOM key handler. Selecting a color redraws only the old/new selected
+cells and restores focus when it belonged to that selector; repeating the same
+selection retains every cell root and the current focus.
 
 ### TVSearchDialog
 
@@ -804,6 +1592,14 @@ parallel DOM key handler.
   `TVApplicationMenuBar`'s standard `TVMenuItem` beside Downloads: `▤ N%` while
   building, hidden and disabled otherwise. A `global-index-show` TVEvent command
   reopens/activates the same dialog after Hide, without creating another one.
+  Automatic building/paused replies open progress through the shared
+  `TVDialog.open(false)` path, preserving the selected window, application
+  chrome, native focus and caret/selection. The menu command requests foreground
+  explicitly. An active global Search waiting on the current index may also
+  raise progress; an inactive, idle or local Search may not. Closing Search or
+  rendering a replacement/empty/local query clears its previous pending intent.
+  Hide remains respected until explicitly reopened; completion removes progress
+  and the indicator without displacing the active window.
   Poll every 250 ms while building and every five seconds when idle so later
   server rebuilds are detected too; a missing API stops monitoring, transient
   failures retry, and `destroy()` cancels timers and ignores outstanding replies.
@@ -830,7 +1626,17 @@ parallel DOM key handler.
   it has no dialog-specific grid columns that can displace the right frame.
 - Empty/loading/error messages are ordinary bounded `TVStaticText` children
   owned by `TVSearchResultsList`; there is no role-only status widget or
-  caller-provided root/viewport CSS class.
+  caller-provided root/viewport CSS class. Their inset and wrapped height are
+  recomputed from the current client width while retaining the raw text.
+- Each result reserves two character rows: title then source file. Both text
+  lines come from `getText()` and use the ordinary list text rectangle, clipped
+  to the item width. There is no result-specific button class, DOM geometry
+  override or parallel command dispatch. Clicks on either line select the same
+  item; shared paging and `topItem` count complete two-row results.
+- Consecutive empty/loading/error statuses reuse the same TVStaticText and
+  mounted root, rewrap from their raw text and update their scroll range. A
+  results replacement detaches that text view and clears its owner; destroying
+  Search explicitly disposes the results control and its retained status.
 
 The FastAPI server owns `GlobalSearchIndex` in `server/search_index.py`.
 It stores a SQLite FTS5 database at `THELP_STATE_DIR/global-search.sqlite3`
@@ -873,6 +1679,13 @@ snapshot for maximized windows. No stored settings are cleared.
 - `More`/`Less` changes the owned main-group and dialog bounds together, so
   the expanded controls remain inside both vertical frame sides.
 
+The player remains directly registered in the 2.1 dialog manager and uses the
+2.1 `/api/midi` catalog and priority endpoints. Its cover, display, progress,
+buttons, history and track list use shared TVision views. More/Less grows the
+same window in place. The display owns a DOS palette, and ordinary TVListBox
+text rows mount only the visible part of large catalogs. Destroying the player
+releases its audio nodes/context and cancels pending catalog work.
+
 ### TVFindDialog
 
 - `configure({find, findAgain, targetLabel})` — Bind the dialog to the active
@@ -888,6 +1701,69 @@ snapshot for maximized windows. No stored settings are cleared.
   HELP/Docs window, global after the server search API responds. Find Again remains
   disabled until the active target has a previous query.
 
+Numeric palette drawing is shared by TVView: `_appColor(index)` resolves the
+current cpAppColor attribute through the browser adapter, and `_drawPalette()`
+updates native foreground/background paint without remounting the view. One
+observer refreshes bound numeric palettes after theme/Colors edits. Detaching
+TVGroup recursively unbinds children; destroying TVDialog detaches its content
+so private painting parts and palette subscriptions are released too.
+TVButton translates native hover/focus to its own paint state. Flat buttons
+use the same in-place attribute/caption update as ordinary dialog buttons.
+
+ASCII cells and Calendar arrows/days now choose numeric palette attributes;
+there are no private color/reset selectors for them. Empty Calendar cells do
+not need opacity since they contain no visible text. Color selector buttons
+paint their DOS color on black; a TVStaticText marker makes the selected black
+cell visible. `TVColorDisplay.setColor(attribute)` paints its owned sample from
+a DOS attribute, without sample CSS variables. These controls retain native
+nodes and focus across data, bounds and palette updates.
+`TVAsciiTable.setCode(code)` changes the character choice and retains its
+explicit cell-focus behavior; `TVColorSelector.setColor(index, focus = false)`
+changes the color and preserves focus within an already focused selector.
+Both inherit the ordinary view-level `select()` without changing their values.
+Search Topic uses shared TVListViewer row/text drawing for its two lines.
+Status messages keep their raw source in `messageText`; TVStaticText displays
+lines wrapped in JS for its current character width, without private wrapping
+or selection CSS. File Open/Change Directory detail text uses ordinary bounded
+TVStaticText clipping, with no selectors dependent on neighboring buttons.
+
+TVWindow and TVDialog share their native palette aliases, shadow and surface
+paint; each supplies its own owner palette. Markdown windows only
+override the Viewer palette and fixed editor colors, inheriting active/passive
+frame state from the common window. Native button resets and browser scrollbar
+suppression are likewise shared. List-row hover remains under TVListViewer's
+palette rules; generic HELP button-hover paint excludes list rows.
+List rows, grid cells and pinned headers share selection colors, while their
+focused states use the same focused palette. Popup surfaces share one opaque
+background rule, and focused/pressed buttons share face paint. Unconsumed CSS
+palette defaults are omitted; theme presets still update canonical cpAppColor
+entries used by the renderer.
+
+`TVGridView.setHeadersVisible()` updates its existing header's native `hidden`
+state and recalculates scrolling. `draw()` emits the same state before mounting;
+there is no second visibility class or grid-specific display rule. Toggling
+headers retains their nodes, column bounds, selected cell and keyboard focus.
+
+The remaining stylesheet has native browser responsibilities: font loading and
+rasterization, input resets/selection, clipping and scroll surfaces, sticky grid
+headers, shared frame/control paint, and HELP/Markdown document typography.
+DOS/image canvases retain their scaling and pixel-rendering rules; Screen Saver
+retains a fixed browser overlay. These are not second definitions of TVRect
+window/control dimensions. Generated static HTML also uses the grouped index
+and Top-link styles, so they remain even though client JS does not emit them.
+The unused loading-overlay selector and old Colors-list scrollbar override
+have been removed; shared frame/scrollbar state supplies current behavior.
+
+Shared clipping, whitespace, box sizing, margins, native resets, typography,
+shadows and sticky-header properties are factored into common selector groups.
+Keep selectors' specificity and later component exceptions when consolidating;
+equal values in two states are not sufficient reason to remove an override.
+Window-local owner aliases reset inherited source colors, while input padding,
+flowing versus fixed HELP, frozen headers and scroll axes retain their own
+rules. The `game-board` role is emitted dynamically by shared game views and
+still needs clipping. This consolidation does not add style options to view
+constructors or move stylesheet declarations into application JavaScript.
+
 ### TVFileOpenDialog
 
 - `configure(entries, onOpen)` — Populate the browser-safe virtual filesystem and install its open callback
@@ -896,40 +1772,58 @@ snapshot for maximized windows. No stored settings are cleared.
   reusable file-list, trigger/storage, list and popup roles. Obsolete
   compatibility aliases are intentionally not exported.
 - `TVHistoryWindow` inherits the shared `TVWindow.draw()` frame used by the
-  other windows; it has no private frame renderer. `wfClose` suppresses zoom,
+  other windows; it has no private frame renderer or window-specific CSS.
+  Frame and shadow use ordinary TVWindow drawing. The popup is inserted after
+  its sibling controls; the History trigger has no custom z-index above it.
+  `wfClose` suppresses zoom,
   grow and outer scrollbars while preserving the owned viewer scrollbar. The
-  popup is shared by File Open, Change Directory and Find. Its default geometry
-  is 32×8 character
-  cells, covering the 28-cell File Open input and its three-cell History
+  popup is shared by File Open, Change Directory, Find and the MIDI filter.
+  Its position is declared by the owning view's TVRect, using TVWindow's model
+  origin. File Open, Change Directory and Find start at (1,1) in their group;
+  the MIDI filter starts at (8,-5) in its advanced group. The File Open popup
+  is 32×8 character cells, covering the 28-cell input and its three-cell History
   trigger without padding outside the frame. The `TVHistoryViewer` scrollbar
   now occupies the popup's right frame column. Like original `THistoryWindow`
   with `wfClose`, it owns a bracketed close control in its top frame. It also
   owns popup visibility through `sfVisible`, `aria-expanded` state, Escape handling,
   outside-click dismissal and focus return to the History button. Its document
-  pointer bridge exists only while the popup is open and forwards dismissal to
-  `handleEvent()`. Pointer and
+  pointer/Escape bridges exist only while the popup is open and forward
+  dismissal to `handleEvent()`. Escape works from the list or the trigger;
+  concrete parent dialogs and MIDI Player need no separate Escape callbacks.
+  Keyboard dismissal stays within the owning window; another active dialog
+  or HELP window keeps its own Escape action.
+  Detaching the popup removes these bridges. The named History palette uses
+  input-normal for frame/content and input-selected for selected/focused rows;
+  shared TVListViewer state rules draw these colors. Its appearance does not
+  depend on its history ID or a dialog-specific CSS selector. Palette variables
+  remain live, so editing colors updates an already open popup. Pointer and
   keyboard activation are translated by `TVHistory.handleEvent()` into the
   same owner event flow as the other TV buttons. An empty history remains
   an active control and opens the same closable empty window; it is not
   disabled based on its current item count.
 - An untitled `TVWindow` emits a normal border-fill cell instead of reserving
-  an empty caption. All three History popups therefore keep one continuous top
+  an empty caption. History popups therefore keep one continuous top
   frame while retaining the shared Close control and event path.
 - `TVHistory : TVButton` is the single three-cell History trigger used by File
-  Open, Change Directory and Find. It draws its own icon, shares the base
+  Open, Change Directory, Find and the MIDI filter. Its glyphs occupy explicit
+  1×1 character bounds at columns 0, 1 and 2; CSS supplies no grid or cell sizes.
+  It draws its own icon, shares the base
   `TVButton` command flow, owns the storage model and binds one
   `TVHistoryWindow`.
-- The source `THistory::icon` value `\xDE~\x19~\xDD` is rendered as two
-  explicit half-cell CSS fills around the arrow. This preserves the original
-  History sides/button palette mapping without relying on browser rendering of
-  Unicode `▐`/`▌` glyphs, which can expose the blue InputLine in Safari.
+- The source `THistory::icon` value `\xDE~\x19~\xDD` is drawn with five private
+  TVStaticText parts: two whole side cells, two half-cell foreground fills and
+  the arrow. Their TVRect bounds and numeric palettes preserve the original
+  History button/sides colors without gradients, History CSS or reliance on
+  Unicode `▐`/`▌` rasterization. The parts belong to the button and detach with
+  it; they keep the normal TVButton/TVEvent command path.
 - The layout follows Turbo Vision 2.0 `TFileDialog`: one unframed, two-column
   `TFileList`, a horizontal scrollbar, Name input with a three-cell History
   control, Open/Cancel buttons and the two-line `TFileInfoPane` at the bottom.
-- The two-column file content stays inside the owned `TVListBox` viewport; it
-  does not replace the root grid that positions the shared right scrollbar.
-  Change Directory's `TVOutline` keeps native vertical overflow under that
-  same scrollbar, so wheel and scrollbar input share one scroll position.
+- The two-column file content and the shared bottom `TVScrollBar` occupy one
+  bounded list frame, with eight visible rows and no redundant vertical bar.
+  The bottom track supports arrow/track clicks, dragging and wheel input.
+  Change Directory's `TVOutline` uses the same scroll controller on its vertical
+  axis; wheel and scrollbar input share one scroll position.
 - HELP and DOCS roots and their catalog groups appear in the same list as
   directory entries ending in `\`; `..\` navigates to the parent directory.
 - Arrow keys move within a column, Left/Right move by one eight-row column,
@@ -1011,8 +1905,8 @@ also suspends the owning game until the prompt is destroyed.
 
 | Class | Game | Grid | Key Controls |
 |-------|------|------|-------------|
-| `TVPuzzleDialog` | 15-puzzle | 4×4 | Click tiles |
-| `TVTetrisDialog` | Tetris / Pentix | 12×18 | ←→ move, ↑ rotate, ↓/Space drop, P pause, X pentix |
+| `TVPuzzleDialog` | 15-puzzle | 4×4 | Click tiles or arrows |
+| `TVTetrisDialog` | Tetris / Pentix | 12×18 | ←→ move, ↑ rotate, ↓/Space drop, P pause, Setup selects Pentix |
 | `TVMinesDialog` | Minesweeper | 9×9 (10 mines) | Click or Space/Enter reveal, Right-click or F flag, arrows/Home/End move cursor; first reveal is safe |
 | `TVBreakOutDialog` | BreakOut | 14×20 | ←→ paddle, Space launch |
 | `TVSokobanDialog` | Sokoban | Variable (10 levels) | ←→↑↓ move, R restart, U undo; Enter advances after each solved intermediate level and starts a new game after the last; Hall of Fame ranks the highest legitimately reached level first, then the cumulative moves |
@@ -1022,7 +1916,7 @@ also suspends the owning game until the prompt is destroyed.
 | `TVMastermindDialog` | Mastermind | 4 pegs, 6 colors, 10 turns | 1–6 choose color, ←→ select peg, Enter/G guess, N new |
 | `TVTronDialog` | Tron Light Cycles | 30×18 | P1 W/A/S/D, P2 arrows, P pause, N new round |
 | `TVHanoiDialog` | Tower of Hanoi | 3 towers, 5 disks | ←→/1–3 focus, Enter/Space select or move, drag, U undo, N new |
-| `TVSnakeDialog` | Snake | 28×18 | ←→↑↓ move, Enter restart |
+| `TVSnakeDialog` | Snake | 20×15 | ←→↑↓ move, Enter restart |
 
 All twelve games use the same sorted ten-entry Hall of Fame. Scores are shared
 through the server SQLite API when it is available and fall back to the prior
@@ -1041,9 +1935,63 @@ window is active. `HanoiGame` owns legal moves and reversible move history;
 drag-and-drop and restores tower focus synchronously after every board redraw,
 so rapid key sequences remain on the game view.
 
+All game client layouts use owned views and `TVRect` character bounds. The
+internal `TVGameBoard` (`TVGroup`) shares retained `TVGameTile` text views,
+`TVGameTileButton` command views and one bounded `TVStaticText` message across
+Tetris, BreakOut, Sokoban, Lines, Reversi, Tron and Snake. Renderers supply cell
+state and glyphs; the shared drawing primitives retain native nodes and apply
+playfield colors. Only changed cells repaint. Changing a level updates cell
+bounds and releases surplus views. Pause/result messages wrap within the field
+and center through view bounds and the original StaticText centering marker.
+There are no per-game CSS selectors, color variables or keyframes. The only
+shared playfield rule, `.tv-game-board { overflow: hidden; }`, clips owned cells
+when a field shrinks. Common flat TVButton rules reset the browser's border,
+padding and font; character bounds and numeric palettes supply geometry/paint.
+
+`TVGamePaletteGroup` passes the complete DOS attribute range through its owner
+palette while reserving its first slot for the group's surface. Text/button
+views resolve numeric `getPalette()` / `getColor()` values; `_drawPalette()` in
+TVView refreshes native paint without replacing nodes. Static surfaces,
+selection and frame colors read the application's current cpAppColor entries.
+Fixed playfield colors use DOS attributes; previous non-DOS shades are rounded
+to the DOS palette. Palette changes repaint open games and Hall of Fame without
+replacing their views or moving focus. The window frame path synchronizes
+`sfActive` with manager activation, including children; Tetris pauses when its
+window loses activation.
+
+Selected Lines balls and Ludo move/capture flashes share one palette timer.
+It changes DOS attributes rather than opacity, CSS animation or injected style
+rules. Only active games animate, reduced-motion disables flashing and restores
+the static attribute, and closing/destroying the last animated game clears the
+timer. A Tetris ghost uses dim DOS foreground intensity and a shaded glyph.
+
+Ludo owns a StaticText path layer, marker views and sixteen piece buttons;
+movement transfers their bounds instead of rebuilding the board. Mastermind
+owns ten row groups, four peg buttons per row and a separate secret-code group;
+completed turns cannot be edited. Each row's `isCurrentTurn` marker is separate
+from the inherited `TVGroup.current` selected child. Hanoi owns three tower
+groups and five disk views. A move transfers the same disk view between tower owners while retaining
+its node, with explicit rod/base/number bounds. Disk/tower views translate
+native drag events into commands; dialog logic reads owned objects rather than
+HTML attributes or selectors. Player/color/action buttons use the same owner
+flow. Keyboard handling lives in `handleEvent(TVEvent)`; a consumed native key
+cannot be forwarded through the owner chain twice. `TVGameDialog` rejects
+inactive commands and releases all child bindings after destruction. Shared
+`TVGameStatus` text preserves polite live announcements for Tron/Hanoi.
+
 Puzzle uses Turbo Vision's Viewer highlight attribute `0x71`: highlighted
 letters are blue on a light-gray background, while ordinary letters remain
 yellow on blue. Both halves of the attribute must be applied to the tile.
+`TVPuzzleBoard` is a `TVGroup` owning sixteen `TVButton` cells with 3-by-1
+character rectangles. Each cell draws its single glyph with character padding.
+The shared numeric palette path supplies colors and native flat buttons supply
+text clipping, without grid/flex tracks or duplicate tile dimensions. Updates
+retain the mounted buttons and unchanged glyphs. A cell sends its position as the owned command value;
+`TVPuzzleDialog.handleEvent()` handles clicks and keys without rediscovering
+tiles through a DOM selector. Valid moves retain keyboard focus, invalid moves
+do not increment the counter, and the counter's bounds fit the client area.
+Explicit remount/destruction releases old button listeners through the shared
+view lifecycle. The game rules, score ranking and Hall of Fame stay in the game.
 
 `TVWindow.drawContent()` restores the window's current active/passive frame
 after replacing owned views. Dynamic dialogs such as Hall of Fame therefore
@@ -1056,13 +2004,37 @@ cells, including the Players selector in Ludo.
 The `TVWindow` client viewport is the coordinate origin for bounded child
 views. Nested windows such as Find history therefore place their `TVListBox`
 inside the frame rather than one cell over its top-left corner. ASCII Chart is
-composed as two `TVDialog` sections; the standard section renderer supplies
-the horizontal `╟──╢` divider before the selected-character report and colors
-it from the current active/passive frame palette.
+composed as two bounded `TVDialog` sections: the 32×8 chart contains 256 owned
+1×1 TVButton cells, followed by a 32×1 TVStaticText report. TVFrame supplies each
+section's local client origin, side borders and the horizontal `╟──╢` divider.
+Both `TVDialog.draw()` and `drawContent()` use that same frame drawing path.
+Bounded section clients reserve height through the section's lower Y bound;
+owner resizing first applies normal child growth, then updates the existing
+client heights without replacing inputs. Unbounded text sections keep natural
+content height. The divider uses the owning active/passive frame palette and
+changes its connectors to `├──┤` with a passive frame. Character selection is
+stored in the buttons' command data, survives redraw and provides one tab stop;
+arrows and clicks still travel through the existing TVEvent owner chain.
+The chart and report no longer use CSS grid tracks or duplicate cell dimensions.
 
 `TVScrollBar` normalizes browser wheel deltas expressed as pixels, lines or
-pages. Wheel input works over both the `TVListBox` viewport and its custom
+pages. If only one axis can scroll, wheel input on either browser axis moves
+that available axis, including ordinary vertical wheels on horizontal lists.
+Wheel input works over both the `TVListBox` viewport and its custom
 scrollbar, while inactive windows continue to reject input.
+
+Minesweeper's `TVMinesField` is a `TVGroup` owning 81 `TVButton` cells at
+2-by-1 character bounds. `TVMinesCellButton` translates a context click into a
+flag command; ordinary button activation reveals the cell. Both commands carry
+the owned cell object and its numeric value to `TVMinesDialog.handleEvent()`.
+The dialog also handles arrows, Home/End, F and Enter/Space through TVEvent,
+with one tab stop at the board cursor. Reveals, flags and restart update the
+existing cell state and changed glyphs; unchanged buttons/text and keyboard
+focus survive rendering and font changes. Number/flag/mine palettes remain
+specialized playfield drawing, including focused cells; generic button
+highlighting does not override those states. These are numeric DOS attributes;
+no Mines-specific CSS supplies colors, grid tracks or cell dimensions. The face button fits its two-column bounds without
+extra padding.
 
 ### Tetris Specifics
 
@@ -1072,13 +2044,24 @@ scrollbar, while inactive windows continue to reject input.
 - `TETRIS_COLORS` — 7 colors
 - `TETRIS_DELAYS` — Level-based drop speeds (1600ms → 80ms)
 - The `Next` preview uses a 7×7 grid, keeping at least one empty cell
-  between every Tetris/Pentix figure and its frame. It remains an unbounded
-  child in the normal `TVInfoBox` flow; its 23-column row includes both frame
-  sides and the information box height includes the complete footer.
+  between every Tetris/Pentix figure and its frame. Its explicit local bounds
+  are `(0,5)-(23,12)` in the information box, including both frame sides.
+  Score/level rows, separators and best-score rows also have explicit bounds;
+  the information box's final row contains the complete footer.
+- `TVTetrisPreview` is a `TVGroup` owning three `TVStaticText` views: one
+  vertical frame side at each edge and a multiline field between them. Its
+  `setData(figure)` accepts the figure index or `null` for an empty preview;
+  `getData()` returns that value. Character bounds allocate the frame and
+  field, including centering space; frame/text views supply their numeric palette.
+  The field uses `getPalette()` with the figure's DOS attribute on black,
+  while both sides follow the information box's active/passive frame color.
+  Repeated drawing of the same figure retains its field/text nodes. Changing a
+  figure color refreshes native paint without replacing its root; frame views
+  and focused controls remain mounted. Owner-size/font changes retain their state.
 - `TVTetrisDialog` follows DOS Navigator `TGameWindow.Init`: the 12x18 field
   starts at `(2,2)`, the 23-column information view at `4 + Shi*2`, and the
   complete dialog is 54x23 character cells.
-- Ghost piece rendering (transparent preview where piece will land)
+- Ghost piece rendering (dimmed, shaded preview where the piece will land)
 
 ### Server Statistics
 
@@ -1223,7 +2206,11 @@ Entry point. Called via `TV.initTurboVision()`.
 - Size limits use the desktop area for the frame, without reserving shadow
   margins. Maximize fills that area; shadows at its edges are clipped. Default
   Size and DOS proportional fitting use the same shadow-free limits.
-- Persists geometry to localStorage per optional `data-tv-window-storage-key`
+- Reads/writes the owned `TVWindow` bounds through `locate()`/`moveTo()` and
+  `sizeLimits()`, without CSS geometry variables or a separate size-sync path.
+  A viewport/font resize redraws normal clipping or recomputes the maximized
+  whole-cell model extent. Move-only changes preserve the mounted frame/client.
+- Persists geometry to localStorage per explicit window identity
 - `destroy()` persists the final geometry and detaches drag, handle and
   `beforeunload` listeners.
 
@@ -1299,26 +2286,28 @@ Supported syntax: headings (`# H1` through `###### H6`), bold (`**text**`), ital
 - `?file=<name>` — Auto-load a help bundle by catalog name
 - `?topic=<hex>` — Navigate directly to a topic (requires `?file=`)
 - `?search=<query>` — Open search dialog with pre-filled query
-- `?docs=<file.md>` — Open a documentation Markdown file
+- `?doc=<file.md>` — Open a documentation Markdown file
 
 ### Z-Index Hierarchy
 
-The viewer uses a fixed z-index stack for layering:
-
-| Layer | z-index | Element |
-|-------|---------|---------|
-| Desktop pattern | 0 | Background |
-| Help windows | 1 | `tv-window` |
-| Doc windows | 5 | Markdown document viewer |
-| Dialog overlays | 10 | `TVDialog` overlays |
-| Menu bar | 10 | `.tv-menu-bar` (position: relative) |
-| Menu popups | 20 | Dropdown menu panels |
-| Submenus | 25 | Nested submenu panels |
-| Modal overlay | 9999 | Loading dialog |
+The desktop pattern paints at layer 0. TVDialogManager assigns managed windows
+and dialog overlays consecutive stack positions starting at 10, with the active
+host/window last and modal dialogs kept above ordinary targets. The menu bar
+and its popups use layers 100/101; nested popup layers are local to that stack.
+The screen saver is a separate fixed surface at 9999. Do not give individual
+applications fixed layers that bypass the shared manager.
 
 ### Browser regression tests
 
-`tests/test_browser_smoke.py` exercises the viewer in Chrome. The Safari
+`tests/test_tv_browser_backport.py` exercises shared bounds, frames, palettes,
+menus, scrollbars, input focus/selection, editors, histories and every game frame
+in Chrome, including both shells and a generated standalone page. It also plays
+MIDI with the real SoundFont engine, checks a 7,000-row playlist, filter/history,
+seek, pause/resume and resource disposal. `tests/test_passkey_browser.py` uses a
+virtual authenticator; `tests/test_dos_browser.py` runs both real DOS engines,
+graphics mode changes, native fonts, private saves and local/media mounts.
+Each fixture uses isolated storage. The original `tests/test_browser_smoke.py`
+provides additional full-corpus coverage when its original HELP files exist. The Safari
 close/history regression is opt-in: enable **Safari → Settings → Developer →
 Allow remote automation**, then run
 `THELP_SAFARI_TEST=1 .venv/bin/python -m pytest -q tests/test_safari_smoke.py`.

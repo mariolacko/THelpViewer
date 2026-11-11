@@ -3,7 +3,6 @@
   "memory_mb": 64,
   "max_media_bytes": 134217728,
   "allow_full_disk_fallback": false,
-  "text_rendering": true,
   "files": [
     {
       "path": "AUTOEXEC.BAT",

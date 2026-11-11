@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### 2.1.2 maintenance
+
+- Backport the shared TVision drawing and event improvements to the stable 2.1
+  viewer and generated HTML. View bounds/growth now place menu and status bars,
+  frames, scrollbars, histories, dialog controls and game fields. Preserve focus,
+  input selection, source HELP palettes and inactive-window drawing while moving,
+  resizing, zooming or changing colors.
+- Consolidate the shared stylesheet from 3,748 to 469 lines. Remove duplicated
+  control/game geometry and palette rules; retain browser drawing, native text
+  editing, fonts, scrolling and HELP/Markdown content styles. Update both asset
+  trees and cache revisions together.
+- Window large single-column lists instead of mounting thousands of rows.
+  Keep 2.1's directly registered MIDI player and server API, with shared button,
+  display, history, cover and progress drawing, in-place More/Less and audio
+  resource disposal. Keep automatic global-index progress behind the active tool.
+- Render DOS text and graphics through the same native canvas, preserving
+  uploaded fonts, blink, video-mode aspect ratios and gray pause/drag states.
+  Remove the character-cell bridge and text_rendering configuration.
+- Route clicks on owned button artwork once, including the History arrow;
+  opening a popup no longer immediately toggles it closed.
+- Correct Login's signed-out state and Passkey flow, and cover shared controls,
+  all game frames, MIDI playback and both DOS engines in browser regression tests.
+
 ## [2.1.1] — 2026-10-18
 
 - During automatic DOS boot repair, prepare only invalid required packages.

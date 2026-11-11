@@ -23,6 +23,7 @@ const {
     TVMenuItem,
     TVSubMenu,
     TVStatusItem,
+    TVStatusLink,
     NewStatusKey,
     TVStatusLine,
     TVDesktop,
@@ -35,7 +36,6 @@ const {
     fillBorders,
     updateWindowFrameState,
     updateClocks,
-    bindCloseButtons,
     applyThemeAndSyncPalette,
     initializeTVTheme,
     TV_COMMANDS,
@@ -306,6 +306,8 @@ class TVApplicationMenuBar extends TVMenuBar {
         this.downloadItem = downloadItem;
         this.indexItem = indexItem;
         this.indexStatus = { state: "idle" };
+        this.clock = new TVStaticText(new TVRect(0, 0, 10, 1), "\x03");
+        this.clock.owner = this;
     }
     _drawItemName(item) {
         return item === this.rightItem && item.subMenu instanceof TVMenu
@@ -318,15 +320,45 @@ class TVApplicationMenuBar extends TVMenuBar {
         const left = this.menu.entries().filter((item) =>
             item !== this.rightItem && item !== this.downloadItem && item !== this.indexItem);
         return `<nav class="tv-menu-items">${left.map((item) => this.drawItem(item, "bar")).join("")}`
-            + `<div class="tv-menu-right">${this.drawItem(this.rightItem, "bar")}${this.drawItem(this.downloadItem, "bar")}${this.drawItem(this.indexItem, "bar")}</div></nav>`;
+            + `</nav><div class="tv-menu-right">${this.drawItem(this.rightItem, "bar")}${this.drawItem(this.downloadItem, "bar")}${this.drawItem(this.indexItem, "bar")}</div>`
+            + this.clock.draw();
     }
     bindRoot(root) {
+        this.rightRoot = this.directChild(root, ".tv-menu-right");
+        this.clock.resolve(root);
         super.bindRoot(root);
+        if (!root) { this.clock.bindRoot(null); return this; }
         updateClocks();
         this.downloadItem.update(this.downloadItem.status, this);
         this.showDownloads();
         this.setIndexStatus(this.indexStatus);
         return this;
+    }
+    _layout() {
+        if (!this.itemsRoot || !this.root?.clientWidth) { return; }
+        const columns = Math.floor(this.root.clientWidth / measureCells().width);
+        this.setBounds(new TVRect(0, 0, columns, 1));
+        this.root.style.height = `${this.size.y}em`;
+        this._itemRects.clear();
+        const right = [this.rightItem, this.downloadItem, this.indexItem].filter((item) => {
+            const element = this.rootByItem.get(item) || this.itemElements.get(item);
+            return element && !element.hidden;
+        });
+        const clockWidth = Math.min(10, columns), budget = Math.max(0, columns - clockWidth - 3);
+        const widths = new Map(), minimum = right.length ? Math.min(3, Math.floor(budget / right.length)) : 0;
+        let remaining = budget;
+        for (let index = right.length - 1; index >= 0; index -= 1) {
+            const item = right[index], natural = this._itemWidth(item);
+            const limit = item === this.rightItem ? Math.max(minimum, Math.floor(columns / 3)) : natural;
+            const width = Math.min(natural, limit, Math.max(minimum, remaining - index * minimum));
+            widths.set(item, width); remaining -= width;
+        }
+        const rightWidth = [...widths.values()].reduce((sum, width) => sum + width, 0);
+        const rightLeft = columns - clockWidth - rightWidth;
+        this.clock.locate(new TVRect(columns - clockWidth, 0, columns, 1));
+        this._layoutItems(this.rightRoot, right, new TVRect(rightLeft, 0, columns - clockWidth, 1), widths);
+        const left = this.menu.entries().filter((item) => item !== this.rightItem && item !== this.downloadItem && item !== this.indexItem);
+        this._layoutItems(this.itemsRoot, left, new TVRect(0, 0, rightLeft, 1));
     }
     setIndexStatus(status) {
         this.indexStatus = status || { state: "idle" };
@@ -343,6 +375,7 @@ class TVApplicationMenuBar extends TVMenuBar {
         element.hidden = !["building", "paused"].includes(this.indexStatus.state);
         this.topLevelActions = this.topLevelActions.filter((item) => !item.hidden);
         if (!element.hidden && !this.topLevelActions.includes(element)) { this.topLevelActions.push(element); }
+        this.drawView();
     }
     showDownloads() {
         const root = this.rootByItem.get(this.downloadItem);
@@ -352,6 +385,7 @@ class TVApplicationMenuBar extends TVMenuBar {
             && !this.downloadItem.status.errors && this.activeRoot !== root;
         this.menuRoots = this.menuRoots.filter((item) => !item.hidden);
         if (!root.hidden && !this.menuRoots.includes(root)) { this.menuRoots.push(root); }
+        this.drawView();
     }
     refresh() {
         super.refresh();
@@ -413,11 +447,11 @@ function buildPageMenuBar(root, context, session = null, downloadProgress = root
         dialog("calendar", "Ca~l~endar"),
         dialog("ascii", "Ascii ~T~able"),
         dialog("calc", "~C~alculator"),
-        dialog("midi", "~M~IDI Player"),
         ...(!session?.authenticated ? [dialog("colors", "C~o~lors")] : []),
         dialog("widgets", "~W~idget Gallery"),
         dialog("grid", "~G~rid Viewer"),
         dialog("systeminfo", "System ~I~nformation"),
+        dialog("midi", "~M~IDI Player"),
         NewLine(),
         pageSubMenu("~S~creen saver", savers, hcSystemMenu),
         ...(!session?.authenticated ? [
@@ -438,8 +472,7 @@ function buildPageMenuBar(root, context, session = null, downloadProgress = root
     const accountItem = buildAccountMenu(session);
     top.push(accountItem);
     const menuBar = new TVApplicationMenuBar(new TVRect(), pageMenu(top), accountItem, downloadProgress);
-    root.innerHTML = menuBar.draw()
-        + '<div class="tv-menu-clock" data-tv-clock>00:00:00</div>';
+    root.innerHTML = menuBar.draw();
     menuBar.bindRoot(root);
     menuBar.setIndexStatus(indexStatus);
     return menuBar;
@@ -455,46 +488,45 @@ class TVPageStatusLine extends TVStatusLine {
         switch (entry.type) {
             case "back":
                 return NewStatusKey(
-                    renderHotkeyMarkup(entry.label || "~B~ack"),
+                    entry.label || "~B~ack",
                     0,
                     "back",
                     { value: true, fallback: this.context.indexHref },
                 );
             case "index-link":
-                return `<a class="tv-status-item" href="${escapeHtml(this.context.indexHref)}">${renderHotkeyMarkup(entry.label || "~F1~ Index")}</a>`;
+                return new TVStatusLink(entry.label || "~F1~ Index", this.context.indexHref);
             case "context-help":
                 return NewStatusKey(
-                    renderHotkeyMarkup(entry.label || "~F1~ Help"),
+                    entry.label || "~F1~ Help",
                     kbF1,
                     "context-help",
                 );
             case "dialog":
                 return NewStatusKey(
-                    renderHotkeyMarkup(entry.label || ""),
+                    entry.label || "",
                     entry.dialog === "search" ? kbF3 : 0,
                     "dialog-open",
                     entry.dialog,
                 );
-            case "hint":
-                return `<span class="tv-status-hint">${escapeHtml(this.context.statusHint)}</span>`;
             case "link":
-                return `<a class="tv-status-link" href="${escapeHtml(entry.href)}" target="_blank" rel="noopener">${escapeHtml(entry.label)}</a>`;
+                return new TVStatusLink(entry.label, entry.href, true);
             default:
-                return "";
+                return null;
         }
     }
 
+    hint() {
+        return this.context.uiConfig.status.some(entry => entry.type === "hint") ? this.context.statusHint : "";
+    }
+
     render() {
-        const items = this.context.uiConfig.status
-            .map((entry) => this.renderItem(entry))
-            .filter(Boolean);
-        const hintIndex = items.findIndex((item) => typeof item === "string" && item.indexOf("tv-status-hint") !== -1);
-        if (hintIndex > 0) {
-            items.splice(hintIndex, 0, '<span class="tv-status-separator" aria-hidden="true">│</span>');
-        }
-        this.items = items;
-        this.root.innerHTML = this.draw();
-        this.bindItems();
+        this.items = [...this.context.uiConfig.status
+            .filter(entry => entry.type !== "link")
+            .map(entry => this.renderItem(entry))
+            .filter(Boolean)];
+        this.defs.items = this.items;
+        this.rightItems = this.context.uiConfig.status.filter(entry => entry.type === "link").map(entry => this.renderItem(entry));
+        return super.render();
     }
 }
 
@@ -503,13 +535,10 @@ function buildAppChrome() {
     const statusLine = document.querySelector("[data-tv-status-line]");
     const context = new TVAppContext();
 
-    if (menuBar) {
-        buildPageMenuBar(menuBar, context);
-    }
-
-    if (statusLine) {
-        new TVPageStatusLine(new TVRect(), context).bindRoot(statusLine).render();
-    }
+    const menuView = menuBar ? buildPageMenuBar(menuBar, context) : null;
+    const statusView = statusLine ? new TVPageStatusLine(new TVRect(), context).bindRoot(statusLine) : null;
+    statusView?.render();
+    return { menuBar: menuView, statusLine: statusView };
 }
 
 class TurboVisionWindowResizer {
@@ -529,6 +558,10 @@ class TurboVisionWindowResizer {
         this.onHandleMouseDown = (event) => this.startResize(event);
         this.onMoveHandleMouseDown = (event) => this.startMove(event);
         this.onBeforeUnload = () => this.persistState();
+        this.onViewportResize = () => {
+            if (this.windowElement.classList.contains("is-maximized")) { this._maximizeBounds(); }
+            else { this.windowElement._tvView._drawBounds(); }
+        };
         const initial = this.captureGeometry();
         this.defaultSize = { cols: initial.cols, rows: initial.rows };
         this.bind();
@@ -537,6 +570,7 @@ class TurboVisionWindowResizer {
             this.restoreSnapshot = this.captureGeometry();
         }
         window.addEventListener("beforeunload", this.onBeforeUnload, { passive: true });
+        window.addEventListener("resize", this.onViewportResize, { passive: true });
     }
 
     bind() {
@@ -559,8 +593,8 @@ class TurboVisionWindowResizer {
         }
         const left = Math.max(0, Math.floor((this.desktop.clientWidth - this.windowElement.offsetWidth) / 2));
         const top = Math.max(0, Math.floor((this.desktop.clientHeight - this.windowElement.offsetHeight) / 2));
-        this.windowElement.style.setProperty("--tv-window-left", `${left}px`);
-        this.windowElement.style.setProperty("--tv-window-top", `${top}px`);
+        const cell = measureCells();
+        this.windowElement._tvView.moveTo(left / cell.width, top / cell.height);
     }
 
     startResize(event) {
@@ -571,16 +605,15 @@ class TurboVisionWindowResizer {
         event.preventDefault();
         this.setResizeFrame(true);
         const cell = measureCells();
-        const style = getComputedStyle(this.windowElement);
-        const left = this.numericVar(style, "--tv-window-left", this.windowElement.offsetLeft);
-        const top = this.numericVar(style, "--tv-window-top", this.windowElement.offsetTop);
+        const geometry = this.captureGeometry(), limits = this.windowElement._tvView.sizeLimits();
+        const { left, top } = geometry;
         this.dragState = {
             startX: event.clientX,
             startY: event.clientY,
-            startCols: this.numericVar(style, "--tv-window-cols", Math.round(this.windowElement.offsetWidth / cell.width)),
-            startRows: this.numericVar(style, "--tv-window-rows", Math.round(this.windowElement.offsetHeight / cell.height)),
-            minCols: this.numericVar(style, "--tv-window-min-cols", 80),
-            minRows: this.numericVar(style, "--tv-window-min-rows", 25),
+            startCols: geometry.cols,
+            startRows: geometry.rows,
+            minCols: limits.min.x,
+            minRows: limits.min.y,
             maxCols: this.desktop ? Math.max(1, Math.floor((this.desktop.clientWidth - left) / cell.width)) : Infinity,
             maxRows: this.desktop ? Math.max(1, Math.floor((this.desktop.clientHeight - top) / cell.height)) : Infinity,
             cellWidth: cell.width,
@@ -600,12 +633,12 @@ class TurboVisionWindowResizer {
         if (this.windowElement.classList.contains("is-maximized")) {
             return;
         }
-        const style = getComputedStyle(this.windowElement);
+        const geometry = this.captureGeometry();
         this.moveState = {
             startX: event.clientX,
             startY: event.clientY,
-            startLeft: this.numericVar(style, "--tv-window-left", this.windowElement.offsetLeft),
-            startTop: this.numericVar(style, "--tv-window-top", this.windowElement.offsetTop),
+            startLeft: geometry.left,
+            startTop: geometry.top,
             maxLeft: this.desktop ? Math.max(0, this.desktop.clientWidth - this.windowElement.offsetWidth) : Infinity,
             maxTop: this.desktop ? Math.max(0, this.desktop.clientHeight - this.windowElement.offsetHeight) : Infinity,
         };
@@ -634,23 +667,14 @@ class TurboVisionWindowResizer {
         updateWindowFrameState(this.windowElement, !this.windowElement.classList.contains("is-window-inactive"));
     }
 
-    numericVar(style, name, fallback) {
-        const value = Number.parseFloat(style.getPropertyValue(name));
-        return Number.isFinite(value) ? value : fallback;
-    }
-
     clamp(value, min, max) {
         return Math.min(Math.max(value, min), max);
     }
 
     captureGeometry() {
-        const style = getComputedStyle(this.windowElement);
-        return {
-            left: this.numericVar(style, "--tv-window-left", this.windowElement.offsetLeft),
-            top: this.numericVar(style, "--tv-window-top", this.windowElement.offsetTop),
-            cols: this.numericVar(style, "--tv-window-cols", Math.round(this.windowElement.offsetWidth / measureCells().width)),
-            rows: this.numericVar(style, "--tv-window-rows", Math.round(this.windowElement.offsetHeight / measureCells().height)),
-        };
+        const view = this.windowElement._tvView, cell = measureCells();
+        return { left: view.origin.x * cell.width, top: view.origin.y * cell.height,
+            cols: Math.round(view.size.x), rows: Math.round(view.size.y) };
     }
 
     sanitizeGeometry(state) {
@@ -673,10 +697,18 @@ class TurboVisionWindowResizer {
     }
 
     applyGeometry(geometry) {
-        this.windowElement.style.setProperty("--tv-window-left", `${geometry.left}px`);
-        this.windowElement.style.setProperty("--tv-window-top", `${geometry.top}px`);
-        this.windowElement.style.setProperty("--tv-window-cols", String(geometry.cols));
-        this.windowElement.style.setProperty("--tv-window-rows", String(geometry.rows));
+        const view = this.windowElement._tvView, cell = measureCells(), limits = view.sizeLimits();
+        const x = geometry.left / cell.width, y = geometry.top / cell.height;
+        const minCols = this.desktop ? Math.min(limits.min.x, Math.floor(this.desktop.clientWidth / cell.width)) : limits.min.x;
+        const minRows = this.desktop ? Math.min(limits.min.y, Math.floor(this.desktop.clientHeight / cell.height)) : limits.min.y;
+        view.locate(new TVRect(x, y, x + Math.min(limits.max.x, Math.max(minCols, geometry.cols)),
+            y + Math.min(limits.max.y, Math.max(minRows, geometry.rows))));
+    }
+
+    _maximizeBounds() {
+        const cell = measureCells(), desktop = this.desktop.getBoundingClientRect();
+        this.windowElement._tvView.locate(new TVRect(0, 0,
+            Math.floor(desktop.width / cell.width), Math.floor(desktop.height / cell.height)));
     }
 
     place(geometry) {
@@ -691,11 +723,11 @@ class TurboVisionWindowResizer {
     restoreDefaultSize() {
         const current = this.windowElement.classList.contains("is-maximized") && this.restoreSnapshot
             ? this.restoreSnapshot : this.captureGeometry();
-        const cell = measureCells(), style = getComputedStyle(this.windowElement);
+        const cell = measureCells(), limits = this.windowElement._tvView.sizeLimits();
         const maxCols = this.desktop ? Math.max(1, Math.floor(this.desktop.clientWidth / cell.width)) : Infinity;
         const maxRows = this.desktop ? Math.max(1, Math.floor(this.desktop.clientHeight / cell.height)) : Infinity;
-        const cols = Math.min(maxCols, Math.max(this.defaultSize.cols, this.numericVar(style, "--tv-window-min-cols", 1)));
-        const rows = Math.min(maxRows, Math.max(this.defaultSize.rows, this.numericVar(style, "--tv-window-min-rows", 1)));
+        const cols = Math.min(maxCols, Math.max(this.defaultSize.cols, limits.min.x));
+        const rows = Math.min(maxRows, Math.max(this.defaultSize.rows, limits.min.y));
         this.place({ cols, rows,
             left: this.desktop ? this.clamp(current.left, 0, Math.max(0, this.desktop.clientWidth - cols * cell.width)) : current.left,
             top: this.desktop ? this.clamp(current.top, 0, Math.max(0, this.desktop.clientHeight - rows * cell.height)) : current.top,
@@ -739,7 +771,6 @@ class TurboVisionWindowResizer {
         this.windowElement.classList.remove("is-maximized");
         this.restoreSnapshot = restore || current;
         this.applyGeometry(this.restoreSnapshot);
-        this.enforceMinimumSize();
         if (this.desktop) {
             const geometry = this.captureGeometry();
             geometry.left = this.clamp(geometry.left, 0, Math.max(0, this.desktop.clientWidth - this.windowElement.offsetWidth));
@@ -754,26 +785,6 @@ class TurboVisionWindowResizer {
         return true;
     }
 
-    enforceMinimumSize() {
-        const style = getComputedStyle(this.windowElement);
-        const cols = this.numericVar(style, "--tv-window-cols", 1);
-        const rows = this.numericVar(style, "--tv-window-rows", 1);
-        const minCols = this.numericVar(style, "--tv-window-min-cols", 1);
-        const minRows = this.numericVar(style, "--tv-window-min-rows", 1);
-        let changed = false;
-        if (cols < minCols) {
-            this.windowElement.style.setProperty("--tv-window-cols", String(minCols));
-            changed = true;
-        }
-        if (rows < minRows) {
-            this.windowElement.style.setProperty("--tv-window-rows", String(minRows));
-            changed = true;
-        }
-        if (changed) {
-            this.restoreSnapshot = this.captureGeometry();
-        }
-    }
-
     maximize(persist = true) {
         if (!this.desktop) {
             return;
@@ -782,8 +793,7 @@ class TurboVisionWindowResizer {
             this.restoreSnapshot = this.captureGeometry();
         }
         this.windowElement.classList.add("is-maximized");
-        this.windowElement.style.setProperty("--tv-window-left", "0px");
-        this.windowElement.style.setProperty("--tv-window-top", "0px");
+        this._maximizeBounds();
         const zoomGlyph = this.windowElement.querySelector("[data-tv-zoom-glyph]");
         if (zoomGlyph) { zoomGlyph.textContent = "↓"; }
         fillBorders();
@@ -836,8 +846,7 @@ class TurboVisionWindowResizer {
         this.windowElement._tvView?.handleEvent(new TVEvent(evCommand, {
             command: TV_COMMANDS.RESIZE, infoPtr: bounds, nativeEvent: event,
         }));
-        this.windowElement.style.setProperty("--tv-window-cols", String(bounds.width));
-        this.windowElement.style.setProperty("--tv-window-rows", String(bounds.height));
+        this.applyGeometry({ ...this.captureGeometry(), cols: bounds.width, rows: bounds.height });
         fillBorders();
     };
 
@@ -875,8 +884,8 @@ class TurboVisionWindowResizer {
     applyMove = () => {
         this.moveFrame = null;
         if (!this.moveState || this.moveState.nextLeft === undefined) { return; }
-        this.windowElement.style.setProperty("--tv-window-left", `${this.moveState.nextLeft}px`);
-        this.windowElement.style.setProperty("--tv-window-top", `${this.moveState.nextTop}px`);
+        const cell = measureCells();
+        this.windowElement._tvView.moveTo(this.moveState.nextLeft / cell.width, this.moveState.nextTop / cell.height);
     };
 
     onMoveEnd = (event) => {
@@ -916,6 +925,7 @@ class TurboVisionWindowResizer {
         document.removeEventListener("mouseup", this.onMoveEnd, true);
         window.removeEventListener("blur", this.onDragCancel);
         window.removeEventListener("beforeunload", this.onBeforeUnload);
+        window.removeEventListener("resize", this.onViewportResize);
         if (this.handle) {
             this.handle.removeEventListener("mousedown", this.onHandleMouseDown);
         }
@@ -1062,7 +1072,6 @@ class TVApplication extends TVProgram {
         } else if (event.command === "downloads-failed") {
             void this.downloadProgress?.failedItem(control, this.desktopView);
         } else if (event.command === "account-logout") {
-            this.dialogManager.open("login");
             this.dialogManager.get("login")?.handleEvent(new TVEvent(evCommand, { command: "login-sign-out" }));
         } else if (String(event.command).startsWith("account-")) {
             if (["account-rebuild-dos", "account-rebuild-midi"].includes(event.command)) {
@@ -1118,7 +1127,6 @@ class TVApplication extends TVProgram {
             const root = TVView._fromHTML(helpWindow.draw());
             helpWindow.resolve(root);
             this.desktopView.insert(helpWindow);
-            bindCloseButtons(root);
 
             const frame = root.querySelector("[data-tv-scroll-frame]");
             const scrollbar = frame ? new TVScrollBar(new TVRect()).bindRoot(frame) : null;
@@ -1156,8 +1164,9 @@ class TVApplication extends TVProgram {
     }
 
     initChrome() {
-        buildAppChrome();
-        bindCloseButtons();
+        const { menuBar, statusLine } = buildAppChrome();
+        if (menuBar) { this.insert(menuBar); }
+        if (statusLine) { this.insert(statusLine); }
     }
 
     _setAuthSession(session) {
@@ -1177,7 +1186,7 @@ class TVApplication extends TVProgram {
         if (nextAdmin) { void this.helpPackagesDialog?.checkFirstRun(); }
         const menuBar = document.querySelector("[data-tv-menu-bar]");
         if (menuBar) {
-            buildPageMenuBar(menuBar, new TVAppContext(), this.authSession, this.downloadProgress);
+            this.insert(buildPageMenuBar(menuBar, new TVAppContext(), this.authSession, this.downloadProgress));
             this.menus?.refresh();
             void this.downloadProgress?.refresh();
         }
@@ -1215,15 +1224,6 @@ class TVApplication extends TVProgram {
         this.menus.commandTarget = this;
         this.downloadProgress = this.menus.menuView?.downloadItem;
         this.downloadProgress?.start(() => this.menus.menuView);
-        if (hostWindow && this.boundHostWindow !== hostWindow) {
-            this.boundHostWindow = hostWindow;
-            hostWindow.addEventListener("mousedown", (event) => {
-                if (event.target.closest(".tv-close-control, .tv-grow-handle, .tv-menu-bar, .tv-status-line")) {
-                    return;
-                }
-                this.dialogManager.activateHostWindow();
-            });
-        }
         this.registerDialog("about", () => new TVAboutDialog());
         const loginDialog = this.registerDialog("login", () => new TVLoginDialog());
         const accountDialog = this.registerDialog("account", () => new TVAccountDialog());
@@ -1239,16 +1239,15 @@ class TVApplication extends TVProgram {
         this.registerDialog("dos-packages", () => new TVDosPackagesDialog());
         this.midiSourcesDialog = this.registerDialog("midi-sources", () => new TVMidiSourcesDialog());
         this.midiSourcesDialog.onMidiApplied = () => {
-            const player = this.dialogManager.get("midi");
-            player?.stopPlayback();
-            if (player) { player.pendingPlay = null; void player.refreshCatalog(); }
+            this.broadcast("content-changed", "midi");
         };
         this.serverConfigDialog.onBeforeRebuild = (resource) => {
             if (resource === "midi") {
-                const player = this.dialogManager.get("midi");
-                player?.stopPlayback();
-                if (player) { player.pendingPlay = null; }
+                this.broadcast("content-reset", "midi");
             }
+        };
+        this.serverConfigDialog.onRebuildStarted = (resource) => {
+            if (resource === "midi") { this.broadcast("content-changed", "midi"); }
         };
         loginDialog.onRegister = () => this.dialogManager.open("registration");
         loginDialog.onSessionChange = (session) => this._setAuthSession(session);
@@ -1261,9 +1260,9 @@ class TVApplication extends TVProgram {
         this.registerDialog("calendar", () => new TVCalendarDialog());
         this.registerDialog("ascii", () => new TVAsciiTableDialog());
         this.registerDialog("calc", () => new TVCalculatorDialog());
-        this.registerDialog("midi", () => new TVMidiPlayerDialog());
         this.registerDialog("colors", () => new TVColorsDialog());
         this.registerDialog("widgets", () => new TVViewGalleryDialog());
+        this.registerDialog("midi", () => new TVMidiPlayerDialog());
         this.registerDialog("grid", () => new TVGridDemoDialog());
         this.registerDialog("systeminfo", () => new TVSystemInformationDialog());
         this.searchDialog = this.registerDialog("search", () => new TVSearchDialog());
@@ -1289,10 +1288,12 @@ class TVApplication extends TVProgram {
 
     start() {
         this.initTheme();
+        this.bindRoot(document.querySelector(".tv-app"));
         this.initChrome();
         this.initShellWidgets();
         this.initLayout();
     }
+
 }
 
 

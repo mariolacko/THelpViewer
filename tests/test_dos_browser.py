@@ -17,8 +17,8 @@ from test_dos_prompt import floppy_image, cd_image
 
 
 @pytest.mark.skipif(NODE is None or CHROME is None, reason="Chrome and Node.js are required")
-@pytest.mark.parametrize("blocked_worker,text_rendering", [(False, True), (True, True), (False, False)])
-def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker, text_rendering):
+@pytest.mark.parametrize("blocked_worker", [False, True])
+def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker):
     with tempfile.TemporaryDirectory(prefix="thelp-dos-browser-") as temporary:
         root = Path(temporary).resolve()
         # DOS interaction must not race a modal rebuild of the developer's
@@ -29,18 +29,19 @@ def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker,
         docs = root / "docs"
         docs.mkdir()
         (root / "config.json").write_text(json.dumps({"sources": [], "memory_mb": 64,
-            "allow_full_disk_fallback": True, "text_rendering": text_rendering,
+            "allow_full_disk_fallback": True,
             "files": [{"path": "README.TXT", "text": ["Shared test disk"]}]}))
-        accounts = AccountStore(root / "var")
+        accounts = AccountStore(root / "data")
         accounts.create_user("player")
         # This fixture is an already configured DOS server, not first-run setup.
-        (root / "var" / "content-settings.json").write_text(json.dumps({
+        (root / "data" / "content-settings.json").write_text(json.dumps({
             "configured": True, "help_groups": [], "dos_packages": [],
         }), encoding="utf-8")
         with accounts._connect() as database:
             ident = database.execute("SELECT id FROM accounts WHERE username='player'").fetchone()[0]
             token = new_session(database, ident)
-        store = DosPromptStore(root / "var" / "dos", root / "config.json")
+        store = DosPromptStore(root / "var" / "dos", root / "config.json",
+            disk_dir=root / "var/dos/c", users_dir=root / "data/dos/users")
         store.prepare()
         extra_game = os.environ.get("THELP_DOS_TEST_GAME", "")
         extra_software = os.environ.get("THELP_DOS_TEST_SOFTWARE", "")
@@ -52,10 +53,10 @@ def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker,
             # Optional local smoke test against the actually prepared public disk.
             prepared = Path(__file__).resolve().parents[1] / "var" / "dos" / "c"
             for name in ([extra_game] if extra_game else ["BLKDROP", "SUDOKU86", "ZMIY"]):
-                shutil.copytree(prepared / "GAMES" / name, store.root / "base" / "c" / "GAMES" / name, dirs_exist_ok=True)
+                shutil.copytree(prepared / "GAMES" / name, store.disk_dir / "GAMES" / name, dirs_exist_ok=True)
             if audio_test:
                 # Isolated test disk only: settings produced by DOOM's SETUP.
-                cfg = store.root / "base" / "c" / "GAMES" / "DOOM" / "DEFAULT.CFG"
+                cfg = store.disk_dir / "GAMES" / "DOOM" / "DEFAULT.CFG"
                 configured = cfg.read_bytes()
                 for old, new in ((b"snd_musicdevice\t\t0", b"snd_musicdevice\t\t3"),
                                  (b"snd_sfxdevice\t\t0", b"snd_sfxdevice\t\t3"),
@@ -65,39 +66,42 @@ def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker,
                     configured = configured.replace(old, new)
                 cfg.write_bytes(configured)
         # BIOS mode 13h: fill all 320x200 pixels red, wait for a key, restore text.
-        (store.root / "base" / "c" / "GFX.COM").write_bytes(bytes.fromhex(
+        (store.disk_dir / "GFX.COM").write_bytes(bytes.fromhex(
             "b81300cd10b800a08ec031ffb900fab004f3aa31c0cd16b80300cd10cd20"))
         # BIOS mode 12h: 640x480 with a red last pixel; wait, then restore text.
-        (store.root / "base" / "c" / "GFX480.COM").write_bytes(bytes.fromhex(
+        (store.disk_dir / "GFX480.COM").write_bytes(bytes.fromhex(
             "b81200cd10b8040c31dbb97f02badf01cd1031c0cd16b80300cd10cd20"))
         # Direct B800 writes, not DOS stdout: 'A' and a CP437 full block.
-        (store.root / "base" / "c" / "TEXTMEM.COM").write_bytes(bytes.fromhex(
+        (store.disk_dir / "TEXTMEM.COM").write_bytes(bytes.fromhex(
             "b800b88ec026c7060000411f26c7060200db2e31c0cd16b80300cd10cd20"))
-        # Standard ROM 8x8 font switches an 80-column mode to 50 text rows.
-        (store.root / "base" / "c" / "TEXT50.COM").write_bytes(bytes.fromhex(
-            "b8121131dbcd1031c0cd16b80300cd10cd20"))
+        # Standard ROM 8x8 font switches to 50 rows; paint the final row.
+        (store.disk_dir / "TEXT50.COM").write_bytes(bytes.fromhex(
+            "b8121131dbcd10b800b88ec026c706a01edb2e31c0cd16b80300cd10cd20"))
         # BIOS uploads a custom solid glyph for A, paints it, waits, then restores
         # the ROM font. The browser must never substitute CP437 for this glyph.
         custom = bytearray.fromhex(
             "0e07b81011bb0010b90100ba4100bd0000cd10b800b88ec026c7060000411f31c0cd16b80300cd10cd20")
         custom[15:17] = (0x100 + len(custom)).to_bytes(2, "little")
-        (store.root / "base" / "c" / "CUSTOM.COM").write_bytes(custom + b"\xff" * 16)
+        (store.disk_dir / "CUSTOM.COM").write_bytes(custom + b"\xff" * 16)
         # Set the BIOS NumLock flag in this isolated test, independent of host LEDs.
-        (store.root / "base" / "c" / "NUMON.COM").write_bytes(bytes.fromhex(
+        (store.disk_dir / "NUMON.COM").write_bytes(bytes.fromhex(
             "1eb840008ed8800e1700201fc3"))
-        nested = store.root / "base" / "c" / "FREEDOS" / "APPINFO"
+        nested = store.disk_dir / "FREEDOS" / "APPINFO"
         nested.mkdir(parents=True, exist_ok=True)
         (nested / "TEST.LSM").write_bytes(b"nested software metadata\r\n")
-        (store.root / "base" / "c" / "UNUSED.DAT").write_bytes(bytes(3 * 1024 * 1024))
+        (store.disk_dir / "UNUSED.DAT").write_bytes(bytes(3 * 1024 * 1024))
         media_id = store.add_media(ident, "floppy", floppy_image())
         cd_id = store.add_media(ident, "cd", cd_image())
         port = _free_port()
         url = f"http://127.0.0.1:{port}/"
+        store.downloads.close()
         server_log = (root / "server.log").open("w")
         server = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "thelpviewer.server.app:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "info"],
             stdout=server_log, stderr=subprocess.DEVNULL,
             env={**os.environ, "THELP_STATE_DIR": str(root / "var"),
+                "THELP_DATA_DIR": str(root / "data"), "THELP_DEV_AUTO_LOGIN": "0",
+                "THELP_SOURCES_DIR": str(root / "var/sources"), "THELP_DOWNLOADS_DIR": str(root / "var/downloads"),
                 "THELP_HELPS_DIR": str(helps), "THELP_DOCS_DIR": str(docs),
                 "THELP_STATISTICS_PATH": str(root / "var" / "statistics.sqlite3"),
                 "THELP_DOS_CONFIG_PATH": str(root / "config.json"),
@@ -113,7 +117,7 @@ def test_dos_prompt_real_runtime_save_restart_and_browser_mounts(blocked_worker,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             debugging = _wait_for_file(root / "chrome" / "DevToolsActivePort").splitlines()[0]
             script = r'''
-const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame, gameCommand, audioTest, softwarePath, softwareCommand, screenshotPath, softwareOutput, textRendering] = process.argv.slice(1);
+const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame, gameCommand, audioTest, softwarePath, softwareCommand, screenshotPath, softwareOutput] = process.argv.slice(1);
 (async () => {
  const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, {method:'PUT'})).json();
  const socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -200,11 +204,19 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   const bottomOkay=bottomFill.getBoundingClientRect().width>bottom.getBoundingClientRect().width*0.8
    &&bottomFill.textContent.includes('═')
    &&Math.abs(bottom.querySelector('.tv-grow-handle').getBoundingClientRect().right-bottom.getBoundingClientRect().right)<1;
+  const paintedBackground=element=>{
+   for(let part=element;part;part=part.parentElement){
+    const color=getComputedStyle(part).backgroundColor;
+    if(color!=='rgba(0, 0, 0, 0)')return color;
+   }
+  };
   const allBlack=[dos.root,dos.root.querySelector('.tv-border-top'),bottom,dos.root.querySelector('.tv-frame')]
-   .every(el=>getComputedStyle(el).backgroundColor==='rgb(0, 0, 0)');
-  const nestedLoaded=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/FREEDOS/APPINFO/TEST.LSM')).includes('nested software');
+   .every(el=>paintedBackground(el)==='rgb(0, 0, 0)');
+  let nestedLoaded;try{nestedLoaded=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/FREEDOS/APPINFO/TEST.LSM')).includes('nested software');}catch(error){throw Error('Nested file read: '+error+' '+JSON.stringify(await dos.view.ci.fsTree()));}
   const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
-  const rendered=dos.view.textMode ? dos.view.textScreen.root.textContent.includes('C:') : pixels.some((value,index)=>index%4!==3&&value>0);
+  const rendered=pixels.some((value,index)=>index%4!==3&&value>0);
+  if(canvas.hidden||dos.view.root.querySelectorAll('canvas').length!==1
+   ||dos.view.root.querySelector('.tv-text-screen'))throw Error('DOS created a second text presentation');
   async function command(text,keypad=false){
    if(window.commandCi!==dos.view.ci){window.commandCi=dos.view.ci;dos.view.ci.events().onStdout(text=>console.log('DOS command stdout: '+text));}
    dos.view.focus();
@@ -225,39 +237,31 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   await command('custom');
   await new Promise((resolve,reject)=>{const end=Date.now()+3000;const check=()=>{
    const p=canvas.getContext('2d').getImageData(0,0,8,16).data;
-   if(!dos.view.textMode&&!canvas.hidden&&p.every((v,i)=>i%4===3||v===255)){resolve();return;}
-   if(Date.now()>end){reject(Error('Custom DOS font did not retain native pixel rendering: '+JSON.stringify({text:dos.view.textMode,hidden:canvas.hidden,pixels:Array.from(p.slice(0,32)),width:canvas.width,height:canvas.height})));return;}setTimeout(check,30);
+   if(!canvas.hidden&&p.every((v,i)=>i%4===3||v===255)){resolve();return;}
+   if(Date.now()>end){reject(Error('Custom DOS font did not retain native pixel rendering: '+JSON.stringify({hidden:canvas.hidden,pixels:Array.from(p.slice(0,32)),width:canvas.width,height:canvas.height})));return;}setTimeout(check,30);
   };check();});
   await command('');
-  if(${JSON.stringify(textRendering)}==='false'){
-   await new Promise(resolve=>setTimeout(resolve,250));
-   if(dos.session.text_rendering!==false||dos.view.textMode||canvas.hidden
-    ||!canvas.getContext('2d').getImageData(0,0,640,400).data.some((v,i)=>i%4!==3&&v>0))
-    throw Error('Configured canvas-only rendering did not display DOS text');
-   await dos.stop(false);return {smokeOnly:true,canvasOnly:true};
-  }
-  if(!dos.view.textMode||!canvas.hidden||dos.view.textScreen.owner!==dos.view)
-   throw Error('Standard DOS text was not rendered by the shared character view');
   await command('textmem');
   await new Promise((resolve,reject)=>{const end=Date.now()+3000;const check=()=>{
-   const screen=dos.view.textScreen.screen;
-   if(dos.view.textMode&&screen.cells[0][0]===65&&screen.cells[1][0]===219){resolve();return;}
-   if(Date.now()>end){reject(Error('Direct video-memory cells were not published'));return;}setTimeout(check,30);
+   const p=canvas.getContext('2d').getImageData(8,0,8,16).data;
+   if(p.every((v,i)=>v===[255,255,85,255][i%4])){resolve();return;}
+   if(Date.now()>end){reject(Error('Direct video-memory full block was not painted'));return;}setTimeout(check,30);
   };check();});
-  const chars=dos.view.textScreen.root.querySelectorAll('.tv-text-screen-row > span');
-  if(chars[0].textContent!=='A'||chars[1].textContent!=='█'||getComputedStyle(chars[0]).color!=='rgb(255, 255, 255)'
-   ||getComputedStyle(chars[0]).backgroundColor!=='rgb(0, 0, 170)')throw Error('Native glyph/attribute palette differs');
+  const letter=canvas.getContext('2d').getImageData(0,0,8,16).data;
+  const colors=new Set(Array.from({length:128},(_,i)=>Array.from(letter.slice(i*4,i*4+3)).join(',')));
+  if(!colors.has('255,255,255')||!colors.has('0,0,170')||colors.size!==2)
+   throw Error('Native glyph/attribute palette differs');
   await command('');
   await command('text50');
   await new Promise((resolve,reject)=>{const end=Date.now()+3000;const check=()=>{
-   if(dos.view.textMode&&dos.view.textScreen.screen.rows===50){resolve();return;}
-   if(Date.now()>end){reject(Error('80x50 text mode was not published'));return;}setTimeout(check,30);
+   const p=canvas.getContext('2d').getImageData(0,392,8,8).data;
+   if(p.every((v,i)=>v===[255,255,85,255][i%4])){resolve();return;}
+   if(Date.now()>end){reject(Error('Final 80x50 text row was not painted'));return;}setTimeout(check,30);
   };check();});
   await command('');
   if(${JSON.stringify(softwarePath)}){
    await command('cd '+String.fromCharCode(92)+${JSON.stringify(softwarePath)}.replaceAll('/',String.fromCharCode(92)).toLowerCase());
    const before=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
-   const beforeText=JSON.stringify(dos.view.textScreen.screen?.cells);
    const commands=${JSON.stringify(softwareCommand)};
    for(const line of (commands.startsWith('[')?JSON.parse(commands):[commands])){await command(line);}
    await new Promise(resolve=>setTimeout(resolve,2000));
@@ -272,8 +276,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    }
    const running=await dos.view.ci.getRunningProgram();
    const after=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
-   const changed=dos.view.textMode ? JSON.stringify(dos.view.textScreen.screen?.cells)!==beforeText
-    : after.some((value,index)=>index%4!==3&&value!==before[index]);
+   const changed=after.some((value,index)=>index%4!==3&&value!==before[index]);
    if(!changed||!running||running.toUpperCase().includes('COMMAND.COM')){
     let log='';try{log=new TextDecoder().decode(await dos.view.ci.fsReadFile('drive_c/'+${JSON.stringify(softwarePath)}+'/BUILD.LOG'));}catch{}
     throw Error('Software did not start: '+running+' '+log);
@@ -328,7 +331,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   const textGeometry=dos.root._tvResizer.captureGeometry();
   await command('gfx480');
   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
-   if(canvas.width===640&&canvas.height===480&&!dos.view.textMode&&!canvas.hidden){resolve(true);return;}
+   if(canvas.width===640&&canvas.height===480&&!canvas.hidden){resolve(true);return;}
    if(Date.now()>deadline){reject(new Error('640x480 video mode was not rendered'));return;}setTimeout(check,50);
   };check();});
   const highGeometry=dos.root._tvResizer.captureGeometry(),client=canvas.getBoundingClientRect();
@@ -362,14 +365,14 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    throw new Error('DOS default size lost video ratio or restarted emulation: '+JSON.stringify(defaultGeometry));
   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
-   if(canvas.height===400&&dos.view.textMode&&canvas.hidden&&dos.root._tvResizer.captureGeometry().rows===textGeometry.rows){resolve(true);return;}
+   if(canvas.height===400&&!canvas.hidden&&dos.root._tvResizer.captureGeometry().rows===textGeometry.rows){resolve(true);return;}
    if(Date.now()>deadline){reject(new Error('DOS frame did not shrink back to text mode'));return;}setTimeout(check,50);
   };check();});
   await command('gfx');
   await new Promise((resolve,reject)=>{const deadline=Date.now()+3000;const check=()=>{
    const pixel=canvas.getContext('2d').getImageData(100,100,1,1).data;
    if(canvas.width===320&&canvas.height===200&&pixel[0]>100&&pixel[1]===0&&pixel[2]===0){resolve(true);return;}
-   if(Date.now()>deadline){reject(new Error('DOS VGA graphics were not rendered: '+JSON.stringify({active:dos.active,paused:dos.paused,busy:dos.busy,dragging:dos.getState(THelpViewerTV.sfDragging),width:canvas.width,height:canvas.height,text:dos.view.textMode})));return;}setTimeout(check,50);
+   if(Date.now()>deadline){reject(new Error('DOS VGA graphics were not rendered: '+JSON.stringify({active:dos.active,paused:dos.paused,busy:dos.busy,dragging:dos.getState(THelpViewerTV.sfDragging),width:canvas.width,height:canvas.height})));return;}setTimeout(check,50);
   };check();});
   const graphics=true;
   for(const type of ['keydown','keyup']){canvas.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,25));}
@@ -473,7 +476,17 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
    // No manual Save: automatic D flush works even with the window inactive.
    dos.setActive(false);
    const deadline=Date.now()+8000;
-   while(dos.localDrive.savedRevision!==JSON.parse(new TextDecoder().decode(await dos.view.ci.fsReadFile('.jsdos/local-state.json'))).revision){
+   const localSaved=async()=>{
+    try{
+     const text=await(await(await folder.getFileHandle('OUT.TXT')).getFile()).text();
+     await folder.getDirectoryHandle('EMPTY');await folder.getFileHandle('MOVED.TXT');
+     try{await folder.getFileHandle('DELETE.TXT');return false;}catch(error){if(error.name!=='NotFoundError')throw error;}
+     return text.includes('saved')&&!dos.saving&&!dos.checkingLocal;
+    }catch(error){if(error.name==='NotFoundError')return false;throw error;}
+   };
+   // Observe the actual saved folder, not the same CI file currently being
+   // read by autosave; the upstream protocol rejects duplicate file reads.
+   while(!await localSaved()){
     if(dos.localSaveFailed||Date.now()>deadline)throw Error('Automatic local save failed');
     await new Promise(resolve=>setTimeout(resolve,100));
    }
@@ -638,7 +651,7 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
   if(Date.now()>deadline){reject(new Error('DOS URL restore failed'));return;}setTimeout(check,100);
  };check();})`);
  const geometry=JSON.parse(Buffer.from(hash.slice('#tv=1.'.length),'base64url').toString()).w.find(item=>item.t==='dos').g;
- const restoredGeometry=await evaluate(`(()=>{const s=getComputedStyle(dos.root);return ['--tv-window-left','--tv-window-top','--tv-window-cols','--tv-window-rows'].map(key=>Math.round(parseFloat(s.getPropertyValue(key))));})()`);
+ const restoredGeometry=await evaluate(`(()=>{const g=dos.root._tvResizer.captureGeometry();return [g.left,g.top,g.cols,g.rows].map(Math.round);})()`);
  if(JSON.stringify(restoredGeometry)!==JSON.stringify(geometry.slice(0,4)))throw new Error('DOS window geometry was not restored');
  const stats=await evaluate(`(async()=>{return await (await fetch('/api/statistics/summary')).json();})()`);
  if(!stats.tool.some(row=>row.value==='dos-prompt'&&row.count===2)||!stats.tool_duration.some(row=>row.value.startsWith('dos-prompt · '))){throw new Error('DOS statistics missing: '+JSON.stringify({stats,errors}));}
@@ -691,11 +704,11 @@ const [port, url, token, mediaId, cdId, blockedWorker, installedGames, extraGame
                 launch = next(source["launch"] for source in sources if f"\\GAMES\\{extra_game} then " in source.get("launch", ""))
                 game_command = launch.split(" then ", 1)[1]
             result = subprocess.run([NODE, "-e", script, debugging, url, token, media_id, cd_id, str(blocked_worker).lower(), installed_games, extra_game, game_command, str(audio_test).lower(),
-                extra_software, os.environ.get("THELP_DOS_TEST_SOFTWARE_COMMAND", "start"), os.environ.get("THELP_DOS_TEST_SCREENSHOT", ""), os.environ.get("THELP_DOS_TEST_SOFTWARE_OUTPUT", ""), str(text_rendering).lower()], capture_output=True, text=True, timeout=180)
+                extra_software, os.environ.get("THELP_DOS_TEST_SOFTWARE_COMMAND", "start"), os.environ.get("THELP_DOS_TEST_SCREENSHOT", ""), os.environ.get("THELP_DOS_TEST_SOFTWARE_OUTPUT", "")], capture_output=True, text=True, timeout=180)
             assert result.returncode == 0, result.stderr
             if extra_software:
                 print(result.stdout)
-            if text_rendering and not blocked_worker and not extra_game and not extra_software:
+            if not blocked_worker and not extra_game and not extra_software:
                 trace = (root / "server.log").read_text()
                 assert "name=GFX.COM" in trace
                 assert "name=UNUSED.DAT" not in trace

@@ -20,6 +20,7 @@ const fs = require("fs");
 
 class FakeElement {
     constructor() {
+        this.classList = { toggle() {} };
         this.hidden = false;
         this.tabIndex = -1;
         this.clientWidth = 100;
@@ -36,6 +37,8 @@ class FakeElement {
     get textContent() { return this._textContent; }
     appendChild(child) { this.children.push(child); }
     setAttribute() {}
+    removeAttribute() {}
+    getBoundingClientRect() { return {width: this.clientWidth, height: this.clientHeight}; }
     addEventListener(name, callback) { this.listeners.set(name, callback); }
     focus() { document.activeElement = this; }
     getContext() {
@@ -44,15 +47,6 @@ class FakeElement {
             clearRect: (...args) => this.drawCalls.push(["clear", ...args]),
         };
     }
-}
-
-class FakeView {
-    constructor() { this.eventMask = 1 | 16; }
-    bindRoot(root) { this.root = root; }
-    dispatchEvent(event) {
-        if (this.eventMask & event.what) { this.handleEvent(event); }
-    }
-    clearEvent(event) { event.what = 0; }
 }
 
 const windowListeners = new Map();
@@ -79,16 +73,8 @@ global.setTimeout = (callback, delay) => {
     return 2;
 };
 global.clearTimeout = () => {};
-global.window.THelpViewerTV = {
-    TVView: FakeView,
-    TVRect: class {},
-    TVEvent: class { constructor(what, options) { Object.assign(this, options); this.what = what; } },
-    evMouseDown: 1,
-    evMouseMove: 4,
-    evKeyDown: 16,
-    escapeHtml: (value) => String(value),
-    measureCells: () => ({ width: 10, height: 10 }),
-};
+eval(fs.readFileSync('www/assets/tv-core.js', 'utf8'));
+window.THelpViewerTV.measureCells = () => ({ width: 10, height: 10 });
 
 eval(fs.readFileSync(process.argv[1], "utf8"));
 const TV = window.THelpViewerTV;
@@ -157,12 +143,13 @@ if (!TV.TVScreenSaver.active) {
 }
 TV.TVScreenSaver.stop();
 '''
-    subprocess.run(
+    result = subprocess.run(
         [NODE, "-e", script, str(SAVER_PATHS[0])],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    assert result.returncode == 0, result.stderr
 
 
 def test_generated_and_bundle_apps_enable_shared_idle_start():

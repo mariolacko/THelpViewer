@@ -19,7 +19,7 @@ def test_bundle_desktop_keeps_multiple_help_and_document_windows():
     assert 'const managerName = "doc:" + docKey' in open_doc
     assert "querySelectorAll(\".tv-doc-window\").forEach" not in open_doc
     assert "this.docWindows.delete(docKey)" in open_doc
-    assert 'targets.push("doc:" + entry.file)' in source
+    assert 'targets[index] = "doc:" + entry.file' in source
 
 
 def test_window_commands_include_cycle_and_layout_for_all_managed_windows():
@@ -29,7 +29,6 @@ def test_window_commands_include_cycle_and_layout_for_all_managed_windows():
 
     assert '{ cmd: "next", label: "~N~ext", hotkey: "F6" }' in bundle
     assert '{ cmd: "previous", label: "~P~revious", hotkey: "Shift-F6" }' in bundle
-    assert "[...this.dialogManager.windows.values()]" in bundle
     assert "kbF6" in bundle
     assert "kbShiftF6" in bundle
     assert "this.activateKeyCode(getKeyCode(key), key)" in core

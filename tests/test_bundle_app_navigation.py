@@ -373,6 +373,8 @@ const bundle = { _catalogFile: file, topics: {
 } };
 const escapeHtml = (value) => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+const shared = fs.readFileSync('www/assets/tv-context-help.js', 'utf8');
+eval(shared.slice(shared.indexOf('function renderUhfRule()'), shared.indexOf('function renderContextHelpTopic(')));
 const TVView = { _controlAttrs({ commandData }) {
     return Object.fromEntries(Object.entries(commandData).map(([key, value]) =>
         ['data-tv-' + key.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase(), value]));
@@ -448,16 +450,22 @@ function section(start, end, from = 0) {
     return source.slice(offset, limit);
 }
 const TV = { evCommand: 1 }, evKeyDown = 2;
-class TVProgram { handleEvent() {} clearEvent(event) { event.what = 0; } }
+class TVProgram {
+    handleEvent() {}
+    clearEvent(event) { event.what = 0; }
+    insert(view) { view.owner = this; }
+}
 class TVMenuItem {}
 class TVStatusItem {
     constructor(text, keyCode, command, param) { Object.assign(this, {text, keyCode, command, param}); }
 }
+class TVStatusLink extends TVStatusItem {}
 class TVRect {}
 class TVStatusLine {
-    constructor(bounds, defs) { this.items = defs.items; }
+    constructor(bounds, defs = {items:[]}) { this.defs = defs; this.items = defs.items; }
     draw() { globalThis.statusItems = this.items.filter(item => item instanceof TVStatusItem); return ''; }
-    bindRoot() {}
+    bindRoot(root) { this.root = root; }
+    render() { this.draw(); }
 }
 const kbF3 = 3, kbAltF3 = 4, kbF1 = 5;
 const menuActions = new WeakMap();

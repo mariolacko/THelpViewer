@@ -655,7 +655,6 @@ class DosPromptStore:
             "max_overlay_bytes": self.overlay_limit(account_id) if account_id else 0,
             "overlay_files": list(overlay), "remote_files": remote_files,
             "allow_full_disk_fallback": self.config.get("allow_full_disk_fallback") is True,
-            "text_rendering": self.config.get("text_rendering", True),
             "max_media_bytes": self.config.get("max_media_bytes", 128 * 1024 * 1024),
         }
         return buffer.getvalue(), metadata

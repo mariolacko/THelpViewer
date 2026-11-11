@@ -141,6 +141,9 @@ class TVScreenSaver extends TVView {
         this.cellHeight = cell.height;
         this.cols = Math.max(1, Math.floor(this.overlay.clientWidth / cell.width));
         this.rows = Math.max(1, Math.floor(this.overlay.clientHeight / cell.height));
+        const rect = this.overlay.getBoundingClientRect();
+        this.setBounds(new TVRect(0, 0, rect.width / cell.width, rect.height / cell.height));
+        this._placePart(this.canvas, this.getExtent());
     }
 
     handleEvent(event) {
@@ -414,8 +417,7 @@ class TVScreenSaverProjector extends TVScreenSaver {
         this.surface = document.createElement("canvas");
         this.surface.width = this.overlay.clientWidth;
         this.surface.height = this.overlay.clientHeight;
-        this.surface.style.width = "100%";
-        this.surface.style.height = "100%";
+        this._placePart(this.surface, this.getExtent());
         this.canvas.appendChild(this.surface);
         this.context = this.surface.getContext("2d");
         this.centerX = Math.floor(this.cols / 2);

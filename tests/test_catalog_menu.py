@@ -45,7 +45,8 @@ eval(part(core,'class TVMenu {','class TVMenuView ')+part(core,'class TVMenuItem
 const releases=buildCatalogMenuItems(JSON.parse(process.argv[1])).filter(item=>item.subMenu);
 assert.equal(releases.length,1);const branches=releases[0].subMenu.entries();
 assert.deepEqual(branches.map(item=>item.name),['1.0','2.x']);
-assert(branches.every(item=>item.subMenu.entries().length===1));
+assert(branches.every(item=>!item.subMenu));
+assert.deepEqual(branches.map(item=>menuActions.get(item).value),JSON.parse(process.argv[1]).map(entry=>entry.file));
 const entries=[{name:'Same Help',file:'Example/first.json.gz',product_name:'Example',version:'1'},
  {name:'Same Help',file:'Example/second.json.gz',product_name:'Example',version:'1'},
  {name:'Other Help',file:'Example/other.json.gz',product_name:'Example',version:'1'}];

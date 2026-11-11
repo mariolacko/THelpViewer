@@ -35,56 +35,43 @@ const THEME_PRESETS = {
     dark: {
         label: "Dark",
         vars: {
-            "--tv-desktop": "#000000",
-            "--tv-desktop-dot": "#0000aa",
-            "--tv-appbar-bg": "#0000aa",
-            "--tv-appbar-text": "#aaaaaa",
-            "--tv-appbar-hotkey": "#ffff55",
-            "--tv-appbar-active-bg": "#aaaaaa",
-            "--tv-appbar-active-text": "#000000",
-            "--tv-appbar-active-hotkey": "#aa0000",
-            "--tv-help-pane": "#000000",
-            "--tv-window": "#000000",
-            "--tv-puzzle-pane": "#000000",
-            "--tv-calendar-pane": "#000000",
-            "--tv-title": "#0000aa",
-            "--tv-title-text": "#ffffff",
-            "--tv-icon": "#55ffff",
-            "--tv-text": "#aaaaaa",
+            "--tv-palette-desktop-bg": "#000000",
+            "--tv-palette-desktop-fg": "#0000aa",
+            "--tv-palette-menu-normal-bg": "#0000aa",
+            "--tv-palette-menu-normal-fg": "#aaaaaa",
+            "--tv-palette-menu-shortcut-fg": "#ffff55",
+            "--tv-palette-menu-selected-bg": "#aaaaaa",
+            "--tv-palette-menu-selected-fg": "#000000",
+            "--tv-palette-menu-selected-shortcut-fg": "#aa0000",
+            "--tv-palette-help-text-bg": "#000000",
+            "--tv-palette-calendar-text-bg": "#000000",
+            "--tv-palette-help-frame-active-bg": "#0000aa",
+            "--tv-palette-help-frame-active-fg": "#aaaaaa",
+            "--tv-palette-help-frame-icons-fg": "#55ffff",
+            "--tv-palette-help-text-fg": "#aaaaaa",
             "--tv-muted": "#55ffff",
-            "--tv-link": "#55ffff",
-            "--tv-hover-bg": "#00aaaa",
-            "--tv-hover-fg": "#000000",
-            "--tv-page-area": "#000000",
-            "--tv-arrow-bg": "#0000aa",
-            "--tv-arrow-fg": "#aaaaaa",
-            "--tv-scroll-glyph": "#5555ff",
-            "--tv-thumb-fg": "#ffffff",
-            "--tv-frame-line": "#aaaaaa",
-            "--tv-frame-passive": "#555555",
-            "--tv-title-passive": "#000000",
-            "--tv-title-text-passive": "#aaaaaa",
-            "--tv-icon-passive": "#aaaaaa",
-            "--tv-dialog-bg": "#555555",
-            "--tv-dialog-fg": "#ffffff",
-            "--tv-dialog-frame": "#ffffff",
-            "--tv-dialog-title": "#ffff55",
-            "--tv-dialog-frame-passive": "#aaaaaa",
-            "--tv-dialog-title-passive": "#555555",
-            "--tv-dialog-title-text-passive": "#ffffff",
-            "--tv-dialog-icon-passive": "#ffffff",
-            "--tv-dialog-input-bg": "#000000",
-            "--tv-dialog-input-fg": "#55ffff",
-            "--tv-dialog-button-face": "#00aa00",
-            "--tv-dialog-button-fg": "#000000",
-            "--tv-dialog-button-shadow-bg": "#555555",
-            "--tv-dialog-button-shadow-fg": "#000000",
-            "--tv-dialog-button-edge-bg": "#555555",
-            "--tv-dialog-button-edge-fg": "#000000",
-            "--tv-ascii-pane": "#555555",
-            "--tv-ascii-text": "#ffffff",
-            "--tv-calc-display-bg": "#000000",
-            "--tv-calc-display-fg": "#ffffff",
+            "--tv-palette-help-keyword-fg": "#55ffff",
+            "--tv-palette-help-keyword-selected-bg": "#00aaaa",
+            "--tv-palette-help-keyword-selected-fg": "#000000",
+            "--tv-palette-help-scroll-page-bg": "#000000",
+            "--tv-palette-help-scroll-controls-bg": "#0000aa",
+            "--tv-palette-help-scroll-controls-fg": "#ffffff",
+            "--tv-palette-help-scroll-page-fg": "#5555ff",
+            "--tv-palette-help-frame-passive-fg": "#aaaaaa",
+            "--tv-palette-help-frame-passive-bg": "#000000",
+            "--tv-palette-dialog-frame-active-bg": "#555555",
+            "--tv-palette-dialog-static-fg": "#ffffff",
+            "--tv-palette-dialog-frame-active-fg": "#ffff55",
+            "--tv-palette-dialog-frame-passive-fg": "#ffffff",
+            "--tv-palette-dialog-frame-passive-bg": "#555555",
+            "--tv-palette-dialog-input-normal-bg": "#000000",
+            "--tv-palette-dialog-input-normal-fg": "#55ffff",
+            "--tv-palette-dialog-button-normal-bg": "#00aa00",
+            "--tv-palette-dialog-button-normal-fg": "#000000",
+            "--tv-palette-dialog-button-shadow-bg": "#555555",
+            "--tv-palette-dialog-button-shadow-fg": "#000000",
+            "--tv-palette-ascii-text-bg": "#555555",
+            "--tv-palette-ascii-text-fg": "#ffffff",
             "--tv-code-bg": "#0000aa",
             "--tv-code-text": "#aaaaaa",
             "--tv-code-keyword": "#ffff55",
@@ -100,109 +87,86 @@ const THEME_PRESETS = {
     green: {
         label: "Green",
         vars: {
-            "--tv-desktop": "#aaaaaa",
-            "--tv-desktop-dot": "#0000aa",
-            "--tv-appbar-bg": "#aaaaaa",
-            "--tv-appbar-active-bg": "#00aa00",
-            "--tv-help-pane": "#00aa00",
-            "--tv-window": "#00aa00",
-            "--tv-title": "#00aa00",
-            "--tv-title-text": "#ffffff",
-            "--tv-icon": "#55ff55",
-            "--tv-link": "#ffff55",
-            "--tv-hover-bg": "#0000aa",
-            "--tv-hover-fg": "#ffff55",
-            "--tv-page-area": "#0000aa",
-            "--tv-arrow-bg": "#0000aa",
-            "--tv-arrow-fg": "#00aa00",
-            "--tv-scroll-glyph": "#00aa00",
-            "--tv-thumb-fg": "#00ff00",
-            "--tv-puzzle-pane": "#00aaaa",
-            "--tv-puzzle-normal": "#000000",
-            "--tv-puzzle-highlight": "#ffffff",
-            "--tv-calendar-pane": "#00aaaa",
-            "--tv-calendar-normal": "#000000",
-            "--tv-calendar-current": "#ffffff",
-            "--tv-ascii-pane": "#aaaaaa",
-            "--tv-ascii-text": "#000000",
-            "--tv-calc-display-bg": "#0000aa",
-            "--tv-calc-display-fg": "#ffffff",
+            "--tv-palette-desktop-bg": "#aaaaaa",
+            "--tv-palette-desktop-fg": "#0000aa",
+            "--tv-palette-menu-normal-bg": "#aaaaaa",
+            "--tv-palette-menu-selected-bg": "#00aa00",
+            "--tv-palette-help-text-bg": "#00aa00",
+            "--tv-palette-help-frame-active-bg": "#00aa00",
+            "--tv-palette-help-frame-active-fg": "#ffffff",
+            "--tv-palette-help-frame-icons-fg": "#55ff55",
+            "--tv-palette-help-keyword-fg": "#ffff55",
+            "--tv-palette-help-keyword-selected-bg": "#0000aa",
+            "--tv-palette-help-keyword-selected-fg": "#ffff55",
+            "--tv-palette-help-scroll-page-bg": "#0000aa",
+            "--tv-palette-help-scroll-controls-bg": "#0000aa",
+            "--tv-palette-help-scroll-controls-fg": "#00ff00",
+            "--tv-palette-help-scroll-page-fg": "#00aa00",
+            "--tv-palette-calendar-text-bg": "#00aaaa",
+            "--tv-palette-calendar-text-fg": "#000000",
+            "--tv-palette-calendar-current-fg": "#ffffff",
+            "--tv-palette-ascii-text-bg": "#aaaaaa",
+            "--tv-palette-ascii-text-fg": "#000000",
         },
     },
     amber: {
         label: "Amber",
         vars: {
-            "--tv-desktop": "#000000",
-            "--tv-desktop-dot": "#aa5500",
-            "--tv-appbar-bg": "#aa5500",
-            "--tv-appbar-text": "#000000",
-            "--tv-appbar-hotkey": "#ffff55",
-            "--tv-appbar-active-bg": "#ffaa00",
-            "--tv-appbar-active-text": "#000000",
-            "--tv-appbar-active-hotkey": "#aa0000",
-            "--tv-help-pane": "#aa5500",
-            "--tv-window": "#aa5500",
-            "--tv-title": "#aa5500",
-            "--tv-title-text": "#000000",
-            "--tv-icon": "#ffff55",
-            "--tv-text": "#000000",
-            "--tv-link": "#ffff55",
-            "--tv-hover-bg": "#552200",
-            "--tv-hover-fg": "#ffff55",
-            "--tv-page-area": "#552200",
-            "--tv-arrow-bg": "#552200",
-            "--tv-arrow-fg": "#ffaa00",
-            "--tv-scroll-glyph": "#ffaa00",
-            "--tv-thumb-fg": "#ffff55",
-            "--tv-frame-line": "#ffff55",
-            "--tv-puzzle-pane": "#aa5500",
-            "--tv-puzzle-normal": "#000000",
-            "--tv-puzzle-highlight": "#ffff55",
-            "--tv-calendar-pane": "#aa5500",
-            "--tv-calendar-normal": "#000000",
-            "--tv-calendar-current": "#ffff55",
-            "--tv-ascii-pane": "#552200",
-            "--tv-ascii-text": "#ffff55",
-            "--tv-calc-display-bg": "#552200",
-            "--tv-calc-display-fg": "#ffffff",
+            "--tv-palette-desktop-bg": "#000000",
+            "--tv-palette-desktop-fg": "#aa5500",
+            "--tv-palette-menu-normal-bg": "#aa5500",
+            "--tv-palette-menu-normal-fg": "#000000",
+            "--tv-palette-menu-shortcut-fg": "#ffff55",
+            "--tv-palette-menu-selected-bg": "#ffaa00",
+            "--tv-palette-menu-selected-fg": "#000000",
+            "--tv-palette-menu-selected-shortcut-fg": "#aa0000",
+            "--tv-palette-help-text-bg": "#aa5500",
+            "--tv-palette-help-frame-active-bg": "#aa5500",
+            "--tv-palette-help-frame-active-fg": "#ffff55",
+            "--tv-palette-help-frame-icons-fg": "#ffff55",
+            "--tv-palette-help-text-fg": "#000000",
+            "--tv-palette-help-keyword-fg": "#ffff55",
+            "--tv-palette-help-keyword-selected-bg": "#552200",
+            "--tv-palette-help-keyword-selected-fg": "#ffff55",
+            "--tv-palette-help-scroll-page-bg": "#552200",
+            "--tv-palette-help-scroll-controls-bg": "#552200",
+            "--tv-palette-help-scroll-controls-fg": "#ffff55",
+            "--tv-palette-help-scroll-page-fg": "#ffaa00",
+            "--tv-palette-calendar-text-bg": "#aa5500",
+            "--tv-palette-calendar-text-fg": "#000000",
+            "--tv-palette-calendar-current-fg": "#ffff55",
+            "--tv-palette-ascii-text-bg": "#552200",
+            "--tv-palette-ascii-text-fg": "#ffff55",
         },
     },
     gray: {
         label: "Gray",
         vars: {
-            "--tv-desktop": "#aaaaaa",
-            "--tv-desktop-dot": "#555555",
-            "--tv-appbar-bg": "#aaaaaa",
-            "--tv-appbar-text": "#000000",
-            "--tv-appbar-hotkey": "#555555",
-            "--tv-appbar-active-bg": "#ffffff",
-            "--tv-appbar-active-text": "#000000",
-            "--tv-appbar-active-hotkey": "#555555",
-            "--tv-help-pane": "#c0c0c0",
-            "--tv-window": "#c0c0c0",
-            "--tv-title": "#aaaaaa",
-            "--tv-title-text": "#000000",
-            "--tv-icon": "#000000",
-            "--tv-text": "#000000",
-            "--tv-link": "#000000",
-            "--tv-hover-bg": "#555555",
-            "--tv-hover-fg": "#ffffff",
-            "--tv-page-area": "#555555",
-            "--tv-arrow-bg": "#555555",
-            "--tv-arrow-fg": "#ffffff",
-            "--tv-scroll-glyph": "#c0c0c0",
-            "--tv-thumb-fg": "#ffffff",
-            "--tv-frame-line": "#ffffff",
-            "--tv-puzzle-pane": "#c0c0c0",
-            "--tv-puzzle-normal": "#000000",
-            "--tv-puzzle-highlight": "#ffffff",
-            "--tv-calendar-pane": "#c0c0c0",
-            "--tv-calendar-normal": "#000000",
-            "--tv-calendar-current": "#ffffff",
-            "--tv-ascii-pane": "#c0c0c0",
-            "--tv-ascii-text": "#000000",
-            "--tv-calc-display-bg": "#555555",
-            "--tv-calc-display-fg": "#ffffff",
+            "--tv-palette-desktop-bg": "#aaaaaa",
+            "--tv-palette-desktop-fg": "#555555",
+            "--tv-palette-menu-normal-bg": "#aaaaaa",
+            "--tv-palette-menu-normal-fg": "#000000",
+            "--tv-palette-menu-shortcut-fg": "#555555",
+            "--tv-palette-menu-selected-bg": "#ffffff",
+            "--tv-palette-menu-selected-fg": "#000000",
+            "--tv-palette-menu-selected-shortcut-fg": "#555555",
+            "--tv-palette-help-text-bg": "#c0c0c0",
+            "--tv-palette-help-frame-active-bg": "#aaaaaa",
+            "--tv-palette-help-frame-active-fg": "#ffffff",
+            "--tv-palette-help-frame-icons-fg": "#000000",
+            "--tv-palette-help-text-fg": "#000000",
+            "--tv-palette-help-keyword-fg": "#000000",
+            "--tv-palette-help-keyword-selected-bg": "#555555",
+            "--tv-palette-help-keyword-selected-fg": "#ffffff",
+            "--tv-palette-help-scroll-page-bg": "#555555",
+            "--tv-palette-help-scroll-controls-bg": "#555555",
+            "--tv-palette-help-scroll-controls-fg": "#ffffff",
+            "--tv-palette-help-scroll-page-fg": "#c0c0c0",
+            "--tv-palette-calendar-text-bg": "#c0c0c0",
+            "--tv-palette-calendar-text-fg": "#000000",
+            "--tv-palette-calendar-current-fg": "#ffffff",
+            "--tv-palette-ascii-text-bg": "#c0c0c0",
+            "--tv-palette-ascii-text-fg": "#000000",
         },
     },
 };
@@ -303,72 +267,26 @@ const COLOR_GROUPS = COLOR_GROUP_DEFINITIONS.map((group) => ({
 const EDITABLE_PALETTE_INDEXES = [...new Set(
     COLOR_GROUP_DEFINITIONS.flatMap((group) => group.items.map(([, paletteIndex]) => paletteIndex))
 )];
-const COLOR_PALETTE_VARIABLE_KEYS = EDITABLE_PALETTE_INDEXES.flatMap((paletteIndex) => {
-    const variables = paletteVariables(paletteIndex);
-    return [...variables.bg, ...variables.fg];
+const EDITOR_COLOR_ATTRIBUTE = 0x1e;
+const WINDOW_PALETTE_INDEXES = Object.freeze({
+    help: [128, 129, 130, 131, 132, 133],
+    viewer: [8, 9, 10, 11, 12, 13],
+    editor: [8, 9, 10, 11, 12, 13],
+    dos: [128, 129, 130, 131, 132, 133],
+    calendar: [16, 17, 18, 19, 20, 21],
+    ascii: [24, 25, 26, 27, 28, 29],
+    dialog: [32, 33, 34, 35, 36, 37],
+    history: [50, 50, 50, 55, 54, 50],
 });
-const THEME_PALETTE_TARGETS = Object.freeze({
-    "--tv-desktop": ["--tv-palette-desktop-bg"],
-    "--tv-desktop-dot": ["--tv-palette-desktop-fg"],
-    "--tv-appbar-bg": ["--tv-palette-menu-normal-bg"],
-    "--tv-appbar-text": ["--tv-palette-menu-normal-fg"],
-    "--tv-appbar-hotkey": ["--tv-palette-menu-shortcut-fg"],
-    "--tv-appbar-active-bg": ["--tv-palette-menu-selected-bg"],
-    "--tv-appbar-active-text": ["--tv-palette-menu-selected-fg"],
-    "--tv-appbar-active-hotkey": ["--tv-palette-menu-selected-shortcut-fg"],
-    "--tv-help-pane": ["--tv-palette-help-text-bg"],
-    "--tv-window": ["--tv-palette-help-text-bg"],
-    "--tv-puzzle-pane": ["--tv-palette-viewer-text-bg"],
-    "--tv-puzzle-normal": ["--tv-palette-viewer-text-fg"],
-    "--tv-puzzle-highlight": ["--tv-palette-viewer-highlight-fg"],
-    "--tv-calendar-pane": ["--tv-palette-calendar-text-bg"],
-    "--tv-calendar-normal": ["--tv-palette-calendar-text-fg"],
-    "--tv-calendar-current": ["--tv-palette-calendar-current-fg"],
-    "--tv-ascii-pane": ["--tv-palette-ascii-text-bg"],
-    "--tv-ascii-text": ["--tv-palette-ascii-text-fg"],
-    "--tv-title": ["--tv-palette-help-frame-active-bg"],
-    "--tv-title-text": ["--tv-palette-help-frame-active-fg"],
-    "--tv-icon": ["--tv-palette-help-frame-icons-fg"],
-    "--tv-frame-passive": ["--tv-palette-help-frame-passive-fg"],
-    "--tv-title-passive": ["--tv-palette-help-frame-passive-bg"],
-    "--tv-title-text-passive": ["--tv-palette-help-frame-passive-fg"],
-    "--tv-icon-passive": ["--tv-palette-help-frame-passive-fg"],
-    "--tv-text": ["--tv-palette-help-text-fg"],
-    "--tv-link": ["--tv-palette-help-keyword-fg"],
-    "--tv-hover-bg": ["--tv-palette-help-keyword-selected-bg"],
-    "--tv-hover-fg": ["--tv-palette-help-keyword-selected-fg"],
-    "--tv-page-area": ["--tv-palette-help-scroll-page-bg"],
-    "--tv-scroll-glyph": ["--tv-palette-help-scroll-page-fg"],
-    "--tv-arrow-bg": ["--tv-palette-help-scroll-controls-bg"],
-    "--tv-arrow-fg": ["--tv-palette-help-scroll-controls-fg"],
-    "--tv-thumb-fg": ["--tv-palette-help-scroll-controls-fg"],
-    "--tv-frame-line": ["--tv-palette-help-frame-active-fg"],
-    "--tv-dialog-bg": ["--tv-palette-dialog-frame-active-bg"],
-    "--tv-dialog-fg": ["--tv-palette-dialog-static-fg"],
-    "--tv-dialog-frame": ["--tv-palette-dialog-frame-active-fg"],
-    "--tv-dialog-title": ["--tv-palette-dialog-frame-active-fg"],
-    "--tv-dialog-icon": ["--tv-palette-dialog-frame-icons-fg"],
-    "--tv-dialog-frame-passive": ["--tv-palette-dialog-frame-passive-fg"],
-    "--tv-dialog-title-passive": ["--tv-palette-dialog-frame-passive-bg"],
-    "--tv-dialog-title-text-passive": ["--tv-palette-dialog-frame-passive-fg"],
-    "--tv-dialog-icon-passive": ["--tv-palette-dialog-frame-passive-fg"],
-    "--tv-dialog-input-bg": ["--tv-palette-dialog-input-normal-bg"],
-    "--tv-dialog-input-fg": ["--tv-palette-dialog-input-normal-fg"],
-    "--tv-dialog-button-face": ["--tv-palette-dialog-button-normal-bg"],
-    "--tv-dialog-button-fg": ["--tv-palette-dialog-button-normal-fg"],
-    "--tv-dialog-button-disabled": ["--tv-palette-dialog-button-disabled-fg"],
-    "--tv-dialog-button-shadow-bg": ["--tv-palette-dialog-button-shadow-bg"],
-    "--tv-dialog-button-shadow-fg": ["--tv-palette-dialog-button-shadow-fg"],
-    "--tv-dialog-button-edge-bg": ["--tv-palette-dialog-button-shadow-bg"],
-    "--tv-dialog-button-edge-fg": ["--tv-palette-dialog-button-shadow-fg"],
-});
-function themeVariableTargets(key) {
-    return THEME_PALETTE_TARGETS[key] || [key];
+
+function paletteStyle(properties) {
+    return Object.entries(properties).flatMap(([name, index]) => {
+        const variables = paletteVariables(index);
+        return ["bg", "fg"].map((part) => `--tv-${name}-${part}:var(${variables[part][0]})`);
+    }).join(";");
 }
 const THEME_VARIABLE_KEYS = [...new Set(
-    Object.values(THEME_PRESETS).flatMap((preset) => (
-        Object.keys(preset.vars).flatMap(themeVariableTargets)
-    ))
+    Object.values(THEME_PRESETS).flatMap((preset) => Object.keys(preset.vars))
 )];
 let activeThemePreset = "default";
 let activeColorPalette = null;
@@ -447,6 +365,7 @@ const {
 } = TV_HELP_CONTEXTS;
 
 function normalizeHelpContext(value, fallback = hcNoContext) {
+    if (typeof value === "string" && /^app:[a-z][a-z0-9_]{0,63}:[a-z][a-z0-9-]{0,63}$/.test(value)) { return value; }
     const context = Number(value);
     return Number.isInteger(context) && context >= hcNoContext ? context : fallback;
 }
@@ -642,6 +561,24 @@ function nearestDosColorIndex(color) {
     return bestIndex;
 }
 
+// Native paint for numeric TVision palettes; browser CSS variables are the
+// platform adapter for the application's editable cpAppColor attributes.
+let nativeAppColors = null;
+const nativePaletteViews = new Set();
+let nativePaletteObserver = null;
+function watchNativePalette(view, enabled) {
+    if (enabled) { nativePaletteViews.add(view); } else { nativePaletteViews.delete(view); }
+    if (nativePaletteViews.size && !nativePaletteObserver && typeof MutationObserver !== "undefined") {
+        nativePaletteObserver = new MutationObserver(() => {
+            nativeAppColors = null;
+            for (const item of nativePaletteViews) { item._drawPalette(); }
+        });
+        nativePaletteObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    } else if (!nativePaletteViews.size && nativePaletteObserver) {
+        nativePaletteObserver.disconnect(); nativePaletteObserver = null; nativeAppColors = null;
+    }
+}
+
 function buildPaletteFromCurrentStyle() {
     const palette = buildDefaultColorPalette();
     const style = getComputedStyle(document.documentElement);
@@ -650,10 +587,12 @@ function buildPaletteFromCurrentStyle() {
             let fg = item.attr & 0x0F;
             let bg = (item.attr >> 4) & 0x0F;
             if (item.fg.length) {
-                fg = nearestDosColorIndex(parseCssColor(style.getPropertyValue(item.fg[0])));
+                const color = parseCssColor(style.getPropertyValue(item.fg[0]));
+                if (color) { fg = nearestDosColorIndex(color); }
             }
             if (item.bg.length) {
-                bg = nearestDosColorIndex(parseCssColor(style.getPropertyValue(item.bg[0])));
+                const color = parseCssColor(style.getPropertyValue(item.bg[0]));
+                if (color) { bg = nearestDosColorIndex(color); }
             }
             item.attr = ((bg & 0x0F) << 4) | (fg & 0x0F);
         });
@@ -663,7 +602,7 @@ function buildPaletteFromCurrentStyle() {
 
 function applyColorPalette(palette, persist = false) {
     const root = document.documentElement;
-    COLOR_PALETTE_VARIABLE_KEYS.forEach((key) => root.style.removeProperty(key));
+    applyThemePreset(activeThemePreset, false);
     const attributes = new Map();
     palette.forEach((group) => {
         group.items.forEach((item) => {
@@ -704,6 +643,7 @@ function persistThemePreset(name) {
 }
 
 function applyThemePreset(name, persist = false) {
+    nativeAppColors = null;
     const requestedName = THEME_PRESETS[name] ? name : "default";
     const presetName = requestedName === "auto"
         ? ((window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light")
@@ -711,9 +651,13 @@ function applyThemePreset(name, persist = false) {
     const preset = THEME_PRESETS[presetName];
     const root = document.documentElement;
     THEME_VARIABLE_KEYS.forEach((key) => root.style.removeProperty(key));
-    Object.entries(preset.vars).forEach(([key, value]) => {
-        themeVariableTargets(key).forEach((target) => root.style.setProperty(target, value));
+    Object.keys(TV2_PALETTE_TOKENS).forEach((index) => {
+        const attr = TV2_APP_COLOR_ATTRIBUTES[index - 1];
+        const variables = paletteVariables(index);
+        variables.bg.forEach((key) => root.style.setProperty(key, dosColor(attr, 4)));
+        variables.fg.forEach((key) => root.style.setProperty(key, dosColor(attr, 0)));
     });
+    Object.entries(preset.vars).forEach(([key, value]) => root.style.setProperty(key, value));
     activeThemePreset = requestedName;
     if (persist) {
         persistThemePreset(requestedName);
@@ -721,8 +665,6 @@ function applyThemePreset(name, persist = false) {
 }
 
 function applyThemeAndSyncPalette(name, persist = false) {
-    const root = document.documentElement;
-    COLOR_PALETTE_VARIABLE_KEYS.forEach((key) => root.style.removeProperty(key));
     applyThemePreset(name, persist);
     const palette = buildPaletteFromCurrentStyle();
     applyColorPalette(palette, persist);
@@ -785,31 +727,39 @@ function measureCells() {
 
 function fillBorders(root) {
     const container = (root instanceof HTMLElement) ? root : document;
-    measuredCell = null;
     const cell = measureCells();
 
+    container._tvFrame?._layout(cell);
+    container.querySelectorAll("[data-tv-window], .tv-dialog-window").forEach((element) => element._tvFrame?._layout(cell));
+
+    const borders = [];
     container.querySelectorAll("[data-tv-border-fill]").forEach((element) => {
         const char = element.getAttribute("data-tv-border-fill") || "\u2500";
         const count = Math.max(1, Math.ceil(element.clientWidth / cell.width) + 2);
-        element.textContent = char.repeat(count);
+        borders.push([element, char.repeat(count)]);
     });
 
     container.querySelectorAll("[data-tv-border-side]").forEach((element) => {
         const char = element.getAttribute("data-tv-border-side") || "\u2502";
         const count = Math.max(1, Math.ceil(element.clientHeight / cell.height));
-        element.textContent = `${Array.from({ length: count }, () => char).join("\n")}`;
+        borders.push([element, Array.from({ length: count }, () => char).join("\n")]);
     });
+    // Read every extent before writing text: each intervening write can force
+    // layout of the entire desktop, including large lists in other windows.
+    for (const [element, text] of borders) {
+        if (element.textContent !== text) { element.textContent = text; }
+    }
 }
 
 function setBorderFill(element, char) {
     if (element) {
-        element.setAttribute("data-tv-border-fill", char);
+        if (element.getAttribute("data-tv-border-fill") !== char) { element.setAttribute("data-tv-border-fill", char); }
     }
 }
 
 function setBorderSide(element, char) {
     if (element) {
-        element.setAttribute("data-tv-border-side", char);
+        if (element.getAttribute("data-tv-border-side") !== char) { element.setAttribute("data-tv-border-side", char); }
     }
 }
 
@@ -848,6 +798,8 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
     if (!windowElement) {
         return;
     }
+    const view = windowElement._tvFrame?.owner || windowElement._tvView;
+    if (view && view.getState(sfActive) !== Boolean(active)) { view.setState(sfActive, Boolean(active)); }
     const frameMode = windowFrameMode(windowElement, active, dialog);
     const glyphs = TV_FRAME_GLYPHS[frameMode];
     const topBar = dialog
@@ -870,7 +822,7 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
 
     setOwnedWidgetsActive(windowElement, active);
     if (closeButton) {
-        closeButton.hidden = false;
+        closeButton.hidden = view instanceof TVWindow && (view.flags & wfClose) === 0;
         closeButton.classList.toggle("is-frame-control-passive", !active);
         if (!active) {
             closeButton.tabIndex = -1;
@@ -890,23 +842,25 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
             zoomButton.removeAttribute("aria-disabled");
             zoomButton.removeAttribute("tabindex");
         }
+        const passive = zoomButton.querySelector(".tv-frame-passive");
+        if (passive) { passive.hidden = dialog || active; }
     }
 
     if (topCorners[0]) {
-        topCorners[0].textContent = glyphs.topLeft;
+        if (topCorners[0].textContent !== glyphs.topLeft) { topCorners[0].textContent = glyphs.topLeft; }
     }
     if (topCorners[topCorners.length - 1]) {
-        topCorners[topCorners.length - 1].textContent = glyphs.topRight;
+        if (topCorners.at(-1).textContent !== glyphs.topRight) { topCorners.at(-1).textContent = glyphs.topRight; }
     }
     topFills.forEach((element) => setBorderFill(element, glyphs.horizontal));
     sides.forEach((element) => setBorderSide(element, glyphs.vertical));
 
     if (dialog) {
         if (bottomCorners[0]) {
-            bottomCorners[0].textContent = glyphs.bottomLeft;
+            if (bottomCorners[0].textContent !== glyphs.bottomLeft) { bottomCorners[0].textContent = glyphs.bottomLeft; }
         }
         if (bottomCorners[bottomCorners.length - 1]) {
-            bottomCorners[bottomCorners.length - 1].textContent = glyphs.bottomRight;
+            if (bottomCorners.at(-1).textContent !== glyphs.bottomRight) { bottomCorners.at(-1).textContent = glyphs.bottomRight; }
         }
         bottomFills.forEach((element) => setBorderFill(element, glyphs.horizontal));
 
@@ -923,13 +877,13 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
     } else {
         const leftCorner = windowElement.querySelector(".tv-scroll-corner-left");
         if (leftCorner) {
-            leftCorner.textContent = glyphs.bottomLeft;
+            if (leftCorner.textContent !== glyphs.bottomLeft) { leftCorner.textContent = glyphs.bottomLeft; }
         }
         bottomFills.forEach((element) => setBorderFill(element, glyphs.horizontal));
         if (resizeHandle) {
             // Turbo Vision 2.0 always draws the grow icon as a single-line
             // horizontal stroke plus the lower-right corner (TFrame::dragIcon).
-            resizeHandle.textContent = "─┘";
+            if (resizeHandle.textContent !== "─┘") { resizeHandle.textContent = "─┘"; }
         }
     }
 
@@ -942,14 +896,9 @@ function updateWindowFrameState(windowElement, active, { dialog = false } = {}) 
 
 function fillDesktopPatterns() {
     measuredCell = null;
-    const cell = measureCells();
-
     document.querySelectorAll("[data-tv-desktop-pattern]").forEach((element) => {
-        const char = element.getAttribute("data-tv-desktop-pattern") || "\u2591";
-        const cols = Math.max(1, Math.ceil(element.clientWidth / cell.width) + 1);
-        const rows = Math.max(1, Math.ceil(element.clientHeight / cell.height) + 1);
-        const line = char.repeat(cols);
-        element.textContent = Array.from({ length: rows }, () => line).join("\n");
+        const desktop = element.parentElement?._tvView;
+        if (desktop instanceof TVDesktop) { desktop.drawView(); }
     });
 }
 
@@ -958,8 +907,8 @@ function updateClocks() {
     const text = [now.getHours(), now.getMinutes(), now.getSeconds()]
         .map((value) => String(value).padStart(2, "0"))
         .join(":");
-    document.querySelectorAll("[data-tv-clock]").forEach((element) => {
-        element.textContent = text;
+    document.querySelectorAll("[data-tv-menu-bar]").forEach((element) => {
+        element._tvMenuView?.clock?.setText(`\x03${text}`);
     });
 }
 
@@ -1037,13 +986,14 @@ function applyCloseGlyphState(button, active) {
     if (!glyph) {
         return;
     }
-    glyph.textContent = active ? CLOSE_PRESSED_CHAR : "\u25A0";
+    const text = active ? CLOSE_PRESSED_CHAR : "\u25A0";
+    if (glyph.textContent !== text) { glyph.textContent = text; }
 }
 
 const boundCloseButtons = new WeakSet();
 const pressedCloseButtons = new WeakSet();
 
-function bindCloseButtons(scope = document) {
+function bindCloseButtons(scope) {
     scope.querySelectorAll("[data-tv-close-button]").forEach((button) => {
         if (boundCloseButtons.has(button)) { return; }
         boundCloseButtons.add(button);
@@ -1199,6 +1149,7 @@ class TVRect {
 }
 
 let tvViewSequence = 0;
+let focusVersion = 0;
 
 const evNothing = 0x0000;
 const evMouseDown = 0x0001;
@@ -1277,6 +1228,7 @@ const kbShiftIns = 0x0500;
 const kbShiftDel = 0x0700;
 const kbF1 = 0x3b00;
 const kbF3 = 0x3d00;
+const kbF4 = 0x3e00;
 const kbF5 = 0x3f00;
 const kbF6 = 0x4000;
 const kbShiftF6 = 0x5900;
@@ -1301,6 +1253,7 @@ function getKeyCode(event) {
     if (!event.altKey && !event.ctrlKey) {
         if (event.key === "F1" && !event.shiftKey) { return kbF1; }
         if (event.key === "F3" && !event.shiftKey) { return kbF3; }
+        if (event.key === "F4" && !event.shiftKey) { return kbF4; }
         if (event.key === "F5" && !event.shiftKey) { return kbF5; }
         if (event.key === "F6") { return event.shiftKey ? kbShiftF6 : kbF6; }
     }
@@ -1326,11 +1279,36 @@ async function readClipboardText() {
     return navigator.clipboard.readText();
 }
 
+function saveLocalFile(name, bytes) {
+    if (typeof name !== "string" || !name || /[\\/:\x00-\x1f\x7f]/.test(name) || !(bytes instanceof Uint8Array)) {
+        throw new Error("Invalid local file export");
+    }
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+    const link = document.createElement("a"); link.href = url; link.download = name;
+    link.hidden = true; document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+function viewAcceptsInput(view) {
+    for (let current = view; current; current = current.owner) {
+        if (!current.getState(sfVisible) || current.getState(sfDisabled)
+            || current.root?.hidden || current.root?.disabled) { return false; }
+    }
+    return true;
+}
+
+function owningDesktop(view) {
+    let top = view;
+    for (let current = view; current; current = current.owner) {
+        if (current instanceof TVDesktop) { return current; }
+        top = current;
+    }
+    return top?.desktopView || top?.manager?.desktop
+        || top?.firstThat?.(view => view instanceof TVDesktop) || null;
+}
+
 async function messageBox(owner, options) {
-    let desktop = owner;
-    while (desktop && !(desktop instanceof TVDesktop)) { desktop = desktop.owner; }
-    desktop ||= owner.topView()?.firstThat?.((view) => view instanceof TVDesktop)
-        || owner.root?.closest?.(".tv-desktop")?._tvView;
+    const desktop = owningDesktop(owner) || owner.root?.closest?.(".tv-desktop")?._tvView;
     if (!(desktop instanceof TVDesktop)) { return; }
     const box = new TVMessageBox();
     desktop.insert(box);
@@ -1346,6 +1324,24 @@ function handleClipboardEvent(view, event) {
     const method = command === cmCopy ? "clipCopy" : command === cmCut ? "clipCut"
         : command === cmPaste ? "clipPaste" : "";
     if (!method || typeof view[method] !== "function") { return false; }
+    if (!view.commandEnabled(command)) {
+        native?.preventDefault();
+        view.clearEvent(event);
+        return true;
+    }
+    const manager = owningDesktop(view)?.dialogManager, dialog = manager?.get(manager.activeTarget);
+    if (dialog?.isOpen() && dialog.getState(sfModal) && !(view instanceof TVProgram)
+        && !dialog.dialog.contains(view.root)) {
+        native?.preventDefault();
+        view.clearEvent(event);
+        manager._focusTarget(manager.activeTarget);
+        return true;
+    }
+    if (!viewAcceptsInput(view)) {
+        native?.preventDefault();
+        view.clearEvent(event);
+        return true;
+    }
     if (event.what === evKeyDown) { event.what = evCommand; event.command = command; }
     // Native editable-input clipboard actions preserve the browser's undo stack
     // and paste permission flow. Input broadcasts still pass through validators.
@@ -1362,7 +1358,89 @@ function handleClipboardEvent(view, event) {
     return true;
 }
 
-const disabledCommands = new Set();
+const cmCommandSetChanged = 52;
+
+class TVCommandSet {
+    constructor(commands = []) {
+        this._defaultEnabled = commands instanceof TVCommandSet ? commands._defaultEnabled : false;
+        this._commands = new Set(commands instanceof TVCommandSet ? commands._commands : commands);
+    }
+
+    has(command) { return this._defaultEnabled !== this._commands.has(command); }
+    enableCmd(command) { this._commands[this._defaultEnabled ? "delete" : "add"](command); return this; }
+    disableCmd(command) { this._commands[this._defaultEnabled ? "add" : "delete"](command); return this; }
+    isEmpty() { return !this._defaultEnabled && this._commands.size === 0; }
+
+    _equals(other) {
+        return this._defaultEnabled === other._defaultEnabled && this._commands.size === other._commands.size
+            && [...this._commands].every(command => other._commands.has(command));
+    }
+
+    _combine(other, enable) {
+        const result = new TVCommandSet();
+        result._defaultEnabled = enable ? this._defaultEnabled || other._defaultEnabled
+            : this._defaultEnabled && !other._defaultEnabled;
+        for (const command of new Set([...this._commands, ...other._commands])) {
+            const enabled = enable ? this.has(command) || other.has(command) : this.has(command) && !other.has(command);
+            if (enabled !== result._defaultEnabled) { result._commands.add(command); }
+        }
+        return result;
+    }
+}
+
+let currentCommands = new TVCommandSet();
+currentCommands._defaultEnabled = true;
+const commandViews = new Set();
+const pendingCommandRoots = new Set();
+let notifyingCommands = false;
+
+function watchCommands(view, enabled) {
+    if (enabled) { commandViews.add(view); } else { commandViews.delete(view); }
+}
+
+function commandDisabled(item) {
+    return Boolean(item?.disabled || (item?.command && !currentCommands.has(item.command)));
+}
+
+function notifyCommands(source) {
+    for (let view of [source, ...commandViews]) {
+        while (view.owner instanceof TVGroup && view.owner.children.includes(view)) { view = view.owner; }
+        pendingCommandRoots.add(view);
+    }
+    if (notifyingCommands) { return; }
+    notifyingCommands = true;
+    try {
+        while (pendingCommandRoots.size) {
+            const roots = [...pendingCommandRoots]; pendingCommandRoots.clear();
+            for (const view of roots) {
+                if (view instanceof TVGroup) { view.broadcast(cmCommandSetChanged); }
+                else if ((view.eventMask & evBroadcast) !== 0) {
+                    view.handleEvent(new TVEvent(evBroadcast, { command: cmCommandSetChanged }));
+                }
+            }
+        }
+    } finally { notifyingCommands = false; }
+}
+
+function recordStatisticsEvent(event, { beacon = false } = {}) {
+    const body = JSON.stringify(event);
+    if (beacon && typeof navigator.sendBeacon === "function") {
+        try {
+            if (navigator.sendBeacon(
+                "/api/statistics/events",
+                new Blob([body], { type: "application/json" }),
+            )) { return; }
+        } catch {
+            // Fall through to a keepalive request.
+        }
+    }
+    void fetch("/api/statistics/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+    }).catch(() => {});
+}
 
 class TVEvent {
     constructor(what = evNothing, { command = "", infoPtr = null, infoLong = 0, nativeEvent = null } = {}) {
@@ -1498,10 +1576,13 @@ class TVView {
     }
 
     bindRoot(root) {
+        if (this.root && this.root !== root) { this.setState(sfFocused, false); }
         if (this.root?._tvView === this) { delete this.root._tvView; }
         this.root = root || null;
         if (this.root) { this.root._tvView = this; }
         setElementHelpContext(this.root, this.helpCtx);
+        watchNativePalette(this, Boolean(this.root?.style && this._paletteAttribute() !== null));
+        this._drawPalette();
         return this;
     }
 
@@ -1573,42 +1654,82 @@ class TVView {
     }
 
     getState(state) {
-        return (this.state & state) !== 0;
+        return (this.state & state) === state;
     }
 
     show() { return this.setState(sfVisible, true); }
     hide() { return this.setState(sfVisible, false); }
     exposed() { return this.getState(sfVisible) && !this.root?.hidden; }
 
+    _focusTarget() { return this.root; }
+
+    _canFocus() {
+        if ((this.options & ofSelectable) === 0 || !viewAcceptsInput(this)) { return false; }
+        const target = this._focusTarget();
+        return !this.root || Boolean(target && !target.disabled && !target.hidden
+            && target.isConnected !== false && target.getAttribute?.("aria-hidden") !== "true"
+            && !target.closest?.("[hidden]") && target.tabIndex >= 0);
+    }
+
     focus() {
-        this.root?.focus?.();
-        return this.setState(sfFocused, true);
+        if (!viewAcceptsInput(this)) { return this; }
+        const target = this._focusTarget();
+        target?.focus?.();
+        if (!this.root || (target && document.activeElement === target)) { this._recordFocus(target); }
+        return this;
+    }
+
+    _recordFocus(element = null) {
+        if (!viewAcceptsInput(this) || (element && document.activeElement !== element)) { return; }
+        const version = ++focusVersion, path = [this];
+        for (let child = this, owner = this.owner; owner instanceof TVGroup
+            && !(owner instanceof TVDesktop || owner instanceof TVProgram) && owner.children.includes(child);
+            child = owner, owner = owner.owner) { path.push(owner); }
+        const current = () => version === focusVersion && (!element || document.activeElement === element);
+        for (let index = path.length - 1; index > 0; index--) {
+            if (!current()) { return; }
+            const owner = path[index], child = path[index - 1];
+            owner.setCurrent(child);
+            if (owner.current !== child) { return; }
+        }
+        if (this instanceof TVGroup) { this.current?.setState(sfFocused, false); }
+        for (let index = path.length - 1; index >= 0; index--) {
+            if (!current()) { return; }
+            const view = path[index];
+            if (view instanceof TVGroup) { TVView.prototype.setState.call(view, sfFocused, true); }
+            else { view.setState(sfFocused, true); }
+        }
     }
 
     select() {
-        this.owner?.setCurrent?.(this);
-        return this.setState(sfSelected, true);
+        const owner = this.owner;
+        if ((this.options & ofSelectable) === 0 || !(owner instanceof TVGroup) || !owner.children.includes(this)) { return this; }
+        if ((this.options & ofTopSelect) !== 0) {
+            const managed = owner instanceof TVDesktop && owner.dialogManager?._targetName(this) != null;
+            const current = owner.current, version = focusVersion;
+            this.makeFirst();
+            if (managed || this.owner !== owner || !owner.children.includes(this) || owner.current !== current
+                || version !== focusVersion || (this.options & ofSelectable) === 0 || !this.getState(sfVisible)) { return this; }
+        }
+        owner.setCurrent(this);
+        return this;
     }
 
     makeFirst() {
-        if (this.owner instanceof TVGroup) {
-            this.owner.remove(this);
-            this.owner.insert(this);
-            this.root?.parentElement?.appendChild(this.root);
-        }
+        if (this.owner instanceof TVGroup) { this.owner._reorder(this); }
         return this;
     }
 
     nextView() {
         if (!(this.owner instanceof TVGroup)) { return null; }
         const index = this.owner.indexOf(this);
-        return index < 0 ? null : this.owner.at((index + 1) % this.owner.children.length);
+        return index < 0 ? null : this.owner.at(index + 1);
     }
 
     prevView() {
         if (!(this.owner instanceof TVGroup)) { return null; }
         const index = this.owner.indexOf(this);
-        return index < 0 ? null : this.owner.at((index + this.owner.children.length - 1) % this.owner.children.length);
+        return index <= 0 ? null : this.owner.at(index - 1);
     }
 
     topView() {
@@ -1625,42 +1746,100 @@ class TVView {
     calcBounds(bounds, delta) {
         if (!(bounds instanceof TVRect)) { return null; }
         const change = delta instanceof TVPoint ? delta : new TVPoint(delta?.x, delta?.y);
-        if ((this.growMode & gfGrowLoX) !== 0) { bounds.x1 += change.x; }
-        if ((this.growMode & gfGrowLoY) !== 0) { bounds.y1 += change.y; }
-        if ((this.growMode & gfGrowHiX) !== 0) { bounds.x2 += change.x; }
-        if ((this.growMode & gfGrowHiY) !== 0) { bounds.y2 += change.y; }
+        const grow = (value, size, difference) => {
+            if ((this.growMode & gfGrowRel) === 0) { return value + difference; }
+            const previous = size - difference;
+            return previous ? Math.trunc((value * size + Math.floor(previous / 2)) / previous) : value;
+        };
+        bounds.x1 = this.bounds.x1;
+        bounds.y1 = this.bounds.y1;
+        bounds.x2 = this.bounds.x2;
+        bounds.y2 = this.bounds.y2;
+        if ((this.growMode & gfGrowLoX) !== 0) { bounds.x1 = grow(bounds.x1, this.owner?.size.x ?? change.x, change.x); }
+        if ((this.growMode & gfGrowLoY) !== 0) { bounds.y1 = grow(bounds.y1, this.owner?.size.y ?? change.y, change.y); }
+        if ((this.growMode & gfGrowHiX) !== 0) { bounds.x2 = grow(bounds.x2, this.owner?.size.x ?? change.x, change.x); }
+        if ((this.growMode & gfGrowHiY) !== 0) { bounds.y2 = grow(bounds.y2, this.owner?.size.y ?? change.y, change.y); }
+        const limits = this.sizeLimits();
+        bounds.x2 = bounds.x1 + Math.max(limits.min.x, Math.min(limits.max.x, bounds.width));
+        bounds.y2 = bounds.y1 + Math.max(limits.min.y, Math.min(limits.max.y, bounds.height));
         return bounds;
     }
 
-    commandEnabled(command) { return !disabledCommands.has(command); }
+    commandEnabled(command) { return currentCommands.has(command); }
 
     disableCommands(commands) {
-        const values = commands instanceof Set || Array.isArray(commands) ? commands : [commands];
-        for (const command of values) { disabledCommands.add(command); }
+        const values = commands instanceof TVCommandSet ? commands
+            : new TVCommandSet(commands instanceof Set || Array.isArray(commands) ? commands : [commands]);
+        this.setCommands(currentCommands._combine(values, false));
     }
 
     enableCommands(commands) {
-        const values = commands instanceof Set || Array.isArray(commands) ? commands : [commands];
-        for (const command of values) { disabledCommands.delete(command); }
+        const values = commands instanceof TVCommandSet ? commands
+            : new TVCommandSet(commands instanceof Set || Array.isArray(commands) ? commands : [commands]);
+        this.setCommands(currentCommands._combine(values, true));
     }
 
     getCommands() {
-        return new Set(Object.values(TV_COMMANDS).filter((command) => !disabledCommands.has(command)));
+        return new TVCommandSet(currentCommands);
     }
 
     setCommands(commands) {
-        disabledCommands.clear();
-        const enabled = new Set(commands instanceof Set || Array.isArray(commands) ? commands : []);
-        Object.values(TV_COMMANDS).forEach((command) => {
-            if (!enabled.has(command)) { disabledCommands.add(command); }
-        });
+        const enabled = new TVCommandSet(commands);
+        if (currentCommands._equals(enabled)) { return; }
+        currentCommands = enabled;
+        notifyCommands(this);
     }
 
     endModal(command) { return this.owner?.endModal?.(command); }
     execute() { return 0; }
     getClipRect() { return this.getExtent(); }
-    getColor(color) { return color; }
+    getColor(color) {
+        const palette = this.getPalette();
+        const mapped = Array.isArray(palette) ? palette[color - 1] : color;
+        return this.owner?.getColor?.(mapped) ?? mapped;
+    }
     getPalette() { return null; }
+
+    _appColor(index) {
+        if (!nativeAppColors) {
+            nativeAppColors = new Map(buildPaletteFromCurrentStyle().flatMap(group => group.items.map(item => [item.paletteIndex, item.attr])));
+        }
+        return nativeAppColors.get(index) ?? TV2_APP_COLOR_ATTRIBUTES[index - 1];
+    }
+
+    _paletteAttribute() {
+        for (let view = this; view; view = view.owner) {
+            if (!Array.isArray(view.getPalette())) { continue; }
+            const attr = this.getColor(1);
+            return Number.isInteger(attr) && attr >= 0 && attr <= 255 ? attr : null;
+        }
+        return null;
+    }
+
+    _paletteStyle() {
+        const attr = this._paletteAttribute();
+        return attr === null ? "" : `color:${dosColor(attr, 0)};background-color:${dosColor(attr, 4)}`;
+    }
+
+    _paintPalette(element, attribute) {
+        if (!element) { return; }
+        this._partPalettes ||= new WeakMap();
+        if (this._partPalettes.get(element) === attribute) { return; }
+        element.style.color = attribute === null ? "" : dosColor(attribute, 0);
+        element.style.backgroundColor = attribute === null ? "" : dosColor(attribute, 4);
+        this._partPalettes.set(element, attribute);
+    }
+
+    _paintPaletteText(element, attribute, shortcut = attribute) {
+        if (!element) { return; }
+        this._paintPalette(element, attribute);
+        element.querySelectorAll(".tv-hotkey").forEach(key => this._paintPalette(key, (attribute & 0xf0) | (shortcut & 15)));
+    }
+
+    _drawPalette() {
+        if (this.root) { this._paintPalette(this.root, this._paletteAttribute()); }
+        return this;
+    }
 
     makeGlobal(source) {
         const point = source instanceof TVPoint ? source.copy() : new TVPoint(source?.x, source?.y);
@@ -1681,11 +1860,8 @@ class TVView {
         return this.getExtent().contains(local.x, local.y);
     }
 
-    putInFrontOf(target) {
-        if (!(this.owner instanceof TVGroup) || target?.owner !== this.owner) { return this; }
-        this.owner.remove(this);
-        this.owner.insertBefore(this, target);
-        target.root?.parentElement?.insertBefore(this.root, target.root);
+    putInFrontOf(target = null) {
+        if (this.owner instanceof TVGroup) { this.owner._reorder(this, target); }
         return this;
     }
 
@@ -1710,14 +1886,31 @@ class TVView {
 
     changeBounds(bounds) {
         this.setBounds(bounds);
-        if (!this.root) { return this; }
+        this._drawBounds();
+        return this;
+    }
+
+    _placePart(element, bounds) {
+        if (!element) { return; }
+        this._partBounds ||= new WeakMap();
+        if (this._partBounds.get(element)?.equals(bounds)) { return; }
+        element.style.position = "absolute";
+        element.style.left = `${bounds.x1}ch`;
+        element.style.top = `${bounds.y1}em`;
+        element.style.width = `${bounds.width}ch`;
+        element.style.height = `${bounds.height}em`;
+        this._partBounds.set(element, bounds);
+    }
+
+    _drawBounds() {
+        if (!this.root) { return; }
+        const bounds = this.bounds;
         const positioned = !(bounds.x1 === 0 && bounds.y1 === 0 && bounds.x2 === 0 && bounds.y2 === 0);
         this.root.style.position = positioned ? "absolute" : "";
         this.root.style.left = positioned ? `${bounds.x1}ch` : "";
         this.root.style.top = positioned ? `${bounds.y1}em` : "";
         this.root.style.width = positioned && bounds.width ? `${bounds.width}ch` : "";
         this.root.style.height = positioned && bounds.height ? `${bounds.height}em` : "";
-        return this;
     }
 
     growTo(x, y) {
@@ -1746,11 +1939,14 @@ class TVView {
     }
 
     dispatchEvent(event) {
+        const nativeTab = event.what === evKeyDown && event.nativeEvent?.key === "Tab"
+            && event.nativeEvent.type !== "keyup";
         let view = this;
         while (view && event.what !== evNothing) {
             if ((view.eventMask & event.what) !== 0) { view.handleEvent(event); }
             view = view.owner;
         }
+        if (nativeTab && event.what === evNothing) { event.nativeEvent.preventDefault(); }
         return event;
     }
 
@@ -1774,6 +1970,16 @@ class TVStaticText extends TVView {
         this.text = String(text ?? "");
     }
 
+    _textBoundsStyle() {
+        return [TVView._viewBoundsStyle(this), this.size.x > 0 && this.size.y > 0 ? "overflow:hidden" : ""]
+            .filter(Boolean).join(";");
+    }
+
+    _drawBounds() {
+        super._drawBounds();
+        if (this.root) { this.root.style.overflow = this.size.x > 0 && this.size.y > 0 ? "hidden" : ""; }
+    }
+
     draw() {
         const role = this._drawRole();
         const centered = this.text.charCodeAt(0) === 3;
@@ -1783,20 +1989,18 @@ class TVStaticText extends TVView {
             TVView._roleClassNames(role),
         ].filter(Boolean).join(" ");
         const classAttr = ` class="${escapeHtml(cls)}"`;
-        const bounds = TVView._viewBoundsStyle(this);
+        const bounds = this._textBoundsStyle();
         const alignStyle = centered ? "text-align:center" : "";
-        const inlineStyle = [bounds, alignStyle].filter(Boolean).join(";");
+        const inlineStyle = [bounds, alignStyle, this._paletteStyle()].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
-        const liveNames = new Set(["tron-status", "hanoi-history", "hanoi-status"]);
         const semanticName = this._semanticName();
         const attrString = attrsToString(this._drawAttrs({
+            hidden: !this.getState(sfVisible),
             ...(semanticName ? {
                 [`data-tv-${semanticName}`]: true,
                 "data-tv-row": semanticName,
             } : {}),
-            ...(role === "calc-display" || liveNames.has(semanticName) ? { "aria-live": "polite" } : {}),
-            ...(semanticName === "ludo-board" ? { role: "grid", "aria-label": "Ludo board" } : {}),
-            ...(semanticName === "tron-field" ? { role: "img", "aria-label": "Tron arena" } : {}),
+            ...(role === "calc-display" ? { "aria-live": "polite" } : {}),
         }));
         const attrs = attrString ? ` ${attrString}` : "";
         return `<div${classAttr}${styleAttr}${attrs}>${escapeHtml(text)}</div>`;
@@ -1810,7 +2014,8 @@ class TVStaticText extends TVView {
         this.text = String(text ?? "");
         if (this.root) {
             const centered = this.text.charCodeAt(0) === 3;
-            this.root.textContent = centered ? this.text.slice(1) : this.text;
+            const content = centered ? this.text.slice(1) : this.text;
+            if (this.root.childElementCount || this.root.textContent !== content) { this.root.textContent = content; }
             this.root.style.textAlign = centered ? "center" : "";
         }
         return this;
@@ -1836,10 +2041,10 @@ class TVTextScreen extends TVView {
             throw new TypeError("Invalid TVTextScreen dimensions/cells");
         }
         const font = screen.font;
-        if (font && (!Number.isInteger(font.width) || font.width < 1 || font.width > 32
+        if (!font || !Number.isInteger(font.width) || font.width < 1 || font.width > 32
             || !Number.isInteger(font.height) || font.height < 1 || font.height > 64
             || !(font.data instanceof Uint8Array)
-            || font.data.length !== 256 * font.height * Math.ceil(font.width / 8))) {
+            || font.data.length !== 256 * font.height * Math.ceil(font.width / 8)) {
             throw new TypeError("Invalid TVTextScreen bitmap font");
         }
         if (screen.cells.some(cell => !Array.isArray(cell) || cell.length !== 3
@@ -1851,23 +2056,11 @@ class TVTextScreen extends TVView {
             || screen.blink.length !== screen.cells.length || screen.blink.some(flag => typeof flag !== "boolean"))) {
             throw new TypeError("Invalid TVTextScreen blink mask");
         }
-        if (screen.blinkVisible !== undefined && typeof screen.blinkVisible !== "boolean") {
-            throw new TypeError("Invalid TVTextScreen blink phase");
-        }
-        const cursor = screen.cursor;
-        if (cursor && (!Number.isInteger(cursor.index) || typeof cursor.visible !== "boolean"
-            || (cursor.visible && (cursor.index < 0 || cursor.index >= screen.cells.length))
-            || !Number.isFinite(cursor.start) || !Number.isFinite(cursor.end)
-            || cursor.start < 0 || cursor.end < cursor.start || cursor.end > 100)) {
-            throw new TypeError("Invalid TVTextScreen cursor");
-        }
-        if (font && screen.cols * font.width * screen.rows * font.height > 16777216) {
+        if (screen.cols * font.width * screen.rows * font.height > 16777216) {
             throw new TypeError("TVTextScreen bitmap is too large");
         }
         this._stopBlink();
         this.screen = screen;
-        this._blinkVisible = screen.blinkVisible !== false;
-        if (this.root && (this.root.tagName === "CANVAS") !== Boolean(font)) { this.drawView(); }
         this._paint();
         this._startBlink();
         return this;
@@ -1881,10 +2074,6 @@ class TVTextScreen extends TVView {
         const { cols, rows, font, text = [] } = this.screen;
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds || `width:${cols}ch;height:${rows}em`;
-        if (!font) {
-            return `<div class="tv-text-screen tv-text-screen-text" ${attrsToString(this._drawAttrs())}`
-                + ` style="${escapeHtml(style)}"></div>`;
-        }
         return `<canvas class="tv-text-screen" ${attrsToString(this._drawAttrs())}`
             + ` width="${cols * font.width}" height="${rows * font.height}" style="${escapeHtml(style)}"`
             + ` role="img" aria-label="${escapeHtml(text.join("\n"))}">${escapeHtml(text.join("\n"))}</canvas>`;
@@ -1893,9 +2082,6 @@ class TVTextScreen extends TVView {
     bindRoot(root) {
         this._stopBlink();
         super.bindRoot(root);
-        this._textLayout = null;
-        if (!root) { this._textRoot = null; this._textCells = []; this._textGlyphs = []; this._textState = []; }
-        this._blinkVisible = this.screen?.blinkVisible !== false;
         this._paint();
         this._startBlink();
         return this;
@@ -1912,7 +2098,6 @@ class TVTextScreen extends TVView {
     }
 
     _startBlink() {
-        if (typeof this.screen?.blinkVisible === "boolean") { return; } // Live hardware supplies its own phase.
         if (!this.root || !this.screen?.blink?.some(Boolean) || typeof window === "undefined") { return; }
         this._motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)") || null;
         this._motionQuery?.addEventListener("change", this._onMotionChange);
@@ -1935,7 +2120,6 @@ class TVTextScreen extends TVView {
 
     _paint() {
         if (!this.root || !this.screen) { return; }
-        if (!this.screen.font) { this._paintText(); return; }
         const context = this.root.getContext?.("2d");
         if (!context) { return; }
         const { cols, rows, cells, font, palette } = this.screen;
@@ -1956,65 +2140,6 @@ class TVTextScreen extends TVView {
             }
         });
     }
-
-    _paintText() {
-        const { cols, rows, cells, palette, blink, cursor } = this.screen;
-        if (this._textRoot !== this.root || this._textCols !== cols || this._textRows !== rows) {
-            this._textRoot = this.root; this._textCols = cols; this._textRows = rows;
-            this._textLayout = null;
-            this._textCells = []; this._textGlyphs = []; this._textState = [];
-            const lines = Array.from({ length: rows }, () => {
-                const line = document.createElement("div"); line.className = "tv-text-screen-row";
-                line.style.gridTemplateColumns = `repeat(${cols},minmax(0,1fr))`;
-                for (let col = 0; col < cols; col++) {
-                    const cell = document.createElement("span"), glyph = document.createElement("span");
-                    cell.appendChild(glyph); line.appendChild(cell);
-                    this._textCells.push(cell); this._textGlyphs.push(glyph);
-                }
-                return line;
-            });
-            this.root.replaceChildren(...lines);
-            this.root.style.width = `${cols}ch`; this.root.style.height = `${rows}em`;
-            this.root.style.gridTemplateRows = `repeat(${rows},minmax(0,1fr))`;
-        }
-        cells.forEach(([glyph, fg, bg], index) => {
-            const foreground = palette[fg], background = palette[bg];
-            const hidden = blink?.[index] && !this._blinkVisible;
-            const mark = cursor?.visible && cursor.index === index;
-            const state = [glyph, foreground, background, hidden, mark, cursor?.start, cursor?.end].join(":");
-            if (this._textState[index] === state) { return; }
-            this._textState[index] = state;
-            const cell = this._textCells[index];
-            this._textGlyphs[index].textContent = displayCp437Char(glyph);
-            cell.style.color = hidden ? background : foreground;
-            cell.style.backgroundColor = background;
-            cell.style.backgroundImage = mark
-                ? `linear-gradient(to bottom,transparent ${cursor.start}%,${foreground} ${cursor.start}%,${foreground} ${cursor.end}%,transparent ${cursor.end}%)` : "";
-        });
-        this._layoutText();
-    }
-
-    _layoutText() {
-        if (!this._textGlyphs?.length || !this.root?.getBoundingClientRect) { return; }
-        const rect = this.root.getBoundingClientRect(), cell = measureCells(), pixels = window.devicePixelRatio || 1;
-        if (!rect.width || !rect.height) { return; }
-        const key = [rect.left, rect.top, rect.width, rect.height, cell.width, cell.height, pixels].join(":");
-        if (key === this._textLayout) { return; }
-        this._textLayout = key;
-        // The VGA web font is hinted on CSS pixels before compositing. Half-CSS-
-        // pixel heights on Retina can still lose a bitmap row, despite physical
-        // pixel alignment. Fit glyphs to whole raster cells, not centered boxes.
-        const snap = value => Math.round(value);
-        // Read all grid bounds before writing. Adjacent glyphs share rounded
-        // edges; centering uniformly scaled glyphs leaves row gaps.
-        const bounds = this._textCells.map(item => item.getBoundingClientRect());
-        bounds.forEach((bounds, index) => {
-            const glyph = this._textGlyphs[index];
-            glyph.style.left = `${snap(bounds.left) - bounds.left}px`;
-            glyph.style.top = `${snap(bounds.top) - bounds.top}px`;
-            glyph.style.transform = `scale(${(snap(bounds.right) - snap(bounds.left)) / cell.width},${(snap(bounds.bottom) - snap(bounds.top)) / cell.height})`;
-        });
-    }
 }
 
 class TVImage extends TVView {
@@ -2025,30 +2150,98 @@ class TVImage extends TVView {
         super(bounds);
         this.src = "";
         this.alt = "";
+        this._picture = null;
+        this._placeholder = null;
+        this.resizeObserver = null;
+        this._onImageState = (event) => {
+            if (event.currentTarget === this._picture) { this._updateImage(); }
+        };
+    }
+
+    getPalette() { return [0x07]; }
+
+    bindRoot(root) {
+        if (root === this.root) { return this; }
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = null;
+        for (const type of ["load", "error"]) { this._picture?.removeEventListener(type, this._onImageState); }
+        super.bindRoot(root);
+        this._picture = this.root?.querySelector("img") || null;
+        this._placeholder = this.root?.querySelector("span") || null;
+        for (const type of ["load", "error"]) { this._picture?.addEventListener(type, this._onImageState); }
+        if (root && "ResizeObserver" in window) {
+            this.resizeObserver = new ResizeObserver(() => {
+                if (this.root === root) { measuredCell = null; this._layout(); }
+            });
+            this.resizeObserver.observe(root);
+        }
+        return this.drawView();
     }
 
     draw() {
-        const bounds = TVView._viewBoundsStyle(this);
-        const attrs = attrsToString(this._drawAttrs());
+        const bounds = [TVView._viewBoundsStyle(this), this._paletteStyle()].filter(Boolean).join(";");
+        const attrs = attrsToString(this._drawAttrs({ hidden: !this.getState(sfVisible) }));
         return `<div class="tv-image"${bounds ? ` style="${escapeHtml(bounds)}"` : ""} ${attrs}>`
-            + `<img alt="${escapeHtml(this.alt)}"${this.src ? ` src="${escapeHtml(this.src)}"` : ""}${this.src ? "" : " hidden"}>`
-            + `<span${this.src ? " hidden" : ""}>No cover</span></div>`;
+            + `<img alt="${escapeHtml(this.alt)}"${this.src ? ` src="${escapeHtml(this.src)}"` : ""} hidden>`
+            + `<span>${this.src ? "Loading" : "No cover"}</span></div>`;
+    }
+
+    _updateImage() {
+        const picture = this._picture;
+        const ready = Boolean(this.src && picture?.complete && picture.naturalWidth > 0
+            && picture.currentSrc === picture.src);
+        if (picture) { picture.hidden = !ready; }
+        if (this._placeholder) {
+            const text = this.src && picture && !picture.complete ? "Loading" : "No cover";
+            if (this._placeholder.textContent !== text) { this._placeholder.textContent = text; }
+            this._placeholder.hidden = ready;
+        }
+        this._layout();
+    }
+
+    _layout() {
+        if (!this.root) { return; }
+        const cell = measureCells(), width = this.root.clientWidth / cell.width, height = this.root.clientHeight / cell.height;
+        this._placePart(this._picture, new TVRect(0, 0, width, height));
+        const columns = Math.min(width, this._placeholder?.textContent.length || 0), rows = Math.min(1, height);
+        const left = (width - columns) / 2, top = (height - rows) / 2;
+        this._placePart(this._placeholder, new TVRect(left, top, left + columns, top + rows));
+    }
+
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        this._layout();
+        return this;
+    }
+
+    setState(state, enable) {
+        super.setState(state, enable);
+        if ((state & sfVisible) !== 0 && enable) { this._layout(); }
+        return this;
+    }
+
+    drawView() {
+        if (!this.root) { return this; }
+        this._drawBounds();
+        this.root.hidden = !this.getState(sfVisible);
+        const picture = this._picture;
+        if (picture) {
+            if (picture.alt !== this.alt) { picture.alt = this.alt; }
+            if (this.src) {
+                if (picture.getAttribute("src") !== this.src) { picture.src = this.src; }
+            } else if (picture.hasAttribute("src")) { picture.removeAttribute("src"); }
+        }
+        this._updateImage();
+        return this;
     }
 
     setImage(src, alt = "") {
         this.src = String(src || "");
         this.alt = String(alt || "");
-        const picture = this.root?.querySelector("img");
-        const placeholder = this.root?.querySelector("span");
-        if (picture) {
-            picture.hidden = !this.src;
-            picture.alt = this.alt;
-            if (this.src) { picture.src = this.src; }
-            else { picture.removeAttribute("src"); }
-        }
-        if (placeholder) { placeholder.hidden = Boolean(this.src); }
-        return this;
+        return this.drawView();
     }
+
+    destroy() { this.bindRoot(null); }
 }
 
 class TVPercentGauge extends TVView {
@@ -2065,25 +2258,63 @@ class TVPercentGauge extends TVView {
     }
 
     solveForX(y, z) {
-        return Math.trunc((Number(z) || 0) * ((Number(y) || 0) * 0.01));
+        const percent = Number(y) || 0, total = Number(z) || 0;
+        const scaled = total * percent;
+        return Math.trunc(Number.isFinite(scaled) ? scaled / 100 : total * (percent / 100));
     }
 
     solveForY(x, z) {
         const total = Number(z) || 0;
-        return total === 0 ? 0 : Math.trunc(((Number(x) || 0) * 100) / total);
+        const current = Number(x) || 0, scaled = current * 100;
+        return total === 0 ? 0 : current === total ? 100
+            : Math.trunc(Number.isFinite(scaled) ? scaled / total : (current / total) * 100);
+    }
+
+    _gaugeValues() {
+        const maximum = Number(this.maxValue), current = Number(this.curValue);
+        const maxValue = Number.isFinite(maximum) ? Math.max(0, maximum) : 0;
+        const curValue = Number.isFinite(current) ? Math.min(maxValue, Math.max(0, current)) : 0;
+        return { maxValue, curValue };
+    }
+
+    _gaugeText() {
+        const { curValue, maxValue } = this._gaugeValues();
+        return `${String(this.solveForY(curValue, maxValue)).padEnd(3, " ")}%`;
+    }
+
+    _gaugeAttrs() {
+        return this._drawAttrs({
+            [`data-tv-${this._semanticName()}`]: true,
+            hidden: !this.getState(sfVisible),
+        });
     }
 
     draw() {
-        const percentDone = this.solveForY(this.curValue, this.maxValue);
-        const text = `${String(percentDone).padEnd(3, " ")}%`;
-        const bounds = TVView._viewBoundsStyle(this);
+        const bounds = [TVView._viewBoundsStyle(this), this._paletteStyle()].filter(Boolean).join(";");
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
-        const attrs = attrsToString(this._drawAttrs({ "data-tv-percent-gauge": true }));
-        return `<div class="tv-gauge tv-percent-gauge"${style} ${attrs}>${escapeHtml(text)}</div>`;
+        const attrs = attrsToString(this._gaugeAttrs());
+        return `<div class="tv-gauge tv-${this._semanticName()}"${style} ${attrs}>${escapeHtml(this._gaugeText())}</div>`;
+    }
+
+    drawView() {
+        if (!this.root) { return this; }
+        const text = this._gaugeText();
+        if (this.root.textContent !== text) { this.root.textContent = text; }
+        for (const [name, value] of Object.entries(this._gaugeAttrs())) {
+            if (typeof value === "boolean") { this.root.toggleAttribute(name, value); }
+            else if (this.root.getAttribute(name) !== String(value)) { this.root.setAttribute(name, String(value)); }
+        }
+        return this;
+    }
+
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        return this.drawView();
     }
 
     updateView(progress) {
-        this.curValue = Number(progress) || 0;
+        const value = Number(progress);
+        this.curValue = Number.isFinite(value) ? value : 0;
         this.drawView();
         return this;
     }
@@ -2109,22 +2340,24 @@ class TVPercentGauge extends TVView {
 class TVBarGauge extends TVPercentGauge {
     static viewName = "bar-gauge";
 
-    draw() {
-        const width = Math.max(0, this.size.x);
-        const maxValue = Math.max(0, this.maxValue);
-        const curValue = Math.min(maxValue, Math.max(0, this.curValue));
-        const fillSize = maxValue ? Math.floor((curValue / maxValue) * width) : 0;
-        const text = "█".repeat(fillSize) + "░".repeat(width - fillSize);
-        const bounds = TVView._viewBoundsStyle(this);
-        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
-        const attrs = attrsToString(this._drawAttrs({
-            "data-tv-bar-gauge": true,
+    _gaugeText() {
+        const width = Number.isFinite(this.size.x) ? Math.max(0, Math.floor(this.size.x)) : 0;
+        const { maxValue, curValue } = this._gaugeValues();
+        const scaled = curValue * width;
+        const fillSize = !maxValue ? 0 : curValue === maxValue ? width
+            : Math.floor(Number.isFinite(scaled) ? scaled / maxValue : (curValue / maxValue) * width);
+        return "█".repeat(fillSize) + "░".repeat(width - fillSize);
+    }
+
+    _gaugeAttrs() {
+        const { maxValue, curValue } = this._gaugeValues();
+        return {
+            ...super._gaugeAttrs(),
             role: "progressbar",
             "aria-valuemin": 0,
             "aria-valuemax": maxValue,
             "aria-valuenow": curValue,
-        }));
-        return `<div class="tv-gauge tv-bar-gauge"${style} ${attrs}>${escapeHtml(text)}</div>`;
+        };
     }
 }
 
@@ -2132,6 +2365,28 @@ class TVLabel extends TVStaticText {
     constructor(bounds, text, link = null) {
         super(bounds, text);
         this.link = link instanceof TVView ? link : null;
+        this._labelMarkup = null;
+        this.light = false;
+        this._onLabelFocus = event => this._drawPalette(event.type === "focusout" ? event.relatedTarget : event.target);
+    }
+
+    getPalette() { return [38, 39, 40].map(index => this._appColor(index)); }
+
+    _drawPalette(focusedElement = document.activeElement) {
+        if (!this.root) { this.light = false; return this; }
+        this.light = Boolean(this.link?.root?.contains(focusedElement));
+        this._paintPaletteText(this.root, this.getColor(this.light ? 2 : 1), this.getColor(3));
+        return this;
+    }
+
+    bindRoot(root) {
+        if (root === this.root) { return this; }
+        for (const type of ["focusin", "focusout"]) { this._focusScope?.removeEventListener(type, this._onLabelFocus); }
+        super.bindRoot(root);
+        this._focusScope = root && this.link ? (this.owner?.root || root.parentElement) : null;
+        for (const type of ["focusin", "focusout"]) { this._focusScope?.addEventListener(type, this._onLabelFocus); }
+        this._labelMarkup = null;
+        return this.drawView();
     }
 
     setText(text) {
@@ -2140,20 +2395,42 @@ class TVLabel extends TVStaticText {
         return this;
     }
 
+    drawView() {
+        if (!this.root) { return this; }
+        if (this.root.localName !== (this.link ? "label" : "span")) { return super.drawView(); }
+        const content = renderHotkeyMarkup(this.text);
+        if (this._labelMarkup !== content) {
+            if (this.root.innerHTML !== content) { this.root.innerHTML = content; }
+            this._labelMarkup = content;
+        }
+        if (this.link) { this.root.htmlFor = this.link.viewId; }
+        this.root.hidden = !this.getState(sfVisible);
+        setElementHelpContext(this.root, this.helpCtx);
+        this._drawBounds();
+        this._drawPalette();
+        return this;
+    }
+
     draw() {
         const tag = this.link ? "label" : "span";
         const cls = ["tv-static-text", "tv-label", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
-        const bounds = TVView._viewBoundsStyle(this);
+        const bounds = [this._textBoundsStyle(), this._paletteStyle()].filter(Boolean).join(";");
         const styleAttr = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const forAttr = this.link ? ` for="${escapeHtml(this.link.viewId)}"` : "";
-        const attrs = attrsToString(this._drawAttrs());
+        const attrs = attrsToString(this._drawAttrs({ hidden: !this.getState(sfVisible) }));
         const content = renderHotkeyMarkup(this.text);
         return `<${tag} class="${escapeHtml(cls)}"${styleAttr}${forAttr} ${attrs}>${content}</${tag}>`;
     }
 
     handleEvent(event) {
-        if (!this.link || this.link.getState(sfDisabled)) { return; }
         const nativeEvent = event.nativeEvent;
+        if (!this.link || nativeEvent?.defaultPrevented) { return; }
+        if (!viewAcceptsInput(this) || !viewAcceptsInput(this.link)) {
+            if (event.what === evMouseDown && event.infoPtr === this) {
+                nativeEvent?.preventDefault(); this.clearEvent(event);
+            }
+            return;
+        }
         const mnemonic = this.text.match(/~([^~])~/)?.[1]?.toLowerCase();
         if ((event.what === evMouseDown && event.infoPtr === this)
             || (event.what === evKeyDown && mnemonic && nativeEvent?.altKey
@@ -2236,6 +2513,7 @@ class TVInputLine extends TVView {
             throw new TypeError("TVInputLine expects TVRect bounds");
         }
         super(bounds);
+        this.options |= ofSelectable;
         this.maxLen = Math.max(1, Number(maxLen) || 255);
         this.eventMask |= evBroadcast;
         this.data = "";
@@ -2248,24 +2526,52 @@ class TVInputLine extends TVView {
         this.onInputKeyDown = (nativeEvent) => {
             if (clipboardKeyCommand(nativeEvent)) { this.dispatchEvent(new TVEvent(evKeyDown, { infoPtr: this, nativeEvent })); }
         };
+        this.onBeforeInput = (nativeEvent) => this.dispatchEvent(new TVEvent(evBroadcast, { infoPtr: this, nativeEvent }));
     }
 
+    getPalette() { return [this._appColor(50)]; }
+
     bindRoot(root) {
+        if (root === this.root) { return this; }
+        this.beforeInput = null;
         if (this.root) {
+            this.data = this.root.value;
             for (const type of ["copy", "cut", "paste"]) { this.root.removeEventListener(type, this.onClipboardEvent); }
             this.root.removeEventListener("keydown", this.onInputKeyDown);
+            this.root.removeEventListener("beforeinput", this.onBeforeInput);
         }
         super.bindRoot(root);
         if (this.root) {
+            if (this.root.value !== this.data) { this.root.value = this.data; }
+            this.drawView();
             for (const type of ["copy", "cut", "paste"]) { this.root.addEventListener(type, this.onClipboardEvent); }
             this.root.addEventListener("keydown", this.onInputKeyDown);
+            this.root.addEventListener("beforeinput", this.onBeforeInput);
         }
         return this;
     }
 
+    _formatData(value) {
+        return String(this.validator?.format?.(value) ?? value ?? "").slice(0, this.maxLen);
+    }
+
+    _editState() {
+        const root = this.root;
+        return root ? { root, value: root.value, start: root.selectionStart, end: root.selectionEnd,
+            direction: root.selectionDirection, left: root.scrollLeft } : null;
+    }
+
+    _restoreSelection(edit, formatted = false) {
+        if (!edit || edit.root !== this.root || !Number.isInteger(edit.start) || !Number.isInteger(edit.end)) { return; }
+        const position = offset => Math.min(this.data.length, formatted ? this._formatData(edit.value.slice(0, offset)).length : offset);
+        this.root.setSelectionRange(position(edit.start), position(edit.end), edit.direction);
+        this.root.scrollLeft = edit.left;
+    }
+
     setData(value) {
-        this.data = (this.validator?.format?.(value) ?? String(value ?? "")).slice(0, this.maxLen);
-        if (this.root) { this.root.value = this.data; }
+        this.beforeInput = null;
+        this.data = this._formatData(value);
+        if (this.root && this.root.value !== this.data) { this.root.value = this.data; }
         return this;
     }
 
@@ -2274,8 +2580,10 @@ class TVInputLine extends TVView {
     }
 
     setValidator(validator) {
+        const edit = this._editState();
         this.validator = validator;
         this.setData(this.getData());
+        if (edit?.value !== this.data) { this._restoreSelection(edit, true); }
         return this;
     }
 
@@ -2285,64 +2593,82 @@ class TVInputLine extends TVView {
 
     handleEvent(event) {
         if ((event.what === evKeyDown || event.what === evCommand) && handleClipboardEvent(this, event)) { return; }
-        if (event.what !== evBroadcast || event.infoPtr !== this
-            || event.nativeEvent?.type !== "input") { return; }
-        const formatted = this.validator?.format?.(this.root.value) ?? this.root.value;
-        if (this.validator?.isValidInput && !this.validator.isValidInput(formatted, false)) {
-            this.root.value = this.data;
+        const native = event.nativeEvent;
+        if (event.what !== evBroadcast || event.infoPtr !== this || !["beforeinput", "input"].includes(native?.type)) { return; }
+        if (!this.root || native.target !== this.root) { this.clearEvent(event); return; }
+        if (native.type === "beforeinput") {
+            this.beforeInput = this.disabled || !viewAcceptsInput(this) || this.root.readOnly ? null : this._editState();
+            if (this.beforeInput) { this.data = this.beforeInput.value; }
+            const edit = this.beforeInput;
+            // Cancel predictable invalid insertions before they disturb native
+            // selection/Undo. Other edits are validated after the browser edit.
+            if (!edit || (native.cancelable && !native.isComposing && typeof native.data === "string"
+                && native.inputType?.startsWith("insert") && this.validator?.isValidInput
+                && !this.validator.isValidInput(this._formatData(edit.value.slice(0, edit.start)
+                    + native.data + edit.value.slice(edit.end)), false))) {
+                native.preventDefault();
+                this.beforeInput = null;
+            }
+            this.clearEvent(event);
             return;
         }
-        if (formatted !== this.root.value) { this.root.value = formatted; }
+        const previous = this.beforeInput, edit = this._editState();
+        this.beforeInput = null;
+        const formatted = this._formatData(this.root.value);
+        if (this.disabled || !viewAcceptsInput(this) || this.root.readOnly
+            || (this.validator?.isValidInput && !this.validator.isValidInput(formatted, false))) {
+            this.root.value = this.data = previous?.value ?? this.data;
+            this._restoreSelection(previous || edit);
+            this.clearEvent(event);
+            return;
+        }
+        const changed = formatted !== this.root.value;
+        if (changed) { this.root.value = formatted; }
         this.data = this.root.value;
+        if (changed) { this._restoreSelection(edit, true); }
     }
 
     async clipCopy() {
         const start = this.root?.selectionStart, end = this.root?.selectionEnd;
-        if (this.disabled || start == null || end == null || start === end) { return false; }
+        if (this.disabled || !viewAcceptsInput(this) || start == null || end == null || start === end) { return false; }
         await writeClipboardText(this.getData().slice(start, end));
         return true;
     }
 
     async clipCut() {
-        if (this.disabled || !this.root || this.root.readOnly) { return false; }
+        if (this.disabled || !viewAcceptsInput(this) || !this.root || this.root.readOnly) { return false; }
         const root = this.root, value = this.getData(), start = root.selectionStart, end = root.selectionEnd;
         const focus = document.activeElement;
         if (!await this.clipCopy()) { return false; }
-        if (root !== this.root || !root.isConnected || this.disabled || root.readOnly || this.getData() !== value
+        if (root !== this.root || !root.isConnected || this.disabled || !viewAcceptsInput(this) || root.readOnly || this.getData() !== value
             || document.activeElement !== focus || root.selectionStart !== start || root.selectionEnd !== end) { return false; }
         return this.insertText("");
     }
 
     async clipPaste() {
-        if (this.disabled || !this.root || this.root.readOnly) { return false; }
+        if (this.disabled || !viewAcceptsInput(this) || !this.root || this.root.readOnly) { return false; }
         const root = this.root, value = this.getData(), start = root.selectionStart, end = root.selectionEnd;
         const focus = document.activeElement;
         const text = await readClipboardText();
         if (!text.replace(/[\r\n]/g, "")) { return false; }
-        if (root !== this.root || !root.isConnected || this.disabled || root.readOnly || this.getData() !== value
+        if (root !== this.root || !root.isConnected || this.disabled || !viewAcceptsInput(this) || root.readOnly || this.getData() !== value
             || document.activeElement !== focus || root.selectionStart !== start || root.selectionEnd !== end) { return false; }
         return this.insertText(text);
     }
 
     insertText(text) {
-        if (this.disabled || !this.root || this.root.readOnly) { return false; }
+        if (this.disabled || !viewAcceptsInput(this) || !this.root || this.root.readOnly) { return false; }
         const value = this.getData(), start = this.root.selectionStart, end = this.root.selectionEnd;
         if (start == null || end == null) { return false; }
         const inserted = String(text).replace(/[\r\n]/g, "").slice(0, Math.max(0, this.maxLen - value.length + end - start));
         const candidate = value.slice(0, start) + inserted + value.slice(end);
-        const formatted = this.validator?.format?.(candidate) ?? candidate;
+        const formatted = this._formatData(candidate);
         if (this.validator?.isValidInput && !this.validator.isValidInput(formatted, false)) { return false; }
         this.setData(formatted);
-        const position = Math.min(this.data.length, (this.validator?.format?.(value.slice(0, start) + inserted)
-            ?? value.slice(0, start) + inserted).length);
+        const position = Math.min(this.data.length, this._formatData(value.slice(0, start) + inserted).length);
         this.root.setSelectionRange(position, position);
         this.root.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: inserted ? "insertFromPaste" : "deleteByCut", data: inserted }));
         return true;
-    }
-
-    focus() {
-        this.root?.focus();
-        return this;
     }
 
     setSecret(enable = true) {
@@ -2363,38 +2689,47 @@ class TVInputLine extends TVView {
 
     setState(state, enable) {
         if ((state & sfDisabled) !== 0) {
+            this.beforeInput = null;
             this.disabled = Boolean(enable);
             if (this.root) { this.root.disabled = this.disabled; }
         }
         return super.setState(state, enable);
     }
 
-    draw() {
+    _inputAttrs() {
         const viewName = this._semanticName();
-        const attrString = attrsToString(this._drawAttrs({
+        return this._drawAttrs({
             type: this.secret ? "password" : "text",
             id: this.viewId,
             maxlength: this.maxLen,
-            value: this.data,
             disabled: this.disabled,
+            hidden: !this.getState(sfVisible),
             autocomplete: "off",
-            spellcheck: false,
+            spellcheck: "false",
             ...(viewName ? { [`data-tv-${viewName}`]: true } : {}),
-        }));
+        });
+    }
+
+    drawView() {
+        if (!this.root) { return this; }
+        this.data = this.root.value;
+        this._drawBounds();
+        for (const [name, value] of Object.entries(this._inputAttrs())) {
+            if (typeof value === "boolean") { this.root.toggleAttribute(name, value); }
+            else if (this.root.getAttribute(name) !== String(value)) { this.root.setAttribute(name, String(value)); }
+        }
+        return this;
+    }
+
+    draw() {
+        const attrString = attrsToString({ ...this._inputAttrs(), value: this.getData() });
         const cls = ["tv-input-line", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
         const bounds = TVView._viewBoundsStyle(this);
         const styleAttr = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         return `<input class="${escapeHtml(cls)}"${styleAttr} ${attrString}>`;
     }
 
-    resolve(root) {
-        super.resolve(root);
-        if (this.root) {
-            this.root.value = this.data;
-            this.root.disabled = this.disabled;
-        }
-        return this;
-    }
+    destroy() { this.bindRoot(null); }
 }
 
 class TVGroup extends TVView {
@@ -2403,18 +2738,53 @@ class TVGroup extends TVView {
             throw new TypeError("TVGroup expects TVRect bounds");
         }
         super(bounds);
+        this.options |= ofSelectable;
         this.children = [];
         this.current = null;
         this.lockFlag = 0;
         this.endState = 0;
         this.eventMask |= evBroadcast;
+        this._onGroupFocus = event => {
+            if (this instanceof TVDesktop || this instanceof TVProgram) { return; }
+            for (let owner = this.owner; owner instanceof TVGroup
+                && !(owner instanceof TVDesktop || owner instanceof TVProgram); owner = owner.owner) {
+                if (owner.root?.contains(event.target)) { return; }
+            }
+            const owns = view => {
+                for (; view; view = view.owner) { if (view === this) { return true; } }
+                return false;
+            };
+            if (event.type === "focusin") {
+                const view = TVView._fromElement(event.target);
+                if (owns(view) && document.activeElement === event.target) { view._recordFocus(event.target); }
+            } else {
+                const actual = TVView._fromElement(document.activeElement);
+                if (owns(TVView._fromElement(event.relatedTarget))
+                    || (document.activeElement !== event.target && owns(actual))) { return; }
+                this.setState(sfFocused, false);
+            }
+        };
     }
 
-    /** True if any child has absolute positioning (x or y). */
-    _hasPositionedChildren() {
-        return this.children.some((child) =>
-            child instanceof TVView && (child.bounds.x1 !== 0 || child.bounds.y1 !== 0)
-        );
+    bindRoot(root) {
+        for (const type of ["focusin", "focusout"]) { this.root?.removeEventListener(type, this._onGroupFocus, true); }
+        if (!root) { this.children?.forEach(view => view.bindRoot(null)); }
+        super.bindRoot(root);
+        for (const type of ["focusin", "focusout"]) { this.root?.addEventListener(type, this._onGroupFocus, true); }
+        return this;
+    }
+
+    changeBounds(bounds) {
+        const previous = this.size.copy();
+        super.changeBounds(bounds);
+        const delta = new TVPoint(this.size.x - previous.x, this.size.y - previous.y);
+        if (delta.x || delta.y) {
+            this.children.forEach((child) => {
+                const next = child.calcBounds(new TVRect(), delta);
+                if (!next.equals(child.bounds)) { child.changeBounds(next); }
+            });
+        }
+        return this;
     }
 
     renderChildren() {
@@ -2428,15 +2798,8 @@ class TVGroup extends TVView {
 
     draw() {
         const cls = ["tv-group", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
-        const bounds = TVView._viewBoundsStyle(this);
-        const positioned = this._hasPositionedChildren()
-            ? `${bounds ? "" : "position:relative;"}display:block`
-            : "";
-        const parts = [
-            bounds,
-            positioned,
-        ].filter(Boolean).join(";");
-        const styleAttr = parts ? ` style="${escapeHtml(parts)}"` : "";
+        const bounds = [TVView._viewBoundsStyle(this), this._paletteStyle()].filter(Boolean).join(";");
+        const styleAttr = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const viewName = this._semanticName();
         const attrString = attrsToString(this._drawAttrs({
             ...(viewName ? { [`data-tv-${viewName}`]: this.value ?? true } : {}),
@@ -2448,23 +2811,43 @@ class TVGroup extends TVView {
 
     setCurrent(child) {
         const next = this.children.includes(child) ? child : null;
-        if (this.current && this.current !== next) {
-            this.current.setState(sfSelected | sfFocused, false);
-        }
+        if (this.current === next) { return next; }
+        const previous = this.current;
         this.current = next;
-        if (next) { next.setState(sfSelected, true); }
+        previous?.setState(sfSelected | sfFocused, false);
+        if (this.current === next && next) { next.setState(sfSelected, true); }
         return this.current;
     }
 
     setState(state, enable) {
+        const previous = this.state;
         super.setState(state, enable);
-        if ((state & (sfActive | sfDragging)) !== 0) {
-            this.children.forEach((child) => child.setState(state, enable));
-        } else if ((state & sfFocused) !== 0) {
+        // A child's callback may supersede some of the requested state bits.
+        const pending = mask => mask & (enable ? this.state : ~this.state);
+        const inherited = state & (sfActive | sfDragging);
+        if (inherited) {
+            for (const child of this.children.slice()) {
+                const mask = pending(inherited);
+                if (mask && child.owner === this) { child.setState(mask, enable); }
+            }
+        }
+        if (pending(state & sfFocused) && this.current?.owner === this) {
             this.current?.setState(sfFocused, enable);
-        } else if ((state & sfExposed) !== 0) {
-            this.children.forEach((child) => {
-                if (child.getState(sfVisible)) { child.setState(sfExposed, enable); }
+        }
+        if ((state & sfExposed) !== 0) {
+            for (const child of this.children.slice()) {
+                if (pending(sfExposed) && child.owner === this && child.getState(sfVisible)) { child.setState(sfExposed, enable); }
+            }
+        }
+        if (((previous ^ this.state) & (sfVisible | sfDisabled)) !== 0) {
+            this.firstThat(view => {
+                if (view instanceof TVButton && (view.flags & bfDefault) === 0) {
+                    const available = viewAcceptsInput(view);
+                    if (view.amDefault && !available) { view.makeDefault(false); }
+                    else if (!view.amDefault && available && (view.root
+                        ? document.activeElement === view.root : view.getState(sfFocused))) { view.makeDefault(true); }
+                }
+                return false;
             });
         }
         return this;
@@ -2475,15 +2858,18 @@ class TVGroup extends TVView {
     indexOf(child) { return this.children.indexOf(child); }
 
     broadcast(command, infoPtr = null, infoLong = 0) {
-        this.children.forEach((child) => {
-            if ((child.eventMask & evBroadcast) !== 0) {
-                child.handleEvent(new TVEvent(evBroadcast, { command, infoPtr, infoLong }));
-            }
-            if (child instanceof TVGroup) {
-                child.broadcast(command, infoPtr, infoLong);
-            }
-        });
+        this._broadcastEvent(new TVEvent(evBroadcast, { command, infoPtr, infoLong }));
         return infoPtr;
+    }
+
+    _broadcastEvent(event) {
+        for (const child of this.children.slice()) {
+            if (child.owner !== this || (child.eventMask & evBroadcast) === 0) { continue; }
+            if (child instanceof TVGroup) {
+                child._broadcastEvent(event);
+            } else { child.handleEvent(new TVEvent(evBroadcast, event)); }
+        }
+        this.handleEvent(new TVEvent(evBroadcast, event));
     }
 
     firstThat(predicate) {
@@ -2500,26 +2886,26 @@ class TVGroup extends TVView {
 
     handleEvent(event) {
         if (event.what !== evKeyDown || !event.nativeEvent?.altKey
+            || event.nativeEvent.defaultPrevented
             || event.nativeEvent.ctrlKey || event.nativeEvent.metaKey
-            || this instanceof TVDesktop
+            || this instanceof TVDesktop || this instanceof TVProgram
             || !this.root?.contains(event.nativeEvent.target)) { return; }
         const mnemonic = event.nativeEvent.key?.toLowerCase();
-        const label = this.firstThat((view) => view instanceof TVLabel
-            && view.link && !view.link.getState(sfDisabled)
-            && view.text.match(/~([^~])~/)?.[1]?.toLowerCase() === mnemonic);
-        label?.handleEvent(event);
+        const control = this.firstThat((view) => {
+            if (!(view instanceof TVLabel || view instanceof TVButton) || !viewAcceptsInput(view)) { return false; }
+            if (view instanceof TVLabel && (!view.link || !viewAcceptsInput(view.link))) { return false; }
+            return (view instanceof TVLabel ? view.text : view.title).match(/~([^~])~/)?.[1]?.toLowerCase() === mnemonic;
+        });
+        control?.handleEvent(event);
     }
 
     forEach(callback) {
         if (typeof callback === "function") { this.children.forEach(callback); }
     }
 
-    insertBefore(child, target) {
-        if (!(child instanceof TVView)) {
-            throw new TypeError("TVGroup.insertBefore expects TVView");
-        }
-        const index = this.indexOf(target);
-        if (index < 0) { return this.insert(child); }
+    insertBefore(child, target = null) {
+        this._validateInsert(child, target);
+        const index = target === null ? this.children.length : this.indexOf(target);
         child.owner = this;
         this.children.splice(index, 0, child);
         return child;
@@ -2527,17 +2913,36 @@ class TVGroup extends TVView {
 
     delete(child) { return this.remove(child); }
 
-    focusNext(forwards = true) {
-        const selectable = this.children.filter((child) => (
-            child.getState(sfVisible) && !child.getState(sfDisabled)
-            && ((child.options & ofSelectable) !== 0 || child.root?.tabIndex >= 0)
-        ));
-        if (!selectable.length) { return false; }
-        const current = selectable.indexOf(this.current);
+    _focusViews() {
+        const views = [];
+        const visit = group => {
+            for (const child of group.children) {
+                if (child.owner !== group || !viewAcceptsInput(child) || child instanceof TVWindow) { continue; }
+                if (child instanceof TVGroup && !(child.root && child._canFocus())) { visit(child); }
+                else if (child._canFocus()) { views.push(child); }
+            }
+        };
+        visit(this);
+        return views;
+    }
+
+    findNext(forwards = true) {
+        const selectable = this._focusViews();
+        if (!selectable.length) { return null; }
+        let selected = this.current;
+        while (selected instanceof TVGroup && !selectable.includes(selected)) { selected = selected.current; }
+        if (this.root && this.root.contains(document.activeElement)) { selected = TVView._fromElement(document.activeElement); }
+        const current = selectable.indexOf(selected);
         const offset = forwards ? 1 : -1;
-        const index = (current + offset + selectable.length) % selectable.length;
-        this.setCurrent(selectable[index]);
-        selectable[index].focus();
+        const index = current < 0 ? (forwards ? 0 : selectable.length - 1)
+            : (current + offset + selectable.length) % selectable.length;
+        return selectable[index];
+    }
+
+    focusNext(forwards = true) {
+        const next = this.findNext(forwards);
+        if (!next) { return false; }
+        next.focus();
         return true;
     }
 
@@ -2570,10 +2975,23 @@ class TVGroup extends TVView {
         return command;
     }
 
-    insert(child) {
+    _validateInsert(child, target = null) {
         if (!(child instanceof TVView)) {
             throw new TypeError("TVGroup.insert expects TVView");
         }
+        if (child.owner !== null || this.children.includes(child)) {
+            throw new Error("TVGroup.insert expects an unowned view; remove it from its owner first");
+        }
+        for (let owner = this; owner; owner = owner.owner) {
+            if (owner === child) { throw new Error("TVGroup.insert cannot create an ownership cycle"); }
+        }
+        if (target !== null && (target.owner !== this || !this.children.includes(target))) {
+            throw new Error("TVGroup.insertBefore target must be an owned child");
+        }
+    }
+
+    insert(child) {
+        this._validateInsert(child);
         child.owner = this;
         this.children.push(child);
         return child;
@@ -2584,11 +3002,56 @@ class TVGroup extends TVView {
         return this;
     }
 
+    _reorder(child, target) {
+        const index = this.children.indexOf(child);
+        if (child.owner !== this || index < 0 || target === child) { return; }
+        if (target != null && (target.owner !== this || !this.children.includes(target))) { return; }
+        const parent = child.root?.parentElement;
+        if (parent && target?.root?.parentElement && target.root.parentElement !== parent) { return; }
+        // Children paint back to front; their array also defines forward Tab order.
+        let position = target === undefined ? this.children.length : target === null ? 0 : this.children.indexOf(target) + 1;
+        if (index < position) { position--; }
+        if (index === position) { return; }
+        this.children.splice(index, 1);
+        this.children.splice(position, 0, child);
+        if (!parent) { return; }
+        const roots = this.children.map(view => view.root).filter(root => root?.parentElement === parent);
+        const selection = window.getSelection?.();
+        const selected = selection?.rangeCount && !selection.isCollapsed
+            && roots.some(root => root.contains(selection.anchorNode) || root.contains(selection.focusNode));
+        const endpoints = selected ? [selection.anchorNode, selection.anchorOffset, selection.focusNode, selection.focusOffset] : null;
+        if (typeof parent.moveBefore === "function") {
+            const next = roots[roots.indexOf(child.root) + 1] || null;
+            parent.moveBefore(child.root, next);
+        } else {
+            // InsertBefore blurs a moved focused subtree. Move its peers instead.
+            const pivot = roots.find(root => root.contains(document.activeElement)) || child.root, pivotIndex = roots.indexOf(pivot);
+            let reference = pivot;
+            for (let i = pivotIndex - 1; i >= 0; i--) {
+                if (roots[i].nextSibling !== reference) { parent.insertBefore(roots[i], reference); }
+                reference = roots[i];
+            }
+            reference = pivot;
+            for (let i = pivotIndex + 1; i < roots.length; i++) {
+                if (reference.nextSibling !== roots[i]) { parent.insertBefore(roots[i], reference.nextSibling); }
+                reference = roots[i];
+            }
+        }
+        if (endpoints && (selection.anchorNode !== endpoints[0] || selection.anchorOffset !== endpoints[1]
+            || selection.focusNode !== endpoints[2] || selection.focusOffset !== endpoints[3])) {
+            selection.setBaseAndExtent(...endpoints);
+        }
+    }
+
     remove(child) {
         const index = this.children.indexOf(child);
         if (index < 0) { return null; }
         this.children.splice(index, 1);
-        child.owner = null;
+        try {
+            if (this.current === child) { this.setCurrent(null); }
+        } finally {
+            if (child.owner === this && !this.children.includes(child)) { child.owner = null; }
+        }
         return child;
     }
 
@@ -2624,127 +3087,102 @@ class TVGroup extends TVView {
 class TVInfoRow extends TVStaticText {
     constructor(bounds, text = "") {
         super(bounds, text);
-        this.infoWidth = 0;
+        this.growMode = gfGrowHiX;
+        this.htmlContent = null;
+        this.contentLength = 0;
     }
 
+    get infoWidth() { return this.owner instanceof TVInfoBox ? this.owner.innerW : Math.max(0, this.size.x - 2); }
+
     _borderRole() { return this.owner instanceof TVInfoBox ? this.owner._borderRole() : ""; }
+
+    _rowMarkup() {
+        const borderClass = TVView._roleClassNames(this._borderRole());
+        if (this.htmlContent === null) { return TVInfoBox.rowHtml(this.infoWidth, this.text, borderClass); }
+        const classAttr = borderClass ? ` class="${escapeHtml(borderClass)}"` : "";
+        const border = `<span data-tv-info-side${classAttr}>│</span>`;
+        return border + " " + this.htmlContent
+            + " ".repeat(Math.max(0, this.infoWidth - 1 - this.contentLength)) + border;
+    }
 
     draw() {
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const attrs = attrsToString(this._drawAttrs());
-        return `<div class="tv-static-text tv-info-row"${style} ${attrs}>${TVInfoBox.rowHtml(
-            this.infoWidth,
-            this.text,
-            TVView._roleClassNames(this._borderRole()),
-        )}</div>`;
+        return `<div class="tv-static-text tv-info-row"${style} ${attrs}>${this._rowMarkup()}</div>`;
+    }
+
+    _drawBounds() {
+        super._drawBounds();
+        if (this.root) { this.root.innerHTML = this._rowMarkup(); }
     }
 
     setText(text) {
         this.text = String(text ?? "");
-        if (this.root) {
-            this.root.innerHTML = TVInfoBox.rowHtml(
-                this.infoWidth,
-                this.text,
-                TVView._roleClassNames(this._borderRole()),
-            );
-        }
+        this.htmlContent = null;
+        if (this.root) { this.root.innerHTML = this._rowMarkup(); }
         return this;
     }
 
     setHTML(html, contentLen) {
-        if (!this.root) { return this; }
-        const borderClass = TVView._roleClassNames(this._borderRole());
-        const classAttr = borderClass ? ` class="${escapeHtml(borderClass)}"` : "";
-        const border = `<span data-tv-info-side${classAttr}>│</span>`;
-        const padding = " ".repeat(Math.max(0, this.infoWidth - 1 - contentLen));
-        this.root.innerHTML = border + " " + html + padding + border;
+        this.htmlContent = String(html ?? "");
+        this.contentLength = Math.max(0, Number(contentLen) || 0);
+        if (this.root) { this.root.innerHTML = this._rowMarkup(); }
         return this;
     }
 }
 
-class TVInfoBox extends TVView {
+class TVInfoBox extends TVGroup {
     constructor(bounds, title, children = []) {
         if (!(bounds instanceof TVRect)) {
             throw new TypeError("TVInfoBox expects TVRect bounds");
         }
         super(bounds);
         this.title = String(title ?? "");
-        this.children = Array.isArray(children) ? children : [];
-        this.children.forEach((child) => {
-            if (child instanceof TVView) { child.owner = this; }
-        });
-        this._el = null;
+        this.topFrame = new TVStaticText(new TVRect(0, 0, this.size.x, 1), TVInfoBox.header(this.innerW, this.title));
+        this.topFrame.growMode = gfGrowHiX;
+        this.bottomFrame = new TVStaticText(new TVRect(0, this.size.y - 1, this.size.x, this.size.y), TVInfoBox.footer(this.innerW));
+        this.bottomFrame.growMode = gfGrowHiX | gfGrowLoY | gfGrowHiY;
+        this.insertAll([this.topFrame, ...children, this.bottomFrame]);
     }
 
-    get innerW() { return this.bounds.width - 2; }
+    get innerW() { return Math.max(0, this.size.x - 2); }
 
     _borderRole() { return String(this.constructor.borderRole || ""); }
 
     draw() {
-        const innerW = this.innerW;
-        const bounded = this.children.some((child) => (
-            child instanceof TVView
-            && (child.bounds.x1 !== 0 || child.bounds.y1 !== 0
-                || child.bounds.x2 !== 0 || child.bounds.y2 !== 0)
-        ));
-        const parts = [];
-        // Header
-        parts.push(`<span data-tv-info-frame="top">${escapeHtml(TVInfoBox.header(innerW, this.title))}</span>`);
-        // Children — all TVView instances
-        for (const child of this.children) {
-            if (child && typeof child.draw === "function") {
-                if (child instanceof TVInfoRow) {
-                    child.infoWidth = innerW;
-                }
-                parts.push(child.draw());
-            }
-        }
-        // Footer
-        parts.push(`<span data-tv-info-frame="bottom">${escapeHtml(TVInfoBox.footer(innerW))}</span>`);
-
         const bounds = TVView._viewBoundsStyle(this);
         const cls = [
+            "tv-group",
             "tv-info-box",
-            bounded ? "is-bounded" : "",
             TVView._roleClassNames(this._drawRole()),
         ].filter(Boolean).join(" ");
         const attrString = attrsToString(this._drawAttrs());
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const extra = attrString ? ` ${attrString}` : "";
-        return `<div class="${escapeHtml(cls)}" data-tv-info-w="${innerW}"${style}${extra}>${parts.join("")}</div>`;
+        return `<div class="${escapeHtml(cls)}"${style}${extra}>${this.renderChildren()}</div>`;
     }
 
-    resolve(rootEl) {
-        this._el = null;
-        if (!rootEl) { return this; }
-        this._el = rootEl.getAttribute?.("data-tv-view-id") === this.viewId
-            ? rootEl
-            : rootEl.querySelector(`[data-tv-view-id="${this.viewId}"]`);
-        if (!this._el) { return this; }
-        this.bindRoot(this._el);
-        for (const child of this.children) {
-            child?.resolve?.(this._el);
-        }
-        return this;
+    _drawBounds() {
+        super._drawBounds();
+        this.topFrame.setText(TVInfoBox.header(this.innerW, this.title));
+        this.bottomFrame.setText(TVInfoBox.footer(this.innerW));
     }
 
     updateRow(row, text) {
         if (!(row instanceof TVInfoRow) || !this.children.includes(row)) { return; }
-        row.infoWidth = this.innerW;
         row.setText(text);
     }
 
     updateRowHTML(row, html, contentLen) {
         if (!(row instanceof TVInfoRow) || !this.children.includes(row)) { return; }
-        row.infoWidth = this.innerW;
         row.setHTML(html, contentLen);
     }
 
     /** ┌─── Title ───┐ */
     static header(width, title) {
-        const padded = ` ${title} `;
-        const titleLen = padded.length;
+        const padded = Array.from(` ${title} `).slice(0, width).join("");
+        const titleLen = Array.from(padded).length;
         const left = (width - titleLen) >> 1;
         const right = width - titleLen - left;
         return "\u250C" + "\u2500".repeat(left) + padded + "\u2500".repeat(right) + "\u2510";
@@ -2757,8 +3195,8 @@ class TVInfoBox extends TVView {
 
     /** ├─── Title ───┤ */
     static separator(width, title) {
-        const padded = ` ${title} `;
-        const titleLen = padded.length;
+        const padded = Array.from(` ${title} `).slice(0, width).join("");
+        const titleLen = Array.from(padded).length;
         const left = (width - titleLen) >> 1;
         const right = width - titleLen - left;
         return "\u251C" + "\u2500".repeat(left) + padded + "\u2500".repeat(right) + "\u2524";
@@ -2768,19 +3206,11 @@ class TVInfoBox extends TVView {
     static rowHtml(width, content, borderClass) {
         const classAttr = borderClass ? ` class="${escapeHtml(borderClass)}"` : "";
         const B = `<span data-tv-info-side${classAttr}>\u2502</span>`;
-        return B + " " + escapeHtml(content) + " ".repeat(Math.max(0, width - 1 - content.length)) + B;
+        const clipped = Array.from(String(content)).slice(0, Math.max(0, width - 1));
+        return B + (width ? " " : "") + escapeHtml(clipped.join(""))
+            + " ".repeat(Math.max(0, width - 1 - clipped.length)) + B;
     }
 
-    /** Apply header/footer/separator text to elements from a spec array.
-     *  spec: [{ el, type: "header"|"footer"|"separator", title }] */
-    static applyBorders(width, specs) {
-        for (const { el, type, title } of specs) {
-            if (!el) { continue; }
-            if (type === "header") { el.textContent = TVInfoBox.header(width, title); }
-            else if (type === "footer") { el.textContent = TVInfoBox.footer(width); }
-            else if (type === "separator") { el.textContent = TVInfoBox.separator(width, title); }
-        }
-    }
 }
 
 class TVTerminal extends TVView {
@@ -2789,10 +3219,12 @@ class TVTerminal extends TVView {
             throw new TypeError("TVTerminal expects TVRect bounds");
         }
         super(bounds);
-        this.width = bounds.width;
-        this.rows = bounds.height;
         this.maxLines = Math.max(1, Number(maxLines) || 100);
         this.lines = [];
+        this.streamTail = "";
+        this.pendingCR = false;
+        this.lineElements = [];
+        this.lineHtml = [];
     }
 
     draw() {
@@ -2804,20 +3236,48 @@ class TVTerminal extends TVView {
         }));
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
-        const rows = Array.from({ length: this.rows }, (_unused, index) => (
-            `<span data-tv-terminal-line="${index}"></span>`
+        const rows = Array.from({ length: Math.max(0, Math.floor(this.size.y)) }, (_unused, index) => (
+            `<span data-tv-terminal-line="${index}" style="${TVView._boundsStyle(0, index, this.size.x, 1)}"></span>`
         )).join("");
         return `<div class="${escapeHtml(className)}"${style} ${attrString}>${rows}</div>`;
     }
 
-    bind(root) {
-        this.bindRoot(root);
+    bindRoot(root) {
+        if (root === this.root) { return this; }
+        super.bindRoot(root);
+        this.lineElements = this._queryAll("[data-tv-terminal-line]");
+        this.lineHtml = [];
         this.render();
         return this;
     }
 
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        if (!this.root) { return this; }
+        const rows = Math.max(0, Math.floor(this.size.y));
+        while (this.lineElements.length > rows) { this.lineElements.pop().remove(); }
+        while (this.lineElements.length < rows) {
+            const line = document.createElement("span");
+            line.dataset.tvTerminalLine = String(this.lineElements.length);
+            this.root.appendChild(line);
+            this.lineElements.push(line);
+        }
+        this.lineHtml.length = rows;
+        this.lineElements.forEach((line, index) => {
+            line.style.position = "absolute";
+            line.style.left = "0ch";
+            line.style.top = `${index}em`;
+            line.style.width = `${this.size.x}ch`;
+            line.style.height = "1em";
+        });
+        this.render();
+        return this;
+    }
+
+    destroy() { this.bindRoot(null); }
+
     append(value) {
-        const nextLines = String(value ?? "").split(/\r?\n/);
+        const nextLines = String(value ?? "").replace(/\r\n?/g, "\n").split("\n");
         this.lines.push(...nextLines);
         if (this.lines.length > this.maxLines) {
             this.lines.splice(0, this.lines.length - this.maxLines);
@@ -2826,8 +3286,11 @@ class TVTerminal extends TVView {
     }
 
     appendChunk(value) {
-        const parts = (this.streamTail || "") + String(value ?? "");
-        const lines = parts.replace(/\r\n?/g, "\n").split("\n");
+        let text = String(value ?? "");
+        if (!text) { return; }
+        if (this.pendingCR && text.startsWith("\n")) { text = text.slice(1); }
+        this.pendingCR = text.endsWith("\r");
+        const lines = (this.streamTail + text.replace(/\r\n?/g, "\n")).split("\n");
         this.streamTail = lines.pop();
         this.lines.push(...lines);
         if (this.lines.length > this.maxLines) {
@@ -2839,23 +3302,31 @@ class TVTerminal extends TVView {
     clear() {
         this.lines = [];
         this.streamTail = "";
+        this.pendingCR = false;
         this.render();
     }
 
     render() {
         if (!this.root) { return; }
-        const innerWidth = Math.max(0, this.width - 2);
-        const visible = [...this.lines, ...(this.streamTail ? [this.streamTail] : [])].slice(-this.rows);
-        const offset = this.rows - visible.length;
-        this._queryAll("[data-tv-terminal-line]").forEach((element, index) => {
+        const rows = this.lineElements.length;
+        const innerWidth = Math.max(0, this.size.x - 2);
+        const visible = rows ? [...this.lines, ...(this.streamTail ? [this.streamTail] : [])].slice(-rows) : [];
+        const offset = rows - visible.length;
+        this.lineElements.forEach((element, index) => {
             const text = index >= offset ? visible[index - offset] : "";
             const clipped = Array.from(text).slice(0, Math.max(0, innerWidth - 1)).join("");
-            element.innerHTML = TVInfoBox.rowHtml(innerWidth, clipped);
+            const html = TVInfoBox.rowHtml(innerWidth, clipped);
+            if (this.lineHtml[index] !== html) {
+                element.innerHTML = html;
+                this.lineHtml[index] = html;
+            }
         });
     }
 }
 
 class TVIndicator extends TVView {
+    getPalette() { return [EDITOR_COLOR_ATTRIBUTE]; }
+
     draw() {
         const className = "tv-editor-indicator";
         const attrString = attrsToString(this._drawAttrs({ "aria-live": "polite" }));
@@ -2873,11 +3344,31 @@ class TVEditor extends TVView {
             throw new TypeError("TVEditor expects TVRect bounds");
         }
         super(bounds);
+        this.options |= ofSelectable;
         this.hScrollBar = hScrollBar;
         this.vScrollBar = vScrollBar;
         this.indicator = indicator;
         this.bufSize = Math.max(1, Number(bufSize) || 65535);
         this.readOnly = true;
+        this.text = "";
+        this.eventMask |= evBroadcast;
+        this.onTextInput = nativeEvent => {
+            if (this.readOnly || !viewAcceptsInput(this)) {
+                nativeEvent.stopPropagation();
+                if (!this.readOnly) { this.setData(this.text); }
+                return;
+            }
+            nativeEvent.stopPropagation(); this.text = this.getData(); this.updateEndMarker(); this.updateIndicator(); this.scrollController?.update();
+            this.dispatchEvent(new TVEvent(evBroadcast, { infoPtr: this, nativeEvent }));
+        };
+        this.onBeforeInput = nativeEvent => {
+            if (this.readOnly || !viewAcceptsInput(this)) { nativeEvent.preventDefault(); return; }
+            if (["insertParagraph", "insertLineBreak"].includes(nativeEvent.inputType)) {
+                nativeEvent.preventDefault(); this.insertText("\n");
+            } else if (nativeEvent.data && this.getData().length + nativeEvent.data.length - (this._selectionRange()?.toString().length || 0) > this.bufSize) {
+                nativeEvent.preventDefault();
+            }
+        };
         this.lastQuery = "";
         this.lastMatchEnd = 0;
         this.onSelectionChange = () => this.updateIndicator();
@@ -2893,52 +3384,122 @@ class TVEditor extends TVView {
         };
     }
 
+    get textRoot() { return this.viewport || this.root; }
+
+    _focusTarget() { return this.textRoot; }
+
+    getPalette() { return [EDITOR_COLOR_ATTRIBUTE]; }
+
+    _drawPalette() {
+        if (!this.root) { return this; }
+        const attribute = this._paletteAttribute();
+        this._paintPalette(this.root, attribute);
+        this._paintPalette(this.textRoot, attribute);
+        return this;
+    }
+
     bindRoot(root) {
-        if (this.root) {
-            this.root.removeEventListener("keyup", this.onSelectionChange);
-            this.root.removeEventListener("mouseup", this.onSelectionChange);
-            this.root.removeEventListener("click", this.onContentClick);
-            this.root.removeEventListener("keydown", this.onEditorKeyDown);
-            for (const type of ["copy", "cut", "paste"]) { this.root.removeEventListener(type, this.onClipboardEvent); }
+        if (root === this.root) { return this; }
+        this.scrollController?.destroy();
+        this.scrollController = null;
+        const previous = this.textRoot;
+        if (previous) {
+            for (const [type, handler] of [["input", this.onTextInput], ["beforeinput", this.onBeforeInput],
+                ["keyup", this.onSelectionChange], ["mouseup", this.onSelectionChange], ["click", this.onContentClick],
+                ["keydown", this.onEditorKeyDown], ...["copy", "cut", "paste"].map(type => [type, this.onClipboardEvent])]) {
+                previous.removeEventListener(type, handler);
+            }
             document.removeEventListener("selectionchange", this.onSelectionChange);
         }
+        this.viewport = null;
         super.bindRoot(root);
-        if (this.root) {
-            this.root.setAttribute("role", "document");
-            this.root.setAttribute("aria-readonly", this.readOnly ? "true" : "false");
-            this.root.setAttribute("contenteditable", this.readOnly ? "false" : "plaintext-only");
-            if (!this.root.hasAttribute("tabindex")) { this.root.tabIndex = 0; }
-            this.root.addEventListener("keyup", this.onSelectionChange);
-            this.root.addEventListener("mouseup", this.onSelectionChange);
-            this.root.addEventListener("keydown", this.onEditorKeyDown);
-            for (const type of ["copy", "cut", "paste"]) { this.root.addEventListener(type, this.onClipboardEvent); }
-            if (this.onLink) { this.root.addEventListener("click", this.onContentClick); }
+        this.viewport = root?.classList.contains("tv-editor-frame") ? root.querySelector(":scope > [data-tv-editor-input]") : root;
+        this._drawPalette();
+        const surface = this.textRoot;
+        if (surface) {
+            surface.setAttribute("role", "document");
+            surface.setAttribute("aria-readonly", this.readOnly ? "true" : "false");
+            surface.setAttribute("contenteditable", this.readOnly ? "false" : "plaintext-only");
+            if (!surface.hasAttribute("tabindex")) { surface.tabIndex = 0; }
+            for (const [type, handler] of [["input", this.onTextInput], ["beforeinput", this.onBeforeInput],
+                ["keyup", this.onSelectionChange], ["mouseup", this.onSelectionChange], ["keydown", this.onEditorKeyDown],
+                ...["copy", "cut", "paste"].map(type => [type, this.onClipboardEvent])]) { surface.addEventListener(type, handler); }
+            if (this.onLink) { surface.addEventListener("click", this.onContentClick); }
             document.addEventListener("selectionchange", this.onSelectionChange);
+            if (surface !== root) {
+                this.scrollController = this.vScrollBar || this.hScrollBar;
+                this.scrollController?.bindRoot(root);
+                this.scrollController?._setClientExtent(this.getExtent(), false);
+            }
         }
-        this.updateIndicator();
+        this.updateEndMarker(); this.updateIndicator(); return this;
+    }
+
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        this.scrollController?._setClientExtent(this.getExtent(), false);
+        return this;
+    }
+
+    focus() {
+        if (!viewAcceptsInput(this)) { return this; }
+        this.textRoot?.focus();
+        if (this.textRoot && document.activeElement === this.textRoot) { this._recordFocus(this.textRoot); }
+        return this;
+    }
+
+    draw() {
+        const bounds = TVView._viewBoundsStyle(this), content = escapeHtml(this.text);
+        const attrs = attrsToString(this._drawAttrs()), style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
+        if (!this.hScrollBar && !this.vScrollBar) { return `<div class="tv-editor-surface" ${attrs}${style}>${content}</div>`; }
+        return `<div class="tv-editor-frame" data-tv-scroll-frame ${attrs}${style}><div class="tv-editor-surface" data-tv-editor-input data-tv-viewport>${content}</div>${this.vScrollBar?.draw() || ""}${this.hScrollBar?.draw() || ""}</div>`;
+    }
+
+    updateEndMarker() {
+        if (!this.textRoot || this.readOnly) { return; }
+        // A final newline needs a rendered empty line for the browser caret.
+        // The BR has no text bytes and is never part of the saved buffer.
+        if (this.textRoot.textContent.endsWith("\n")) {
+            if (this.textRoot.lastChild?.nodeName !== "BR") { this.textRoot.append(document.createElement("br")); }
+        } else if (this.textRoot.lastChild?.nodeName === "BR") { this.textRoot.lastChild.remove(); }
+    }
+
+    getData() {
+        if (!this.textRoot) { return this.text; }
+        return (this.readOnly ? this.textRoot.innerText ?? this.textRoot.textContent ?? "" : this.textRoot.textContent || "").replace(/\r\n?/g, "\n");
+    }
+    setData(text) {
+        text = String(text);
+        if (text.length > this.bufSize) { throw new RangeError("Editor text exceeds its buffer size"); }
+        this.text = text;
+        if (this.textRoot) { this.textRoot.textContent = text; this.updateEndMarker(); this.updateIndicator(); this.scrollController?.update(); }
         return this;
     }
 
     handleEvent(event) {
         if ((event.what === evKeyDown || event.what === evCommand) && handleClipboardEvent(this, event)) { return; }
+        if (event.what === evMouseDown && !viewAcceptsInput(this) && this.textRoot?.contains(event.nativeEvent?.target)) {
+            event.nativeEvent.preventDefault(); this.clearEvent(event); return;
+        }
         if (event.what !== evMouseDown || event.nativeEvent?.type !== "click" || !this.onLink) { return; }
         const link = event.nativeEvent.target?.closest?.("a[href]");
-        if (!link || !this.root?.contains(link) || !this.onLink(link)) { return; }
+        if (!link || !this.textRoot?.contains(link) || !this.onLink(link)) { return; }
         event.nativeEvent.preventDefault();
         this.clearEvent(event);
     }
 
     setReadOnly(readOnly = true) {
         this.readOnly = Boolean(readOnly);
-        this.root?.setAttribute("aria-readonly", this.readOnly ? "true" : "false");
-        this.root?.setAttribute("contenteditable", this.readOnly ? "false" : "plaintext-only");
+        this.textRoot?.setAttribute("aria-readonly", this.readOnly ? "true" : "false");
+        this.textRoot?.setAttribute("contenteditable", this.readOnly ? "false" : "plaintext-only");
         return this;
     }
 
     async clipCopy(nativeEvent = null) {
+        if (!viewAcceptsInput(this)) { return false; }
         const selection = window.getSelection();
-        if (!selection || selection.isCollapsed || !this.root?.contains(selection.anchorNode)
-            || !this.root.contains(selection.focusNode)) { return false; }
+        if (!selection || selection.isCollapsed || !this.textRoot?.contains(selection.anchorNode)
+            || !this.textRoot.contains(selection.focusNode)) { return false; }
         const text = selection.toString();
         if (nativeEvent?.clipboardData) { nativeEvent.clipboardData.setData("text/plain", text); }
         else { await writeClipboardText(text); }
@@ -2947,58 +3508,58 @@ class TVEditor extends TVView {
 
     _selectionRange() {
         const selection = window.getSelection();
-        return selection?.rangeCount && this.root?.contains(selection.anchorNode) && this.root.contains(selection.focusNode)
+        return selection?.rangeCount && this.textRoot?.contains(selection.anchorNode) && this.textRoot.contains(selection.focusNode)
             ? selection.getRangeAt(0).cloneRange() : null;
     }
 
     async clipCut() {
-        if (this.readOnly) { return false; }
-        const range = this._selectionRange(), root = this.root, text = root?.textContent;
+        if (this.readOnly || !viewAcceptsInput(this)) { return false; }
+        const range = this._selectionRange(), root = this.textRoot, text = root?.textContent;
         const focus = document.activeElement;
         if (!range || range.collapsed || !await this.clipCopy()) { return false; }
         const current = this._selectionRange();
-        if (this.readOnly || root !== this.root || !root.isConnected || document.activeElement !== focus || text !== root.textContent || !current
+        if (this.readOnly || !viewAcceptsInput(this) || root !== this.textRoot || !root.isConnected || document.activeElement !== focus || text !== root.textContent || !current
             || current.compareBoundaryPoints(Range.START_TO_START, range) || current.compareBoundaryPoints(Range.END_TO_END, range)) { return false; }
         return this.insertText("");
     }
 
     async clipPaste() {
-        if (this.readOnly) { return false; }
-        const range = this._selectionRange(), root = this.root, text = root?.textContent;
+        if (this.readOnly || !viewAcceptsInput(this)) { return false; }
+        const range = this._selectionRange(), root = this.textRoot, text = root?.textContent;
         const focus = document.activeElement;
         if (!range) { return false; }
         const inserted = await readClipboardText(), current = this._selectionRange();
         if (!inserted) { return false; }
-        if (this.readOnly || root !== this.root || !root.isConnected || document.activeElement !== focus || text !== root.textContent || !current
+        if (this.readOnly || !viewAcceptsInput(this) || root !== this.textRoot || !root.isConnected || document.activeElement !== focus || text !== root.textContent || !current
             || current.compareBoundaryPoints(Range.START_TO_START, range) || current.compareBoundaryPoints(Range.END_TO_END, range)) { return false; }
         return this.insertText(inserted);
     }
 
     insertText(text) {
         const range = this._selectionRange();
-        if (this.readOnly || !range) { return false; }
-        const inserted = String(text).slice(0, Math.max(0, this.bufSize - this.root.textContent.length + range.toString().length));
+        if (this.readOnly || !viewAcceptsInput(this) || !range) { return false; }
+        const inserted = String(text).replace(/\r\n?/g, "\n").slice(0, Math.max(0, this.bufSize - this.textRoot.textContent.length + range.toString().length));
         range.deleteContents();
         const node = document.createTextNode(inserted);
-        range.insertNode(node); range.setStartAfter(node); range.collapse(true);
+        range.insertNode(node); this.updateEndMarker(); range.setStart(node, node.length); range.collapse(true);
         const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-        this.root.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: inserted ? "insertFromPaste" : "deleteByCut", data: inserted }));
+        this.textRoot.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: inserted ? "insertFromPaste" : "deleteByCut", data: inserted }));
         this.updateIndicator();
         return true;
     }
 
     selectionOffset() {
         const selection = window.getSelection();
-        if (!selection || !selection.anchorNode || !this.root?.contains(selection.anchorNode)) { return 0; }
+        if (!selection || !selection.anchorNode || !this.textRoot?.contains(selection.anchorNode)) { return 0; }
         const range = document.createRange();
-        range.selectNodeContents(this.root);
+        range.selectNodeContents(this.textRoot);
         range.setEnd(selection.anchorNode, selection.anchorOffset);
         return range.toString().length;
     }
 
     updateIndicator() {
-        if (!this.root || !this.indicator) { return; }
-        const text = this.root.textContent || "";
+        if (!this.textRoot || !this.indicator) { return; }
+        const text = this.textRoot.textContent || "";
         const offset = Math.min(text.length, this.selectionOffset());
         const before = text.slice(0, offset);
         const lines = before.split("\n");
@@ -3006,7 +3567,7 @@ class TVEditor extends TVView {
     }
 
     textNodeAt(offset) {
-        const walker = document.createTreeWalker(this.root, NodeFilter.SHOW_TEXT);
+        const walker = document.createTreeWalker(this.textRoot, NodeFilter.SHOW_TEXT);
         let remaining = offset;
         let node = walker.nextNode();
         while (node) {
@@ -3021,8 +3582,8 @@ class TVEditor extends TVView {
 
     find(query, { fromStart = false } = {}) {
         const value = String(query || "");
-        if (!this.root || !value) { return false; }
-        const text = this.root.textContent || "";
+        if (!this.textRoot || !value) { return false; }
+        const text = this.textRoot.textContent || "";
         const start = fromStart || value !== this.lastQuery ? 0 : this.lastMatchEnd;
         let index = text.toLocaleLowerCase().indexOf(value.toLocaleLowerCase(), start);
         if (index < 0 && start > 0) {
@@ -3050,14 +3611,121 @@ class TVEditor extends TVView {
     }
 
     destroy() {
-        if (!this.root) { return; }
-        this.root.removeEventListener("keyup", this.onSelectionChange);
-        this.root.removeEventListener("mouseup", this.onSelectionChange);
-        this.root.removeEventListener("click", this.onContentClick);
-        this.root.removeEventListener("keydown", this.onEditorKeyDown);
-        for (const type of ["copy", "cut", "paste"]) { this.root.removeEventListener(type, this.onClipboardEvent); }
-        document.removeEventListener("selectionchange", this.onSelectionChange);
-        this.root = null;
+        this.bindRoot(null);
+    }
+}
+
+// A sparse collection for bounded remote lists. The loader owns its transport;
+// the collection owns cancellation, revision consistency and a bounded cache.
+class TVPagedCollection {
+    constructor(pageSize, loader) {
+        if (!Number.isInteger(pageSize) || pageSize < 1 || typeof loader !== "function") {
+            throw new TypeError("TVPagedCollection expects a page size and loader");
+        }
+        this.pageSize = pageSize;
+        this.loader = loader;
+        this.items = [];
+        this.revision = "";
+        this.metadata = null;
+        this.pages = new Map();
+        this.pending = new Map();
+        this.listeners = new Set();
+        this.version = 0;
+        this.pinned = new Set();
+        this.failed = new Set();
+    }
+
+    get count() { return this.items.length; }
+    at(index) { return this.items[index]; }
+    subscribe(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    _notify(error = null, refresh = false) {
+        this.change = { error, refresh };
+        for (const listener of [...this.listeners]) { listener(error); }
+    }
+
+    cancel() {
+        this.version++;
+        for (const request of this.pending.values()) { request.controller.abort(); }
+        this.pending.clear();
+    }
+
+    clear() {
+        this.cancel();
+        this.items = []; this.pages.clear(); this.failed.clear(); this.revision = ""; this.metadata = null;
+        this._notify();
+    }
+
+    async _load(offset, refresh = false, track = "") {
+        const key = `${offset}:${track}`;
+        if (this.pending.has(key)) { return this.pending.get(key).promise; }
+        const cached = this.pages.get(offset);
+        if (cached && !refresh && !track) { this.pages.delete(offset); this.pages.set(offset, cached); return cached.data; }
+        const version = this.version, controller = new AbortController();
+        const request = { controller, offset, refresh, promise: null };
+        this.pending.set(key, request);
+        request.promise = Promise.resolve().then(() => { controller.signal.throwIfAborted(); return this.loader({ offset, limit: this.pageSize,
+            revision: refresh ? "" : this.revision, track, signal: controller.signal,
+            etag: cached?.etag || "", cached: cached?.data || null,
+        }); }).then(data => {
+            controller.signal.throwIfAborted();
+            if (version !== this.version) { throw new DOMException("Collection changed", "AbortError"); }
+            if (!data || !Number.isInteger(data.total) || data.total < 0 || !Number.isInteger(data.offset)
+                || data.offset < 0 || !Array.isArray(data.items) || data.items.length !== Math.min(this.pageSize, data.total - data.offset)
+                || data.offset + data.items.length > data.total || typeof data.revision !== "string") {
+                throw new Error("Invalid list page");
+            }
+            if (!refresh && this.revision && data.revision !== this.revision) {
+                const error = new Error("List revision changed"); error.code = "revision"; throw error;
+            }
+            if (data.revision !== this.revision || this.items.length !== data.total) {
+                for (const other of this.pending.values()) { if (other !== request) { other.controller.abort(); } }
+                this.items = new Array(data.total); this.pages.clear(); this.revision = data.revision;
+            }
+            // Keep object identities for a revalidated page, including selection.
+            this.metadata = data;
+            for (let i = 0; i < data.items.length; i++) { this.items[data.offset + i] = data.items[i]; }
+            this.pages.delete(data.offset);
+            this.pages.set(data.offset, { data, etag: data.etag || "" });
+            for (const [start] of this.pages) {
+                if (this.pages.size <= 8) { break; }
+                if ([...this.pinned].some(index => index >= start && index < start + this.pageSize)) { continue; }
+                this.pages.delete(start);
+                for (let i = start; i < Math.min(this.count, start + this.pageSize); i++) { delete this.items[i]; }
+            }
+            if (this.pending.get(key) === request) { this.pending.delete(key); }
+            this.failed.delete(offset);
+            this._notify(null, refresh);
+            return data;
+        }).catch(error => {
+            if (!controller.signal.aborted && version === this.version) { this.failed.add(offset); this._notify(error); }
+            throw error;
+        }).finally(() => { if (this.pending.get(key) === request) { this.pending.delete(key); } });
+        return request.promise;
+    }
+
+    refresh(track = "", offset = 0) { this.failed.clear(); return this._load(offset, true, track); }
+
+    async load(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.count) { return null; }
+        if (!this.at(index)) { await this._load(Math.floor(index / this.pageSize) * this.pageSize); }
+        return this.at(index) || null;
+    }
+
+    requestRange(start, end, pinned = []) {
+        this.pinned = new Set(pinned.filter(index => index >= 0 && index < this.count));
+        const wanted = new Set();
+        for (let i = start; i < Math.min(end, this.count); i += this.pageSize) { wanted.add(Math.floor(i / this.pageSize) * this.pageSize); }
+        if (end > start) { wanted.add(Math.floor((Math.min(end, this.count) - 1) / this.pageSize) * this.pageSize); }
+        for (const index of this.pinned) { wanted.add(Math.floor(index / this.pageSize) * this.pageSize); }
+        for (const [key, request] of this.pending) {
+            if (!request.refresh && !wanted.has(request.offset)) { request.controller.abort(); this.pending.delete(key); }
+        }
+        for (const offset of wanted) { if (!this.failed.has(offset)) { void this._load(offset).catch(() => {}); } }
+    }
+
+    dispose() {
+        this.cancel(); this.listeners.clear(); this.pages.clear(); this.failed.clear(); this.pinned.clear();
+        this.items = []; this.metadata = null; this.revision = "";
     }
 }
 
@@ -3067,7 +3735,9 @@ class TVListViewer extends TVView {
             throw new TypeError("TVListViewer expects TVRect bounds");
         }
         super(bounds);
-        this.numCols = Math.max(1, Number(numCols) || 1);
+        this.options |= ofSelectable;
+        const columns = Math.trunc(Number(numCols));
+        this.numCols = Number.isFinite(columns) ? Math.max(1, columns) : 1;
         this.hScrollBar = hScrollBar;
         this.vScrollBar = vScrollBar;
         this.topItem = 0;
@@ -3079,20 +3749,293 @@ class TVListViewer extends TVView {
         this.activateHandler = null;
         this.selectionUiRoot = null;
         this.selectionUiIndex = null;
+        this._itemsRoot = null;
+        this._columnLayout = null;
+        this._itemTextWidth = null;
+        this.boundItemsRoot = null;
+        this._disabledTabIndexes = null;
+        this.active = true;
+        this._onListFocus = event => {
+            if (!viewAcceptsInput(this) && event.type === "focusin") { event.target.blur?.(); }
+            this._drawPalette(event.type === "focusout" ? event.relatedTarget : event.target);
+        };
+        this.onListWheel = event => {
+            if (!this.active || !viewAcceptsInput(this)) { event.preventDefault(); event.stopPropagation(); }
+        };
+        this.onListScroll = () => {
+            const viewport = this.scrollViewport || this.itemsRoot();
+            if (!viewport) { return; }
+            this.topItem = this.numCols > 1
+                ? Math.floor(viewport.scrollLeft / (this._columnWidth() * measureCells().width)) * this.visibleRows()
+                : Math.floor(viewport.scrollTop / (this._itemHeight() * measureCells().height));
+            if (this._syncVisibleItems()) {
+                this._layoutItems();
+                this.updateSelectionUi(false);
+            }
+        };
+    }
+
+    bindRoot(root) {
+        if (root === this.root) { return this; }
+        this.root?.removeEventListener("scroll", this.onListScroll, true);
+        this.root?.removeEventListener("focusin", this._onListFocus);
+        this.root?.removeEventListener("focusout", this._onListFocus);
+        this.root?.removeEventListener("wheel", this.onListWheel);
+        if (!root) { this._disabledTabIndexes = null; }
+        if (this.root?._tvListViewer === this) { delete this.root._tvListViewer; }
+        this._itemsRoot = this._paintedSelection = null;
+        super.bindRoot(root);
+        this._itemsRoot = this._findItemsRoot(this.root);
+        this._renderItems();
+        this.updateSelectionUi(false);
+        this._bindListEvents();
+        this.root?.addEventListener("scroll", this.onListScroll, true);
+        this.root?.addEventListener("focusin", this._onListFocus);
+        this.root?.addEventListener("focusout", this._onListFocus);
+        this.root?.addEventListener("wheel", this.onListWheel, { passive: false });
+        this.root?.classList.toggle("is-inactive", !this.active);
+        if (this.root) { this.root._tvListViewer = this; }
+        this._drawPalette();
+        return this;
+    }
+
+    _findItemsRoot(root) { return root; }
+    _itemsRole() { return "listbox"; }
+
+    _drawAttrs(attrs = {}) {
+        return super._drawAttrs({ ...attrs, hidden: !this.getState(sfVisible), "aria-disabled": String(this.getState(sfDisabled)) });
+    }
+
+    _syncDisabledState() {
+        if (!this.root) { return; }
+        const disabled = this.getState(sfDisabled);
+        this.root.classList.toggle("is-disabled", disabled);
+        this.root.setAttribute("aria-disabled", String(disabled));
+        if (disabled && this.root.contains(document.activeElement)) { document.activeElement.blur?.(); }
+        if (!disabled && !this._disabledTabIndexes) { return; }
+        this._disabledTabIndexes ||= new WeakMap();
+        this.itemsRoot()?.querySelectorAll("a[href], button, input, select, textarea, [tabindex]").forEach(element => {
+            if (element.matches(this.itemSelector())) { return; }
+            if (disabled) {
+                if (!this._disabledTabIndexes.has(element)) { this._disabledTabIndexes.set(element, element.getAttribute("tabindex")); }
+                element.tabIndex = -1;
+            } else if (this._disabledTabIndexes.has(element)) {
+                const value = this._disabledTabIndexes.get(element);
+                if (value === null) { element.removeAttribute("tabindex"); }
+                else { element.setAttribute("tabindex", value); }
+            }
+        });
+        if (!disabled) { this._disabledTabIndexes = null; }
+    }
+
+    setState(state, enable) {
+        super.setState(state, enable);
+        if ((state & sfDisabled) !== 0) {
+            if (enable) { super.setState(sfFocused, false); }
+            this._syncDisabledState();
+            this.selectionUiIndex = null;
+            this.updateSelectionUi(false);
+            this.scrollbarWidget?.refresh();
+        }
+        return this;
+    }
+
+    _renderItems() {
+        this.selectionUiRoot = null;
+        this.selectionUiIndex = null;
+        this._columnLayout = null;
+        this._itemTextWidth = null;
+        const root = this.itemsRoot();
+        this._visibleItems = null;
+        this._extentRoot = null;
+        this._windowed = this.numCols === 1 && !this.hScrollBar && this.size.y > 0
+            && (!this.scrollViewport || this.scrollViewport === root)
+            && (this._collection || this.items.length > Math.max(200, this.size.y * 5));
+        if (root) {
+            root.innerHTML = this._windowed ? "" : this.items.map((item, index) => this.itemMarkup(item, index)).join("");
+            if (this._windowed) {
+                const extent = document.createElement("div");
+                this._extentRoot = extent;
+                extent.setAttribute("aria-hidden", "true");
+                extent.style.cssText = `position:absolute;left:0;top:0;width:1px;height:${this.items.length * this._itemHeight()}em;pointer-events:none`;
+                root.appendChild(extent);
+                this._syncVisibleItems();
+            }
+        }
+        this._syncDisabledState();
+        this._layoutItems();
+    }
+
+    _syncVisibleItems() {
+        const root = this.itemsRoot();
+        if (!this._windowed || !root) { return false; }
+        const rows = this.visibleRows(), height = this._itemHeight() * measureCells().height;
+        const first = Math.max(0, Math.floor(root.scrollTop / height));
+        const start = Math.max(0, first - rows), end = Math.min(this.items.length, first + rows * 2);
+        const selected = this.selectedIndex;
+        const focused = root.contains(document.activeElement) ? this.resolveIndex(document.activeElement) : -1;
+        const previous = this._visibleItems;
+        if (previous?.start === start && previous.end === end && previous.selected === selected && previous.focused === focused) { return false; }
+        this._visibleItems = { start, end, selected, focused };
+        const wanted = new Set(Array.from({ length: end - start }, (_, index) => start + index));
+        // Retain the selected native focus target even while wheel scrolling
+        // elsewhere. FocusItem/End can still reveal it through the usual path.
+        if (selected >= 0 && selected < this.items.length) { wanted.add(selected); }
+        if (focused >= 0 && focused < this.items.length) { wanted.add(focused); }
+        const mounted = new Map();
+        let changed = false;
+        root.querySelectorAll(this.itemSelector()).forEach(element => {
+            const index = Number(element.dataset.tvListIndex);
+            if (wanted.has(index)) { mounted.set(index, element); }
+            else { element.remove(); changed = true; }
+        });
+        let next = null;
+        for (const index of [...wanted].sort((a, b) => b - a)) {
+            const element = mounted.get(index) || TVView._fromHTML(this.itemMarkup(this.items[index], index));
+            if (!mounted.has(index)) { changed = true; }
+            this._rowItems ||= new WeakMap();
+            if (this._collection && mounted.has(index) && this._rowItems.get(element) !== this.items[index]) {
+                element.innerHTML = TVView._fromHTML(this.itemMarkup(this.items[index], index)).innerHTML;
+                changed = true;
+            }
+            this._rowItems.set(element, this.items[index]);
+            if (element.getAttribute("aria-posinset") !== String(index + 1)) { element.setAttribute("aria-posinset", String(index + 1)); }
+            if (element.getAttribute("aria-setsize") !== String(this.items.length)) { element.setAttribute("aria-setsize", String(this.items.length)); }
+            if (element.parentElement !== root || element.nextSibling !== next) { root.insertBefore(element, next); changed = true; }
+            next = element;
+        }
+        if (changed) { this._columnLayout = null; this.selectionUiIndex = null; }
+        if (viewAcceptsInput(this)) { this._collection?.requestRange(start, end, [selected, focused]); }
+        return changed;
+    }
+
+    visibleRows() {
+        const viewport = this.scrollViewport || this.itemsRoot();
+        const height = viewport?.clientHeight
+            ? viewport.clientHeight / measureCells().height : this.size.y || 1;
+        return Math.max(1, Math.floor(height / this._itemHeight()));
+    }
+
+    _itemHeight() { return 1; }
+
+    getPalette() { return [57, 58, 59].map(index => this._appColor(index)); }
+
+    _selectionColor(focusedElement = document.activeElement) {
+        return this.getColor(!this.getState(sfDisabled) && this.active && this.root?.contains(focusedElement) ? 2 : 3);
+    }
+
+    _drawPalette(focusedElement) {
+        if (!this.root || this._paletteAttribute() === null) { return this; }
+        const normal = this.getColor(1), selected = this.selectedElement();
+        for (const part of [this.root, this.viewport, this.itemsRoot()]) { this._paintPalette(part, normal); }
+        if (this._paintedSelection && this._paintedSelection !== selected) { this._paintPalette(this._paintedSelection, null); }
+        this._paintPalette(selected, this._selectionColor(focusedElement));
+        this._paintedSelection = selected;
+        return this;
+    }
+
+    setActive(active) {
+        this.active = Boolean(active);
+        this.root?.classList.toggle("is-inactive", !this.active);
+        this._drawPalette();
+    }
+
+    _columnWidth() {
+        const viewport = this.scrollViewport || this.itemsRoot();
+        const width = viewport?.clientWidth ? Math.floor(viewport.clientWidth / measureCells().width) : this.size.x;
+        return Math.max(1, Math.floor(width / this.numCols) + 1);
+    }
+
+    _layoutItems() {
+        const root = this.itemsRoot();
+        if (!root) { return; }
+        this._syncVisibleItems();
+        const cell = measureCells(), multi = this.numCols > 1, height = this._itemHeight();
+        const clientWidth = root.clientWidth ? Math.floor(root.clientWidth / cell.width) : this.size.x;
+        const rows = multi ? this.visibleRows() : 0;
+        let width = multi ? this._columnWidth() : Math.max(1, clientWidth);
+        if (!multi && this.hScrollBar) {
+            let textWidth = this._itemTextWidth?.width || 0;
+            if (this._itemTextWidth?.cellWidth !== cell.width) {
+                const range = document.createRange();
+                let pixels = 0;
+                root.querySelectorAll(".tv-vlist-text").forEach((text) => {
+                    range.selectNodeContents(text);
+                    pixels = Math.max(pixels, range.getBoundingClientRect().width);
+                });
+                textWidth = Math.ceil(pixels / cell.width) + 2;
+                this._itemTextWidth = root.clientWidth ? { cellWidth: cell.width, width: textWidth } : null;
+            }
+            width = Math.max(width, textWidth);
+        }
+        const last = multi ? Math.max(0, Math.ceil(this.items.length / rows) - 1) : 0;
+        const previous = this._columnLayout;
+        const flow = !multi && this.size.y === 0;
+        if (previous?.root === root && previous.rows === rows && previous.width === width
+            && previous.height === height && previous.flow === flow && previous.clientWidth === clientWidth) { return; }
+        this._columnLayout = { root, rows, width, height, flow, clientWidth };
+        root.querySelectorAll(this.itemSelector()).forEach((element, index) => {
+            if (this._windowed) { index = Number(element.dataset.tvListIndex); }
+            const column = multi ? Math.floor(index / rows) : 0;
+            const cellWidth = multi && column === last && last >= this.numCols - 1
+                ? Math.max(1, Math.min(width, clientWidth - (this.numCols - 1) * width)) : width;
+            const top = (multi ? index % rows : index) * height;
+            this._layoutItem(element, index, new TVRect(column * width, top, column * width + cellWidth, top + height));
+        });
+        if (multi && root.contains(document.activeElement)) { this.ensureSelectionVisible(); }
+        this.onListScroll();
+    }
+
+    _layoutItem(element, _index, bounds) {
+        const flow = this.numCols === 1 && this.size.y === 0;
+        element.classList.toggle("is-flow", flow);
+        element.style.position = flow ? "relative" : "absolute";
+        element.style.left = `${bounds.x1}ch`;
+        element.style.top = flow ? "0em" : `${bounds.y1}em`;
+        element.style.width = flow && !this.hScrollBar ? "" : `${bounds.width}ch`;
+        element.style.height = `${bounds.height}em`;
+        const texts = Array.from(element.children).filter(part => part.classList.contains("tv-vlist-text"));
+        texts.forEach((text, row) => {
+            if (flow) {
+                this._partBounds?.delete(text);
+                for (const property of ["position", "left", "top", "width", "height"]) { text.style.removeProperty(property); }
+            } else {
+                const inset = Math.min(1, bounds.width / 2);
+                const height = bounds.height / texts.length;
+                this._placePart(text, new TVRect(inset, row * height, Math.max(inset, bounds.width - inset), (row + 1) * height));
+            }
+        });
+    }
+
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        this._layoutItems();
+        return this;
+    }
+
+    drawView() {
+        const focused = Boolean(this.itemsRoot()?.contains(document.activeElement));
+        const viewport = this.scrollViewport || this.itemsRoot();
+        const left = viewport?.scrollLeft || 0, top = viewport?.scrollTop || 0;
+        super.drawView();
+        const next = this.scrollViewport || this.itemsRoot();
+        if (next) { next.scrollLeft = left; next.scrollTop = top; }
+        if (focused) { this.focusSelectedItem(); }
+        return this;
     }
 
     draw() {
-        const className = ["tv-list-viewer", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
+        const className = ["tv-list-viewer", this.numCols > 1 ? "is-multi-column" : "", TVView._roleClassNames(this._drawRole())].filter(Boolean).join(" ");
         const attrs = attrsToString(this._drawAttrs(
             this._semanticName() ? { [`data-tv-${this._semanticName()}`]: true } : {},
         ));
-        const bounds = TVView._viewBoundsStyle(this);
+        const bounds = [TVView._viewBoundsStyle(this), this._paletteStyle()].filter(Boolean).join(";");
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         return `<div class="${escapeHtml(className)}"${style} ${attrs}></div>`;
     }
 
     itemsRoot() {
-        return this.root;
+        return this._itemsRoot;
     }
 
     itemSelector() {
@@ -3109,10 +4052,7 @@ class TVListViewer extends TVView {
     }
 
     defaultContent(item, index) {
-        if (typeof item === "string") {
-            return escapeHtml(item);
-        }
-        const label = escapeHtml(item && item.label ? item.label : "");
+        const label = escapeHtml(this.getText(index));
         return item?.icon ? `<span class="tv-vlist-icon">${escapeHtml(item.icon)}</span>${label}` : label;
     }
 
@@ -3129,38 +4069,63 @@ class TVListViewer extends TVView {
     }
 
     setItems(items = [], selectedIndex = -1) {
-        this.items = Array.isArray(items) ? [...items] : [];
+        const source = items instanceof TVPagedCollection ? items : null;
+        if (source && (this.numCols !== 1 || this.hScrollBar || this.size.y <= 0)) {
+            throw new TypeError("Paged lists need bounded single-column views without horizontal scrolling");
+        }
+        this._unsubscribeCollection?.(); this._unsubscribeCollection = null;
+        this._collection = source;
+        this.items = this._collection ? this._collection.items : Array.isArray(items) ? [...items] : [];
         this.range = this.items.length;
         const itemsRoot = this.itemsRoot();
         const restoreFocus = Boolean(itemsRoot?.contains(document.activeElement));
-        this.selectionUiRoot = null;
-        this.selectionUiIndex = null;
-        if (itemsRoot) {
-            itemsRoot.innerHTML = this.items.map((item, index) => this.itemMarkup(item, index)).join("");
-        }
-        this.select(selectedIndex, { scroll: false });
+        this._renderItems();
+        this.focusItem(selectedIndex, { scroll: false });
         if (restoreFocus) { this.focusSelectedItem(); }
+        if (this._collection) {
+            const source = this._collection;
+            this._unsubscribeCollection = source.subscribe(error => {
+                if (source !== this._collection) { return; }
+                const focused = Boolean(this.root?.contains(document.activeElement));
+                this.items = source.items; this.range = source.count;
+                if (this._extentRoot) { this._extentRoot.style.height = `${this.range * this._itemHeight()}em`; }
+                if (this.selectedIndex >= this.range) { this.selectedIndex = this.focused = this.range - 1; }
+                if (!this._windowed) { this._renderItems(); }
+                else { this._visibleItems = null; this._layoutItems(); this.updateSelectionUi(false); }
+                this.updateScrollbar?.();
+                if (focused && !this.root.contains(document.activeElement)) {
+                    this.root.tabIndex = -1; this.root.focus({ preventScroll: true }); this._collectionFocus = true;
+                }
+                this.loadError = error;
+                this.dispatchEvent(new TVEvent(evBroadcast, { command: error ? "list-error" : "list-data", infoPtr: this }));
+                if (this._collectionFocus && this.range > 0) {
+                    if (this.active && this.root?.contains(document.activeElement)) { this.focusSelectedItem(); }
+                    this._collectionFocus = false;
+                }
+            });
+        }
     }
 
-    select(index, { scroll = true } = {}) {
+    focusItem(index, { scroll = true } = {}) {
         if (!Number.isInteger(index) || index < 0 || index >= this.items.length) {
             this.selectedIndex = -1;
         } else {
             this.selectedIndex = index;
         }
         this.focused = this.selectedIndex;
+        if (this._syncVisibleItems()) { this._layoutItems(); }
         this.updateSelectionUi(scroll);
     }
 
-    focusItem(index) {
-        this.select(index);
-        this.selectedElement()?.focus();
+    focusItemNum(index) {
+        if (Number.isInteger(index) && this.range > 0) {
+            this.focusItem(Math.max(0, Math.min(this.range - 1, index)));
+        }
     }
 
-    focusItemNum(index) { this.focusItem(index); }
-
     selectItem(index) {
-        this.select(index);
+        if (!viewAcceptsInput(this)) { return; }
+        this.focusItem(index);
         if (this.selectHandler && this.selectedIndex >= 0) {
             this.selectHandler(this.items[this.selectedIndex], this.selectedIndex, null);
         }
@@ -3169,18 +4134,32 @@ class TVListViewer extends TVView {
     pointerIndex(event) { return this.resolveIndex(event?.target); }
 
     keyDestination(index, key) {
-        if (key === "ArrowDown" || key === "ArrowRight") { return Math.min(this.items.length - 1, index + 1); }
-        if (key === "ArrowUp" || key === "ArrowLeft") { return Math.max(0, index - 1); }
+        if (key === "ArrowDown") { return Math.min(this.items.length - 1, index + 1); }
+        if (key === "ArrowUp") { return Math.max(0, index - 1); }
+        if (key === "ArrowRight") { return this.numCols > 1 ? Math.min(this.items.length - 1, index + this.visibleRows()) : -1; }
+        if (key === "ArrowLeft") { return this.numCols > 1 ? Math.max(0, index - this.visibleRows()) : -1; }
+        if (key === "PageDown") { return Math.min(this.items.length - 1, index + this.visibleRows() * this.numCols); }
+        if (key === "PageUp") { return Math.max(0, index - this.visibleRows() * this.numCols); }
         if (key === "Home") { return 0; }
         if (key === "End") { return this.items.length - 1; }
         return -1;
     }
 
-    focusSelectedItem() { this.selectedElement()?.focus(); }
+    focusSelectedItem() {
+        if (!viewAcceptsInput(this)) { return; }
+        const item = this._focusTarget();
+        item?.focus({ preventScroll: true });
+        if (item && document.activeElement === item) { this._recordFocus(item); }
+        this._drawPalette();
+    }
+
+    _focusTarget() { return this.selectedElement() || this.itemsRoot()?.querySelector(this.itemSelector()) || this.itemsRoot() || this.root; }
+
+    focus() { return viewAcceptsInput(this) ? super.focus() : this; }
 
     getText(index, maxLen = Number.MAX_SAFE_INTEGER) {
         const item = this.items[index];
-        const text = typeof item === "string" ? item : String(item?.label ?? "");
+        const text = typeof item === "string" ? item : String(item?.label ?? (this._collection ? "Loading..." : ""));
         return Array.from(text).slice(0, Math.max(0, Number(maxLen) || 0)).join("");
     }
 
@@ -3188,7 +4167,7 @@ class TVListViewer extends TVView {
 
     setRange(range) {
         this.range = Math.max(0, Number(range) || 0);
-        if (this.selectedIndex >= this.range) { this.select(this.range - 1); }
+        if (this.selectedIndex >= this.range) { this.focusItem(this.range - 1); }
     }
 
     selectedItem() {
@@ -3214,7 +4193,7 @@ class TVListViewer extends TVView {
             element.setAttribute("role", "option");
             element.classList.toggle("is-selected", selected);
             element.setAttribute("aria-selected", selected ? "true" : "false");
-            element.tabIndex = selected || (this.selectedIndex < 0 && index === 0) ? 0 : -1;
+            element.tabIndex = !this.getState(sfDisabled) && (selected || (this.selectedIndex < 0 && index === 0)) ? 0 : -1;
         };
         if (this.selectionUiRoot !== itemsRoot || this.selectionUiIndex === null) {
             itemsRoot.querySelectorAll(this.itemSelector()).forEach(updateItem);
@@ -3226,6 +4205,7 @@ class TVListViewer extends TVView {
         }
         this.selectionUiRoot = itemsRoot;
         this.selectionUiIndex = this.selectedIndex;
+        this._drawPalette();
         if (scroll) {
             this.ensureSelectionVisible();
         }
@@ -3233,8 +4213,17 @@ class TVListViewer extends TVView {
 
     ensureSelectionVisible() {
         const element = this.selectedElement();
-        const itemsRoot = this.itemsRoot();
+        const itemsRoot = this.scrollViewport || this.itemsRoot();
         if (!element || !itemsRoot) {
+            return;
+        }
+        if (this.numCols > 1) {
+            const width = this._columnWidth() * measureCells().width;
+            const column = Math.floor(this.selectedIndex / this.visibleRows());
+            const first = Math.floor(itemsRoot.scrollLeft / width);
+            const next = column < first ? column : column >= first + this.numCols ? column - this.numCols + 1 : first;
+            itemsRoot.scrollLeft = next * width;
+            this.onListScroll();
             return;
         }
         const elementRect = element.getBoundingClientRect();
@@ -3249,16 +4238,22 @@ class TVListViewer extends TVView {
     bind({ onSelect = null, onActivate = null } = {}) {
         this.selectHandler = onSelect;
         this.activateHandler = onActivate;
-        const itemsRoot = this.itemsRoot();
-        if (!itemsRoot || this.boundItemsRoot === itemsRoot) { return; }
+        this._bindListEvents();
+    }
+
+    _bindListEvents(itemsRoot = this.itemsRoot()) {
+        if (this.boundItemsRoot === itemsRoot) { return; }
         if (this.boundItemsRoot) {
-            this.boundItemsRoot.removeEventListener("click", this.onListClick);
-            this.boundItemsRoot.removeEventListener("dblclick", this.onListClick);
-            this.boundItemsRoot.removeEventListener("keydown", this.onListKeyDown);
+            this.boundItemsRoot.removeEventListener("click", this.onListClick, true);
+            this.boundItemsRoot.removeEventListener("dblclick", this.onListClick, true);
+            this.boundItemsRoot.removeEventListener("mousedown", this.onListClick, true);
+            this.boundItemsRoot.removeEventListener("keydown", this.onListKeyDown, true);
         }
         this.boundItemsRoot = itemsRoot;
-        itemsRoot.setAttribute("role", "listbox");
+        if (!itemsRoot) { return; }
+        itemsRoot.setAttribute("role", this._itemsRole());
         this.onListClick ||= (nativeEvent) => {
+            if (nativeEvent.type === "mousedown" && viewAcceptsInput(this)) { return; }
             const event = this.dispatchEvent(new TVEvent(evMouseDown, { infoPtr: this, nativeEvent }));
             if (event.what === evNothing && !nativeEvent.target?.closest?.("a[href]")) {
                 nativeEvent.stopPropagation();
@@ -3268,17 +4263,34 @@ class TVListViewer extends TVView {
             const event = this.dispatchEvent(new TVEvent(evKeyDown, { infoPtr: this, nativeEvent }));
             if (event.what === evNothing) { nativeEvent.stopPropagation(); }
         };
-        itemsRoot.addEventListener("click", this.onListClick);
-        itemsRoot.addEventListener("dblclick", this.onListClick);
-        itemsRoot.addEventListener("keydown", this.onListKeyDown);
+        itemsRoot.addEventListener("click", this.onListClick, true);
+        itemsRoot.addEventListener("dblclick", this.onListClick, true);
+        itemsRoot.addEventListener("mousedown", this.onListClick, true);
+        itemsRoot.addEventListener("keydown", this.onListKeyDown, true);
+    }
+
+    destroy() { this._unsubscribeCollection?.(); this._unsubscribeCollection = null; this.bindRoot(null); }
+
+    _acceptsInput(event) {
+        const native = event.nativeEvent;
+        if ((event.what !== evMouseDown && event.what !== evKeyDown)
+            || !native || !this.root?.contains(native.target)) { return false; }
+        if (event.what === evKeyDown && (native.altKey || native.ctrlKey || native.metaKey)) { return false; }
+        if (viewAcceptsInput(this)) { return true; }
+        if (event.what === evKeyDown && !["Enter", " ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(native.key)) { return false; }
+        native.preventDefault();
+        native.stopPropagation();
+        this.clearEvent(event);
+        return false;
     }
 
     handleEvent(event) {
+        if (!this._acceptsInput(event)) { return; }
         const nativeEvent = event.nativeEvent;
         if (event.what === evMouseDown && (nativeEvent?.type === "click" || nativeEvent?.type === "dblclick")) {
             const index = this.pointerIndex(nativeEvent);
             if (index < 0 || index >= this.items.length) { return; }
-            this.select(index);
+            this.focusItem(index);
             if (nativeEvent.type === "dblclick") {
                 this.activateHandler?.(this.items[index], index, nativeEvent);
             } else {
@@ -3293,7 +4305,7 @@ class TVListViewer extends TVView {
         if (current < 0) { return; }
         if (nativeEvent.key === "Enter" || nativeEvent.key === " ") {
             nativeEvent.preventDefault();
-            this.select(current);
+            this.focusItem(current);
             if (nativeEvent.key === "Enter" && this.activateHandler) {
                 this.activateHandler(this.items[current], current, nativeEvent);
             } else {
@@ -3306,7 +4318,7 @@ class TVListViewer extends TVView {
         const next = this.keyDestination(current, nativeEvent.key);
         if (next < 0) { return; }
         nativeEvent.preventDefault();
-        this.select(next);
+        this.focusItem(next);
         this.focusSelectedItem();
         if (next !== current) { this.selectHandler?.(this.items[next], next, nativeEvent); }
         this.clearEvent(event);
@@ -3316,26 +4328,26 @@ class TVListViewer extends TVView {
 class TVListBox extends TVListViewer {
     constructor(bounds, numCols = 1, scrollBar = null) {
         super(bounds, numCols, null, scrollBar);
+        if (this.numCols > 1) { this.hScrollBar = new TVScrollBar(new TVRect(), sbHorizontal); }
         this.list = [];
         this.viewport = null;
         this.scrollViewport = null;
         this.externalScrollbarWidget = null;
         this.scrollbarWidget = null;
         this.scrollbar = null;
-        this.horizontalResizeObserver = null;
-        this.active = true;
     }
 
     hasScrollbar() { return true; }
 
     newList(list = []) {
-        this.list = Array.isArray(list) ? list : [];
-        this.setItems(this.list, this.list.length ? 0 : -1);
+        this.list = list instanceof TVPagedCollection || Array.isArray(list) ? list : [];
+        this.setItems(this.list, (this.list instanceof TVPagedCollection ? this.list.count : this.list.length) ? 0 : -1);
     }
 
     draw() {
         const rootClasses = [
             "tv-vlist-viewer",
+            this.numCols > 1 ? "is-multi-column" : "",
             this.hScrollBar ? "has-h-scrollbar" : "",
             TVView._roleClassNames(this._drawRole()),
         ].filter(Boolean).join(" ");
@@ -3347,10 +4359,10 @@ class TVListBox extends TVListViewer {
             },
         ));
         const rootAttrsText = attrString ? ` ${attrString}` : "";
-        const bounds = TVView._viewBoundsStyle(this);
+        const bounds = [TVView._viewBoundsStyle(this), this._paletteStyle()].filter(Boolean).join(";");
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const scrollbarMarkup = this.hasScrollbar()
-            ? new TVScrollBar(new TVRect(), sbVertical).draw() + (this.hScrollBar?.draw() || "")
+            ? ((this.numCols === 1 || this.vScrollBar) ? new TVScrollBar(new TVRect(), sbVertical).draw() : "") + (this.hScrollBar?.draw() || "")
             : "";
         return `
             <div class="${escapeHtml(rootClasses)}"${style}${scrollFrameAttr}${rootAttrsText}>
@@ -3361,27 +4373,33 @@ class TVListBox extends TVListViewer {
     }
 
     bindRoot(root) {
-        this.horizontalResizeObserver?.disconnect();
+        if (root === this.root) { return this; }
         this.scrollbarWidget?.destroy();
         super.bindRoot(root);
-        this.viewport = this._query("[data-tv-list-viewport]");
-        this.scrollViewport = this.viewport;
-        this.scrollbarWidget = this.root?.querySelector(".tv-scrollbar-y")
-            ? (this.hScrollBar || new TVScrollBar(new TVRect())).bindRoot(this.root)
+        this.scrollbarWidget = this.root?.querySelector(".tv-scrollbar")
+            ? (this.hScrollBar || this.vScrollBar || new TVScrollBar(new TVRect())).bindRoot(this.root)
             : null;
         this.scrollbar = this.scrollbarWidget?.axes.y?.root || null;
         if (this.root) {
             this.root._tvListViewer = this;
-            if (this.hScrollBar && typeof ResizeObserver === "function") {
-                this.horizontalResizeObserver = new ResizeObserver(() => this.updateScrollbar());
-                this.horizontalResizeObserver.observe(this.viewport);
-            }
         }
+        this.setActive(this.active);
         this.updateScrollbar();
         return this;
     }
 
-    itemsRoot() {
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        this.updateScrollbar();
+        return this;
+    }
+
+    _findItemsRoot(root) {
+        const external = this.scrollViewport !== this.viewport ? this.scrollViewport : null;
+        this.viewport = root?.querySelector("[data-tv-list-viewport]") || null;
+        const retained = external && root && external.contains(root);
+        this.scrollViewport = retained ? external : this.viewport;
+        if (external && !retained) { this.externalScrollbarWidget = null; }
         return this.viewport;
     }
 
@@ -3403,15 +4421,6 @@ class TVListBox extends TVListViewer {
 
     pointerIndex(event) { return this.resolvePointerIndex(event); }
 
-    keyDestination(index, key) {
-        if (key === "ArrowLeft" || key === "ArrowRight") { return -1; }
-        if (key === "PageDown") { return Math.min(this.items.length - 1, index + this.visibleRows()); }
-        if (key === "PageUp") { return Math.max(0, index - this.visibleRows()); }
-        return super.keyDestination(index, key);
-    }
-
-    focusSelectedItem() { this.selectedElement()?.focus({ preventScroll: true }); }
-
     setItems(items = [], selectedIndex = -1) {
         if (this.scrollViewport) {
             this.scrollViewport.scrollTop = 0;
@@ -3420,31 +4429,9 @@ class TVListBox extends TVListViewer {
         this.updateScrollbar();
     }
 
-    select(index, { scroll = true } = {}) {
-        super.select(index, { scroll });
+    focusItem(index, { scroll = true } = {}) {
+        super.focusItem(index, { scroll });
         this.updateScrollbar();
-    }
-
-    ensureSelectionVisible() {
-        const element = this.selectedElement();
-        const viewport = this.scrollViewport;
-        if (!element || !viewport) {
-            return;
-        }
-        const elementRect = element.getBoundingClientRect();
-        const viewportRect = viewport.getBoundingClientRect();
-        if (elementRect.top < viewportRect.top) {
-            viewport.scrollTop -= viewportRect.top - elementRect.top;
-        } else if (elementRect.bottom > viewportRect.bottom) {
-            viewport.scrollTop += elementRect.bottom - viewportRect.bottom;
-        }
-    }
-
-    visibleRows() {
-        if (!this.scrollViewport) {
-            return 1;
-        }
-        return Math.max(1, Math.floor(this.scrollViewport.clientHeight / measureCells().height));
     }
 
     setScrollViewport(viewport = null, scrollbarWidget = null) {
@@ -3454,35 +4441,18 @@ class TVListBox extends TVListViewer {
     }
 
     updateScrollbar() {
-        if (this.root && this.viewport) {
-            this.root.classList.toggle("is-h-scrollable", Boolean(this.hScrollBar)
-                && this.viewport.scrollWidth > this.viewport.clientWidth + 1);
-        }
-        this.scrollbarWidget?.refresh();
+        this.scrollbarWidget?._setClientExtent(this.getExtent(), this.numCols === 1);
+        if (!this.scrollbarWidget) { this._layoutItems(); }
         this.externalScrollbarWidget?.refresh();
     }
 
     setActive(active) {
-        this.active = Boolean(active);
-        if (this.root) {
-            this.root.classList.toggle("is-inactive", !this.active);
-        }
+        super.setActive(active);
         this.scrollbarWidget?.setActive(this.active);
     }
 
-    bind({ onSelect = null, onActivate = null } = {}) {
-        super.bind({ onSelect, onActivate });
-    }
-
     destroy() {
-        this.horizontalResizeObserver?.disconnect();
-        this.horizontalResizeObserver = null;
-        if (this.boundItemsRoot) {
-            this.boundItemsRoot.removeEventListener("click", this.onListClick);
-            this.boundItemsRoot.removeEventListener("dblclick", this.onListClick);
-            this.boundItemsRoot.removeEventListener("keydown", this.onListKeyDown);
-            this.boundItemsRoot = null;
-        }
+        super.destroy();
         this.scrollbarWidget?.destroy();
         this.scrollbarWidget = null;
         this.externalScrollbarWidget = null;
@@ -3491,44 +4461,95 @@ class TVListBox extends TVListViewer {
 
 class TVGridView extends TVListBox {
     constructor(bounds, columns = [], hScrollBar = null, vScrollBar = null) {
-        super(bounds, columns.length || 1, vScrollBar);
+        super(bounds, 1, vScrollBar);
         this.columns = columns.map((column) => typeof column === "string" ? { title: column } : { ...column });
         this.hScrollBar = hScrollBar || new TVScrollBar(new TVRect(), sbHorizontal);
         this.headersVisible = true;
         this.selectedColumn = 0;
+        this.headerRoot = null;
         this.rowsRoot = null;
     }
 
-    columnWidths() {
-        return this.columns.map((column) => `${Math.min(200, Math.max(3, Number(column.width) || 12))}ch`).join(" ");
+    _columnBounds() {
+        let left = 0;
+        return this.columns.map((column) => {
+            const width = Math.min(200, Math.max(3, Math.trunc(Number(column.width) || 12)));
+            const bounds = new TVRect(left, 0, left + width, 1);
+            left += width;
+            return bounds;
+        });
+    }
+
+    _drawCells(values, header = false) {
+        return this._columnBounds().map((bounds, column) => {
+            const attrs = header ? 'role="columnheader"' : `role="gridcell" data-tv-grid-column="${column}"`;
+            const style = TVView._boundsStyle(bounds.x1, bounds.y1, bounds.width, bounds.height);
+            const textBounds = new TVRect(1, 0, bounds.width - 1, 1);
+            const textStyle = TVView._boundsStyle(textBounds.x1, textBounds.y1, textBounds.width, textBounds.height);
+            return `<span ${attrs} class="tv-grid-cell" style="${escapeHtml(style)}">`
+                + `<span class="tv-grid-text" style="${escapeHtml(textStyle)}">${escapeHtml(String(values[column] ?? ""))}</span></span>`;
+        }).join("");
     }
 
     draw() {
         const bounds = TVView._viewBoundsStyle(this);
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const attrs = attrsToString(this._drawAttrs({ hidden: !this.getState(sfVisible) }));
-        const header = this.columns.map((column) => `<span role="columnheader" class="tv-grid-cell">${escapeHtml(String(column.title ?? ""))}</span>`).join("");
-        return `<div role="grid" class="tv-vlist-viewer tv-grid-view has-h-scrollbar${this.headersVisible ? "" : " headers-hidden"}"${style} data-tv-scroll-frame ${attrs}>
+        const header = this._drawCells(this.columns.map((column) => column.title), true);
+        return `<div role="grid" class="tv-vlist-viewer tv-grid-view has-h-scrollbar"${style} data-tv-scroll-frame ${attrs}>
             <div class="tv-vlist-viewport" data-tv-list-viewport data-tv-viewport>
-                <div role="row" class="tv-grid-header" style="grid-template-columns:${escapeHtml(this.columnWidths())}">${header}</div>
+                <div role="row" class="tv-grid-header"${this.headersVisible ? "" : " hidden"}>${header}</div>
                 <div class="tv-grid-rows" data-tv-grid-rows></div>
             </div>
             ${new TVScrollBar(new TVRect(), sbVertical).draw()}${this.hScrollBar.draw()}
         </div>`;
     }
 
-    bindRoot(root) {
-        super.bindRoot(root);
-        this.rowsRoot = this._query("[data-tv-grid-rows]");
-        this.setItems(this.items, this.selectedIndex);
+    _findItemsRoot(root) {
+        super._findItemsRoot(root);
+        this.headerRoot = root?.querySelector(".tv-grid-header") || null;
+        this.rowsRoot = root?.querySelector("[data-tv-grid-rows]") || null;
+        return this.rowsRoot;
+    }
+
+    _itemsRole() { return "rowgroup"; }
+
+    _drawPalette(focusedElement) {
+        super._drawPalette(focusedElement);
+        if (!this.root) { this._paintedCell = null; return this; }
+        this._paintPalette(this.headerRoot, this.getColor(3));
+        const selected = this.selectedElement()?.querySelector(`[data-tv-grid-column="${this.selectedColumn}"]`);
+        if (this._paintedCell && this._paintedCell !== selected) { this._paintPalette(this._paintedCell, null); }
+        this._paintPalette(selected, this._selectionColor(focusedElement));
+        this._paintedCell = selected;
         return this;
     }
 
-    itemsRoot() { return this.rowsRoot; }
+    _layoutItems() {
+        if (!this.rowsRoot || !this.viewport) { return; }
+        const columns = this._columnBounds();
+        const clientWidth = this.viewport.clientWidth
+            ? Math.floor(this.viewport.clientWidth / measureCells().width) : Math.max(0, this.size.x - 1);
+        const contentWidth = this.items.length || this.headersVisible ? columns.at(-1)?.x2 || 0 : 0;
+        const width = Math.max(clientWidth, contentWidth);
+        const previous = this._columnLayout;
+        if (previous?.root === this.rowsRoot && previous.width === width) { return; }
+        this._columnLayout = { root: this.rowsRoot, width };
+        this.headerRoot.style.width = `${width}ch`;
+        this.headerRoot.style.height = "1em";
+        this.rowsRoot.style.width = `${width}ch`;
+        this.rowsRoot.style.height = `${this.items.length}em`;
+        this.rowsRoot.querySelectorAll(this.itemSelector()).forEach((row, index) => {
+            this._placePart(row, new TVRect(0, index, width, index + 1));
+        });
+    }
+
+    visibleRows() {
+        return Math.max(1, super.visibleRows() - (this.headersVisible ? 1 : 0));
+    }
 
     itemMarkup(row, index) {
-        const cells = this.columns.map((_, column) => `<span role="gridcell" class="tv-grid-cell" data-tv-grid-column="${column}">${escapeHtml(String(row?.[column] ?? ""))}</span>`).join("");
-        return `<div role="row" tabindex="-1" class="tv-vlist-item tv-grid-row" data-tv-list-index="${index}" style="grid-template-columns:${escapeHtml(this.columnWidths())}">${cells}</div>`;
+        return `<div role="row" tabindex="-1" class="tv-vlist-item tv-grid-row" data-tv-list-index="${index}">${this._drawCells(row || [])}</div>`;
     }
 
     setRows(rows = []) {
@@ -3538,7 +4559,7 @@ class TVGridView extends TVListBox {
 
     setHeadersVisible(visible) {
         this.headersVisible = Boolean(visible);
-        this.root?.classList.toggle("headers-hidden", !this.headersVisible);
+        if (this.headerRoot) { this.headerRoot.hidden = !this.headersVisible; }
         this.updateScrollbar();
     }
 
@@ -3546,16 +4567,11 @@ class TVGridView extends TVListBox {
 
     selectCell(row, column, options = {}) {
         this.selectedColumn = Math.max(0, Math.min(this.columns.length - 1, Number(column) || 0));
-        this.select(row, options);
+        this.focusItem(row, options);
     }
 
     getText(index, maxLen = Number.MAX_SAFE_INTEGER) {
         return Array.from((this.items[index] || []).join("\t")).slice(0, maxLen).join("");
-    }
-
-    bind(handlers = {}) {
-        super.bind(handlers);
-        this.rowsRoot?.setAttribute("role", "rowgroup");
     }
 
     updateSelectionUi(scroll = true) {
@@ -3568,11 +4584,16 @@ class TVGridView extends TVListBox {
     }
 
     ensureSelectionVisible() {
-        super.ensureSelectionVisible();
         const cell = this.selectedElement()?.querySelector(`[data-tv-grid-column="${this.selectedColumn}"]`);
         if (!cell || !this.viewport) { return; }
         const cellRect = cell.getBoundingClientRect();
         const viewportRect = this.viewport.getBoundingClientRect();
+        const top = viewportRect.top + (this.headersVisible ? this.headerRoot?.getBoundingClientRect().height || 0 : 0);
+        if (cellRect.top < top) {
+            this.viewport.scrollTop -= top - cellRect.top;
+        } else if (cellRect.bottom > viewportRect.bottom) {
+            this.viewport.scrollTop += cellRect.bottom - viewportRect.bottom;
+        }
         if (cellRect.left < viewportRect.left) {
             this.viewport.scrollLeft -= viewportRect.left - cellRect.left;
         } else if (cellRect.right > viewportRect.right) {
@@ -3581,6 +4602,7 @@ class TVGridView extends TVListBox {
     }
 
     handleEvent(event) {
+        if (!this._acceptsInput(event)) { return; }
         const nativeEvent = event.nativeEvent;
         if (event.what === evMouseDown) {
             const cell = nativeEvent?.target?.closest?.("[data-tv-grid-column]");
@@ -3699,7 +4721,7 @@ class TVOutline extends TVListBox {
 
     selectKey(key, options = {}) {
         const index = this.indexForKey(key);
-        this.select(index, options);
+        this.focusItem(index, options);
         return index >= 0;
     }
 
@@ -3723,6 +4745,7 @@ class TVOutline extends TVListBox {
     }
 
     handleEvent(event) {
+        if (!this._acceptsInput(event)) { return; }
         if (event.what === evKeyDown && ["ArrowLeft", "ArrowRight"].includes(event.nativeEvent?.key)) {
             const index = this.resolveIndex(event.nativeEvent.target);
             const entry = this.items[index];
@@ -3730,7 +4753,7 @@ class TVOutline extends TVListBox {
                 event.nativeEvent.preventDefault();
                 if (event.nativeEvent.key === "ArrowRight") {
                     if (entry.hasChildren && !entry.expanded) { this.toggle(index, true); }
-                    else if (entry.hasChildren) { this.select(index + 1); }
+                    else if (entry.hasChildren) { this.focusItem(index + 1); }
                 } else if (entry.hasChildren && entry.expanded) {
                     this.toggle(index, false);
                 } else if (entry.parentKey) {
@@ -3770,20 +4793,31 @@ class TVScroller extends TVView {
             <div class="${escapeHtml(className)}" data-tv-scroll-frame${style}${attrs}>
                 <div class="tv-scroller-viewport" data-tv-scroll-viewport data-tv-viewport></div>
                 ${this.vScrollBar?.draw() || ""}
+                ${this.hScrollBar?.draw() || ""}
             </div>
         `;
     }
 
     bindRoot(root) {
-        this.vScrollBar?.destroy();
+        const scrollBar = this.vScrollBar || this.hScrollBar;
+        scrollBar?.destroy();
         super.bindRoot(root);
         this.viewport = this._query("[data-tv-scroll-viewport]");
-        this.vScrollBar?.bindRoot(this.root);
+        scrollBar?.bindRoot(this.root);
+        this.update();
         return this;
     }
 
     update() {
-        this.vScrollBar?.refresh();
+        const scrollBar = this.vScrollBar || this.hScrollBar;
+        if (scrollBar) { scrollBar._setClientExtent(this.getExtent()); }
+        else { this._placePart(this.viewport, this.getExtent()); }
+    }
+
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        this.update();
+        return this;
     }
 
     bind() {
@@ -3791,7 +4825,7 @@ class TVScroller extends TVView {
     }
 
     destroy() {
-        this.vScrollBar?.destroy();
+        this.bindRoot(null);
     }
 }
 
@@ -3824,7 +4858,7 @@ class TVMenuView extends TVView {
         this.menu = menu;
         this.parentMenu = parentMenu;
         this.current = menu.deflt;
-        this.eventMask |= evMouseMove;
+        this.eventMask |= evMouseMove | evBroadcast;
         this.menuRoots = [];
         this.topLevelActions = [];
         this.activeRoot = null;
@@ -3839,10 +4873,60 @@ class TVMenuView extends TVView {
         this.popupItems = new Map();
         this.selectedElement = null;
         this.topLevelItems = new Set(menu.entries());
+        this.menuBoxes = new Map();
+        this._hoveredItem = null;
+        this._onMenuPaint = event => {
+            const target = /out$/.test(event.type) ? event.relatedTarget : event.target;
+            const element = target?.closest?.("button, a");
+            const item = element?._tvMenuItem;
+            const previous = this._hoveredItem;
+            if (event.type.startsWith("mouse")) { this._hoveredItem = this.root?.contains(element) ? item : null; }
+            for (const entry of new Set([previous, item, event.target?.closest?.("button, a")?._tvMenuItem])) {
+                this._paintMenuItem(entry);
+            }
+        };
+    }
+
+    getPalette() {
+        return this.owner instanceof TVMenuView ? [1, 2, 3, 4, 5, 6] : [2, 3, 4, 5, 6, 7].map(index => this._appColor(index));
+    }
+
+    _paintMenuItem(item, element = this.itemElements.get(item)) {
+        if (!element) { return; }
+        const root = this.rootByItem.get(item);
+        const popup = root ? this.rootControls.get(root)?.popup : this.submenuControls.get(element)?.popup;
+        const selected = item === this._hoveredItem || element === document.activeElement
+            || element === this.selectedElement || Boolean(popup && !popup.hidden);
+        const color = this.getColor(commandDisabled(item) ? (selected ? 5 : 2) : (selected ? 4 : 1));
+        this._paintPaletteText(element, color, this.getColor(commandDisabled(item) ? (selected ? 5 : 2) : (selected ? 6 : 3)));
+    }
+
+    _drawPalette() {
+        if (!this.root) { return this; }
+        super._drawPalette();
+        if (!(this.owner instanceof TVMenuView)) {
+            this.itemElements?.forEach((element, item) => this._paintMenuItem(item, element));
+        }
+        return this;
     }
 
     bindRoot(root) {
+        for (const type of ["mouseover", "mouseout", "focusin", "focusout"]) { this.root?.removeEventListener(type, this._onMenuPaint); }
+        if (root?._tvMenuView && root._tvMenuView !== this) { root._tvMenuView.bindRoot(null); }
+        if (this.root?._tvMenuView === this) { delete this.root._tvMenuView; }
         super.bindRoot(root);
+        watchCommands(this, Boolean(root) && !(this.owner instanceof TVMenuView));
+        if (!root) {
+            this.menuBoxes.forEach((box) => box.bindRoot(null));
+            this._hoveredItem = null;
+            this.itemElements.clear();
+            this.popupItems.clear();
+            this.rootControls.clear(); this.rootByItem.clear();
+            this.submenuControls.clear(); this.submenuByPopup.clear();
+            this.menuRoots = []; this.topLevelActions = [];
+            this.activeRoot = this.activePopup = this.selectedElement = this.previousFocus = null;
+            return this;
+        }
         const items = new Map();
         const collect = (menu) => menu.entries().forEach((item) => {
             items.set(item._menuId, item);
@@ -3850,16 +4934,31 @@ class TVMenuView extends TVView {
         });
         collect(this.menu);
         this.itemElements.clear();
-        root.querySelectorAll("[data-tv-menu-item-id]").forEach((element) => {
-            const item = items.get(element.dataset.tvMenuItemId);
-            if (item) {
-                element._tvMenuItem = item;
-                this.itemElements.set(item, element);
-                this.updateItem(item, element);
-            }
-        });
+        if (this.owner instanceof TVMenuView) {
+            items.forEach((item) => {
+                const element = this.owner.itemElements.get(item);
+                if (element) { this.itemElements.set(item, element); }
+            });
+        } else {
+            root.querySelectorAll("[data-tv-menu-item-id]").forEach((element) => {
+                const item = items.get(element.dataset.tvMenuItemId);
+                if (item) {
+                    element._tvMenuItem = item;
+                    this.itemElements.set(item, element);
+                    this.updateItem(item, element);
+                }
+            });
+        }
         root._tvMenuView = this;
+        if (!(this.owner instanceof TVMenuView)) {
+            for (const type of ["mouseover", "mouseout", "focusin", "focusout"]) { root.addEventListener(type, this._onMenuPaint); }
+        }
         this.refresh();
+        this.menuBoxes.forEach((box, item) => {
+            box.owner = this;
+            box.bindRoot(this.itemElements.get(item)?.nextElementSibling || null);
+        });
+        this._drawPalette();
         return this;
     }
 
@@ -3899,15 +4998,19 @@ class TVMenuView extends TVView {
             this.selectedElement = null;
         }
         this.popupItems.clear();
-        this.root.querySelectorAll(".tv-menu-popup").forEach((popup) => {
-            popup.setAttribute("role", "menu");
+        const popups = Array.from(this.root.querySelectorAll(".tv-menu-popup"));
+        if (this.root.matches?.(".tv-menu-popup")) { popups.unshift(this.root); }
+        popups.forEach((popup) => {
             this.popupItems.set(popup, Array.from(popup.querySelectorAll(".tv-menu-popup-item")).filter(
                 (item) => item.closest(".tv-menu-popup") === popup
             ));
-            this.menuItems(popup).forEach((item) => {
-                item.setAttribute("role", "menuitem");
-                item.tabIndex = -1;
-            });
+            if (!(this.owner instanceof TVMenuView)) {
+                popup.setAttribute("role", "menu");
+                this.menuItems(popup).forEach((item) => {
+                    item.setAttribute("role", "menuitem");
+                    item.tabIndex = -1;
+                });
+            }
         });
     }
 
@@ -3925,7 +5028,7 @@ class TVMenuView extends TVView {
 
     menuItems(popup) {
         if (!popup) { return []; }
-        return (this.popupItems.get(popup) || []).filter((item) => !item._tvMenuItem?.disabled);
+        return (this.popupItems.get(popup) || []).filter((item) => !commandDisabled(item._tvMenuItem));
     }
 
     menuMnemonic(item) {
@@ -3936,6 +5039,7 @@ class TVMenuView extends TVView {
 
     markSelected(element, focus = true) {
         if (!element) { return; }
+        const previous = this.selectedElement?._tvMenuItem;
         if (this.selectedElement && this.selectedElement !== element) {
             this.selectedElement.classList.remove("is-menu-selected");
             this.selectedElement.tabIndex = -1;
@@ -3950,6 +5054,8 @@ class TVMenuView extends TVView {
             element.focus({ preventScroll: true });
             element.scrollIntoView({ block: "nearest" });
         }
+        this._paintMenuItem(previous);
+        this._paintMenuItem(element._tvMenuItem);
     }
 
     selectByIndex(popup, index) {
@@ -3971,6 +5077,7 @@ class TVMenuView extends TVView {
     openMenu(menuRoot, { focusFirst = true } = {}) {
         const { popup, toggle } = this.rootControls.get(menuRoot) || {};
         if (!popup || !toggle) { return; }
+        toggle.scrollIntoView?.({ block: "nearest", inline: "nearest" });
         const savedFocus = this.previousFocus
             || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
         this.closeMenus({ restoreFocus: false, preservePreviousFocus: true });
@@ -3981,7 +5088,9 @@ class TVMenuView extends TVView {
         this.current = toggle._tvMenuItem || this.current;
         this.activeRoot = menuRoot;
         this.activePopup = popup;
+        this._paintMenuItem(toggle._tvMenuItem);
         requestAnimationFrame(() => {
+            if (popup.hidden || !popup.isConnected) { return; }
             fitMenuPopupToViewport(menuRoot, popup);
             fillBorders(popup);
             if (focusFirst) {
@@ -4004,7 +5113,9 @@ class TVMenuView extends TVView {
         toggle.setAttribute("aria-expanded", "true");
         this.current = toggle._tvMenuItem || this.current;
         this.activePopup = popup;
+        this._paintMenuItem(toggle._tvMenuItem);
         requestAnimationFrame(() => {
+            if (popup.hidden || !popup.isConnected) { return; }
             fitMenuPopupToViewport(submenuRoot, popup);
             fillBorders(popup);
             if (scrollTop !== null) { popup.querySelector(".tv-menu-popup-body").scrollTop = scrollTop; }
@@ -4033,6 +5144,7 @@ class TVMenuView extends TVView {
         if (toggle) {
             toggle.classList.remove("is-submenu-open");
             toggle.setAttribute("aria-expanded", "false");
+            this._paintMenuItem(toggle._tvMenuItem);
         }
         this.activePopup = parentPopup || null;
         if (focusToggle && toggle) { this.markSelected(toggle); }
@@ -4054,6 +5166,7 @@ class TVMenuView extends TVView {
 
     closeMenus({ restoreFocus = true, preservePreviousFocus = false } = {}) {
         const focusTarget = this.previousFocus;
+        const selected = this.selectedElement?._tvMenuItem;
         this.closeSubmenus();
         this.menuRoots.forEach((menuRoot) => {
             const { popup, toggle } = this.rootControls.get(menuRoot) || {};
@@ -4064,6 +5177,7 @@ class TVMenuView extends TVView {
             if (toggle) {
                 toggle.setAttribute("aria-expanded", "false");
                 toggle.classList.remove("is-current");
+                this._paintMenuItem(toggle._tvMenuItem);
             }
         });
         if (this.selectedElement) {
@@ -4074,9 +5188,12 @@ class TVMenuView extends TVView {
         this.activeRoot = null;
         this.activePopup = null;
         if (!preservePreviousFocus) { this.previousFocus = null; }
-        if (restoreFocus && focusTarget?.isConnected && typeof focusTarget.focus === "function") {
-            focusTarget.focus({ preventScroll: true });
+        if (restoreFocus) {
+            const manager = owningDesktop(this)?.dialogManager;
+            if (manager) { manager._focusTarget(manager.activeTarget, focusTarget); }
+            else if (focusTarget?.isConnected && typeof focusTarget.focus === "function") { focusTarget.focus({ preventScroll: true }); }
         }
+        this._paintMenuItem(selected);
     }
 
     switchRoot(delta) {
@@ -4087,7 +5204,7 @@ class TVMenuView extends TVView {
     }
 
     activateItem(item, nativeEvent = null) {
-        if (!(item instanceof TVMenuItem) || item.disabled || !item.command) { return false; }
+        if (!(item instanceof TVMenuItem) || commandDisabled(item) || !item.command) { return false; }
         this.current = item;
         const focusRemainsInMenu = Boolean(document.activeElement?.closest?.("[data-tv-menu-bar]"));
         this.closeMenus({ restoreFocus: focusRemainsInMenu });
@@ -4118,7 +5235,7 @@ class TVMenuView extends TVView {
     activateKeyCode(keyCode, nativeEvent = null) {
         if (!keyCode) { return false; }
         const item = Array.from(this.itemElements.keys())
-            .find((candidate) => candidate.keyCode === keyCode && !candidate.disabled);
+            .find((candidate) => candidate.keyCode === keyCode && !commandDisabled(candidate));
         if (!item) { return false; }
         const element = this.itemElements.get(item);
         if (item.subMenu instanceof TVMenu && !this.topLevelItems.has(item)) {
@@ -4132,12 +5249,16 @@ class TVMenuView extends TVView {
     }
 
     handleEvent(event) {
+        if (event.what === evBroadcast && event.command === cmCommandSetChanged) {
+            this.itemElements.forEach((element, item) => this._syncItemState(item, element));
+            return;
+        }
         if (event.what === evMouseDown) {
             const item = event.infoPtr instanceof TVMenuItem ? event.infoPtr : null;
             const element = this.itemElements.get(item);
             if (!item) {
-                this.closeMenus();
-            } else if (element && !item.disabled) {
+                this.closeMenus({ restoreFocus: false });
+            } else if (element && !commandDisabled(item)) {
                 if (item.subMenu instanceof TVMenu && !this.topLevelItems.has(item)) {
                     this.markSelected(element, false);
                     this.openSubmenu(element, { focusFirst: false });
@@ -4154,7 +5275,7 @@ class TVMenuView extends TVView {
         if (event.what === evMouseMove) {
             const item = event.infoPtr instanceof TVMenuItem ? event.infoPtr : null;
             const element = this.itemElements.get(item);
-            if (element && !item.disabled) {
+            if (element && !commandDisabled(item)) {
                 if (this.activeRoot && item.subMenu instanceof TVMenu && !this.topLevelItems.has(item)) {
                     this.markSelected(element, false);
                     this.openSubmenu(element, { focusFirst: false });
@@ -4249,17 +5370,35 @@ class TVMenuView extends TVView {
         if (!(item instanceof TVMenuItem)) { return; }
         const target = element || this.itemElements.get(item);
         if (!target) { return; }
-        target.disabled = item.disabled;
-        target.setAttribute("aria-disabled", item.disabled ? "true" : "false");
-        target.classList.toggle("is-disabled", item.disabled);
-        target.innerHTML = this._drawItemName(item)
+        const name = this._drawItemName(item);
+        const markup = `<span class="${target.classList.contains("tv-menu-popup-item") ? "tv-menu-popup-label" : "tv-menu-label"}">${name}</span>`
             + (target.classList.contains("tv-submenu-toggle") ? '<span class="tv-submenu-arrow">►</span>' : "")
             + (!(item.subMenu instanceof TVMenu) && item.param ? `<span class="tv-menu-hotkey">${escapeHtml(item.param)}</span>` : "");
-        if (item.disabled) {
+        this._itemMarkups ||= new WeakMap();
+        const changed = (this._itemMarkups.get(target) ?? target.innerHTML) !== markup;
+        if (changed) { target.innerHTML = markup; }
+        this._itemMarkups.set(target, markup);
+        this._syncItemState(item, target);
+        const popup = target.closest?.(".tv-menu-popup");
+        if (!element && popup?._tvMenuBox && !popup.hidden) {
+            popup._tvMenuBox._fit(popup.parentElement);
+            fillBorders(popup);
+        }
+        if (!element && changed && this instanceof TVMenuBar) { this.drawView(); }
+    }
+
+    _syncItemState(item, target) {
+        const disabled = commandDisabled(item);
+        target.disabled = disabled;
+        target.setAttribute("aria-disabled", disabled ? "true" : "false");
+        target.classList.toggle("is-disabled", disabled);
+        if (disabled) {
+            if (this._hoveredItem === item) { this._hoveredItem = null; }
             target.classList.remove("is-menu-selected");
             target.tabIndex = -1;
             if (this.selectedElement === target) { this.selectedElement = null; }
-        }
+        } else if (target.classList.contains("tv-menu-item")) { target.removeAttribute("tabindex"); }
+        this._paintMenuItem(item, target);
     }
 
     setSubMenu(item, menu) {
@@ -4280,18 +5419,17 @@ class TVMenuView extends TVView {
             path.unshift({ item: controls.toggle._tvMenuItem, scroll: active.querySelector(".tv-menu-popup-body").scrollTop });
             active = controls.parentPopup;
         }
-        [popup, ...popup.querySelectorAll(".tv-menu-popup")].forEach((child) => child._tvMenuPopupScrollbar?.destroy());
-        popup.outerHTML = new TVMenuBox(new TVRect(), menu).draw();
+        popup.outerHTML = this._drawSubMenu(item, null);
         this.bindRoot(this.root);
-        fillBorders(root);
         if (open) {
             this.activePopup = this.rootControls.get(root).popup;
             this.activePopup.hidden = false;
             fitMenuPopupToViewport(root, this.activePopup);
+            fillBorders(this.activePopup);
             this.activePopup.querySelector(".tv-menu-popup-body").scrollTop = scroll;
             for (const entry of path) {
                 const toggle = this.itemElements.get(entry.item);
-                if (!toggle || entry.item.disabled || !this.openSubmenu(toggle, { focusFirst: false, scrollTop: entry.scroll })) { break; }
+                if (!toggle || commandDisabled(entry.item) || !this.openSubmenu(toggle, { focusFirst: false, scrollTop: entry.scroll })) { break; }
             }
             const element = this.itemElements.get(selected);
             if (element?.closest(".tv-menu-popup") === this.activePopup) {
@@ -4326,16 +5464,16 @@ class TVMenuView extends TVView {
                 "data-tv-menu-item-id": item._menuId,
                 ...TVView._controlAttrs({
                     command: "menu-toggle",
-                    disabled: item.disabled,
+                    disabled: commandDisabled(item),
                     ariaHasPopup: true,
                     ariaExpanded: false,
                 }),
             });
             return '<div class="tv-submenu-root" data-tv-submenu-root="true"' + helpAttr + '>'
                 + '<button class="tv-menu-popup-item tv-submenu-toggle" ' + toggleAttrs + '>'
-                + this._drawItemName(item) + '<span class="tv-submenu-arrow">►</span>'
+                + `<span class="tv-menu-popup-label">${this._drawItemName(item)}</span><span class="tv-submenu-arrow">►</span>`
                 + '</button>'
-                + new TVMenuBox(new TVRect(), item.subMenu, this).draw()
+                + this._drawSubMenu(item)
                 + '</div>';
         }
         const isMenuBar = view === "bar";
@@ -4348,14 +5486,25 @@ class TVMenuView extends TVView {
             ...TVView._controlAttrs({
                 name: item.command,
                 command: item.command,
-                disabled: item.disabled,
+                disabled: commandDisabled(item),
             }),
         });
         const className = isMenuBar ? "tv-menu-item tv-menu-button" : "tv-menu-popup-item";
         const shortcut = item.param
             ? `<span class="tv-menu-hotkey">${escapeHtml(item.param)}</span>`
             : "";
-        return `<${tag} class="${className}" ${attrs}>${this._drawItemName(item)}${shortcut}</${tag}>`;
+        const name = this._drawItemName(item);
+        return `<${tag} class="${className}" ${attrs}><span class="${isMenuBar ? "tv-menu-label" : "tv-menu-popup-label"}">${name}</span>${shortcut}</${tag}>`;
+    }
+
+    _drawSubMenu(item, parentMenu = this) {
+        let box = this.menuBoxes.get(item);
+        if (box?.menu !== item.subMenu) {
+            box?.destroy();
+            box = new TVMenuBox(new TVRect(), item.subMenu, parentMenu);
+            this.menuBoxes.set(item, box);
+        }
+        return box.draw();
     }
 
     _drawItemName(item) { return renderHotkeyMarkup(item.name); }
@@ -4365,6 +5514,12 @@ class TVMenuView extends TVView {
     }
 
     draw(view = "popup") { return this.renderItems(view).join(""); }
+
+    destroy() {
+        this.closeMenus({ restoreFocus: false });
+        this.bindRoot(null);
+        this.owner = null;
+    }
 }
 
 /**
@@ -4464,6 +5619,76 @@ function NewSubMenu(name, helpCtx, subMenu, next = null) {
 }
 
 class TVMenuBar extends TVMenuView {
+    constructor(bounds, menu = new TVMenu(), parentMenu = null) {
+        super(bounds, menu, parentMenu);
+        this._itemRects = new Map();
+        this.onMenuScroll = () => { if (this.activeRoot) { this.drawView(); } };
+    }
+
+    bindRoot(root) {
+        this.itemsRoot?.removeEventListener("scroll", this.onMenuScroll);
+        super.bindRoot(root);
+        this.itemsRoot = this.directChild(root, ".tv-menu-items");
+        this.itemsRoot?.addEventListener("scroll", this.onMenuScroll, { passive: true });
+        this.drawView();
+        if (root) {
+            document.fonts?.ready.then(() => {
+                if (this.root === root && root.isConnected) { this.drawView(); }
+            });
+        }
+        return this;
+    }
+
+    getItemRect(item) { return this._itemRects.get(item)?.copy() || new TVRect(); }
+
+    _itemWidth(item) {
+        const element = this.itemElements.get(item);
+        const range = document.createRange(), cell = measureCells();
+        const columns = (part) => {
+            if (!part) { return 0; }
+            range.selectNodeContents(part);
+            return Math.ceil(range.getBoundingClientRect().width / cell.width);
+        };
+        const suffix = columns(element?.querySelector(".tv-menu-hotkey"));
+        return Math.max(3, columns(element?.querySelector(".tv-menu-label")) + 2 + (suffix ? suffix + 2 : 0));
+    }
+
+    _layoutItems(root, items, bounds, widths = null) {
+        if (!root) { return; }
+        this._placePart(root, bounds);
+        let column = 0;
+        for (const item of items) {
+            const button = this.itemElements.get(item), entry = this.rootByItem.get(item) || button;
+            if (!entry || entry.hidden) { continue; }
+            const width = widths?.get(item) ?? this._itemWidth(item);
+            this._itemRects.set(item, new TVRect(bounds.x1 + column, bounds.y1, bounds.x1 + column + width, bounds.y1 + 1));
+            this._placePart(entry, new TVRect(column, 0, column + width, 1));
+            if (entry !== button) { this._placePart(button, new TVRect(0, 0, width, 1)); }
+            const suffix = button.querySelector(".tv-menu-hotkey"), suffixWidth = suffix ? Array.from(suffix.textContent).length : 0;
+            this._placePart(button.querySelector(".tv-menu-label"), new TVRect(1, 0, Math.max(1, width - 1 - (suffixWidth ? suffixWidth + 2 : 0)), 1));
+            if (suffix) { this._placePart(suffix, new TVRect(Math.max(1, width - 1 - suffixWidth), 0, Math.max(1, width - 1), 1)); }
+            column += width;
+        }
+    }
+
+    _layout() {
+        if (!this.itemsRoot || !this.root?.clientWidth) { return; }
+        const columns = Math.floor(this.root.clientWidth / measureCells().width);
+        this.setBounds(new TVRect(0, 0, columns, 1));
+        this.root.style.height = `${this.size.y}em`;
+        this._itemRects.clear();
+        this._layoutItems(this.itemsRoot, this.menu.entries(), this.getExtent());
+    }
+
+    drawView() {
+        this._layout();
+        if (this.activeRoot) {
+            fitMenuPopupToViewport(this.activeRoot, this.rootControls.get(this.activeRoot)?.popup);
+            fillBorders(this.root);
+        }
+        return this;
+    }
+
     drawItem(item, view = "bar") {
         if (view === "bar" && item.subMenu instanceof TVMenu) {
             const helpAttr = item.helpCtx !== hcNoContext ? ` data-tv-help-ctx="${item.helpCtx}"` : "";
@@ -4474,14 +5699,14 @@ class TVMenuBar extends TVMenuView {
                 ...TVView._controlAttrs({
                     name: "menu-toggle",
                     command: "menu-toggle",
-                    disabled: item.disabled,
+                    disabled: commandDisabled(item),
                     ariaHasPopup: true,
                     ariaExpanded: false,
                 }),
             });
             return `<div class="tv-menu-root" data-tv-menu-root="true"${helpAttr}>`
-                + `<button class="tv-menu-item tv-menu-button" ${toggleAttrs}>${this._drawItemName(item)}</button>`
-                + new TVMenuBox(new TVRect(), item.subMenu).draw()
+                + `<button class="tv-menu-item tv-menu-button" ${toggleAttrs}><span class="tv-menu-label">${this._drawItemName(item)}</span></button>`
+                + this._drawSubMenu(item, null)
                 + "</div>";
         }
         return super.drawItem(item, view);
@@ -4508,6 +5733,18 @@ class TVStatusItem {
         return this;
     }
 
+    getUrl() { return ""; }
+}
+
+// Native browser navigation keeps ordinary status commands as TVStatusItem.
+class TVStatusLink extends TVStatusItem {
+    constructor(text, url, newWindow = false) {
+        super(text);
+        this.url = String(url || "");
+        this.newWindow = Boolean(newWindow);
+    }
+
+    getUrl() { return this.url; }
 }
 
 class TVStatusDef {
@@ -4535,13 +5772,81 @@ class TVStatusLine extends TVView {
         }
         this.defs = statusDefs;
         this.items = statusDefs.items;
+        this.rightItems = [];
+        this.itemElements = new Map();
+        this._itemRects = new Map();
+        this._itemText = new WeakMap();
+        this.eventMask |= evBroadcast;
+        this.onResize = () => this.drawView();
+        this._hoveredItem = null;
+        this._onStatusPaint = event => {
+            const target = /out$/.test(event.type) ? event.relatedTarget : event.target;
+            const element = target?.closest?.("button, a"), item = element?._tvStatusItem;
+            const previous = this._hoveredItem;
+            if (event.type.startsWith("mouse")) { this._hoveredItem = this.root?.contains(element) ? item : null; }
+            for (const entry of new Set([previous, item, event.target?.closest?.("button, a")?._tvStatusItem])) {
+                this._paintStatusItem(entry);
+            }
+        };
+    }
+
+    getPalette() { return [2, 3, 4, 5, 6, 7].map(index => this._appColor(index)); }
+
+    _paintStatusItem(item) {
+        const element = this.itemElements.get(item);
+        if (!element) { return; }
+        const selected = item === this._hoveredItem || element === document.activeElement;
+        this._paintPaletteText(element, this.getColor(commandDisabled(item) ? 2 : selected ? 4 : 1),
+            this.getColor(commandDisabled(item) ? 2 : selected ? 6 : 3));
+    }
+
+    _drawPalette() {
+        if (!this.root) { return this; }
+        super._drawPalette();
+        this.itemElements?.forEach((_element, item) => this._paintStatusItem(item));
+        return this;
+    }
+
+    hint(_helpCtx) { return ""; }
+
+    handleEvent(event) {
+        if (event.what === evBroadcast && event.command === cmCommandSetChanged) { this.drawView(); return; }
+        const mouse = event.what === evMouseDown;
+        if (!mouse && event.what !== evKeyDown) { return; }
+        if (event.nativeEvent?.defaultPrevented) { return; }
+        const items = [...this.items, ...this.rightItems];
+        const enabled = viewAcceptsInput(this);
+        const keyCode = !mouse && getKeyCode(event.nativeEvent);
+        const item = mouse ? event.infoPtr : enabled && keyCode
+            ? items.find(item => item.keyCode === keyCode && !commandDisabled(item)) : null;
+        if (mouse && !(item instanceof TVStatusItem)) { return; }
+        if (!enabled || !items.includes(item) || commandDisabled(item)) {
+            if (mouse) { event.nativeEvent?.preventDefault(); this.clearEvent(event); }
+            return;
+        }
+        if (item.getUrl() || !item.command) { return; }
+        if (!mouse) { this._revealItem(item); }
+        event.nativeEvent?.preventDefault();
+        event.what = evCommand;
+        event.command = item.command;
+        event.infoPtr = item;
+    }
+
+    _ensureChrome() {
+        if (this.hintView) { return; }
+        this.hintView = new TVStaticText(new TVRect(0, 0, 1, 1), "");
+        this.separator = new TVStaticText(new TVRect(0, 0, 1, 1), "│");
+        this.hintView.owner = this.separator.owner = this;
     }
 
     findItems(helpCtx = this.getHelpCtx()) {
         const context = normalizeHelpContext(helpCtx);
         let definition = this.defs;
         while (definition) {
-            if (context >= definition.min && context <= definition.max) {
+            if (typeof context === "string"
+                ? (context === definition.min && context === definition.max)
+                    || (definition.min === hcNoContext && definition.max === 0xffff)
+                : context >= definition.min && context <= definition.max) {
                 this.items = definition.items;
                 return this.items;
             }
@@ -4552,8 +5857,9 @@ class TVStatusLine extends TVView {
     }
 
     drawItem(item) {
+        const url = item.getUrl(), tag = url ? "a" : "button";
         const attrs = attrsToString({
-            type: "button",
+            ...(url ? { href: url, ...(item.newWindow ? { target: "_blank", rel: "noopener" } : {}) } : { type: "button" }),
             ...TVView._controlAttrs({
                 name: item.command,
                 command: item.command,
@@ -4563,31 +5869,143 @@ class TVStatusLine extends TVView {
                 commandData: item.param && typeof item.param === "object"
                     ? Object.fromEntries(Object.entries(item.param).filter(([key]) => key !== "value"))
                     : {},
-                disabled: item.disabled,
+                disabled: commandDisabled(item),
             }),
         });
-        return `<button class="tv-status-item" ${attrs}>${item.text}</button>`;
+        return `<${tag} class="tv-status-item" ${attrs}><span class="tv-status-label">${renderHotkeyMarkup(item.text)}</span></${tag}>`;
     }
 
     draw() {
-        return this.items.map((item) => (
-            typeof item === "string" ? item : item instanceof TVStatusItem ? this.drawItem(item) : ""
-        )).join("");
+        this._ensureChrome();
+        this.hintView.setText(this.hint(this.getHelpCtx()) || "");
+        return `<div class="tv-status-items">${this.items.map(item => this.drawItem(item)).join("")}</div>`
+            + `<div class="tv-status-right">${this.rightItems.map(item => this.drawItem(item)).join("")}</div>`
+            + this.separator.draw() + this.hintView.draw();
     }
 
     bindRoot(root) {
+        window.removeEventListener("resize", this.onResize);
+        for (const type of ["mouseover", "mouseout", "focusin", "focusout"]) { this.root?.removeEventListener(type, this._onStatusPaint); }
+        if (root?._tvStatusLine && root._tvStatusLine !== this) { root._tvStatusLine.bindRoot(null); }
+        if (this.root?._tvStatusLine === this) { delete this.root._tvStatusLine; }
         super.bindRoot(root);
+        watchCommands(this, Boolean(root));
+        if (!root) {
+            this.hintView?.bindRoot(null); this.separator?.bindRoot(null);
+            this._hoveredItem = null;
+            this.itemElements.clear(); this._itemRects.clear();
+            this.itemsRoot = this.rightRoot = null;
+            return this;
+        }
+        this._ensureChrome();
         this.bindItems();
+        for (const type of ["mouseover", "mouseout", "focusin", "focusout"]) { root.addEventListener(type, this._onStatusPaint); }
+        window.addEventListener("resize", this.onResize, { passive: true });
+        document.fonts?.ready.then(() => {
+            if (this.root === root && root.isConnected) { this.drawView(); }
+        });
         return this;
     }
 
     bindItems() {
         if (!this.root) { return; }
         this.root._tvStatusLine = this;
-        const buttons = this.root.querySelectorAll("button.tv-status-item");
-        const items = this.items.filter((item) => item instanceof TVStatusItem);
-        buttons.forEach((button, index) => { button._tvStatusItem = items[index] || null; });
+        this.itemsRoot = this.root.querySelector(":scope > .tv-status-items");
+        this.rightRoot = this.root.querySelector(":scope > .tv-status-right");
+        this._ensureChrome(); this.hintView.resolve(this.root); this.separator.resolve(this.root);
+        this.itemElements.clear();
+        const all = [...this.items, ...this.rightItems];
+        for (const [selector, items] of [
+            ["button.tv-status-item", all.filter(item => !item.getUrl())],
+            ["a.tv-status-item", all.filter(item => item.getUrl())],
+        ]) {
+            this.root.querySelectorAll(selector).forEach((element, index) => {
+                const item = items[index];
+                if (!item) { return; }
+                element._tvStatusItem = item; this.itemElements.set(item, element);
+                this._itemText.set(item, item.text);
+            });
+        }
+        this.drawView();
     }
+
+    getItemRect(item) { return this._itemRects.get(item)?.copy() || new TVRect(); }
+
+    _revealItem(item) { this.itemElements.get(item)?.scrollIntoView?.({ block: "nearest", inline: "nearest" }); }
+
+    _itemWidth(item, cell, range) {
+        const label = this.itemElements.get(item)?.firstElementChild;
+        if (!label) { return 0; }
+        range.selectNodeContents(label);
+        return Math.ceil(range.getBoundingClientRect().width / cell.width) + 2;
+    }
+
+    _layoutItems(root, items, bounds, widths) {
+        this._placePart(root, bounds);
+        let column = 0;
+        for (const item of items) {
+            const element = this.itemElements.get(item), width = widths.get(item) || 0;
+            if (!element) { continue; }
+            this._itemRects.set(item, new TVRect(bounds.x1 + column, 0, bounds.x1 + column + width, 1));
+            this._placePart(element, new TVRect(column, 0, column + width, 1));
+            this._placePart(element.firstElementChild, new TVRect(1, 0, Math.max(1, width - 1), 1));
+            column += width;
+        }
+    }
+
+    _layout() {
+        if (!this.root?.clientWidth || !this.itemsRoot || !this.rightRoot) { return; }
+        const cell = measureCells(), range = document.createRange();
+        const columns = Math.floor(this.root.clientWidth / cell.width), end = Math.max(0, columns - 1);
+        this.setBounds(new TVRect(this.origin.x, this.origin.y, this.origin.x + columns, this.origin.y + 1));
+        this.root.style.height = `${this.size.y}em`;
+        this._itemRects.clear();
+        const widths = new Map([...this.items, ...this.rightItems].map(item => [item, this._itemWidth(item, cell, range)]));
+        const total = items => items.reduce((sum, item) => sum + widths.get(item), 0);
+        const rightWidth = Math.min(total(this.rightItems), Math.floor(end / 3));
+        const available = end - rightWidth, hasHint = Boolean(this.hintView.getText());
+        const separatorWidth = hasHint && this.items.length ? Math.min(2, available) : 0;
+        const reservedHint = hasHint ? Math.min(16, Math.floor(Math.max(0, available - separatorWidth) / 3)) : 0;
+        const commandsWidth = Math.min(total(this.items), Math.max(0, available - separatorWidth - reservedHint));
+        this._layoutItems(this.itemsRoot, this.items, new TVRect(0, 0, commandsWidth, 1), widths);
+        this._layoutItems(this.rightRoot, this.rightItems, new TVRect(available, 0, end, 1), widths);
+        this.separator.locate(new TVRect(commandsWidth, 0, commandsWidth + 1, 1));
+        this.separator.setState(sfVisible, separatorWidth > 0);
+        const hintLeft = commandsWidth + separatorWidth;
+        this.hintView.locate(new TVRect(hintLeft, 0, Math.max(hintLeft, available), 1));
+        this.hintView.setState(sfVisible, hasHint && available > hintLeft);
+    }
+
+    render() {
+        if (this.root) { this.root.innerHTML = this.draw(); this.bindItems(); }
+        return this;
+    }
+
+    _drawBounds() { super._drawBounds(); this.drawView(); }
+
+    drawView() {
+        if (!this.root) { return this; }
+        measuredCell = null;
+        this._ensureChrome(); this.hintView.setText(this.hint(this.getHelpCtx()) || "");
+        this.itemElements.forEach((element, item) => {
+            if (this._itemText.get(item) !== item.text) {
+                element.firstElementChild.innerHTML = renderHotkeyMarkup(item.text); this._itemText.set(item, item.text);
+            }
+            if (element.tagName === "BUTTON") { element.disabled = commandDisabled(item); }
+            if (element.tagName === "A") {
+                element.setAttribute("href", item.getUrl());
+                if (item.newWindow) { element.setAttribute("target", "_blank"); element.setAttribute("rel", "noopener"); }
+                else { element.removeAttribute("target"); element.removeAttribute("rel"); }
+                if (commandDisabled(item)) { element.tabIndex = -1; } else { element.removeAttribute("tabindex"); }
+            }
+            element.setAttribute("aria-disabled", commandDisabled(item) ? "true" : "false");
+        });
+        this._drawPalette();
+        this._layout();
+        return this;
+    }
+
+    destroy() { this.bindRoot(null); this.owner = null; }
 }
 
 class TVMenuBox extends TVMenuView {
@@ -4597,6 +6015,130 @@ class TVMenuBox extends TVMenuView {
         }
         super(bounds, menu);
         this.parentMenu = parentMenu;
+    }
+
+    bindRoot(root) {
+        if (this.root && this.root !== root) {
+            this.root._tvMenuPopupScrollbar?.destroy();
+            delete this.root._tvMenuPopupScrollbar;
+            delete this.root._tvMenuBox;
+        }
+        super.bindRoot(root);
+        if (root) {
+            root._tvMenuBox = this;
+            [this.topFrame, this.main, this.bottomFrame] = root.children;
+            [this.body, this.scrollbarRoot, this.rightFrame] = this.main.children;
+        } else {
+            this.topFrame = this.main = this.bottomFrame = this.body = this.scrollbarRoot = this.rightFrame = null;
+        }
+        return this;
+    }
+
+    getItemRect(item) {
+        const row = this.menu.entries().indexOf(item);
+        return row < 0 ? new TVRect() : new TVRect(1, row + 1, this.size.x - 1, row + 2);
+    }
+
+    _naturalWidth(cell) {
+        const range = document.createRange();
+        let width = 14;
+        this.menu.entries().forEach((item) => {
+            if (item.separator) { return; }
+            const element = this.itemElements.get(item);
+            const columns = (part) => {
+                if (!part) { return 0; }
+                range.selectNodeContents(part);
+                return Math.ceil(range.getBoundingClientRect().width / cell.width);
+            };
+            const label = columns(element?.querySelector(".tv-menu-popup-label"));
+            const suffix = columns(element?.querySelector(".tv-submenu-arrow, .tv-menu-hotkey"));
+            width = Math.max(width, label + 5 + (suffix ? suffix + 2 : 0));
+        });
+        return width;
+    }
+
+    _fit(anchor) {
+        if (!this.root || this.root.hidden) { return; }
+        const cell = measureCells(), rect = anchor.getBoundingClientRect();
+        const parent = this.parentMenu ? anchor.closest(".tv-menu-popup")?.getBoundingClientRect() : null;
+        const top = parent ? parent.top : rect.bottom;
+        const available = Math.max(3, Math.floor((window.innerHeight - 2 * cell.height - top) / cell.height));
+        const rows = this.menu.entries().length;
+        const height = Math.min(rows + 2, available);
+        const width = Math.min(this._naturalWidth(cell) + (rows > height - 2 ? 1 : 0), Math.max(4, Math.floor(window.innerWidth / cell.width)));
+        let left = parent ? rect.right - cell.width : rect.left;
+        if (parent && left + width * cell.width > window.innerWidth) { left = rect.left + cell.width - width * cell.width; }
+        left = Math.max(0, Math.min(left, window.innerWidth - width * cell.width));
+        const maximumTop = Math.max(0, window.innerHeight - (height + 2) * cell.height);
+        const nextTop = Math.max(0, Math.min(parent ? rect.top - cell.height : rect.bottom, maximumTop));
+        const x = left / cell.width;
+        const y = nextTop / cell.height;
+        const resized = this.size.x !== width || this.size.y !== height;
+        this.locate(new TVRect(x, y, x + width, y + height));
+        if (resized) { this.body.querySelector(".is-menu-selected")?.scrollIntoView({ block: "nearest" }); }
+        if (!this.root._tvMenuPopupScrollbar) {
+            this.root._tvMenuPopupScrollbar = new TVScrollBar(new TVRect()).bindRoot(this.main);
+        }
+        this.root._tvMenuPopupScrollbar.refresh();
+        this.menuBoxes.forEach((box) => {
+            if (box.root && !box.root.hidden) { box._fit(box.root.parentElement); }
+        });
+    }
+
+    _drawBounds() {
+        super._drawBounds();
+        if (this.root) {
+            this.root.style.position = "fixed";
+            this._layout();
+        }
+    }
+
+    _layout() {
+        if (!this.root || this.root.hidden) { return; }
+        const width = this.size.x, height = this.size.y, rows = this.menu.entries().length;
+        const scrolling = rows > height - 2;
+        const place = (element, x, y, w, h) => this._placePart(element, new TVRect(x, y, x + Math.max(0, w), y + Math.max(0, h)));
+        this.root.classList.toggle("is-scrollable", scrolling);
+        this.body.classList.toggle("is-scrollable", scrolling);
+        this.scrollbarRoot.hidden = this.rightFrame.hidden = !scrolling;
+        place(this.topFrame, 0, 0, width, 1);
+        place(this.main, 0, 1, width, height - 2);
+        place(this.body, 0, 0, width, height - 2);
+        place(this.bottomFrame, 0, height - 1, width, 1);
+        place(this.scrollbarRoot, width - 2, 0, 1, height - 2);
+        place(this.rightFrame, width - 1, 0, 1, height - 2);
+        const frameRow = (row) => {
+            const [left, fill, right] = row.children;
+            place(left, 0, 0, 1, 1); place(fill, 1, 0, width - 2, 1); place(right, width - 1, 0, 1, 1);
+        };
+        frameRow(this.topFrame); frameRow(this.bottomFrame);
+        let row = 0;
+        const parts = Array.from(this.body.children);
+        for (let index = 0; index < parts.length;) {
+            const part = parts[index];
+            if (part.classList.contains("tv-menu-popup-separator")) {
+                place(part, 0, row++, width, 1); frameRow(part); index += 1;
+            } else {
+                const [left, items, right] = parts.slice(index, index + 3);
+                const count = items.children.length, itemWidth = width - 2 - (scrolling ? 1 : 0);
+                place(left, 0, row, 1, count); place(items, 1, row, width - 2, count); place(right, width - 1, row, 1, count);
+                Array.from(items.children).forEach((entry, offset) => {
+                    place(entry, 0, offset, itemWidth, 1);
+                    const button = entry.classList.contains("tv-submenu-root") ? entry.firstElementChild : entry;
+                    if (button !== entry) { place(button, 0, 0, itemWidth, 1); }
+                    const suffix = button.querySelector(".tv-submenu-arrow, .tv-menu-hotkey");
+                    const suffixWidth = suffix ? Array.from(suffix.textContent).length : 0;
+                    place(button.querySelector(".tv-menu-popup-label"), 1, 0, itemWidth - 3 - (suffixWidth ? suffixWidth + 2 : 0), 1);
+                    if (suffix) { place(suffix, Math.max(1, itemWidth - 2 - suffixWidth), 0, suffixWidth, 1); }
+                });
+                row += count; index += 3;
+            }
+        }
+    }
+
+    drawView() {
+        if (this.root) { this._layout(); fillBorders(this.root); this.root._tvMenuPopupScrollbar?.refresh(); }
+        return this;
     }
 
     draw() {
@@ -4609,14 +6151,13 @@ class TVMenuBox extends TVMenuView {
         const className = `tv-menu-popup${isSubMenu ? " tv-submenu-popup" : ""}`;
         const borderFill = '<span class="tv-border-fill" data-tv-border-fill="\u2500" aria-hidden="true"></span>';
         const scrollbarMarkup = new TVScrollBar(new TVRect(), sbVertical).draw();
-        // Split items into segments at separator strings to render them as body-level rows.
         const segments = [[]];
-        for (const html of this.renderItems("popup")) {
-            if (/^<div class="tv-menu-popup-separator(?:\s|\")/.test(html.trim())) {
+        for (const item of this.menu.entries()) {
+            if (item.separator) {
                 segments.push("separator");
                 segments.push([]);
             } else {
-                segments[segments.length - 1].push(html);
+                segments[segments.length - 1].push(this.drawItem(item, "popup"));
             }
         }
         const bodyRows = [];
@@ -4659,168 +6200,14 @@ class TVMenuBox extends TVMenuView {
     }
 }
 
-function getMenuPopupScrollbarParts(popup) {
-    if (!popup) {
-        return null;
-    }
-    const main = Array.from(popup.children).find((node) => node.classList?.contains("tv-menu-popup-main")) || null;
-    const body = main
-        ? Array.from(main.children).find((node) => node.classList?.contains("tv-menu-popup-body")) || null
-        : null;
-    const scrollbar = main?.querySelector(":scope > .tv-scrollbar-y") || null;
-    const track = scrollbar?.querySelector("[data-role='track']") || null;
-    const cells = scrollbar?.querySelector("[data-role='cells']") || null;
-    const thumb = scrollbar?.querySelector("[data-role='thumb']") || null;
-    const backward = scrollbar?.querySelector("[data-role='backward']") || null;
-    const forward = scrollbar?.querySelector("[data-role='forward']") || null;
-    return body && scrollbar && track && cells && thumb && backward && forward
-        ? { body, scrollbar, track, cells, thumb, backward, forward }
-        : null;
-}
-
-function syncMenuPopupScrollbar(popup) {
-    const parts = getMenuPopupScrollbarParts(popup);
-    if (!parts) {
-        return;
-    }
-    const { body, scrollbar } = parts;
-    const needsScrollbar = body.scrollHeight > body.clientHeight + 1;
-    popup.classList.toggle("is-scrollable", needsScrollbar);
-    body.classList.toggle("is-scrollable", needsScrollbar);
-    scrollbar.hidden = !needsScrollbar;
-    popup._tvMenuPopupScrollbar?.refresh();
-}
-
-function bindMenuPopupScrollbar(popup) {
-    if (!popup || popup._tvMenuPopupScrollbar) { return; }
-    const parts = getMenuPopupScrollbarParts(popup);
-    if (!parts) {
-        return;
-    }
-    const main = popup.querySelector(".tv-menu-popup-main");
-    popup._tvMenuPopupScrollbar = main ? new TVScrollBar(new TVRect()).bindRoot(main) : null;
-}
-
 function resetMenuPopupLayout(popup) {
-    if (!popup) {
-        return;
-    }
-    bindMenuPopupScrollbar(popup);
-    popup.classList.remove("is-scrollable");
-    popup.style.position = "";
-    popup.style.left = "";
-    popup.style.top = "";
-    popup.style.maxHeight = "";
-    const body = popup.querySelector(".tv-menu-popup-body");
-    if (body) {
-        body.scrollTop = 0;
-        body.style.maxHeight = "";
-        body.style.overflowY = "";
-        body.classList.remove("is-scrollable");
-    }
-    const parts = getMenuPopupScrollbarParts(popup);
-    if (parts) {
-        parts.scrollbar.hidden = true;
-        syncMenuPopupScrollbar(popup);
-    }
+    if (!popup?._tvMenuBox) { return; }
+    popup._tvMenuBox.body.scrollTop = 0;
+    popup._tvMenuPopupScrollbar?.stopRepeat();
 }
 
 function fitMenuPopupToViewport(root, popup) {
-    if (!root || !popup) {
-        return;
-    }
-    bindMenuPopupScrollbar(popup);
-    const cell = measureCells();
-    const cellHeight = cell.height || 16;
-    const cellWidth = cell.width || 8;
-    const rootRect = root.getBoundingClientRect();
-    const isSubmenu = root.matches("[data-tv-submenu-root]");
-    const parentPopupRect = isSubmenu
-        ? root.closest(".tv-menu-popup")?.getBoundingClientRect() || null
-        : null;
-    const defaultTop = isSubmenu ? rootRect.top - cellHeight : rootRect.height;
-    const defaultLeft = isSubmenu ? rootRect.right - cellWidth : 0;
-    const body = popup.querySelector(".tv-menu-popup-body");
-
-    popup.classList.remove("is-scrollable");
-    popup.style.position = isSubmenu ? "fixed" : "";
-    popup.style.left = isSubmenu ? `${Math.round(defaultLeft)}px` : "";
-    popup.style.top = `${defaultTop}px`;
-    popup.style.maxHeight = "";
-    if (body) {
-        body.scrollTop = 0;
-        body.style.maxHeight = "";
-        body.style.overflowY = "";
-        body.classList.remove("is-scrollable");
-    }
-
-    let popupRect = popup.getBoundingClientRect();
-    const reservedBottomRows = 2;
-    const minGlobalTop = parentPopupRect ? parentPopupRect.top : rootRect.top + defaultTop;
-    const availablePopupHeight = Math.max(
-        cellHeight * 4,
-        window.innerHeight - (cellHeight * reservedBottomRows) - minGlobalTop,
-    );
-    const maxPopupRows = Math.max(4, Math.floor(availablePopupHeight / cellHeight));
-    const maxPopupHeight = maxPopupRows * cellHeight;
-    if (popupRect.height > maxPopupHeight && body) {
-        const maxBodyHeight = Math.max(cellHeight, maxPopupHeight - (cellHeight * 2));
-        popup.classList.add("is-scrollable");
-        popup.style.maxHeight = `${Math.round(maxPopupHeight)}px`;
-        body.style.maxHeight = `${Math.round(maxBodyHeight)}px`;
-        body.style.overflowY = "auto";
-        body.classList.add("is-scrollable");
-        popupRect = popup.getBoundingClientRect();
-    }
-
-    if (isSubmenu) {
-        let nextTop = defaultTop;
-        const minTop = minGlobalTop;
-        const maxTop = minGlobalTop + maxPopupHeight - popupRect.height;
-        if (nextTop > maxTop) {
-            nextTop = maxTop;
-        }
-        if (nextTop < minTop) {
-            nextTop = minTop;
-        }
-
-        let nextLeft = defaultLeft;
-        if (nextLeft + popupRect.width > window.innerWidth) {
-            nextLeft = rootRect.left + cellWidth - popupRect.width;
-        }
-        const minLeft = 0;
-        const maxLeft = Math.max(0, window.innerWidth - popupRect.width);
-        if (nextLeft < minLeft) {
-            nextLeft = minLeft;
-        }
-        if (nextLeft > maxLeft) {
-            nextLeft = maxLeft;
-        }
-
-        popup.style.left = `${Math.round(nextLeft)}px`;
-        popup.style.top = `${Math.round(nextTop)}px`;
-    } else {
-        let nextTop = defaultTop;
-        const minTop = minGlobalTop - rootRect.top;
-        const maxTop = minGlobalTop + maxPopupHeight - rootRect.top - popupRect.height;
-        if (nextTop > maxTop) {
-            nextTop = maxTop;
-        }
-        if (nextTop < minTop) {
-            nextTop = minTop;
-        }
-        popup.style.top = `${Math.round(nextTop)}px`;
-        // Menu-bar popup coordinates are relative to the owning item.
-        const maxLeft = Math.max(0, window.innerWidth - popupRect.width);
-        const nextLeft = Math.max(0, Math.min(rootRect.left, maxLeft));
-        popup.style.left = `${Math.round(nextLeft - rootRect.left)}px`;
-    }
-    syncMenuPopupScrollbar(popup);
-    window.requestAnimationFrame(() => {
-        if (!popup.hidden) {
-            syncMenuPopupScrollbar(popup);
-        }
-    });
+    if (root) { popup?._tvMenuBox?._fit(root); }
 }
 
 class TVMenuController {
@@ -4837,10 +6224,18 @@ class TVMenuController {
         this.onDocumentCommand = (event) => this.onCommand(event);
         this.onDocumentHover = (event) => this.onHover(event);
         this.onDocumentKeyDown = (event) => this.onKeyDown(event);
+        this.onViewportResize = () => {
+            const view = this.menuView;
+            if (view instanceof TVMenuBar) { view.drawView(); return; }
+            if (!view?.activeRoot) { return; }
+            fitMenuPopupToViewport(view.activeRoot, view.rootControls.get(view.activeRoot)?.popup);
+            fillBorders(view.root);
+        };
         document.addEventListener("click", this.onDocumentClick);
         document.addEventListener("click", this.onDocumentCommand);
         document.addEventListener("mouseover", this.onDocumentHover);
         document.addEventListener("keydown", this.onDocumentKeyDown);
+        window.addEventListener("resize", this.onViewportResize, { passive: true });
         this.refresh();
     }
 
@@ -4865,7 +6260,7 @@ class TVMenuController {
         const control = nativeEvent.target?.closest?.("button, a");
         if (!control) { return; }
         if (control.disabled || control.getAttribute("aria-disabled") === "true") {
-            if (control._tvMenuItem) { nativeEvent.preventDefault(); }
+            if (control._tvMenuItem || control._tvStatusItem) { nativeEvent.preventDefault(); }
             return;
         }
         const menuItem = control._tvMenuItem;
@@ -4879,13 +6274,14 @@ class TVMenuController {
             return;
         }
         const statusItem = control._tvStatusItem;
-        if (!(statusItem instanceof TVStatusItem)) { return; }
-        nativeEvent.preventDefault();
-        const event = new TVEvent(evCommand, {
-            command: statusItem.command,
+        const statusLine = this.root.querySelector("[data-tv-status-line]")?._tvStatusLine;
+        if (!(statusItem instanceof TVStatusItem) || statusLine?.itemElements.get(statusItem) !== control) { return; }
+        const event = new TVEvent(evMouseDown, {
             infoPtr: statusItem,
             nativeEvent,
         });
+        statusLine.handleEvent(event);
+        if (event.what !== evCommand) { return; }
         if (this._commandTarget instanceof TVView) {
             this._commandTarget.dispatchEvent(event);
         } else {
@@ -4912,22 +6308,13 @@ class TVMenuController {
             nativeEvent.stopPropagation?.();
             return;
         }
-        const keyCode = getKeyCode(nativeEvent);
         const statusLine = this.root.querySelector("[data-tv-status-line]")?._tvStatusLine;
-        const statusItem = keyCode && statusLine?.items.find((item) => (
-            item instanceof TVStatusItem && item.keyCode === keyCode && !item.disabled
-        ));
-        if (statusItem) {
-            nativeEvent.preventDefault();
-            const command = new TVEvent(evCommand, {
-                command: statusItem.command,
-                infoPtr: statusItem,
-                nativeEvent,
-            });
+        statusLine?.handleEvent(event);
+        if (event.what === evCommand) {
             if (this._commandTarget instanceof TVView) {
-                this._commandTarget.dispatchEvent(command);
+                this._commandTarget.dispatchEvent(event);
             } else {
-                this._commandTarget?.handleEvent?.(command);
+                this._commandTarget?.handleEvent?.(event);
             }
             return;
         }
@@ -4947,6 +6334,7 @@ class TVMenuController {
         document.removeEventListener("click", this.onDocumentCommand);
         document.removeEventListener("mouseover", this.onDocumentHover);
         document.removeEventListener("keydown", this.onDocumentKeyDown);
+        window.removeEventListener("resize", this.onViewportResize);
     }
 }
 
@@ -4958,12 +6346,14 @@ class TVCluster extends TVView {
             throw new TypeError("TVCluster expects TVRect bounds");
         }
         super(bounds);
-        this.options = Array.isArray(options) ? options : [];
-        this.value = this.options.length > 31 ? 0n : 0;
+        this.options |= ofSelectable;
+        this.strings = Array.isArray(options) ? options : [];
+        this.value = this.strings.length > 31 ? 0n : 0;
         this.sel = 0;
-        this.enableMask = this.options.reduce((mask, _option, index) => mask | this.bit(index), this.value);
+        this.enableMask = this.strings.reduce((mask, _option, index) => mask | this.bit(index), this.value);
         this.eventMask |= evBroadcast;
         this.type = "checkbox";
+        this.value = this._initialValue();
         this.itemClass = "tv-checkbox-item";
         this.markClass = "tv-checkbox-mark";
         this.choiceElements = [];
@@ -4971,46 +6361,121 @@ class TVCluster extends TVView {
         this.vScrollBar = null;
         this.viewport = null;
         this.scrollbarWidget = null;
+        this._itemTextWidth = null;
+        this._onChoiceFocus = event => this._drawPalette(event.type === "focusout" ? event.relatedTarget : event.target);
+        this._onChoiceEvent = nativeEvent => {
+            if (!this.root?.contains(nativeEvent.target)) { return; }
+            const what = nativeEvent.type === "click" ? evMouseDown : nativeEvent.type === "keydown" ? evKeyDown : evBroadcast;
+            this.dispatchEvent(new TVEvent(what, { infoPtr: this, nativeEvent }));
+        };
     }
 
-    bit(index) { return this.options.length > 31 ? 1n << BigInt(index) : 1 << index; }
+    getPalette() { return [47, 48, 49, 62].map(index => this._appColor(index)); }
+
+    _choiceEnabled(index) {
+        return !this.getState(sfDisabled) && this.buttonState(index) && !this.strings[index].disabled;
+    }
+
+    setState(state, enable) {
+        super.setState(state, enable);
+        if ((state & sfDisabled) !== 0) {
+            if (enable) { this.setState(sfFocused, false); }
+            this.syncInputs();
+            this.scrollbarWidget?.refresh();
+        }
+        return this;
+    }
+
+    _drawPalette(focusedElement) {
+        if (!this.root) { return this; }
+        super._drawPalette();
+        const focused = this.getState(sfDisabled) ? -1
+            : this.choiceElements.indexOf(focusedElement === undefined ? document.activeElement : focusedElement);
+        this.setState(sfFocused, focused >= 0);
+        this.choiceElements.forEach((input, index) => {
+            const disabled = !this._choiceEnabled(index);
+            const color = this.getColor(disabled ? 4 : focused === index ? 2 : 1);
+            const row = input.parentElement;
+            this._paintPaletteText(row, color, this.getColor(disabled ? 4 : 3));
+            row.style.cursor = disabled ? "default" : "pointer";
+            if (this.type === "button") {
+                this._paintPalette(input, color); input.style.cursor = disabled ? "default" : "pointer";
+            }
+        });
+        return this;
+    }
+
+    bit(index) { return this.strings.length > 31 ? 1n << BigInt(index) : 1 << index; }
+
+    _initialValue() {
+        const empty = this.type === "radio" || this.strings.length <= 31 ? 0 : 0n;
+        return this.strings.reduce((value, option, index) => option.checked
+            ? (this.type === "radio" ? index : value | this.bit(index)) : value, empty);
+    }
+
+    _markText(index) {
+        return this.type === "radio" ? `(${this.mark(index) ? "•" : " "})` : `[${this.mark(index) ? "X" : " "}]`;
+    }
 
     setItems(options = []) {
-        this.options = Array.isArray(options) ? options : [];
-        this.value = this.type === "radio" ? 0 : (this.options.length > 31 ? 0n : 0);
-        this.sel = 0;
-        this.enableMask = this.options.reduce((mask, _option, index) => mask | this.bit(index),
-            this.options.length > 31 ? 0n : 0);
+        if (this.viewport) { this.viewport.scrollLeft = 0; this.viewport.scrollTop = 0; }
+        this.strings = Array.isArray(options) ? options : [];
+        this.value = this._initialValue();
+        this.sel = this.type === "radio" ? this.value : 0;
+        this.enableMask = this.strings.reduce((mask, _option, index) => mask | this.bit(index),
+            this.strings.length > 31 ? 0n : 0);
         this.drawView();
         return this;
     }
 
+    drawView() {
+        const focused = Boolean(this.root && this.choiceElements.includes(document.activeElement));
+        const left = this.viewport?.scrollLeft || 0, top = this.viewport?.scrollTop || 0;
+        super.drawView();
+        if (this.viewport) { this.viewport.scrollLeft = left; this.viewport.scrollTop = top; }
+        if (focused) { this.focus(); }
+        this.updateScrollbar();
+        return this;
+    }
+
+    _itemMarkup(option, index) {
+        const disabled = !this._choiceEnabled(index);
+        const inputAttrs = attrsToString({
+            type: this.type,
+            class: "tv-choice-input",
+            name: this.type === "radio" ? this.viewId : null,
+            value: option.value !== undefined ? option.value : index,
+            checked: this.mark(index),
+            disabled,
+        });
+        const className = `${this.itemClass}${disabled ? " is-disabled" : ""}`;
+        return `<label class="${className}"><input ${inputAttrs}><span class="${this.markClass}" aria-hidden="true">${this._markText(index)}</span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
+    }
+
     draw() {
-        const items = this.options.map((option, index) => {
-            const inputAttrs = attrsToString({
-                type: this.type,
-                class: "tv-choice-input",
-                name: this.type === "radio" ? this.viewId : null,
-                value: option.value !== undefined ? option.value : index,
-                checked: Boolean(option.checked),
-                disabled: Boolean(option.disabled),
-            });
-            const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
-            return `<label class="${className}"><input ${inputAttrs}><span class="${this.markClass}" aria-hidden="true"></span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></label>`;
-        }).join("");
-        const attrs = attrsToString(this._drawAttrs({ hidden: !this.getState(sfVisible) }));
-        const bounds = TVView._viewBoundsStyle(this);
+        const items = this.strings.map((option, index) => this._itemMarkup(option, index)).join("");
+        const attrs = attrsToString(this._drawAttrs({ hidden: !this.getState(sfVisible), "aria-disabled": String(this.getState(sfDisabled)) }));
+        const bounds = [TVView._viewBoundsStyle(this), this._paletteStyle()].filter(Boolean).join(";");
         const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
         const scrollable = this.hScrollBar || this.vScrollBar;
         const content = scrollable
             ? `<div class="tv-cluster-viewport" data-tv-viewport>${items}</div>${this.vScrollBar?.draw() || ""}${this.hScrollBar?.draw() || ""}`
             : items;
-        return `<div class="tv-cluster${scrollable ? " has-scrollbars" : ""}"${scrollable ? " data-tv-scroll-frame" : ""}${style} ${attrs}>${content}</div>`;
+        return `<div class="tv-cluster${this.getState(sfDisabled) ? " is-disabled" : ""}"${scrollable ? " data-tv-scroll-frame" : ""}${style} ${attrs}>${content}</div>`;
     }
 
     bindRoot(root) {
+        if (root === this.root) { return this; }
+        this.root?.removeEventListener("focusin", this._onChoiceFocus);
+        this.root?.removeEventListener("focusout", this._onChoiceFocus);
+        for (const type of ["click", "input", "change", "keydown"]) { this.root?.removeEventListener(type, this._onChoiceEvent); }
         this.scrollbarWidget?.destroy();
+        this.choiceElements = [];
+        this._itemTextWidth = null;
         super.bindRoot(root);
+        this.root?.addEventListener("focusin", this._onChoiceFocus);
+        this.root?.addEventListener("focusout", this._onChoiceFocus);
+        for (const type of ["click", "input", "change", "keydown"]) { this.root?.addEventListener(type, this._onChoiceEvent); }
         this.viewport = this._query(".tv-cluster-viewport");
         this.scrollbarWidget = this.viewport ? (this.vScrollBar || this.hScrollBar)?.bindRoot(root) : null;
         this.updateScrollbar();
@@ -5018,28 +6483,77 @@ class TVCluster extends TVView {
     }
 
     updateScrollbar() {
-        this.root?.classList.toggle("is-h-scrollable", Boolean(this.hScrollBar && this.viewport
-            && this.viewport.scrollWidth > this.viewport.clientWidth + 1));
-        this.scrollbarWidget?.refresh();
+        this.scrollbarWidget?._setClientExtent(this.getExtent());
+        if (!this.scrollbarWidget) { this._layoutItems(); }
     }
 
-    destroy() { this.scrollbarWidget?.destroy(); }
+    _layoutItems() {
+        const root = this.viewport || this.root;
+        if (!root) { return; }
+        const cell = measureCells();
+        let width = root.clientWidth ? root.clientWidth / cell.width : this.size.x;
+        if (this.hScrollBar) {
+            if (this._itemTextWidth?.cellWidth !== cell.width) {
+                const range = document.createRange();
+                let pixels = 0;
+                for (const input of this.choiceElements) {
+                    const label = input.parentElement.querySelector(".tv-choice-label");
+                    if (!label) { continue; }
+                    range.selectNodeContents(label);
+                    const labelWidth = range.getBoundingClientRect().width;
+                    range.selectNodeContents(input.parentElement.querySelector(`.${this.markClass}`));
+                    pixels = Math.max(pixels, labelWidth + range.getBoundingClientRect().width + cell.width);
+                }
+                this._itemTextWidth = root.clientWidth ? { cellWidth: cell.width, width: Math.ceil(pixels / cell.width) } : null;
+            }
+            width = Math.max(width, this._itemTextWidth?.width || 0);
+        }
+        this.choiceElements.forEach((input, index) => {
+            this._placePart(input.parentElement, new TVRect(0, index, width, index + 1));
+            if (this.type === "button") { this._placePart(input, new TVRect(0, 0, width, 1)); }
+        });
+    }
 
-    focus() { this.choiceElements[this.sel]?.focus({ preventScroll: true }); return this.setState(sfFocused, true); }
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        this.updateScrollbar();
+        return this;
+    }
 
-    buttonState(item) { return Boolean(this.enableMask & this.bit(item)); }
+    destroy() { this.bindRoot(null); this.choiceElements = []; }
+
+    _focusTarget() { return this._choiceEnabled(this.sel) ? this.choiceElements[this.sel] : null; }
+
+    _canFocus() { return super._canFocus() && this.strings.some((_item, index) => this._choiceEnabled(index)); }
+
+    focus() {
+        const input = this.choiceElements[this.sel];
+        if (viewAcceptsInput(this) && this._choiceEnabled(this.sel) && input && !input.disabled) {
+            input.focus({ preventScroll: true });
+            if (document.activeElement === input) { this._recordFocus(input); }
+            else { this.setState(sfFocused, false); }
+        }
+        return this;
+    }
+
+    buttonState(item) {
+        return Number.isInteger(item) && item >= 0 && item < this.strings.length
+            && Boolean(this.enableMask & this.bit(item));
+    }
 
     mark(item) {
+        if (!Number.isInteger(item) || item < 0 || item >= this.strings.length) { return false; }
         return this.type === "radio" ? this.value === item : Boolean(this.value & this.bit(item));
     }
 
+    multiMark(item) { return Number(this.mark(item)); }
+
     movedTo(item) {
-        if (Number.isInteger(item) && item >= 0 && item < this.options.length) {
+        if (Number.isInteger(item) && item >= 0 && item < this.strings.length
+            && this._choiceEnabled(item)) {
             const changed = this.sel !== item;
             this.sel = item;
-            if (this.type === "checkbox") {
-                this.choiceElements.forEach((input, index) => { input.tabIndex = index === item ? 0 : -1; });
-            }
+            this.choiceElements.forEach((input, index) => { input.tabIndex = index === item && !input.disabled ? 0 : -1; });
             if (changed) {
                 this.dispatchEvent(new TVEvent(evBroadcast, { command: "cluster-moved-to", infoPtr: this, infoLong: item }));
             }
@@ -5047,7 +6561,7 @@ class TVCluster extends TVView {
     }
 
     press(item) {
-        if (!this.buttonState(item) || this.options[item]?.disabled) { return; }
+        if (!viewAcceptsInput(this) || !this._choiceEnabled(item)) { return; }
         this.movedTo(item);
         if (this.type === "radio") { this.value = item; }
         else { this.value ^= this.bit(item); }
@@ -5055,28 +6569,49 @@ class TVCluster extends TVView {
     }
 
     setButtonState(mask, enable) {
-        if (this.options.length > 31) { mask = BigInt(mask); }
+        if (this.strings.length > 31) { mask = BigInt(mask); }
         this.enableMask = enable ? (this.enableMask | mask) : (this.enableMask & ~mask);
         this.syncInputs();
     }
 
     getData() { return this.value; }
 
+    destroy() { this.bindRoot(null); }
+
     setData(value) {
-        this.value = this.type !== "radio" && this.options.length > 31
+        const focused = this.type === "radio" && this.choiceElements.includes(document.activeElement);
+        this.value = this.type !== "radio" && this.strings.length > 31
             ? (BigInt(value || 0) < 0n ? 0n : BigInt(value || 0)) : Math.max(0, Number(value) || 0);
+        if (this.type === "radio" && Number.isInteger(this.value) && this.value < this.strings.length) { this.sel = this.value; }
         this.syncInputs();
+        if (focused) { this.focus(); }
         return this;
     }
 
     syncInputs() {
-        if (!this.root) { return; }
-        this.choiceElements.filter((input) => input.classList.contains("tv-choice-input")).forEach((input, index) => {
-            input.checked = this.mark(index);
-            input.disabled = !this.buttonState(index) || Boolean(this.options[index]?.disabled);
+        const previous = this.sel, focused = this.choiceElements.includes(document.activeElement);
+        if (!this._choiceEnabled(this.sel)) {
+            const enabled = this.strings.findIndex((_option, index) => this._choiceEnabled(index));
+            if (enabled >= 0) { this.sel = enabled; }
+        }
+        this.strings.forEach((option, index) => {
+            if (this.type !== "button") { option.checked = this.mark(index); }
+            const input = this.choiceElements[index];
+            if (!input) { return; }
+            input.disabled = !this._choiceEnabled(index);
+            input.tabIndex = index === this.sel && !input.disabled ? 0 : -1;
             input.parentElement?.classList.toggle("is-disabled", input.disabled);
-            this.options[index].checked = input.checked;
+            const mark = this.type === "button" ? input.querySelector(`.${this.markClass}`) : input.nextElementSibling;
+            let text;
+            if (this.type === "button") {
+                const state = this.multiMark(index);
+                input.setAttribute("aria-checked", state === 0 ? "false" : state === 1 ? "true" : "mixed");
+                text = `[${this.states[state]}]`;
+            } else { input.checked = option.checked; text = this._markText(index); }
+            if (mark && mark.textContent !== text) { mark.textContent = text; }
         });
+        this._drawPalette();
+        if (focused && previous !== this.sel) { this.focus(); }
     }
 
     resolve(root) {
@@ -5084,12 +6619,8 @@ class TVCluster extends TVView {
         this.choiceElements = Array.from(this.root?.querySelectorAll(
             this.type === "button" ? ".tv-multicheck-button" : ".tv-choice-input",
         ) || []);
+        this._itemTextWidth = null;
         this.choiceElements.forEach((element, index) => { element._tvChoiceIndex = index; });
-        this.options.forEach((option, index) => {
-            if (option.checked) {
-                this.value = this.type === "radio" ? index : (this.value | this.bit(index));
-            }
-        });
         this.syncInputs();
         this.movedTo(this.sel);
         this.updateScrollbar();
@@ -5097,28 +6628,40 @@ class TVCluster extends TVView {
     }
 
     handleEvent(event) {
-        if (event.what === evKeyDown && this.type === "checkbox") {
+        const native = event.nativeEvent;
+        if (!viewAcceptsInput(this) && this.root?.contains(native?.target)) {
+            if (event.what === evBroadcast && native.type === "change") {
+                this.syncInputs(); this.clearEvent(event);
+            } else if (event.what === evMouseDown || (event.what === evKeyDown && !native.altKey && !native.ctrlKey && !native.metaKey
+                && ["Enter", " ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(native.key))) {
+                native.preventDefault(); this.clearEvent(event);
+            }
+            return;
+        }
+        if (event.what === evKeyDown && this.type !== "radio") {
             const native = event.nativeEvent;
             const index = native?.target?._tvChoiceIndex;
-            if (!Number.isInteger(index) || !this.root?.contains(native.target)) { return; }
+            if (!Number.isInteger(index) || !this.root?.contains(native.target)
+                || !this._choiceEnabled(index) || native.target.disabled || native.altKey || native.ctrlKey || native.metaKey) { return; }
             if (native.key === " " || native.key === "Enter") {
                 native.preventDefault();
                 this.press(index);
                 event.what = evBroadcast;
                 event.command = "cluster-press";
+                event.infoPtr = this;
                 event.infoLong = index;
                 return;
             }
             const page = Math.max(1, Math.floor((this.viewport?.clientHeight || 0) / measureCells().height));
             const destinations = { ArrowDown: index + 1, ArrowRight: index + 1, ArrowUp: index - 1,
-                ArrowLeft: index - 1, Home: 0, End: this.options.length - 1,
+                ArrowLeft: index - 1, Home: 0, End: this.strings.length - 1,
                 PageDown: index + page, PageUp: index - page };
             if (!(native.key in destinations)) { return; }
             native.preventDefault();
-            let next = Math.max(0, Math.min(this.options.length - 1, destinations[native.key]));
-            const step = next < index ? -1 : 1;
-            while (next >= 0 && next < this.options.length && (!this.buttonState(next) || this.options[next].disabled)) { next += step; }
-            if (next >= 0 && next < this.options.length) {
+            let next = Math.max(0, Math.min(this.strings.length - 1, destinations[native.key]));
+            const step = native.key === "Home" ? 1 : native.key === "End" ? -1 : next < index ? -1 : 1;
+            while (next >= 0 && next < this.strings.length && !this._choiceEnabled(next)) { next += step; }
+            if (next >= 0 && next < this.strings.length) {
                 this.movedTo(next);
                 this.focus();
                 const input = this.choiceElements[next];
@@ -5137,8 +6680,9 @@ class TVCluster extends TVView {
         if (!this.root?.contains(input) || !input.matches?.(".tv-choice-input")) { return; }
         const index = input._tvChoiceIndex;
         if (!Number.isInteger(index)) { return; }
-        if (!this.buttonState(index) || this.options[index]?.disabled) {
+        if (!this._choiceEnabled(index)) {
             this.syncInputs();
+            this.clearEvent(event);
             return;
         }
         this.movedTo(index);
@@ -5161,60 +6705,125 @@ class TVRadioButtons extends TVCluster {
     constructor(bounds, options = []) {
         super(bounds, options);
         this.type = "radio";
-        this.value = 0;
+        this.value = this._initialValue();
+        this.sel = this.value;
         this.viewId = `tv-radio-${++tvChoiceGroupId}`;
         this.itemClass = "tv-radio-item";
         this.markClass = "tv-radio-mark";
     }
 }
 
+const cfOneBit = 0x0101;
+const cfTwoBits = 0x0203;
+const cfFourBits = 0x040f;
+const cfEightBits = 0x08ff;
+
 class TVMultiCheckBoxes extends TVCluster {
-    constructor(bounds, options = [], states = [" ", "X", "?"]) {
+    constructor(bounds, options = [], selRange = 3, flags = cfTwoBits, states = " X?") {
         super(bounds, options);
+        if (!Number.isInteger(selRange) || typeof states !== "string") {
+            throw new TypeError("TVMultiCheckBoxes expects a state count and marker string");
+        }
+        if (![cfOneBit, cfTwoBits, cfFourBits, cfEightBits].includes(flags)
+            || selRange < 1 || selRange > Math.min(255, (flags & 0xff) + 1)
+            || Array.from(states).length < selRange) {
+            throw new RangeError("Invalid multi-check state range, flags or markers");
+        }
         this.type = "button";
         this.itemClass = "tv-multicheck-item";
         this.markClass = "tv-multicheck-mark";
-        this.states = Array.isArray(states) && states.length > 1
-            ? states.map(String)
-            : [" ", "X", "?"];
+        this.selRange = selRange;
+        this.flags = flags;
+        this.states = Array.from(states);
+        this.setItems(options);
     }
 
-    draw() {
-        const items = this.options.map((option, index) => {
-            const state = Math.max(0, Math.min(
-                this.states.length - 1,
-                Number.isInteger(option.state) ? option.state : 0,
-            ));
-            const ariaChecked = state === 0 ? "false" : (state === 1 ? "true" : "mixed");
-            const attrs = attrsToString({
-                type: "button",
-                class: "tv-multicheck-button",
-                disabled: Boolean(option.disabled),
-                role: "checkbox",
-                "aria-checked": ariaChecked,
-            });
-            const className = `${this.itemClass}${option.disabled ? " is-disabled" : ""}`;
-            return `<label class="${className}"><button ${attrs}><span class="${this.markClass}" aria-hidden="true">[${escapeHtml(this.states[state])}]</span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></button></label>`;
-        }).join("");
-        const attrs = attrsToString(this._drawAttrs());
-        const bounds = TVView._viewBoundsStyle(this);
-        const style = bounds ? ` style="${escapeHtml(bounds)}"` : "";
-        return `<div${style}${this.getState(sfVisible) ? "" : " hidden"} ${attrs}>${items}</div>`;
+    _dataValue(value, count = this.strings.length) {
+        if (typeof value !== "bigint" && (typeof value !== "number" || !Number.isSafeInteger(value))) {
+            throw new TypeError("Multi-check data must be an integer or BigInt");
+        }
+        const packed = BigInt(value), width = this.flags >> 8, bits = Math.max(32, count * width);
+        if (packed < 0n || packed >= (1n << BigInt(bits))) { throw new RangeError("Multi-check data exceeds its record"); }
+        for (let index = 0; index < count; index++) {
+            if (Number((packed >> BigInt(index * width)) & BigInt(this.flags & 0xff)) >= this.selRange) {
+                throw new RangeError("Multi-check data contains an unavailable state");
+            }
+        }
+        return bits > 32 ? packed : Number(packed);
+    }
+
+    _initialValue(options = this.strings) {
+        // TCluster initializes before the subclass's packing fields are set.
+        if (this.flags === undefined) { return options.length > 31 ? 0n : 0; }
+        let value = 0n;
+        options.forEach((option, index) => {
+            const state = option.state ?? 0;
+            if (!Number.isInteger(state) || state < 0 || state >= this.selRange) {
+                throw new RangeError("Invalid initial multi-check state");
+            }
+            value |= BigInt(state) << BigInt(index * (this.flags >> 8));
+        });
+        return this._dataValue(value, options.length);
+    }
+
+    setItems(options = []) {
+        const items = Array.isArray(options) ? options : [], value = this._initialValue(items);
+        this.strings = items.map(({ state, ...option }) => option);
+        this.value = value;
+        this.sel = 0;
+        this.enableMask = this.strings.reduce((mask, _option, index) => mask | this.bit(index), this.strings.length > 31 ? 0n : 0);
+        if (this.viewport) { this.viewport.scrollLeft = 0; this.viewport.scrollTop = 0; }
+        this.drawView();
+        return this;
+    }
+
+    setData(value) {
+        this.value = this._dataValue(value);
+        this.syncInputs();
+        return this;
+    }
+
+    multiMark(item) {
+        if (!Number.isInteger(item) || item < 0 || item >= this.strings.length) { return 0; }
+        return Number((BigInt(this.value) >> BigInt(item * (this.flags >> 8))) & BigInt(this.flags & 0xff));
+    }
+
+    mark(item) { return this.multiMark(item) !== 0; }
+
+    _itemMarkup(option, index) {
+        const state = this.multiMark(index);
+        const ariaChecked = state === 0 ? "false" : (state === 1 ? "true" : "mixed");
+        const disabled = !this._choiceEnabled(index);
+        const attrs = attrsToString({
+            type: "button",
+            class: "tv-flat-button tv-multicheck-button",
+            disabled,
+            role: "checkbox",
+            "aria-checked": ariaChecked,
+        });
+        const className = `${this.itemClass}${disabled ? " is-disabled" : ""}`;
+        return `<label class="${className}"><button ${attrs}><span class="${this.markClass}" aria-hidden="true">[${escapeHtml(this.states[state])}]</span> <span class="tv-choice-label">${renderHotkeyMarkup(option.label || "")}</span></button></label>`;
     }
 
     cycle(index, button = null) {
-        if (!Number.isInteger(index) || index < 0 || index >= this.options.length) { return; }
+        if (!Number.isInteger(index) || index < 0 || index >= this.strings.length) { return; }
+        if (!viewAcceptsInput(this) || !this._choiceEnabled(index)) { return; }
         const target = button || this.choiceElements[index];
-        if (!target || target.disabled) { return; }
-        const state = ((Number(this.options[index].state) || 0) + 1) % this.states.length;
-        target.setAttribute("aria-checked", state === 0 ? "false" : (state === 1 ? "true" : "mixed"));
-        const mark = target.querySelector(`.${this.markClass}`);
-        if (mark) { mark.textContent = `[${this.states[state]}]`; }
-        this.options[index].state = state;
+        if (target?.disabled) { return; }
+        this.movedTo(index);
+        const state = (this.multiMark(index) + 1) % this.selRange;
+        const shift = BigInt(index * (this.flags >> 8)), mask = BigInt(this.flags & 0xff) << shift;
+        this.value = this._dataValue((BigInt(this.value) & ~mask) | (BigInt(state) << shift));
+        this.syncInputs();
+        this._itemTextWidth = null;
+        this.updateScrollbar();
         return state;
     }
 
+    press(item) { return this.cycle(item); }
+
     handleEvent(event) {
+        super.handleEvent(event);
         if (event.what !== evMouseDown || event.nativeEvent?.type !== "click") { return; }
         const button = event.nativeEvent.target.closest?.(".tv-multicheck-button");
         if (!button || button.disabled || !this.root?.contains(button)) { return; }
@@ -5235,6 +6844,8 @@ const bfNormal = 0x00;
 const bfDefault = 0x01;
 const bfLeftJust = 0x02;
 const bfBroadcast = 0x04;
+const cmGrabDefault = 61;
+const cmReleaseDefault = 62;
 
 class TVButton extends TVView {
     constructor(bounds, title, command, flags = bfNormal) {
@@ -5242,16 +6853,55 @@ class TVButton extends TVView {
             throw new TypeError("TVButton expects TVRect bounds");
         }
         super(bounds);
+        this.options |= ofSelectable;
         this.title = String(title ?? "");
-        this.command = String(command || "");
+        this.command = command ?? "";
         this.commandData = {};
         this.value = true;
         this.flags = flags;
-        this.disabled = false;
+        this.amDefault = (flags & bfDefault) !== 0;
+        this.eventMask |= evBroadcast;
+        this._localDisabled = false;
+        this.disabled = !this.commandEnabled(this.command);
+        if (this.disabled) { this.state |= sfDisabled; }
+        this._nativeHovered = false;
+        this._nativeFocused = false;
+        this._onButtonPaint = Object.fromEntries(["mouseenter", "mouseleave", "focus", "blur"].map(type => [type, () => {
+            if (type === "mouseenter" || type === "mouseleave") { this._nativeHovered = type === "mouseenter"; }
+            else {
+                this._nativeFocused = type === "focus";
+                this.setState(sfFocused, this._nativeFocused);
+            }
+            this._drawPalette();
+        }]));
+        this.onButtonClick = nativeEvent => {
+            if (!this.disabled && !this.root?.disabled) {
+                this.dispatchEvent(new TVEvent(evMouseDown, { infoPtr: this, nativeEvent }));
+            }
+        };
+    }
+
+    getPalette() {
+        return this._drawParts().dialog ? [41, 42, 43, 44, 45, 46].map(index => this._appColor(index)) : super.getPalette();
+    }
+
+    _drawPalette() {
+        if (!this.root) { return this; }
+        if (!this._drawParts().dialog) { return super._drawPalette(); }
+        const parts = this._buttonElements;
+        if (!parts?.face) { return this; }
+        const selected = this._nativeFocused || document.activeElement === this.root || this.root.classList.contains("is-pressed");
+        const color = this.getColor(this.disabled ? 4 : selected ? 3 : this.amDefault ? 2 : 1);
+        this._paintPaletteText(parts.face, color, this.disabled ? color : this.getColor(5));
+        for (const part of [parts.inset, parts.edge, parts.shadow]) { this._paintPalette(part, this.getColor(6)); }
+        return this;
     }
 
     setCommandData(commandData = {}) {
         this.commandData = { ...commandData };
+        if (typeof this.commandData.expanded === "boolean") {
+            this.root?.setAttribute("aria-expanded", String(this.commandData.expanded));
+        } else { this.root?.removeAttribute("aria-expanded"); }
         return this;
     }
 
@@ -5261,15 +6911,96 @@ class TVButton extends TVView {
     }
 
     _shadowText() {
-        return " " + "\u2580".repeat(Math.max(0, Math.ceil(this.size.x) - 1));
+        const width = Math.max(0, Math.ceil(this.size.x));
+        if (this.size.y < 2) { return " ".repeat(width); }
+        return " ".repeat(Math.min(2, width)) + "\u2580".repeat(Math.max(0, width - 2));
     }
 
-    changeBounds(bounds) {
-        super.changeBounds(bounds);
-        const shadow = this._query(".tv-dialog-button-shadow");
-        if (shadow) { shadow.textContent = this._shadowText(); }
+    _edgeText() {
+        const rows = Math.max(0, Math.ceil(this.size.y) - 1);
+        return rows ? "▄" + "\n█".repeat(rows - 1) : "";
+    }
+
+    _titleMarkup(markup) {
+        const length = Array.from(this.title.replaceAll("~", "")).length;
+        const left = (this.flags & bfLeftJust) !== 0 ? 1 : Math.max(1, Math.trunc((this.size.x - length - 2) / 2));
+        const top = Math.max(0, Math.floor(this.size.y / 2) - 1);
+        return "\n".repeat(top) + " ".repeat(left) + markup;
+    }
+
+    bindRoot(root) {
+        if (root === this.root) { return this; }
+        if (this.root) { this.makeDefault(false); super.setState(sfFocused, false); }
+        this._releasePress?.();
+        this.root?.removeEventListener("click", this.onButtonClick);
+        for (const [type, handler] of Object.entries(this._onButtonPaint)) { this.root?.removeEventListener(type, handler); }
+        this._nativeHovered = false; this._nativeFocused = false;
+        super.bindRoot(root);
+        watchCommands(this, Boolean(root));
+        this.root?.addEventListener("click", this.onButtonClick);
+        for (const [type, handler] of Object.entries(this._onButtonPaint)) { this.root?.addEventListener(type, handler); }
+        this._buttonElements = Object.fromEntries(["face", "inset", "label", "edge", "shadow"]
+            .map(name => [name, this._query(`.tv-dialog-button-${name}`)]));
+        this._captionMarkup = null;
+        this._buttonClasses = new Set(this._drawParts().className.split(/\s+/).filter(Boolean));
+        this._buttonAttrNames = [];
+        if (this._buttonElements.face) { this.drawView(); }
+        this._syncCommandState();
         return this;
     }
+
+    _drawBounds() {
+        super._drawBounds();
+        if (this._buttonElements?.face) { this.drawView(); }
+    }
+
+    _layout() {
+        const parts = this._buttonElements;
+        if (!parts?.face) { return; }
+        const width = this.size.x, height = this.size.y, faceHeight = Math.max(0, height - 1);
+        const pressed = this.root.classList.contains("is-pressed"), inset = Math.min(1, width);
+        this._placePart(parts.face, new TVRect(pressed ? 1 : 0, 0, width + (pressed ? 1 : 0), faceHeight));
+        this._placePart(parts.inset, new TVRect(0, 0, inset, faceHeight));
+        this._placePart(parts.label, new TVRect(inset, 0, Math.max(inset, width - 1), faceHeight));
+        this._placePart(parts.edge, new TVRect(Math.max(0, width - 1), 0, width, faceHeight));
+        this._placePart(parts.shadow, new TVRect(0, faceHeight, width, height));
+        parts.edge.style.visibility = parts.shadow.style.visibility = pressed ? "hidden" : "";
+    }
+
+    drawView() {
+        if (!this.root) { return this; }
+        const parts = this._drawParts(), attrs = this._drawButtonAttrs(parts);
+        for (const name of this._buttonAttrNames) {
+            if (!Object.hasOwn(attrs, name)) { this.root.removeAttribute(name); }
+        }
+        for (const [name, value] of Object.entries(attrs)) {
+            if (value == null || value === false) { this.root.removeAttribute(name); }
+            else if (this.root.getAttribute(name) !== String(value === true ? "" : value)) {
+                this.root.setAttribute(name, value === true ? "" : String(value));
+            }
+        }
+        this._buttonAttrNames = Object.keys(attrs);
+        const classes = new Set(parts.className.split(/\s+/).filter(Boolean));
+        for (const name of this._buttonClasses) { if (!classes.has(name)) { this.root.classList.remove(name); } }
+        for (const name of classes) { this.root.classList.add(name); }
+        this._buttonClasses = classes;
+        this.root.classList.toggle("is-default", this.amDefault);
+        const elements = this._buttonElements, label = elements?.label || this.root;
+        const markup = parts.dialog ? this._titleMarkup(parts.labelMarkup) : parts.labelMarkup;
+        if (this._captionMarkup !== markup) {
+            if (label.innerHTML !== markup) { label.innerHTML = markup; }
+            this._captionMarkup = markup;
+        }
+        this._drawPalette();
+        if (!elements?.face) { return this; }
+        for (const [element, text] of [[elements.edge, this._edgeText()], [elements.shadow, this._shadowText()]]) {
+            if (element.textContent !== text) { element.textContent = text; }
+        }
+        this._layout();
+        return this;
+    }
+
+    destroy() { this.bindRoot(null); }
 
     _drawParts() {
         return {
@@ -5279,16 +7010,15 @@ class TVButton extends TVView {
             style: "",
             labelMarkup: renderHotkeyMarkup(this.title),
             ariaLabel: "",
-            ariaExpanded: null,
+            ariaExpanded: typeof this.commandData.expanded === "boolean" ? this.commandData.expanded : null,
             ariaPressed: null,
             tabIndex: null,
             tooltip: "",
         };
     }
 
-    draw() {
-        const parts = this._drawParts();
-        const attrString = attrsToString(this._drawAttrs({
+    _drawButtonAttrs(parts) {
+        return this._drawAttrs({
             type: "button",
             ...TVView._controlAttrs({
                 name: this.command,
@@ -5303,8 +7033,13 @@ class TVButton extends TVView {
                 tabIndex: parts.tabIndex,
                 tooltip: parts.tooltip,
             }),
-        }));
-        const classNames = [parts.className, (this.flags & bfDefault) !== 0 ? "is-default" : ""].filter(Boolean).join(" ");
+        });
+    }
+
+    draw() {
+        const parts = this._drawParts();
+        const attrString = attrsToString(this._drawButtonAttrs(parts));
+        const classNames = [parts.className, this.amDefault ? "is-default" : ""].filter(Boolean).join(" ");
         const bounds = TVView._viewBoundsStyle(this);
         const inlineStyle = [bounds, parts.style].filter(Boolean).join(";");
         const styleAttr = inlineStyle ? ` style="${escapeHtml(inlineStyle)}"` : "";
@@ -5315,61 +7050,133 @@ class TVButton extends TVView {
             return `
                 <button class="${buttonClass}"${styleAttr} ${attrString}>
                     <span class="tv-dialog-button-face">
-                        <span class="tv-dialog-button-label">${labelMarkup}</span>
-                        <span class="tv-dialog-button-edge" aria-hidden="true">▄</span>
+                        <span class="tv-dialog-button-inset" aria-hidden="true"> </span>
+                        <span class="tv-dialog-button-label">${this._titleMarkup(labelMarkup)}</span>
+                        <span class="tv-dialog-button-edge" aria-hidden="true">${this._edgeText()}</span>
                     </span>
                     <span class="tv-dialog-button-shadow" aria-hidden="true">${shadow}</span>
                 </button>
             `;
         }
-        const classAttr = classNames ? ` class="${classNames}"` : "";
+        const classAttr = ` class="${escapeHtml(["tv-flat-button", classNames].filter(Boolean).join(" "))}"`;
         const attrs = attrString ? ` ${attrString}` : "";
         return `<button${classAttr}${styleAttr}${attrs}>${labelMarkup}</button>`;
     }
 
     handleEvent(event) {
+        if (event.what === evBroadcast && event.command === cmCommandSetChanged) {
+            this._syncCommandState();
+            return;
+        }
+        if (event.what === evBroadcast && [cmGrabDefault, cmReleaseDefault].includes(event.command)) {
+            if ((this.flags & bfDefault) !== 0) {
+                const group = this._defaultGroup();
+                this.amDefault = event.infoPtr instanceof TVButton
+                    ? !group?.firstThat(view => view instanceof TVButton && view._defaultGroup() === group
+                        && (view.flags & bfDefault) === 0 && view.amDefault && viewAcceptsInput(view))
+                    : event.command === cmReleaseDefault;
+                this.root?.classList.toggle("is-default", this.amDefault);
+                this._drawPalette();
+            }
+            return;
+        }
+        const native = event.nativeEvent;
+        if (native?.defaultPrevented) { return; }
+        if (!viewAcceptsInput(this) || !this.commandEnabled(this.command)) {
+            if (event.what === evMouseDown && event.infoPtr === this) {
+                native?.preventDefault(); this.clearEvent(event);
+            }
+            return;
+        }
         if (event.what === evMouseDown && this.command && !this.disabled) {
-            event.what = evCommand;
-            event.command = this.command;
-            event.infoPtr = this;
+            if ((this.flags & bfBroadcast) !== 0) {
+                if (this.press(native)) { native?.preventDefault(); this.clearEvent(event); }
+            } else {
+                event.what = evCommand;
+                event.command = this.command;
+                event.infoPtr = this;
+            }
+        } else if (event.what === evKeyDown && native?.altKey && !native.ctrlKey && !native.metaKey
+            && this.title.match(/~([^~])~/)?.[1]?.toLowerCase() === native.key?.toLowerCase()
+            && this.press(native)) {
+            native.preventDefault();
+            this.clearEvent(event);
         }
     }
 
     setTitle(title) {
         this.title = String(title ?? "");
-        const label = this._query(".tv-dialog-button-label");
-        if (label) { label.innerHTML = this._drawParts().labelMarkup; }
+        if (this._buttonElements?.face) { this.drawView(); }
         else if (this.root) { this.root.innerHTML = this._drawParts().labelMarkup; }
         return this;
     }
 
+    _defaultGroup() {
+        let group = null;
+        for (let owner = this.owner; owner instanceof TVGroup && !(owner instanceof TVDesktop || owner instanceof TVProgram); owner = owner.owner) {
+            group = owner;
+            if (owner instanceof TVWindow) { break; }
+        }
+        return group;
+    }
+
     makeDefault(enable = true) {
-        this.flags = enable ? (this.flags | bfDefault) : (this.flags & ~bfDefault);
-        this.root?.classList.toggle("is-default", Boolean(enable));
+        if ((this.flags & bfDefault) !== 0 || this.amDefault === Boolean(enable)) { return this; }
+        if (enable && !viewAcceptsInput(this)) { return this; }
+        this.amDefault = Boolean(enable);
+        this._defaultGroup()?.broadcast(enable ? cmGrabDefault : cmReleaseDefault, this);
+        this.root?.classList.toggle("is-default", this.amDefault);
+        this._drawPalette();
         return this;
     }
 
     drawState(down) {
         this.root?.classList.toggle("is-pressed", Boolean(down));
+        this._layout();
+        this._drawPalette();
         return this;
     }
 
     press(nativeEvent = null) {
-        if (!this.command || this.disabled || this.root?.disabled) { return false; }
-        this.dispatchEvent(new TVEvent(evCommand, {
+        if (!this.command || this.disabled || !this.commandEnabled(this.command) || !viewAcceptsInput(this)) { return false; }
+        const event = new TVEvent((this.flags & bfBroadcast) !== 0 ? evBroadcast : evCommand, {
             command: this.command,
             infoPtr: this,
             nativeEvent,
-        }));
+        });
+        if (event.what === evBroadcast) {
+            if (!(this.owner instanceof TVGroup)) { return false; }
+            this.owner._broadcastEvent(event);
+        } else { this.dispatchEvent(event); }
         return true;
     }
 
+    _syncCommandState() {
+        this.disabled = this._localDisabled || !this.commandEnabled(this.command);
+        super.setState(sfDisabled, this.disabled);
+        if (this.root) { this.root.disabled = this.disabled; }
+        if (this.disabled) {
+            this._releasePress?.(); this.drawState(false);
+            super.setState(sfFocused, false); this.makeDefault(false);
+        } else if (this.root && document.activeElement === this.root) { this.makeDefault(true); }
+        this._drawPalette();
+    }
+
     setState(state, enable) {
-        if ((state & sfDisabled) !== 0) {
-            this.disabled = Boolean(enable);
-            if (this.root) { this.root.disabled = Boolean(enable); }
+        if ((state & sfDisabled) !== 0) { this._localDisabled = Boolean(enable); }
+        super.setState(state & ~sfDisabled, enable);
+        this._syncCommandState();
+        if ((state & sfFocused) !== 0) {
+            this.makeDefault(enable && viewAcceptsInput(this) && (!this.root || document.activeElement === this.root));
         }
-        return super.setState(state, enable);
+        if ((state & (sfDisabled | sfVisible)) !== 0) {
+            if (!viewAcceptsInput(this)) {
+                super.setState(sfFocused, false);
+                this.makeDefault(false);
+            } else if (this.root && document.activeElement === this.root) { this.makeDefault(true); }
+        }
+        this._drawPalette();
+        return this;
     }
 }
 
@@ -5378,11 +7185,135 @@ class TVFrame extends TVView {
         super(bounds);
         this.frameMode = 0;
         this.titleCommands = new WeakMap();
+        this._bodySections = [];
+        this._bodyBorders = true;
+    }
+
+    bindRoot(root) {
+        if (this.root?._tvFrame === this) { delete this.root._tvFrame; }
+        // The frame paints the owner's window; it must not replace its TVView.
+        this.root = root || null;
+        if (this.root) { this.root._tvFrame = this; bindCloseButtons(this.root); }
+        return this;
+    }
+
+    drawView() {
+        if (this.root) { fillBorders(this.root); }
+        return this;
+    }
+
+    _layout(cell = measureCells()) {
+        if (!this.root) { return; }
+        const width = this.root.clientWidth ? this.root.clientWidth / cell.width : this.size.x;
+        const height = this.root.clientHeight ? this.root.clientHeight / cell.height : this.size.y;
+        if (width < 2 || height < 2) { return; }
+        const place = (element, x, y, w, h) => this._placePart(element, new TVRect(x, y, x + Math.max(0, w), y + Math.max(0, h)));
+        if (this.root.classList.contains("tv-dialog-window")) { this._layoutDialog(width, height, place); }
+        else { this._layoutWindow(width, height, place); }
+    }
+
+    _layoutWindow(width, height, place) {
+        const shell = this.root.firstElementChild;
+        const [titlebar, body] = shell?.children || [];
+        const [left, client, right, bottom] = body?.children || [];
+        if (!titlebar || !left || !client || !right || !bottom) { return; }
+        place(shell, 0, 0, width, height);
+        place(titlebar, 0, 0, width, 1);
+        place(body, 0, 1, width, height - 1);
+        place(left, 0, 0, 1, height - 2);
+        place(client, 1, 0, width - 2, height - 2);
+        place(right, width - 1, 0, 1, height - 2);
+        place(bottom, 0, height - 2, width, 1);
+        const scrollShell = client.firstElementChild;
+        place(scrollShell, 0, 0, width - 2, height - 2);
+        place(scrollShell?.firstElementChild, 0, 0, width - 2, height - 2);
+
+        const [tl, gap, close, before, caption, after, zoom, lastGap, tr] = titlebar.children;
+        const titleLength = caption?.classList.contains("tv-window-caption") ? Array.from(caption.textContent).length : 0;
+        const titleWidth = titleLength ? Math.min(titleLength + 2, Math.max(0, width - 12)) : 0;
+        const titleLeft = Math.floor((width - titleWidth) / 2);
+        if (caption) { caption.hidden = !titleLength; }
+        place(tl, 0, 0, 1, 1);
+        place(gap, 1, 0, 1, 1);
+        place(close, 2, 0, 3, 1);
+        place(before, 5, 0, titleLeft - 5, 1);
+        place(caption, titleLeft, 0, titleWidth, 1);
+        this._layoutTitle(caption, titleWidth, place);
+        place(after, titleLeft + titleWidth, 0, width - 5 - titleLeft - titleWidth, 1);
+        place(zoom, width - 5, 0, 3, 1);
+        place(zoom?.querySelector(".tv-frame-passive"), 0, 0, 3, 1);
+        place(lastGap, width - 2, 0, 1, 1);
+        place(tr, width - 1, 0, 1, 1);
+
+        const parts = Array.from(bottom.children);
+        const growable = (this.owner.flags & wfGrow) !== 0;
+        const fill = parts.find((part) => part.classList.contains("tv-scrollbar-x")
+            || (part.classList.contains("tv-border-fill") && !part.classList.contains("tv-control-gap")));
+        const widths = parts.map((part, index) => index === 0 ? 1
+            : index === parts.length - 1 ? (growable ? 2 : 1)
+                : part === fill ? 0 : part._tvView?.size.x || 1);
+        let column = 0;
+        const spare = Math.max(0, width - widths.reduce((sum, value) => sum + value, 0));
+        parts.forEach((part, index) => {
+            const columns = part === fill ? spare : widths[index];
+            place(part, column, 0, columns, 1);
+            column += columns;
+        });
+    }
+
+    _layoutDialog(width, height, place) {
+        const [titlebar, body, footer] = this.root.children || [];
+        if (!titlebar || !body || !footer) { return; }
+        place(titlebar, 0, 0, width, 1);
+        place(body, 0, 1, width, height - 2);
+        place(footer, 0, height - 1, width, 1);
+        const frameRow = (row) => {
+            const [left, fill, right] = row.children;
+            place(left, 0, 0, 1, 1);
+            place(fill, 1, 0, width - 2, 1);
+            place(right, width - 1, 0, 1, 1);
+        };
+        frameRow(titlebar); frameRow(footer);
+        let rightControls = 0, close = false;
+        for (const control of titlebar.children) {
+            const command = this.titleCommand(control);
+            if (!command || control.hidden) { continue; }
+            if (command === "dialog-close") { place(control, 2, 0, 3, 1); close = true; }
+            else { place(control, width - 5 - rightControls * 4, 0, 3, 1); rightControls += 1; }
+        }
+        const title = Array.from(titlebar.children).find((element) => element.classList.contains("tv-dialog-title-text"));
+        if (title) {
+            const margin = close || rightControls ? Math.max(6, 2 + rightControls * 4) : 2;
+            const titleWidth = Math.min(this.getTitleWidth() + 2, Math.max(0, width - 2 * margin));
+            place(title, Math.floor((width - titleWidth) / 2), 0, titleWidth, 1);
+            this._layoutTitle(title, titleWidth, place);
+            title.hidden = !this.getTitleWidth();
+        }
+        if (!this._bodyBorders) { return; }
+        const parts = Array.from(body.children);
+        const clients = parts.filter((element) => element.classList.contains("tv-dialog-client"));
+        const heights = clients.map((_element, index) => clients.length > 1
+            ? Math.max(1, this._bodySections[index]?.getBounds?.().y2 || 0) : height - 2);
+        const used = heights.reduce((sum, value) => sum + value, Math.max(0, clients.length - 1));
+        if (heights.length && used < height - 2) { heights[heights.length - 1] += height - 2 - used; }
+        let top = 0, section = 0;
+        for (let index = 0; index + 2 < parts.length; index += 3) {
+            const [left, content, right] = parts.slice(index, index + 3);
+            const rows = content.classList.contains("tv-dialog-client") ? heights[section++] : 1;
+            place(left, 0, top, 1, rows);
+            place(content, 1, top, width - 2, rows);
+            place(right, width - 1, top, 1, rows);
+            top += rows;
+        }
     }
 
     bindTitleControl(button, command) {
         if (button) { this.titleCommands.set(button, command); }
         return button;
+    }
+
+    _layoutTitle(caption, width, place) {
+        place(caption?.firstElementChild, 1, 0, Math.max(0, width - 2), 1);
     }
 
     titleCommand(button) { return button ? this.titleCommands.get(button) || "" : ""; }
@@ -5396,7 +7327,9 @@ class TVFrame extends TVView {
     drawTitle() {
         const title = this.owner?.getTitle?.() || "";
         const element = this.owner?.root?.querySelector?.(".tv-dialog-title-text, .tv-window-caption");
-        if (element) { element.textContent = title; }
+        const text = element?.firstElementChild;
+        if (text && text.textContent !== title) { text.textContent = title; }
+        if (this.owner?.root) { fillBorders(this.owner.root); }
         return this;
     }
 
@@ -5475,11 +7408,31 @@ class TVFrame extends TVView {
             ...definition.attrs,
         });
         const glyphAttrString = attrsToString(definition.glyphAttrs);
-        return `<button class="${definition.classes}" ${attrString}>[<span class="${definition.glyphClass}" ${glyphAttrString}>${escapeHtml(glyph)}</span>]</button>`;
+        const passive = command === "window-zoom" ? '<span class="tv-frame-passive" aria-hidden="true" hidden>───</span>' : "";
+        return `<button class="${definition.classes}" ${attrString}>[<span class="${definition.glyphClass}" ${glyphAttrString}>${escapeHtml(glyph)}</span>]${passive}</button>`;
     }
 
     createTitleControl(command, glyph, title = "") {
         return this.bindTitleControl(TVView._fromHTML(this.drawTitleControl(command, glyph, title)), command);
+    }
+
+    _drawDialogBody(bodyMarkup, bodyBorders = true) {
+        this._bodySections = Array.isArray(bodyMarkup) ? bodyMarkup : [bodyMarkup];
+        this._bodyBorders = bodyBorders;
+        const renderBody = (value) => (
+            value instanceof TVView
+                ? value.draw()
+                : String(value ?? "")
+        );
+        const client = (value) => `<div class="tv-dialog-client">${renderBody(value)}</div>`;
+        const side = '<span class="tv-border-side" data-tv-border-side="║" aria-hidden="true"></span>';
+        if (Array.isArray(bodyMarkup)) {
+            const sep = '<span class="tv-border-corner" aria-hidden="true">╟</span>'
+                + '<span class="tv-border-fill tv-border-separator" data-tv-border-fill="─" aria-hidden="true"></span>'
+                + '<span class="tv-border-corner" aria-hidden="true">╢</span>';
+            return bodyMarkup.map(section => side + client(section) + side).join(sep);
+        }
+        return bodyBorders ? side + client(bodyMarkup) + side : renderBody(bodyMarkup);
     }
 
     drawDialog(bodyMarkup = "", footerMarkup = "", bodyBorders = true) {
@@ -5494,34 +7447,17 @@ class TVFrame extends TVView {
         const footerClasses = `tv-dialog-footer ${classPrefix}-footer`;
         const titleClasses = `tv-dialog-title-text ${classPrefix}-title`;
         const bodyClasses = `tv-dialog-body ${classPrefix}-body`;
-        const renderBody = (value) => (
-            value instanceof TVView
-                ? value.draw()
-                : String(value ?? "")
-        );
-        let bodyContent;
-        if (Array.isArray(bodyMarkup)) {
-            const side = '<span class="tv-border-side" data-tv-border-side="║" aria-hidden="true"></span>';
-            const sep = '<span class="tv-border-corner" aria-hidden="true">╟</span>'
-                + '<span class="tv-border-fill tv-border-separator" data-tv-border-fill="─" aria-hidden="true"></span>'
-                + '<span class="tv-border-corner" aria-hidden="true">╢</span>';
-            bodyContent = bodyMarkup.map(section => side + renderBody(section) + side).join(sep);
-        } else if (bodyBorders) {
-            bodyContent = '<span class="tv-border-side" data-tv-border-side="║" aria-hidden="true"></span>'
-                + `<div class="tv-dialog-client">${renderBody(bodyMarkup)}</div>`
-                + '<span class="tv-border-side" data-tv-border-side="║" aria-hidden="true"></span>';
-        } else {
-            bodyContent = renderBody(bodyMarkup);
-        }
+        const viewAttrs = attrsToString(dialog._drawAttrs());
+        const bodyContent = this._drawDialogBody(bodyMarkup, bodyBorders);
         return `
-            <div class="${overlayClasses}" hidden>
-                <div class="${windowClasses}" data-tv-palette="${escapeHtml(palette)}" role="dialog" aria-modal="${modal ? "true" : "false"}" aria-label="${escapeHtml(dialog?.title || "")}">
+            <div class="${overlayClasses}" ${viewAttrs} hidden>
+                <div class="${windowClasses}" style="${escapeHtml(dialog?._framePaletteStyle?.("dialog") || "")}" data-tv-palette="${escapeHtml(palette)}" role="dialog" aria-modal="${modal ? "true" : "false"}" aria-label="${escapeHtml(dialog?.title || "")}">
                     <div class="${titlebarClasses}">
                         <span class="tv-border-corner" aria-hidden="true">╔</span>
                         <span class="tv-border-fill" data-tv-border-fill="═" aria-hidden="true"></span>
                         <span class="tv-border-corner" aria-hidden="true">╗</span>
                         ${this.drawTitleControl("dialog-close", "■", `Close ${dialog?.title || "dialog"}`)}
-                        <div class="${titleClasses}">${escapeHtml(dialog?.title || "")}</div>
+                        <div class="${titleClasses}"><span class="tv-frame-title">${escapeHtml(dialog?.title || "")}</span></div>
                     </div>
                     <div class="${bodyClasses}">${bodyContent}</div>
                     <div class="${footerClasses}">${footerMarkup}</div>
@@ -5546,14 +7482,24 @@ class TVWindow extends TVGroup {
         this.zoomRect = bounds.copy();
         this.maxiRect = bounds.copy();
         this.minSize = new TVPoint(16, 6);
-        this.palette = new.target.palette || 0;
+        this.palette = new.target.palette || "help";
         this.frame = this.initFrame();
         this.scrollbars = [];
         this.editor = null;
         this.findEditor = null;
         this.closeAction = null;
         this.zoomAction = null;
+        this.manager = null;
+        this.managerName = "";
         this.onWindowControlClick = (event) => this.dispatchWindowControl(event);
+        this.onWindowKeyDown = nativeEvent => {
+            if (nativeEvent.key !== "Tab" || nativeEvent.defaultPrevented
+                || nativeEvent.altKey || nativeEvent.ctrlKey || nativeEvent.metaKey) { return; }
+            const source = TVView._fromElement(nativeEvent.target) || this;
+            for (let view = source; view; view = view.owner) {
+                if (view === this) { source.dispatchEvent(new TVEvent(evKeyDown, { infoPtr: source, nativeEvent })); return; }
+            }
+        };
         this.onWindowTitleDoubleClick = (event) => {
             const titlebar = this.root.querySelector(".tv-border-top");
             if ((this.flags & wfZoom) === 0 || event.target.closest?.("button, a")
@@ -5568,18 +7514,38 @@ class TVWindow extends TVGroup {
     }
 
     bindRoot(root) {
+        this.root?.removeEventListener("keydown", this.onWindowKeyDown);
         if (this.root?.matches?.("[data-tv-window]")) {
             this.root.removeEventListener("click", this.onWindowControlClick);
             this.root.removeEventListener("dblclick", this.onWindowTitleDoubleClick);
+            this.frame.bindRoot(null);
+        }
+        if (root?.matches?.("[data-tv-window]") && !this.size.x && !this.size.y) {
+            const size = JSON.parse(root.getAttribute("data-tv-window") || "null");
+            if (Array.isArray(size) && size.length === 4 && size.every(value => Number.isSafeInteger(value) && value > 0)) {
+                this.setBounds(new TVRect(0, 0, size[0], size[1]));
+                this.minSize = new TVPoint(size[2], size[3]);
+            }
         }
         super.bindRoot(root);
+        this.root?.addEventListener("keydown", this.onWindowKeyDown);
         if (this.root?.matches?.("[data-tv-window]")) {
+            this.root.tabIndex = -1;
+            const defaults = new Map(this._framePaletteStyle().split(";").filter(Boolean).map(declaration => {
+                const colon = declaration.indexOf(":");
+                return [declaration.slice(0, colon), declaration.slice(colon + 1)];
+            }));
+            for (const [name, value] of defaults) {
+                if (!this.root.style.getPropertyValue(name)) { this.root.style.setProperty(name, value); }
+            }
             this.closeControl = this.root.querySelector(".tv-close-control");
             this.zoomControl = this.root.querySelector(".tv-zoom-control");
             this.frame.bindTitleControl(this.closeControl, "window-close");
             this.frame.bindTitleControl(this.zoomControl, "window-zoom");
+            this.frame.bindRoot(this.root);
             this.root.addEventListener("click", this.onWindowControlClick);
             this.root.addEventListener("dblclick", this.onWindowTitleDoubleClick);
+            this._drawBounds();
         } else {
             this.closeControl = null;
             this.zoomControl = null;
@@ -5599,10 +7565,23 @@ class TVWindow extends TVGroup {
 
     handleEvent(event) {
         super.handleEvent(event);
+        const native = event.nativeEvent;
+        if (event.what === evKeyDown && native?.key === "Tab" && native.type !== "keyup"
+            && !native.defaultPrevented && !native.altKey && !native.ctrlKey && !native.metaKey
+            && viewAcceptsInput(this) && (!this.manager || this.getState(sfActive))
+            && (!(this instanceof TVDialog) || this.keyboard)
+            && !TVView._fromElement(native.target)?.capturesKey?.(native)) {
+            native.preventDefault(); native.stopPropagation();
+            if (!this.focusNext(!native.shiftKey)) { this.focus(); }
+            this.clearEvent(event);
+            return;
+        }
         if (event.what !== evCommand) { return; }
         if (event.command === "window-close") {
-            if (typeof this.closeAction === "function") { this.closeAction(); }
-            else { this.close(); }
+            if ((this.flags & wfClose) !== 0) {
+                if (typeof this.closeAction === "function") { this.closeAction(); }
+                else { this.close(); }
+            }
             this.clearEvent(event);
         } else if (event.command === "window-zoom") {
             if (typeof this.zoomAction === "function") { this.zoomAction(); }
@@ -5620,11 +7599,42 @@ class TVWindow extends TVGroup {
         return frame;
     }
 
+    _focusTarget() { return this.dialog || this.root; }
+
     getTitle(maxSize = Number.MAX_SAFE_INTEGER) {
         return Array.from(this.title).slice(0, Math.max(0, Number(maxSize) || 0)).join("");
     }
 
     getPalette() { return this.palette; }
+
+    _framePaletteStyle(fallback = "help") {
+        const indexes = WINDOW_PALETTE_INDEXES[this.getPalette()] || WINDOW_PALETTE_INDEXES[fallback];
+        const names = ["frame-passive", "frame-active", "frame-icons", "scroll-page", "scroll-controls", "content"];
+        return paletteStyle(Object.fromEntries(names.map((name, index) => [`owner-${name}`, indexes[index]])))
+            + (this.getPalette() === "editor" ? `;--tv-owner-content-bg:${dosColor(EDITOR_COLOR_ATTRIBUTE, 4)};--tv-owner-content-fg:${dosColor(EDITOR_COLOR_ATTRIBUTE, 0)}` : "")
+            + (this.getPalette() === "dos" ? ";--tv-owner-content-bg:#000000;--tv-owner-content-fg:#aaaaaa"
+                + ";--tv-owner-frame-active-bg:#000000;--tv-owner-frame-passive-bg:#000000;--tv-owner-frame-icons-bg:#000000" : "");
+    }
+
+    _drawBounds() {
+        this.frame?.setBounds(this.getExtent());
+        if (!this.root) { return; }
+        const cell = measureCells(), desktop = this.root.closest(".tv-desktop")?.getBoundingClientRect();
+        const maximized = this.root.classList.contains("is-maximized");
+        const width = desktop ? Math.min(this.size.x * cell.width, desktop.width) : this.size.x * cell.width;
+        const height = desktop ? Math.min(this.size.y * cell.height, desktop.height) : this.size.y * cell.height;
+        const drawing = {
+            left: `${maximized ? 0 : this.origin.x * cell.width}px`,
+            top: `${maximized ? 0 : this.origin.y * cell.height}px`,
+            width: `${maximized && desktop ? desktop.width : width}px`,
+            height: `${maximized && desktop ? desktop.height : height}px`,
+        };
+        const resized = this.root.style.width !== drawing.width || this.root.style.height !== drawing.height;
+        for (const [name, value] of Object.entries(drawing)) {
+            if (this.root.style[name] !== value) { this.root.style[name] = value; }
+        }
+        if (resized) { fillBorders(this.root); }
+    }
 
     standardScrollBar(options = 0) {
         const vertical = (options & sbVertical) !== 0;
@@ -5637,11 +7647,36 @@ class TVWindow extends TVGroup {
         return scrollBar;
     }
 
+    setManager(manager, name) {
+        this.manager = manager;
+        this.managerName = name;
+    }
+
+    setState(state, enable) {
+        const visibility = (state & sfVisible) !== 0;
+        const wasExposed = visibility && this.exposed();
+        super.setState(state, enable);
+        if (visibility && wasExposed !== this.exposed()
+            && this.manager?.windows.get(this.managerName) === this.root) {
+            if (this.exposed()) { this.manager._insertTarget(this.managerName, false); }
+            else { this.manager._removeTarget(this.managerName, true); }
+        }
+        return this;
+    }
+
     close() { this.hide(); }
 
     zoom() {
         if (this.root?._tvResizer) { this.root._tvResizer.toggle(); }
-        else { this.root?.classList.toggle("is-maximized"); }
+        else if (this.root) {
+            const maximized = this.root.classList.toggle("is-maximized");
+            if (maximized) {
+                this.zoomRect = this.getBounds();
+                const cell = measureCells(), desktop = this.root.closest(".tv-desktop");
+                this.locate(desktop ? new TVRect(0, 0, Math.floor(desktop.clientWidth / cell.width), Math.floor(desktop.clientHeight / cell.height)) : this.getBounds());
+            } else { this.locate(this.zoomRect.copy()); }
+            if (this.zoomControl) { this.zoomControl.querySelector("[data-tv-zoom-glyph]").textContent = maximized ? "↓" : "↑"; }
+        }
         return this;
     }
 
@@ -5660,10 +7695,10 @@ class TVWindow extends TVGroup {
     hasScrollBars() { return true; }
 
     draw(contentMarkup = this.renderChildren()) {
-        const limits = this.sizeLimits();
         const semanticName = this._semanticName();
         const windowAttrs = attrsToString(this._drawAttrs({
             "data-tv-window": true,
+            "data-tv-palette": this.getPalette() || "help",
             ...(semanticName ? { [`data-tv-${semanticName}`]: true } : {}),
             hidden: !this.getState(sfVisible),
         }));
@@ -5681,9 +7716,7 @@ class TVWindow extends TVGroup {
             ? this.frame.drawTitleControl("window-zoom", "↑", "Zoom window")
             : framePlaceholder;
         const title = this.getTitle();
-        const titleMarkup = title
-            ? `<div class="tv-window-caption">${escapeHtml(title)}</div>`
-            : '<span class="tv-border-fill tv-window-caption-fill" data-tv-border-fill="═" aria-hidden="true"></span>';
+        const titleMarkup = `<div class="tv-window-caption"><span class="tv-frame-title">${escapeHtml(title)}</span></div>`;
         const rightFrame = growable && this.hasScrollBars()
             ? new TVScrollBar(new TVRect(), sbVertical).draw()
             : '<span class="tv-border-side tv-border-side-right" data-tv-border-side="║" aria-hidden="true"></span>';
@@ -5701,10 +7734,8 @@ class TVWindow extends TVGroup {
                 '<span class="tv-scroll-corner tv-scroll-corner-right" data-tv-frame-corner="br" aria-hidden="true">╝</span>',
             ].join("");
         const style = [
-            this.size.x ? `--tv-window-cols:${this.size.x}` : "",
-            this.size.y ? `--tv-window-rows:${this.size.y}` : "",
-            limits.min.x ? `--tv-window-min-cols:${limits.min.x}` : "",
-            limits.min.y ? `--tv-window-min-rows:${limits.min.y}` : "",
+            this.getPalette() ? this._framePaletteStyle() : "",
+            TVView._viewBoundsStyle(this),
         ].filter(Boolean).join(";");
         const styleAttr = style ? ` style="${escapeHtml(style)}"` : "";
         return [
@@ -5756,6 +7787,7 @@ class TVDialog extends TVWindow {
         super(bounds, title);
         this.flags = wfMove | wfClose;
         this.growMode = 0;
+        this.options |= ofCentered;
         const root = TVView._fromHTML(this.frame.drawDialog("", TVDialog.footerMarkup()));
         this.bindRoot(root);
         this.setHelpCtx(hcDialog);
@@ -5766,12 +7798,10 @@ class TVDialog extends TVWindow {
         this.titlebar = this._query(".tv-dialog-titlebar");
         this.closeButton = this._query(".tv-dialog-close-control");
         this.frame.bindTitleControl(this.closeButton, "dialog-close");
-        if (bounds.width) this.dialog.style.setProperty("--tv-dialog-width", `${bounds.width}ch`);
-        if (bounds.height) this.dialog.style.setProperty("--tv-dialog-height", `${bounds.height}em`);
-        this.hasPosition = false;
+        this.frame.bindRoot(this.dialog);
+        this._drawBounds();
         this.dragState = null;
-        this.manager = null;
-        this.managerName = "";
+        this.dragFrame = null;
         this.modal = false;
         this.keyboard = true;
         this.escapeCloses = true;
@@ -5779,7 +7809,6 @@ class TVDialog extends TVWindow {
         this.destroyed = false;
         this.closeAction = () => this.close();
         this.dialog.tabIndex = -1;
-        bindCloseButtons(this.overlay);
         this.dialog.addEventListener("click", (event) => this.dispatchDomEvent(evMouseDown, event));
         this.dialog.addEventListener("contextmenu", (event) => this.dispatchDomEvent(evMouseDown, event));
         this.dialog.addEventListener("input", (event) => this.dispatchDomEvent(evBroadcast, event));
@@ -5789,6 +7818,18 @@ class TVDialog extends TVWindow {
             this.onDialogKeyDown(event);
         });
         this.dialog.addEventListener("keyup", (event) => this.onDialogKeyUp(event));
+        this.onViewportResize = () => {
+            if (!this.isOpen()) { return; }
+            if (this.dragState) { this.onDragEnd(); }
+            if ((this.options & ofCentered) !== 0) { this.center(); }
+            else {
+                this._drawBounds();
+                const area = this._visibleArea(), rect = this.dialog.getBoundingClientRect(), cell = measureCells();
+                this.moveTo(Math.max(0, Math.min(this.origin.x * cell.width, area.width - rect.width)) / cell.width,
+                    Math.max(0, Math.min(this.origin.y * cell.height, area.height - rect.height)) / cell.height);
+            }
+            fillBorders(this.dialog);
+        };
     }
 
     handleEvent(event) {
@@ -5817,7 +7858,7 @@ class TVDialog extends TVWindow {
     }
 
     draw() {
-        const content = this.children.map((view) => view.draw()).join("");
+        const content = this.children.length > 1 ? this.children : this.children[0] || "";
         return this.frame.drawDialog(content, TVDialog.footerMarkup());
     }
 
@@ -5825,31 +7866,42 @@ class TVDialog extends TVWindow {
         const body = this._query(".tv-dialog-body");
         if (!body) { return; }
         if (this.closeButton) { this.closeButton.hidden = (this.flags & wfClose) === 0; }
-        const render = (view) => view?.draw?.() || "";
-        const side = '<span class="tv-border-side" data-tv-border-side="║" aria-hidden="true"></span>';
-        if (this.children.length <= 1) {
-            body.innerHTML = side
-                + `<div class="tv-dialog-client">${this.children[0] ? render(this.children[0]) : ""}</div>`
-                + side;
-        } else {
-            const separator = '<span class="tv-border-corner" aria-hidden="true">╟</span>'
-                + '<span class="tv-border-fill tv-border-separator" data-tv-border-fill="─" aria-hidden="true"></span>'
-                + '<span class="tv-border-corner" aria-hidden="true">╢</span>';
-            body.innerHTML = this.children.map((view) => side + render(view) + side).join(separator);
-        }
+        body.innerHTML = this.frame._drawDialogBody(this.children.length > 1 ? this.children : this.children[0] || "");
         this.children.forEach((view) => view.resolve?.(body));
+        this.frame._layout();
         if (this.isOpen()) {
             updateWindowFrameState(this.dialog, this.isActive(), { dialog: true });
         }
     }
 
+    changeBounds(bounds) {
+        if (bounds instanceof TVRect && (bounds.x1 !== this.origin.x || bounds.y1 !== this.origin.y)) {
+            this.options &= ~ofCentered;
+        }
+        super.changeBounds(bounds);
+        fillBorders(this.dialog);
+        return this;
+    }
+
     setState(state, enable) {
-        super.setState(state, enable);
+        const wasModal = this.modal;
+        super.setState(state & ~sfVisible, enable);
         if ((state & sfModal) !== 0) {
             this.modal = Boolean(enable);
             this.overlay?.classList.toggle("is-modal", this.modal);
             this.dialog?.setAttribute("aria-modal", this.modal ? "true" : "false");
         }
+        const visibilityChanged = (state & sfVisible) !== 0
+            && (Boolean(enable) !== this.getState(sfVisible) || Boolean(enable) !== this.isOpen());
+        if (visibilityChanged) {
+            if (this.owner instanceof TVGroup && this.overlay?.isConnected) {
+                if (enable) { TVDialog.prototype.open.call(this, false); }
+                else { TVDialog.prototype.close.call(this); }
+            } else {
+                super.setState(sfVisible, enable);
+            }
+        }
+        if (wasModal !== this.modal && !visibilityChanged && this.isOpen()) { this.manager?.onChange?.(); }
         return this;
     }
 
@@ -5865,15 +7917,19 @@ class TVDialog extends TVWindow {
 
     dispatchDomEvent(what, nativeEvent) {
         const target = TVView._fromElement(nativeEvent.target) || this;
+        if (target instanceof TVCluster) { return; }
+        // A bound control translates its native click before it reaches the
+        // dialog, so the same owner chain must not receive it a second time.
+        if (nativeEvent.type === "click") {
+            for (let control = target; control && control !== this; control = control.owner) {
+                if (control instanceof TVButton || (control instanceof TVListViewer
+                    && control.boundItemsRoot?.contains(nativeEvent.target))) { return; }
+            }
+        }
         return target.dispatchEvent(new TVEvent(what, {
             infoPtr: target,
             nativeEvent,
         }));
-    }
-
-    setManager(manager, name) {
-        this.manager = manager;
-        this.managerName = name;
     }
 
     isOpen() {
@@ -5887,7 +7943,7 @@ class TVDialog extends TVWindow {
         return this.isOpen() && this.manager.activeTarget === this.managerName;
     }
 
-    open() {
+    open(activate = true) {
         if (this.destroyed) {
             return;
         }
@@ -5903,29 +7959,38 @@ class TVDialog extends TVWindow {
                 ? document.activeElement
                 : null;
         }
-        this.overlay.hidden = false;
-        if (!this.hasPosition) {
+        super.setState(sfVisible, true);
+        this._drawBounds();
+        if ((this.options & ofCentered) !== 0) {
             this.center();
         }
-        fillBorders();
+        window.addEventListener("resize", this.onViewportResize, { passive: true });
+        fillBorders(this.dialog);
         if (this.manager && this.managerName) {
-            this.manager.onDialogOpened(this.managerName);
+            this.manager.onDialogOpened(this.managerName, activate);
         }
-        try {
-            this.dialog.focus({ preventScroll: true });
-        } catch {
-            this.dialog.focus();
+        if (activate && this.isActive() && !this.dialog.contains(document.activeElement)) {
+            try {
+                this.dialog.focus({ preventScroll: true });
+            } catch {
+                this.dialog.focus();
+            }
         }
     }
 
     close() {
-        const restoreFocus = this.previousFocus;
+        const wasActive = this.isActive();
+        if (this.dragState) { this.onDragEnd(); }
+        const restoreFocus = this.previousFocus, manager = this.manager, name = this.managerName;
         this.previousFocus = null;
-        this.overlay.hidden = true;
-        if (this.manager && this.managerName) {
-            this.manager.onDialogClosed(this.managerName);
+        super.setState(sfVisible, false);
+        window.removeEventListener("resize", this.onViewportResize);
+        if (manager && name) {
+            manager._removeTarget(name);
+            if (wasActive) { manager._focusTarget(manager.activeTarget, restoreFocus); }
+            return;
         }
-        if (restoreFocus && restoreFocus.isConnected && typeof restoreFocus.focus === "function") {
+        if (wasActive && restoreFocus?.isConnected && typeof restoreFocus.focus === "function") {
             try {
                 restoreFocus.focus({ preventScroll: true });
             } catch {
@@ -5941,8 +8006,10 @@ class TVDialog extends TVWindow {
         if (this.isOpen()) {
             this.close();
         }
-        document.removeEventListener("mousemove", this.onDragMove);
-        document.removeEventListener("mouseup", this.onDragEnd);
+        document.removeEventListener("mousemove", this.onDragMove, true);
+        document.removeEventListener("mouseup", this.onDragEnd, true);
+        window.removeEventListener("blur", this.onDragEnd);
+        if (this.dragFrame !== null) { window.cancelAnimationFrame(this.dragFrame); this.dragFrame = null; }
         this.dragState = null;
         if (this.manager && this.managerName) {
             this.manager.unregister(this.managerName, this);
@@ -5952,23 +8019,10 @@ class TVDialog extends TVWindow {
         this.owner?.remove?.(this);
         this.previousFocus = null;
         this.destroyed = true;
+        window.removeEventListener("resize", this.onViewportResize);
+        this.frame.bindRoot(null);
+        this.bindRoot(null);
         this.overlay.remove();
-    }
-
-    focusableElements() {
-        const selector = [
-            "a[href]",
-            "button:not([disabled])",
-            "input:not([disabled])",
-            "select:not([disabled])",
-            "textarea:not([disabled])",
-            '[tabindex]:not([tabindex="-1"])',
-        ].join(",");
-        return Array.from(this.dialog.querySelectorAll(selector)).filter((element) => (
-            !element.hidden
-            && !element.closest("[hidden]")
-            && element.getAttribute("aria-hidden") !== "true"
-        ));
     }
 
     onDialogKeyDown(event) {
@@ -5989,31 +8043,19 @@ class TVDialog extends TVWindow {
             && !event.ctrlKey
             && !event.metaKey
             && !event.shiftKey
-            && !(event.target && event.target.closest("button, a, textarea, [contenteditable='true']"))
+            && !(event.target && (event.target.isContentEditable || event.target.closest("button, a, textarea")))
         ) {
             const defaultButton = this.firstThat((view) => (
                 view instanceof TVButton
-                && (view.flags & bfDefault) !== 0
+                && view.amDefault
+                && view.root?.isConnected
                 && !view.disabled
-                && !view.hidden
+                && viewAcceptsInput(view)
             ));
             if (defaultButton?.root && !defaultButton.root.disabled) {
                 event.preventDefault();
                 event.stopPropagation();
                 defaultButton.press(event);
-                return;
-            }
-        }
-        if (event.key === "Tab") {
-            const focusable = this.focusableElements();
-            if (focusable.length) {
-                event.preventDefault();
-                event.stopPropagation();
-                const current = focusable.indexOf(document.activeElement);
-                const next = event.shiftKey
-                    ? (current <= 0 ? focusable.length - 1 : current - 1)
-                    : (current < 0 || current === focusable.length - 1 ? 0 : current + 1);
-                focusable[next].focus();
                 return;
             }
         }
@@ -6024,27 +8066,39 @@ class TVDialog extends TVWindow {
 
     onDialogKeyUp(_event) {}
 
-    center() {
-        const width = this.dialog.offsetWidth;
-        const height = this.dialog.offsetHeight;
-        const rect = this.overlay.getBoundingClientRect?.();
-        const visibleWidth = Math.min(this.overlay.clientWidth, (window.innerWidth || this.overlay.clientWidth) - (rect?.left || 0));
-        const visibleHeight = Math.min(this.overlay.clientHeight, (window.innerHeight || this.overlay.clientHeight) - (rect?.top || 0));
-        const left = Math.max(0, Math.floor((visibleWidth - width) / 2));
-        const top = Math.max(0, Math.floor((visibleHeight - height) / 2));
-        this.dialog.style.setProperty("--tv-dialog-left", `${left}px`);
-        this.dialog.style.setProperty("--tv-dialog-top", `${top}px`);
+    _visibleArea() {
+        const rect = this.overlay.getBoundingClientRect();
+        return {
+            width: Math.max(0, Math.min(rect.width, (window.innerWidth || rect.width) - rect.left)),
+            height: Math.max(0, Math.min(rect.height, (window.innerHeight || rect.height) - rect.top)),
+        };
     }
 
-    changeBounds(bounds) {
-        if (!(bounds instanceof TVRect)) {
-            throw new TypeError("TVDialog.changeBounds expects TVRect");
+    center() {
+        this._drawBounds();
+        const area = this._visibleArea(), rect = this.dialog.getBoundingClientRect(), cell = measureCells();
+        const centered = this.options & ofCentered;
+        const axes = centered || ofCentered;
+        this.moveTo((axes & ofCenterX) !== 0 ? Math.max(0, Math.floor((area.width - rect.width) / 2)) / cell.width : this.origin.x,
+            (axes & ofCenterY) !== 0 ? Math.max(0, Math.floor((area.height - rect.height) / 2)) / cell.height : this.origin.y);
+        this.options = (this.options & ~ofCentered) | centered;
+    }
+
+    moveTo(x, y) {
+        this.options &= ~ofCentered;
+        return super.moveTo(x, y);
+    }
+
+    _drawBounds() {
+        this.frame.setBounds(this.getExtent());
+        if (!this.dialog) { return; }
+        const cell = measureCells(), area = this._visibleArea();
+        const width = area.width ? Math.min(this.size.x * cell.width, Math.max(0, area.width - 2 * cell.width)) : this.size.x * cell.width;
+        const height = area.height ? Math.min(this.size.y * cell.height, area.height) : this.size.y * cell.height;
+        for (const [name, value] of Object.entries({ left: `${this.origin.x * cell.width}px`, top: `${this.origin.y * cell.height}px`,
+            width: `${width}px`, height: `${height}px` })) {
+            if (this.dialog.style[name] !== value) { this.dialog.style[name] = value; }
         }
-        this.setBounds(bounds);
-        this.dialog.style.setProperty("--tv-dialog-width", `${bounds.width}ch`);
-        this.dialog.style.setProperty("--tv-dialog-height", `${bounds.height}em`);
-        fillBorders(this.dialog);
-        return this;
     }
 
     bindCommonClose(onClose = () => this.close()) {
@@ -6059,45 +8113,70 @@ class TVDialog extends TVWindow {
     }
 
     startDrag(event) {
-        if ((this.flags & wfMove) === 0) { return; }
+        if ((this.flags & wfMove) === 0 || event.button > 0 || this.dragState) { return; }
         if (event.target.closest("button, input, a")) {
             return;
         }
         event.preventDefault();
-        const style = getComputedStyle(this.dialog);
+        const rect = this.dialog.getBoundingClientRect(), area = this._visibleArea();
         this.dragState = {
             startX: event.clientX,
             startY: event.clientY,
-            startLeft: Number.parseFloat(style.getPropertyValue("--tv-dialog-left")) || this.dialog.offsetLeft,
-            startTop: Number.parseFloat(style.getPropertyValue("--tv-dialog-top")) || this.dialog.offsetTop,
+            startLeft: this.origin.x * measureCells().width,
+            startTop: this.origin.y * measureCells().height,
+            maxLeft: Math.max(0, area.width - rect.width),
+            maxTop: Math.max(0, area.height - rect.height),
+            cell: measureCells(), size: this.size.copy(),
+            transform: this.dialog.style.transform || "",
         };
         this.dialog.classList.add("is-dragging");
         updateWindowFrameState(this.dialog, true, { dialog: true });
-        document.addEventListener("mousemove", this.onDragMove);
-        document.addEventListener("mouseup", this.onDragEnd);
+        document.addEventListener("mousemove", this.onDragMove, true);
+        document.addEventListener("mouseup", this.onDragEnd, true);
+        window.addEventListener("blur", this.onDragEnd);
     }
 
     onDragMove = (event) => {
-        if (!this.dragState) {
-            return;
-        }
-        const rawLeft = this.dragState.startLeft + (event.clientX - this.dragState.startX);
-        const rawTop = this.dragState.startTop + (event.clientY - this.dragState.startY);
-        const maxLeft = Math.max(0, this.overlay.clientWidth - this.dialog.offsetWidth);
-        const maxTop = Math.max(0, this.overlay.clientHeight - this.dialog.offsetHeight);
-        const nextLeft = Math.min(Math.max(rawLeft, 0), maxLeft);
-        const nextTop = Math.min(Math.max(rawTop, 0), maxTop);
-        this.dialog.style.setProperty("--tv-dialog-left", `${nextLeft}px`);
-        this.dialog.style.setProperty("--tv-dialog-top", `${nextTop}px`);
-        this.hasPosition = true;
+        if (!this.dragState) { return; }
+        event.preventDefault?.(); event.stopPropagation?.();
+        if (event.buttons === 0) { this.onDragEnd(event); return; }
+        this._updateDragPosition(event);
+        if (this.dragFrame === null) { this.dragFrame = window.requestAnimationFrame(this._applyDragPosition); }
     };
 
-    onDragEnd = () => {
+    _updateDragPosition(event) {
+        const rawLeft = this.dragState.startLeft + (event.clientX - this.dragState.startX);
+        const rawTop = this.dragState.startTop + (event.clientY - this.dragState.startY);
+        this.dragState.nextLeft = Math.min(Math.max(rawLeft, 0), this.dragState.maxLeft);
+        this.dragState.nextTop = Math.min(Math.max(rawTop, 0), this.dragState.maxTop);
+    }
+
+    _applyDragPosition = () => {
+        this.dragFrame = null;
+        const state = this.dragState;
+        if (!state || state.nextLeft === undefined) { return; }
+        const offset = `translate3d(${state.nextLeft - state.startLeft}px, ${state.nextTop - state.startTop}px, 0)`;
+        const x = state.nextLeft / state.cell.width, y = state.nextTop / state.cell.height;
+        this.setBounds(new TVRect(x, y, x + state.size.x, y + state.size.y));
+        this.dialog.style.transform = state.transform ? `${offset} ${state.transform}` : offset;
+    };
+
+    onDragEnd = (event) => {
+        if (!this.dragState) { return; }
+        event?.preventDefault?.(); event?.stopPropagation?.();
+        if (Number.isFinite(event?.clientX) && Number.isFinite(event?.clientY)) { this._updateDragPosition(event); }
+        if (this.dragFrame !== null) { window.cancelAnimationFrame(this.dragFrame); this.dragFrame = null; }
+        const state = this.dragState;
+        this.dialog.style.transform = state.transform;
+        if (state.nextLeft !== undefined) {
+            this.moveTo(state.nextLeft / state.cell.width, state.nextTop / state.cell.height);
+        }
         this.dragState = null;
         this.dialog.classList.remove("is-dragging");
         updateWindowFrameState(this.dialog, this.isActive(), { dialog: true });
-        document.removeEventListener("mousemove", this.onDragMove);
-        document.removeEventListener("mouseup", this.onDragEnd);
+        document.removeEventListener("mousemove", this.onDragMove, true);
+        document.removeEventListener("mouseup", this.onDragEnd, true);
+        window.removeEventListener("blur", this.onDragEnd);
         if (this.manager && this.manager.onChange) {
             this.manager.onChange();
         }
@@ -6113,14 +8192,102 @@ class TVDialogManager {
         this.root = desktop.root;
         this.dialogs = new Map();
         this.windows = new Map();
-        this.managedWindows = new WeakSet();
-        this.managedDialogs = new WeakSet();
+        this.managedWindows = new WeakMap();
+        this.managedDialogs = new WeakMap();
         this.windowCommands = new Map();
         this.stackOrder = [];
         this.baseZIndex = 10;
         this.hostWindow = this.root?.querySelector("[data-tv-window]") || null;
         this.activeTarget = HOST_WINDOW_TOKEN;
+        this.selectionVersion = 0;
         this.onChange = null;
+        this.activationPress = null;
+        this.activationReleaseTimer = null;
+        this.onMouseDown = nativeEvent => this.handleEvent(new TVEvent(evMouseDown, { nativeEvent }));
+        this.onActivationClick = nativeEvent => {
+            if (!this.activationPress?.contains(nativeEvent.target)) { return; }
+            nativeEvent.preventDefault(); nativeEvent.stopImmediatePropagation();
+            if (nativeEvent.type !== "contextmenu") { this._clearActivationPress(); }
+        };
+        this.onActivationMove = nativeEvent => {
+            nativeEvent.preventDefault(); nativeEvent.stopImmediatePropagation();
+        };
+        this.onActivationRelease = nativeEvent => {
+            this.onActivationMove(nativeEvent);
+            // Native click follows mouseup before this timer may release the gate.
+            this.activationReleaseTimer = window.setTimeout(() => this._clearActivationPress(), 0);
+        };
+        this.onActivationBlur = () => this._clearActivationPress();
+        this.root?.addEventListener?.("mousedown", this.onMouseDown, true);
+        for (const type of ["click", "dblclick", "contextmenu"]) {
+            this.root?.addEventListener?.(type, this.onActivationClick, true);
+        }
+    }
+
+    _mouseTarget(nativeEvent) {
+        for (let element = nativeEvent.target; element; element = element.parentElement) {
+            const dialogName = this.managedDialogs.get(element)?.name, dialog = this.dialogs.get(dialogName);
+            if (dialog?.overlay === element && dialog.isOpen() && dialog.dialog.contains(nativeEvent.target)) {
+                return { name: dialogName, root: dialog.dialog, view: dialog };
+            }
+            const windowName = this.managedWindows.get(element)?.name;
+            if (this.windows.get(windowName) === element && this.isOpen(windowName)) {
+                return { name: windowName, root: element, view: TVView._fromElement(element) };
+            }
+            if (element === this.hostWindow) {
+                return { name: HOST_WINDOW_TOKEN, root: element, view: TVView._fromElement(element) };
+            }
+            if (element === this.root) { break; }
+        }
+        return null;
+    }
+
+    handleEvent(event) {
+        if (event.what !== evMouseDown || !event.nativeEvent) { return; }
+        this._clearActivationPress();
+        const native = event.nativeEvent, target = this._mouseTarget(native);
+        if (!target) { return; }
+        event.infoPtr = target.view;
+        const modal = this.get(this.activeTarget);
+        const blocked = (modal?.isOpen() && modal.getState(sfModal) && this.activeTarget !== target.name)
+            || (target.view && !viewAcceptsInput(target.view));
+        const selecting = this.activeTarget !== target.name;
+        const selectable = !target.view || (target.view.options & ofSelectable) !== 0;
+        const firstClick = (target.view?.options & ofFirstClick) !== 0;
+        if (!blocked && selecting && selectable) {
+            this.desktop.owner?.menuBar?.closeMenus({ restoreFocus: false });
+            if (target.name === HOST_WINDOW_TOKEN) { this.activateHostWindow(); }
+            else if (this.dialogs.has(target.name)) { this.bringToFront(target.name); }
+            else { this.activateWindow(target.name); }
+        }
+        const current = this._mouseTarget(native);
+        if (blocked || (selecting && (!selectable || !firstClick)) || this.activeTarget !== target.name
+            || current?.name !== target.name || current.root !== target.root
+            || !target.root.isConnected || target.root.hidden) {
+            this.activationPress = target.root;
+            native.preventDefault(); native.stopImmediatePropagation();
+            this.desktop.clearEvent(event);
+            document.addEventListener("mousemove", this.onActivationMove, true);
+            document.addEventListener("mouseup", this.onActivationRelease, true);
+            window.addEventListener("blur", this.onActivationBlur);
+        }
+    }
+
+    _clearActivationPress() {
+        if (this.activationReleaseTimer !== null) { window.clearTimeout(this.activationReleaseTimer); }
+        this.activationReleaseTimer = null;
+        this.activationPress = null;
+        document.removeEventListener("mousemove", this.onActivationMove, true);
+        document.removeEventListener("mouseup", this.onActivationRelease, true);
+        window.removeEventListener("blur", this.onActivationBlur);
+    }
+
+    destroy() {
+        this._clearActivationPress();
+        this.root?.removeEventListener?.("mousedown", this.onMouseDown, true);
+        for (const type of ["click", "dblclick", "contextmenu"]) {
+            this.root?.removeEventListener?.(type, this.onActivationClick, true);
+        }
     }
 
     setHostWindow(element, commands = {}) {
@@ -6130,45 +8297,99 @@ class TVDialogManager {
     }
 
     activateHostWindow() {
-        this.activeTarget = HOST_WINDOW_TOKEN;
-        this.applyAllZIndices();
-        this.applyActiveStates();
-        if (this.onChange) { this.onChange(); }
+        this._selectTarget(HOST_WINDOW_TOKEN);
     }
 
-    registerWindow(name, element, commands = {}) {
+    registerWindow(name, element, commands = {}, activate = true) {
         this.windows.set(name, element);
         this.windowCommands.set(name, { ...commands });
-        if (!this.managedWindows.has(element)) {
-            this.managedWindows.add(element);
-            element.addEventListener("mousedown", () => {
-                this.activateWindow(name);
-            });
-        }
-        this.activateWindow(name);
+        const view = TVView._fromElement(element);
+        if (view instanceof TVWindow && view.root === element) { view.setManager(this, name); }
+        this.managedWindows.set(element, { name });
+        this._insertTarget(name, activate);
     }
 
     unregisterWindow(name) {
+        const view = TVView._fromElement(this.windows.get(name));
+        if (view instanceof TVWindow && view.manager === this && view.managerName === name) { view.setManager(null, ""); }
         this.windows.delete(name);
         this.windowCommands.delete(name);
-        this.stackOrder = this.stackOrder.filter(n => n !== name);
-        if (this.activeTarget === name) {
-            this.activeTarget = this.stackOrder.length
-                ? this.stackOrder[this.stackOrder.length - 1]
-                : HOST_WINDOW_TOKEN;
-        }
-        this.applyAllZIndices();
-        this.applyActiveStates();
-        if (this.onChange) { this.onChange(); }
+        this._removeTarget(name, true);
     }
 
     activateWindow(name) {
+        if (!this.windows.has(name) || !this.isOpen(name)) { return; }
         this.stackOrder = this.stackOrder.filter(n => n !== name);
         this.stackOrder.push(name);
+        this._selectTarget(name);
+    }
+
+    _selectTarget(name) {
+        const version = ++this.selectionVersion;
         this.activeTarget = name;
         this.applyAllZIndices();
         this.applyActiveStates();
+        if (version !== this.selectionVersion) { return; }
         if (this.onChange) { this.onChange(); }
+        if (version === this.selectionVersion) { this._focusTarget(name); }
+    }
+
+    _focusTarget(name, preferred = null) {
+        if (this.activeTarget !== name) { return; }
+        const root = this.dialogs.get(name)?.dialog || this.windows.get(name)
+            || (name === HOST_WINDOW_TOKEN ? this.hostWindow : null);
+        if (root?.contains(document.activeElement)) { return; }
+        const target = preferred?.isConnected && (!root || root.contains(preferred)) ? preferred : root;
+        if (!target?.isConnected) { return; }
+        try {
+            target.focus({ preventScroll: true });
+        } catch {
+            target.focus();
+        }
+    }
+
+    _targetName(view) {
+        if (view?.root === this.hostWindow && this.hostWindow) { return HOST_WINDOW_TOKEN; }
+        const name = view?.manager === this ? view.managerName : null;
+        return name && (this.dialogs.get(name) === view || this.windows.get(name) === view.root) ? name : null;
+    }
+
+    _reorder(view, target) {
+        const name = this._targetName(view);
+        if (name === null) { return false; }
+        const owner = this.desktop, targetName = target == null ? target : this._targetName(target);
+        if (view.owner !== owner || !owner.children.includes(view) || target === view
+            || (target != null && (target.owner !== owner || !owner.children.includes(target) || targetName === null))) { return true; }
+        const available = candidate => candidate === HOST_WINDOW_TOKEN
+            ? Boolean(this.hostWindow?.isConnected && !this.hostWindow.hidden)
+            : this.isOpen(candidate);
+        const selectable = candidate => {
+            const child = this.dialogs.get(candidate) || TVView._fromElement(this.windows.get(candidate));
+            return available(candidate) && (!child || (viewAcceptsInput(child) && (child.options & ofSelectable) !== 0));
+        };
+        if (!available(name) || !viewAcceptsInput(view) || (targetName != null && !available(targetName))) { return true; }
+        const modal = this.get(this.activeTarget);
+        if (modal?.isOpen() && modal.getState(sfModal) && (name !== this.activeTarget || target !== undefined)) { return true; }
+        // The standalone host retains its existing foreground/background policy.
+        if (name === HOST_WINDOW_TOKEN) {
+            const next = target === null ? this.stackOrder.filter(selectable).at(-1) || HOST_WINDOW_TOKEN : HOST_WINDOW_TOKEN;
+            if (next !== this.activeTarget) {
+                if (next === HOST_WINDOW_TOKEN) { this.activateHostWindow(); }
+                else if (this.dialogs.has(next)) { this.bringToFront(next); }
+                else { this.activateWindow(next); }
+            }
+            return true;
+        }
+        const order = this.stackOrder.filter(candidate => candidate !== name);
+        const position = target === undefined || (targetName === HOST_WINDOW_TOKEN && this.activeTarget === HOST_WINDOW_TOKEN)
+            ? order.length : target === null || targetName === HOST_WINDOW_TOKEN ? 0 : order.indexOf(targetName) + 1;
+        order.splice(position, 0, name);
+        const active = this.activeTarget === HOST_WINDOW_TOKEN && target !== undefined && targetName !== HOST_WINDOW_TOKEN
+            ? HOST_WINDOW_TOKEN : order.filter(selectable).at(-1) || HOST_WINDOW_TOKEN;
+        if (active === this.activeTarget && order.every((candidate, index) => candidate === this.stackOrder[index])) { return true; }
+        this.stackOrder = order;
+        this._selectTarget(active);
+        return true;
     }
 
     register(name, dialog) {
@@ -6191,55 +8412,55 @@ class TVDialogManager {
         if (!registered || (dialog && registered !== dialog)) {
             return false;
         }
+        registered.setManager(null, "");
         this.dialogs.delete(name);
         const wasStacked = this.stackOrder.includes(name);
-        this.stackOrder = this.stackOrder.filter(n => n !== name);
         const wasActive = this.activeTarget === name;
-        if (wasActive) {
-            this.activeTarget = this.stackOrder.length
-                ? this.stackOrder[this.stackOrder.length - 1]
-                : HOST_WINDOW_TOKEN;
-        }
         if (wasStacked || wasActive) {
-            this.applyAllZIndices();
-            this.applyActiveStates();
-            if (this.onChange) { this.onChange(); }
+            this._removeTarget(name, true);
         }
         return true;
     }
 
-    onDialogOpened(name) {
-        if (!this.stackOrder.includes(name)) {
+    _insertTarget(name, activate) {
+        if (activate) {
+            this.selectionVersion++;
+            this.stackOrder = this.stackOrder.filter(target => target !== name);
             this.stackOrder.push(name);
-        }
-        this.bringToFront(name);
-        if (this.onChange) { this.onChange(); }
-    }
-
-    onDialogClosed(name) {
-        this.stackOrder = this.stackOrder.filter(n => n !== name);
-        if (this.activeTarget === name) {
-            this.activeTarget = this.stackOrder.length
-                ? this.stackOrder[this.stackOrder.length - 1]
-                : HOST_WINDOW_TOKEN;
+            this.activeTarget = name;
+        } else if (!this.stackOrder.includes(name)) {
+            const index = Math.max(0, this.stackOrder.indexOf(this.activeTarget));
+            this.stackOrder.splice(index, 0, name);
         }
         this.applyAllZIndices();
         this.applyActiveStates();
         if (this.onChange) { this.onChange(); }
     }
 
+    onDialogOpened(name, activate = true) {
+        this._insertTarget(name, activate);
+    }
+
+    _removeTarget(name, focus = false) {
+        const wasActive = this.activeTarget === name;
+        this.stackOrder = this.stackOrder.filter(n => n !== name);
+        if (wasActive) { this.activeTarget = this.openTargets().at(-1) || HOST_WINDOW_TOKEN; }
+        this.applyAllZIndices();
+        this.applyActiveStates();
+        if (this.onChange) { this.onChange(); }
+        if (focus && wasActive) { this._focusTarget(this.activeTarget); }
+    }
+
     installDialogHooks(name, dialog) {
-        if (!dialog || !dialog.overlay || this.managedDialogs.has(dialog.overlay)) { return; }
-        this.managedDialogs.add(dialog.overlay);
-        const focusTarget = dialog.dialog || dialog.overlay;
-        focusTarget.addEventListener("mousedown", () => {
-            if (dialog.isOpen()) {
-                this.bringToFront(name);
-            }
-        });
+        if (!dialog?.overlay) { return; }
+        this.managedDialogs.set(dialog.overlay, { name });
     }
 
     applyAllZIndices() {
+        if (this.hostWindow) {
+            this.hostWindow.style.zIndex = String(this.activeTarget === HOST_WINDOW_TOKEN
+                ? this.baseZIndex + this.stackOrder.length : this.baseZIndex - 1);
+        }
         for (let i = 0; i < this.stackOrder.length; i++) {
             const name = this.stackOrder[i];
             const z = this.baseZIndex + i;
@@ -6299,15 +8520,7 @@ class TVDialogManager {
         }
         this.stackOrder = this.stackOrder.filter(n => n !== name);
         this.stackOrder.push(name);
-        this.activeTarget = name;
-        this.applyAllZIndices();
-        this.applyActiveStates();
-        if (this.onChange) { this.onChange(); }
-        try {
-            dialog.dialog.focus({ preventScroll: true });
-        } catch {
-            dialog.dialog.focus();
-        }
+        this._selectTarget(name);
     }
 
     get(name) {
@@ -6316,10 +8529,12 @@ class TVDialogManager {
 
     isOpen(name) {
         const dialog = this.get(name);
-        return Boolean(dialog) && dialog.isOpen();
+        if (dialog) { return dialog.isOpen(); }
+        const element = this.windows.get(name);
+        return Boolean(element?.isConnected && !element.hidden);
     }
 
-    open(name, { exclusive = false } = {}) {
+    open(name, { exclusive = false, activate = true } = {}) {
         const dialog = this.get(name);
         if (!dialog) {
             return null;
@@ -6328,10 +8543,10 @@ class TVDialogManager {
             this.closeAllExcept(name);
         }
         if (dialog.isOpen()) {
-            this.bringToFront(name);
+            if (activate) { this.bringToFront(name); }
             return dialog;
         }
-        dialog.open();
+        dialog.open(activate);
         return dialog;
     }
 
@@ -6351,6 +8566,7 @@ class TVDialogManager {
     }
 
     cycleTarget(delta = 1) {
+        if (!this.canDispatchCommand(TV_COMMANDS.NEXT)) { return false; }
         const targets = this.openTargets();
         if (!targets.length) {
             return false;
@@ -6369,36 +8585,37 @@ class TVDialogManager {
     }
 
     openTargets() {
-        return this.stackOrder.filter((name) => {
-            const dialog = this.dialogs.get(name);
-            if (dialog) { return dialog.isOpen(); }
-            const windowElement = this.windows.get(name);
-            return Boolean(windowElement && windowElement.isConnected);
-        });
+        return this.stackOrder.filter(name => this.isOpen(name));
     }
 
     openWindowCount() {
-        return Array.from(this.windows.values()).filter((element) => element?.isConnected).length;
+        return Array.from(this.windows.keys()).filter(name => this.isOpen(name)).length;
     }
 
     canDispatchCommand(command) {
         if (command === TV_COMMANDS.NEXT || command === TV_COMMANDS.PREVIOUS) {
-            return this.openTargets().length > 1;
+            const dialog = this.get(this.activeTarget);
+            return !(dialog?.isOpen() && dialog.getState(sfModal)) && this.openTargets().length > 1;
         }
         const target = this.activeTarget;
+        if (target !== HOST_WINDOW_TOKEN && !this.isOpen(target)) { return false; }
         const dialog = this.dialogs.get(target);
         if (dialog && dialog.isOpen()) {
-            return command === TV_COMMANDS.CLOSE || command === TV_COMMANDS.CANCEL;
+            return (command === TV_COMMANDS.CLOSE || command === TV_COMMANDS.CANCEL) && (dialog.flags & wfClose) !== 0;
         }
+        const element = target === HOST_WINDOW_TOKEN ? this.hostWindow : this.windows.get(target);
+        const view = TVView._fromElement(element);
+        if ((command === TV_COMMANDS.CLOSE || command === TV_COMMANDS.CANCEL)
+            && view instanceof TVWindow && (view.flags & wfClose) === 0) { return false; }
         if (command === TV_COMMANDS.DEFAULT_SIZE) {
-            const element = target === HOST_WINDOW_TOKEN ? this.hostWindow : this.windows.get(target);
-            const view = TVView._fromElement(element);
             return view instanceof TVWindow && (view.flags & wfGrow) !== 0 && Boolean(element?._tvResizer);
         }
         return typeof this.windowCommands.get(target)?.[command] === "function";
     }
 
     dispatchCommand(command) {
+        if ((command === TV_COMMANDS.CLOSE || command === TV_COMMANDS.CANCEL)
+            && !this.canDispatchCommand(command)) { return false; }
         if (command === TV_COMMANDS.NEXT) {
             if (!this.canDispatchCommand(command)) { return false; }
             return this.cycleTarget(1);
@@ -6408,6 +8625,7 @@ class TVDialogManager {
             return this.cycleTarget(-1);
         }
         const target = this.activeTarget;
+        if (target !== HOST_WINDOW_TOKEN && !this.isOpen(target)) { return false; }
         if (command === TV_COMMANDS.DEFAULT_SIZE) {
             if (!this.canDispatchCommand(command)) { return false; }
             const element = target === HOST_WINDOW_TOKEN ? this.hostWindow : this.windows.get(target);
@@ -6674,7 +8892,7 @@ function normalizeSearchText(text) {
 
 class TVScrollBar extends TVView {
     draw() {
-        const axis = (this.options & sbVertical) !== 0 ? "y" : "x";
+        const axis = (this._scrollOptions & sbVertical) !== 0 ? "y" : "x";
         const glyphs = axis === "y" ? ["▲", "▼"] : ["◄", "►"];
         return [
             `<div class="tv-scrollbar tv-scrollbar-${axis}" data-axis="${axis}">`,
@@ -6690,7 +8908,7 @@ class TVScrollBar extends TVView {
             throw new TypeError("TVScrollBar expects TVRect bounds");
         }
         super(bounds);
-        this.options = Number(options) || sbHorizontal;
+        this._scrollOptions = Number(options) || sbHorizontal;
         this.value = 0;
         this.min = 0;
         this.max = 0;
@@ -6703,6 +8921,9 @@ class TVScrollBar extends TVView {
         this.resizeObserver = null;
         this.dragState = null;
         this.repeatTimer = null;
+        this._clientExtent = null;
+        this._autoHideHorizontal = true;
+        this._horizontalVisible = false;
         this.destroyed = false;
         this.active = true;
         this.onViewportScroll = () => this.update();
@@ -6733,6 +8954,11 @@ class TVScrollBar extends TVView {
     }
 
     bindRoot(frame) {
+        if (frame === this.frame && !this.destroyed) { this.refresh(); return this; }
+        if (this.frame) { this.destroy(); }
+        this._clientExtent = null;
+        this._autoHideHorizontal = true;
+        this._horizontalVisible = false;
         if (!frame) {
             this.root = null;
             this.frame = null;
@@ -6740,7 +8966,6 @@ class TVScrollBar extends TVView {
             this.viewport = null;
             return this;
         }
-        if (this.root?._tvView === this) { delete this.root._tvView; }
         // A scrollbar is an adapter for a scroll frame; it must not replace
         // the logical TVView that owns that frame (for example TVListViewer).
         this.root = frame;
@@ -6758,10 +8983,9 @@ class TVScrollBar extends TVView {
             axis.root._tvScrollbar = this;
         }
         this.destroyed = false;
-        this.active = !frame.closest(".tv-window")?.classList.contains("is-window-inactive");
+        this.active = !frame.closest(".tv-window, .tv-dialog-window")?.classList.contains("is-window-inactive");
         this.bind();
         this.setActive(this.active);
-        this.update();
         return this;
     }
 
@@ -6819,7 +9043,7 @@ class TVScrollBar extends TVView {
     }
 
     startRepeat(event, axis, direction) {
-        if (!this.active) { return; }
+        if (!this._inputEnabled() || this.axisMetrics(axis).maxScroll <= 0) { return; }
         event.preventDefault();
         this.scrollStep(axis, direction);
         this.stopRepeat();
@@ -6834,6 +9058,7 @@ class TVScrollBar extends TVView {
     }
 
     scrollStep(axis, direction) {
+        if (!this._inputEnabled()) { this.stopRepeat(); return; }
         const step = axis === "y" ? this.lineHeight() : this.charWidth() * 2;
         if (axis === "y") {
             this.viewport.scrollTop += direction * step;
@@ -6844,13 +9069,19 @@ class TVScrollBar extends TVView {
     }
 
     handleWheel(event) {
-        if (!this.active) { return; }
+        if (!this._inputEnabled()) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
         const preferVertical = Math.abs(Number(event.deltaY) || 0) >= Math.abs(Number(event.deltaX) || 0);
         const candidates = preferVertical ? ["y", "x"] : ["x", "y"];
         const axisName = candidates.find((name) => this.axes[name] && this.axisMetrics(name).maxScroll > 0);
         if (!axisName) { return; }
         const metrics = this.axisMetrics(axisName);
-        const rawDelta = axisName === "y" ? Number(event.deltaY) || 0 : Number(event.deltaX) || 0;
+        const rawDelta = axisName === "y"
+            ? Number(event.deltaY) || Number(event.deltaX) || 0
+            : Number(event.deltaX) || Number(event.deltaY) || 0;
         if (!rawDelta) { return; }
         const unit = event.deltaMode === 1
             ? metrics.cellSize
@@ -6871,7 +9102,7 @@ class TVScrollBar extends TVView {
     }
 
     onTrackMouseDown(event, axis) {
-        if (!this.active) { return; }
+        if (!this._inputEnabled()) { return; }
         if (event.target.closest("[data-role='thumb']")) {
             return;
         }
@@ -6889,7 +9120,7 @@ class TVScrollBar extends TVView {
     }
 
     onThumbMouseDown(event, axis) {
-        if (!this.active) { return; }
+        if (!this._inputEnabled()) { return; }
         event.preventDefault();
         const metrics = this.axisMetrics(axis);
         this.dragState = {
@@ -6904,6 +9135,7 @@ class TVScrollBar extends TVView {
     }
 
     onDragMove = (event) => {
+        if (!this._inputEnabled()) { this.onDragEnd(); return; }
         if (!this.dragState) {
             return;
         }
@@ -6939,8 +9171,8 @@ class TVScrollBar extends TVView {
         const maxScroll = Math.max(scrollSize - viewportSize, 0);
         const cellSize = vertical ? this.lineHeight() : this.charWidth();
         const trackSize = vertical ? axis.track.clientHeight : axis.track.clientWidth;
-        const cellCount = Math.max(1, Math.floor(trackSize / cellSize));
-        const thumbCells = maxScroll > 0 ? 1 : 0;
+        const cellCount = Math.max(0, Math.floor(trackSize / cellSize));
+        const thumbCells = maxScroll > 0 && cellCount > 0 ? 1 : 0;
         const freeTrackCells = Math.max(cellCount - thumbCells, 0);
         const freeTrackPx = freeTrackCells * cellSize;
         const thumbPx = thumbCells * cellSize;
@@ -6967,74 +9199,94 @@ class TVScrollBar extends TVView {
         const ratio = maxScroll > 0 ? scrollOffset / maxScroll : 0;
         const thumbStart = Math.round(freeTrackCells * ratio);
         const trackChar = maxScroll > 0 ? TRACK_CHAR : DISABLED_TRACK_CHAR;
-
-        axis.cells.textContent = "";
-        axis.thumb.textContent = "";
-
-        if (metrics.vertical) {
-            axis.cells.style.gridTemplateRows = `repeat(${cellCount}, 1em)`;
-            axis.cells.style.gridTemplateColumns = "1ch";
-            axis.thumb.style.gridTemplateRows = `repeat(${thumbCells}, 1em)`;
-            axis.thumb.style.gridTemplateColumns = "1ch";
-            axis.thumb.style.transform = `translateY(${thumbStart * metrics.cellSize}px)`;
-        } else {
-            axis.cells.style.gridTemplateColumns = `repeat(${cellCount}, 1ch)`;
-            axis.cells.style.gridTemplateRows = "1em";
-            axis.thumb.style.gridTemplateColumns = `repeat(${thumbCells}, 1ch)`;
-            axis.thumb.style.gridTemplateRows = "1em";
-            axis.thumb.style.transform = `translateX(${thumbStart * metrics.cellSize}px)`;
-        }
-
-        for (let index = 0; index < cellCount; index += 1) {
-            const cell = document.createElement("span");
-            cell.className = "tv-scroll-cell";
-            cell.textContent = trackChar;
-            axis.cells.appendChild(cell);
-        }
-
-        for (let index = 0; index < thumbCells; index += 1) {
-            const cell = document.createElement("span");
-            cell.className = "tv-thumb-cell";
-            cell.textContent = THUMB_CHAR;
-            axis.thumb.appendChild(cell);
-        }
+        const separator = metrics.vertical ? "\n" : "";
+        const track = Array(cellCount).fill(trackChar).join(separator);
+        const thumb = Array(thumbCells).fill(THUMB_CHAR).join(separator);
+        if (axis.cells.textContent !== track) { axis.cells.textContent = track; }
+        if (axis.thumb.textContent !== thumb) { axis.thumb.textContent = thumb; }
+        const bounds = metrics.vertical
+            ? new TVRect(0, thumbStart, 1, thumbStart + thumbCells)
+            : new TVRect(thumbStart, 0, thumbStart + thumbCells, 1);
+        this._placePart(axis.thumb, bounds);
 
         axis.root.classList.toggle("is-disabled", maxScroll <= 0);
-        const unavailable = !this.active || maxScroll <= 0;
+        axis.root.classList.toggle("is-inactive", !this.active);
+        const unavailable = !this._inputEnabled() || maxScroll <= 0;
         axis.root.setAttribute("aria-disabled", unavailable ? "true" : "false");
-        axis.backward.tabIndex = unavailable ? -1 : 0;
-        axis.forward.tabIndex = unavailable ? -1 : 0;
-        if (thumbCells > 0) {
-            axis.thumb.style.display = "grid";
-        } else {
-            axis.thumb.style.display = "none";
+        for (const button of [axis.backward, axis.forward]) {
+            button.disabled = unavailable;
+            button.tabIndex = unavailable ? -1 : 0;
         }
+        axis.thumb.hidden = thumbCells === 0;
     }
 
     updateAxis(axisName) {
-        if (this.axes[axisName]) {
+        const axis = this.axes[axisName];
+        if (axis) {
+            const cell = measureCells(), vertical = axisName === "y";
+            const length = vertical ? axis.root.clientHeight / cell.height : axis.root.clientWidth / cell.width;
+            const arrow = Math.min(1, length / 2), end = Math.max(arrow, length - arrow);
+            const bounds = (start, finish) => vertical
+                ? new TVRect(0, start, 1, finish) : new TVRect(start, 0, finish, 1);
+            this._placePart(axis.backward, bounds(0, arrow));
+            this._placePart(axis.track, bounds(arrow, end));
+            this._placePart(axis.forward, bounds(end, length));
+            this._placePart(axis.cells, bounds(0, Math.max(0, end - arrow)));
             this.updateTrackGlyphs(this.axisMetrics(axisName));
         }
     }
 
     update() {
         if (this.destroyed) { return; }
+        if (!this._inputEnabled() && (this.dragState || this.repeatTimer !== null)) { this.onDragEnd(); }
+        this._layoutClient();
+        this.frame?._tvView?._layoutItems?.();
+        this._layoutClient();
         Object.keys(this.axes).forEach((axisName) => this.updateAxis(axisName));
+    }
+
+    _setClientExtent(extent, autoHideHorizontal = true) {
+        this._clientExtent = extent.copy();
+        this._autoHideHorizontal = autoHideHorizontal;
+        this.refresh();
+    }
+
+    _layoutClient() {
+        const extent = this._clientExtent;
+        if (!this.frame || !this.viewport || !extent || extent.width <= 0 || extent.height <= 0) { return; }
+        const { x, y } = this.axes;
+        const client = extent.copy();
+        client.x2 = Math.max(0, client.x2 - (y ? 1 : 0));
+        client.y2 = Math.max(0, client.y2 - (x && this._horizontalVisible ? 1 : 0));
+        this._placePart(this.viewport, client.copy());
+        const horizontal = Boolean(x && (!this._autoHideHorizontal || this.viewport.scrollWidth > this.viewport.clientWidth + 1));
+        if (horizontal !== this._horizontalVisible) {
+            client.y2 = Math.max(0, extent.height - (horizontal ? 1 : 0));
+            this._placePart(this.viewport, client.copy());
+            this._horizontalVisible = horizontal;
+        }
+        this.frame.classList.toggle("is-h-scrollable", horizontal);
+        if (y) {
+            this._placePart(y.root, new TVRect(client.x2, 0, extent.width, client.y2));
+        }
+        if (x) {
+            x.root.hidden = !horizontal;
+            this._placePart(x.root, new TVRect(0, client.y2, client.x2, extent.height));
+        }
+    }
+
+    _inputEnabled() {
+        const view = this.frame?._tvView || TVView._fromElement(this.frame);
+        return this.active && viewAcceptsInput(this) && (!view || viewAcceptsInput(view));
     }
 
     setActive(active) {
         this.active = Boolean(active);
-        for (const axis of Object.values(this.axes)) {
-            axis.root.classList.toggle("is-inactive", !this.active);
-            const unavailable = !this.active || axis.root.classList.contains("is-disabled");
-            axis.root.setAttribute("aria-disabled", unavailable ? "true" : "false");
-            axis.backward.tabIndex = unavailable ? -1 : 0;
-            axis.forward.tabIndex = unavailable ? -1 : 0;
-        }
         if (!this.active) {
             this.stopRepeat();
             this.onDragEnd();
         }
+        this.update();
     }
 
     clamp(value, min, max) {
@@ -7049,29 +9301,102 @@ class TVScrollBar extends TVView {
         document.removeEventListener("mousemove", this.onDragMove);
         document.removeEventListener("mouseup", this.onDragEnd);
         document.removeEventListener("mouseup", this.onDocumentMouseUp);
-        this.viewport.removeEventListener("scroll", this.onViewportScroll);
-        this.frame.removeEventListener("wheel", this.onWheel);
+        this.viewport?.removeEventListener("scroll", this.onViewportScroll);
+        this.frame?.removeEventListener("wheel", this.onWheel);
         window.removeEventListener("resize", this.onWindowResize);
         for (const axis of Object.values(this.axes)) {
             axis.backward.removeEventListener("mousedown", axis.onBackwardMouseDown);
             axis.forward.removeEventListener("mousedown", axis.onForwardMouseDown);
             axis.track.removeEventListener("mousedown", axis.onTrackMouseDown);
             axis.thumb.removeEventListener("mousedown", axis.onThumbMouseDown);
+            if (axis.root._tvScrollbar === this) { delete axis.root._tvScrollbar; }
         }
         if (this.resizeObserver) {
             this.resizeObserver.disconnect();
             this.resizeObserver = null;
         }
         if (this.root?._tvView === this) { delete this.root._tvView; }
+        this.root = this.frame = this.host = this.viewport = null;
+        this.axes = {};
     }
 }
 
 class TVProgram extends TVGroup {
     constructor(bounds = new TVRect()) {
         super(bounds);
-        this.desktop = null;
+        this.desktopView = null;
         this.menuBar = null;
         this.statusLine = null;
+        this.onScreenResize = () => this.initScreen();
+    }
+
+    bindRoot(root) {
+        window.removeEventListener("resize", this.onScreenResize);
+        super.bindRoot(root);
+        if (root) {
+            window.addEventListener("resize", this.onScreenResize, { passive: true });
+            this.initScreen();
+            document.fonts?.ready.then(() => {
+                if (this.root === root && root.isConnected) { window.dispatchEvent(new Event("resize")); }
+            });
+        }
+        return this;
+    }
+
+    insert(view) {
+        const owned = this.children.includes(view) && view.owner === this;
+        if (!owned) { this._validateInsert(view); }
+        const slot = view instanceof TVMenuBar ? "menuBar"
+            : view instanceof TVStatusLine ? "statusLine" : view instanceof TVDesktop ? "desktopView" : "";
+        if (slot) {
+            if (this[slot] && this[slot] !== view) { super.remove(this[slot]); }
+            this[slot] = view;
+        }
+        if (!owned) { super.insert(view); }
+        this._layoutScreen();
+        return view;
+    }
+
+    remove(view) {
+        const removed = super.remove(view);
+        for (const slot of ["menuBar", "statusLine", "desktopView"]) {
+            if (this[slot] === view) { this[slot] = null; }
+        }
+        this._layoutScreen();
+        return removed;
+    }
+
+    initScreen() {
+        if (!this.root?.clientWidth || !this.root.clientHeight) { return; }
+        measuredCell = null;
+        const cell = measureCells();
+        this.setBounds(new TVRect(this.origin.x, this.origin.y,
+            this.origin.x + this.root.clientWidth / cell.width, this.origin.y + this.root.clientHeight / cell.height));
+        this._layoutScreen();
+    }
+
+    changeBounds(bounds) {
+        super.changeBounds(bounds);
+        this._layoutScreen();
+        return this;
+    }
+
+    _layoutScreen() {
+        if (!this.root) { return; }
+        const width = this.size.x, height = this.size.y, top = this.menuBar ? 1 : 0;
+        const bottom = Math.max(top, height - (this.statusLine ? 1 : 0));
+        for (const [view, bounds] of [
+            [this.menuBar, new TVRect(0, 0, width, 1)],
+            [this.desktopView, new TVRect(0, top, width, bottom)],
+            [this.statusLine, new TVRect(0, bottom, width, bottom + 1)],
+        ]) {
+            if (!view?.root || view.root.parentElement !== this.root) { continue; }
+            // Browser window adapters keep normal/maximized window geometry;
+            // changing the screen does not proportionally grow every window.
+            view.setBounds(bounds);
+            this._placePart(view.root, bounds);
+            view.drawView();
+        }
     }
 
     handleEvent(event) {
@@ -7087,9 +9412,11 @@ class TVProgram extends TVGroup {
     }
 
     async clipCopy() {
-        const selection = window.getSelection(), desktop = this.firstThat((view) => view instanceof TVDesktop);
-        if (!selection || selection.isCollapsed || !desktop?.root?.contains(selection.anchorNode)
-            || !desktop.root.contains(selection.focusNode)) { return false; }
+        const selection = window.getSelection(), desktop = owningDesktop(this);
+        const manager = desktop?.dialogManager, dialog = manager?.get(manager.activeTarget);
+        const scope = dialog?.isOpen() && dialog.getState(sfModal) ? dialog.dialog : desktop?.root;
+        if (!selection || selection.isCollapsed || !scope?.contains(selection.anchorNode)
+            || !scope.contains(selection.focusNode)) { return false; }
         await writeClipboardText(selection.toString());
         return true;
     }
@@ -7112,8 +9439,21 @@ class TVDesktop extends TVGroup {
     }
 
     bindRoot(root) {
+        this.dialogManager?.destroy();
         super.bindRoot(root);
+        this._background = root?.querySelector(":scope > [data-tv-desktop-pattern]") || null;
         this.dialogManager = new TVDialogManager(this);
+        return this;
+    }
+
+    drawView() {
+        if (!this.root || !this._background) { return this; }
+        const cell = measureCells(), width = this.root.clientWidth / cell.width, height = this.root.clientHeight / cell.height;
+        this._placePart(this._background, new TVRect(0, 0, width, height));
+        const char = this._background.getAttribute("data-tv-desktop-pattern") || "\u2591";
+        const line = char.repeat(Math.max(1, Math.ceil(width) + 1));
+        const text = Array(Math.max(1, Math.ceil(height) + 1)).fill(line).join("\n");
+        if (this._background.textContent !== text) { this._background.textContent = text; }
         return this;
     }
 
@@ -7123,6 +9463,21 @@ class TVDesktop extends TVGroup {
             inserted.mount(this.root);
         }
         return inserted;
+    }
+
+    setCurrent(view) {
+        const manager = this.dialogManager, name = manager?._targetName(view);
+        if (name == null) { return super.setCurrent(view); }
+        if (view.owner !== this || !this.children.includes(view) || (view.options & ofSelectable) === 0
+            || !viewAcceptsInput(view) || !view.root?.isConnected) { return this.current; }
+        const modal = manager.get(manager.activeTarget);
+        if (modal?.isOpen() && modal.getState(sfModal) && manager.activeTarget !== name) { return this.current; }
+        if (manager.activeTarget !== name) { manager._selectTarget(name); }
+        return manager.activeTarget === name ? view : this.current;
+    }
+
+    _reorder(view, target) {
+        if (!this.dialogManager?._reorder(view, target)) { super._reorder(view, target); }
     }
 
     startLayout() {
@@ -7135,6 +9490,7 @@ class TVDesktop extends TVGroup {
     }
 
     destroy() {
+        this.dialogManager?.destroy();
         if (!this.layoutStarted) { return; }
         this.layoutStarted = false;
         if (this.clockTimer !== null) {
@@ -7147,6 +9503,7 @@ class TVDesktop extends TVGroup {
 }
 
 Object.assign(TV, {
+    saveLocalFile,
     SCROLL_REPEAT_MS,
     TRACK_CHAR,
     DISABLED_TRACK_CHAR,
@@ -7171,6 +9528,7 @@ Object.assign(TV, {
     evKeyDown,
     evCommand,
     evBroadcast,
+    cmCommandSetChanged,
     cmCut,
     cmCopy,
     cmPaste,
@@ -7231,6 +9589,7 @@ Object.assign(TV, {
     kbShiftDel,
     kbF1,
     kbF3,
+    kbF4,
     kbF5,
     kbF6,
     kbShiftF6,
@@ -7261,10 +9620,10 @@ Object.assign(TV, {
     fillDesktopPatterns,
     updateClocks,
     escapeHtml,
+    recordStatisticsEvent,
     wrapTextLines,
     renderHotkeyMarkup,
     displayCp437Char,
-    bindCloseButtons,
     normalizeSearchText,
     updateWindowFrameState,
     normalizeHelpContext,
@@ -7277,6 +9636,7 @@ Object.assign(TV, {
     TVPoint,
     TVRect,
     TVView,
+    TVCommandSet,
     TVStaticText,
     TVImage,
     TVTextScreen,
@@ -7288,6 +9648,7 @@ Object.assign(TV, {
     TVEmailValidator,
     TVInputLine,
     TVListViewer,
+    TVPagedCollection,
     TVGroup,
     TVInfoRow,
     TVInfoBox,
@@ -7309,6 +9670,7 @@ Object.assign(TV, {
     TVMenuBar,
     TVMenuBox,
     TVStatusItem,
+    TVStatusLink,
     TVStatusDef,
     NewStatusKey,
     NewStatusDef,
@@ -7319,11 +9681,17 @@ Object.assign(TV, {
     TVCheckBoxes,
     TVRadioButtons,
     TVMultiCheckBoxes,
+    cfOneBit,
+    cfTwoBits,
+    cfFourBits,
+    cfEightBits,
     TVButton,
     bfNormal,
     bfDefault,
     bfLeftJust,
     bfBroadcast,
+    cmGrabDefault,
+    cmReleaseDefault,
     TVFrame,
     TVWindow,
     TVDialog,
@@ -7338,16 +9706,34 @@ TV.getActiveThemePreset = () => activeThemePreset;
 TV.getActiveColorPalette = () => activeColorPalette;
 TV.setActiveColorPalette = (value) => { activeColorPalette = value; };
 
-// Global button press animation via JS class (CSS :active unreliable on re-click)
-document.addEventListener("mousedown", (event) => {
-    const btn = event.target.closest(".tv-dialog-button");
-    if (!btn) { return; }
-    btn.classList.add("is-pressed");
-    const release = () => {
-        btn.classList.remove("is-pressed");
+// Native input changes only the shared button's drawn state; commands keep
+// their existing TVEvent path through the owner.
+function drawButtonPress(event) {
+    const keyboard = event.type === "keydown";
+    if (keyboard ? (![" ", "Enter"].includes(event.key) || event.repeat || event.altKey || event.ctrlKey || event.metaKey)
+        : event.button !== 0) { return; }
+    const btn = event.target?.closest?.(".tv-dialog-button");
+    if (!btn || !btn.isConnected || btn.disabled) { return; }
+    const button = TVView._fromElement(btn);
+    if (!(button instanceof TVButton)) { return; }
+    button._releasePress?.();
+    button.drawState(true);
+    const release = (nativeEvent) => {
+        if (nativeEvent?.type === "keyup" && nativeEvent.key !== event.key) { return; }
+        document.removeEventListener(keyboard ? "keyup" : "mouseup", release);
+        btn.removeEventListener("mouseleave", release);
+        btn.removeEventListener("blur", release);
+        window.removeEventListener("blur", release);
+        button._releasePress = null;
+        button.drawState(false);
     };
-    document.addEventListener("mouseup", release, { once: true });
-    btn.addEventListener("mouseleave", release, { once: true });
-});
+    button._releasePress = release;
+    document.addEventListener(keyboard ? "keyup" : "mouseup", release);
+    if (!keyboard) { btn.addEventListener("mouseleave", release); }
+    btn.addEventListener("blur", release);
+    window.addEventListener("blur", release);
+}
+document.addEventListener("mousedown", drawButtonPress);
+document.addEventListener("keydown", drawButtonPress);
 
 })();

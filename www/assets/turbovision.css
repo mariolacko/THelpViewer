@@ -1,3748 +1,469 @@
-/* TurboVision-inspired presentation layer for generated help pages. */
+/* Shared browser drawing. TVision owns bounds, growth, palettes and state. */
 
 @font-face {
-    font-family: "IBM VGA 8x16 Plus";
-    src: url("./fonts/WebPlus_IBM_VGA_8x16.woff") format("woff");
+    font-family: "IBM VGA 8x16 Plus"; src: url("./fonts/WebPlus_IBM_VGA_8x16.woff") format("woff");
     font-display: block;
 }
 
-/* The hidden state is semantic and must win over component layout displays. */
-[hidden] {
-    display: none !important;
-}
+[hidden] { display: none !important; }
 
 @font-face {
-    font-family: "IBM VGA 8x16";
-    src: url("./fonts/Web437_IBM_VGA_8x16.woff") format("woff");
+    font-family: "IBM VGA 8x16"; src: url("./fonts/Web437_IBM_VGA_8x16.woff") format("woff");
     font-display: block;
 }
 
+/* Font metrics and source colors; cpAppColor is initialized by tv-core.js. */
 :root {
     --tv-font-text: "IBM VGA 8x16 Plus", "IBM VGA 8x16", monospace;
     --tv-font-chrome: "IBM VGA 8x16", "IBM VGA 8x16 Plus", monospace;
-    /* Exact TV 2.0 cpAppColor entries used by the web implementation. */
-    --tv-palette-desktop-bg: #aaaaaa; --tv-palette-desktop-fg: #0000aa;
-    --tv-palette-menu-normal-bg: #aaaaaa; --tv-palette-menu-normal-fg: #000000;
-    --tv-palette-menu-disabled-bg: #aaaaaa; --tv-palette-menu-disabled-fg: #555555;
-    --tv-palette-menu-shortcut-bg: #aaaaaa; --tv-palette-menu-shortcut-fg: #aa0000;
-    --tv-palette-menu-selected-bg: #00aa00; --tv-palette-menu-selected-fg: #000000;
-    --tv-palette-menu-selected-disabled-bg: #00aa00; --tv-palette-menu-selected-disabled-fg: #555555;
-    --tv-palette-menu-selected-shortcut-bg: #00aa00; --tv-palette-menu-selected-shortcut-fg: #aa0000;
-    --tv-palette-viewer-frame-passive-bg: #0000aa; --tv-palette-viewer-frame-passive-fg: #aaaaaa;
-    --tv-palette-viewer-frame-active-bg: #0000aa; --tv-palette-viewer-frame-active-fg: #ffffff;
-    --tv-palette-viewer-frame-icons-bg: #0000aa; --tv-palette-viewer-frame-icons-fg: #55ff55;
-    --tv-palette-viewer-scroll-page-bg: #00aaaa; --tv-palette-viewer-scroll-page-fg: #0000aa;
-    --tv-palette-viewer-scroll-controls-bg: #00aaaa; --tv-palette-viewer-scroll-controls-fg: #0000aa;
-    --tv-palette-viewer-text-bg: #0000aa; --tv-palette-viewer-text-fg: #ffff55;
-    --tv-palette-viewer-highlight-bg: #aaaaaa; --tv-palette-viewer-highlight-fg: #0000aa;
-    --tv-palette-calendar-frame-passive-bg: #00aaaa; --tv-palette-calendar-frame-passive-fg: #aaaaaa;
-    --tv-palette-calendar-frame-active-bg: #00aaaa; --tv-palette-calendar-frame-active-fg: #ffffff;
-    --tv-palette-calendar-frame-icons-bg: #00aaaa; --tv-palette-calendar-frame-icons-fg: #55ff55;
-    --tv-palette-calendar-scroll-page-bg: #0000aa; --tv-palette-calendar-scroll-page-fg: #00aaaa;
-    --tv-palette-calendar-scroll-controls-bg: #0000aa; --tv-palette-calendar-scroll-controls-fg: #00aaaa;
-    --tv-palette-calendar-text-bg: #00aaaa; --tv-palette-calendar-text-fg: #ffff55;
-    --tv-palette-calendar-current-bg: #00aa00; --tv-palette-calendar-current-fg: #0000aa;
-    --tv-palette-ascii-frame-passive-bg: #aaaaaa; --tv-palette-ascii-frame-passive-fg: #000000;
-    --tv-palette-ascii-frame-active-bg: #aaaaaa; --tv-palette-ascii-frame-active-fg: #ffffff;
-    --tv-palette-ascii-frame-icons-bg: #aaaaaa; --tv-palette-ascii-frame-icons-fg: #55ff55;
-    --tv-palette-ascii-scroll-page-bg: #0000aa; --tv-palette-ascii-scroll-page-fg: #00aaaa;
-    --tv-palette-ascii-scroll-controls-bg: #0000aa; --tv-palette-ascii-scroll-controls-fg: #00aaaa;
-    --tv-palette-ascii-text-bg: #aaaaaa; --tv-palette-ascii-text-fg: #000000;
-    --tv-palette-dialog-frame-passive-bg: #aaaaaa; --tv-palette-dialog-frame-passive-fg: #000000;
-    --tv-palette-dialog-frame-active-bg: #aaaaaa; --tv-palette-dialog-frame-active-fg: #ffffff;
-    --tv-palette-dialog-frame-icons-bg: #aaaaaa; --tv-palette-dialog-frame-icons-fg: #55ff55;
-    --tv-palette-dialog-scroll-page-bg: #0000aa; --tv-palette-dialog-scroll-page-fg: #00aaaa;
-    --tv-palette-dialog-scroll-controls-bg: #0000aa; --tv-palette-dialog-scroll-controls-fg: #00aaaa;
-    --tv-palette-dialog-static-bg: #aaaaaa; --tv-palette-dialog-static-fg: #000000;
-    --tv-palette-dialog-label-normal-bg: #aaaaaa; --tv-palette-dialog-label-normal-fg: #000000;
-    --tv-palette-dialog-label-selected-bg: #aaaaaa; --tv-palette-dialog-label-selected-fg: #ffffff;
-    --tv-palette-dialog-label-shortcut-bg: #aaaaaa; --tv-palette-dialog-label-shortcut-fg: #ffff55;
-    --tv-palette-dialog-button-normal-bg: #00aa00; --tv-palette-dialog-button-normal-fg: #000000;
-    --tv-palette-dialog-button-default-bg: #00aa00; --tv-palette-dialog-button-default-fg: #55ffff;
-    --tv-palette-dialog-button-selected-bg: #00aa00; --tv-palette-dialog-button-selected-fg: #ffffff;
-    --tv-palette-dialog-button-disabled-bg: #aaaaaa; --tv-palette-dialog-button-disabled-fg: #555555;
-    --tv-palette-dialog-button-shortcut-bg: #00aa00; --tv-palette-dialog-button-shortcut-fg: #ffff55;
-    --tv-palette-dialog-button-shadow-bg: #aaaaaa; --tv-palette-dialog-button-shadow-fg: #000000;
-    --tv-palette-dialog-cluster-normal-bg: #00aaaa; --tv-palette-dialog-cluster-normal-fg: #000000;
-    --tv-palette-dialog-cluster-selected-bg: #00aaaa; --tv-palette-dialog-cluster-selected-fg: #ffffff;
-    --tv-palette-dialog-cluster-shortcut-bg: #00aaaa; --tv-palette-dialog-cluster-shortcut-fg: #ffff55;
-    --tv-palette-dialog-cluster-disabled-bg: #00aaaa; --tv-palette-dialog-cluster-disabled-fg: #555555;
-    --tv-palette-dialog-input-normal-bg: #0000aa; --tv-palette-dialog-input-normal-fg: #ffffff;
-    --tv-palette-dialog-input-selected-bg: #00aa00; --tv-palette-dialog-input-selected-fg: #ffffff;
-    --tv-palette-dialog-input-arrow-bg: #0000aa; --tv-palette-dialog-input-arrow-fg: #55ff55;
-    --tv-palette-dialog-history-button-bg: #00aa00; --tv-palette-dialog-history-button-fg: #000000;
-    --tv-palette-dialog-history-sides-bg: #aaaaaa; --tv-palette-dialog-history-sides-fg: #00aa00;
-    --tv-palette-dialog-history-page-bg: #00aaaa; --tv-palette-dialog-history-page-fg: #0000aa;
-    --tv-palette-dialog-history-controls-bg: #00aaaa; --tv-palette-dialog-history-controls-fg: #0000aa;
-    --tv-palette-dialog-list-normal-bg: #00aaaa; --tv-palette-dialog-list-normal-fg: #000000;
-    --tv-palette-dialog-list-focused-bg: #00aa00; --tv-palette-dialog-list-focused-fg: #ffffff;
-    --tv-palette-dialog-list-selected-bg: #00aaaa; --tv-palette-dialog-list-selected-fg: #ffff55;
-    --tv-palette-dialog-list-divider-bg: #00aaaa; --tv-palette-dialog-list-divider-fg: #0000aa;
-    --tv-palette-dialog-info-bg: #0000aa; --tv-palette-dialog-info-fg: #00aaaa;
-    --tv-palette-help-frame-passive-bg: #00aaaa; --tv-palette-help-frame-passive-fg: #aaaaaa;
-    --tv-palette-help-frame-active-bg: #00aaaa; --tv-palette-help-frame-active-fg: #ffffff;
-    --tv-palette-help-frame-icons-bg: #00aaaa; --tv-palette-help-frame-icons-fg: #55ff55;
-    --tv-palette-help-scroll-page-bg: #0000aa; --tv-palette-help-scroll-page-fg: #00aaaa;
-    --tv-palette-help-scroll-controls-bg: #0000aa; --tv-palette-help-scroll-controls-fg: #00aaaa;
-    --tv-palette-help-text-bg: #00aaaa; --tv-palette-help-text-fg: #000000;
-    --tv-palette-help-keyword-bg: #00aaaa; --tv-palette-help-keyword-fg: #ffff55;
-    --tv-palette-help-keyword-selected-bg: #0000aa; --tv-palette-help-keyword-selected-fg: #ffff55;
-
-    /* The Markdown editor keeps the classic DOS editor colors in every theme. */
-    --tv-editor-bg: #0000aa;
-    --tv-editor-fg: #ffff55;
-
-    /* Compatibility aliases. Components below select an owner palette locally. */
-    --tv-desktop: var(--tv-palette-desktop-bg);
-    --tv-desktop-dot: var(--tv-palette-desktop-fg);
-    --tv-appbar-bg: var(--tv-palette-menu-normal-bg);
-    --tv-appbar-text: var(--tv-palette-menu-normal-fg);
-    --tv-appbar-hotkey: var(--tv-palette-menu-shortcut-fg);
-    --tv-appbar-active-bg: var(--tv-palette-menu-selected-bg);
-    --tv-appbar-active-text: var(--tv-palette-menu-selected-fg);
-    --tv-appbar-active-hotkey: var(--tv-palette-menu-selected-shortcut-fg);
-    --tv-menu-disabled: var(--tv-palette-menu-disabled-fg);
-    --tv-help-pane: var(--tv-palette-help-text-bg);
-    --tv-window: var(--tv-palette-help-text-bg);
-    --tv-puzzle-pane: var(--tv-palette-viewer-text-bg);
-    --tv-puzzle-normal: var(--tv-palette-viewer-text-fg);
-    --tv-puzzle-highlight: var(--tv-palette-viewer-highlight-fg);
-    --tv-calendar-pane: var(--tv-palette-calendar-text-bg);
-    --tv-calendar-normal: var(--tv-palette-calendar-text-fg);
-    --tv-calendar-current: var(--tv-palette-calendar-current-fg);
-    --tv-ascii-pane: var(--tv-palette-ascii-text-bg);
-    --tv-ascii-text: var(--tv-palette-ascii-text-fg);
-    --tv-dialog-bg: var(--tv-palette-dialog-frame-active-bg);
-    --tv-dialog-fg: var(--tv-palette-dialog-static-fg);
-    --tv-dialog-frame: var(--tv-palette-dialog-frame-active-fg);
-    --tv-dialog-title: var(--tv-palette-dialog-frame-active-fg);
-    --tv-dialog-icon: var(--tv-palette-dialog-frame-icons-fg);
-    --tv-dialog-frame-passive: var(--tv-palette-dialog-frame-passive-fg);
-    --tv-dialog-title-passive: var(--tv-palette-dialog-frame-passive-bg);
-    --tv-dialog-title-text-passive: var(--tv-palette-dialog-frame-passive-fg);
-    --tv-dialog-icon-passive: var(--tv-palette-dialog-frame-passive-fg);
-    --tv-dialog-button-face: var(--tv-palette-dialog-button-normal-bg);
-    --tv-dialog-button-fg: var(--tv-palette-dialog-button-normal-fg);
-    --tv-dialog-button-disabled: var(--tv-palette-dialog-button-disabled-fg);
-    --tv-dialog-button-edge-bg: var(--tv-palette-dialog-button-shadow-bg);
-    --tv-dialog-button-edge-fg: var(--tv-palette-dialog-button-shadow-fg);
-    --tv-dialog-button-shadow-bg: var(--tv-palette-dialog-button-shadow-bg);
-    --tv-dialog-button-shadow-fg: var(--tv-palette-dialog-button-shadow-fg);
-    --tv-dialog-input-bg: var(--tv-palette-dialog-input-normal-bg);
-    --tv-dialog-input-fg: var(--tv-palette-dialog-input-normal-fg);
-    --tv-dialog-list-normal-bg: var(--tv-palette-dialog-list-normal-bg);
-    --tv-dialog-list-normal-fg: var(--tv-palette-dialog-list-normal-fg);
-    --tv-dialog-list-focused-bg: var(--tv-palette-dialog-list-focused-bg);
-    --tv-dialog-list-focused-fg: var(--tv-palette-dialog-list-focused-fg);
-    --tv-dialog-list-selected-bg: var(--tv-palette-dialog-list-selected-bg);
-    --tv-dialog-list-selected-fg: var(--tv-palette-dialog-list-selected-fg);
-    --tv-calc-display-bg: #0000aa;
-    --tv-calc-display-fg: #ffffff;
-    --tv-title: var(--tv-palette-help-frame-active-bg);
-    --tv-title-text: var(--tv-palette-help-frame-active-fg);
-    --tv-icon: var(--tv-palette-help-frame-icons-fg);
-    --tv-frame-passive: var(--tv-palette-help-frame-passive-fg);
-    --tv-title-passive: var(--tv-palette-help-frame-passive-bg);
-    --tv-title-text-passive: var(--tv-palette-help-frame-passive-fg);
-    --tv-icon-passive: var(--tv-palette-help-frame-passive-fg);
-    --tv-text: var(--tv-palette-help-text-fg);
-    --tv-muted: #ffffff;
-    --tv-link: #ffff55;
-    --tv-hover-bg: #0000aa;
-    --tv-hover-fg: #ffff55;
-    --tv-shadow: #000000;
-    --tv-shadow-soft: rgba(0, 0, 0, 0.58);
-    --tv-shadow-offset-x: 2ch;
-    --tv-shadow-offset-y: 1em;
-    --tv-page-area: var(--tv-palette-help-scroll-page-bg);
-    --tv-arrow-bg: var(--tv-palette-help-scroll-controls-bg);
-    --tv-arrow-fg: var(--tv-palette-help-scroll-controls-fg);
-    --tv-scroll-glyph: var(--tv-palette-help-scroll-page-fg);
-    --tv-thumb-bg: transparent;
-    --tv-thumb-fg: var(--tv-palette-help-scroll-controls-fg);
-    --tv-frame-line: var(--tv-palette-help-frame-active-fg);
-    --tv-code-bg: var(--tv-page-area);
-    --tv-code-text: #ffff55;
-    --tv-code-keyword: #ffffff;
-    --tv-code-string: #55ffff;
-    --tv-code-comment: #aaaaaa;
-    --tv-code-number: #ffffff;
-    --tv-code-preproc: #55ff55;
-    --tv-code-asm: #55ff55;
-    --tv-cell-size: 16px;
-    --tv-cell-width: 1ch;
+    --tv-text: var(--tv-palette-help-text-fg); --tv-muted: #ffffff; --tv-link: #ffff55; --tv-hover-bg: #0000aa;
+    --tv-hover-fg: #ffff55; --tv-shadow-soft: rgba(0, 0, 0, 0.58); --tv-shadow-offset-x: 2ch;
+    --tv-shadow-offset-y: 1em; --tv-page-area: var(--tv-palette-help-scroll-page-bg);
+    --tv-code-bg: var(--tv-page-area); --tv-code-text: #ffff55; --tv-code-keyword: #ffffff;
+    --tv-code-string: #55ffff; --tv-code-comment: #aaaaaa; --tv-code-number: #ffffff;
+    --tv-code-preproc: #55ff55; --tv-code-asm: #55ff55; --tv-cell-size: 16px;
 }
 
-html,
-body {
-    height: 100%;
-}
+html, body, .tv-app { height: 100%; }
 
-body,
-button,
-input,
-textarea,
-select,
-pre,
-code,
-.tv-window,
-.tv-window *,
-.tv-dialog-window,
-.tv-dialog-window * {
-    font-family: var(--tv-font-text) !important;
-    font-size: var(--tv-cell-size);
-    line-height: 1;
-    font-weight: normal;
-    font-kerning: none;
-    font-variant-ligatures: none;
-    font-synthesis: none;
-    text-rendering: optimizeSpeed;
-    -webkit-font-smoothing: none;
-    -moz-osx-font-smoothing: auto;
-}
-
-.tv-desktop-pattern,
-.tv-menu-bar,
-.tv-menu-bar *,
-.tv-status-line,
-.tv-status-line *,
-.tv-border-row,
-.tv-border-row *,
-.tv-border-side,
-.tv-border-corner,
-.tv-border-fill,
-.tv-close-control,
-.tv-window-caption,
-.tv-scrollbar,
-.tv-scrollbar *,
-.tv-scroll-corner {
-    font-family: var(--tv-font-chrome) !important;
-}
+body, .tv-window, .tv-dialog-window { font-family: var(--tv-font-text); }
 
 body {
+    font-size: var(--tv-cell-size); font-kerning: none; font-variant-ligatures: none; font-synthesis: none;
+    text-rendering: optimizeSpeed; -webkit-font-smoothing: none; -moz-osx-font-smoothing: auto;
+}
+
+button, input, textarea, select, pre, code { font: inherit; }
+
+pre, code { font-size: var(--tv-cell-size); }
+
+body, pre, code { line-height: 1; }
+
+.tv-desktop-pattern, .tv-menu-bar, .tv-status-line, .tv-border-row, .tv-border-side, .tv-border-corner,
+.tv-border-fill, .tv-close-control, .tv-window-caption, .tv-scrollbar, .tv-scroll-corner {
+    font-family: var(--tv-font-chrome);
+}
+
+body, .tv-desktop-pattern, .tv-document, .tv-pre, .tv-doc-document :is(h1, h2, h3, h4), .tv-doc-document p,
+.tv-doc-document pre, .tv-doc-document hr, .tv-doc-document ul, .tv-doc-document ol, .code-example {
     margin: 0;
-    background: var(--tv-desktop);
-    color: var(--tv-text);
+}
+
+body, .tv-desktop, .tv-desktop-pattern { background: var(--tv-palette-desktop-bg); }
+
+body, .tv-desktop, .tv-dos-surface, .tv-menu-label, .tv-menu-popup-label, .tv-status-label, .tv-frame-title,
+.tv-desktop-pattern, .tv-window, .tv-dialog-window, .tv-topic-line-rule, .tv-flat-button, .tv-dialog-button,
+.tv-image > span, .tv-grid-text, .tv-checkbox-item, .tv-radio-item, .tv-multicheck-item,
+.tv-dos-window .tv-viewport, .tv-border-fill, .tv-close-control, .tv-zoom-control, .tv-window-caption,
+.tv-scroll-arrow, .tv-editor-indicator, .tv-vlist-item, .tv-vlist-text, .tv-menu-right, .tv-scroll-track,
+.tv-game-board, .tv-border-side, .tv-dialog-body, .tv-dialog-client, .tv-dialog-title-text, .tv-editor-frame,
+.tv-vlist-viewer, .tv-info-box, .tv-terminal, .tv-terminal [data-tv-terminal-line], .tv-gauge, .tv-cluster,
+.tv-image, .tv-dialog-button-face, .tv-dialog-button-label, .tv-saver-canvas {
     overflow: hidden;
 }
 
-a {
-    color: var(--tv-link);
-    text-decoration: none;
+body { color: var(--tv-text); }
+
+a, .tv-index-group-label { color: var(--tv-link); }
+
+a { text-decoration: none; }
+
+a:where(:not(.tv-menu-item, .tv-menu-popup-item, .tv-status-item)):hover,
+a:where(:not(.tv-menu-item, .tv-menu-popup-item, .tv-status-item)):focus-visible {
+    background: var(--tv-hover-bg); color: var(--tv-hover-fg); outline: none;
 }
 
-a:hover,
-a:focus-visible,
-button:hover,
-button:focus-visible {
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
-    outline: none;
-}
-
-.tv-menu-item:hover,
-.tv-menu-item:focus-visible,
-.tv-status-item:hover,
-.tv-status-item:focus-visible {
-    background: var(--tv-appbar-active-bg);
-    color: var(--tv-appbar-active-text);
-}
-
-.tv-menu-item:hover .tv-hotkey,
-.tv-menu-item:focus-visible .tv-hotkey,
-.tv-menu-item.is-current .tv-hotkey,
-.tv-status-item:hover .tv-hotkey,
-.tv-status-item:focus-visible .tv-hotkey {
-    color: var(--tv-appbar-active-hotkey);
-}
-
-.tv-desktop {
+.tv-desktop, .tv-app, .tv-menu-bar, .tv-status-line, .tv-group, .tv-image, .tv-editor-frame, .tv-list-viewer,
+.tv-vlist-viewer, .tv-vlist-viewport, .tv-grid-rows, .tv-cluster {
     position: relative;
-    min-height: 0;
-    padding: 1ch;
-    box-sizing: border-box;
-    overflow: hidden;
-    background: var(--tv-desktop);
 }
 
-/* DOS screen owns the client area; geometry and frames come from TVWindow. */
-.tv-window.tv-dos-window {
-    --tv-window: #000;
-    --tv-owner-content-bg: #000;
-    --tv-owner-content-fg: #aaa;
-    --tv-owner-frame-active-bg: #000;
-    --tv-owner-frame-passive-bg: #000;
-    --tv-owner-frame-icons-bg: #000;
-}
-.tv-dos-window .tv-viewport { padding: 0; overflow: hidden; background: #000; color: #aaa; }
-.tv-dos-view, .tv-dos-surface > canvas { display: block; width: 100%; height: 100%; }
-.tv-dos-view { position: relative; background: #000; outline: none; }
-.tv-dos-surface { position: absolute; inset: 0; overflow: hidden; }
-.tv-dos-surface > canvas { background: #000; object-fit: contain; image-rendering: pixelated; }
-.tv-dos-surface > .tv-text-screen-text { position: absolute; }
-.tv-dos-view.is-paused > .tv-dos-surface,
-.tv-dos-view.is-dragging > .tv-dos-surface { filter: grayscale(1); }
-.tv-dos-window .tv-viewport > .tv-static-text { color: #fff; background: #000; }
+.tv-dos-view { background: #000; outline: none; }
 
-.tv-app {
-    display: grid;
-    grid-template-rows: 1em minmax(0, 1fr) 1em;
-    height: 100%;
+.tv-dos-surface > canvas, .tv-text-screen { image-rendering: pixelated; }
+
+.tv-dos-surface > canvas { background: #000; object-fit: contain; }
+
+.tv-dos-view.is-paused > .tv-dos-surface, .tv-dos-view.is-dragging > .tv-dos-surface { filter: grayscale(1); }
+
+.tv-menu-bar { z-index: 100; }
+
+.tv-menu-items, .tv-status-items, .tv-status-right, .tv-list-viewer.is-multi-column,
+.tv-vlist-viewer.is-multi-column > .tv-vlist-viewport {
+    overflow-x: auto; overflow-y: hidden;
 }
 
-.tv-menu-bar,
-.tv-status-line {
-    display: grid;
-    align-items: stretch;
-    min-height: 1em;
-    background: var(--tv-appbar-bg);
-    color: var(--tv-appbar-text);
+.tv-menu-item, .tv-status-item, .tv-submenu-toggle, .tv-menu-popup-item, .tv-close-control, .tv-zoom-control,
+.tv-scroll-arrow, .tv-grow-handle, .tv-dialog-title-control, .tv-flat-button, .tv-dialog-button,
+.tv-input-line, .tv-vlist-item {
+    padding: 0; border: 0; appearance: none; outline: none;
 }
 
-.tv-menu-bar {
-    position: relative;
-    z-index: 100;
-    grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.tv-menu-items,
-.tv-status-line {
-    display: flex;
-    align-items: stretch;
-    min-width: 0;
-}
-
-.tv-menu-right { display: flex; margin-left: auto; flex-shrink: 0; }
-
-.tv-menu-item,
-.tv-status-item,
-.tv-menu-clock,
-.tv-menu-separator,
-.tv-status-separator,
-.tv-status-hint {
-    display: inline-flex;
-    align-items: center;
-    min-height: 1em;
-    white-space: pre;
-}
-
-.tv-menu-item,
-.tv-status-item {
-    padding: 0 1ch;
-    color: var(--tv-appbar-text);
-    background: var(--tv-appbar-bg);
-}
-
-.tv-menu-separator {
-    padding: 0;
-    color: var(--tv-appbar-text);
-    background: var(--tv-appbar-bg);
-}
-
-.tv-status-separator {
-    padding: 0 1ch 0 0;
-    color: var(--tv-appbar-text);
-    background: var(--tv-appbar-bg);
-}
-
-button.tv-menu-item,
-button.tv-status-item {
-    border: 0;
+button.tv-menu-item, button.tv-status-item, .tv-submenu-toggle, .tv-menu-popup-item, .tv-vlist-item,
+.tv-close-control, .tv-zoom-control, .tv-dialog-title-control,
+:is(.tv-flat-button, .tv-dialog-button, .tv-scroll-arrow):not(:disabled) {
     cursor: pointer;
-    font: inherit;
-    appearance: none;
 }
 
-.tv-menu-item.is-current {
-    background: var(--tv-appbar-active-bg);
-    color: var(--tv-appbar-active-text);
+.tv-menu-popup, .tv-window, .tv-dialog-window, .tv-dialog-overlay, .tv-choice-input { position: absolute; }
+
+.tv-menu-popup, .tv-window, .tv-dialog-window {
+    box-shadow: var(--tv-shadow-offset-x) var(--tv-shadow-offset-y) 0 var(--tv-shadow-soft);
 }
 
-.tv-menu-root {
-    position: relative;
-    display: inline-flex;
-    align-items: stretch;
-}
+.tv-menu-popup { z-index: 101; }
 
-.tv-menu-button {
-    justify-content: center;
-    min-width: 3ch;
-}
-
-.tv-menu-popup {
-    position: absolute;
-    left: 0;
-    top: 1em;
-    z-index: 101;
-    display: grid;
-    grid-template-rows: 1em auto 1em;
-    width: max-content;
-    min-width: 14ch;
-    background: var(--tv-dialog-bg);
-    color: var(--tv-dialog-fg);
-    box-shadow:
-        var(--tv-shadow-offset-x) var(--tv-shadow-offset-y) 0 var(--tv-shadow-soft);
-}
-
-.tv-menu-popup-row {
-    position: relative;
-    background: var(--tv-dialog-bg);
-    color: #000000;
-}
-.tv-menu-popup-row .tv-border-corner:last-child {
-    position: absolute;
-    right: 0;
-    top: 0;
-}
-
-.tv-menu-popup-main {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    min-height: 0;
-    position: relative;
-    background: var(--tv-dialog-bg);
-}
-
-.tv-menu-popup.is-scrollable .tv-menu-popup-main {
-    grid-template-columns: minmax(0, 1fr);
-}
+.tv-menu-popup-body.is-scrollable { overflow-x: hidden; overflow-y: auto; }
 
 .tv-menu-popup-main > .tv-scrollbar-y {
-    grid-column: 2;
+    z-index: 1; --tv-scrollbar-bg: #000000; --tv-scrollbar-glyph: #555555; --tv-scrollbar-arrow-bg: #000000;
+    --tv-scrollbar-arrow-fg: #aaaaaa; --tv-scrollbar-thumb-fg: #aaaaaa;
 }
 
-.tv-menu-popup-body {
-    display: grid;
-    grid-template-columns: 1ch minmax(0, 1fr) 1ch;
-    min-height: 0;
-    background: var(--tv-dialog-bg);
-}
+.tv-menu-popup-frame-side, .tv-window { z-index: 1; }
 
-.tv-menu-popup.is-scrollable .tv-menu-popup-side-right {
-    display: grid;
-}
-
-.tv-menu-popup-body.is-scrollable {
-    overflow-x: hidden;
-    overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
-.tv-js .tv-menu-popup-body.is-scrollable::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-}
-
-.tv-menu-popup-main > .tv-scrollbar-y,
-.tv-menu-popup-frame-side {
-    display: none;
-}
-
-.tv-menu-popup.is-scrollable .tv-menu-popup-main > .tv-scrollbar-y {
-    display: flex;
-    position: absolute;
-    top: 0;
-    right: 1ch;
-    bottom: 0;
-    z-index: 1;
-}
-
-.tv-menu-popup.is-scrollable .tv-menu-popup-frame-side {
-    display: grid !important;
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1;
-}
-
-.tv-menu-popup-main > .tv-scrollbar-y {
-    min-width: 1ch;
-    width: 1ch;
-    --tv-scrollbar-bg: #000000;
-    --tv-scrollbar-glyph: #555555;
-    --tv-scrollbar-arrow-bg: #000000;
-    --tv-scrollbar-arrow-fg: #aaaaaa;
-    --tv-scrollbar-thumb-fg: #aaaaaa;
-}
-
-.tv-menu-popup-main > .tv-scrollbar-y .tv-scroll-arrow {
-    width: 1ch;
-    min-width: 1ch;
-}
-
-.tv-menu-popup-main > .tv-scrollbar-y .tv-scroll-cell {
-    width: 1ch;
-    place-items: center;
-    background: transparent;
-}
-
-.tv-menu-popup-main > .tv-scrollbar-y .tv-scroll-thumb {
-    background: transparent;
-}
-
-.tv-menu-popup-frame-side {
-    grid-column: 3;
-    background: var(--tv-dialog-bg);
-    display: none !important;
-}
-
-.tv-menu-popup-row .tv-border-corner,
-.tv-menu-popup-main > .tv-border-side,
-.tv-menu-popup-body .tv-border-side {
-    color: #000000;
-}
-
-.tv-menu-popup-row .tv-border-fill {
-    position: absolute;
-    left: 1ch;
-    right: 1ch;
-    top: 0;
-    overflow: hidden;
-    color: #000000;
-}
-
-.tv-menu-popup-items {
-    min-width: 0;
-    background: var(--tv-dialog-bg);
-}
-
-.tv-menu-popup.is-scrollable .tv-menu-popup-items {
-    grid-column: auto;
-}
-
-.tv-menu-popup.is-scrollable .tv-menu-popup-item,
-.tv-menu-popup.is-scrollable .tv-submenu-toggle {
-    padding-right: 3ch;
-}
-
-.tv-menu-popup-separator {
-    position: relative;
-    display: grid;
-    grid-template-columns: 1ch minmax(0, 1fr) 1ch;
-    min-height: 1em;
-    line-height: 1;
-    grid-column: 1 / -1;
-    background: var(--tv-dialog-bg);
-    color: #000000;
-}
-.tv-menu-popup-separator .tv-border-fill {
-    display: block;
-    position: static;
-    overflow: hidden;
-    min-width: 0;
-    height: 1em;
-    line-height: 1;
-    white-space: pre;
-}
-
-.tv-menu-popup-separator-left,
-.tv-menu-popup-separator-right {
-    display: block;
-    min-width: 1ch;
-    height: 1em;
-    line-height: 1;
-}
-
-.tv-submenu-root {
-    position: relative;
-}
-
-.tv-submenu-toggle,
-.tv-menu-popup-item {
-    display: block;
+.tv-submenu-toggle, .tv-menu-popup-item, .tv-vlist-item, .tv-document, .tv-pre, .code-example, .tv-image,
+.tv-input-line, .tv-vlist-viewport {
     box-sizing: border-box;
-    width: 100%;
-    min-height: 1em;
-    padding: 0 2ch 0 1ch;
-    border: 0;
-    font: inherit;
-    text-align: left;
-    appearance: none;
-    cursor: pointer;
-    white-space: pre;
-    background: var(--tv-dialog-bg);
-    color: var(--tv-dialog-fg);
 }
 
-.tv-submenu-toggle:hover,
-.tv-submenu-toggle:focus-visible,
-.tv-submenu-toggle.is-menu-selected,
-.tv-submenu-toggle.is-submenu-open,
-.tv-menu-popup-item:hover,
-.tv-menu-popup-item:focus-visible,
-.tv-menu-popup-item.is-menu-selected {
-    background: var(--tv-appbar-active-bg);
-    color: var(--tv-appbar-active-text);
-    outline: none;
-}
-
-.tv-submenu-arrow {
-    float: right;
-    padding-left: 2ch;
-}
-
-.tv-submenu-popup {
-    position: absolute;
-    left: calc(100% - 1ch);
-    top: -1em;
-    z-index: 25;
-}
-
-.tv-menu-hotkey {
-    float: right;
-    padding-left: 2ch;
-    color: var(--tv-dialog-fg);
-}
-
-.tv-menu-popup-item:hover .tv-hotkey,
-.tv-menu-popup-item:focus-visible .tv-hotkey,
-.tv-menu-popup-item.is-menu-selected .tv-hotkey {
-    color: var(--tv-appbar-active-hotkey);
-}
-
-.tv-menu-popup-item:hover .tv-menu-hotkey,
-.tv-menu-popup-item:focus-visible .tv-menu-hotkey,
-.tv-menu-popup-item.is-menu-selected .tv-menu-hotkey {
-    color: var(--tv-appbar-active-text);
-}
-
-.tv-menu-popup-item:disabled,
-.tv-menu-popup-item[aria-disabled="true"],
-.tv-menu-popup-item.is-disabled {
-    color: var(--tv-menu-disabled);
-    background: var(--tv-dialog-bg);
-    cursor: default;
-    pointer-events: none;
-}
-
-.tv-menu-popup-item:disabled .tv-hotkey,
-.tv-menu-popup-item:disabled .tv-menu-hotkey,
-.tv-menu-popup-item[aria-disabled="true"] .tv-hotkey,
-.tv-menu-popup-item[aria-disabled="true"] .tv-menu-hotkey,
-.tv-menu-popup-item.is-disabled .tv-hotkey,
-.tv-menu-popup-item.is-disabled .tv-menu-hotkey {
-    color: var(--tv-menu-disabled);
-}
-
-.tv-menu-clock {
-    justify-self: end;
-    padding: 0 1ch;
-    color: var(--tv-appbar-text);
-    background: var(--tv-appbar-bg);
-    min-width: 8ch;
-}
-
-.tv-status-line {
-    padding-right: 1ch;
-}
-
-.tv-status-hint {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
+.tv-menu-label, .tv-menu-popup-label, .tv-status-label, .tv-frame-title, .tv-status-line > .tv-static-text,
+.tv-grid-text {
     text-overflow: ellipsis;
-    color: var(--tv-appbar-text);
-    padding-left: 0;
 }
 
-.tv-status-link {
-    padding: 0 1ch;
-    color: var(--tv-appbar-text);
-    text-decoration: none;
-}
+.tv-submenu-popup { z-index: 25; }
 
-.tv-status-link:hover {
-    color: var(--tv-appbar-active-text);
-    background: var(--tv-appbar-active-bg);
-}
-
-.tv-hotkey {
-    color: var(--tv-appbar-hotkey);
-}
-
-.tv-desktop-pattern {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    margin: 0;
-    overflow: hidden;
-    white-space: pre;
+.tv-scroll-arrow:disabled, :is(.tv-menu-item, .tv-menu-popup-item)[aria-disabled="true"], .tv-desktop-pattern,
+.tv-zoom-control.is-frame-control-passive, .tv-scroll-cells, .tv-window.is-window-inactive .tv-grow-handle,
+.tv-dialog-overlay, .tv-choice-input {
     pointer-events: none;
-    user-select: none;
-    color: var(--tv-desktop-dot);
-    background: var(--tv-desktop);
 }
 
-.tv-window {
-    position: absolute;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    width: min(calc(var(--tv-window-cols, 82) * 1ch), 100%);
-    height: min(calc(var(--tv-window-rows, 24) * 1em), 100%);
-    min-width: calc(var(--tv-window-min-cols, 10) * 1ch);
-    min-height: calc(var(--tv-window-min-rows, 5) * 1em);
-    margin: 0;
-    left: var(--tv-window-left, 1ch);
-    top: var(--tv-window-top, 1ch);
-    --tv-owner-frame-passive-bg: var(--tv-palette-help-frame-passive-bg);
-    --tv-owner-frame-passive-fg: var(--tv-palette-help-frame-passive-fg);
-    --tv-owner-frame-active-bg: var(--tv-palette-help-frame-active-bg);
-    --tv-owner-frame-active-fg: var(--tv-palette-help-frame-active-fg);
-    --tv-owner-frame-icons-bg: var(--tv-palette-help-frame-icons-bg);
-    --tv-owner-frame-icons-fg: var(--tv-palette-help-frame-icons-fg);
-    --tv-owner-title-active-bg: var(--tv-owner-frame-active-bg);
+.tv-scroll-arrow:disabled, :is(.tv-menu-item, .tv-menu-popup-item)[aria-disabled="true"],
+.tv-status-item[aria-disabled="true"], .tv-window.is-maximized .tv-border-top,
+.tv-zoom-control.is-frame-control-passive, .tv-window.is-window-inactive .tv-grow-handle {
+    cursor: default;
+}
+
+.tv-desktop-pattern, .tv-border-top, .tv-scrollbar { user-select: none; }
+
+.tv-desktop-pattern, .tv-menu-item, .tv-status-item, .tv-submenu-toggle, .tv-menu-popup-item, .tv-vlist-item,
+.tv-grow-handle, .tv-editor-indicator, .tv-dialog-title-text, .tv-dialog-title-control, .tv-border-corner,
+.tv-border-fill, .tv-border-side, .tv-scroll-corner, .tv-window-caption, .tv-close-control, .tv-zoom-control,
+.tv-scroll-cells, .tv-scroll-thumb, .tv-index-entry, .tv-index-group-label, .tv-index-group-item,
+.tv-index-empty, .tv-static-text, .tv-gauge, .tv-terminal, .tv-doc-document pre, .tv-pre, .code-example,
+.tv-flat-button, .tv-dialog-button, .tv-image > span, .tv-grid-text, .tv-checkbox-item, .tv-radio-item,
+.tv-multicheck-item, .tv-editor-surface, .tv-saver-canvas {
+    white-space: pre;
+}
+
+.tv-desktop-pattern { z-index: 0; color: var(--tv-palette-desktop-fg); }
+
+/* Nested windows reset owner aliases before source HELP overrides them. */
+.tv-window, .tv-dialog-window {
+    outline: none; --tv-owner-title-active-bg: var(--tv-owner-frame-active-bg);
     --tv-owner-title-active-fg: var(--tv-owner-frame-active-fg);
     --tv-owner-title-passive-bg: var(--tv-owner-frame-passive-bg);
     --tv-owner-title-passive-fg: var(--tv-owner-frame-passive-fg);
     --tv-owner-icon-active-bg: var(--tv-owner-frame-icons-bg);
     --tv-owner-icon-active-fg: var(--tv-owner-frame-icons-fg);
-    --tv-owner-icon-passive-fg: var(--tv-owner-frame-passive-fg);
-    --tv-owner-scroll-page-bg: var(--tv-palette-help-scroll-page-bg);
-    --tv-owner-scroll-page-fg: var(--tv-palette-help-scroll-page-fg);
-    --tv-owner-scroll-controls-bg: var(--tv-palette-help-scroll-controls-bg);
-    --tv-owner-scroll-controls-fg: var(--tv-palette-help-scroll-controls-fg);
-    --tv-owner-scroll-thumb-bg: var(--tv-thumb-bg);
+    --tv-owner-icon-passive-fg: var(--tv-owner-frame-passive-fg); --tv-owner-scroll-thumb-bg: transparent;
     --tv-owner-scroll-thumb-fg: var(--tv-owner-scroll-controls-fg);
-    --tv-owner-content-bg: var(--tv-palette-help-text-bg);
-    --tv-owner-content-fg: var(--tv-palette-help-text-fg);
     --tv-current-frame: var(--tv-owner-frame-active-fg);
     --tv-current-title-bg: var(--tv-owner-title-active-bg);
-    --tv-current-title-fg: var(--tv-owner-title-active-fg);
-    --tv-current-icon: var(--tv-owner-icon-active-fg);
-    --tv-scrollbar-bg: var(--tv-owner-scroll-page-bg);
-    --tv-scrollbar-glyph: var(--tv-owner-scroll-page-fg);
+    --tv-current-title-fg: var(--tv-owner-title-active-fg); --tv-current-icon: var(--tv-owner-icon-active-fg);
+    --tv-scrollbar-bg: var(--tv-owner-scroll-page-bg); --tv-scrollbar-glyph: var(--tv-owner-scroll-page-fg);
     --tv-scrollbar-arrow-bg: var(--tv-owner-scroll-controls-bg);
     --tv-scrollbar-arrow-fg: var(--tv-owner-scroll-controls-fg);
     --tv-scrollbar-thumb-bg: var(--tv-owner-scroll-thumb-bg);
-    --tv-scrollbar-thumb-fg: var(--tv-owner-scroll-thumb-fg);
-    background: var(--tv-owner-content-bg);
+    --tv-scrollbar-thumb-fg: var(--tv-owner-scroll-thumb-fg); background: var(--tv-owner-content-bg);
     color: var(--tv-owner-content-fg);
-    box-shadow:
-        var(--tv-shadow-offset-x) var(--tv-shadow-offset-y) 0 var(--tv-shadow-soft);
-    overflow: hidden;
 }
 
-.tv-window.is-window-inactive,
-.tv-dialog-window.is-window-inactive {
+.tv-window.is-window-inactive, .tv-dialog-window.is-window-inactive {
     --tv-current-frame: var(--tv-owner-frame-passive-fg);
     --tv-current-title-bg: var(--tv-owner-title-passive-bg);
     --tv-current-title-fg: var(--tv-owner-title-passive-fg);
     --tv-current-icon: var(--tv-owner-icon-passive-fg);
 }
 
-.tv-window.is-maximized {
-    left: 0 !important;
-    top: 0 !important;
-    width: 100%;
-    height: 100%;
-    min-width: 0;
-    min-height: 0;
+.tv-border-top, .tv-dialog-titlebar { cursor: move; }
+
+.tv-border-fill { contain: inline-size; }
+
+.tv-close-control, .tv-zoom-control, .tv-window-caption, .tv-dialog-titlebar, .tv-dialog-footer,
+.tv-dialog-title-text, .tv-dialog-title-control {
+    background: var(--tv-current-title-bg);
 }
 
-.tv-window.is-maximized .tv-border-top {
-    cursor: default;
+.tv-close-control, .tv-zoom-control, .tv-window-caption, .tv-dialog-title-text, .tv-dialog-title-control {
+    color: var(--tv-current-title-fg);
 }
 
-.tv-shell {
-    display: grid;
-    grid-template-rows: 1em minmax(0, 1fr);
-    width: 100%;
-    height: 100%;
-}
-
-.tv-border-row {
-    display: grid;
-    align-items: stretch;
-    background: var(--tv-window);
-}
-
-.tv-border-top {
-    grid-template-columns: 1ch 1ch auto minmax(1ch, 1fr) auto minmax(1ch, 1fr) auto 1ch 1ch;
-    cursor: move;
-    user-select: none;
-}
-
-.tv-border-corner,
-.tv-border-fill,
-.tv-border-side,
-.tv-window-caption,
-.tv-close-control,
-.tv-zoom-control {
-    white-space: pre;
-}
-
-.tv-border-corner,
-.tv-border-side {
-    display: grid;
-    place-items: center;
-    width: 1ch;
-    min-width: 1ch;
-}
-
-.tv-border-fill {
-    contain: inline-size;
-    overflow: hidden;
-    min-width: 0;
-}
-
-.tv-control-gap {
-    width: 1ch;
-    min-width: 1ch;
-    max-width: 1ch;
-}
-
-.tv-frame-control-placeholder {
-    width: 3ch;
-    min-width: 3ch;
-}
-
-.tv-close-control,
-.tv-zoom-control,
-.tv-window-caption {
-    display: inline-flex;
-    align-items: center;
-    line-height: 1;
-    min-height: 1em;
-    height: 1em;
-    background: var(--tv-current-title-bg, var(--tv-title));
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.tv-close-control, .tv-zoom-control, .tv-window-caption, .tv-index-heading, .tv-index-section-label {
     text-transform: uppercase;
 }
 
-.tv-window-caption {
-    padding: 0 1ch;
-    color: var(--tv-current-title-fg, var(--tv-title-text));
-    white-space: nowrap;
-}
+.tv-zoom-control.is-frame-control-passive, .code-example-empty { color: transparent; }
 
-.tv-close-control,
-.tv-zoom-control {
-    padding: 0;
-    border: 0;
-    appearance: none;
-    font: inherit;
-    cursor: pointer;
-    color: var(--tv-current-title-fg, var(--tv-title-text));
-}
+.tv-zoom-control.is-frame-control-passive > .tv-zoom-glyph { visibility: hidden; }
 
-.tv-zoom-control.is-frame-control-passive {
-    position: relative;
-    pointer-events: none;
-    cursor: default;
-    color: transparent;
-    background: var(--tv-current-title-bg, var(--tv-window));
-}
+.tv-close-glyph, .tv-zoom-glyph, .tv-dialog-title-control-glyph { color: var(--tv-current-icon); }
 
-.tv-zoom-control.is-frame-control-passive > * {
-    visibility: hidden;
-}
-
-.tv-zoom-control.is-frame-control-passive::after {
-    position: absolute;
-    inset: 0;
+.tv-frame-passive, .tv-close-control.is-frame-control-passive, .tv-shell > .tv-border-top,
+.tv-shell > .tv-border-top > :is(.tv-border-corner, .tv-border-fill), .tv-client-row > .tv-border-side,
+.tv-bottom-bar > :is(.tv-border-fill, .tv-scroll-corner), .tv-dialog-window .tv-border-side,
+:is(.tv-dialog-titlebar, .tv-dialog-footer) > :is(.tv-border-corner, .tv-border-fill),
+.tv-dialog-body > :is(.tv-border-corner, .tv-border-separator), .tv-window.is-window-inactive .tv-grow-handle,
+.tv-dialog-titlebar, .tv-dialog-footer, .tv-info-box > .tv-static-text:not(.tv-info-row), [data-tv-info-side] {
     color: var(--tv-current-frame);
-    content: "───";
-    text-align: center;
-}
-
-.tv-close-control.is-frame-control-passive {
-    color: var(--tv-current-frame);
-    background: var(--tv-current-title-bg, var(--tv-window));
-}
-
-.tv-close-control:hover,
-.tv-close-control:focus-visible,
-.tv-zoom-control:hover,
-.tv-zoom-control:focus-visible {
-    background: var(--tv-current-title-bg, var(--tv-title)) !important;
-    color: var(--tv-current-title-fg, var(--tv-title-text)) !important;
-    outline: none;
-}
-
-.tv-close-glyph,
-.tv-zoom-glyph {
-    display: inline-block;
-    line-height: 1;
-    height: 1em;
-    color: var(--tv-current-icon, var(--tv-icon));
-}
-
-.tv-dialog-close-control .tv-close-glyph,
-.tv-dialog-title-control-glyph {
-    color: var(--tv-current-icon);
-}
-
-.tv-frame {
-    min-height: 0;
-    padding: 0;
-    background: var(--tv-window);
-    grid-column: 2;
-    grid-row: 1;
-}
-
-.tv-client-row {
-    display: grid;
-    grid-template-columns: 1ch minmax(0, 1fr) var(--tv-cell-width);
-    grid-template-rows: minmax(0, 1fr) 1em;
-    min-height: 0;
-    background: var(--tv-window);
-}
-
-.tv-border-side {
-    overflow: hidden;
-    align-content: start;
-    justify-content: center;
-}
-
-.tv-window > .tv-shell > .tv-border-top,
-.tv-window > .tv-shell > .tv-border-top .tv-border-corner,
-.tv-window > .tv-shell > .tv-border-top .tv-border-fill,
-.tv-window > .tv-shell > .tv-client-row > .tv-border-side-left,
-.tv-window > .tv-shell > .tv-client-row > .tv-border-side-right,
-.tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-border-fill,
-.tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-scroll-corner-left,
-.tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-scroll-corner-right,
-.tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-grow-handle {
-    color: var(--tv-current-frame);
-}
-
-.tv-border-side-left {
-    grid-column: 1;
-    grid-row: 1;
-}
-
-.tv-border-side-right {
-    grid-column: 3;
-    grid-row: 1;
-}
-
-.tv-scroll-shell {
-    width: 100%;
-    height: 100%;
-    background: var(--tv-window);
-}
-
-.tv-viewport {
-    position: relative;
-    min-width: 0;
-    min-height: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background: var(--tv-window);
-    color: var(--tv-text);
-}
-
-.tv-js .tv-viewport {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
-.tv-js .tv-viewport::-webkit-scrollbar {
-    width: 0;
-    height: 0;
 }
 
 .tv-scrollbar {
-    display: none;
-    background: var(--tv-scrollbar-bg, var(--tv-page-area));
-    color: var(--tv-scrollbar-glyph, var(--tv-scroll-glyph));
-    user-select: none;
+    display: none; background: var(--tv-scrollbar-bg, var(--tv-page-area));
+    color: var(--tv-scrollbar-glyph, var(--tv-palette-help-scroll-page-fg));
 }
 
-.tv-scrollbar.is-inactive .tv-scroll-arrow,
-.tv-scrollbar.is-inactive .tv-thumb-cell,
-.tv-scrollbar.is-disabled .tv-scroll-arrow {
-    cursor: default;
-}
-
-.tv-scrollbar.is-inactive .tv-scroll-arrow,
-.tv-scrollbar.is-disabled .tv-scroll-arrow {
-    pointer-events: none;
-}
-
-.tv-js .tv-scrollbar {
-    display: flex;
-}
+.tv-js .tv-scrollbar, .tv-vlist-item.is-flow > .tv-vlist-text { display: block; }
 
 .tv-scroll-arrow {
-    width: var(--tv-cell-width);
-    height: 1em;
-    min-width: var(--tv-cell-width);
-    min-height: 1em;
-    padding: 0;
-    border: 0;
-    background: var(--tv-scrollbar-arrow-bg, var(--tv-arrow-bg));
-    color: var(--tv-scrollbar-arrow-fg, var(--tv-arrow-fg));
-    font: inherit;
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-}
-
-.tv-scroll-track {
-    position: relative;
-    flex: 1;
-    background: var(--tv-scrollbar-bg, var(--tv-page-area));
-    overflow: hidden;
-}
-
-.tv-scroll-cells,
-.tv-scroll-thumb {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    align-content: start;
-    justify-content: start;
-}
-
-.tv-scroll-cells {
-    pointer-events: none;
+    background: var(--tv-scrollbar-arrow-bg, var(--tv-palette-help-scroll-controls-bg));
+    color: var(--tv-scrollbar-arrow-fg, var(--tv-palette-help-scroll-controls-fg));
 }
 
 .tv-scroll-thumb {
-    pointer-events: none;
-    background: transparent;
+    background: var(--tv-scrollbar-thumb-bg, transparent);
+    color: var(--tv-scrollbar-thumb-fg, var(--tv-palette-help-scroll-controls-fg));
 }
 
-.tv-scrollbar-y {
-    grid-column: 3;
-    grid-row: 1;
-    flex-direction: column;
-}
-
-.tv-scrollbar-x {
-    flex-direction: row;
-    min-width: 0;
-    flex: 1;
-}
-
-.tv-scrollbar-y .tv-scroll-cells {
-    grid-auto-rows: 1em;
-    grid-template-columns: var(--tv-cell-width);
-    background: var(--tv-scrollbar-bg, var(--tv-page-area));
-}
-
-.tv-scrollbar-y .tv-scroll-thumb {
-    grid-auto-rows: 1em;
-    grid-template-columns: var(--tv-cell-width);
-}
-
-.tv-scrollbar-x .tv-scroll-cells {
-    grid-auto-columns: var(--tv-cell-width);
-    grid-template-rows: 1em;
-    grid-auto-flow: column;
-    background: var(--tv-scrollbar-bg, var(--tv-page-area));
-}
-
-.tv-scrollbar-x .tv-scroll-thumb {
-    grid-auto-columns: var(--tv-cell-width);
-    grid-template-rows: 1em;
-    grid-auto-flow: column;
-}
-
-.tv-scroll-cell,
-.tv-thumb-cell {
-    display: grid;
-    width: var(--tv-cell-width);
-    height: 1em;
-    place-items: center;
-}
-
-.tv-scroll-cell {
-    background: transparent;
-    color: var(--tv-scrollbar-glyph, var(--tv-scroll-glyph));
-}
-
-.tv-thumb-cell {
-    background: var(--tv-scrollbar-thumb-bg, var(--tv-thumb-bg));
-    color: var(--tv-scrollbar-thumb-fg, var(--tv-thumb-fg));
-    pointer-events: auto;
-}
-
-.tv-bottom-bar {
-    grid-column: 1 / 4;
-    grid-row: 2;
-    display: flex;
-    align-items: stretch;
-    min-width: 0;
-    background: var(--tv-window);
-}
-
-.tv-scroll-corner-left,
-.tv-scroll-corner-right {
-    display: grid;
-    place-items: center;
-    width: 1ch;
-    min-width: 1ch;
-    height: 1em;
-    background: var(--tv-window);
-    color: var(--tv-frame-line);
-    white-space: pre;
-}
-
-.tv-window.is-fixed-window .tv-bottom-bar {
-    display: grid;
-    grid-template-columns: 1ch minmax(0, 1fr) 1ch;
-}
-
-.tv-window.is-fixed-window .tv-fixed-bottom-fill {
-    min-width: 0;
-    color: var(--tv-current-frame);
-}
-
-.tv-bottom-bar > .tv-scrollbar-x {
-    position: relative;
-}
-
-.tv-bottom-bar > .tv-border-fill:not(.tv-control-gap) {
-    flex: 1 1 0;
+.tv-window.is-fixed-window .tv-viewport, [data-tv-contents-outline],
+[data-tv-contents-outline] > .tv-vlist-viewport {
+    overflow: visible;
 }
 
 .tv-grow-handle {
-    width: 2ch;
-    min-width: 2ch;
-    height: 1em;
-    padding: 0;
-    border: 0;
-    background: var(--tv-owner-content-bg);
-    color: var(--tv-owner-icon-active-fg);
-    font: inherit;
-    white-space: pre;
-    display: grid;
-    place-items: center;
-    cursor: nwse-resize;
+    background: var(--tv-owner-content-bg); color: var(--tv-owner-icon-active-fg); cursor: nwse-resize;
 }
 
-.tv-grow-handle:hover,
-.tv-grow-handle:focus-visible {
-    background: var(--tv-owner-content-bg);
-    color: var(--tv-owner-icon-active-fg);
+.tv-window.is-resizing, .tv-window.is-moving {
+    --tv-current-frame: var(--tv-owner-icon-active-fg); --tv-current-title-bg: var(--tv-owner-title-active-bg);
+    --tv-current-title-fg: var(--tv-owner-title-active-fg); --tv-current-icon: var(--tv-owner-icon-active-fg);
 }
 
-.tv-window > .tv-shell > .tv-client-row > .tv-bottom-bar > .tv-grow-handle {
-    color: var(--tv-owner-icon-active-fg);
-}
+/* Source flow also serves generated HTML without the JavaScript client. */
+.tv-document, .tv-pre, .tv-topic-shell.is-fixed-layout { min-width: max-content; }
 
-.tv-window.is-resizing,
-.tv-window.is-moving {
-    --tv-current-frame: var(--tv-owner-icon-active-fg);
-    --tv-current-title-bg: var(--tv-owner-title-active-bg);
-    --tv-current-title-fg: var(--tv-owner-title-active-fg);
-    --tv-current-icon: var(--tv-owner-icon-active-fg);
-}
+.tv-document, .tv-pre { padding: 1ch; }
 
-.tv-window.is-resizing .tv-border-top,
-.tv-window.is-resizing .tv-border-corner,
-.tv-window.is-resizing .tv-border-fill,
-.tv-window.is-resizing .tv-border-side,
-.tv-window.is-resizing .tv-scroll-corner-left,
-.tv-window.is-resizing .tv-grow-handle,
-.tv-window.is-moving .tv-border-top,
-.tv-window.is-moving .tv-border-corner,
-.tv-window.is-moving .tv-border-fill,
-.tv-window.is-moving .tv-border-side,
-.tv-window.is-moving .tv-scroll-corner-left,
-.tv-window.is-moving .tv-grow-handle {
-    color: var(--tv-owner-icon-active-fg);
-}
+.tv-editor-indicator { text-align: center; }
 
-.tv-document,
-.tv-pre {
-    margin: 0;
-    padding: 1ch;
-    min-width: max-content;
-    box-sizing: border-box;
-}
+[data-tv-editor] { outline: none; }
 
-/* Documentation window — blue info theme, uses central button styling via custom properties */
-.tv-doc-window {
-    --tv-owner-frame-passive-bg: var(--tv-palette-viewer-frame-passive-bg);
-    --tv-owner-frame-passive-fg: var(--tv-palette-viewer-frame-passive-fg);
-    --tv-owner-frame-active-bg: var(--tv-palette-viewer-frame-active-bg);
-    --tv-owner-frame-active-fg: var(--tv-palette-viewer-frame-active-fg);
-    --tv-owner-frame-icons-bg: var(--tv-palette-viewer-frame-icons-bg);
-    --tv-owner-frame-icons-fg: var(--tv-palette-viewer-frame-icons-fg);
-    --tv-owner-scroll-page-bg: var(--tv-palette-viewer-scroll-page-bg);
-    --tv-owner-scroll-page-fg: var(--tv-palette-viewer-scroll-page-fg);
-    --tv-owner-scroll-controls-bg: var(--tv-palette-viewer-scroll-controls-bg);
-    --tv-owner-scroll-controls-fg: var(--tv-palette-viewer-scroll-controls-fg);
-    --tv-owner-content-bg: var(--tv-editor-bg);
-    --tv-owner-content-fg: var(--tv-editor-fg);
-    --tv-window-bg: var(--tv-owner-content-bg);
-    --tv-window-fg: var(--tv-owner-content-fg);
-    --tv-current-frame: var(--tv-owner-frame-active-fg);
-    --tv-current-title-bg: var(--tv-owner-frame-active-bg);
-    --tv-current-title-fg: var(--tv-owner-frame-active-fg);
-    --tv-current-icon: var(--tv-owner-frame-icons-fg);
-    background: var(--tv-window-bg);
-    color: var(--tv-window-fg);
-}
+.tv-doc-document, .tv-topic-pre, .tv-input-line { min-width: 0; }
 
-.tv-editor-indicator {
-    display: block;
-    width: 10ch;
-    min-width: 10ch;
-    height: 1em;
-    overflow: hidden;
-    background: var(--tv-editor-bg);
-    color: var(--tv-editor-fg);
-    line-height: 1;
-    white-space: pre;
-    text-align: center;
-}
+.tv-doc-document, .tv-topic-heading, .tv-topic-tags { white-space: normal; }
 
-[data-tv-editor] {
-    outline: none;
-}
+.tv-doc-document :is(h1, h2, h3, h4) { padding: 0; }
 
-[data-tv-editor]:focus {
-    outline: none;
-}
-.tv-doc-window .tv-shell,
-.tv-doc-window .tv-border-row,
-.tv-doc-window .tv-border-corner,
-.tv-doc-window .tv-border-fill,
-.tv-doc-window .tv-border-side,
-.tv-doc-window .tv-client-row,
-.tv-doc-window .tv-bottom-bar,
-.tv-doc-window .tv-grow-handle,
-.tv-doc-window .tv-scroll-corner,
-.tv-doc-window .tv-viewport {
-    background: var(--tv-window-bg);
-    color: var(--tv-window-fg);
-}
-.tv-doc-window .tv-border-corner,
-.tv-doc-window .tv-border-fill,
-.tv-doc-window .tv-border-side {
-    color: var(--tv-current-frame);
-}
-.tv-doc-window.is-window-inactive {
-    --tv-current-frame: var(--tv-owner-frame-passive-fg);
-    --tv-current-title-bg: var(--tv-owner-frame-passive-bg);
-    --tv-current-title-fg: var(--tv-owner-frame-passive-fg);
-    --tv-current-icon: var(--tv-owner-frame-passive-fg);
-}
-.tv-doc-window .tv-grow-handle {
-    color: var(--tv-owner-icon-active-fg);
-}
-.tv-window.is-window-inactive .tv-grow-handle,
-.tv-doc-window.is-window-inactive .tv-grow-handle {
-    color: var(--tv-current-frame);
-    cursor: default;
-    pointer-events: none;
-}
-.tv-doc-document {
-    font-family: inherit;
-    line-height: 1.3;
-    min-width: 0;
-    background: var(--tv-owner-content-bg);
-    color: var(--tv-owner-content-fg);
-    white-space: normal;
-    overflow-wrap: normal;
-    word-break: normal;
-}
-.tv-doc-document h1,
-.tv-doc-document h2,
-.tv-doc-document h3,
-.tv-doc-document h4 {
-    margin: 0;
-    padding: 0;
-    font-weight: bold;
-    color: #ffffff;
-}
+.tv-doc-document :is(h1, h2, h3, h4, th), .tv-topic-heading { font-weight: bold; }
+
+.tv-doc-document :is(h1, h2, h3, h4, th) { color: #ffffff; }
+
 .tv-doc-document h1 { font-size: 1.4em; }
+
 .tv-doc-document h2 { font-size: 1.2em; }
+
 .tv-doc-document h3 { font-size: 1.1em; }
-.tv-doc-document p { margin: 0; }
-.tv-doc-document p:empty { display: block; height: 1.3em; }
-/* Code blocky: svetlosivý text, bez zalamovanie */
-.tv-doc-document pre {
-    margin: 0;
-    padding: 0 1ch;
-    color: #cccccc;
-    background: none;
-    white-space: pre;
-}
-.tv-doc-document code {
-    color: #cccccc;
-}
+
+.tv-doc-document :is(h5, h6) { font-size: 1em; }
+
+body, pre, code, .tv-doc-document :is(h5, h6) { font-weight: normal; }
+
+.tv-doc-document p:empty { height: 1.3em; }
+
+.tv-doc-document pre, .tv-input-line, .tv-vlist-item.is-flow { padding: 0 1ch; }
+
+.tv-doc-document pre, .tv-doc-document code { color: #cccccc; }
+
 .tv-doc-document a { color: #55ffff; }
-.tv-doc-document hr { border: 0; border-top: 1px solid currentColor; margin: 0; }
-.tv-doc-document ul, .tv-doc-document ol { margin: 0; padding-left: 3ch; }
-.tv-doc-document li { margin: 0; }
-/* Tabuľky: tenké žlté steny, lámanie len na medzerách, šírka podľa najdlhšieho slova */
-.tv-doc-document table,
-.tv-doc-document th,
-.tv-doc-document td {
-    border: 1px solid var(--tv-window-fg);
+
+.tv-doc-document hr { border: 0; border-top: 1px solid currentColor; }
+
+.tv-doc-document ul, .tv-doc-document ol { padding-left: 3ch; }
+
+.tv-doc-document table, .tv-doc-document th, .tv-doc-document td {
+    border: 1px solid var(--tv-owner-content-fg);
 }
+
 .tv-doc-document table {
-    border-collapse: collapse;
-    margin: 0;
-    width: max-content;
-    min-width: 100%;
-    table-layout: auto;
-    white-space: normal;
-    word-break: normal;
-    overflow-wrap: normal;
-    line-height: 1em;
+    border-collapse: collapse; width: max-content; line-height: 1em;
 }
-.tv-doc-document th,
-.tv-doc-document td {
-    padding: 0.15em 1.2ch;
+
+.tv-doc-document th, .tv-doc-document td, .tv-dialog-button-label, .tv-menu-item, .tv-status-item,
+.tv-submenu-toggle, .tv-menu-popup-item, .tv-vlist-item, .tv-multicheck-item > .tv-flat-button {
     text-align: left;
-    white-space: normal;
-    word-break: normal;
-    overflow-wrap: normal;
-    hyphens: manual;
-    line-height: 1em;
-}
-/* Hlavička tabuľky: žltý rám, biely text, jemné pozadie */
-.tv-doc-document th {
-    font-weight: bold;
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.08);
-    border-color: var(--tv-window-fg);
 }
 
-.tv-pre {
-    width: max-content;
-    color: var(--tv-text);
-    white-space: pre;
+.tv-doc-document th, .tv-doc-document td { padding: 0.15em 1.2ch; }
+
+.tv-doc-document th { background: rgba(255, 255, 255, 0.08); }
+
+.tv-pre { width: max-content; color: var(--tv-text); }
+
+.tv-topic-pre, .tv-topic-line-rule { width: 100%; }
+
+.tv-topic-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.tv-topic-heading, .tv-topic-tags { padding: 1ch 1ch 0; }
+
+.tv-topic-heading, .tv-index-heading, .tv-index-section-label, .tv-top-link { color: var(--tv-muted); }
+
+.tv-topic-tags, .tv-index-nav, .tv-index-section-heading { display: flex; }
+
+.tv-topic-tags { flex-direction: column; align-items: flex-start; }
+
+.tv-topic-pre-fixed { width: max-content; white-space: pre; }
+
+.tv-topic-pre-frozen, .tv-index-frozen, .tv-grid-header {
+    position: sticky; top: 0; z-index: 1;
 }
 
-.tv-topic-pre {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
+.tv-topic-pre-frozen, .tv-index-frozen { padding-bottom: 0; background: var(--tv-owner-content-bg); }
 
-.tv-topic-heading {
-    padding: 1ch 1ch 0;
-    color: var(--tv-muted);
-    font-weight: bold;
-    white-space: normal;
-}
+.tv-topic-pre-body { padding-top: 0; }
 
-.tv-topic-tags {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-    padding: 1ch 1ch 0;
-    white-space: normal;
-}
+.tv-topic-line-rule, .tv-index-document { white-space: nowrap; }
 
-.tv-topic-tag {
-    color: var(--tv-text);
-}
+.tv-topic-line-rule, .tv-text-screen, .code-example { vertical-align: top; }
 
-.tv-topic-tag-label {
-    color: var(--tv-text);
-}
+.tv-topic-line-rule, .tv-text-screen, .code-example, .tv-vlist-icon { display: inline-block; }
 
-.tv-topic-pre-fixed {
-    width: max-content;
-    max-width: none;
-    min-width: 100%;
-    white-space: pre;
-    overflow-wrap: normal;
-    word-break: normal;
-}
+.tv-topic-line.is-target { background: rgba(255, 255, 255, 0.16); }
 
-.tv-topic-shell {
-    min-width: max-content;
-}
+.tv-uhf-reverse { color: var(--tv-page-area); background: var(--tv-text); }
 
-.tv-topic-pre-frozen {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    padding-bottom: 0;
-    background: var(--tv-window);
-}
+.tv-index-heading, .tv-index-nav, .tv-index-section-heading { margin-bottom: 1ch; }
 
-.tv-topic-pre-body {
-    padding-top: 0;
-}
+.tv-index-nav { flex-wrap: wrap; }
 
-.tv-topic-line-rule {
-    display: inline-block;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    overflow-wrap: normal;
-    word-break: normal;
-    vertical-align: top;
-}
-
-.tv-topic-line.is-target {
-    background: rgba(255, 255, 255, 0.16);
-}
-
-.tv-uhf-reverse {
-    color: var(--tv-page-area);
-    background: var(--tv-text);
-}
-
-.tv-text-screen {
-    display: inline-block;
-    vertical-align: top;
-    image-rendering: pixelated;
-}
-
-.tv-text-screen-text { display: inline-grid; font-family: var(--tv-font-chrome) !important; line-height: 1; white-space: pre; }
-.tv-text-screen-row { display: grid; min-height: 0; }
-.tv-text-screen-row > span { position: relative; min-width: 0; }
-.tv-text-screen-row > span > span {
-    position: absolute;
-    z-index: 1;
-    left: 0;
-    top: 0;
-    width: 1ch;
-    height: 1em;
-    transform-origin: 0 0;
-}
-
-.tv-index-document {
-    white-space: nowrap;
-}
-
-.tv-index-heading {
-    margin-bottom: 1ch;
-    color: var(--tv-muted);
-    text-transform: uppercase;
-}
-
-.tv-index-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0;
-    margin-bottom: 1ch;
-}
-
-.tv-index-frozen {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    padding-bottom: 0;
-    background: var(--tv-window);
-}
-
-.tv-index-frozen .tv-index-heading,
-.tv-index-frozen .tv-index-nav {
-    margin-bottom: 0;
-}
+.tv-index-frozen .tv-index-heading, .tv-index-frozen .tv-index-nav { margin-bottom: 0; }
 
 .tv-index-jump {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 3ch;
+    display: inline-flex; align-items: center; justify-content: center; min-width: 3ch;
 }
 
-.tv-index-jump.is-empty {
-    color: rgba(255, 255, 255, 0.35);
-}
+.tv-index-jump.is-empty { color: rgba(255, 255, 255, 0.35); }
 
-.tv-index-section {
-    margin-top: 1ch;
-}
+.tv-index-section { margin-top: 1ch; }
 
 .tv-index-section-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1ch;
-    margin-bottom: 1ch;
+    align-items: center; justify-content: space-between; gap: 1ch;
 }
 
-.tv-index-section-label {
-    color: var(--tv-muted);
-    text-transform: uppercase;
-}
-
-.tv-index-entry,
-.tv-index-group-label,
-.tv-index-group-item,
-.tv-index-empty {
-    white-space: pre;
-}
-
-.tv-index-entry + .tv-index-entry,
-.tv-index-entry-group + .tv-index-entry-group,
-.tv-index-entry + .tv-index-entry-group,
-.tv-index-entry-group + .tv-index-entry {
-    margin-top: 2px;
-}
-
-.tv-contents-tree {
-    min-height: 6em;
-}
-
-[data-tv-contents-outline] {
-    display: block;
-    height: auto;
-    min-height: 6em;
-    overflow: visible;
-}
-
-[data-tv-contents-outline] > .tv-vlist-viewport {
-    height: auto;
-    min-height: 6em;
-    overflow: visible;
-}
-
-[data-tv-contents-outline] .tv-vlist-item {
-    min-height: 1em;
-    padding: 0 1ch;
-    background: var(--tv-help-pane);
-    color: var(--tv-text);
-}
-
-[data-tv-contents-outline] .tv-vlist-item.is-selected {
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
-}
-
-[data-tv-contents-outline] .tv-vlist-item.is-selected a {
-    background: inherit;
-    color: inherit;
-}
-
-.tv-index-group-label {
-    color: var(--tv-link);
-}
-
-.tv-index-group-items {
-    padding-left: 2ch;
-}
-
+.tv-index-entry + .tv-index-entry, .tv-index-entry-group + .tv-index-entry-group,
+.tv-index-entry + .tv-index-entry-group, .tv-index-entry-group + .tv-index-entry,
 .tv-index-group-item + .tv-index-group-item {
     margin-top: 2px;
 }
 
-.tv-top-link {
-    color: var(--tv-muted);
+[data-tv-contents-outline] > .tv-vlist-viewport { min-height: 6em; }
+
+[data-tv-contents-outline] .tv-vlist-item.is-selected {
+    background: var(--tv-hover-bg); color: var(--tv-hover-fg);
 }
 
-.code-example {
-    display: inline-block;
-    min-width: 100%;
-    box-sizing: border-box;
-    vertical-align: top;
-    margin: 0;
-    line-height: 1;
-    color: var(--tv-code-text);
-    background: var(--tv-code-bg);
-    white-space: pre;
+.tv-index-group-items { padding-left: 2ch; }
+
+.code-example { color: var(--tv-code-text); background: var(--tv-code-bg); }
+
+.tv-doc-document table, .tv-topic-pre-fixed, .code-example { min-width: 100%; }
+
+.code-example.code-lang-c, .code-example.code-lang-pascal, .code-example.code-lang-asm {
+    --tv-code-bg: #0000aa; --tv-code-text: #ffff55; --tv-code-keyword: #ffffff; --tv-code-string: #55ffff;
+    --tv-code-comment: #55ff55; --tv-code-number: #55ffff; --tv-code-preproc: #55ff55; --tv-code-asm: #55ffff;
 }
 
-.code-example.code-lang-c {
-    --tv-code-bg: #0000aa;
-    --tv-code-text: #ffff55;
-    --tv-code-keyword: #ffffff;
-    --tv-code-string: #55ffff;
-    --tv-code-comment: #aaaaaa;
-    --tv-code-number: #55ffff;
-    --tv-code-preproc: #55ff55;
-    --tv-code-asm: #55ff55;
-}
+.code-example.code-lang-c { --tv-code-comment: #aaaaaa; --tv-code-asm: #55ff55; }
 
-.code-example.code-lang-pascal {
-    --tv-code-bg: #0000aa;
-    --tv-code-text: #ffff55;
-    --tv-code-keyword: #ffffff;
-    --tv-code-string: #55ffff;
-    --tv-code-comment: #55ff55;
-    --tv-code-number: #ff55ff;
-    --tv-code-preproc: #ffffff;
-    --tv-code-asm: #55ffff;
-}
+.code-example.code-lang-pascal { --tv-code-number: #ff55ff; --tv-code-preproc: #ffffff; }
 
-.code-example.code-lang-asm {
-    --tv-code-bg: #0000aa;
-    --tv-code-text: #ffff55;
-    --tv-code-keyword: #ffffff;
-    --tv-code-string: #55ffff;
-    --tv-code-comment: #55ff55;
-    --tv-code-number: #55ffff;
-    --tv-code-preproc: #55ff55;
-    --tv-code-asm: #55ffff;
-}
+.code-example .code-keyword { color: var(--tv-code-keyword); }
 
-.code-example-empty {
-    color: transparent;
-}
+.code-example .code-string { color: var(--tv-code-string); }
 
-.code-example .code-keyword {
-    color: var(--tv-code-keyword);
-}
+.code-example .code-comment { color: var(--tv-code-comment); }
 
-.code-example .code-string {
-    color: var(--tv-code-string);
-}
+.code-example .code-number { color: var(--tv-code-number); }
 
-.code-example .code-comment {
-    color: var(--tv-code-comment);
-}
+.code-example .code-preproc { color: var(--tv-code-preproc); }
 
-.code-example .code-number {
-    color: var(--tv-code-number);
-}
+.code-example .code-asm { color: var(--tv-code-asm); }
 
-.code-example .code-preproc {
-    color: var(--tv-code-preproc);
-}
+.tv-dialog-overlay, .tv-saver-overlay { inset: 0; }
 
-.code-example .code-asm {
-    color: var(--tv-code-asm);
-}
+.tv-dialog-overlay { z-index: 10; }
 
-.code-example .code-comment-line {
-    line-height: 1;
-}
+.tv-dialog-overlay.is-modal, .tv-dialog-window { pointer-events: auto; }
 
-.tv-dialog-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    display: block;
-    padding: 1ch;
-    background: transparent;
-    pointer-events: none;
-}
-
-.tv-dialog-overlay.is-modal {
-    z-index: 20;
-    pointer-events: auto;
-}
-
-.tv-dialog-window {
-    position: absolute;
-    left: var(--tv-dialog-left, 6ch);
-    top: var(--tv-dialog-top, 4em);
-    width: min(var(--tv-dialog-width, 44ch), calc(100% - 2ch));
-    height: var(--tv-dialog-height, auto);
-    max-width: 100%;
-    display: grid;
-    grid-template-rows: 1em minmax(0, 1fr) 1em;
-    overflow: hidden;
-    pointer-events: auto;
-    outline: none;
-    --tv-owner-frame-passive-bg: var(--tv-palette-dialog-frame-passive-bg);
-    --tv-owner-frame-passive-fg: var(--tv-palette-dialog-frame-passive-fg);
-    --tv-owner-frame-active-bg: var(--tv-palette-dialog-frame-active-bg);
-    --tv-owner-frame-active-fg: var(--tv-palette-dialog-frame-active-fg);
-    --tv-owner-frame-icons-bg: var(--tv-palette-dialog-frame-icons-bg);
-    --tv-owner-frame-icons-fg: var(--tv-palette-dialog-frame-icons-fg);
-    --tv-owner-title-active-bg: var(--tv-owner-frame-active-bg);
-    --tv-owner-title-active-fg: var(--tv-owner-frame-active-fg);
-    --tv-owner-title-passive-bg: var(--tv-owner-frame-passive-bg);
-    --tv-owner-title-passive-fg: var(--tv-owner-frame-passive-fg);
-    --tv-owner-icon-active-bg: var(--tv-owner-frame-icons-bg);
-    --tv-owner-icon-active-fg: var(--tv-owner-frame-icons-fg);
-    --tv-owner-icon-passive-fg: var(--tv-owner-frame-passive-fg);
-    --tv-owner-scroll-page-bg: var(--tv-palette-dialog-scroll-page-bg);
-    --tv-owner-scroll-page-fg: var(--tv-palette-dialog-scroll-page-fg);
-    --tv-owner-scroll-controls-bg: var(--tv-palette-dialog-scroll-controls-bg);
-    --tv-owner-scroll-controls-fg: var(--tv-palette-dialog-scroll-controls-fg);
-    --tv-owner-scroll-thumb-bg: var(--tv-thumb-bg);
-    --tv-owner-scroll-thumb-fg: var(--tv-owner-scroll-controls-fg);
-    --tv-owner-content-bg: var(--tv-palette-dialog-frame-active-bg);
-    --tv-owner-content-fg: var(--tv-palette-dialog-static-fg);
-    --tv-current-frame: var(--tv-owner-frame-active-fg);
-    --tv-current-title-bg: var(--tv-owner-title-active-bg);
-    --tv-current-title-fg: var(--tv-owner-title-active-fg);
-    --tv-current-icon: var(--tv-owner-icon-active-fg);
-    --tv-scrollbar-bg: var(--tv-owner-scroll-page-bg);
-    --tv-scrollbar-glyph: var(--tv-owner-scroll-page-fg);
-    --tv-scrollbar-arrow-bg: var(--tv-owner-scroll-controls-bg);
-    --tv-scrollbar-arrow-fg: var(--tv-owner-scroll-controls-fg);
-    --tv-scrollbar-thumb-bg: var(--tv-owner-scroll-thumb-bg);
-    --tv-scrollbar-thumb-fg: var(--tv-owner-scroll-thumb-fg);
-    --tv-control-static-fg: var(--tv-palette-dialog-static-fg);
-    --tv-control-label-fg: var(--tv-palette-dialog-label-normal-fg);
-    --tv-control-label-selected-bg: var(--tv-palette-dialog-label-selected-bg);
-    --tv-control-label-selected-fg: var(--tv-palette-dialog-label-selected-fg);
-    background: var(--tv-owner-content-bg);
-    color: var(--tv-owner-content-fg);
-    box-shadow:
-        var(--tv-shadow-offset-x) var(--tv-shadow-offset-y) 0 var(--tv-shadow-soft);
-}
-
-.tv-loading-overlay {
-    z-index: 900;
-}
-
-/* Loading dialog uses bounds positioning */
-
-.tv-loading-body .tv-dialog-client > .tv-group > .tv-static-text {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 0.25em;
-}
-
-.tv-gauge {
-    white-space: pre;
-    overflow: hidden;
-    line-height: 1;
-}
-
-[data-tv-bar-gauge] {
-    color: var(--tv-dialog-fg);
-    letter-spacing: 0;
-    font-size: inherit;
-    line-height: inherit;
-}
-
-[data-tv-percent-gauge] {
-    color: var(--tv-dialog-fg);
-    text-align: left;
-}
-
-/* Dialog palettes override the shared owner properties selected by data-tv-palette. */
-.tv-dialog-window[data-tv-palette="help"] {
-    --tv-owner-frame-passive-bg: var(--tv-palette-help-frame-passive-bg);
-    --tv-owner-frame-passive-fg: var(--tv-palette-help-frame-passive-fg);
-    --tv-owner-frame-active-bg: var(--tv-palette-help-frame-active-bg);
-    --tv-owner-frame-active-fg: var(--tv-palette-help-frame-active-fg);
-    --tv-owner-frame-icons-bg: var(--tv-palette-help-frame-icons-bg);
-    --tv-owner-frame-icons-fg: var(--tv-palette-help-frame-icons-fg);
-    --tv-owner-scroll-page-bg: var(--tv-palette-help-scroll-page-bg);
-    --tv-owner-scroll-page-fg: var(--tv-palette-help-scroll-page-fg);
-    --tv-owner-scroll-controls-bg: var(--tv-palette-help-scroll-controls-bg);
-    --tv-owner-scroll-controls-fg: var(--tv-palette-help-scroll-controls-fg);
-    --tv-owner-content-bg: var(--tv-palette-help-text-bg);
-    --tv-owner-content-fg: var(--tv-palette-help-text-fg);
-    --tv-control-static-fg: var(--tv-owner-content-fg);
-}
-
-.tv-dialog-window[data-tv-palette="viewer"] {
-    --tv-owner-frame-passive-bg: var(--tv-palette-viewer-frame-passive-bg);
-    --tv-owner-frame-passive-fg: var(--tv-palette-viewer-frame-passive-fg);
-    --tv-owner-frame-active-bg: var(--tv-palette-viewer-frame-active-bg);
-    --tv-owner-frame-active-fg: var(--tv-palette-viewer-frame-active-fg);
-    --tv-owner-frame-icons-bg: var(--tv-palette-viewer-frame-icons-bg);
-    --tv-owner-frame-icons-fg: var(--tv-palette-viewer-frame-icons-fg);
-    --tv-owner-scroll-page-bg: var(--tv-palette-viewer-scroll-page-bg);
-    --tv-owner-scroll-page-fg: var(--tv-palette-viewer-scroll-page-fg);
-    --tv-owner-scroll-controls-bg: var(--tv-palette-viewer-scroll-controls-bg);
-    --tv-owner-scroll-controls-fg: var(--tv-palette-viewer-scroll-controls-fg);
-    --tv-owner-content-bg: var(--tv-palette-viewer-text-bg);
-    --tv-owner-content-fg: var(--tv-palette-viewer-text-fg);
-    --tv-control-static-fg: var(--tv-owner-content-fg);
-    --tv-control-label-fg: var(--tv-owner-content-fg);
-}
-
-.tv-dialog-window[data-tv-palette="calendar"] {
-    --tv-owner-frame-passive-bg: var(--tv-palette-calendar-frame-passive-bg);
-    --tv-owner-frame-passive-fg: var(--tv-palette-calendar-frame-passive-fg);
-    --tv-owner-frame-active-bg: var(--tv-palette-calendar-frame-active-bg);
-    --tv-owner-frame-active-fg: var(--tv-palette-calendar-frame-active-fg);
-    --tv-owner-frame-icons-bg: var(--tv-palette-calendar-frame-icons-bg);
-    --tv-owner-frame-icons-fg: var(--tv-palette-calendar-frame-icons-fg);
-    --tv-owner-scroll-page-bg: var(--tv-palette-calendar-scroll-page-bg);
-    --tv-owner-scroll-page-fg: var(--tv-palette-calendar-scroll-page-fg);
-    --tv-owner-scroll-controls-bg: var(--tv-palette-calendar-scroll-controls-bg);
-    --tv-owner-scroll-controls-fg: var(--tv-palette-calendar-scroll-controls-fg);
-    --tv-owner-content-bg: var(--tv-palette-calendar-text-bg);
-    --tv-owner-content-fg: var(--tv-palette-calendar-text-fg);
-    --tv-control-static-fg: var(--tv-owner-content-fg);
-    --tv-control-label-fg: var(--tv-owner-content-fg);
-}
-
-.tv-dialog-window[data-tv-palette="ascii"] {
-    --tv-owner-frame-passive-bg: var(--tv-palette-ascii-frame-passive-bg);
-    --tv-owner-frame-passive-fg: var(--tv-palette-ascii-frame-passive-fg);
-    --tv-owner-frame-active-bg: var(--tv-palette-ascii-frame-active-bg);
-    --tv-owner-frame-active-fg: var(--tv-palette-ascii-frame-active-fg);
-    --tv-owner-frame-icons-bg: var(--tv-palette-ascii-frame-icons-bg);
-    --tv-owner-frame-icons-fg: var(--tv-palette-ascii-frame-icons-fg);
-    --tv-owner-scroll-page-bg: var(--tv-palette-ascii-scroll-page-bg);
-    --tv-owner-scroll-page-fg: var(--tv-palette-ascii-scroll-page-fg);
-    --tv-owner-scroll-controls-bg: var(--tv-palette-ascii-scroll-controls-bg);
-    --tv-owner-scroll-controls-fg: var(--tv-palette-ascii-scroll-controls-fg);
-    --tv-owner-content-bg: var(--tv-palette-ascii-text-bg);
-    --tv-owner-content-fg: var(--tv-palette-ascii-text-fg);
-    --tv-control-static-fg: var(--tv-owner-content-fg);
-    --tv-control-label-fg: var(--tv-owner-content-fg);
-}
+.tv-dialog-overlay.is-modal { z-index: 20; }
 
 .tv-dialog-window.is-dragging {
-    --tv-current-frame: var(--tv-owner-icon-active-fg);
-    --tv-current-title-bg: var(--tv-owner-icon-active-bg);
-    --tv-current-title-fg: var(--tv-owner-icon-active-fg);
-    --tv-current-icon: var(--tv-owner-icon-active-fg);
+    --tv-current-frame: var(--tv-owner-icon-active-fg); --tv-current-title-bg: var(--tv-owner-icon-active-bg);
+    --tv-current-title-fg: var(--tv-owner-icon-active-fg); --tv-current-icon: var(--tv-owner-icon-active-fg);
 }
 
-.tv-dialog-titlebar,
-.tv-dialog-footer {
-    display: grid;
-    align-items: stretch;
-    background: var(--tv-current-title-bg);
-    color: var(--tv-current-frame);
-}
-
-.tv-dialog-titlebar {
-    position: relative;
-    grid-template-columns: 1ch minmax(0, 1fr) 1ch;
-    cursor: move;
-}
-
-.tv-dialog-footer {
-    grid-template-columns: 1ch minmax(1ch, 1fr) 1ch;
-}
-
-.tv-dialog-body {
-    display: grid;
-    grid-template-columns: 1ch minmax(0, 1fr) 1ch;
-    min-height: 0;
-    background: var(--tv-owner-content-bg);
-}
-
-.tv-dialog-client {
-    position: relative;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.tv-dialog-body .tv-border-side {
-    color: var(--tv-current-frame);
-}
-
-.tv-dialog-title-text,
-.tv-dialog-title-control {
-    display: inline-flex;
-    align-items: center;
-    line-height: 1;
-    min-height: 1em;
-    height: 1em;
-    background: var(--tv-current-title-bg);
-    color: var(--tv-current-title-fg);
-    white-space: pre;
-}
-
-.tv-dialog-title-text {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    max-width: calc(100% - 10ch);
-    padding: 0 1ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transform: translateX(-50%);
-}
-
-.tv-dialog-title-control {
-    border: 0;
-    font: inherit;
-    appearance: none;
-    cursor: pointer;
-    padding: 0;
-    color: var(--tv-current-title-fg);
-}
-
-.tv-dialog-close-control {
-    position: absolute;
-    top: 0;
-    left: 2ch;
-    z-index: 1;
-}
-
-.tv-dialog-close-control.is-frame-control-passive {
-    cursor: pointer;
-}
-
-.tv-dialog-title-control:hover,
-.tv-dialog-title-control:focus-visible {
-    background: var(--tv-current-title-bg) !important;
-    color: var(--tv-current-title-fg) !important;
-    outline: none;
-}
-
-.tv-dialog-window .tv-dialog-titlebar .tv-border-corner,
-.tv-dialog-window .tv-dialog-titlebar .tv-border-fill,
-.tv-dialog-window .tv-dialog-footer .tv-border-corner,
-.tv-dialog-window .tv-dialog-footer .tv-border-fill,
-.tv-dialog-window .tv-border-side {
-    color: var(--tv-current-frame);
-}
-
-.tv-dialog-window .tv-dialog-titlebar .tv-border-corner,
-.tv-dialog-window .tv-dialog-titlebar .tv-border-fill,
-.tv-dialog-window .tv-dialog-footer .tv-border-corner,
-.tv-dialog-window .tv-dialog-footer .tv-border-fill {
-    background: var(--tv-current-title-bg);
-}
-
-.tv-dialog-window .tv-dialog-titlebar .tv-border-fill,
-.tv-dialog-window .tv-dialog-footer .tv-border-fill {
-    display: block;
-}
-
-.tv-dialog-window .tv-dialog-body > .tv-border-corner,
-.tv-dialog-window .tv-dialog-body > .tv-border-separator {
-    background: var(--tv-owner-content-bg);
-    color: var(--tv-current-frame);
-}
-
-/* About/Welcome dialogs use bounds positioning */
-
-
-[data-tv-ascii-chart] {
-    display: grid;
-    grid-template-columns: repeat(32, 1ch);
-    grid-template-rows: repeat(8, 1em);
-    align-items: stretch;
-    justify-items: stretch;
-    background: var(--tv-ascii-pane);
-    color: var(--tv-ascii-text);
-    overflow: hidden;
-}
-
-.tv-ascii-cell {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1ch;
-    min-height: 1em;
-    padding: 0;
-    border: 0;
-    font: inherit;
-    appearance: none;
-    cursor: pointer;
-    background: var(--tv-ascii-pane);
-    color: var(--tv-ascii-text);
-}
-
-.tv-ascii-cell:hover,
-.tv-ascii-cell:focus-visible,
-.tv-ascii-cell.is-selected {
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
-    outline: none;
-}
-
-.tv-ascii-window [data-tv-ascii-chart] ~ .tv-static-text {
-    display: inline-flex;
-    align-items: center;
-    padding: 0;
-    background: var(--tv-ascii-pane);
-    color: var(--tv-ascii-text);
-    white-space: pre;
-    overflow: hidden;
-}
-
-.tv-calc-body .tv-dialog-client > .tv-group > .tv-static-text:first-child {
-    --tv-control-static-fg: var(--tv-calc-display-fg);
-    display: block;
-    padding: 0;
-    background: var(--tv-calc-display-bg);
-    color: var(--tv-calc-display-fg);
-    white-space: pre;
-    overflow: hidden;
-}
-
-.tv-calc-button .tv-dialog-button-label {
-    padding: 0;
-}
-
-/* Puzzle: grid cells use position:absolute via x,y,w,h bounds */
-
-[data-tv-puzzle-grid] {
-    display: grid;
-    grid-template-columns: repeat(4, 3ch);
-    grid-template-rows: repeat(4, 1em);
-    background: var(--tv-puzzle-pane);
-}
-
-.tv-puzzle-cell {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 3ch;
-    min-height: 1em;
-    padding: 0;
-    border: 0;
-    font: inherit;
-    appearance: none;
-    cursor: pointer;
-    background: var(--tv-puzzle-pane);
-    color: var(--tv-puzzle-normal);
-}
-
-.tv-puzzle-cell.is-highlight {
-    background: var(--tv-palette-viewer-highlight-bg);
-    color: var(--tv-puzzle-highlight);
-}
-
-.tv-puzzle-cell.is-blank {
-    cursor: default;
-}
-
-.tv-puzzle-cell:hover,
-.tv-puzzle-cell:focus-visible {
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
-    outline: none;
-}
-
-
-.tv-calendar-arrow {
-    padding: 0;
-    border: 0;
-    font: inherit;
-    appearance: none;
-    cursor: pointer;
-    background: var(--tv-calendar-pane);
-    color: var(--tv-calendar-normal);
-}
-
-.tv-calendar-arrow:hover,
-.tv-calendar-arrow:focus-visible {
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
-    outline: none;
-}
-
-[data-tv-calendar-grid] {
-    display: grid;
-    grid-template-columns: repeat(7, 4ch);
-    grid-template-rows: repeat(6, 1em);
-    background: var(--tv-calendar-pane);
-    color: var(--tv-calendar-normal);
-}
-
-[data-tv-calendar-grid] > .tv-static-text {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    white-space: pre;
-}
-
-[data-tv-calendar-grid] > .tv-static-text.is-current {
-    color: var(--tv-calendar-current);
-}
-
-[data-tv-calendar-grid] > .tv-static-text.is-selected {
-    background: var(--tv-palette-calendar-current-bg);
-    color: var(--tv-palette-calendar-current-fg);
-}
-
-[data-tv-calendar-grid] > .tv-static-text.is-empty {
-    opacity: 0.85;
-}
-
-:is([data-tv-colors-groups], [data-tv-colors-items]).is-disabled .tv-scroll-arrow {
-    color: var(--tv-scroll-glyph);
-}
-
-:is([data-tv-colors-foreground], [data-tv-colors-background]) {
-    display: grid;
-    grid-template-columns: repeat(4, 3ch);
-    grid-auto-rows: 1em;
-    background: var(--tv-dialog-bg);
-    color: var(--tv-dialog-fg);
-}
-
-[data-tv-colors-background] {
-    grid-template-rows: repeat(2, 1em);
-}
-
-.tv-color-cell {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 3ch;
-    min-height: 1em;
-    padding: 0;
-    border: 0;
-    font: inherit;
-    appearance: none;
-    cursor: pointer;
-    white-space: pre;
-    background: #000000;
-    color: var(--tv-color-cell);
-}
-
-.tv-color-cell[data-tv-color-index="0"].is-selected .tv-color-cell-marker {
-    background: #aaaaaa;
-    color: #000000;
-}
-
-.tv-color-cell:hover,
-.tv-color-cell:focus-visible {
-    outline: 1px solid #ffffff;
-    outline-offset: -1px;
-}
-
-.tv-vlist-text {
-    display: block;
-    width: 100%;
-    min-width: 0;
-    overflow: hidden;
-    white-space: pre;
-    text-overflow: clip;
-}
-
-[data-tv-colors-display] {
-    overflow: hidden;
-    background: var(--tv-dialog-bg);
-    white-space: pre;
-}
-
-[data-tv-colors-display] > .tv-static-text {
-    display: block;
-    overflow: hidden;
-    color: var(--tv-colors-sample-fg);
-    background: var(--tv-colors-sample-bg);
-}
-
-[data-tv-midi-display] {
-    background: #000000;
-    color: #00aaaa;
-}
-
-.tv-image {
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    color: #aaaaaa;
-    background: #000000;
-    border: 1px solid var(--tv-current-frame);
-}
-
-.tv-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-
-[data-tv-midi-display] > .tv-static-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: pre;
-}
-
-[data-tv-midi-display] > [data-tv-midi-part="label"] {
-    --tv-control-static-fg: #aaaaaa;
-    color: #aaaaaa;
-}
-
-[data-tv-midi-display] > [data-tv-midi-part="number"] {
-    --tv-control-static-fg: #ffff55;
-    color: #ffff55;
-}
-
-[data-tv-midi-display] > [data-tv-midi-part="time"] {
-    text-align: right;
-    --tv-control-static-fg: #ffff55;
-    color: #ffff55;
-}
-
-[data-tv-midi-display] > [data-tv-midi-part="title"] {
-    --tv-control-static-fg: #ffffff;
-    color: #ffffff;
-}
-
-[data-tv-midi-display] > [data-tv-midi-part="status"] {
-    --tv-control-static-fg: #55ff55;
-    background: #000000;
-    color: #55ff55;
-}
-
-.tv-midi-window [data-tv-bar-gauge] {
-    background: #000000;
-    color: #00aaaa;
-    cursor: pointer;
-}
-
-.tv-game-hall-control {
-    position: absolute;
-    top: 0;
-    right: 2ch;
-    z-index: 2;
-    width: 3ch;
-}
-
-.tv-hall-body .tv-dialog-client > .tv-group {
-    background: var(--tv-dialog-list-normal-bg);
-    color: var(--tv-dialog-list-normal-fg);
-}
-
-.tv-hall-header {
-    background: var(--tv-dialog-list-focus-bg);
-    color: var(--tv-dialog-list-focus-fg);
-}
-
-.tv-hall-row > .tv-static-text,
-.tv-hall-header > .tv-static-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: pre;
-}
-
-.tv-hall-row > .tv-static-text:last-child,
-.tv-hall-header > .tv-static-text:last-child {
-    text-align: right;
-}
-
-.tv-hall-body .tv-dialog-client > .tv-group > .tv-static-text {
-    text-align: center;
-}
-
-.tv-midi-track {
-    display: grid;
-    grid-template-columns: 4ch minmax(0, 1fr) 16ch 3ch;
-    align-items: center;
-    min-width: 0;
-    min-height: 1em;
-    padding: 0 1ch;
-    border: 0;
-    font: inherit;
-    text-align: left;
-    appearance: none;
-    cursor: pointer;
-}
-
-.tv-midi-track-index {
-    color: inherit;
-    white-space: pre;
-}
-
-.tv-midi-track-availability {
-    text-align: center;
-    white-space: pre;
-}
-
-.tv-midi-track-title,
-.tv-midi-track-credit {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: pre;
-}
-
-.tv-midi-track-credit {
-    text-align: left;
-    opacity: 0.8;
-}
-
-.tv-context-help-document {
-    min-width: 100%;
-    color: var(--tv-palette-help-text-fg);
-    background: var(--tv-palette-help-text-bg);
-    white-space: pre-wrap;
-}
+.tv-dialog-title-text, .tv-dialog-title-control { z-index: 2; }
 
-.tv-context-help-line {
-    min-height: 1em;
-    line-height: 1;
-}
-
-.tv-context-help-line a {
-    color: var(--tv-palette-help-keyword-fg);
-    background: var(--tv-palette-help-keyword-bg);
-    text-decoration: none;
-}
-
-.tv-context-help-line a:hover,
-.tv-context-help-line a:focus-visible {
-    color: var(--tv-palette-help-keyword-selected-fg);
-    background: var(--tv-palette-help-keyword-selected-bg);
-    outline: none;
-}
-
-.tv-context-help-rule {
-    overflow: hidden;
-    color: var(--tv-current-frame);
-    border-top: 1px solid currentColor;
-}
-
-.tv-group {
-    display: grid;
-    min-width: 0;
-    min-height: 0;
-}
-
-.tv-static-text {
-    white-space: pre;
-    color: var(--tv-control-static-fg, inherit);
-}
-
-.tv-label {
-    white-space: pre;
-    color: var(--tv-control-label-fg, var(--tv-dialog-fg));
-}
-
-.tv-label:focus-within {
-    background: var(--tv-control-label-selected-bg, var(--tv-palette-dialog-label-selected-bg));
-    color: var(--tv-control-label-selected-fg, var(--tv-palette-dialog-label-selected-fg));
-}
+.tv-image { border: 1px solid var(--tv-current-frame); }
 
-.tv-label .tv-hotkey {
-    color: var(--tv-palette-dialog-label-shortcut-fg);
-}
-
-.tv-title {
-    color: var(--tv-link);
-    text-transform: uppercase;
-}
-
-.tv-input-line {
-    box-sizing: border-box;
-    min-width: 0;
-    padding: 0 1ch;
-    border: 0;
-    outline: none;
-    background: var(--tv-dialog-input-bg);
-    color: var(--tv-dialog-input-fg);
-    font: inherit;
-    appearance: none;
-}
+.tv-image img { object-fit: contain; }
 
 .tv-input-line::selection {
-    background: var(--tv-palette-dialog-input-selected-bg);
-    color: var(--tv-palette-dialog-input-selected-fg);
+    background: var(--tv-palette-dialog-input-selected-bg); color: var(--tv-palette-dialog-input-selected-fg);
 }
 
-.tv-dialog-button {
-    display: inline-grid;
-    grid-template-rows: 1em 1em;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    justify-items: stretch;
-    min-width: 0;
-    min-height: 2em;
-    padding: 0;
-    border: 0;
-    font: inherit;
-    appearance: none;
-    cursor: pointer;
-    white-space: pre;
-    box-shadow: none;
-    background: transparent !important;
-    color: var(--tv-palette-dialog-button-normal-fg) !important;
-    overflow: hidden;
-}
-
-.tv-dialog-button.is-default {
-    color: var(--tv-palette-dialog-button-default-fg) !important;
-}
-
-.tv-dialog-button-face {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 1ch;
-    align-items: center;
-    min-height: 1em;
-    background: var(--tv-palette-dialog-button-normal-bg);
-    color: inherit;
-    white-space: pre;
-}
-
-.tv-dialog-button-label {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 0;
-    padding: 0 1ch;
-    white-space: pre;
-}
-
-.tv-dialog-button-edge {
-    display: grid;
-    place-items: center;
-    width: 1ch;
-    min-width: 1ch;
-    background: var(--tv-dialog-button-edge-bg);
-    color: var(--tv-dialog-button-edge-fg);
-}
-
-.tv-dialog-button-shadow {
-    display: block;
-    width: 100%;
-    background: var(--tv-dialog-button-shadow-bg);
-    color: var(--tv-dialog-button-shadow-fg);
-    line-height: 1;
-    white-space: pre;
-}
-
-.tv-dialog-button:focus-visible .tv-dialog-button-face {
-    background: var(--tv-palette-dialog-button-selected-bg);
-    color: var(--tv-palette-dialog-button-selected-fg);
-}
-
-.tv-dialog-button.is-default .tv-dialog-button-face {
-    background: var(--tv-palette-dialog-button-default-bg);
-    color: var(--tv-palette-dialog-button-default-fg);
-}
-
-.tv-dialog-button.is-default:focus-visible .tv-dialog-button-face,
-.tv-dialog-button:active .tv-dialog-button-face,
-.tv-dialog-button.is-pressed .tv-dialog-button-face {
-    background: var(--tv-palette-dialog-button-selected-bg);
-    color: var(--tv-palette-dialog-button-selected-fg);
-}
-
-.tv-dialog-button .tv-hotkey {
-    color: var(--tv-palette-dialog-button-shortcut-fg);
-}
-
-.tv-dialog-button:active {
-    transform: none;
-}
-
-.tv-dialog-button:focus-visible {
-    outline: none;
-}
-
-.tv-dialog-button:hover,
-.tv-dialog-button:focus-visible,
-.tv-dialog-button.is-active {
-    background: transparent !important;
-}
-
-.tv-dialog-button:disabled {
-    color: var(--tv-palette-dialog-button-disabled-fg) !important;
-    cursor: default;
-}
-
-.tv-dialog-button:disabled .tv-dialog-button-face {
-    background: var(--tv-palette-dialog-button-disabled-bg);
-}
-
-.tv-dialog-button:disabled .tv-dialog-button-label,
-.tv-dialog-button:disabled .tv-hotkey {
-    color: var(--tv-palette-dialog-button-disabled-fg);
-}
-
-.tv-dialog-button:active .tv-dialog-button-face,
-.tv-dialog-button.is-pressed .tv-dialog-button-face {
-    transform: translate(1ch, 0);
-}
-
-.tv-dialog-button:active .tv-dialog-button-edge,
-.tv-dialog-button:active .tv-dialog-button-shadow,
-.tv-dialog-button.is-pressed .tv-dialog-button-edge,
-.tv-dialog-button.is-pressed .tv-dialog-button-shadow {
-    visibility: hidden;
-}
-
-[data-tv-search-results] > .tv-vlist-viewport > .tv-static-text {
-    padding: 1ch;
-    color: var(--tv-dialog-list-normal-fg);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-.tv-search-result {
-    display: grid;
-    margin: 0;
-    padding: 0.5ch 1ch;
-    border: 0;
-    background: var(--tv-dialog-list-normal-bg);
-    color: var(--tv-dialog-list-normal-fg);
-    font: inherit;
-    text-align: left;
-    appearance: none;
-    cursor: pointer;
-    overflow: hidden;
-}
-
-.tv-search-result:hover,
-.tv-search-result:focus-visible,
-.tv-search-result.is-selected {
-    background: var(--tv-dialog-list-focused-bg);
-    color: var(--tv-dialog-list-focused-fg);
-    outline: none;
-}
-
-.tv-search-result-title,
-.tv-search-result-meta {
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-.tv-search-result-meta {
-    color: inherit;
-    opacity: 0.9;
-}
+.tv-dialog-button { box-shadow: none; background: transparent; }
 
 @media (max-width: 640px) {
-    :root {
-        --tv-cell-size: 14px;
-    }
-
-    .tv-desktop {
-        padding: 0.5ch;
-    }
-
+    :root { --tv-cell-size: 14px; }
 }
 
-/* ── Shared vertical list scrollbar ────────────────────────────── */
-
-.tv-vlist-viewer {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 1ch;
-    grid-template-rows: minmax(0, 1fr);
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    background: var(--tv-dialog-list-normal-bg);
-    color: var(--tv-dialog-list-normal-fg);
-}
-
-.tv-vlist-viewer > .tv-scrollbar-y {
-    grid-column: 2;
-    grid-row: 1;
-}
-
-.tv-vlist-viewer > .tv-scrollbar-x {
-    display: none;
-    grid-column: 1;
-    grid-row: 2;
-}
-
-.tv-vlist-viewer.is-h-scrollable {
-    grid-template-rows: minmax(0, 1fr) 1em;
-}
-
-.tv-vlist-viewer.is-h-scrollable > .tv-scrollbar-x {
-    display: flex;
-}
-
-.tv-vlist-viewport {
-    display: grid;
-    grid-auto-rows: 1em;
-    align-content: start;
-    min-width: 0;
-    min-height: 0;
-    max-height: none;
+/* Native scroll surfaces; TVScrollBar draws the visible controls. */
+.tv-viewport, .tv-editor-surface, .tv-list-viewer, .tv-vlist-viewport, .tv-cluster-viewport,
+.tv-scroller-viewport {
     overflow: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    box-sizing: border-box;
-    line-height: 1;
-    background: var(--tv-dialog-list-normal-bg);
-    color: var(--tv-dialog-list-normal-fg);
 }
 
-.tv-vlist-viewport::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-}
+.tv-editor-surface { outline: none; }
 
-.tv-vlist-viewer.has-h-scrollbar > .tv-vlist-viewport {
-    overflow-x: auto;
-}
+.tv-vlist-viewport { overflow-x: hidden; }
 
-.tv-vlist-item {
-    display: grid;
-    align-items: center;
-    justify-items: start;
-    width: 100%;
-    min-width: 0;
-    height: 1em;
-    min-height: 1em;
-    max-height: 1em;
-    padding: 0 1ch;
-    border: 0;
-    box-sizing: border-box;
-    overflow: hidden;
-    outline: none;
-    cursor: pointer;
-    font: inherit;
-    line-height: 1;
-    text-align: left;
-    white-space: pre;
-    background: var(--tv-dialog-list-normal-bg);
-    color: var(--tv-dialog-list-normal-fg);
-}
+.tv-vlist-viewer.has-h-scrollbar > .tv-vlist-viewport { overflow-x: auto; }
 
-.tv-vlist-item.is-selected {
-    background: var(--tv-dialog-list-selected-bg);
-    color: var(--tv-dialog-list-selected-fg);
-}
+.tv-vlist-icon { width: 3ch; }
 
-.tv-vlist-icon {
-    display: inline-block;
-    width: 3ch;
-}
+.tv-vlist-item, .tv-grid-cell, .tv-vlist-item.is-selected a { color: inherit; background: inherit; }
 
-.tv-vlist-viewer.has-h-scrollbar .tv-vlist-item {
-    min-width: max-content;
-    overflow: visible;
-}
-
-.tv-vlist-viewer.has-h-scrollbar .tv-vlist-text {
-    width: max-content;
-    overflow: visible;
-}
-
-:is(.tv-list-viewer, .tv-vlist-viewer):not(.is-inactive):focus-within .tv-vlist-item.is-selected {
-    background: var(--tv-dialog-list-focused-bg);
-    color: var(--tv-dialog-list-focused-fg);
-}
-
-/* TVGridView shares TVListBox scrolling and selection, with fixed character columns. */
-.tv-grid-view > .tv-vlist-viewport {
-    display: block;
-}
-
-.tv-grid-header,
-.tv-grid-row {
-    display: grid;
-    width: max-content;
-    min-width: 100%;
-    height: 1em;
-    line-height: 1;
-    white-space: pre;
-}
-
-.tv-grid-header {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    background: var(--tv-dialog-list-selected-bg);
-    color: var(--tv-dialog-list-selected-fg);
-}
-
-.tv-grid-view.headers-hidden .tv-grid-header {
-    display: none;
-}
-
-.tv-grid-view .tv-grid-row {
-    padding: 0;
-}
-
-.tv-grid-cell {
-    min-width: 0;
-    padding: 0 1ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.tv-grid-cell.is-selected {
-    background: var(--tv-dialog-list-selected-bg);
-    color: var(--tv-dialog-list-selected-fg);
-}
-
-.tv-grid-view:not(.is-inactive):focus-within .tv-grid-cell.is-selected {
-    background: var(--tv-dialog-list-focused-bg);
-    color: var(--tv-dialog-list-focused-fg);
-}
-
-/* ── Shared game panel styles ──────────────────────────────────── */
-
-.tv-info-box {
-    display: flex;
-    flex-direction: column;
-    white-space: pre;
-    line-height: 1em;
-    font-family: inherit;
-    overflow: hidden;
-}
-
-.tv-info-box.is-bounded {
-    display: block;
-}
-
-.tv-info-box.is-bounded > [data-tv-info-frame] {
-    position: absolute;
-    left: 0;
-    display: block;
-}
-
-.tv-info-box.is-bounded > [data-tv-info-frame="top"] {
-    top: 0;
-}
-
-.tv-info-box.is-bounded > [data-tv-info-frame="bottom"] {
-    bottom: 0;
-}
-
-.tv-info-box > .tv-static-text:not(.tv-info-row):not([data-tv-tetris-preview]),
-[data-tv-info-frame],
-[data-tv-info-side] {
-    background: var(--tv-owner-content-bg, var(--tv-dialog-bg));
-    color: var(--tv-current-frame);
-    white-space: pre;
-    line-height: 1em;
-}
-
-.tv-info-row {
-    color: var(--tv-dialog-fg);
-    white-space: pre;
-    line-height: 1em;
-}
-
-.tv-terminal {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    color: var(--tv-dialog-fg);
-    white-space: pre;
-    line-height: 1em;
-}
-
-.tv-terminal [data-tv-terminal-line] {
-    display: block;
-    height: 1em;
-    overflow: hidden;
-}
-
-.tv-file-open-history-button {
-    position: absolute;
-    z-index: 3;
-    display: grid;
-    grid-template-columns: repeat(3, 1ch);
-    margin: 0;
-    padding: 0;
-    border: 0;
-    overflow: hidden;
-    appearance: none;
-    box-sizing: border-box;
-    cursor: pointer;
-    background: var(--tv-palette-dialog-history-button-bg);
-    color: var(--tv-palette-dialog-history-button-fg);
-    font: inherit;
-    line-height: 1;
-    white-space: pre;
-}
-
-.tv-file-open-history-button:focus-visible {
-    outline: none;
-    background: var(--tv-hover-bg);
-    color: var(--tv-hover-fg);
-}
-
-.tv-file-open-history-button:disabled {
-    color: var(--tv-dialog-button-disabled);
-    cursor: default;
-}
-
-.tv-file-open-history-button > span {
-    display: block;
-    width: 1ch;
-    height: 1em;
-    overflow: hidden;
-    line-height: 1;
-}
-
-.tv-file-open-history-arrow {
-    background: var(--tv-palette-dialog-history-button-bg);
-    color: var(--tv-palette-dialog-history-button-fg);
-}
-
-.tv-file-open-history-side {
-    background-color: var(--tv-palette-dialog-history-sides-bg);
-    color: transparent;
-}
-
-.tv-file-open-history-side:first-child {
-    background-image: linear-gradient(
-        to right,
-        var(--tv-palette-dialog-history-sides-bg) 0 50%,
-        var(--tv-palette-dialog-history-sides-fg) 50% 100%
-    );
-}
-
-.tv-file-open-history-side:last-child {
-    background-image: linear-gradient(
-        to right,
-        var(--tv-palette-dialog-history-sides-fg) 0 50%,
-        var(--tv-palette-dialog-history-sides-bg) 50% 100%
-    );
-}
-
-[data-tv-file-open-files] > .tv-vlist-viewport {
-    grid-template-rows: repeat(var(--tv-file-list-rows), 1em);
-    grid-auto-flow: column;
-    grid-auto-columns: 15.5ch;
-    overflow-x: auto;
-    overflow-y: hidden;
-}
-
-[data-tv-file-open-files] .tv-vlist-item {
-    display: block;
-    opacity: 1;
-    visibility: visible;
-}
-
-[data-tv-file-open-files] .tv-vlist-item.is-selected {
-    background: var(--tv-dialog-list-selected-bg);
-    color: var(--tv-dialog-list-selected-fg);
-}
-
-[data-tv-file-open-files]:focus-within .tv-vlist-item.is-selected {
-    background: var(--tv-dialog-list-focused-bg);
-    color: var(--tv-dialog-list-focused-fg);
-}
-
-[data-tv-file-open-files] .tv-vlist-item .tv-vlist-text {
-    background: inherit;
-    color: inherit;
-    opacity: 1;
-    visibility: visible;
-}
-
-.tv-file-open-scroll-button {
-    padding: 0;
-    border: 0;
-    background: var(--tv-arrow-bg);
-    color: var(--tv-arrow-fg);
-    font: inherit;
-    line-height: 1;
-    cursor: pointer;
-}
-
-[data-tv-file-open-scroll-left] + .tv-static-text {
-    overflow: hidden;
-    background: var(--tv-page-area);
-    color: var(--tv-scroll-glyph);
-    white-space: pre;
-}
-
-[data-tv-file-open-cancel] ~ .tv-static-text {
-    overflow: hidden;
-    color: var(--tv-dialog-fg);
-    line-height: 1;
-    white-space: pre;
-    text-overflow: clip;
-}
-
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) {
-    position: absolute;
-    z-index: 4;
-    left: 1ch;
-    top: 1em;
-    margin: 0;
-    --tv-window: var(--tv-palette-dialog-input-normal-bg);
-    --tv-owner-frame-passive-bg: var(--tv-palette-dialog-input-normal-bg);
-    --tv-owner-frame-passive-fg: var(--tv-palette-dialog-input-normal-fg);
-    --tv-owner-frame-active-bg: var(--tv-palette-dialog-input-normal-bg);
-    --tv-owner-frame-active-fg: var(--tv-palette-dialog-input-normal-fg);
-    --tv-owner-frame-icons-bg: var(--tv-palette-dialog-input-normal-bg);
-    --tv-owner-frame-icons-fg: var(--tv-palette-dialog-input-normal-fg);
-    --tv-owner-title-active-bg: var(--tv-palette-dialog-input-normal-bg);
-    --tv-owner-title-active-fg: var(--tv-palette-dialog-input-normal-fg);
-    --tv-owner-content-bg: var(--tv-palette-dialog-input-normal-bg);
-    --tv-owner-content-fg: var(--tv-palette-dialog-input-normal-fg);
-    box-shadow: 1ch 0.5em 0 var(--tv-shadow-soft);
-}
-
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-shell {
-    background: var(--tv-palette-dialog-input-normal-bg);
-}
-
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-frame,
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-viewport {
-    min-width: 0;
-    min-height: 0;
-    overflow: visible;
-    background: var(--tv-palette-dialog-input-normal-bg);
-    color: var(--tv-palette-dialog-input-normal-fg);
-}
-
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-close-control {
-    background: var(--tv-palette-dialog-input-normal-bg);
-    color: var(--tv-palette-dialog-input-normal-fg);
-}
-
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer {
-    z-index: 1;
-    background: var(--tv-palette-dialog-input-normal-bg);
-    color: var(--tv-palette-dialog-input-normal-fg);
-    --tv-owner-scroll-page-bg: var(--tv-palette-dialog-history-page-bg);
-    --tv-owner-scroll-page-fg: var(--tv-palette-dialog-history-page-fg);
-    --tv-owner-scroll-controls-bg: var(--tv-palette-dialog-history-sides-bg);
-    --tv-owner-scroll-controls-fg: var(--tv-palette-dialog-history-sides-fg);
-}
-
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer > .tv-vlist-viewport {
-    overflow: hidden;
-    background: var(--tv-palette-dialog-input-normal-bg);
-    color: var(--tv-palette-dialog-input-normal-fg);
-}
-
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer .tv-vlist-item {
-    padding-right: 0;
-    background: var(--tv-palette-dialog-input-normal-bg);
-    color: var(--tv-palette-dialog-input-normal-fg);
-}
-
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer .tv-vlist-item.is-selected,
-:is([data-tv-file-open-history-popup], [data-tv-change-dir-history-popup], [data-tv-find-history-popup], [data-tv-midi-filter-history-popup]) .tv-vlist-viewer > .tv-vlist-viewport:focus-within .tv-vlist-item.is-selected {
-    background: var(--tv-palette-dialog-input-selected-bg);
-    color: var(--tv-palette-dialog-input-selected-fg);
-}
-
-[data-tv-midi-filter-history-popup] {
-    left: 8ch;
-    top: -5em;
-}
-
-[data-tv-change-dir-cancel] + .tv-static-text {
-    overflow: hidden;
-    white-space: pre;
-}
-
-.tv-multicheck-item.is-disabled .tv-multicheck-button {
-    cursor: default;
-}
-
-.tv-cluster.has-scrollbars {
-    background: var(--tv-palette-dialog-cluster-normal-bg);
-    color: var(--tv-palette-dialog-cluster-normal-fg);
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 1ch;
-    grid-template-rows: minmax(0, 1fr);
-    overflow: hidden;
-}
-
-.tv-cluster-viewport {
-    overflow: auto;
-    scrollbar-width: none;
-    min-width: 0;
-    min-height: 0;
-    line-height: 1;
-}
-
-.tv-cluster-viewport::-webkit-scrollbar { width: 0; height: 0; }
-.tv-cluster.has-scrollbars > .tv-scrollbar-y { grid-column: 2; grid-row: 1; }
-.tv-cluster.has-scrollbars > .tv-scrollbar-x { display: none; grid-column: 1; grid-row: 2; }
-.tv-cluster.is-h-scrollable { grid-template-rows: minmax(0, 1fr) 1em; }
-.tv-cluster.is-h-scrollable > .tv-scrollbar-x { display: flex; }
-
-.tv-checkbox-item,
-.tv-radio-item,
-.tv-multicheck-item {
-    all: unset;
-    position: relative;
-    cursor: pointer;
-    white-space: pre;
-    display: block;
-    background: var(--tv-palette-dialog-cluster-normal-bg);
-    color: var(--tv-palette-dialog-cluster-normal-fg);
-}
-
-.tv-checkbox-item .tv-hotkey,
-.tv-radio-item .tv-hotkey,
-.tv-multicheck-item .tv-hotkey {
-    color: var(--tv-palette-dialog-cluster-shortcut-fg);
+.tv-info-box > .tv-static-text:not(.tv-info-row), [data-tv-info-side] {
+    background: var(--tv-owner-content-bg, var(--tv-palette-dialog-frame-active-bg));
 }
 
 .tv-choice-input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
+    width: 1px; height: 1px; opacity: 0;
 }
-
-.tv-multicheck-button {
-    all: unset;
-    display: block;
-    width: 100%;
-    cursor: pointer;
-    color: inherit;
-    background: inherit;
-}
-
-.tv-checkbox-mark::before {
-    content: "[ ]";
-}
-
-.tv-choice-input:checked + .tv-checkbox-mark::before {
-    content: "[X]";
-}
-
-.tv-radio-mark::before {
-    content: "( )";
-}
-
-.tv-choice-input:checked + .tv-radio-mark::before {
-    content: "(•)";
-}
-
-.tv-checkbox-item:focus-within,
-.tv-radio-item:focus-within,
-.tv-multicheck-item:focus-within {
-    color: var(--tv-palette-dialog-cluster-selected-fg);
-    background: var(--tv-palette-dialog-cluster-selected-bg);
-}
-
-.tv-checkbox-item.is-disabled,
-.tv-radio-item.is-disabled,
-.tv-multicheck-item.is-disabled,
-.tv-checkbox-item.is-disabled .tv-hotkey,
-.tv-radio-item.is-disabled .tv-hotkey,
-.tv-multicheck-item.is-disabled .tv-hotkey {
-    cursor: default;
-    background: var(--tv-palette-dialog-cluster-disabled-bg);
-    color: var(--tv-palette-dialog-cluster-disabled-fg);
-}
-
-.tv-game-border {
-    color: var(--tv-current-frame);
-}
-
-/* ── Tetris ────────────────────────────────────────────────────── */
-
-/* Tetris: grid cells use position:absolute via x,y,w,h bounds */
-
-[data-tv-tetris-grid] {
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(12, 2ch);
-    grid-template-rows: repeat(18, 1em);
-    font-family: inherit;
-    line-height: 1em;
-    background: #000000;
-}
-
-.tv-tetris-cell,
-.tv-break-cell {
-    display: inline-block;
-    width: 2ch;
-    height: 1em;
-    text-align: center;
-    line-height: 1em;
-    color: #333333;
-}
-
-.tv-tetris-filled {
-    background: #000000;
-}
-
-.tv-tetris-ghost {
-    background: #000000;
-    opacity: 0.35;
-}
-
-.tv-tetris-overlay-msg,
-.tv-break-overlay-msg,
-.tv-snake-overlay-msg {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.85);
-    color: #ffff55;
-    padding: 1em 2ch;
-    text-align: center;
-    white-space: normal;
-    z-index: 5;
-}
-
-[data-tv-tetris-preview] {
-    display: grid;
-    grid-template-columns: 1ch 3ch repeat(7, 2ch) 4ch 1ch;
-    grid-template-rows: repeat(7, 1em);
-    line-height: 1em;
-    background: var(--tv-dialog-bg);
-    overflow: hidden;
-}
-
-.tv-tetris-preview-border,
-.tv-tetris-preview-pad {
-    display: block;
-    height: 1em;
-}
-
-.tv-tetris-preview-pad,
-[data-tv-tetris-preview] .tv-tetris-cell {
-    background: #000000;
-}
-
-/* ── Minesweeper ───────────────────────────────────────────────── */
-
-/* Minesweeper: uses position:absolute via x,y,w,h bounds */
-
-.tv-mines-body .tv-dialog-client > .tv-group > .tv-static-text {
-    color: #aa0000;
-    font-weight: bold;
-    white-space: pre;
-}
-
-.tv-mines-face {
-    padding: 0 1ch;
-    border: 0;
-    font: inherit;
-    cursor: pointer;
-    background: var(--tv-dialog-bg);
-    color: var(--tv-dialog-fg);
-}
-
-[data-tv-mines-face] + .tv-static-text {
-    text-align: right;
-}
-
-[data-tv-mines-grid] {
-    display: grid;
-    grid-template-columns: repeat(9, 2ch);
-    grid-template-rows: repeat(9, 1em);
-    justify-content: center;
-    white-space: pre;
-    line-height: 1em;
-}
-
-.tv-mines-cell {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2ch;
-    height: 1em;
-    padding: 0;
-    border: 0;
-    font: inherit;
-    appearance: none;
-    cursor: pointer;
-    background: #aaaaaa;
-    color: #000000;
-    line-height: 1em;
-}
-
-.tv-mines-hidden {
-    background: #aaaaaa;
-    color: #555555;
-}
-
-.tv-mines-hidden:hover {
-    background: #ffffff;
-    color: #000000;
-}
-
-.tv-mines-cell.is-cursor,
-.tv-mines-cell:focus-visible {
-    outline: 1px solid var(--tv-hover-fg);
-    outline-offset: -1px;
-}
-
-.tv-mines-empty {
-    background: #c0c0c0;
-    color: #c0c0c0;
-    cursor: default;
-}
-
-.tv-mines-number {
-    background: #c0c0c0;
-    cursor: default;
-}
-
-.tv-mines-flag {
-    background: #aaaaaa;
-    color: #aa0000;
-}
-
-.tv-mines-bomb {
-    background: #aa0000;
-    color: #ffffff;
-}
-
-/* ── BreakOut ──────────────────────────────────────────────────── */
-
-/* BreakOut: uses position:absolute via x,y,w,h bounds */
-
-[data-tv-break-field] {
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(14, 2ch);
-    grid-template-rows: repeat(20, 1em);
-    font-family: inherit;
-    line-height: 1em;
-    background: #000000;
-}
-
-.tv-break-brick {
-    background: #000000;
-}
-
-.tv-break-paddle {
-    background: #000000;
-    color: var(--tv-dialog-button-face);
-}
-
-.tv-break-ball {
-    background: #000000;
-    color: #ffffff;
-}
-
-/* ── Sokoban ───────────────────────────────────────────────────── */
-
-/* Sokoban: uses position:absolute via x,y,w,h bounds */
-
-[data-tv-sokoban-field] {
-    display: grid;
-    grid-template-columns: repeat(9, 2ch);
-    align-content: start;
-    position: relative;
-    background: #000000;
-    line-height: 1em;
-    white-space: pre;
-    font-family: inherit;
-}
-
-.tv-sokoban-cell {
-    display: inline-block;
-    width: 2ch;
-    text-align: center;
-    line-height: 1em;
-    white-space: pre;
-}
-
-.tv-sokoban-wall {
-    color: #aaaaaa;
-    background: #555555;
-}
-
-.tv-sokoban-player {
-    color: #ffff55;
-    background: #000000;
-}
-
-.tv-sokoban-player.tv-sokoban-on-target {
-    background: #003300;
-}
-
-.tv-sokoban-box {
-    color: #aa5500;
-    background: #000000;
-}
-
-.tv-sokoban-box-done {
-    color: #55ff55;
-    background: #003300;
-}
-
-.tv-sokoban-target {
-    color: #55ff55;
-    background: #000000;
-}
-
-.tv-sokoban-overlay-msg,
-.tv-lines-overlay-msg {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #000088;
-    color: #ffff55;
-    padding: 0.5em 2ch;
-    text-align: center;
-    white-space: pre;
-    line-height: 1.2em;
-    z-index: 1;
-}
-
-/* ── Lines ─────────────────────────────────────────────────────── */
-
-/* Lines: uses position:absolute via x,y,w,h bounds */
-
-[data-tv-lines-grid] {
-    display: grid;
-    grid-template-columns: repeat(9, 2ch);
-    align-content: start;
-    position: relative;
-    background: #000055;
-    line-height: 1em;
-    white-space: pre;
-    font-family: inherit;
-}
-
-.tv-lines-cell,
-.tv-reversi-cell {
-    display: inline-block;
-    width: 2ch;
-    text-align: center;
-    line-height: 1em;
-    white-space: pre;
-    cursor: pointer;
-    border: none;
-    font: inherit;
-    background: transparent;
-    padding: 0;
-}
-
-.tv-lines-ball {
-    font-weight: bold;
-}
-
-.tv-lines-selected {
-    animation: tv-lines-pulse 0.6s ease-in-out infinite alternate;
-}
-
-@keyframes tv-lines-pulse {
-    from { opacity: 1; }
-    to { opacity: 0.3; }
-}
-
-.tv-lines-empty {
-    color: #333377;
-}
-
-/* ── Reversi ───────────────────────────────────────────────────── */
-
-/* Reversi: uses position:absolute via x,y,w,h bounds */
-
-[data-tv-reversi-grid] {
-    display: grid;
-    grid-template-columns: repeat(8, 2ch);
-    align-content: start;
-    position: relative;
-    background: #005500;
-    line-height: 1em;
-    white-space: pre;
-    font-family: inherit;
-}
-
-.tv-reversi-cell:hover,
-.tv-reversi-cell:focus-visible {
-    background: #003300;
-}
-
-.tv-reversi-black {
-    color: #000000;
-}
-
-.tv-reversi-white {
-    color: #ffffff;
-}
-
-.tv-reversi-valid {
-    color: #55ff55;
-    cursor: pointer;
-}
-
-.tv-reversi-empty {
-    color: transparent;
-}
-
-/* ── Ludo ─────────────────────────────────────────────────────── */
-
-.tv-ludo-window .tv-dialog-body {
-    overflow: auto;
-}
-
-[data-tv-ludo-board] {
-    display: block;
-    background: var(--tv-dialog-bg);
-    line-height: 1em;
-    white-space: pre;
-    overflow: hidden;
-}
-
-.tv-ludo-ascii-line {
-    display: block;
-    width: 45ch;
-    height: 1em;
-    line-height: 1em;
-    white-space: pre;
-}
-
-.tv-ludo-ascii-path {
-    color: var(--tv-current-frame);
-    display: inline-block;
-    height: 1em;
-    line-height: 1em;
-}
-
-.tv-ludo-ascii-cell,
-.tv-ludo-ascii-piece {
-    display: inline-block;
-    width: 1ch;
-    height: 1em;
-    padding: 0;
-    border: 0;
-    font: inherit;
-    line-height: 1em;
-    text-align: center;
-    white-space: pre;
-    box-sizing: border-box;
-}
-
-.tv-ludo-ascii-cell {
-    color: var(--tv-current-frame);
-}
-
-.tv-ludo-ascii-piece {
-    appearance: none;
-    background: transparent;
-    cursor: default;
-}
-
-.tv-ludo-piece-glyph {
-    display: inline-block;
-    font-family: Arial, sans-serif;
-    position: relative;
-    left: -0.05em;
-    transform: scaleX(0.8);
-}
-
-.tv-ludo-window.is-ludo-capture-flash {
-    animation: tv-ludo-capture-dialog 320ms steps(2, end);
-}
-
-.tv-ludo-window.is-ludo-capture-flash [data-tv-ludo-board] {
-    animation: tv-ludo-capture-board 320ms steps(2, end);
-}
-
-@keyframes tv-ludo-moving-piece {
-    50% {
-        color: var(--tv-dialog-selection-bg);
-        background: var(--tv-dialog-selection-fg);
-    }
-}
-
-@keyframes tv-ludo-captured-piece {
-    50% {
-        color: #ffff55;
-        background: #ffffff;
-    }
-}
-
-@keyframes tv-ludo-capture-dialog {
-    50% {
-        color: #ffff55;
-        background: #aa0000;
-    }
-}
-
-@keyframes tv-ludo-capture-board {
-    50% {
-        background: #aa0000;
-    }
-}
-
-.tv-ludo-ascii-cell.tv-ludo-red,
-.tv-ludo-ascii-piece.tv-ludo-red,
-.tv-ludo-player-toggle.tv-ludo-red { color: #ff5555; }
-.tv-ludo-ascii-cell.tv-ludo-green,
-.tv-ludo-ascii-piece.tv-ludo-green,
-.tv-ludo-player-toggle.tv-ludo-green { color: #55ff55; }
-.tv-ludo-ascii-cell.tv-ludo-yellow,
-.tv-ludo-ascii-piece.tv-ludo-yellow,
-.tv-ludo-player-toggle.tv-ludo-yellow { color: #ffff55; }
-.tv-ludo-ascii-cell.tv-ludo-blue,
-.tv-ludo-ascii-piece.tv-ludo-blue,
-.tv-ludo-player-toggle.tv-ludo-blue { color: #5555ff; }
-
-.tv-ludo-ascii-piece.is-moving {
-    animation: tv-ludo-moving-piece 110ms steps(1, end) infinite;
-    color: var(--tv-dialog-selection-fg);
-    background: var(--tv-dialog-selection-bg);
-}
-
-.tv-ludo-ascii-piece.is-captured {
-    animation: tv-ludo-captured-piece 160ms steps(1, end) infinite;
-    color: var(--tv-dialog-selection-fg);
-    background: #aa0000;
-}
-
-.tv-ludo-ascii-piece.is-legal {
-    cursor: pointer;
-    color: var(--tv-dialog-selection-fg);
-    background: var(--tv-dialog-selection-bg);
-}
-
-.tv-ludo-ascii-piece.is-selected,
-.tv-ludo-ascii-piece.is-legal:focus-visible,
-.tv-ludo-ascii-piece.is-legal:hover {
-    color: var(--tv-dialog-selection-bg);
-    background: var(--tv-dialog-selection-fg);
-    outline: none;
-}
-
-.tv-ludo-player-toggle {
-    display: block;
-    padding: 0;
-    border: 0;
-    background: var(--tv-dialog-bg);
-    font: inherit;
-    line-height: 1em;
-    text-align: left;
-    white-space: pre;
-    cursor: pointer;
-}
-
-.tv-ludo-player-toggle.is-current {
-    font-weight: bold;
-}
-
-.tv-ludo-player-toggle.is-off {
-    opacity: 0.45;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .tv-ludo-ascii-piece.is-moving,
-    .tv-ludo-ascii-piece.is-captured,
-    .tv-ludo-window.is-ludo-capture-flash,
-    .tv-ludo-window.is-ludo-capture-flash [data-tv-ludo-board] {
-        animation: none;
-    }
-}
-
-/* ── Tron Light Cycles ─────────────────────────────────────────── */
-
-[data-tv-tron-field] {
-    display: grid;
-    grid-template-columns: repeat(30, 2ch);
-    grid-template-rows: repeat(18, 1em);
-    overflow: hidden;
-    background: #000000;
-    color: #000000;
-    line-height: 1;
-}
-
-.tv-tron-cell {
-    display: block;
-    width: 2ch;
-    height: 1em;
-    overflow: hidden;
-    white-space: pre;
-}
-
-.tv-tron-player-one {
-    background: #0000aa;
-    color: #55ffff;
-}
-
-.tv-tron-player-two {
-    background: #aa0000;
-    color: #ffff55;
-}
-
-.tv-tron-cell.is-head {
-    background: #ffffff;
-    color: #000000;
-}
-
-/* ── Tower of Hanoi ────────────────────────────────────────────── */
-
-[data-tv-hanoi-board] {
-    display: grid;
-    grid-template-columns: repeat(3, 18ch);
-    overflow: hidden;
-    background: var(--tv-dialog-bg);
-    color: var(--tv-dialog-fg);
-}
-
-.tv-hanoi-tower {
-    position: relative;
-    display: flex;
-    flex-direction: column-reverse;
-    align-items: center;
-    justify-content: flex-start;
-    width: 18ch;
-    height: 10em;
-    padding: 0 1ch 2em;
-    border: 0;
-    outline: none;
-    box-sizing: border-box;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-}
-
-.tv-hanoi-tower:focus,
-.tv-hanoi-tower.is-selected {
-    background: var(--tv-palette-dialog-list-focused-bg);
-    color: var(--tv-palette-dialog-list-focused-fg);
-}
-
-.tv-hanoi-rod {
-    position: absolute;
-    left: calc(50% - 0.5ch);
-    bottom: 2em;
-    width: 1ch;
-    height: 7em;
-    background: #aa5500;
-}
-
-.tv-hanoi-disk {
-    position: relative;
-    z-index: 1;
-    display: block;
-    width: var(--tv-hanoi-disk-width);
-    height: 1em;
-    overflow: hidden;
-    background: #00aaaa;
-    color: #000000;
-    line-height: 1;
-    text-align: center;
-    white-space: pre;
-    cursor: grab;
-}
-
-.tv-hanoi-disk:nth-of-type(even) {
-    background: #0000aa;
-    color: #ffff55;
-}
-
-.tv-hanoi-disk[draggable="false"] {
-    cursor: default;
-}
-
-.tv-hanoi-base {
-    position: absolute;
-    z-index: 2;
-    left: 1ch;
-    bottom: 1em;
-    width: 16ch;
-    color: #aa5500;
-    line-height: 1;
-    white-space: pre;
-}
-
-.tv-hanoi-number {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 18ch;
-    text-align: center;
-}
-
-[data-tv-hanoi-history] {
-    overflow: hidden;
-    white-space: pre;
-    line-height: 1;
-}
-
-/* ── Snake ─────────────────────────────────────────────────────── */
-
-/* Snake: uses position:absolute via x,y,w,h bounds */
-
-[data-tv-mastermind-board] {
-    white-space: normal;
-    font-variant-numeric: tabular-nums;
-}
-
-.tv-mastermind-row {
-    display: grid;
-    grid-template-columns: 3ch repeat(4, 2ch) 1fr;
-    height: 1em;
-    line-height: 1;
-}
-
-.tv-mastermind-row.is-current {
-    color: var(--tv-palette-dialog-list-focused-fg);
-    background: var(--tv-palette-dialog-list-focused-bg);
-}
-
-.tv-mastermind-peg {
-    display: inline-block;
-    width: 2ch;
-    border: 0;
-    padding: 0;
-    color: inherit;
-    background: transparent;
-    font: inherit;
-    line-height: 1;
-    text-align: center;
-}
-
-button.tv-mastermind-peg {
-    cursor: pointer;
-}
-
-.tv-mastermind-peg.is-selected {
-    color: var(--tv-palette-dialog-label-shortcut-fg);
-    background: var(--tv-palette-dialog-list-focused-bg);
-}
-
-.tv-mastermind-color-0 { color: #ff5555; }
-.tv-mastermind-color-1 { color: #55ff55; }
-.tv-mastermind-color-2 { color: #ffff55; }
-.tv-mastermind-color-3 { color: #5555ff; }
-.tv-mastermind-color-4 { color: #ff55ff; }
-.tv-mastermind-color-5 { color: #55ffff; }
-
-.tv-mastermind-color.tv-dialog-button {
-    color: inherit;
-}
-
-.tv-mastermind-feedback {
-    color: var(--tv-dialog-fg);
-    white-space: nowrap;
-}
-
-.tv-mastermind-empty {
-    grid-column: span 4;
-    width: 8ch;
-    color: var(--tv-palette-dialog-button-disabled-fg);
-}
-
-[data-tv-snake-field] {
-    display: grid;
-    grid-template-columns: repeat(20, 2ch);
-    grid-template-rows: repeat(15, 1em);
-    align-content: start;
-    position: relative;
-    background: #000000;
-    line-height: 1em;
-    white-space: pre;
-    font-family: inherit;
-}
-
-.tv-snake-cell {
-    display: inline-block;
-    width: 2ch;
-    height: 1em;
-    text-align: center;
-    line-height: 1em;
-    white-space: pre;
-}
-
-.tv-snake-head {
-    color: #ffff55;
-    background: #000000;
-}
-
-.tv-snake-segment {
-    color: #55ff55;
-    background: #000000;
-}
-
-.tv-snake-food {
-    color: #ff5555;
-    background: #000000;
-}
-
-/* ── Screen Saver ──────────────────────────────────────────────────── */
 
 .tv-saver-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    background: #000000;
-    cursor: none;
-    outline: none;
+    position: fixed; z-index: 9999; background: #000000; cursor: none; outline: none;
 }
 
-.tv-saver-canvas {
-    width: 100%;
-    height: 100%;
-    white-space: pre;
-    font-family: var(--tv-font-text, monospace);
-    font-size: var(--tv-cell-size);
-    line-height: 1em;
-    color: #555555;
-    overflow: hidden;
+.tv-saver-canvas { color: #555555; }
+
+.tv-menu-items, .tv-status-items, .tv-status-right, .tv-list-viewer, .tv-js [data-tv-viewport] {
+    scrollbar-width: none;
+}
+
+.tv-menu-items::-webkit-scrollbar, .tv-status-items::-webkit-scrollbar, .tv-status-right::-webkit-scrollbar,
+.tv-list-viewer::-webkit-scrollbar, .tv-js [data-tv-viewport]::-webkit-scrollbar {
+    width: 0; height: 0;
 }

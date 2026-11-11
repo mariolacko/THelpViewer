@@ -32,30 +32,6 @@ def store_at(tmp_path):
     return store
 
 
-def test_text_rendering_option_does_not_rebuild_or_change_the_disk(tmp_path):
-    store = store_at(tmp_path)
-    try:
-        assert store.bundle(None)[1]["text_rendering"] is True
-        before = store.base_id, dict(store.files)
-        config = json.loads(store.config_path.read_text())
-        config["text_rendering"] = False
-        store.config_path.write_text(json.dumps(config))
-        store.prepare()
-        assert store.bundle(None)[1]["text_rendering"] is False
-        assert (store.base_id, dict(store.files)) == before
-    finally:
-        store.downloads.close()
-
-
-@pytest.mark.parametrize("value", ["false", 0, None, []])
-def test_text_rendering_requires_a_boolean(tmp_path, value):
-    from thelpviewer.server.dos.config import load_dos_config
-    config = tmp_path / "dos.json"
-    config.write_text(json.dumps({"sources": [], "text_rendering": value}))
-    with pytest.raises(DosError, match="text_rendering must be a boolean"):
-        load_dos_config(config)
-
-
 def test_package_selection_uninstalls_only_owned_files_and_preserves_private_and_shared_files(tmp_path, monkeypatch):
     data = io.BytesIO()
     with zipfile.ZipFile(data, "w") as archive:

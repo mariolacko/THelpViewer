@@ -5,7 +5,7 @@ const TV = window.THelpViewerTV;
 const { TVDialog, TVRect, TVGroup, TVLabel, TVInputLine, TVListBox, TVCheckBoxes,
     TVButton, TVInfoBox, TVInfoRow, TVMessageBox, messageBox, TVLoginDialog, TVRegistrationDialog,
     TVProgressDialog, bfDefault, evCommand, evBroadcast, evKeyDown, sfDisabled, sfModal, sfVisible,
-    sbVertical, TVScrollBar, TVPoint, gfGrowLoX, gfGrowLoY, gfGrowHiX, gfGrowHiY,
+    sbVertical, TVScrollBar, gfGrowLoX, gfGrowLoY, gfGrowHiX, gfGrowHiY,
     wrapTextLines, normalizeSearchText, TV_HELP_CONTEXTS } = TV;
 
 function languageFlag(language) {
@@ -34,7 +34,7 @@ class TVPackagesDialog extends TVDialog {
         this.itemLabel = new TVLabel(new TVRect(32, 1, right, 2), "~V~ersions", this.items);
         this.enabled = new TVCheckBoxes(new TVRect(2, 12, 29, 13));
         this.groupAll = new TVCheckBoxes(new TVRect(32, 12, right, 13), [{ label: "Selec~t~ / Deselect All" }]);
-        this.descriptionRows = Array.from({ length: 3 }, (_item, row) => new TVInfoRow(new TVRect(0, row + 1, right - 4, row + 2)));
+        this.descriptionRows = Array.from({ length: 3 }, (_item, row) => new TVInfoRow(new TVRect(0, row + 1, right - 2, row + 2)));
         this.descriptionBox = new TVInfoBox(new TVRect(2, 14, right, 19), "Description", this.descriptionRows);
         this.indexButton = new TVButton(new TVRect(47, 20, 64, 22), "~L~oad albums", "packages-index");
         this.selectAllButton = new TVButton(new TVRect(2, 20, midi ? 16 : 17, 22), "~S~elect All", "packages-all");
@@ -50,7 +50,9 @@ class TVPackagesDialog extends TVDialog {
             view.growMode = gfGrowLoY | gfGrowHiY;
         }
         this.refreshButton.growMode = this.closeButtonView.growMode = gfGrowLoX | gfGrowHiX | gfGrowLoY | gfGrowHiY;
-        this.insert(new TVGroup(new TVRect(0, 0, this.size.x - 2, this.size.y - 2)).insertAll([
+        const content = new TVGroup(new TVRect(0, 0, this.size.x - 2, this.size.y - 2));
+        content.growMode = gfGrowHiX | gfGrowHiY;
+        this.insert(content.insertAll([
             this.filterLabel, this.filterInput, this.indexButton, this.categoryLabel, this.categories, this.itemLabel, this.items,
             this.enabled, this.groupAll, this.descriptionBox, this.selectAllButton, this.deselectAllButton, this.applyButton,
             this.refreshButton, this.closeButtonView,
@@ -77,21 +79,15 @@ class TVPackagesDialog extends TVDialog {
     close() { this.requestVersion += 1; super.close(); }
 
     changeBounds(bounds) {
-        const delta = new TVPoint(bounds.width - this.size.x, bounds.height - this.size.y);
+        const deltaX = bounds.width - this.size.x, deltaY = bounds.height - this.size.y;
         super.changeBounds(bounds);
-        if (this.content && (delta.x || delta.y)) {
-            this.content.growTo(this.size.x - 2, this.size.y - 2);
-            for (const view of this.content.children) {
-                view.changeBounds(view.calcBounds(view.getBounds(), delta));
-            }
-            for (const row of this.descriptionRows) { row.growTo(this.descriptionBox.innerW, 1); }
-            if (this.kind === "dos" && this.draft && delta.x) {
-                for (const option of this.items.options) {
+        if (this.content && (deltaX || deltaY)) {
+            if (this.kind === "dos" && this.draft && deltaX) {
+                for (const option of this.items.strings) {
                     option.label = this.packageLabel(this.draft.packages.find((item) => item.id === option.id));
                 }
                 this.items.drawView();
             }
-            this.descriptionBox.drawView();
             this.updateDescription();
             this.categories.updateScrollbar(); this.items.updateScrollbar();
         }
@@ -126,7 +122,7 @@ class TVPackagesDialog extends TVDialog {
         const empty = !this.valid || !(this.kind === "midi" ? this.draft?.sources.length : this.draft?.packages.length);
         this.selectAllButton.setState(sfDisabled, empty); this.deselectAllButton.setState(sfDisabled, empty);
         const source = this.draft?.sources?.find((item) => item.id === this.category);
-        const optional = this.items.options.flatMap((item, index) => item.required ? [] : [index]);
+        const optional = this.items.strings.flatMap((item, index) => item.required ? [] : [index]);
         const futureAlbums = this.kind === "midi" && source && !this.filterText;
         this.indexButton.setState(sfDisabled, !this.valid || !source || source.indexed || Boolean(this.indexTask));
         this.groupAll.setState(sfDisabled, !this.valid || (!optional.length && !futureAlbums));
@@ -177,7 +173,7 @@ class TVPackagesDialog extends TVDialog {
         this.categories.newList(draft.categories.filter((item) => !this.filterText
             || normalizeSearchText(item.label).includes(this.filterText) || this.matchingItems(item.id).length));
         const index = this.categories.items.findIndex((item) => item.id === category);
-        this.categories.select(index >= 0 ? index : 0); this.selectCategory(this.categories.selectedItem()?.id);
+        this.categories.focusItem(index >= 0 ? index : 0); this.selectCategory(this.categories.selectedItem()?.id);
         this.valid = true; this.updateButtons();
     }
 
@@ -201,12 +197,12 @@ class TVPackagesDialog extends TVDialog {
         if (!draft || !this.category) { return; }
         if (this.kind === "midi") {
             const source = draft.sources.find((item) => item.id === this.category);
-            const selected = new Map(this.items.options.map((item, index) => [item.id, this.items.mark(index)]));
+            const selected = new Map(this.items.strings.map((item, index) => [item.id, this.items.mark(index)]));
             if (source) { source.albums.forEach((album) => {
                 if (selected.has(album.id)) { album.selected = selected.get(album.id); }
             }); }
         } else {
-            this.items.options.forEach((item, index) => {
+            this.items.strings.forEach((item, index) => {
                 if (item.required || this.items.mark(index)) { draft.selected.add(item.id); } else { draft.selected.delete(item.id); }
             });
         }
@@ -238,7 +234,7 @@ class TVPackagesDialog extends TVDialog {
     }
 
     updateDescription() {
-        const item = this.items.options[this.items.sel];
+        const item = this.items.strings[this.items.sel];
         const text = item ? (this.kind === "midi" ? item.name : item.description || "No description available.")
             : this.filterText ? "No matching packages or cached albums."
                 : this.kind === "midi" ? "No cached albums. Use Load albums to read this source." : "No packages in this group.";
@@ -248,7 +244,7 @@ class TVPackagesDialog extends TVDialog {
 
     setGroupAll(all) {
         if (!this.valid) { return; }
-        this.items.options.forEach((item) => { item.checked = all || Boolean(item.required); }); this.items.setItems(this.items.options);
+        this.items.strings.forEach((item) => { item.checked = all || Boolean(item.required); }); this.items.setItems(this.items.strings);
         this.rememberSelection();
         if (this.kind === "midi") {
             const source = this.draft?.sources.find((item) => item.id === this.category);
@@ -346,7 +342,7 @@ class TVPackagesDialog extends TVDialog {
                 if (status.state === "error") { throw new Error(status.error || "Album indexing failed."); }
                 if (!status.indexing) { break; }
                 await new Promise((resolve) => setTimeout(resolve, 500));
-                status = await TVLoginDialog.request("/api/admin/midi-sources/status");
+                status = await TVLoginDialog.request("/api/admin/midi-status");
             }
             if (this.isOpen()) {
                 this.rememberSelection();
@@ -380,7 +376,7 @@ class TVPackagesDialog extends TVDialog {
             else { return; }
         } else if (event.what === evKeyDown && event.infoPtr === this.filterInput
                 && ["ArrowDown", "Enter"].includes(event.nativeEvent?.key)) {
-            if (this.items.options.length) { this.items.focus(); }
+            if (this.items.strings.length) { this.items.focus(); }
             event.nativeEvent.preventDefault();
         } else if (event.what === evCommand) {
             switch (event.command) {
