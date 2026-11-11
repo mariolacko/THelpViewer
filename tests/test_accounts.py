@@ -63,7 +63,7 @@ def test_profile_api_requires_owner_session_origin_and_rejects_role_changes(tmp_
     manifest.write_text('{"sources": []}')
     config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
         downloads_dir=(tmp_path / "var") / "downloads",
-        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+        data_dir=tmp_path / "data", state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      midi_sources_path=manifest, auth_origin="https://accounts.example.test")
     app = create_app(config)
@@ -152,7 +152,7 @@ def test_admin_invitation_passkey_and_session(tmp_path, monkeypatch):
 def test_passkey_api_requires_configured_origin_and_no_public_registration(tmp_path):
     config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
         downloads_dir=(tmp_path / "var") / "downloads",
-        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+        data_dir=tmp_path / "data", state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      auth_origin="https://accounts.example.test")
     (tmp_path / "helps").mkdir()
@@ -161,7 +161,7 @@ def test_passkey_api_requires_configured_origin_and_no_public_registration(tmp_p
             "enabled": True, "authenticated": False, "user": None,
         }
         assert client.post("/api/auth/passkey/login/options", json={"username": "missing"}).status_code == 403
-        token = AccountStore(tmp_path / "var").create_user("user")
+        token = AccountStore(tmp_path / "data").create_user("user")
         response = client.post("/api/auth/passkey/enroll/options", json={"username": "user", "token": token},
                                headers={"Origin": "https://accounts.example.test"})
         assert response.status_code == 200
@@ -174,7 +174,7 @@ def test_passkey_api_requires_configured_origin_and_no_public_registration(tmp_p
 def test_missing_passkey_dependency_returns_actionable_json(tmp_path, monkeypatch):
     config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
         downloads_dir=(tmp_path / "var") / "downloads",
-        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+        data_dir=tmp_path / "data", state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      auth_origin="https://accounts.example.test")
     (tmp_path / "helps").mkdir()
@@ -196,7 +196,7 @@ def test_missing_passkey_dependency_returns_actionable_json(tmp_path, monkeypatc
 
 
 def test_bootstrap_admin_and_one_hour_admin_registration_tokens(tmp_path, monkeypatch):
-    store = AccountStore(tmp_path / "var")
+    store = AccountStore(tmp_path / "data")
     bootstrap = store.bootstrap_token()
     assert bootstrap and store.bootstrap_token() != bootstrap
     bootstrap = store.bootstrap_token()
@@ -234,8 +234,8 @@ def test_bootstrap_admin_and_one_hour_admin_registration_tokens(tmp_path, monkey
     listed = store.list_registration_tokens(admin_session)
     assert len(listed) == 1 and listed[0]["token"] == invitation
     assert listed[0]["expires_at"] > 0
-    assert AccountStore(tmp_path / "var").list_registration_tokens(admin_session) == listed
-    assert ((tmp_path / "var" / "registration-tokens.key").stat().st_mode & 0o777) == 0o600
+    assert AccountStore(tmp_path / "data").list_registration_tokens(admin_session) == listed
+    assert ((tmp_path / "data" / "registration-tokens.key").stat().st_mode & 0o777) == 0o600
     with sqlite3.connect(store.path) as connection:
         ciphertext = connection.execute(
             "SELECT token_ciphertext FROM registration_tokens WHERE token_hash = ?", (listed[0]["id"],)
@@ -276,7 +276,7 @@ def test_bootstrap_admin_and_one_hour_admin_registration_tokens(tmp_path, monkey
 
     config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
         downloads_dir=(tmp_path / "var") / "downloads",
-        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+        data_dir=tmp_path / "data", state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      auth_origin="https://example.test")
     (tmp_path / "helps").mkdir()
@@ -310,7 +310,7 @@ def test_bootstrap_admin_and_one_hour_admin_registration_tokens(tmp_path, monkey
 
 
 def test_old_registration_token_is_rejected_even_if_its_hash_is_stored(tmp_path):
-    store = AccountStore(tmp_path / "var")
+    store = AccountStore(tmp_path / "data")
     old_token = "legacy-enrollment-token_with-43-characters-123"
     with store._connect() as connection:
         connection.execute(
@@ -339,7 +339,7 @@ def test_old_registration_token_table_gains_encrypted_value_column(tmp_path):
 def test_public_robots_uses_configured_https_origin_behind_http_proxy(tmp_path):
     config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
         downloads_dir=(tmp_path / "var") / "downloads",
-        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+        data_dir=tmp_path / "data", state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      public_base_url="", auth_origin="https://help.example.test")
     (tmp_path / "helps").mkdir()

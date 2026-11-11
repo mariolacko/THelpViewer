@@ -86,7 +86,8 @@ def test_custom_font_screen_in_standard_help_window_draws_palette_pixels_and_rel
     server = subprocess.Popen([sys.executable, "-m", "uvicorn", "thelpviewer.server.app:app", "--host", "127.0.0.1",
                                "--port", url.split(":")[-1].rstrip("/"), "--log-level", "warning"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        env={**os.environ, "THELP_STATE_DIR": str(tmp_path), "THELP_HELPS_DIR": str(helps), "THELP_DOCS_DIR": str(docs),
+        env={**os.environ, "THELP_STATE_DIR": str(tmp_path), "THELP_DATA_DIR": str(tmp_path),
+             "THELP_SOURCES_DIR": str(tmp_path / "sources"), "THELP_DOWNLOADS_DIR": str(tmp_path / "downloads"), "THELP_HELPS_DIR": str(helps), "THELP_DOCS_DIR": str(docs),
              "THELP_STATISTICS_PATH": str(tmp_path / "statistics.sqlite3"), "THELP_AUTH_ORIGIN": url.rstrip("/"),
              "THELP_DOS_CONFIG_PATH": str(config), "THELP_MIDI_SOURCES_PATH": str(config), "THELP_PUBLIC_BASE_URL": ""})
     chrome = None

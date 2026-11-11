@@ -16,7 +16,7 @@ def test_admin_users_and_disk_limits(tmp_path):
     manifest.write_text('{"sources": [], "files": [{"path":"BASE.TXT","text":["shared"]}]}')
     config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
         downloads_dir=(tmp_path / "var") / "downloads",
-        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+        data_dir=tmp_path / "data", state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
         midi_sources_path=manifest, dos_config_path=manifest, auth_origin="https://accounts.example.test",
         dev_auto_login=False, statistics_path=tmp_path / "var" / "statistics.sqlite3")
     app = create_app(config)
@@ -100,7 +100,7 @@ def test_admin_users_and_disk_limits(tmp_path):
         assert dos.disk_usage(ids["member"])["used_bytes"] == 800000
         assert client.get("/api/terminal/jobs/example").status_code == 404
         assert client.post("/api/terminal/jobs/example/input", json={"text": "x"}).status_code == 404
-    assert (config.state_dir / "dos" / "users" / ids["member"] / "c" / "1" / "SAVE.DAT").stat().st_size == 800000
+    assert (config.persistent_dir / "dos" / "users" / ids["member"] / "c" / "1" / "SAVE.DAT").stat().st_size == 800000
 
 
 def test_founder_identity_migrates_and_is_preserved_after_profile_changes(tmp_path):
@@ -144,7 +144,7 @@ def test_manifest_without_archive_hash_installs_and_reuses_download(tmp_path, mo
     monkeypatch.setattr("thelpviewer.server.downloader.packages.fetch_source",
                         lambda *args, **kwargs: (calls.append(args[0]["url"]) or archive.getvalue()))
     store = DosPromptStore(tmp_path / "dos", manifest)
-    store.prepare()
+    store.prepare(install_sources=True)
     assert store.state == "ready", store.error
     assert store.files["GAMES/GAME.EXE"] == b"test software"
     assert b"GAME" in store.files["SOFTWARE.TXT"]

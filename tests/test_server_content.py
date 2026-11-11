@@ -30,7 +30,7 @@ def config_for(tmp_path):
     midi = tmp_path / "midi.json"
     midi.write_text('{"sources": []}')
     return replace(load_config(), helps_dir=tmp_path / "helps", sources_dir=tmp_path / "sources",
-        downloads_dir=tmp_path / "var" / "downloads", state_dir=tmp_path / "var",
+        downloads_dir=tmp_path / "var" / "downloads", data_dir=tmp_path / "data", state_dir=tmp_path / "var",
         statistics_path=tmp_path / "var" / "statistics.sqlite3", docs_dir=tmp_path / "docs",
         virtual_docs=(), dos_config_path=manifest, midi_sources_path=midi,
         dev_auto_login=False, auth_origin="https://testserver")

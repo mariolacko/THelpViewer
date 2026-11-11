@@ -19,7 +19,7 @@ def test_admin_creates_member_and_bound_invitation_without_changing_session(tmp_
     manifest.write_text('{"sources": []}')
     config = replace(load_config(), sources_dir=(tmp_path / "var") / 'sources',
         downloads_dir=(tmp_path / "var") / "downloads",
-        state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
+        data_dir=tmp_path / "data", state_dir=tmp_path / "var", helps_dir=tmp_path / "helps",
                      midi_sources_path=manifest, dos_config_path=manifest,
                      statistics_path=tmp_path / "var" / "statistics.sqlite3",
                      auth_origin="https://accounts.example.test", dev_auto_login=False)
@@ -76,7 +76,7 @@ def test_admin_creates_member_and_bound_invitation_without_changing_session(tmp_
 
     monkeypatch.setattr("webauthn.verify_registration_response", verify)
     # A separate new-user client completes Register with the bound invitation.
-    with TestClient(app, base_url=config.auth_origin) as member:
+    with TestClient(create_app(config), base_url=config.auth_origin) as member:
         registration = {"name": "Different input", "email": user["email"], "token": invitation["token"].lower(),
                         "first_name": "Different", "last_name": "Input", "nickname": "Other"}
         options = member.post("/api/auth/passkey/register/options", json=registration, headers=headers)
